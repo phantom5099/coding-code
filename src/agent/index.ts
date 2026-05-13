@@ -1,48 +1,56 @@
 import { generateText, streamText, stepCountIs, type ToolSet } from "ai";
 import type { ModelMessage } from "@ai-sdk/provider-utils";
 import { getModel } from "../providers";
-import { readFileTool, writeFileTool, listDirTool } from "../tools/fs";
-import { execCommandTool } from "../tools/shell";
-import { searchCodeTool } from "../tools/search";
-
-const tools = {
-  read_file: readFileTool,
-  write_file: writeFileTool,
-  list_dir: listDirTool,
-  execute_command: execCommandTool,
-  search_code: searchCodeTool,
-} satisfies ToolSet;
-
-const SYSTEM_PROMPT = `You are a coding assistant — an AI agent that helps users write, read, search, and modify code.
-
-## Rules
-1. Read files before modifying them — never guess file contents
-2. Use search_code to find where symbols are defined
-3. After writing files, verify with read_file
-4. Prefer editing existing files over creating new ones
-5. Make small, focused changes — avoid large rewrites
-6. Run tests or type-check after changes when applicable
-7. If the user's request is ambiguous, ask for clarification
-
-## Environment
-- Working directory: ${process.cwd()}
-- Operating system: ${process.platform}
-- Shell: ${process.env.SHELL || process.env.ComSpec || "bash"}
-
-Respond in the user's language. Use code blocks for code.`;
+import { getPromptSet } from "../prompts";
+import type { AgentRole } from "../prompts";
 
 export class Agent {
   private messages: ModelMessage[] = [];
+  private role: AgentRole;
+
+  constructor(role: AgentRole = "coder") {
+    this.role = role;
+  }
+
+  /** 获取当前角色的提示词（含环境变量注入） */
+  private getSystemPrompt(): string {
+    const ps = getPromptSet(this.role);
+    return ps.buildSystem({
+      cwd: process.cwd(),
+      platform: process.platform,
+      shell: process.env.SHELL || process.env.ComSpec || "bash",
+    });
+  }
+
+  /** 获取当前角色的工具集 */
+  private getTools(): ToolSet {
+    return getPromptSet(this.role).tools;
+  }
+
+  /** 获取当前角色的最大步数 */
+  private getMaxSteps(): number {
+    return getPromptSet(this.role).maxSteps ?? 15;
+  }
+
+  /** 切换角色（保留当前对话上下文） */
+  switchRole(role: AgentRole): void {
+    this.role = role;
+  }
+
+  /** 获取当前角色 */
+  getRole(): AgentRole {
+    return this.role;
+  }
 
   async run(userInput: string): Promise<string> {
     this.messages.push({ role: "user", content: userInput } as ModelMessage);
 
     const result = await generateText({
-      model: getModel(),
-      system: SYSTEM_PROMPT,
+      model: await getModel(),
+      system: this.getSystemPrompt(),
       messages: this.messages,
-      tools,
-      stopWhen: stepCountIs(15),
+      tools: this.getTools(),
+      stopWhen: stepCountIs(this.getMaxSteps()),
     });
 
     this.messages = [...result.response.messages];
@@ -53,11 +61,11 @@ export class Agent {
     this.messages.push({ role: "user", content: userInput } as ModelMessage);
 
     const result = streamText({
-      model: getModel(),
-      system: SYSTEM_PROMPT,
+      model: await getModel(),
+      system: this.getSystemPrompt(),
       messages: this.messages,
-      tools,
-      stopWhen: stepCountIs(15),
+      tools: this.getTools(),
+      stopWhen: stepCountIs(this.getMaxSteps()),
     });
 
     for await (const part of result.fullStream) {

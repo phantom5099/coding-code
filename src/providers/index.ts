@@ -1,82 +1,170 @@
-import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 
-export interface ModelEntry {
+// ── JSON Schema types ──────────────────────────────────────────────
+
+export interface ModelDescriptor {
   id: string;
+  name: string;
+}
+
+export interface ProviderEntry {
+  name: string;
+  driver: string;
+  base_url: string;
+  api_key_env: string;
+  default_model: string;
+  models: ModelDescriptor[];
+}
+
+interface ProviderCatalog {
+  active: string;
+  providers: ProviderEntry[];
+}
+
+// ── Flat selectable model (derived, for UI / runtime) ──────────────
+
+export interface SelectableModel {
+  id: string; // compound: "modelId@providerName"
+  provider: string;
+  driver: string;
   name: string;
   model: string;
   base_url: string;
   api_key_env: string;
 }
 
-interface ModelCatalog {
-  active: string;
-  models: ModelEntry[];
-}
+// ── Module state ───────────────────────────────────────────────────
 
 const MODELS_FILE = resolve(process.cwd(), "models.json");
 
-let catalog: ModelCatalog | null = null;
-let currentModelEntry: ModelEntry | null = null;
+let catalog: ProviderCatalog | null = null;
+let currentEntry: SelectableModel | null = null;
 let currentModel: LanguageModelV3 | null = null;
 
-function loadCatalog(): ModelCatalog {
+// ── Load catalog ───────────────────────────────────────────────────
+
+function loadCatalog(): ProviderCatalog {
   if (catalog) return catalog;
   if (!existsSync(MODELS_FILE)) {
     throw new Error(`models.json not found at ${MODELS_FILE}`);
   }
   const raw = readFileSync(MODELS_FILE, "utf-8");
-  catalog = JSON.parse(raw) as ModelCatalog;
-  if (!catalog.models || catalog.models.length === 0) {
-    throw new Error("models.json has no models defined");
+  const parsed = JSON.parse(raw) as ProviderCatalog;
+  if (!parsed.providers || parsed.providers.length === 0) {
+    throw new Error("models.json has no providers defined");
   }
+  catalog = parsed;
   return catalog;
 }
 
-function resolveApiKey(entry: ModelEntry): string {
+// ── Flatten provider structure into selectable entries ─────────────
+
+function flattenModels(cat: ProviderCatalog): SelectableModel[] {
+  const result: SelectableModel[] = [];
+  for (const p of cat.providers) {
+    for (const m of p.models) {
+      result.push({
+        id: `${m.id}@${p.name}`,
+        provider: p.name,
+        driver: p.driver,
+        name: m.name,
+        model: m.id,
+        base_url: p.base_url,
+        api_key_env: p.api_key_env,
+      });
+    }
+  }
+  return result;
+}
+
+function resolveApiKey(entry: SelectableModel): string {
   return process.env[entry.api_key_env] || process.env.OPENAI_API_KEY || "";
 }
 
-function buildModel(entry: ModelEntry): LanguageModelV3 {
+// ── Build Vercel AI SDK model ──────────────────────────────────────
+
+async function buildModel(entry: SelectableModel): Promise<LanguageModelV3> {
   const apiKey = resolveApiKey(entry);
-  const provider = createOpenAI({
-    name: entry.id,
-    baseURL: entry.base_url,
-    apiKey,
-  });
-  // provider.chat() uses /chat/completions (classic OpenAI-compatible),
-  // provider() / provider.languageModel() would default to /responses
-  return provider.chat(entry.model) as LanguageModelV3;
+
+  switch (entry.driver) {
+    case "openai": {
+      const { createOpenAI } = await import("@ai-sdk/openai");
+      const provider = createOpenAI({
+        name: entry.provider,
+        baseURL: entry.base_url,
+        apiKey,
+      });
+      return provider.chat(entry.model) as LanguageModelV3;
+    }
+
+    case "deepseek": {
+      const { createDeepSeek } = await import("@ai-sdk/deepseek");
+      const deepseek = createDeepSeek({
+        baseURL: entry.base_url,
+        apiKey,
+      });
+      return deepseek(entry.model) as LanguageModelV3;
+    }
+
+    default:
+      throw new Error(
+        `Unknown driver "${entry.driver}" for provider "${entry.provider}". ` +
+          `Supported: openai, deepseek. ` +
+          `Install the corresponding @ai-sdk/* package if needed.`
+      );
+  }
 }
 
-export function listModels(): ModelEntry[] {
-  return loadCatalog().models;
+// ── Exported API ───────────────────────────────────────────────────
+
+export function listModels(): SelectableModel[] {
+  return flattenModels(loadCatalog());
 }
 
-export function getActiveEntry(): ModelEntry {
-  if (currentModelEntry) return currentModelEntry;
+export function getActiveEntry(): SelectableModel {
+  if (currentEntry) return currentEntry;
+
   const cat = loadCatalog();
-  const activeId = cat.active;
-  const found = cat.models.find((m) => m.id === activeId);
-  if (!found) throw new Error(`Active model "${activeId}" not found in models.json`);
-  currentModelEntry = found;
-  currentModel = buildModel(found);
-  return found;
+  const activeProviderName = cat.active;
+  const provider = cat.providers.find((p) => p.name === activeProviderName);
+  if (!provider) {
+    throw new Error(`Active provider "${activeProviderName}" not found in models.json`);
+  }
+
+  const model = provider.models.find((m) => m.id === provider.default_model);
+  if (!model) {
+    throw new Error(
+      `Default model "${provider.default_model}" not found in provider "${provider.name}"`
+    );
+  }
+
+  currentEntry = {
+    id: `${model.id}@${provider.name}`,
+    provider: provider.name,
+    driver: provider.driver,
+    name: model.name,
+    model: model.id,
+    base_url: provider.base_url,
+    api_key_env: provider.api_key_env,
+  };
+  return currentEntry;
 }
 
-export function getModel(): LanguageModelV3 {
+export async function getModel(): Promise<LanguageModelV3> {
   if (currentModel) return currentModel;
-  getActiveEntry();
-  return currentModel!;
+  const entry = getActiveEntry();
+  currentModel = await buildModel(entry);
+  return currentModel;
 }
 
-export function switchModel(id: string): ModelEntry {
+export function switchModel(id: string): SelectableModel {
   const cat = loadCatalog();
-  const found = cat.models.find((m) => m.id === id);
+  const all = flattenModels(cat);
+  const found = all.find((m) => m.id === id);
   if (!found) throw new Error(`Model "${id}" not found. Use /model to list.`);
-  currentModelEntry = found;
-  currentModel = buildModel(found);
+  currentEntry = found;
+  currentModel = null; // lazy rebuild on next getModel()
   return found;
 }

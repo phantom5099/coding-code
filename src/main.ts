@@ -1,6 +1,8 @@
 import * as readline from "readline";
 import { Agent } from "./agent";
 import { listModels, switchModel, getActiveEntry } from "./providers";
+import { listRoles, switchRole } from "./prompts";
+import type { AgentRole } from "./prompts";
 
 const c = {
   reset: "\x1b[0m",
@@ -14,6 +16,7 @@ const c = {
 
 let rl: readline.Interface;
 let selectingModel = false;
+let selectingRole = false;
 
 function write(msg: string) {
   process.stdout.write(msg);
@@ -37,6 +40,8 @@ function showHelp() {
   writeln(`\n${c.bold}Commands:${c.reset}
   ${c.yellow}/model${c.reset}         Pick a model interactively
   ${c.yellow}/model <id>${c.reset}    Switch directly by id
+  ${c.yellow}/role${c.reset}          Pick a role interactively
+  ${c.yellow}/role <id>${c.reset}     Switch directly by role id
   ${c.yellow}/clear${c.reset}         Reset conversation context
   ${c.yellow}/exit${c.reset}          Quit
 `);
@@ -51,8 +56,8 @@ function showModelSelection() {
   writeln();
   models.forEach((m, i) => {
     const marker = m.id === active.id ? `${c.green}▶${c.reset}` : " ";
-    writeln(` ${c.yellow}${i + 1}${c.reset}. ${marker} ${c.bold}${m.id}${c.reset}`);
-    writeln(`    ${c.dim}${m.name}  |  ${m.model}  |  ${m.base_url}${c.reset}`);
+    writeln(` ${c.yellow}${i + 1}${c.reset}. ${marker} ${c.bold}${m.name}${c.reset}`);
+    writeln(`    ${c.dim}${m.provider}/${m.model}${c.reset}`);
   });
   writeln();
 
@@ -61,10 +66,27 @@ function showModelSelection() {
   rl.prompt();
 }
 
+function showRoleSelection(currentRole: AgentRole) {
+  const roles = listRoles();
+
+  writeln();
+  writeln(`${c.bold}Select a role (type number, Enter to cancel):${c.reset}`);
+  writeln();
+  roles.forEach((r, i) => {
+    const marker = r.id === currentRole ? `${c.green}▶${c.reset}` : " ";
+    writeln(` ${c.yellow}${i + 1}${c.reset}. ${marker} ${c.bold}${r.label}${c.reset}`);
+    writeln(`    ${c.dim}${r.description}${c.reset}`);
+  });
+  writeln();
+
+  selectingRole = true;
+  rl.setPrompt(`${c.yellow}?${c.reset} `);
+  rl.prompt();
+}
+
 function handleModelSelection(input: string) {
   const models = listModels();
 
-  // Empty → cancel
   if (!input) {
     writeln(`${c.dim}Cancelled.${c.reset}`);
     selectingModel = false;
@@ -91,6 +113,31 @@ function handleModelSelection(input: string) {
   normalPrompt();
 }
 
+function handleRoleSelection(input: string, agent: Agent) {
+  const roles = listRoles();
+
+  if (!input) {
+    writeln(`${c.dim}Cancelled.${c.reset}`);
+    selectingRole = false;
+    normalPrompt();
+    return;
+  }
+
+  const num = Number(input);
+  if (isNaN(num) || num < 1 || num > roles.length) {
+    writeln(`${c.red}Type a number 1-${roles.length}, or Enter to cancel${c.reset}`);
+    rl.prompt();
+    return;
+  }
+
+  const role = roles[num - 1]!;
+  agent.switchRole(role.id);
+  writeln(`${c.green}Switched role to:${c.reset} ${c.bold}${role.label}${c.reset} ${c.dim}(${role.description})${c.reset}`);
+
+  selectingRole = false;
+  normalPrompt();
+}
+
 async function main() {
   const agent = new Agent();
 
@@ -107,9 +154,15 @@ async function main() {
   rl.on("line", async (line) => {
     const input = line.trim();
 
-    // ── Selection mode: only accept numbers or Enter ──
+    // ── Selection mode: model ──
     if (selectingModel) {
       handleModelSelection(input);
+      return;
+    }
+
+    // ── Selection mode: role ──
+    if (selectingRole) {
+      handleRoleSelection(input, agent);
       return;
     }
 
@@ -141,6 +194,23 @@ async function main() {
             normalPrompt();
           } else {
             showModelSelection();
+          }
+          return;
+        }
+
+        case "/roles":
+        case "/role": {
+          if (arg) {
+            try {
+              const ps = switchRole(arg);
+              agent.switchRole(ps.label.toLowerCase() as AgentRole);
+              writeln(`${c.green}Switched to role:${c.reset} ${c.bold}${ps.label}${c.reset}`);
+            } catch (e: any) {
+              writeln(`${c.red}${e.message}${c.reset}`);
+            }
+            normalPrompt();
+          } else {
+            showRoleSelection(agent.getRole());
           }
           return;
         }
