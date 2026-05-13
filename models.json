@@ -1,0 +1,61 @@
+{
+  "active": "deepseek-v4-flash@deepseek",
+  "models": [
+    {
+      "id": "deepseek-v4-flash@deepseek",
+      "name": "DeepSeek V4 Flash (官方)",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "OPENAI_API_KEY"
+    },
+    {
+      "id": "deepseek-chat@deepseek",
+      "name": "DeepSeek V3 (官方)",
+      "model": "deepseek-chat",
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "OPENAI_API_KEY"
+    },
+    {
+      "id": "deepseek-reasoner@deepseek",
+      "name": "DeepSeek R1 (官方)",
+      "model": "deepseek-reasoner",
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "OPENAI_API_KEY"
+    },
+    {
+      "id": "deepseek-v4-flash@sensenova",
+      "name": "DeepSeek V4 Flash (商汤)",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://token.sensenova.cn/v1",
+      "api_key_env": "OPENAI_API_KEY"
+    },
+    {
+      "id": "gpt-4o@openai",
+      "name": "GPT-4o (OpenAI)",
+      "model": "gpt-4o",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY"
+    },
+    {
+      "id": "gpt-4o-mini@openai",
+      "name": "GPT-4o Mini (OpenAI)",
+      "model": "gpt-4o-mini",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY"
+    },
+    {
+      "id": "qwen-turbo@dashscope",
+      "name": "通义千问 Turbo",
+      "model": "qwen-turbo",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key_env": "DASHSCOPE_API_KEY"
+    },
+    {
+      "id": "deepseek-v3@siliconflow",
+      "name": "DeepSeek V3 (硅基流动)",
+      "model": "deepseek-ai/DeepSeek-V3",
+      "base_url": "https://api.siliconflow.cn/v1",
+      "api_key_env": "OPENAI_API_KEY"
+    }
+  ]
+}
