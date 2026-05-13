@@ -13,6 +13,7 @@ const c = {
 };
 
 let rl: readline.Interface;
+let selectingModel = false;
 
 function write(msg: string) {
   process.stdout.write(msg);
@@ -22,7 +23,7 @@ function writeln(msg = "") {
   process.stdout.write(msg + "\n");
 }
 
-function prompt() {
+function normalPrompt() {
   rl.setPrompt(`${c.green}▸${c.reset} `);
   rl.prompt(true);
 }
@@ -38,25 +39,16 @@ function showHelp() {
   ${c.yellow}/model <id>${c.reset}    Switch directly by id
   ${c.yellow}/clear${c.reset}         Reset conversation context
   ${c.yellow}/exit${c.reset}          Quit
-
-${c.bold}Examples:${c.reset}
-  "Read src/main.ts and explain what it does"
-  "Find all TODO comments"
 `);
 }
 
-/**
- * Enter model selection mode — shows list, waits for user to pick a number.
- * Blocks until user selects or cancels (empty input).
- */
-function enterModelSelection() {
+function showModelSelection() {
   const models = listModels();
   const active = getActiveEntry();
 
   writeln();
-  writeln(`${c.bold}Select a model (type number, or Enter to cancel):${c.reset}`);
+  writeln(`${c.bold}Select a model (type number, Enter to cancel):${c.reset}`);
   writeln();
-
   models.forEach((m, i) => {
     const marker = m.id === active.id ? `${c.green}▶${c.reset}` : " ";
     writeln(` ${c.yellow}${i + 1}${c.reset}. ${marker} ${c.bold}${m.id}${c.reset}`);
@@ -64,45 +56,39 @@ function enterModelSelection() {
   });
   writeln();
 
-  // Switch prompt to selection mode
+  selectingModel = true;
   rl.setPrompt(`${c.yellow}?${c.reset} `);
-
-  function onSelect(line: string) {
-    const input = line.trim();
-
-    // Empty → cancel
-    if (!input) {
-      writeln(`${c.dim}Cancelled.${c.reset}`);
-      cleanup();
-      prompt();
-      return;
-    }
-
-    const num = Number(input);
-    if (isNaN(num) || num < 1 || num > models.length) {
-      writeln(`${c.red}Type a number 1-${models.length}, or Enter to cancel${c.reset}`);
-      rl.prompt();
-      return;
-    }
-
-    const entry = models[num - 1]!;
-    try {
-      const switched = switchModel(entry.id);
-      writeln(`${c.green}Switched to:${c.reset} ${c.bold}${switched.name}${c.reset}`);
-    } catch (e: any) {
-      writeln(`${c.red}${e.message}${c.reset}`);
-    }
-
-    cleanup();
-    prompt();
-  }
-
-  function cleanup() {
-    rl.removeListener("line", onSelect);
-  }
-
-  rl.on("line", onSelect);
   rl.prompt();
+}
+
+function handleModelSelection(input: string) {
+  const models = listModels();
+
+  // Empty → cancel
+  if (!input) {
+    writeln(`${c.dim}Cancelled.${c.reset}`);
+    selectingModel = false;
+    normalPrompt();
+    return;
+  }
+
+  const num = Number(input);
+  if (isNaN(num) || num < 1 || num > models.length) {
+    writeln(`${c.red}Type a number 1-${models.length}, or Enter to cancel${c.reset}`);
+    rl.prompt();
+    return;
+  }
+
+  const entry = models[num - 1]!;
+  try {
+    const switched = switchModel(entry.id);
+    writeln(`${c.green}Switched to:${c.reset} ${c.bold}${switched.name}${c.reset}`);
+  } catch (e: any) {
+    writeln(`${c.red}${e.message}${c.reset}`);
+  }
+
+  selectingModel = false;
+  normalPrompt();
 }
 
 async function main() {
@@ -116,12 +102,19 @@ async function main() {
   });
 
   showBanner();
-  prompt();
+  normalPrompt();
 
   rl.on("line", async (line) => {
     const input = line.trim();
+
+    // ── Selection mode: only accept numbers or Enter ──
+    if (selectingModel) {
+      handleModelSelection(input);
+      return;
+    }
+
     if (!input) {
-      prompt();
+      normalPrompt();
       return;
     }
 
@@ -136,19 +129,18 @@ async function main() {
           writeln(`${c.dim}bye.${c.reset}`);
           process.exit(0);
 
+        case "/models":
         case "/model": {
           if (arg) {
-            // /model <id> — direct switch
             try {
               const entry = switchModel(arg);
               writeln(`${c.green}Switched to:${c.reset} ${c.bold}${entry.name}${c.reset}`);
             } catch (e: any) {
               writeln(`${c.red}${e.message}${c.reset}`);
             }
-            prompt();
+            normalPrompt();
           } else {
-            // /model (no args) — enter selection mode
-            enterModelSelection();
+            showModelSelection();
           }
           return;
         }
@@ -156,17 +148,17 @@ async function main() {
         case "/clear":
           agent.clearContext();
           writeln(`${c.dim}Context cleared.${c.reset}`);
-          prompt();
+          normalPrompt();
           return;
 
         case "/help":
           showHelp();
-          prompt();
+          normalPrompt();
           return;
 
         default:
           writeln(`${c.red}Unknown:${c.reset} ${cmd}. Use /help`);
-          prompt();
+          normalPrompt();
           return;
       }
     }
@@ -192,7 +184,7 @@ async function main() {
       writeln(`\n${c.red}Error: ${error.message || error}${c.reset}`);
     }
 
-    prompt();
+    normalPrompt();
   });
 
   rl.on("close", () => {

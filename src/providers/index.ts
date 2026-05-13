@@ -3,8 +3,6 @@ import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 
-// ─── Types ────────────────────────────────────────────
-
 export interface ModelEntry {
   id: string;
   name: string;
@@ -18,15 +16,11 @@ interface ModelCatalog {
   models: ModelEntry[];
 }
 
-// ─── State ────────────────────────────────────────────
-
 const MODELS_FILE = resolve(process.cwd(), "models.json");
 
 let catalog: ModelCatalog | null = null;
 let currentModelEntry: ModelEntry | null = null;
 let currentModel: LanguageModelV3 | null = null;
-
-// ─── Load ─────────────────────────────────────────────
 
 function loadCatalog(): ModelCatalog {
   if (catalog) return catalog;
@@ -45,8 +39,6 @@ function resolveApiKey(entry: ModelEntry): string {
   return process.env[entry.api_key_env] || process.env.OPENAI_API_KEY || "";
 }
 
-// ─── Build model ──────────────────────────────────────
-
 function buildModel(entry: ModelEntry): LanguageModelV3 {
   const apiKey = resolveApiKey(entry);
   const provider = createOpenAI({
@@ -54,10 +46,10 @@ function buildModel(entry: ModelEntry): LanguageModelV3 {
     baseURL: entry.base_url,
     apiKey,
   });
-  return provider(entry.model) as LanguageModelV3;
+  // provider.chat() uses /chat/completions (classic OpenAI-compatible),
+  // provider() / provider.languageModel() would default to /responses
+  return provider.chat(entry.model) as LanguageModelV3;
 }
-
-// ─── Public API ───────────────────────────────────────
 
 export function listModels(): ModelEntry[] {
   return loadCatalog().models;
@@ -83,7 +75,7 @@ export function getModel(): LanguageModelV3 {
 export function switchModel(id: string): ModelEntry {
   const cat = loadCatalog();
   const found = cat.models.find((m) => m.id === id);
-  if (!found) throw new Error(`Model "${id}" not found. Use /models to list.`);
+  if (!found) throw new Error(`Model "${id}" not found. Use /model to list.`);
   currentModelEntry = found;
   currentModel = buildModel(found);
   return found;
