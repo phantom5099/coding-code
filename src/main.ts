@@ -54,7 +54,7 @@ function showHelp() {
   ${c.yellow}/model <id>${c.reset}    Switch directly by id
   ${c.yellow}/role${c.reset}          Pick a role interactively
   ${c.yellow}/role <id>${c.reset}     Switch directly by role id
-  ${c.yellow}/rules${c.reset}         Show rules & choose which to edit
+  ${c.yellow}/rules${c.reset}         Choose which rules to edit
   ${c.yellow}/rules edit global${c.reset}  Edit global rules directly
   ${c.yellow}/rules edit project${c.reset}  Edit project rules directly
   ${c.yellow}/rules clear${c.reset}   Clear rules (default: project)
@@ -309,8 +309,7 @@ function handleRulesCommand(args: string) {
     }
 
     default: {
-      // 无子命令或未知子命令 → 显示规则 + 弹出编辑选择
-      showRules();
+      // 无子命令或未知子命令 → 只弹出编辑选择（不展示规则内容，防止内容过长不雅观）
       showRulesSelection();
       return; // 不执行 normalPrompt，由选择处理器负责
     }
