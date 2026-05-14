@@ -48,15 +48,15 @@ function showBanner() {
 
 function showHelp() {
   writeln(`\n${c.bold}Commands:${c.reset}
-  ${c.yellow}/model${c.reset}         Pick a model interactively
-  ${c.yellow}/model <id>${c.reset}    Switch directly by id
-  ${c.yellow}/role${c.reset}          Pick a role interactively
-  ${c.yellow}/role <id>${c.reset}     Switch directly by role id
-  ${c.yellow}/rules${c.reset}         Choose which rules to edit
-  ${c.yellow}/rules clear${c.reset}   Clear rules (default: project)
-  ${c.yellow}/rules clear global${c.reset}  Clear global rules
-  ${c.yellow}/clear${c.reset}         Reset conversation context
-  ${c.yellow}/exit${c.reset}          Quit
+  ${c.yellow}/model${c.reset}            Pick a model interactively
+  ${c.yellow}/model <id>${c.reset}       Switch directly by id
+  ${c.yellow}/role${c.reset}             Pick a role interactively
+  ${c.yellow}/role <id>${c.reset}        Switch directly by role id
+  ${c.yellow}/rules${c.reset}            Choose which rules to edit
+  ${c.yellow}/rules clear global${c.reset}   Clear global rules
+  ${c.yellow}/rules clear project${c.reset}  Clear project rules
+  ${c.yellow}/clear${c.reset}            Reset conversation context
+  ${c.yellow}/exit${c.reset}             Quit
 `);
 }
 
@@ -75,7 +75,7 @@ function showModelSelection() {
   writeln();
 
   selectingModel = true;
-  rl.setPrompt(`${c.blue}▸${c.reset} `);
+  rl.setPrompt(`${c.yellow}▸${c.reset} `);
   rl.prompt();
 }
 
@@ -93,7 +93,7 @@ function showRoleSelection(currentRole: AgentRole) {
   writeln();
 
   selectingRole = true;
-  rl.setPrompt(`${c.blue}▸${c.reset} `);
+  rl.setPrompt(`${c.yellow}▸${c.reset} `);
   rl.prompt();
 }
 
@@ -272,7 +272,7 @@ async function main() {
   rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: `${c.blue}▸${c.reset} `,
+    prompt: `${c.yellow}▸${c.reset} `,
     terminal: true,
   });
 
@@ -330,7 +330,9 @@ async function main() {
         case "/r": {
           if (cmdArgs) {
             try {
-              agent.switchRole(cmdArgs);
+              // 用 prompts 模块的 switchRole 做合法性校验（无效角色会抛异常）
+              switchRole(cmdArgs);
+              agent.switchRole(cmdArgs as AgentRole);
               writeln(`${c.green}Switched to role:${c.reset} ${c.bold}${cmdArgs}${c.reset}`);
             } catch {
               writeln(`${c.red}Unknown role: ${cmdArgs}${c.reset}`);
@@ -367,13 +369,15 @@ async function main() {
         }
 
         case "/exit":
+        case "/e":
         case "/q": {
-          writeln("Bye!");
-          process.exit(0);
+          writeln("bye");
+          rl.close();
+          return;
         }
 
         default: {
-          writeln(`${c.red}Unknown command: ${cmd}${c.reset}`);
+          writeln(`${c.dim}Unknown command: ${cmd}. Type /help for commands.${c.reset}`);
           break;
         }
       }
@@ -382,16 +386,27 @@ async function main() {
       return;
     }
 
-    // ── Normal chat ──
-    writeln();
-    await agent.chat(input);
+    // ── Normal message → agent ──
+    try {
+      const text = await agent.run(input);
+      if (text) {
+        writeln();
+        writeln(text);
+        writeln();
+      }
+    } catch (e: any) {
+      writeln(`${c.red}${e.message}${c.reset}`);
+    }
+
     normalPrompt();
   });
 
   rl.on("close", () => {
-    writeln("\nBye!");
     process.exit(0);
   });
 }
 
-main();
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
