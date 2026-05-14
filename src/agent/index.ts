@@ -3,6 +3,7 @@ import type { ModelMessage } from "@ai-sdk/provider-utils";
 import { getModel } from "../providers";
 import { getPromptSet } from "../prompts";
 import type { AgentRole } from "../prompts";
+import { getAllRules } from "../rules";
 
 export class Agent {
   private messages: ModelMessage[] = [];
@@ -12,14 +13,22 @@ export class Agent {
     this.role = role;
   }
 
-  /** 获取当前角色的提示词（含环境变量注入） */
+  /** 获取当前角色的提示词（含规则注入和/or环境变量注入） */
   private getSystemPrompt(): string {
     const ps = getPromptSet(this.role);
-    return ps.buildSystem({
+    const basePrompt = ps.buildSystem({
       cwd: process.cwd(),
       platform: process.platform,
       shell: process.env.SHELL || process.env.ComSpec || "bash",
     });
+
+    // ── 注入全局规则和项目规则 ──
+    const rules = getAllRules();
+    if (rules) {
+      return `${basePrompt}\n\n## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`;
+    }
+
+    return basePrompt;
   }
 
   /** 获取当前角色的工具集 */
