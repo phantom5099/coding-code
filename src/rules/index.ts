@@ -51,19 +51,7 @@ export function getAllRules(): string {
   return parts.join("\n\n");
 }
 
-// ── Write ──
-
-/** 写入全局规则 */
-export function setGlobalRules(content: string): void {
-  const dir = path.dirname(getGlobalRulesPath());
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(getGlobalRulesPath(), content, "utf-8");
-}
-
-/** 写入项目规则 */
-export function setProjectRules(content: string): void {
-  fs.writeFileSync(getProjectRulesPath(), content, "utf-8");
-}
+// ── Clear ──
 
 /** 清除全局规则 */
 export function clearGlobalRules(): void {

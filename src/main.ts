@@ -6,8 +6,6 @@ import type { AgentRole } from "./prompts";
 import {
   getGlobalRules,
   getProjectRules,
-  setGlobalRules,
-  setProjectRules,
   clearGlobalRules,
   clearProjectRules,
   editGlobalRules,
@@ -55,8 +53,6 @@ function showHelp() {
   ${c.yellow}/role${c.reset}          Pick a role interactively
   ${c.yellow}/role <id>${c.reset}     Switch directly by role id
   ${c.yellow}/rules${c.reset}         Choose which rules to edit
-  ${c.yellow}/rules edit global${c.reset}  Edit global rules directly
-  ${c.yellow}/rules edit project${c.reset}  Edit project rules directly
   ${c.yellow}/rules clear${c.reset}   Clear rules (default: project)
   ${c.yellow}/rules clear global${c.reset}  Clear global rules
   ${c.yellow}/clear${c.reset}         Reset conversation context
@@ -251,52 +247,6 @@ function handleRulesCommand(args: string) {
   const scope = hasGlobal ? "global" : hasProject ? "project" : null;
 
   switch (subCmd) {
-    case "edit": {
-      if (scope === "global") {
-        writeln(`${c.dim}Opening global rules in editor...${c.reset}`);
-        const ok = editGlobalRules();
-        if (ok) {
-          writeln(`${c.green}Global rules opened in editor.${c.reset}`);
-          writeln(`${c.dim}Save & close the editor when done. Use /rules to check.${c.reset}`);
-        } else {
-          writeln(`${c.red}Editor failed. You can edit manually at: ~/.coding-agent/rules.md${c.reset}`);
-        }
-      } else if (scope === "project") {
-        writeln(`${c.dim}Opening project rules in editor...${c.reset}`);
-        const ok = editProjectRules();
-        if (ok) {
-          writeln(`${c.green}Project rules opened in editor.${c.reset}`);
-          writeln(`${c.dim}Save & close the editor when done. Use /rules to check.${c.reset}`);
-        } else {
-          writeln(`${c.red}Editor failed. You can edit manually at: .coderules${c.reset}`);
-        }
-      } else {
-        // 没有指定 scope → 弹出选择
-        showRulesSelection();
-        return; // 不执行 normalPrompt，由选择处理器负责
-      }
-      break;
-    }
-
-    case "set": {
-      // 用法: /rules set <content> 或 /rules set global <content> 或 /rules set project <content>
-      const effectiveScope = scope ?? "project";
-      const skipCount = subCmd ? 1 : 0; // skip "set"
-      const content = parts.slice(skipCount + (scope ? 1 : 0)).join(" ");
-      if (!content) {
-        writeln(`${c.red}Usage: /rules set [global|project] <content>${c.reset}`);
-        break;
-      }
-      if (effectiveScope === "global") {
-        setGlobalRules(content);
-        writeln(`${c.green}Global rules set.${c.reset}`);
-      } else {
-        setProjectRules(content);
-        writeln(`${c.green}Project rules set.${c.reset}`);
-      }
-      break;
-    }
-
     case "clear": {
       if (scope === "global") {
         clearGlobalRules();
@@ -309,7 +259,7 @@ function handleRulesCommand(args: string) {
     }
 
     default: {
-      // 无子命令或未知子命令 → 只弹出编辑选择（不展示规则内容，防止内容过长不雅观）
+      // 无子命令或未知子命令 → 弹出编辑选择
       showRulesSelection();
       return; // 不执行 normalPrompt，由选择处理器负责
     }
@@ -360,42 +310,35 @@ async function main() {
       const [cmd, ...rest] = input.split(/\s+/);
       const cmdArgs = rest.join(" ").trim();
 
-      switch (cmd!) {
-        case "/exit":
-        case "/quit":
-          writeln(`${c.dim}bye.${c.reset}`);
-          process.exit(0);
-
-        case "/models":
-        case "/model": {
+      switch (cmd) {
+        case "/model":
+        case "/m": {
           if (cmdArgs) {
             try {
-              const entry = switchModel(cmdArgs);
-              writeln(`${c.green}Switched to:${c.reset} ${c.bold}${entry.name}${c.reset}`);
+              const switched = switchModel(cmdArgs);
+              writeln(`${c.green}Switched to:${c.reset} ${c.bold}${switched.name}${c.reset}`);
             } catch (e: any) {
               writeln(`${c.red}${e.message}${c.reset}`);
             }
-            normalPrompt();
           } else {
             showModelSelection();
           }
-          return;
+          break;
         }
 
-        case "/roles":
-        case "/role": {
+        case "/role":
+        case "/r": {
           if (cmdArgs) {
             try {
-              agent.switchRole(cmdArgs as AgentRole);
-              writeln(`${c.green}Switched role to:${c.reset} ${c.bold}${cmdArgs}${c.reset}`);
-            } catch (e: any) {
-              writeln(`${c.red}${e.message}${c.reset}`);
+              agent.switchRole(cmdArgs);
+              writeln(`${c.green}Switched to role:${c.reset} ${c.bold}${cmdArgs}${c.reset}`);
+            } catch {
+              writeln(`${c.red}Unknown role: ${cmdArgs}${c.reset}`);
             }
-            normalPrompt();
           } else {
             showRoleSelection(agent.getRole());
           }
-          return;
+          break;
         }
 
         case "/rules": {
@@ -423,37 +366,32 @@ async function main() {
           break;
         }
 
+        case "/exit":
+        case "/q": {
+          writeln("Bye!");
+          process.exit(0);
+        }
+
         default: {
-          writeln(`${c.red}Unknown command:${c.reset} ${cmd}. Type ${c.yellow}/help${c.reset} for available commands.`);
+          writeln(`${c.red}Unknown command: ${cmd}${c.reset}`);
           break;
         }
       }
+
       normalPrompt();
       return;
     }
 
-    // ── AI conversation ──
-    try {
-      write(`\n${c.dim}── thinking ──${c.reset}\n`);
-      for await (const chunk of agent.runStream(input)) {
-        write(chunk);
-      }
-      writeln();
-    } catch (e: any) {
-      writeln(`\n${c.red}Error:${c.reset} ${e.message}`);
-    }
-
-    write(`\n${c.dim}── done ──${c.reset}\n`);
+    // ── Normal chat ──
+    writeln();
+    await agent.chat(input);
     normalPrompt();
   });
 
   rl.on("close", () => {
-    writeln(`${c.dim}bye.${c.reset}`);
+    writeln("\nBye!");
     process.exit(0);
   });
 }
 
-main().catch((e: unknown) => {
-  console.error("Fatal:", e);
-  process.exit(1);
-});
+main();
