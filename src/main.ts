@@ -1,7 +1,7 @@
 import * as readline from "readline";
 import { Agent } from "./agent";
 import { listModels, switchModel, getActiveEntry } from "./providers";
-import { listRoles, switchRole } from "./prompts";
+import { listRoles } from "./prompts";
 import type { AgentRole } from "./prompts";
 import {
   getGlobalRules,
@@ -49,9 +49,7 @@ function showBanner() {
 function showHelp() {
   writeln(`\n${c.bold}Commands:${c.reset}
   ${c.yellow}/model${c.reset}            Pick a model interactively
-  ${c.yellow}/model <id>${c.reset}       Switch directly by id
   ${c.yellow}/role${c.reset}             Pick a role interactively
-  ${c.yellow}/role <id>${c.reset}        Switch directly by role id
   ${c.yellow}/rules${c.reset}            Choose which rules to edit
   ${c.yellow}/rules clear global${c.reset}   Clear global rules
   ${c.yellow}/rules clear project${c.reset}  Clear project rules
@@ -313,33 +311,13 @@ async function main() {
       switch (cmd) {
         case "/model":
         case "/m": {
-          if (cmdArgs) {
-            try {
-              const switched = switchModel(cmdArgs);
-              writeln(`${c.green}Switched to:${c.reset} ${c.bold}${switched.name}${c.reset}`);
-            } catch (e: any) {
-              writeln(`${c.red}${e.message}${c.reset}`);
-            }
-          } else {
-            showModelSelection();
-          }
+          showModelSelection();
           break;
         }
 
         case "/role":
         case "/r": {
-          if (cmdArgs) {
-            try {
-              // 用 prompts 模块的 switchRole 做合法性校验（无效角色会抛异常）
-              switchRole(cmdArgs);
-              agent.switchRole(cmdArgs as AgentRole);
-              writeln(`${c.green}Switched to role:${c.reset} ${c.bold}${cmdArgs}${c.reset}`);
-            } catch {
-              writeln(`${c.red}Unknown role: ${cmdArgs}${c.reset}`);
-            }
-          } else {
-            showRoleSelection(agent.getRole());
-          }
+          showRoleSelection(agent.getRole());
           break;
         }
 
@@ -386,27 +364,34 @@ async function main() {
       return;
     }
 
-    // ── Normal message → agent ──
+// ── Run agent ──
     try {
-      const text = await agent.run(input);
-      if (text) {
-        writeln();
-        writeln(text);
-        writeln();
+      const stream = agent.runStream(input);
+      let firstChunk = true;
+
+      let iterResult = await stream.next();
+      while (!iterResult.done) {
+        if (firstChunk) {
+          write(`\n${c.cyan}⚡${c.reset} `);
+          firstChunk = false;
+        }
+        write(iterResult.value);
+        iterResult = await stream.next();
       }
-    } catch (e: any) {
-      writeln(`${c.red}${e.message}${c.reset}`);
+
+      writeln();
+      writeln();
+    } catch (error: any) {
+      writeln(`\n${c.red}Error: ${error.message || error}${c.reset}`);
     }
 
     normalPrompt();
   });
 
   rl.on("close", () => {
+    writeln(`\n${c.dim}bye.${c.reset}`);
     process.exit(0);
   });
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main();
