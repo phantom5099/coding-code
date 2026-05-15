@@ -30,6 +30,7 @@ let rl: readline.Interface;
 let selectingModel = false;
 let selectingRole = false;
 let selectingRules = false;
+let selectingSession = false;
 
 function write(msg: string) {
   process.stdout.write(msg);
@@ -51,16 +52,15 @@ function showBanner() {
 
 function showHelp() {
   writeln(`\n${c.bold}Commands:${c.reset}
-  ${c.yellow}/model${c.reset}            Pick a model interactively
-  ${c.yellow}/role${c.reset}             Pick a role interactively
-  ${c.yellow}/rules${c.reset}            Choose which rules to edit
+  ${c.yellow}/model${c.reset}      Pick a model interactively
+  ${c.yellow}/role${c.reset}       Pick a role interactively
+  ${c.yellow}/rules${c.reset}      Edit global or project rules
   ${c.yellow}/rules clear global${c.reset}   Clear global rules
   ${c.yellow}/rules clear project${c.reset}  Clear project rules
-  ${c.yellow}/sessions${c.reset}         List historical sessions
-  ${c.yellow}/resume <id>${c.reset}      Resume a historical session
-  ${c.yellow}/clear${c.reset}            Reset conversation context and start new session
-  ${c.yellow}/help${c.reset}             Show this help
-  ${c.yellow}/exit${c.reset}             Quit
+  ${c.yellow}/sessions${c.reset}   List and resume a historical session
+  ${c.yellow}/clear${c.reset}      Reset conversation context and start new session
+  ${c.yellow}/help${c.reset}       Show this help
+  ${c.yellow}/exit${c.reset}       Quit
 `);
 }
 
@@ -111,6 +111,36 @@ function showRulesSelection() {
   writeln();
 
   selectingRules = true;
+  rl.setPrompt(`${c.yellow}▸${c.reset} `);
+  rl.prompt();
+}
+
+function showSessionSelection(agent: Agent, sessionStore: SessionStore) {
+  const sessions = SessionStore.listSessions();
+
+  writeln();
+  writeln(`${c.bold}Select a session to resume (type number, Enter to cancel):${c.reset}`);
+  writeln();
+
+  if (sessions.length === 0) {
+    writeln(`  ${c.dim}(no sessions found)${c.reset}`);
+    normalPrompt();
+    return;
+  }
+
+  const sorted = sessions.sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+
+  sorted.forEach((s, i) => {
+    const date = new Date(s.createdAt).toLocaleString();
+    writeln(` ${c.yellow}${i + 1}${c.reset}. ${c.bold}${s.sessionId.slice(0, 8)}${c.reset} ${c.dim}(${s.messageCount} msgs)${c.reset}`);
+    writeln(`    ${c.dim}model:${c.reset} ${s.model}  ${c.dim}role:${c.reset} ${s.role}`);
+    writeln(`    ${c.dim}created:${c.reset} ${date}  ${c.dim}cwd:${c.reset} ${s.cwd}`);
+  });
+  writeln();
+
+  selectingSession = true;
   rl.setPrompt(`${c.yellow}▸${c.reset} `);
   rl.prompt();
 }
@@ -211,9 +241,67 @@ function handleRulesSelection(input: string) {
   normalPrompt();
 }
 
+function handleRulesClear(args: string) {
+  const parts = args.split(/\s+/);
+  const scope = parts.includes("global") ? "global" : parts.includes("project") ? "project" : null;
+
+  if (scope === "global") {
+    clearGlobalRules();
+    writeln(`${c.green}Global rules cleared.${c.reset}`);
+  } else if (scope === "project") {
+    clearProjectRules();
+    writeln(`${c.green}Project rules cleared.${c.reset}`);
+  } else {
+    writeln(`${c.red}Usage: /rules clear global|project${c.reset}`);
+  }
+}
+
+function handleSessionSelection(input: string, agent: Agent, sessionStore: SessionStore) {
+  const sessions = SessionStore.listSessions();
+  const sorted = sessions.sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+
+  if (!input) {
+    writeln(`${c.dim}Cancelled.${c.reset}`);
+    selectingSession = false;
+    normalPrompt();
+    return;
+  }
+
+  const num = Number(input);
+  if (isNaN(num) || num < 1 || num > sorted.length) {
+    writeln(`${c.red}Type a number 1-${sorted.length}, or Enter to cancel${c.reset}`);
+    rl.prompt();
+    return;
+  }
+
+  const session = sorted[num - 1]!;
+  const resumedStore = new SessionStore(process.cwd(), session.sessionId);
+  const history = resumedStore.readHistory();
+
+  if (history.length === 0) {
+    writeln(`${c.red}Session not found or empty: ${session.sessionId}${c.reset}`);
+    selectingSession = false;
+    normalPrompt();
+    return;
+  }
+
+  const { messages, role } = buildMessagesFromHistory(history);
+  const newAgent = new Agent(role, resumedStore);
+  newAgent.setMessages(messages);
+
+  Object.assign(agent, newAgent);
+  Object.assign(sessionStore, resumedStore);
+
+  writeln(`${c.green}Resumed session:${c.reset} ${c.bold}${session.sessionId.slice(0, 8)}${c.reset} ${c.dim}(${messages.length} messages)${c.reset}`);
+
+  selectingSession = false;
+  normalPrompt();
+}
+
 // ── Rules helpers ──
 
-/** 显示当前生效的规则 */
 function showRules() {
   const globalRules = getGlobalRules();
   const projectRules = getProjectRules();
@@ -240,64 +328,8 @@ function showRules() {
   writeln();
 }
 
-/** 处理 /rules 命令 */
-function handleRulesCommand(args: string) {
-  const parts = args.split(/\s+/);
-  const subCmd = parts[0];
-
-  const hasGlobal = parts.includes("global");
-  const hasProject = parts.includes("project");
-  const scope = hasGlobal ? "global" : hasProject ? "project" : null;
-
-  switch (subCmd) {
-    case "clear": {
-      if (scope === "global") {
-        clearGlobalRules();
-        writeln(`${c.green}Global rules cleared.${c.reset}`);
-      } else {
-        clearProjectRules();
-        writeln(`${c.green}Project rules cleared.${c.reset}`);
-      }
-      break;
-    }
-
-    default: {
-      showRulesSelection();
-      return;
-    }
-  }
-}
-
 // ── Session helpers ──
 
-/** 列出所有历史会话 */
-function showSessions() {
-  const sessions = SessionStore.listSessions();
-  writeln();
-  writeln(`${c.bold}${c.cyan}── Sessions ──${c.reset}`);
-
-  if (sessions.length === 0) {
-    writeln(`  ${c.dim}(no sessions found)${c.reset}`);
-    normalPrompt();
-    return;
-  }
-
-  sessions
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .forEach((s, i) => {
-      const date = new Date(s.createdAt).toLocaleString();
-      writeln(`\n ${c.yellow}${i + 1}${c.reset}. ${c.bold}${s.sessionId.slice(0, 8)}${c.reset} ${c.dim}(${s.messageCount} msgs)${c.reset}`);
-      writeln(`    ${c.dim}model:${c.reset} ${s.model}  ${c.dim}role:${c.reset} ${s.role}`);
-      writeln(`    ${c.dim}created:${c.reset} ${date}  ${c.dim}cwd:${c.reset} ${s.cwd}`);
-    });
-
-  writeln();
-  writeln(`${c.dim}Use /resume <id> to restore a session.${c.reset}`);
-  writeln();
-  normalPrompt();
-}
-
-/** 从会话历史中重建 ModelMessage[] */
 function buildMessagesFromHistory(history: SessionEvent[]): {
   messages: ModelMessage[];
   role: AgentRole;
@@ -314,7 +346,7 @@ function buildMessagesFromHistory(history: SessionEvent[]): {
   function flushToolResults() {
     if (pendingToolResults.length === 0) return;
     messages.push({
-      role: "user",
+      role: "tool",
       content: pendingToolResults.map((tr) => ({
         type: "tool-result" as const,
         toolCallId: tr.toolCallId,
@@ -330,33 +362,28 @@ function buildMessagesFromHistory(history: SessionEvent[]): {
       case "session_meta":
         role = event.role as AgentRole;
         break;
-
       case "user":
         flushToolResults();
         messages.push({ role: "user", content: event.content } as ModelMessage);
         break;
-
       case "assistant": {
         flushToolResults();
         if (event.toolCalls && event.toolCalls.length > 0) {
-          const contentParts: any[] = [
-            { type: "text", text: event.content },
-          ];
+          const contentParts: any[] = [{ type: "text", text: event.content }];
           for (const tc of event.toolCalls) {
             contentParts.push({
               type: "tool-call",
               toolCallId: tc.id,
               toolName: tc.name,
-              args: tc.arguments,
+              input: tc.arguments,
             });
           }
-          messages.push({ role: "assistant", content: contentParts } as ModelMessage);
+          messages.push({ role: "assistant", content: contentParts } as unknown as ModelMessage);
         } else {
           messages.push({ role: "assistant", content: event.content } as ModelMessage);
         }
         break;
       }
-
       case "tool_result":
         pendingToolResults.push({
           toolName: event.toolName,
@@ -364,11 +391,9 @@ function buildMessagesFromHistory(history: SessionEvent[]): {
           output: event.output,
         });
         break;
-
       case "role_switch":
         role = event.toRole as AgentRole;
         break;
-
       case "compact_boundary":
         flushToolResults();
         messages.push({ role: "user", content: event.summary } as ModelMessage);
@@ -415,6 +440,11 @@ async function main() {
       return;
     }
 
+    if (selectingSession) {
+      handleSessionSelection(input, agent, sessionStore);
+      return;
+    }
+
     if (!input) {
       normalPrompt();
       return;
@@ -438,7 +468,18 @@ async function main() {
         }
 
         case "/rules": {
-          handleRulesCommand(cmdArgs);
+          if (cmdArgs.startsWith("clear")) {
+            handleRulesClear(cmdArgs);
+          } else if (cmdArgs === "show") {
+            showRules();
+          } else {
+            showRulesSelection();
+          }
+          break;
+        }
+
+        case "/sessions": {
+          showSessionSelection(agent, sessionStore);
           break;
         }
 
@@ -448,47 +489,12 @@ async function main() {
           break;
         }
 
-        case "/sessions": {
-          showSessions();
-          return; // showSessions handles its own prompt
-        }
-
-        case "/resume": {
-          const sessionId = cmdArgs;
-          if (!sessionId) {
-            writeln(`${c.red}Usage: /resume <sessionId>${c.reset}`);
-            normalPrompt();
-            break;
-          }
-
-          const resumedStore = new SessionStore(process.cwd(), sessionId);
-          const history = resumedStore.readHistory();
-
-          if (history.length === 0) {
-            writeln(`${c.red}Session not found: ${sessionId}${c.reset}`);
-            normalPrompt();
-            break;
-          }
-
-          const { messages, role } = buildMessagesFromHistory(history);
-          agent = new Agent(role, resumedStore);
-          agent.setMessages(messages);
-          sessionStore = resumedStore;
-
-          writeln(`${c.green}Resumed session:${c.reset} ${c.bold}${sessionId.slice(0, 8)}${c.reset} ${c.dim}(${messages.length} messages)${c.reset}`);
-          normalPrompt();
-          break;
-        }
-
         case "/clear": {
           agent.clearContext();
-
-          // 开启新 session
           sessionStore = new SessionStore(process.cwd());
           const currentEntry = getActiveEntry();
           sessionStore.init(currentEntry.model, agent.getRole(), "0.1.0");
           agent = new Agent(agent.getRole(), sessionStore);
-
           writeln(`${c.green}Context cleared. New session started.${c.reset}`);
           break;
         }

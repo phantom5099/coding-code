@@ -93,7 +93,7 @@ export class ContextCompressor {
       if (i >= cutoffIndex) return m;
 
       // 对旧消息中的 tool-result 类型内容进行截断
-      if (m.role === "user" && typeof m.content === "object" && Array.isArray(m.content)) {
+      if ((m.role === "tool" || m.role === "user") && typeof m.content === "object" && Array.isArray(m.content)) {
         return {
           ...m,
           content: m.content.map((part: any) => {

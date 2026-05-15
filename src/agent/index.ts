@@ -151,8 +151,13 @@ export class Agent {
     modelId: string,
     beforeCount: number
   ): void {
-    // SDK 返回的 messages 包含完整历史，新增部分从 beforeCount 开始
-    const newMessages = responseMessages.slice(beforeCount);
+    // SDK v6 的 response.messages 有时包含完整历史，有时只返回新生成的消息。
+    // 通过长度对比判断属于哪种情况，避免 slice(beforeCount) 在后者情形下返回空数组。
+    const isFullHistory = responseMessages.length > beforeCount;
+    const newMessages = isFullHistory
+      ? responseMessages.slice(beforeCount)
+      : responseMessages;
+
     let lastAssistantUuid: string | undefined;
 
     for (const msg of newMessages) {
@@ -160,7 +165,7 @@ export class Agent {
         const { content, toolCalls } = this.parseAssistantMessage(msg);
         const event = this.sessionStore?.recordAssistant(content, toolCalls, modelId);
         if (event) lastAssistantUuid = event.uuid;
-      } else if (msg.role === "user") {
+      } else if (msg.role === "user" || msg.role === "tool") {
         const toolResults = this.parseToolResults(msg);
         for (const tr of toolResults) {
           this.sessionStore?.recordToolResult(
@@ -173,7 +178,12 @@ export class Agent {
       }
     }
 
-    this.messages = [...responseMessages];
+    // 同步内存中的消息：如果 SDK 返回了完整历史则直接使用，否则把新消息追加到现有历史
+    if (isFullHistory) {
+      this.messages = [...responseMessages];
+    } else {
+      this.messages.push(...(newMessages as ModelMessage[]));
+    }
   }
 
   /** 从 assistant ModelMessage 中提取 content 和 toolCalls */
@@ -198,7 +208,7 @@ export class Agent {
           toolCalls.push({
             id: (part as any).toolCallId ?? (part as any).toolCallID ?? "unknown",
             name: (part as any).toolName ?? "unknown",
-            arguments: ((part as any).args ?? {}) as Record<string, unknown>,
+            arguments: ((part as any).input ?? (part as any).args ?? {}) as Record<string, unknown>,
           });
         }
       }

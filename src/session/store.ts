@@ -27,7 +27,8 @@ const CODINGCODE_DIR = join(homedir(), ".codingcode");
 const SESSIONS_DIR = join(CODINGCODE_DIR, "sessions");
 
 export function makeProjectSlug(cwd: string): string {
-  const hash = createHash("sha256").update(cwd).digest("hex");
+  const safeCwd = cwd || process.cwd();
+  const hash = createHash("sha256").update(safeCwd).digest("hex");
   return hash.slice(0, 16);
 }
 
@@ -231,7 +232,7 @@ export class SessionStore {
           results.push(index);
         } else {
           const meta = SessionStore.quickReadMeta(jsonlPath);
-          if (meta) {
+          if (meta && meta.cwd && meta.sessionId) {
             const history = new SessionStore(meta.cwd, meta.sessionId).readHistory();
             const msgCount = history.filter((e) => e.type !== "session_meta").length;
             results.push({
