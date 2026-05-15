@@ -5,7 +5,7 @@ import type { LLMClient } from '../llm/client';
 import type { ToolExecutor } from '../tools/executor';
 import type { HookRegistry } from '../core/hooks';
 import { SessionStore } from '../session/store';
-import { ContextCompressor } from '../context/compressor';
+import { ContextCompressor } from './compressor';
 import type { AgentConfig, AgentDeps, LoopState } from './types';
 import { ContextManager } from './context';
 import { resolveConfig, mergeConfig, type ResolvedConfig } from './config';
