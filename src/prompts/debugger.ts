@@ -1,6 +1,3 @@
-import { readFileTool, listDirTool } from "../tools/fs";
-import { execCommandTool } from "../tools/shell";
-import { searchCodeTool } from "../tools/search";
 import type { PromptSet } from "./types";
 
 /** 调试专家：只读 + 搜索 + 执行，不写文件 */
@@ -8,12 +5,12 @@ export const debuggerPromptSet: PromptSet = {
   label: "Debugger",
   description: "Debugging specialist — read, search, execute (read-only)",
   maxSteps: 20,
-  tools: {
-    read_file: readFileTool,
-    list_dir: listDirTool,
-    execute_command: execCommandTool,
-    search_code: searchCodeTool,
-  },
+  toolNames: [
+    "read_file",
+    "list_dir",
+    "execute_command",
+    "search_code",
+  ],
   buildSystem: (env) => `You are a debugging specialist — an AI agent that helps users find and fix bugs.
 
 ## Rules

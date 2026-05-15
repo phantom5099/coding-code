@@ -1,5 +1,3 @@
-import { readFileTool, listDirTool } from "../tools/fs";
-import { searchCodeTool } from "../tools/search";
 import type { PromptSet } from "./types";
 
 /** 代码审查专家：只读，不执行也不写 */
@@ -7,11 +5,11 @@ export const reviewerPromptSet: PromptSet = {
   label: "Reviewer",
   description: "Code reviewer — read & search only (read-only)",
   maxSteps: 10,
-  tools: {
-    read_file: readFileTool,
-    list_dir: listDirTool,
-    search_code: searchCodeTool,
-  },
+  toolNames: [
+    "read_file",
+    "list_dir",
+    "search_code",
+  ],
   buildSystem: (env) => `You are a code review specialist — an AI agent that helps review code for quality, correctness, and best practices.
 
 ## Rules

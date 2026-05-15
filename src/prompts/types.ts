@@ -1,5 +1,3 @@
-import type { ToolSet } from "ai";
-
 /** 当前支持的 Agent 角色 */
 export type AgentRole = "coder" | "debugger" | "reviewer";
 
@@ -18,8 +16,8 @@ export interface PromptSet {
   description: string;
   /** 构建 system prompt 的函数 */
   buildSystem: (env: EnvVars) => string;
-  /** 该角色可用的工具集 */
-  tools: ToolSet;
+  /** 该角色可用的工具名列表 */
+  toolNames: string[];
   /** 最大 tool-call 步数 */
   maxSteps?: number;
 }
