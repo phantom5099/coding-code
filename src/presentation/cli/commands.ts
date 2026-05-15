@@ -42,6 +42,7 @@ let selectingModel = false;
 let selectingRole = false;
 let selectingRules = false;
 let selectingSession = false;
+let pendingSessions: import('../../session/types').SessionIndex[] = [];
 let pendingCallback: ((value: string) => void) | null = null;
 
 export function isSelecting(): boolean {
@@ -128,10 +129,7 @@ export function handleSelectionInput(input: string, ctx: CommandContext): boolea
 
   if (selectingSession) {
     selectingSession = false;
-    const sessions = SessionStore.listSessions();
-    const sorted = sessions.sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
+    const sorted = pendingSessions;
     if (!input) {
       writeln(`${c.dim}Cancelled.${c.reset}`);
       normalPrompt();
@@ -144,8 +142,34 @@ export function handleSelectionInput(input: string, ctx: CommandContext): boolea
       return true;
     }
     const session = sorted[num - 1]!;
-    // Session resume is handled separately due to its complexity
-    writeln(`${c.dim}Session resume not yet implemented for: ${session.sessionId}${c.reset}`);
+
+    // 创建目标会话的 SessionStore
+    const newStore = new SessionStore(session.cwd, session.sessionId);
+    const messages = newStore.readMessages();
+
+    // 切换模型
+    const switched = switchModel(session.model);
+    if (switched.ok) {
+      writeln(`${c.green}Switched to:${c.reset} ${c.bold}${switched.value.name}${c.reset}`);
+    } else {
+      writeln(`${c.yellow}Model "${session.model}" not available, keeping current${c.reset}`);
+    }
+
+    // 切换角色
+    ctx.agent.switchRole(session.role);
+
+    // 加载历史消息
+    ctx.agent.clearContext();
+    ctx.agent.setMessages(messages);
+
+    // 替换 session store
+    Object.assign(ctx.sessionStore, newStore);
+    ctx.onSessionReset?.();
+
+    writeln(
+      `${c.green}Session resumed:${c.reset} ${c.bold}${session.sessionId.slice(0, 8)}${c.reset} ` +
+        `${c.dim}(model=${session.model}, role=${session.role}, ${messages.length} msgs)${c.reset}`,
+    );
     normalPrompt();
     return true;
   }
@@ -202,10 +226,10 @@ function handleSessions(ctx: CommandContext, _args: string) {
     normalPrompt();
     return;
   }
-  const sorted = sessions.sort(
+  pendingSessions = sessions.sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
-  sorted.forEach((s, i) => {
+  pendingSessions.forEach((s, i) => {
     const date = new Date(s.createdAt).toLocaleString();
     writeln(` ${c.yellow}${i + 1}${c.reset}. ${c.bold}${s.sessionId.slice(0, 8)}${c.reset} ${c.dim}(${s.messageCount} msgs)${c.reset}`);
     writeln(`    ${c.dim}model:${c.reset} ${s.model}  ${c.dim}role:${c.reset} ${s.role}`);

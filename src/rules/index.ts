@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 
 /** 全局规则文件路径 */
 function getGlobalRulesPath(): string {
-  return path.join(os.homedir(), ".coding-agent", "rules.md");
+  return path.join(os.homedir(), ".codingcode", "rules.md");
 }
 
 /** 项目规则文件路径 */
