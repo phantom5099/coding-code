@@ -1,4 +1,5 @@
 import * as readline from "readline";
+import type { ModelMessage } from "@ai-sdk/provider-utils";
 import { Agent } from "./agent";
 import { listModels, switchModel, getActiveEntry } from "./providers";
 import { listRoles } from "./prompts";
@@ -11,6 +12,8 @@ import {
   editGlobalRules,
   editProjectRules,
 } from "./rules";
+import { SessionStore } from "./session/store";
+import type { SessionEvent } from "./session/types";
 
 const c = {
   reset: "\x1b[0m",
@@ -53,7 +56,10 @@ function showHelp() {
   ${c.yellow}/rules${c.reset}            Choose which rules to edit
   ${c.yellow}/rules clear global${c.reset}   Clear global rules
   ${c.yellow}/rules clear project${c.reset}  Clear project rules
-  ${c.yellow}/clear${c.reset}            Reset conversation context
+  ${c.yellow}/sessions${c.reset}         List historical sessions
+  ${c.yellow}/resume <id>${c.reset}      Resume a historical session
+  ${c.yellow}/clear${c.reset}            Reset conversation context and start new session
+  ${c.yellow}/help${c.reset}             Show this help
   ${c.yellow}/exit${c.reset}             Quit
 `);
 }
@@ -239,7 +245,6 @@ function handleRulesCommand(args: string) {
   const parts = args.split(/\s+/);
   const subCmd = parts[0];
 
-  // 检查指定的 scope（支持 "global" 和 "project"）
   const hasGlobal = parts.includes("global");
   const hasProject = parts.includes("project");
   const scope = hasGlobal ? "global" : hasProject ? "project" : null;
@@ -257,15 +262,130 @@ function handleRulesCommand(args: string) {
     }
 
     default: {
-      // 无子命令或未知子命令 → 弹出编辑选择
       showRulesSelection();
-      return; // 不执行 normalPrompt，由选择处理器负责
+      return;
     }
   }
 }
 
+// ── Session helpers ──
+
+/** 列出所有历史会话 */
+function showSessions() {
+  const sessions = SessionStore.listSessions();
+  writeln();
+  writeln(`${c.bold}${c.cyan}── Sessions ──${c.reset}`);
+
+  if (sessions.length === 0) {
+    writeln(`  ${c.dim}(no sessions found)${c.reset}`);
+    normalPrompt();
+    return;
+  }
+
+  sessions
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .forEach((s, i) => {
+      const date = new Date(s.createdAt).toLocaleString();
+      writeln(`\n ${c.yellow}${i + 1}${c.reset}. ${c.bold}${s.sessionId.slice(0, 8)}${c.reset} ${c.dim}(${s.messageCount} msgs)${c.reset}`);
+      writeln(`    ${c.dim}model:${c.reset} ${s.model}  ${c.dim}role:${c.reset} ${s.role}`);
+      writeln(`    ${c.dim}created:${c.reset} ${date}  ${c.dim}cwd:${c.reset} ${s.cwd}`);
+    });
+
+  writeln();
+  writeln(`${c.dim}Use /resume <id> to restore a session.${c.reset}`);
+  writeln();
+  normalPrompt();
+}
+
+/** 从会话历史中重建 ModelMessage[] */
+function buildMessagesFromHistory(history: SessionEvent[]): {
+  messages: ModelMessage[];
+  role: AgentRole;
+} {
+  const messages: ModelMessage[] = [];
+  let role: AgentRole = "coder";
+
+  const pendingToolResults: Array<{
+    toolName: string;
+    toolCallId: string;
+    output: string;
+  }> = [];
+
+  function flushToolResults() {
+    if (pendingToolResults.length === 0) return;
+    messages.push({
+      role: "user",
+      content: pendingToolResults.map((tr) => ({
+        type: "tool-result" as const,
+        toolCallId: tr.toolCallId,
+        toolName: tr.toolName,
+        result: tr.output,
+      })),
+    } as unknown as ModelMessage);
+    pendingToolResults.length = 0;
+  }
+
+  for (const event of history) {
+    switch (event.type) {
+      case "session_meta":
+        role = event.role as AgentRole;
+        break;
+
+      case "user":
+        flushToolResults();
+        messages.push({ role: "user", content: event.content } as ModelMessage);
+        break;
+
+      case "assistant": {
+        flushToolResults();
+        if (event.toolCalls && event.toolCalls.length > 0) {
+          const contentParts: any[] = [
+            { type: "text", text: event.content },
+          ];
+          for (const tc of event.toolCalls) {
+            contentParts.push({
+              type: "tool-call",
+              toolCallId: tc.id,
+              toolName: tc.name,
+              args: tc.arguments,
+            });
+          }
+          messages.push({ role: "assistant", content: contentParts } as ModelMessage);
+        } else {
+          messages.push({ role: "assistant", content: event.content } as ModelMessage);
+        }
+        break;
+      }
+
+      case "tool_result":
+        pendingToolResults.push({
+          toolName: event.toolName,
+          toolCallId: event.toolCallId,
+          output: event.output,
+        });
+        break;
+
+      case "role_switch":
+        role = event.toRole as AgentRole;
+        break;
+
+      case "compact_boundary":
+        flushToolResults();
+        messages.push({ role: "user", content: event.summary } as ModelMessage);
+        break;
+    }
+  }
+
+  flushToolResults();
+  return { messages, role };
+}
+
 async function main() {
-  const agent = new Agent();
+  let sessionStore = new SessionStore(process.cwd());
+  let agent = new Agent("coder", sessionStore);
+
+  const entry = getActiveEntry();
+  sessionStore.init(entry.model, agent.getRole(), "0.1.0");
 
   rl = readline.createInterface({
     input: process.stdin,
@@ -280,19 +400,16 @@ async function main() {
   rl.on("line", async (line) => {
     const input = line.trim();
 
-    // ── Selection mode: model ──
     if (selectingModel) {
       handleModelSelection(input);
       return;
     }
 
-    // ── Selection mode: role ──
     if (selectingRole) {
       handleRoleSelection(input, agent);
       return;
     }
 
-    // ── Selection mode: rules ──
     if (selectingRules) {
       handleRulesSelection(input);
       return;
@@ -303,7 +420,6 @@ async function main() {
       return;
     }
 
-    // ── Commands ──
     if (input.startsWith("/")) {
       const [cmd, ...rest] = input.split(/\s+/);
       const cmdArgs = rest.join(" ").trim();
@@ -332,9 +448,48 @@ async function main() {
           break;
         }
 
+        case "/sessions": {
+          showSessions();
+          return; // showSessions handles its own prompt
+        }
+
+        case "/resume": {
+          const sessionId = cmdArgs;
+          if (!sessionId) {
+            writeln(`${c.red}Usage: /resume <sessionId>${c.reset}`);
+            normalPrompt();
+            break;
+          }
+
+          const resumedStore = new SessionStore(process.cwd(), sessionId);
+          const history = resumedStore.readHistory();
+
+          if (history.length === 0) {
+            writeln(`${c.red}Session not found: ${sessionId}${c.reset}`);
+            normalPrompt();
+            break;
+          }
+
+          const { messages, role } = buildMessagesFromHistory(history);
+          agent = new Agent(role, resumedStore);
+          agent.setMessages(messages);
+          sessionStore = resumedStore;
+
+          writeln(`${c.green}Resumed session:${c.reset} ${c.bold}${sessionId.slice(0, 8)}${c.reset} ${c.dim}(${messages.length} messages)${c.reset}`);
+          normalPrompt();
+          break;
+        }
+
         case "/clear": {
           agent.clearContext();
-          writeln(`${c.green}Context cleared.${c.reset}`);
+
+          // 开启新 session
+          sessionStore = new SessionStore(process.cwd());
+          const currentEntry = getActiveEntry();
+          sessionStore.init(currentEntry.model, agent.getRole(), "0.1.0");
+          agent = new Agent(agent.getRole(), sessionStore);
+
+          writeln(`${c.green}Context cleared. New session started.${c.reset}`);
           break;
         }
 
@@ -343,6 +498,9 @@ async function main() {
           writeln(`  Role: ${c.bold}${agent.getRole()}${c.reset}`);
           writeln(`  Model: ${c.bold}${getActiveEntry().name}${c.reset}`);
           writeln(`  CWD: ${c.dim}${process.cwd()}${c.reset}`);
+          writeln(`  Session: ${c.dim}${sessionStore.getSessionId().slice(0, 8)}${c.reset}`);
+          writeln(`  Messages: ${c.dim}${sessionStore.getMessageCount()}${c.reset}`);
+          writeln(`  Path: ${c.dim}${sessionStore.getTranscriptPath()}${c.reset}`);
           break;
         }
 
@@ -364,7 +522,6 @@ async function main() {
       return;
     }
 
-// ── Run agent ──
     try {
       const stream = agent.runStream(input);
       let firstChunk = true;
@@ -390,6 +547,7 @@ async function main() {
 
   rl.on("close", () => {
     writeln(`\n${c.dim}bye.${c.reset}`);
+    writeln(`${c.dim}Session saved to: ${sessionStore.getTranscriptPath()}${c.reset}`);
     process.exit(0);
   });
 }
