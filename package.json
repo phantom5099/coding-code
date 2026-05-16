@@ -12,10 +12,15 @@
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.35",
     "@ai-sdk/openai": "^3.0.63",
+    "@types/react": "^19.2.14",
     "ai": "^6.0.180",
     "globby": "^14.1.0",
+    "ink": "^7.0.3",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
+    "react": "^19.2.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {
