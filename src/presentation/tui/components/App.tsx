@@ -32,7 +32,7 @@ interface AppProps {
 
 export function App({ agent, sessionStore }: AppProps) {
   const { exit } = useApp();
-  const { width, height } = useTerminalSize();
+  const { width } = useTerminalSize();
   const {
     staticMessages,
     activeMessages,
@@ -287,7 +287,7 @@ export function App({ agent, sessionStore }: AppProps) {
   const helpW = Math.min(50, width - 4);
 
   return (
-    <Box flexDirection="column" height={height}>
+    <Box flexDirection="column">
       <Box>
         <Text bold color="cyan">coding-agent</Text>
         <Text color="gray" dimColor>  {bannerEntry.ok ? bannerEntry.value.name : 'unknown'} · /help for commands</Text>
