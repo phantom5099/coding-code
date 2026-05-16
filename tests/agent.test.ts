@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Agent } from "../src/agent";
+import { Agent } from "../src/agent/agent";
 
 describe("Agent", () => {
   it("should create an agent instance", () => {
