@@ -1,7 +1,7 @@
 export interface UIMessage {
   id: string;
   timestamp: number;
-  role: 'user' | 'assistant' | 'tool' | 'system';
+  role: 'user' | 'assistant' | 'tool' | 'system' | 'welcome';
   content: string;
   isStreaming?: boolean;
   model?: string;

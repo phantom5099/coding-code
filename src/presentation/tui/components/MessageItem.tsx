@@ -52,6 +52,14 @@ export function MessageItem({ message, isFocused = false, width, expanded = true
     );
   }
 
+  if (message.role === 'welcome') {
+    return (
+      <Box flexDirection="column" marginY={1} paddingLeft={2}>
+        <Text color="cyan" bold>{message.content}</Text>
+      </Box>
+    );
+  }
+
   if (message.role === 'system') {
     return (
       <Box flexDirection="column" marginY={1} paddingLeft={2}>

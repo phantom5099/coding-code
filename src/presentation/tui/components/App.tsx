@@ -23,6 +23,7 @@ import { ModelPicker } from './ModelPicker';
 import { RolePicker } from './RolePicker';
 import { SessionPicker } from './SessionPicker';
 import { HelpOverlay } from './HelpOverlay';
+import { buildWelcomeContent } from './WelcomePanel';
 
 interface AppProps {
   agent: Agent;
@@ -57,10 +58,26 @@ export function App({ agent, sessionStore }: AppProps) {
   // 初始化加载历史到 static
   useEffect(() => {
     const history = sessionStore.readHistory();
-    const uiMessages = historyToUIMessages(history);
+    let uiMessages = historyToUIMessages(history);
+
+    // 新会话无历史时，添加欢迎面板到 scrollback
+    if (uiMessages.length === 0) {
+      const entry = getActiveEntry();
+      uiMessages = [{
+        id: generateId(),
+        timestamp: Date.now(),
+        role: 'welcome' as const,
+        content: buildWelcomeContent({
+          model: entry.ok ? entry.value.name : 'unknown',
+          role: agent.getRole(),
+          sessionId: sessionStore.getSessionId(),
+        }),
+      }];
+    }
+
     setStaticMessages(uiMessages);
     setActiveMessages([]);
-  }, [sessionStore, setStaticMessages, setActiveMessages]);
+  }, [sessionStore, setStaticMessages, setActiveMessages, agent]);
 
   // active 消息变化时聚焦到最后一条
   useEffect(() => {
