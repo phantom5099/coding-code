@@ -5,7 +5,6 @@ import type { LLMClient } from '../llm/client';
 import type { ToolExecutor } from '../tools/executor';
 import type { HookRegistry } from '../core/hooks';
 import { SessionStore } from '../session/store';
-import { ContextCompressor } from './compressor';
 import type { AgentConfig, AgentDeps, LoopState } from './types';
 import { ContextManager } from './context';
 import { resolveConfig, mergeConfig, type ResolvedConfig } from './config';
@@ -14,7 +13,6 @@ export class Agent {
   private context: ContextManager;
   private config: ResolvedConfig;
   private sessionStore?: SessionStore;
-  private compressor: ContextCompressor;
   private deps: AgentDeps;
   private state: LoopState;
   private lastAssistantUuid: string = '';
@@ -28,7 +26,6 @@ export class Agent {
     this.config = mergeConfig(resolveConfig(config.role), config);
     this.sessionStore = sessionStore;
     this.context = new ContextManager();
-    this.compressor = new ContextCompressor();
     this.state = { step: 0, maxSteps: this.config.maxSteps };
   }
 
@@ -193,10 +190,8 @@ export class Agent {
   /** 运行前：压缩上下文 + 记录用户输入 */
   private beforeRun(userInput: string): void {
     // 1. 压缩已有消息
-    const currentMessages = this.context.getMessages();
-    const compressResult = this.compressor.compress(currentMessages as any);
+    const compressResult = this.context.compress();
     if (compressResult.didCompress) {
-      this.context.setMessages(compressResult.messages as any);
       this.sessionStore?.recordCompactBoundary(
         compressResult.summary ?? '',
         compressResult.replacedRange ?? [0, 0],
