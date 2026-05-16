@@ -24,18 +24,13 @@ export interface CommandContext {
 
 export const commands: Record<string, (ctx: CommandContext, args: string) => Promise<void> | void> = {
   '/model': handleModel,
-  '/m': handleModel,
   '/role': handleRole,
-  '/r': handleRole,
   '/rules': handleRules,
   '/sessions': handleSessions,
   '/help': handleHelp,
-  '/h': handleHelp,
   '/clear': handleClear,
   '/debug': handleDebug,
   '/exit': handleExit,
-  '/e': handleExit,
-  '/q': handleExit,
 };
 
 let selectingModel = false;
