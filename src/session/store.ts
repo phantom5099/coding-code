@@ -12,6 +12,7 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { join, dirname, basename } from "path";
+import type { Message } from "../core/types";
 import type {
   SessionEvent,
   SessionMetaEvent,
@@ -250,6 +251,42 @@ export class SessionStore {
       }
     }
     return results;
+  }
+
+  /** 从事件历史重建 Message[] 用于会话恢复 */
+  readMessages(): Message[] {
+    const history = this.readHistory();
+    const messages: Message[] = [];
+
+    for (const event of history) {
+      switch (event.type) {
+        case 'user':
+          messages.push({ role: 'user', content: event.content });
+          break;
+        case 'assistant': {
+          const msg: Message = { role: 'assistant', content: event.content };
+          if (event.toolCalls && event.toolCalls.length > 0) {
+            (msg as any).tool_calls = event.toolCalls.map((tc) => ({
+              id: tc.id,
+              name: tc.name,
+              arguments: tc.arguments,
+            }));
+          }
+          messages.push(msg);
+          break;
+        }
+        case 'tool_result':
+          messages.push({
+            role: 'tool',
+            content: event.output,
+            tool_call_id: event.toolCallId,
+            tool_name: event.toolName,
+          } as any);
+          break;
+        // session_meta, role_switch, compact_boundary are skipped
+      }
+    }
+    return messages;
   }
 
   private static quickReadMeta(path: string): SessionMetaEvent | null {
