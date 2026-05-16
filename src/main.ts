@@ -3,8 +3,6 @@ import { ToolRegistry } from './tools/registry';
 import { ToolExecutor } from './tools/executor';
 import { getLLMClient } from './llm/factory';
 import { Agent } from './agent/agent';
-import { CliApp } from './presentation/cli/app';
-import { StdioTransport } from './transport/stdio';
 import { runTui } from './presentation/tui/index.js';
 import { SessionStore } from './session/store';
 import { DefaultSandbox } from './sandbox';
@@ -46,15 +44,7 @@ async function main() {
     sessionStore,
   );
 
-  const useCli = process.argv.includes('--cli');
-
-  if (useCli) {
-    const transport = new StdioTransport();
-    const app = new CliApp(transport, agent, sessionStore);
-    await app.run();
-  } else {
-    runTui(agent, sessionStore);
-  }
+  runTui(agent, sessionStore);
 }
 
 main().catch((err) => {
