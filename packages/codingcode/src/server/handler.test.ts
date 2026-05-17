@@ -44,6 +44,7 @@ const mockExecutor = {
 const MockSessionLayer = Layer.succeed(
   SessionService,
   SessionService.of({
+    _tag: 'Session' as const,
     create: () => Effect.succeed(createMockState()),
     recordUser: () =>
       Effect.succeed({

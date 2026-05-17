@@ -44,6 +44,7 @@ const mockHooks = {};
 const MockSessionLayer = Layer.succeed(
   SessionService,
   SessionService.of({
+    _tag: 'Session' as const,
     create: () => Effect.succeed(mockState),
     recordUser: () =>
       Effect.succeed({
@@ -94,6 +95,7 @@ const MockSessionLayer = Layer.succeed(
     getSessionId: () => 'test',
     getMessageCount: () => 0,
   }),
+
 );
 
 const TestLayer = Layer.mergeAll(

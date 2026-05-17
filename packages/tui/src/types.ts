@@ -19,9 +19,15 @@ export interface SessionIndex {
   messageCount: number;
 }
 
-export type OverlayState =
+export interface PanelItem<T = string> {
+  label: string;
+  value: T;
+  description?: string;
+}
+
+export type PanelState =
   | { type: 'none' }
-  | { type: 'model'; models: Array<{ id: string; name: string; provider: string; model: string }>; activeId: string }
-  | { type: 'role'; roles: Array<{ id: string; label: string; description: string }>; currentRole: string }
-  | { type: 'sessions'; sessions: SessionIndex[] }
+  | { type: 'model'; items: PanelItem[]; activeValue: string }
+  | { type: 'role'; items: PanelItem[]; activeValue: string }
+  | { type: 'sessions'; items: PanelItem[] }
   | { type: 'help' };

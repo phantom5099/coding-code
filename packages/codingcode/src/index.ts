@@ -13,4 +13,3 @@ export { AppLayer, AgentLayer, SessionLayer, ContextLayer, BusLayer } from './la
 export { createServer } from './server/index.js';
 export { CodingCodeClient } from './server/client.js';
 export { handler, sseHandler } from './server/handler.js';
-export { useEffectFiber } from './server/useFiber.js';

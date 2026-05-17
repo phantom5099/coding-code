@@ -16,9 +16,6 @@ export interface Message {
 
 export interface ToolCall {
   id: string;
-  type: 'function';
-  function: {
-    name: string;
-    arguments: string;
-  };
+  name: string;
+  arguments: Record<string, unknown>;
 }

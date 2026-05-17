@@ -20,6 +20,7 @@ export const sendMessage = (
     const agent = yield* AgentService;
     const bus = yield* Bus;
 
+    yield* agent.init({ role: state.sessionMeta?.role ?? 'coder' });
     yield* ctx.addUser(input);
     yield* session.recordUser(state, input);
 
@@ -45,6 +46,8 @@ export const resumeSession = (
     const meta = history.find((e) => e.type === 'session_meta') as { role?: string } | undefined;
     if (meta?.role) {
       yield* agent.switchRole(meta.role);
+    } else {
+      yield* agent.init({ role: 'coder' });
     }
 
     return history;
