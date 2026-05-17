@@ -12,6 +12,7 @@ import { bashTool } from './tools/domains/bash/exec';
 import { searchTool } from './tools/domains/search/grep';
 import { webFetchTool } from './tools/domains/web/fetch';
 import { createServer } from './server/index';
+import { loadConfig } from '../../infra/src/config';
 
 function findAvailablePort(startPort: number): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -38,7 +39,8 @@ async function main() {
   const args = process.argv.slice(2);
   const serveOnly = args.includes('serve');
   const tuiOnly = args.includes('tui');
-  const basePort = parseInt(process.env.PORT ?? '8080', 10);
+  const config = loadConfig();
+  const basePort = config.server.port;
 
   // 装配核心依赖
   const hooks = new HookRegistry();

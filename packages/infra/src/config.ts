@@ -3,6 +3,9 @@ import { resolve } from 'path';
 import { parse as parseYaml } from 'yaml';
 
 export interface AppConfig {
+  server: {
+    port: number;
+  };
   models: Record<string, {
     provider: string;
     model: string;
@@ -18,6 +21,9 @@ export interface AppConfig {
 }
 
 const DEFAULT_CONFIG: AppConfig = {
+  server: {
+    port: 8080,
+  },
   models: {},
   roles: {},
 };
