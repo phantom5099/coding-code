@@ -7,7 +7,7 @@ interface WelcomeContent {
 export function buildWelcomeContent({ model, role, sessionId }: WelcomeContent): string {
   return [
     '',
-    '  C O D I N G    A G E N T',
+    '  C O D I N G    C O D E',
     '',
     `  Model:    ${model}`,
     `  Role:     ${role}`,

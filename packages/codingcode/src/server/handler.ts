@@ -38,11 +38,11 @@ export function sseHandler(
             new TextEncoder().encode('data: {"type":"complete"}\n\n'),
           );
         } catch (e) {
-          controller.enqueue(
-            new TextEncoder().encode(
-              `data: {"type":"error","message":"${String(e)}"}\n\n`,
-            ),
-          );
+          const msg = JSON.stringify({
+            type: 'error',
+            message: e instanceof Error ? e.message : String(e),
+          });
+          controller.enqueue(new TextEncoder().encode(`data: ${msg}\n\n`));
         }
         controller.close();
       },

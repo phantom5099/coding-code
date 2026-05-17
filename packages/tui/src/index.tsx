@@ -4,16 +4,26 @@ import { App } from './components/App.js';
 
 interface TuiOptions {
   serverUrl?: string;
-  sessionId?: string;
 }
 
 export function runTui(options: TuiOptions = {}) {
-  const serverUrl = options.serverUrl ?? 'http://localhost:3000';
-  const sessionId = options.sessionId ?? 'default';
+  const serverUrl = options.serverUrl ?? 'http://localhost:8080';
+  let currentSessionId: string | undefined;
 
   const client = {
-    async *sendMessage(sid: string, input: string): AsyncGenerator<string> {
-      const response = await fetch(`${serverUrl}/api/sessions/${sid}/messages`, {
+    async *sendMessage(input: string): AsyncGenerator<string> {
+      if (!currentSessionId) {
+        const createRes = await fetch(`${serverUrl}/api/sessions`, {
+          method: 'POST',
+          body: JSON.stringify({ cwd: process.cwd() }),
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
+        const { sessionId } = await createRes.json() as { sessionId: string };
+        currentSessionId = sessionId;
+      }
+
+      const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId}/messages`, {
         method: 'POST', body: JSON.stringify({ input }),
         headers: { 'Content-Type': 'application/json' },
       });
@@ -40,6 +50,7 @@ export function runTui(options: TuiOptions = {}) {
     },
 
     async resumeSession(sid: string) {
+      currentSessionId = sid;
       const res = await fetch(`${serverUrl}/api/sessions/${sid}/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: process.cwd() }) });
       return res.json();
     },
@@ -48,11 +59,11 @@ export function runTui(options: TuiOptions = {}) {
     async switchModel(id: string) { await fetch(`${serverUrl}/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: id }) }); },
     async listRoles() { const res = await fetch(`${serverUrl}/api/roles`); return res.json(); },
     async switchRole(id: string) { await fetch(`${serverUrl}/api/roles/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: id }) }); },
-    async getSessionInfo() { return { sessionId, model: 'unknown', role: 'coder', messageCount: 0 }; },
+    getSessionId() { return currentSessionId ?? 'unknown'; },
     async clearSession() {},
   };
 
-  const { waitUntilExit } = render(<App client={client} sessionId={sessionId} />);
+  const { waitUntilExit } = render(<App client={client} />);
 
   process.on('SIGINT', () => { process.exit(0); });
   process.on('SIGTERM', () => { process.exit(0); });

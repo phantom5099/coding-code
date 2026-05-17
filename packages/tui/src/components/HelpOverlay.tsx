@@ -3,17 +3,18 @@ import { Box, Text } from 'ink';
 
 interface Props {
   width: number;
+  maxHeight?: number;
 }
 
-export function HelpOverlay({ width }: Props) {
+export function HelpOverlay({ width, maxHeight }: Props) {
   const maxLen = Math.max(0, width - 4);
 
   const line = (cmd: string, desc: string) =>
     `${cmd.padEnd(12)}${desc}`.slice(0, maxLen);
 
   return (
-    <Box flexDirection="column">
-      <Box marginY={1}>
+    <Box flexDirection="column" height={maxHeight ?? 12}>
+      <Box marginTop={1}>
         <Text bold>Commands:</Text>
       </Box>
       <Box paddingLeft={2} flexDirection="column">
@@ -21,11 +22,10 @@ export function HelpOverlay({ width }: Props) {
         <Text color="gray" dimColor>{line('/role', '选择角色')}</Text>
         <Text color="gray" dimColor>{line('/sessions', '恢复历史会话')}</Text>
         <Text color="gray" dimColor>{line('/clear', '清空上下文并开始新会话')}</Text>
-        <Text color="gray" dimColor>{line('/debug', '显示调试信息')}</Text>
         <Text color="gray" dimColor>{line('/help', '显示此帮助')}</Text>
         <Text color="gray" dimColor>{line('/exit', '退出')}</Text>
       </Box>
-      <Box marginY={1}>
+      <Box marginTop={1}>
         <Text bold>Shortcuts:</Text>
       </Box>
       <Box paddingLeft={2} flexDirection="column">

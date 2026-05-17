@@ -56,7 +56,7 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
   }),
 }) {}
 
-async function* runReActLoop(
+export async function* runReActLoop(
   initialMessages: Message[],
   config: ResolvedConfig,
   llm: LLMStreamAdapter,
@@ -89,7 +89,7 @@ async function* runReActLoop(
     }
 
     const resp = llmResult.value;
-    const toolCalls: ToolCall[] | undefined = (resp as any).toolCalls;
+    const toolCalls = resp.toolCalls;
     const assistantMsg: Message = { role: 'assistant', content: resp.content };
     if (toolCalls && toolCalls.length > 0) {
       (assistantMsg as any).tool_calls = toolCalls;
@@ -101,15 +101,13 @@ async function* runReActLoop(
       return Result.ok(resp.content);
     }
 
-    for (const tc of (resp as any).toolCalls) {
-      const args: Record<string, unknown> = typeof tc.function.arguments === 'string'
-        ? JSON.parse(tc.function.arguments)
-        : tc.function.arguments;
-      yield { type: 'toolStart', name: tc.function.name, arguments: args };
-      const toolResult = await executor.execute(tc.function.name, args);
+    for (const tc of toolCalls) {
+      const args = tc.arguments ?? {};
+      yield { type: 'toolStart', name: tc.name, arguments: args };
+      const toolResult = await executor.execute(tc.name, args);
       const output = toolResult.ok ? toolResult.value : `[Error: ${toolResult.error.code}] ${toolResult.error.message}`;
-      messages.push({ role: 'tool', content: output, tool_call_id: tc.id, tool_name: tc.function.name });
-      yield { type: 'toolResult', id: tc.id, name: tc.function.name, output, ok: toolResult.ok };
+      messages.push({ role: 'tool', content: output, tool_call_id: tc.id, tool_name: tc.name });
+      yield { type: 'toolResult', id: tc.id, name: tc.name, output, ok: toolResult.ok };
     }
   }
 

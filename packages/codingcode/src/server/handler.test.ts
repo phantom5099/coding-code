@@ -1,0 +1,192 @@
+import { describe, it, expect } from 'vitest';
+import { Effect, Layer } from 'effect';
+import { sseHandler } from './handler.js';
+import { sendMessage } from '../orchestrate.js';
+import { SessionService, type SessionStoreState } from '../session/store.js';
+import { Result } from '../core/result.js';
+
+function createMockState(overrides: Partial<SessionStoreState> = {}): SessionStoreState {
+  return {
+    sessionId: 'test-session',
+    cwd: '/tmp/test',
+    projectSlug: 'test',
+    transcriptPath: '/tmp/test.jsonl',
+    indexPath: '/tmp/test.index.json',
+    messageCount: 0,
+    sessionMeta: null,
+    ...overrides,
+  };
+}
+
+function createMockLlm(chunks?: string[], responseContent?: string) {
+  return {
+    completeStream: (_params: any) => ({
+      stream: (async function* () {
+        for (const c of chunks ?? []) {
+          yield c;
+        }
+      })(),
+      response: Promise.resolve(
+        Result.ok({
+          content: responseContent ?? chunks?.join('') ?? '',
+          finishReason: 'stop' as const,
+        }),
+      ),
+    }),
+  };
+}
+
+const mockExecutor = {
+  execute: async () => Result.ok('done'),
+  getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
+};
+
+const MockSessionLayer = Layer.succeed(
+  SessionService,
+  SessionService.of({
+    create: () => Effect.succeed(createMockState()),
+    recordUser: () =>
+      Effect.succeed({
+        type: 'user' as const,
+        uuid: 'u1',
+        content: '',
+        timestamp: new Date().toISOString(),
+      }),
+    recordAssistant: () =>
+      Effect.succeed({
+        type: 'assistant' as const,
+        uuid: 'a1',
+        content: '',
+        toolCalls: [],
+        model: 'test',
+        timestamp: new Date().toISOString(),
+      }),
+    recordToolResult: () =>
+      Effect.succeed({
+        type: 'tool_result' as const,
+        uuid: 't1',
+        parentUuid: 'a1',
+        toolName: 'test',
+        toolCallId: 'tc1',
+        output: '',
+        timestamp: new Date().toISOString(),
+      }),
+    recordRoleSwitch: () =>
+      Effect.succeed({
+        type: 'role_switch' as const,
+        uuid: 'r1',
+        fromRole: 'a',
+        toRole: 'b',
+        timestamp: new Date().toISOString(),
+      }),
+    recordCompactBoundary: () =>
+      Effect.succeed({
+        type: 'compact_boundary' as const,
+        uuid: 'c1',
+        summary: '',
+        replacedRange: [0, 0] as [number, number],
+        messageCount: 0,
+        timestamp: new Date().toISOString(),
+      }),
+    readHistory: () => Effect.succeed([]),
+    readMessages: () => Effect.succeed([]),
+    listSessions: () => Effect.succeed([]),
+    getSessionId: () => 'test',
+    getMessageCount: () => 0,
+  }),
+);
+
+async function readSSEStream(response: Response): Promise<{ events: any[]; raw: string }> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let raw = '';
+  const events: any[] = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    raw += decoder.decode(value, { stream: true });
+  }
+
+  // flush any remaining buffer
+  buffer += decoder.decode();
+  raw += buffer;
+
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('data: ')) {
+      events.push(JSON.parse(line.slice(6)));
+    }
+  }
+
+  return { events, raw };
+}
+
+describe('sseHandler + sendMessage integration', () => {
+  it('should stream text chunks and complete event', async () => {
+    const llm = createMockLlm(['Hello', ' ', 'world']);
+    const state = createMockState();
+    const program = sendMessage(state, 'hi', llm, mockExecutor, {});
+    const handler = sseHandler(program);
+
+    const response = await handler({} as any);
+    const { events } = await readSSEStream(response);
+
+    expect(events).toHaveLength(4); // 3 text + 1 complete
+    expect(events[0]).toEqual({ type: 'text', text: 'Hello' });
+    expect(events[1]).toEqual({ type: 'text', text: ' ' });
+    expect(events[2]).toEqual({ type: 'text', text: 'world' });
+    expect(events[3]).toEqual({ type: 'complete' });
+  });
+
+  it('should send complete event even when LLM returns no text', async () => {
+    const llm = createMockLlm([], '');
+    const state = createMockState();
+    const program = sendMessage(state, 'hi', llm, mockExecutor, {});
+    const handler = sseHandler(program);
+
+    const response = await handler({} as any);
+    const { events } = await readSSEStream(response);
+
+    expect(events[events.length - 1]).toEqual({ type: 'complete' });
+  });
+
+  it('should forward [Using: ...] markers when LLM calls tools', async () => {
+    const llm = {
+      completeStream: (_params: any) => ({
+        stream: (async function* () {
+          yield '\n[Using: readFile]\n';
+        })(),
+        response: Promise.resolve(
+          Result.ok({
+            content: '',
+            toolCalls: [
+              { id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } },
+            ],
+            finishReason: 'tool_calls' as const,
+          }),
+        ),
+      }),
+    };
+
+    const state = createMockState();
+    const program = sendMessage(state, 'read file', llm, mockExecutor, {});
+    const handler = sseHandler(program);
+
+    const response = await handler({} as any);
+    const { events } = await readSSEStream(response);
+
+    const textEvent = events.find((e: any) => e.type === 'text');
+    expect(textEvent).toBeDefined();
+    expect(textEvent!.text).toContain('[Using:');
+  });
+
+  it('should send error event when Effect fails', async () => {
+    const program = Effect.fail(new Error('boom'));
+    const handler = sseHandler(program as any);
+    const response = await handler({} as any);
+    const { events } = await readSSEStream(response);
+
+    expect(events.some((e: any) => e.type === 'error')).toBe(true);
+  });
+});

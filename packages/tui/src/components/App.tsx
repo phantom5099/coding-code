@@ -3,7 +3,7 @@ import { Box, Text, Static, useApp, useInput } from 'ink';
 import { useAgentRunner } from '../hooks/useAgentRunner.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
 import { historyToUIMessages, generateId } from '../utils.js';
-import type { OverlayState } from '../types.js';
+import type { OverlayState, UIMessage } from '../types.js';
 import { MessageItem } from './MessageItem.js';
 import { InputBox } from './InputBox.js';
 import { LoadingIndicator } from './LoadingIndicator.js';
@@ -16,15 +16,15 @@ import { buildWelcomeContent } from './WelcomePanel.js';
 
 interface AppProps {
   client: Record<string, any>;
-  sessionId: string;
 }
 
-export function App({ client, sessionId }: AppProps) {
+export function App({ client }: AppProps) {
   const { exit } = useApp();
-  const { width } = useTerminalSize();
+  const { width, height } = useTerminalSize();
+  const [sessionId, setSessionId] = useState('unknown');
   const runner = useCallback(
-    (input: string) => client.sendMessage(sessionId, input),
-    [client, sessionId],
+    (input: string) => client.sendMessage(input),
+    [client],
   );
   const {
     staticMessages,
@@ -40,40 +40,20 @@ export function App({ client, sessionId }: AppProps) {
   const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
   const [pickerIndex, setPickerIndex] = useState(0);
   const [staticKey, setStaticKey] = useState(0);
-  const [modelName, setModelName] = useState('unknown');
+  const [modelName] = useState('unknown');
 
   useEffect(() => {
     if (overlay.type !== 'none') setPickerIndex(0);
   }, [overlay.type]);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const info = await client.getSessionInfo();
-        setModelName(info.model);
-        const sessions = await client.listSessions();
-        const current = sessions.find((s: any) => s.sessionId === sessionId);
-        if (current) {
-          const history = await client.resumeSession(current.sessionId);
-          const uiMessages = historyToUIMessages(history.events || []);
-          setStaticMessages(uiMessages);
-        } else {
-          const uiMsgs = [{
-            id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
-            content: buildWelcomeContent({ model: modelName, role: 'coder', sessionId }),
-          }];
-          setStaticMessages(uiMsgs);
-        }
-      } catch {
-        const uiMsgs = [{
-          id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
-          content: buildWelcomeContent({ model: modelName, role: 'coder', sessionId }),
-        }];
-        setStaticMessages(uiMsgs);
-      }
-      setActiveMessages([]);
-    })();
-  }, [client, sessionId, setStaticMessages, setActiveMessages, modelName]);
+    const uiMsgs = [{
+      id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
+      content: buildWelcomeContent({ model: modelName, role: 'coder', sessionId }),
+    }];
+    setStaticMessages(uiMsgs);
+    setActiveMessages([]);
+  }, [sessionId, setStaticMessages, setActiveMessages, modelName]);
 
   useEffect(() => {
     if (activeMessages.length > 0) setFocusedIndex(activeMessages.length - 1);
@@ -109,7 +89,9 @@ export function App({ client, sessionId }: AppProps) {
     }
 
     await run(trimmed);
-  }, [client, run, exit, clearMessages]);
+    const sid = client.getSessionId();
+    if (sid !== sessionId) setSessionId(sid);
+  }, [client, run, exit, clearMessages, sessionId]);
 
   useInput((input, key) => {
     const overlayType = overlay.type;
@@ -130,6 +112,7 @@ export function App({ client, sessionId }: AppProps) {
           } else if (overlayType === 'sessions') {
             const s = (overlay as any).sessions[pickerIndex];
             await client.resumeSession(s.sessionId);
+            setSessionId(s.sessionId);
             setOverlay({ type: 'none' });
             setStaticKey(k => k + 1);
           }
@@ -152,13 +135,11 @@ export function App({ client, sessionId }: AppProps) {
   const sessionW = Math.min(70, width - 4);
   const helpW = Math.min(50, width - 4);
 
+  // CommandOverlay 开销约 6 行（边框+padding+标题+页脚），留 2 行边距
+  const pickerMaxHeight = Math.max(3, height - 8);
+
   return (
     <Box flexDirection="column">
-      <Box>
-        <Text bold color="cyan">coding-agent</Text>
-        <Text color="gray" dimColor>  {modelName} · /help for commands</Text>
-      </Box>
-
       <Static key={staticKey} items={staticMessages}>
         {msg => (
           <MessageItem key={msg.id} message={msg} width={width} interactive={false} />
@@ -176,22 +157,22 @@ export function App({ client, sessionId }: AppProps) {
 
       {overlay.type === 'model' && (
         <CommandOverlay title="选择模型" width={modelW} left={Math.floor((width - modelW) / 2)}>
-          <ModelPicker models={(overlay as any).models} activeId={(overlay as any).activeId} selectedIndex={pickerIndex} width={modelW} />
+          <ModelPicker models={(overlay as any).models} activeId={(overlay as any).activeId} selectedIndex={pickerIndex} width={modelW} maxHeight={pickerMaxHeight} />
         </CommandOverlay>
       )}
       {overlay.type === 'role' && (
         <CommandOverlay title="选择角色" width={roleW} left={Math.floor((width - roleW) / 2)} titleColor="magenta">
-          <RolePicker roles={(overlay as any).roles} currentRole={(overlay as any).currentRole} selectedIndex={pickerIndex} width={roleW} />
+          <RolePicker roles={(overlay as any).roles} currentRole={(overlay as any).currentRole} selectedIndex={pickerIndex} width={roleW} maxHeight={pickerMaxHeight} />
         </CommandOverlay>
       )}
       {overlay.type === 'sessions' && (
         <CommandOverlay title="恢复会话" width={sessionW} left={Math.floor((width - sessionW) / 2)} titleColor="yellow">
-          <SessionPicker sessions={(overlay as any).sessions} selectedIndex={pickerIndex} width={sessionW} />
+          <SessionPicker sessions={(overlay as any).sessions} selectedIndex={pickerIndex} width={sessionW} maxHeight={pickerMaxHeight} />
         </CommandOverlay>
       )}
       {overlay.type === 'help' && (
         <CommandOverlay title="帮助" width={helpW} left={Math.floor((width - helpW) / 2)} titleColor="green">
-          <HelpOverlay width={helpW} />
+          <HelpOverlay width={helpW} maxHeight={pickerMaxHeight} />
         </CommandOverlay>
       )}
     </Box>

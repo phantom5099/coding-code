@@ -7,13 +7,14 @@ interface Props {
   activeId: string;
   selectedIndex: number;
   width: number;
+  maxHeight?: number;
 }
 
-export function ModelPicker({ models, activeId, selectedIndex, width }: Props) {
+export function ModelPicker({ models, activeId, selectedIndex, width, maxHeight }: Props) {
   const maxLen = Math.max(0, width - 4);
 
   return (
-    <Box flexDirection="column" height={Math.min(models.length, 8)}>
+    <Box flexDirection="column" height={Math.min(models.length, maxHeight ?? 8)}>
       {models.map((m, i) => {
         const isActive = m.id === activeId;
         const isSelected = i === selectedIndex;

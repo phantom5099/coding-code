@@ -12,13 +12,14 @@ interface Props {
   currentRole: string;
   selectedIndex: number;
   width: number;
+  maxHeight?: number;
 }
 
-export function RolePicker({ roles, currentRole, selectedIndex, width }: Props) {
+export function RolePicker({ roles, currentRole, selectedIndex, width, maxHeight }: Props) {
   const maxLen = Math.max(0, width - 4);
 
   return (
-    <Box flexDirection="column" height={Math.min(roles.length, 8)}>
+    <Box flexDirection="column" height={Math.min(roles.length, maxHeight ?? 8)}>
       {roles.map((r, i) => {
         const isCurrent = r.id === currentRole;
         const isSelected = i === selectedIndex;

@@ -1,3 +1,4 @@
+import { createServer as createNetServer } from 'net';
 import { serve } from '@hono/node-server';
 import { HookRegistry } from './hooks/registry';
 import { ToolRegistry } from './tools/registry';
@@ -12,11 +13,32 @@ import { searchTool } from './tools/domains/search/grep';
 import { webFetchTool } from './tools/domains/web/fetch';
 import { createServer } from './server/index';
 
+function findAvailablePort(startPort: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createNetServer();
+    server.once('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        server.close();
+        resolve(findAvailablePort(startPort + 1));
+      } else {
+        reject(err);
+      }
+    });
+    server.once('listening', () => {
+      const addr = server.address();
+      const port = typeof addr === 'object' && addr ? addr.port : startPort;
+      server.close();
+      resolve(port);
+    });
+    server.listen(startPort);
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const serveOnly = args.includes('serve');
   const tuiOnly = args.includes('tui');
-  const port = parseInt(process.env.PORT ?? '3000', 10);
+  const basePort = parseInt(process.env.PORT ?? '8080', 10);
 
   // 装配核心依赖
   const hooks = new HookRegistry();
@@ -31,20 +53,21 @@ async function main() {
     process.exit(1);
   }
 
+  const port = await findAvailablePort(basePort);
+  const serverUrl = process.env.CODINGCODE_SERVER ?? `http://localhost:${port}`;
+
   if (tuiOnly) {
     const { runTui } = await import('../../tui/src/index');
-    runTui({ serverUrl: process.env.CODINGCODE_SERVER ?? `http://localhost:${port}` });
+    runTui({ serverUrl });
     return;
   }
 
-  const app = createServer();
-  serve({ fetch: app.fetch, port }, (info) => {
-    console.log(`Server: http://localhost:${info.port}`);
-  });
+  const app = createServer({ llm: llmResult.value, executor, hooks });
+  serve({ fetch: app.fetch, port });
 
   if (!serveOnly) {
     const { runTui } = await import('../../tui/src/index');
-    runTui({ serverUrl: `http://localhost:${port}` });
+    runTui({ serverUrl });
   }
 }
 

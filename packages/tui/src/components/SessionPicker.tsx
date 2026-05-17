@@ -6,13 +6,14 @@ interface Props {
   sessions: SessionIndex[];
   selectedIndex: number;
   width: number;
+  maxHeight?: number;
 }
 
-export function SessionPicker({ sessions, selectedIndex, width }: Props) {
+export function SessionPicker({ sessions, selectedIndex, width, maxHeight }: Props) {
   const maxLen = Math.max(0, width - 4);
 
   return (
-    <Box flexDirection="column" height={Math.min(sessions.length * 2, 8)}>
+    <Box flexDirection="column" height={Math.min(sessions.length * 2, maxHeight ?? 8)}>
       {sessions.map((s, i) => {
         const isSelected = i === selectedIndex;
         const date = new Date(s.createdAt).toLocaleString();
