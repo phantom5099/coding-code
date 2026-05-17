@@ -1,0 +1,16 @@
+{
+  "name": "@codingcode/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@ai-sdk/deepseek": "^2.0.35",
+    "@ai-sdk/openai": "^3.0.63",
+    "ai": "^6.0.180",
+    "effect": "^3.21.2",
+    "hono": "^4.12.19",
+    "zod": "^4.4.3",
+    "@codingcode/infra": "*"
+  }
+}
