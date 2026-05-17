@@ -1,0 +1,39 @@
+import { Hono } from 'hono';
+import { sessionsRouter } from './routes/sessions.js';
+import { messagesRouter } from './routes/messages.js';
+import { modelsRouter } from './routes/models.js';
+import { rolesRouter } from './routes/roles.js';
+
+type ServerDeps = {
+  llm: any;
+  executor: any;
+  hooks: any;
+};
+
+declare module 'hono' {
+  interface ContextVariableMap {
+    llm: any;
+    executor: any;
+    hooks: any;
+  }
+}
+
+export function createServer(deps: ServerDeps): Hono {
+  const app = new Hono();
+
+  app.use('*', async (c, next) => {
+    c.set('llm', deps.llm);
+    c.set('executor', deps.executor);
+    c.set('hooks', deps.hooks);
+    await next();
+  });
+
+  app.get('/api/health', (c) => c.json({ status: 'ok' }));
+
+  app.route('/api/sessions', sessionsRouter);
+  app.route('/api', messagesRouter);
+  app.route('/api/models', modelsRouter);
+  app.route('/api/roles', rolesRouter);
+
+  return app;
+}
