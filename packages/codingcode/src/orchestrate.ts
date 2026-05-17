@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { ContextService } from './context/context.js';
 import { AgentService } from './agent/agent.js';
 import { SessionService, type SessionStoreState } from './session/store.js';
-import { Bus } from './bus/bus.js';
 import type { ReActEvent } from './agent/types.js';
 import type { AgentError } from './core/error.js';
 import { Result } from './core/result.js';
@@ -18,7 +17,6 @@ export const sendMessage = (
     const ctx = yield* ContextService;
     const session = yield* SessionService;
     const agent = yield* AgentService;
-    const bus = yield* Bus;
 
     yield* agent.init({ role: state.sessionMeta?.role ?? 'coder' });
     yield* ctx.addUser(input);
@@ -26,7 +24,7 @@ export const sendMessage = (
 
     const messages = yield* ctx.build();
     const raw = agent.runStream(messages, llm, executor);
-    return wrapStream(raw, ctx, session, bus, state);
+    return wrapStream(raw, ctx, session, state);
   });
 
 export const resumeSession = (
@@ -57,11 +55,9 @@ export const compact = (state: SessionStoreState) =>
   Effect.gen(function* () {
     const ctx = yield* ContextService;
     const session = yield* SessionService;
-    const bus = yield* Bus;
 
     const result = yield* ctx.compress();
     if (result.didCompress) {
-      yield* bus.publish({ type: 'compaction', didCompress: true, summary: result.summary });
       yield* session.recordCompactBoundary(
         state,
         result.summary ?? '',
@@ -76,7 +72,6 @@ async function* wrapStream(
   source: AsyncGenerator<ReActEvent, Result<string, AgentError>, unknown>,
   ctx: ContextService,
   session: SessionService,
-  bus: Bus,
   state: SessionStoreState,
 ): AsyncGenerator<string, Result<string, AgentError>, unknown> {
   let assistantUuid: string | undefined;
@@ -95,7 +90,6 @@ async function* wrapStream(
         break;
 
       case 'step':
-        await Effect.runPromise(bus.publish({ type: 'step', step: event.step, max: event.max }));
         break;
 
       case 'assistant': {
@@ -110,7 +104,6 @@ async function* wrapStream(
       }
 
       case 'toolStart':
-        await Effect.runPromise(bus.publish({ type: 'toolCall', name: event.name, arguments: event.arguments }));
         yield `\n[Using: ${event.name}]\n`;
         break;
 
@@ -121,14 +114,10 @@ async function* wrapStream(
             session.recordToolResult(state, assistantUuid, event.name, event.id, event.output),
           );
         }
-        await Effect.runPromise(
-          bus.publish({ type: 'toolResult', name: event.name, ok: event.ok, durationMs: 0 }),
-        );
         break;
       }
 
       case 'error':
-        await Effect.runPromise(bus.publish({ type: 'error', error: event.error }));
         break;
     }
   }

@@ -102,7 +102,6 @@ const TestLayer = Layer.mergeAll(
   MockSessionLayer,
   (await import('./layer.js')).AgentLayer,
   (await import('./layer.js')).ContextLayer,
-  (await import('./layer.js')).BusLayer,
 );
 
 describe('sendMessage stream', () => {
