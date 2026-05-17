@@ -2,9 +2,7 @@ import { Effect } from 'effect';
 import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
-import { ContextService } from '../context/context.js';
-import { Bus } from '../bus/bus.js';
-import type { AgentConfig } from './types.js';
+import type { AgentConfig, ReActEvent } from './types.js';
 import { resolveConfig, mergeConfig, type ResolvedConfig } from './config.js';
 import type { ToolDescription } from '../tools/types.js';
 
@@ -30,9 +28,6 @@ interface ToolExecutorAdapter {
 
 export class AgentService extends Effect.Service<AgentService>()('Agent', {
   effect: Effect.gen(function* () {
-    const context = yield* ContextService;
-    const bus = yield* Bus;
-
     let config: ResolvedConfig = { role: 'coder', systemPrompt: '', maxSteps: 25, availableTools: undefined };
 
     return {
@@ -50,34 +45,29 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
 
       getRole: (): Effect.Effect<string> => Effect.succeed(config.role),
 
-      compactContext: () =>
-        Effect.gen(function* () {
-          const result = yield* context.compress();
-          if (result.didCompress) {
-            yield* (bus.publish({ type: 'compaction', didCompress: true, summary: result.summary }) as Effect.Effect<void>);
-          }
-          return result;
-        }) as Effect.Effect<import('../context/compaction.js').CompressResult>,
-
-      runStream: (llm: LLMStreamAdapter, executor: ToolExecutorAdapter): AsyncGenerator<string, Result<string, AgentError>, unknown> =>
-        runReActLoop(context, bus, config, llm, executor),
+      // 纯流——输入 messages，输出 ReActEvent。不感知 Context、Bus、Session。
+      runStream: (
+        messages: Message[],
+        llm: LLMStreamAdapter,
+        executor: ToolExecutorAdapter,
+      ): AsyncGenerator<ReActEvent, Result<string, AgentError>, unknown> =>
+        runReActLoop(messages, config, llm, executor),
     };
   }),
 }) {}
 
-// 纯异步生成器函数——流式 ReAct 循环
 async function* runReActLoop(
-  context: ContextService,
-  bus: { publish: (e: import('../bus/bus.js').BusEvent) => Effect.Effect<void> },
+  initialMessages: Message[],
   config: ResolvedConfig,
   llm: LLMStreamAdapter,
   executor: ToolExecutorAdapter,
-): AsyncGenerator<string, Result<string, AgentError>, unknown> {
+): AsyncGenerator<ReActEvent, Result<string, AgentError>, unknown> {
+  const messages = [...initialMessages];
   const maxSteps = config.maxSteps;
 
   for (let step = 0; step < maxSteps; step++) {
-    // 用 Effect.runPromise 桥接 Effect 调用
-    const messages = await Effect.runPromise(context.build());
+    yield { type: 'step', step: step + 1, max: maxSteps };
+
     const tools: ToolDescription[] = config.availableTools
       ? executor.getRegistry().filter(config.availableTools).map((t) => ({
           name: t.name, description: t.description, parameters: t.schema,
@@ -86,37 +76,40 @@ async function* runReActLoop(
           name: t.name, description: t.description, parameters: t.schema,
         }));
 
-    await Effect.runPromise(bus.publish({ type: 'step', step: step + 1, max: maxSteps }));
-
     const { stream, response } = llm.completeStream({ messages, system: config.systemPrompt, tools, maxSteps: 1 });
 
     for await (const chunk of stream) {
-      yield chunk;
+      yield { type: 'text', text: chunk };
     }
 
     const llmResult = await response;
     if (!llmResult.ok) {
-      await Effect.runPromise(bus.publish({ type: 'error', error: llmResult.error }));
+      yield { type: 'error', error: llmResult.error };
       return Result.err(llmResult.error);
     }
 
     const resp = llmResult.value;
-    await Effect.runPromise(context.addAssistant(resp.content, (resp as any).toolCalls));
+    const toolCalls: ToolCall[] | undefined = (resp as any).toolCalls;
+    const assistantMsg: Message = { role: 'assistant', content: resp.content };
+    if (toolCalls && toolCalls.length > 0) {
+      (assistantMsg as any).tool_calls = toolCalls;
+    }
+    messages.push(assistantMsg);
+    yield { type: 'assistant', content: resp.content, toolCalls };
 
-    if (!resp.toolCalls || resp.toolCalls.length === 0) {
+    if (!toolCalls || toolCalls.length === 0) {
       return Result.ok(resp.content);
     }
 
-    for (const tc of resp.toolCalls) {
-      yield `\n[Using: ${tc.function.name}]\n`;
-      await Effect.runPromise(bus.publish({
-        type: 'toolCall',
-        name: tc.function.name,
-        arguments: JSON.parse(tc.function.arguments) as Record<string, unknown>,
-      }));
-      const toolResult = await executor.execute(tc.function.name, JSON.parse(tc.function.arguments));
+    for (const tc of (resp as any).toolCalls) {
+      const args: Record<string, unknown> = typeof tc.function.arguments === 'string'
+        ? JSON.parse(tc.function.arguments)
+        : tc.function.arguments;
+      yield { type: 'toolStart', name: tc.function.name, arguments: args };
+      const toolResult = await executor.execute(tc.function.name, args);
       const output = toolResult.ok ? toolResult.value : `[Error: ${toolResult.error.code}] ${toolResult.error.message}`;
-      await Effect.runPromise(context.addToolResult(tc.id, output, tc.function.name));
+      messages.push({ role: 'tool', content: output, tool_call_id: tc.id, tool_name: tc.function.name });
+      yield { type: 'toolResult', id: tc.id, name: tc.function.name, output, ok: toolResult.ok };
     }
   }
 

@@ -1,37 +1,50 @@
-import { Effect, Fiber } from 'effect';
+import { Effect } from 'effect';
 import type { Context } from 'hono';
 import { AppLayer } from '../layer.js';
 
+type EffectProgram = Effect.Effect<any, any, any>;
+
 export function handler(
-  program: ReturnType<typeof Effect.gen>,
+  program: EffectProgram,
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
     const result = await Effect.runPromise(
-      (program as any).pipe(Effect.provide(AppLayer)),
+      program.pipe(Effect.provide(AppLayer)) as Effect.Effect<any, any, never>,
     );
     return c.json(result);
   };
 }
 
 export function sseHandler(
-  program: ReturnType<typeof Effect.gen>,
+  program: EffectProgram,
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
     const stream = new ReadableStream({
-      start(controller) {
-        const fiber = Effect.runFork(
-          (program as any).pipe(Effect.provide(AppLayer)),
-        );
+      async start(controller) {
+        try {
+          const generator: AsyncIterable<string> = await Effect.runPromise(
+            program.pipe(Effect.provide(AppLayer)) as Effect.Effect<any, any, never>,
+          );
 
-        (async () => {
-          try {
-            await Fiber.await(fiber);
-            controller.enqueue(new TextEncoder().encode('data: {"type":"complete"}\n\n'));
-          } catch (e) {
-            controller.enqueue(new TextEncoder().encode(`data: {"type":"error","message":"${String(e)}"}\n\n`));
+          for await (const chunk of generator) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                `data: ${JSON.stringify({ type: 'text', text: chunk })}\n\n`,
+              ),
+            );
           }
-          controller.close();
-        })();
+
+          controller.enqueue(
+            new TextEncoder().encode('data: {"type":"complete"}\n\n'),
+          );
+        } catch (e) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              `data: {"type":"error","message":"${String(e)}"}\n\n`,
+            ),
+          );
+        }
+        controller.close();
       },
     });
 
