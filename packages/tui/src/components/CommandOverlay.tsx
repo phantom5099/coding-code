@@ -8,9 +8,12 @@ interface Props {
   titleColor?: string;
   left?: number;
   top?: number;
+  position?: 'absolute' | 'relative';
 }
 
-export function CommandOverlay({ children, width, title, titleColor = 'cyan', left = 2, top = 2 }: Props) {
+export function CommandOverlay({ children, width, title, titleColor = 'cyan', left, top, position = 'absolute' }: Props) {
+  const posProps = position === 'absolute' ? { position: 'absolute' as const, top: top ?? 2, left: left ?? 2 } : {};
+
   return (
     <Box
       flexDirection="column"
@@ -18,10 +21,8 @@ export function CommandOverlay({ children, width, title, titleColor = 'cyan', le
       borderColor={titleColor}
       padding={1}
       width={width}
-      position="absolute"
-      top={top}
-      left={left}
       backgroundColor="black"
+      {...posProps}
     >
       <Box marginBottom={1}>
         <Text bold color={titleColor}>

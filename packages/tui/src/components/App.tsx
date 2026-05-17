@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Box, Text, Static, useApp, useInput } from 'ink';
+import { Box, Static, useApp, useInput } from 'ink';
 import { useAgentRunner } from '../hooks/useAgentRunner.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
-import { historyToUIMessages, generateId } from '../utils.js';
+import { generateId } from '../utils.js';
 import type { OverlayState, UIMessage } from '../types.js';
 import { MessageItem } from './MessageItem.js';
 import { InputBox } from './InputBox.js';
@@ -20,7 +20,7 @@ interface AppProps {
 
 export function App({ client }: AppProps) {
   const { exit } = useApp();
-  const { width, height } = useTerminalSize();
+  const { width } = useTerminalSize();
   const [sessionId, setSessionId] = useState('unknown');
   const runner = useCallback(
     (input: string) => client.sendMessage(input),
@@ -40,8 +40,6 @@ export function App({ client }: AppProps) {
   const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
   const [pickerIndex, setPickerIndex] = useState(0);
   const [staticKey, setStaticKey] = useState(0);
-  const [modelName] = useState('unknown');
-
   useEffect(() => {
     if (overlay.type !== 'none') setPickerIndex(0);
   }, [overlay.type]);
@@ -49,11 +47,11 @@ export function App({ client }: AppProps) {
   useEffect(() => {
     const uiMsgs = [{
       id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
-      content: buildWelcomeContent({ model: modelName, role: 'coder', sessionId }),
+      content: buildWelcomeContent({ model: 'unknown', role: 'coder', sessionId }),
     }];
     setStaticMessages(uiMsgs);
     setActiveMessages([]);
-  }, [sessionId, setStaticMessages, setActiveMessages, modelName]);
+  }, [sessionId, setStaticMessages, setActiveMessages]);
 
   useEffect(() => {
     if (activeMessages.length > 0) setFocusedIndex(activeMessages.length - 1);
@@ -135,9 +133,6 @@ export function App({ client }: AppProps) {
   const sessionW = Math.min(70, width - 4);
   const helpW = Math.min(50, width - 4);
 
-  // CommandOverlay 开销约 6 行（边框+padding+标题+页脚），留 2 行边距
-  const pickerMaxHeight = Math.max(3, height - 8);
-
   return (
     <Box flexDirection="column">
       <Static key={staticKey} items={staticMessages}>
@@ -157,22 +152,22 @@ export function App({ client }: AppProps) {
 
       {overlay.type === 'model' && (
         <CommandOverlay title="选择模型" width={modelW} left={Math.floor((width - modelW) / 2)}>
-          <ModelPicker models={(overlay as any).models} activeId={(overlay as any).activeId} selectedIndex={pickerIndex} width={modelW} maxHeight={pickerMaxHeight} />
+          <ModelPicker models={(overlay as any).models} activeId={(overlay as any).activeId} selectedIndex={pickerIndex} width={modelW} />
         </CommandOverlay>
       )}
       {overlay.type === 'role' && (
         <CommandOverlay title="选择角色" width={roleW} left={Math.floor((width - roleW) / 2)} titleColor="magenta">
-          <RolePicker roles={(overlay as any).roles} currentRole={(overlay as any).currentRole} selectedIndex={pickerIndex} width={roleW} maxHeight={pickerMaxHeight} />
+          <RolePicker roles={(overlay as any).roles} currentRole={(overlay as any).currentRole} selectedIndex={pickerIndex} width={roleW} />
         </CommandOverlay>
       )}
       {overlay.type === 'sessions' && (
         <CommandOverlay title="恢复会话" width={sessionW} left={Math.floor((width - sessionW) / 2)} titleColor="yellow">
-          <SessionPicker sessions={(overlay as any).sessions} selectedIndex={pickerIndex} width={sessionW} maxHeight={pickerMaxHeight} />
+          <SessionPicker sessions={(overlay as any).sessions} selectedIndex={pickerIndex} width={sessionW} />
         </CommandOverlay>
       )}
       {overlay.type === 'help' && (
         <CommandOverlay title="帮助" width={helpW} left={Math.floor((width - helpW) / 2)} titleColor="green">
-          <HelpOverlay width={helpW} maxHeight={pickerMaxHeight} />
+          <HelpOverlay width={helpW} />
         </CommandOverlay>
       )}
     </Box>
