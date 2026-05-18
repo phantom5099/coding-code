@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildWelcomeContent } from './WelcomePanel.js';
+import { buildWelcomeContent } from '../../src/components/WelcomePanel.js';
 
 describe('buildWelcomeContent', () => {
   it('should contain CODING CODE ASCII art banner', () => {

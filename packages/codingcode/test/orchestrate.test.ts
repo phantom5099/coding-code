@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { sendMessage } from './orchestrate.js';
-import { SessionService, type SessionStoreState } from './session/store.js';
-import { SkillService } from './skills/index.js';
-import { Result } from './core/result.js';
+import { sendMessage } from '../src/orchestrate.js';
+import { SessionService, type SessionStoreState } from '../src/session/store.js';
+import { SkillService } from '../src/skills/index.js';
+import { Result } from '../src/core/result.js';
 
 const mockState: SessionStoreState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
@@ -42,7 +42,7 @@ const MockSkillLayer = Layer.succeed(SkillService, SkillService.of({
   selectImplicit: () => Effect.succeed(undefined), extractSkill: () => Effect.succeed([undefined, 'hi']),
 }));
 
-const { AgentLayer, ContextLayer } = await import('./layer.js');
+const { AgentLayer, ContextLayer } = await import('../src/layer.js');
 const TestLayer = Layer.mergeAll(MockSessionLayer, MockSkillLayer, AgentLayer, ContextLayer);
 
 describe('sendMessage stream', () => {

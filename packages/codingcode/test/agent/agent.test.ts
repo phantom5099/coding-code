@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { runReActLoop } from './agent.js';
-import { Result } from '../core/result.js';
+import { runReActLoop } from '../../src/agent/agent.js';
+import { Result } from '../../src/core/result.js';
 
 describe('runReActLoop', () => {
   it('should yield text chunks from LLM stream', async () => {

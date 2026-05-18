@@ -3,8 +3,8 @@ import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { SkillService } from './index.js';
-import { AppLayer } from '../layer.js';
+import { SkillService } from '../../src/skills/index.js';
+import { AppLayer } from '../../src/layer.js';
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));

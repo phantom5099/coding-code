@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { loadMcpConfig } from './config.js';
+import { loadMcpConfig } from '../../src/mcp/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEST_CODINGCODE_DIR = join(__dirname, '..', '..', '..', '.codingcode');

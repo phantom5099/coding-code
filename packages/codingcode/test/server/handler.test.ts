@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { sseHandler } from './handler.js';
-import { sendMessage } from '../orchestrate.js';
-import { SessionService, type SessionStoreState } from '../session/store.js';
-import { SkillService } from '../skills/index.js';
-import { Result } from '../core/result.js';
+import { sseHandler } from '../../src/server/handler.js';
+import { sendMessage } from '../../src/orchestrate.js';
+import { SessionService, type SessionStoreState } from '../../src/session/store.js';
+import { SkillService } from '../../src/skills/index.js';
+import { Result } from '../../src/core/result.js';
 
 function createMockState(overrides: Partial<SessionStoreState> = {}): SessionStoreState {
   return {
@@ -77,7 +77,7 @@ const MockSkillLayer = Layer.succeed(
   }),
 );
 
-const { AgentLayer, ContextLayer } = await import('../layer.js');
+const { AgentLayer, ContextLayer } = await import('../../src/layer.js');
 
 const TestLayer = Layer.mergeAll(
   MockSessionLayer,

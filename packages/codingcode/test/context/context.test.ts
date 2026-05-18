@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { ContextService } from './context.js';
-import { SessionService } from '../session/store.js';
-import { AgentService } from '../agent/agent.js';
-import { SkillService } from '../skills/index.js';
-import type { SessionStoreState } from '../session/store.js';
-import { sendMessage, resumeSession } from '../orchestrate.js';
-import { Result } from '../core/result.js';
+import { ContextService } from '../../src/context/context.js';
+import { SessionService } from '../../src/session/store.js';
+import { AgentService } from '../../src/agent/agent.js';
+import { SkillService } from '../../src/skills/index.js';
+import type { SessionStoreState } from '../../src/session/store.js';
+import { sendMessage, resumeSession } from '../../src/orchestrate.js';
+import { Result } from '../../src/core/result.js';
 
 const mockState: SessionStoreState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
@@ -45,7 +45,7 @@ function makeMockSessionLayer(state: SessionStoreState) {
   }));
 }
 
-const { ContextLayer } = await import('../layer.js');
+const { ContextLayer } = await import('../../src/layer.js');
 
 describe('ContextService cross-request persistence', () => {
   it('should retain messages across separate Effect.runPromise calls', async () => {
@@ -157,7 +157,7 @@ describe('ContextService cross-request persistence', () => {
     const sid = 'full-flow';
 
     const mockSessionLayer = makeMockSessionLayer({ ...mockState, sessionId: sid });
-    const { AgentLayer } = await import('../layer.js');
+    const { AgentLayer } = await import('../../src/layer.js');
 
     const MockSkillLayer = Layer.succeed(SkillService, SkillService.of({
       _tag: 'Skill' as const,

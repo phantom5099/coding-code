@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { historyToUIMessages } from './utils.js';
+import { historyToUIMessages } from '../src/utils.js';
 
 describe('historyToUIMessages', () => {
   it('should return empty array for empty history', () => {

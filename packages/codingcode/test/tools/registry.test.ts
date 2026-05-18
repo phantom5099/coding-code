@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { ToolService } from './registry.js';
-import { AppLayer } from '../layer.js';
-import type { ToolDefinition } from './types.js';
+import { ToolService } from '../../src/tools/registry.js';
+import { AppLayer } from '../../src/layer.js';
+import type { ToolDefinition } from '../../src/tools/types.js';
 import { z } from 'zod';
 
 function makeTool(name: string): ToolDefinition {
