@@ -61,13 +61,10 @@ async function main() {
     yield* tools.register(webFetchTool);
 
     // Connect MCP servers (auto-registers tools to ToolService)
-    const mcpCount = yield* mcp.connectAll(process.cwd());
-    console.log(`[MCP] Registered ${mcpCount} tools from MCP servers`);
+    yield* mcp.connectAll(process.cwd());
 
     // Load skills
     yield* skill.loadAll(process.cwd());
-    const skills = yield* skill.getAll();
-    console.log(`[Skill] Loaded ${skills.length} skills: ${skills.map((s: { name: string }) => s.name).join(', ') || 'none'}`);
 
     // Initialize LLM
     const llmResult = yield* Effect.tryPromise(() => getLLMClient());
@@ -90,7 +87,6 @@ async function main() {
     const executor = new ToolExecutor(tools, hooks, sandbox);
     const app = createServer({ llm: llmResult.value, executor, hooks });
     serve({ fetch: app.fetch, port });
-    console.log(`[Server] Running on port ${port}`);
 
     if (!serveOnly) {
       const { runTui } = yield* Effect.tryPromise(() => import('../../tui/src/index.js'));
