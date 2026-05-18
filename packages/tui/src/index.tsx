@@ -12,18 +12,7 @@ export function runTui(options: TuiOptions = {}) {
 
   const client = {
     async *sendMessage(input: string): AsyncGenerator<string> {
-      if (!currentSessionId) {
-        const createRes = await fetch(`${serverUrl}/api/sessions`, {
-          method: 'POST',
-          body: JSON.stringify({ cwd: process.cwd() }),
-          headers: { 'Content-Type': 'application/json' },
-        });
-        if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
-        const { sessionId } = await createRes.json() as { sessionId: string };
-        currentSessionId = sessionId;
-      }
-
-      const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId}/messages`, {
+      const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId ?? ''}/messages`, {
         method: 'POST', body: JSON.stringify({ input }),
         headers: { 'Content-Type': 'application/json' },
       });
@@ -41,9 +30,15 @@ export function runTui(options: TuiOptions = {}) {
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = JSON.parse(line.slice(6));
-            if (data.type === 'text') yield data.text;
-            else if (data.type === 'complete') return;
-            else if (data.type === 'error') throw new Error(data.message);
+            if (data.type === 'session_id') {
+              currentSessionId = data.sessionId;
+            } else if (data.type === 'text') {
+              yield data.text;
+            } else if (data.type === 'complete') {
+              return;
+            } else if (data.type === 'error') {
+              throw new Error(data.message);
+            }
           }
         }
       }

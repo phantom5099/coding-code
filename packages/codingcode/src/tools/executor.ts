@@ -35,7 +35,8 @@ export class ToolExecutor {
 
     const start = Date.now();
     try {
-      const result = await tool.execute(args, signal);
+      const parsedArgs = tool.parameters.parse(args);
+      const result = await tool.execute(parsedArgs, signal);
       const durationMs = Date.now() - start;
       await this.hooks.emit('tool.execute.after', {
         toolName: name,
