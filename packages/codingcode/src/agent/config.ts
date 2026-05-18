@@ -1,5 +1,6 @@
 import { getPromptSet, type AgentRole } from '../prompts/index.js';
 import { getAllRules } from '../rules/index.js';
+import { loadConfig } from '@codingcode/infra';
 import type { AgentConfig } from './types.js';
 
 export interface ResolvedConfig {
@@ -12,6 +13,7 @@ export interface ResolvedConfig {
 
 export function resolveConfig(role: string): ResolvedConfig {
   const ps = getPromptSet(role as AgentRole);
+  const appConfig = loadConfig();
   let systemPrompt = ps.buildSystem({
     cwd: process.cwd(),
     platform: process.platform,
@@ -26,7 +28,7 @@ export function resolveConfig(role: string): ResolvedConfig {
   return {
     role,
     systemPrompt,
-    maxSteps: ps.maxSteps ?? 15,
+    maxSteps: ps.maxSteps ?? appConfig.maxSteps,
     availableTools: ps.toolNames,
   };
 }

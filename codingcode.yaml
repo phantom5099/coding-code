@@ -1,4 +1,5 @@
 server:
   port: 8080
 
-
+# 主 agent 最大循环轮数，默认 50
+maxSteps: 50

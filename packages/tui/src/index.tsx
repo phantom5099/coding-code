@@ -12,7 +12,7 @@ export function runTui(options: TuiOptions = {}) {
 
   const client = {
     async *sendMessage(input: string): AsyncGenerator<string> {
-      const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId ?? ''}/messages`, {
+      const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId || '_'}/messages`, {
         method: 'POST', body: JSON.stringify({ input }),
         headers: { 'Content-Type': 'application/json' },
       });

@@ -18,7 +18,7 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
   const state = await Effect.runPromise(
     Effect.gen(function* () {
       const svc = yield* SessionService;
-      return yield* svc.create(process.cwd(), 'unknown', 'coder', '0.1.0', sessionId || undefined);
+      return yield* svc.create(process.cwd(), 'unknown', 'coder', '0.1.0', sessionId === '_' ? undefined : sessionId);
     }).pipe(Effect.provide(AppLayer)) as Effect.Effect<any, any, never>,
   );
 
