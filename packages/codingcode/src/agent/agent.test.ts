@@ -19,7 +19,7 @@ describe('runReActLoop', () => {
 
     const mockExecutor = {
       execute: async () => Result.ok('done'),
-      getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
+      getRegistry: () => ({ describeAllSync: () => [], filterSync: () => [] }),
     };
 
     const config = {
@@ -59,7 +59,7 @@ describe('runReActLoop', () => {
 
     const mockExecutor = {
       execute: async () => Result.ok('done'),
-      getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
+      getRegistry: () => ({ describeAllSync: () => [], filterSync: () => [] }),
     };
 
     const config = {
@@ -104,10 +104,10 @@ describe('runReActLoop', () => {
     const mockExecutor = {
       execute: async () => Result.ok('file content'),
       getRegistry: () => ({
-        describeAll: () => [
+        describeAllSync: () => [
           { name: 'readFile', description: 'Read a file', schema: { type: 'object' } },
         ],
-        filter: () => [
+        filterSync: () => [
           { name: 'readFile', description: 'Read a file', schema: { type: 'object' } },
         ],
       }),

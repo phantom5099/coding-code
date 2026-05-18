@@ -7,6 +7,11 @@ import { AppLayer } from '../../layer.js';
 
 export const messagesRouter = new Hono();
 
+// Helper to run Effect with AppLayer (AppLayer provides all required services)
+function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
+  return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
+}
+
 messagesRouter.post('/sessions/:id/messages', async (c) => {
   let sessionId = c.req.param('id');
   const { input } = await c.req.json();
@@ -15,16 +20,16 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
   const executor = c.get('executor');
   const hooks = c.get('hooks');
 
-  const state = await Effect.runPromise(
+  const state = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
       return yield* svc.create(process.cwd(), 'unknown', 'coder', '0.1.0', sessionId === '_' ? undefined : sessionId);
-    }).pipe(Effect.provide(AppLayer)) as Effect.Effect<any, any, never>,
+    }),
   );
 
   if (!sessionId) sessionId = state.sessionId;
 
-  return sseHandler(sendMessage(state, input, llm, executor, hooks), {
+  return sseHandler(sendMessage(state, input, llm, executor, hooks) as any, {
     initialEvents: [{ type: 'session_id', sessionId }],
   })(c);
 });

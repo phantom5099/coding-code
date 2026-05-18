@@ -2,9 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sendMessage } from './orchestrate.js';
 import { SessionService, type SessionStoreState } from './session/store.js';
+import { SkillService } from './skills/index.js';
 import { Result } from './core/result.js';
-import { AgentError } from './core/error.js';
-import type { ToolCall } from './core/types.js';
 
 const mockState: SessionStoreState = {
   sessionId: 'test-session',
@@ -34,8 +33,8 @@ const mockExecutor = {
   execute: async (_name: string, _args: Record<string, unknown>) =>
     Result.ok('done'),
   getRegistry: () => ({
-    describeAll: () => [],
-    filter: () => [],
+    describeAllSync: () => [],
+    filterSync: () => [],
   }),
 };
 
@@ -95,20 +94,35 @@ const MockSessionLayer = Layer.succeed(
     getSessionId: () => 'test',
     getMessageCount: () => 0,
   }),
-
 );
+
+const MockSkillLayer = Layer.succeed(
+  SkillService,
+  SkillService.of({
+    _tag: 'Skill' as const,
+    loadAll: () => Effect.succeed(undefined),
+    getAll: () => Effect.succeed([]),
+    findByName: () => Effect.succeed(undefined),
+    select: () => Effect.succeed(undefined),
+    selectImplicit: () => Effect.succeed(undefined),
+    extractSkill: () => Effect.succeed([undefined, 'hi']),
+  }),
+);
+
+const { AgentLayer, ContextLayer } = await import('./layer.js');
 
 const TestLayer = Layer.mergeAll(
   MockSessionLayer,
-  (await import('./layer.js')).AgentLayer,
-  (await import('./layer.js')).ContextLayer,
+  MockSkillLayer,
+  AgentLayer,
+  ContextLayer,
 );
 
 describe('sendMessage stream', () => {
   it('should yield text chunks from LLM', async () => {
     const program = sendMessage(mockState, 'hi', mockLlm, mockExecutor, mockHooks);
-    const generator = await Effect.runPromise(
-      program.pipe(Effect.provide(TestLayer)) as Effect.Effect<any, any, never>,
+    const generator: any = await Effect.runPromise(
+      program.pipe(Effect.provide(TestLayer) as any),
     );
 
     const chunks: string[] = [];
@@ -123,8 +137,8 @@ describe('sendMessage stream', () => {
 
   it('should not return empty stream for normal LLM response', async () => {
     const program = sendMessage(mockState, 'hi', mockLlm, mockExecutor, mockHooks);
-    const generator = await Effect.runPromise(
-      program.pipe(Effect.provide(TestLayer)) as Effect.Effect<any, any, never>,
+    const generator: any = await Effect.runPromise(
+      program.pipe(Effect.provide(TestLayer) as any),
     );
 
     const chunks: string[] = [];

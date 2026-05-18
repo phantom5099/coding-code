@@ -18,6 +18,7 @@
     "@ai-sdk/deepseek": "^2.0.35",
     "@ai-sdk/openai": "^3.0.63",
     "@hono/node-server": "^2.0.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/react": "^19.2.14",
     "ai": "^6.0.180",
     "effect": "^3.21.2",
