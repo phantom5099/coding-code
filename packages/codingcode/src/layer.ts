@@ -14,10 +14,7 @@ export const ToolLayer = ToolService.Default;
 export const HookLayer = HookService.Default;
 export const SkillLayer = SkillService.Default;
 
-// InfraLayer provides ToolService + HookService (no deps)
 const InfraLayer = Layer.mergeAll(ToolLayer, HookLayer);
-
-// McpLayer requires ToolService — satisfy via InfraLayer
 export const McpLayer = McpService.Default.pipe(Layer.provide(InfraLayer));
 
 export const AppLayer = Layer.mergeAll(

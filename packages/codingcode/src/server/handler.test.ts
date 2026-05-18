@@ -3,6 +3,7 @@ import { Effect, Layer } from 'effect';
 import { sseHandler } from './handler.js';
 import { sendMessage } from '../orchestrate.js';
 import { SessionService, type SessionStoreState } from '../session/store.js';
+import { SkillService } from '../skills/index.js';
 import { Result } from '../core/result.js';
 
 function createMockState(overrides: Partial<SessionStoreState> = {}): SessionStoreState {
@@ -22,24 +23,22 @@ function createMockLlm(chunks?: string[], responseContent?: string) {
   return {
     completeStream: (_params: any) => ({
       stream: (async function* () {
-        for (const c of chunks ?? []) {
-          yield c;
-        }
+        for (const c of chunks ?? []) yield c;
       })(),
       response: Promise.resolve(
-        Result.ok({
-          content: responseContent ?? chunks?.join('') ?? '',
-          finishReason: 'stop' as const,
-        }),
+        Result.ok({ content: responseContent ?? chunks?.join('') ?? '' }),
       ),
     }),
   };
 }
 
 const mockExecutor = {
-  execute: async () => Result.ok('done'),
-  getRegistry: () => ({ describeAllSync: () => [], filterSync: () => [] }),
+  execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
+    Effect.succeed('done'),
+  getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
 };
+
+const mockHooks = {};
 
 const MockSessionLayer = Layer.succeed(
   SessionService,
@@ -47,48 +46,15 @@ const MockSessionLayer = Layer.succeed(
     _tag: 'Session' as const,
     create: () => Effect.succeed(createMockState()),
     recordUser: () =>
-      Effect.succeed({
-        type: 'user' as const,
-        uuid: 'u1',
-        content: '',
-        timestamp: new Date().toISOString(),
-      }),
+      Effect.succeed({ type: 'user' as const, uuid: 'u1', content: '', timestamp: new Date().toISOString() }),
     recordAssistant: () =>
-      Effect.succeed({
-        type: 'assistant' as const,
-        uuid: 'a1',
-        content: '',
-        toolCalls: [],
-        model: 'test',
-        timestamp: new Date().toISOString(),
-      }),
+      Effect.succeed({ type: 'assistant' as const, uuid: 'a1', content: '', toolCalls: [], model: 'test', timestamp: new Date().toISOString() }),
     recordToolResult: () =>
-      Effect.succeed({
-        type: 'tool_result' as const,
-        uuid: 't1',
-        parentUuid: 'a1',
-        toolName: 'test',
-        toolCallId: 'tc1',
-        output: '',
-        timestamp: new Date().toISOString(),
-      }),
+      Effect.succeed({ type: 'tool_result' as const, uuid: 't1', parentUuid: 'a1', toolName: 'test', toolCallId: 'tc1', output: '', timestamp: new Date().toISOString() }),
     recordRoleSwitch: () =>
-      Effect.succeed({
-        type: 'role_switch' as const,
-        uuid: 'r1',
-        fromRole: 'a',
-        toRole: 'b',
-        timestamp: new Date().toISOString(),
-      }),
+      Effect.succeed({ type: 'role_switch' as const, uuid: 'r1', fromRole: 'a', toRole: 'b', timestamp: new Date().toISOString() }),
     recordCompactBoundary: () =>
-      Effect.succeed({
-        type: 'compact_boundary' as const,
-        uuid: 'c1',
-        summary: '',
-        replacedRange: [0, 0] as [number, number],
-        messageCount: 0,
-        timestamp: new Date().toISOString(),
-      }),
+      Effect.succeed({ type: 'compact_boundary' as const, uuid: 'c1', summary: '', replacedRange: [0, 0] as [number, number], messageCount: 0, timestamp: new Date().toISOString() }),
     readHistory: () => Effect.succeed([]),
     readMessages: () => Effect.succeed([]),
     listSessions: () => Effect.succeed([]),
@@ -97,39 +63,55 @@ const MockSessionLayer = Layer.succeed(
   }),
 );
 
-async function readSSEStream(response: Response): Promise<{ events: any[]; raw: string }> {
+const MockSkillLayer = Layer.succeed(
+  SkillService,
+  SkillService.of({
+    _tag: 'Skill' as const,
+    loadAll: () => Effect.succeed(undefined),
+    getAll: () => Effect.succeed([]),
+    findByName: () => Effect.succeed(undefined),
+    select: () => Effect.succeed(undefined),
+    selectImplicit: () => Effect.succeed(undefined),
+    extractSkill: () => Effect.succeed([undefined, 'hi']),
+  }),
+);
+
+const { AgentLayer, ContextLayer } = await import('../layer.js');
+
+const TestLayer = Layer.mergeAll(
+  MockSessionLayer,
+  MockSkillLayer,
+  AgentLayer,
+  ContextLayer,
+);
+
+async function readSSEStream(response: Response): Promise<{ events: any[] }> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
   let raw = '';
-  const events: any[] = [];
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     raw += decoder.decode(value, { stream: true });
   }
+  raw += decoder.decode();
 
-  // flush any remaining buffer
-  buffer += decoder.decode();
-  raw += buffer;
-
+  const events: any[] = [];
   for (const line of raw.split('\n')) {
     if (line.startsWith('data: ')) {
       events.push(JSON.parse(line.slice(6)));
     }
   }
-
-  return { events, raw };
+  return { events };
 }
 
 describe('sseHandler + sendMessage integration', () => {
   it('should stream text chunks and complete event', async () => {
     const llm = createMockLlm(['Hello', ' ', 'world']);
     const state = createMockState();
-    const program = sendMessage(state, 'hi', llm, mockExecutor, {});
+    const program = sendMessage(state, 'hi', llm, mockExecutor, mockHooks) as any;
     const handler = sseHandler(program);
-
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -143,9 +125,8 @@ describe('sseHandler + sendMessage integration', () => {
   it('should send complete event even when LLM returns no text', async () => {
     const llm = createMockLlm([], '');
     const state = createMockState();
-    const program = sendMessage(state, 'hi', llm, mockExecutor, {});
+    const program = sendMessage(state, 'hi', llm, mockExecutor, mockHooks) as any;
     const handler = sseHandler(program);
-
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -161,19 +142,15 @@ describe('sseHandler + sendMessage integration', () => {
         response: Promise.resolve(
           Result.ok({
             content: '',
-            toolCalls: [
-              { id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } },
-            ],
-            finishReason: 'tool_calls' as const,
+            toolCalls: [{ id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } }],
           }),
         ),
       }),
     };
 
     const state = createMockState();
-    const program = sendMessage(state, 'read file', llm, mockExecutor, {});
+    const program = sendMessage(state, 'read file', llm, mockExecutor, mockHooks) as any;
     const handler = sseHandler(program);
-
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 

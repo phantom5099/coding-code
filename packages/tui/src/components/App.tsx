@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { Box, Static, useApp, useInput, Text } from 'ink';
 import { useAgentRunner } from '../hooks/useAgentRunner.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
-import { generateId } from '../utils.js';
+import { generateId, historyToUIMessages } from '../utils.js';
 import type { PanelState } from '../types.js';
 import { MessageItem } from './MessageItem.js';
 import { InputBox } from './InputBox.js';
@@ -31,7 +31,6 @@ export function App({ client }: AppProps) {
     setActiveMessages,
     run,
     isRunning,
-    clearMessages,
   } = useAgentRunner(runner);
   const [panel, setPanel] = useState<PanelState>({ type: 'none' });
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
@@ -39,13 +38,12 @@ export function App({ client }: AppProps) {
   const [staticKey, setStaticKey] = useState(0);
 
   useEffect(() => {
-    const uiMsgs = [{
+    setStaticMessages([{
       id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
-      content: buildWelcomeContent({ model: 'unknown', role: currentRole, sessionId }),
-    }];
-    setStaticMessages(uiMsgs);
+      content: buildWelcomeContent({ model: 'unknown', role: currentRole, sessionId: 'unknown' }),
+    }]);
     setActiveMessages([]);
-  }, [sessionId, currentRole, setStaticMessages, setActiveMessages]);
+  }, []); // only on mount
 
   useEffect(() => {
     if (activeMessages.length > 0) setFocusedIndex(activeMessages.length - 1);
@@ -61,7 +59,12 @@ export function App({ client }: AppProps) {
     if (!parsed) {
       await run(trimmed);
       const sid = client.getSessionId();
-      if (sid !== sessionId) setSessionId(sid);
+      if (sid !== sessionId) {
+        setSessionId(sid);
+        setStaticMessages(prev => prev.map(m =>
+          m.role === 'welcome' ? { ...m, content: buildWelcomeContent({ model: 'unknown', role: currentRole, sessionId: sid }) } : m
+        ));
+      }
       return;
     }
 
@@ -75,7 +78,11 @@ export function App({ client }: AppProps) {
       if (parsed.name === 'exit') { exit(); return; }
       if (parsed.name === 'clear') {
         await client.clearSession();
-        clearMessages();
+        setStaticMessages([{
+          id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
+          content: buildWelcomeContent({ model: 'unknown', role: currentRole, sessionId }),
+        }]);
+        setActiveMessages([]);
         setStaticKey(k => k + 1);
         return;
       }
@@ -130,7 +137,7 @@ export function App({ client }: AppProps) {
       setPanel({ type: 'help' });
       return;
     }
-  }, [client, run, exit, clearMessages, sessionId]);
+  }, [client, run, exit, sessionId]);
 
   useInput((_input, key) => {
     if (panel.type === 'help') {
@@ -197,6 +204,15 @@ export function App({ client }: AppProps) {
           onSelect={async (value) => {
             await client.switchRole(value);
             setCurrentRole(value);
+            setStaticMessages(prev => {
+              if (prev.length === 1 && prev[0].role === 'welcome') {
+                return [{
+                  id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
+                  content: buildWelcomeContent({ model: 'unknown', role: value, sessionId }),
+                }];
+              }
+              return prev;
+            });
             setPanel({ type: 'none' });
           }}
           onCancel={() => setPanel({ type: 'none' })}
@@ -208,8 +224,12 @@ export function App({ client }: AppProps) {
           title={COMMAND_REGISTRY.sessions.title}
           items={panel.items}
           onSelect={async (value) => {
-            await client.resumeSession(value);
+            const history = await client.resumeSession(value);
+            const meta = history.find((e: any) => e.type === 'session_meta');
+            const uiMsgs = historyToUIMessages(history);
+            setStaticMessages(uiMsgs);
             setSessionId(value);
+            if (meta?.role) setCurrentRole(meta.role);
             setPanel({ type: 'none' });
             setStaticKey(k => k + 1);
           }}

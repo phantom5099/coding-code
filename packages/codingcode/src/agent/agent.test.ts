@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { Effect } from 'effect';
 import { runReActLoop } from './agent.js';
 import { Result } from '../core/result.js';
 
@@ -12,22 +13,18 @@ describe('runReActLoop', () => {
           yield 'world';
         })(),
         response: Promise.resolve(
-          Result.ok({ content: 'Hello world', finishReason: 'stop' as const }),
+          Result.ok({ content: 'Hello world' }),
         ),
       }),
     };
 
     const mockExecutor = {
-      execute: async () => Result.ok('done'),
-      getRegistry: () => ({ describeAllSync: () => [], filterSync: () => [] }),
+      execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
+        Effect.succeed('done'),
+      getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = {
-      role: 'coder',
-      systemPrompt: 'You are a coder',
-      maxSteps: 25,
-      availableTools: undefined,
-    };
+    const config = { role: 'coder', systemPrompt: 'You are a coder', maxSteps: 25, availableTools: undefined };
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'hi' }],
@@ -41,33 +38,25 @@ describe('runReActLoop', () => {
       events.push(event);
     }
 
-    const textEvents = events.filter((e) => e.type === 'text');
-    expect(textEvents.map((e) => e.text)).toEqual(['Hello', ' ', 'world']);
+    const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
+    expect(textEvents.map((e: any) => e.text)).toEqual(['Hello', ' ', 'world']);
   });
 
   it('should handle empty LLM stream gracefully', async () => {
     const mockLlm = {
       completeStream: (_params: any) => ({
-        stream: (async function* () {
-          // no chunks
-        })(),
-        response: Promise.resolve(
-          Result.ok({ content: '', finishReason: 'stop' as const }),
-        ),
+        stream: (async function* () {})(),
+        response: Promise.resolve(Result.ok({ content: '' })),
       }),
     };
 
     const mockExecutor = {
-      execute: async () => Result.ok('done'),
-      getRegistry: () => ({ describeAllSync: () => [], filterSync: () => [] }),
+      execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
+        Effect.succeed('done'),
+      getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = {
-      role: 'coder',
-      systemPrompt: 'You are a coder',
-      maxSteps: 25,
-      availableTools: undefined,
-    };
+    const config = { role: 'coder', systemPrompt: 'You are a coder', maxSteps: 25, availableTools: undefined };
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'hi' }],
@@ -81,7 +70,7 @@ describe('runReActLoop', () => {
       events.push(event);
     }
 
-    const textEvents = events.filter((e) => e.type === 'text');
+    const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
     expect(textEvents).toHaveLength(0);
   });
 
@@ -91,34 +80,27 @@ describe('runReActLoop', () => {
         stream: (async function* () {
           yield '\n[Using: readFile]\n';
         })(),
-        response: Promise.resolve(
-          Result.ok({
-            content: '',
-            toolCalls: [{ id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } }],
-            finishReason: 'tool_calls' as const,
-          }),
-        ),
+        response: Promise.resolve(Result.ok({
+          content: '',
+          toolCalls: [{ id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } }],
+        })),
       }),
     };
 
     const mockExecutor = {
-      execute: async () => Result.ok('file content'),
+      execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
+        Effect.succeed('file content'),
       getRegistry: () => ({
-        describeAllSync: () => [
+        describeAll: () => [
           { name: 'readFile', description: 'Read a file', schema: { type: 'object' } },
         ],
-        filterSync: () => [
+        filter: () => [
           { name: 'readFile', description: 'Read a file', schema: { type: 'object' } },
         ],
       }),
     };
 
-    const config = {
-      role: 'coder',
-      systemPrompt: 'You are a coder',
-      maxSteps: 1,
-      availableTools: undefined,
-    };
+    const config = { role: 'coder', systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'read file' }],
@@ -132,7 +114,7 @@ describe('runReActLoop', () => {
       events.push(event);
     }
 
-    const textEvents = events.filter((e) => e.type === 'text');
-    expect(textEvents.map((e) => e.text)).toEqual(['\n[Using: readFile]\n']);
+    const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
+    expect(textEvents.map((e: any) => e.text)).toEqual(['\n[Using: readFile]\n']);
   });
 });
