@@ -43,6 +43,20 @@ export interface SessionStoreState {
   indexPath: string;
   messageCount: number;
   sessionMeta: SessionMetaEvent | null;
+  title: string;
+}
+
+function makeTitle(content: string): string {
+  const cleaned = content.replace(/\n/g, ' ').trim();
+  if (cleaned.length <= 30) return cleaned;
+  return cleaned.slice(0, 30) + '...';
+}
+
+function findFirstUserContent(history: SessionEvent[]): string | null {
+  for (const e of history) {
+    if (e.type === 'user') return e.content;
+  }
+  return null;
 }
 
 export class SessionService extends Effect.Service<SessionService>()('Session', {
@@ -60,6 +74,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
               state.sessionMeta = meta;
               state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
             }
+            const firstUser = findFirstUserContent(history);
+            if (firstUser) state.title = makeTitle(firstUser);
             return state;
           }
 
@@ -77,6 +93,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       recordUser: (state: SessionStoreState, content: string): Effect.Effect<UserEvent> =>
         Effect.sync(() => {
           const event: UserEvent = { type: 'user', uuid: randomUUID(), content, timestamp: new Date().toISOString() };
+          if (state.title === state.sessionId.slice(0, 8)) {
+            state.title = makeTitle(content);
+          }
           appendEvent(state, event);
           return event;
         }),
@@ -131,7 +150,7 @@ function initState(cwd: string, sessionId?: string): SessionStoreState {
   return {
     sessionId: id, cwd, projectSlug, transcriptPath,
     indexPath: transcriptPath.replace('.jsonl', '.index.json'),
-    messageCount: 0, sessionMeta: null,
+    messageCount: 0, sessionMeta: null, title: id.slice(0, 8),
   };
 }
 
@@ -185,7 +204,8 @@ function listSessions(projectSlug?: string): SessionIndex[] {
         const meta = quickReadMeta(jsonlPath);
         if (meta?.cwd && meta?.sessionId) {
           const h = readHistory(jsonlPath);
-          results.push({ sessionId: meta.sessionId, projectSlug: meta.projectSlug, cwd: meta.cwd, model: meta.model, role: meta.role, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length });
+          const firstUser = findFirstUserContent(h);
+          results.push({ sessionId: meta.sessionId, projectSlug: meta.projectSlug, cwd: meta.cwd, model: meta.model, role: meta.role, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8) });
         }
       }
     }
@@ -205,6 +225,6 @@ function appendLine(path: string, event: object): void {
 
 function updateIndex(state: SessionStoreState): void {
   if (!state.sessionMeta) return;
-  const index: SessionIndex = { sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd, model: state.sessionMeta.model, role: state.sessionMeta.role, createdAt: state.sessionMeta.createdAt, updatedAt: new Date().toISOString(), messageCount: state.messageCount };
+  const index: SessionIndex = { sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd, model: state.sessionMeta.model, role: state.sessionMeta.role, createdAt: state.sessionMeta.createdAt, updatedAt: new Date().toISOString(), messageCount: state.messageCount, title: state.title };
   try { writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8'); } catch { /* non-critical */ }
 }

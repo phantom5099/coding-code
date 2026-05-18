@@ -40,7 +40,7 @@ export function App({ client }: AppProps) {
   useEffect(() => {
     setStaticMessages([{
       id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
-      content: buildWelcomeContent({ model: 'unknown', role: currentRole, sessionId: 'unknown' }),
+      content: buildWelcomeContent(),
     }]);
     setActiveMessages([]);
   }, []); // only on mount
@@ -62,7 +62,7 @@ export function App({ client }: AppProps) {
       if (sid !== sessionId) {
         setSessionId(sid);
         setStaticMessages(prev => prev.map(m =>
-          m.role === 'welcome' ? { ...m, content: buildWelcomeContent({ model: 'unknown', role: currentRole, sessionId: sid }) } : m
+          m.role === 'welcome' ? { ...m, content: buildWelcomeContent() } : m
         ));
       }
       return;
@@ -80,7 +80,7 @@ export function App({ client }: AppProps) {
         await client.clearSession();
         setStaticMessages([{
           id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
-          content: buildWelcomeContent({ model: 'unknown', role: currentRole, sessionId }),
+          content: buildWelcomeContent(),
         }]);
         setActiveMessages([]);
         setStaticKey(k => k + 1);
@@ -125,9 +125,8 @@ export function App({ client }: AppProps) {
         setPanel({
           type: 'sessions',
           items: sessions.map((s: any) => ({
-            label: `${s.sessionId.slice(0, 8)} (${s.messageCount} msgs)`,
+            label: `${s.title || s.sessionId.slice(0, 8)}  ${new Date(s.createdAt).toLocaleString()}`,
             value: s.sessionId,
-            description: `${s.model} ${s.role} - ${new Date(s.createdAt).toLocaleString()}`,
           })),
         });
       } catch { /* ignore */ }
@@ -208,7 +207,7 @@ export function App({ client }: AppProps) {
               if (prev.length === 1 && prev[0].role === 'welcome') {
                 return [{
                   id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
-                  content: buildWelcomeContent({ model: 'unknown', role: value, sessionId }),
+                  content: buildWelcomeContent(),
                 }];
               }
               return prev;

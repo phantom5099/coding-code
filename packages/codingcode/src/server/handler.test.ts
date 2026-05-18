@@ -15,6 +15,7 @@ function createMockState(overrides: Partial<SessionStoreState> = {}): SessionSto
     indexPath: '/tmp/test.index.json',
     messageCount: 0,
     sessionMeta: null,
+    title: 'test-sess',
     ...overrides,
   };
 }

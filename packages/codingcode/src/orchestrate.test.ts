@@ -8,7 +8,7 @@ import { Result } from './core/result.js';
 const mockState: SessionStoreState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
   transcriptPath: '/tmp/test.jsonl', indexPath: '/tmp/test.index.json',
-  messageCount: 0, sessionMeta: null,
+  messageCount: 0, sessionMeta: null, title: 'test-sess',
 };
 
 const mockLlm = {

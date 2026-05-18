@@ -69,4 +69,5 @@ export interface SessionIndex {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  title: string;
 }
