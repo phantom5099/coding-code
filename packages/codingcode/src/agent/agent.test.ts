@@ -116,7 +116,7 @@ describe('runReActLoop', () => {
     const config = {
       role: 'coder',
       systemPrompt: 'You are a coder',
-      maxSteps: 25,
+      maxSteps: 1,
       availableTools: undefined,
     };
 

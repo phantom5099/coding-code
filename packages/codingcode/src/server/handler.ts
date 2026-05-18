@@ -17,32 +17,36 @@ export function handler(
 
 export function sseHandler(
   program: EffectProgram,
+  opts?: { initialEvents?: Array<Record<string, unknown>> },
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
     const stream = new ReadableStream({
       async start(controller) {
+        const enqueue = (data: Record<string, unknown>) => {
+          controller.enqueue(
+            new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`),
+          );
+        };
+
         try {
+          if (opts?.initialEvents) {
+            for (const ev of opts.initialEvents) enqueue(ev);
+          }
+
           const generator: AsyncIterable<string> = await Effect.runPromise(
             program.pipe(Effect.provide(AppLayer)) as Effect.Effect<any, any, never>,
           );
 
           for await (const chunk of generator) {
-            controller.enqueue(
-              new TextEncoder().encode(
-                `data: ${JSON.stringify({ type: 'text', text: chunk })}\n\n`,
-              ),
-            );
+            enqueue({ type: 'text', text: chunk });
           }
 
-          controller.enqueue(
-            new TextEncoder().encode('data: {"type":"complete"}\n\n'),
-          );
+          enqueue({ type: 'complete' });
         } catch (e) {
-          const msg = JSON.stringify({
+          enqueue({
             type: 'error',
             message: e instanceof Error ? e.message : String(e),
           });
-          controller.enqueue(new TextEncoder().encode(`data: ${msg}\n\n`));
         }
         controller.close();
       },

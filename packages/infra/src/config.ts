@@ -6,6 +6,7 @@ export interface AppConfig {
   server: {
     port: number;
   };
+  maxSteps: number;
   models: Record<string, {
     provider: string;
     model: string;
@@ -24,6 +25,7 @@ const DEFAULT_CONFIG: AppConfig = {
   server: {
     port: 8080,
   },
+  maxSteps: 50,
   models: {},
   roles: {},
 };
