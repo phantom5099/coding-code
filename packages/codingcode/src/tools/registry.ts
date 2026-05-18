@@ -17,43 +17,19 @@ export class ToolService extends Effect.Service<ToolService>()('ToolService', {
           tools.set(tool.name, tool);
         }),
 
-      get: (name: string): Effect.Effect<ToolDefinition, AgentError> =>
-        Effect.gen(function* () {
-          const t = tools.get(name);
-          if (t) return t;
-          return yield* Effect.fail(AgentError.toolNotFound(name));
-        }),
-
-      describeAll: (): Effect.Effect<ToolDescription[]> =>
-        Effect.sync(() =>
-          Array.from(tools.values()).map((t) => ({
-            name: t.name,
-            description: t.description,
-            parameters: t.schema,
-          })),
-        ),
-
-      filter: (names: string[]): Effect.Effect<ToolDefinition[]> =>
-        Effect.sync(() =>
-          names
-            .map((n) => tools.get(n))
-            .filter((t): t is ToolDefinition => t !== undefined),
-        ),
-
-      // Sync accessors for ToolExecutor (called from async generator context)
-      getSync: (name: string): Result<ToolDefinition, AgentError> => {
+      get: (name: string): Result<ToolDefinition, AgentError> => {
         const t = tools.get(name);
         return t ? Result.ok(t) : Result.err(AgentError.toolNotFound(name));
       },
 
-      describeAllSync: (): ToolDescription[] =>
+      describeAll: (): ToolDescription[] =>
         Array.from(tools.values()).map((t) => ({
           name: t.name,
           description: t.description,
           parameters: t.schema,
         })),
 
-      filterSync: (names: string[]): ToolDefinition[] =>
+      filter: (names: string[]): ToolDefinition[] =>
         names
           .map((n) => tools.get(n))
           .filter((t): t is ToolDefinition => t !== undefined),

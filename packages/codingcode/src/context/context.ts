@@ -2,86 +2,97 @@ import { Effect } from 'effect';
 import type { Message, ToolCall } from '../core/types.js';
 import { compactMessages, type CompressResult } from './compaction.js';
 
+const stores = new Map<string, Message[]>();
+const budget = 200_000;
+
+function getStore(sessionId: string): Message[] {
+  let msgs = stores.get(sessionId);
+  if (!msgs) {
+    msgs = [];
+    stores.set(sessionId, msgs);
+  }
+  return msgs;
+}
+
+function overThreshold(msgs: Message[]): boolean {
+  let total = 0;
+  for (const m of msgs) {
+    for (const char of m.content) {
+      total += char.charCodeAt(0) > 127 ? 1.5 : 1;
+    }
+  }
+  return Math.ceil(total / 3.5) > budget * 0.9;
+}
+
+function doCompact(msgs: Message[]): void {
+  const result = compactMessages(msgs, budget);
+  if (result.ok && result.value.didCompress) {
+    msgs.length = 0;
+    msgs.push(...result.value.messages);
+  }
+}
+
 export class ContextService extends Effect.Service<ContextService>()('Context', {
   effect: Effect.gen(function* () {
-    const messages: Message[] = [];
-    const budget = 200_000;
-
-    const self = {
-      addUser: (content: string): Effect.Effect<void> =>
+    return {
+      addUser: (sessionId: string, content: string): Effect.Effect<void> =>
         Effect.gen(function* () {
-          messages.push({ role: 'user', content });
-          if (messages.length > 0 && self._overThreshold()) {
-            self._doCompact();
+          const msgs = getStore(sessionId);
+          msgs.push({ role: 'user', content });
+          if (msgs.length > 0 && overThreshold(msgs)) {
+            doCompact(msgs);
           }
         }),
 
-      addAssistant: (content: string, toolCalls?: ToolCall[]): Effect.Effect<void> =>
+      addAssistant: (sessionId: string, content: string, toolCalls?: ToolCall[]): Effect.Effect<void> =>
         Effect.sync(() => {
+          const msgs = getStore(sessionId);
           const msg: Message = { role: 'assistant', content };
           if (toolCalls && toolCalls.length > 0) {
             (msg as any).tool_calls = toolCalls;
           }
-          messages.push(msg);
-          if (self._overThreshold()) {
-            self._doCompact();
+          msgs.push(msg);
+          if (overThreshold(msgs)) {
+            doCompact(msgs);
           }
         }),
 
-      addToolResult: (toolCallId: string, output: string, toolName?: string): Effect.Effect<void> =>
+      addToolResult: (sessionId: string, toolCallId: string, output: string, toolName?: string): Effect.Effect<void> =>
         Effect.sync(() => {
-          messages.push({ role: 'tool', content: output, tool_call_id: toolCallId, tool_name: toolName });
+          const msgs = getStore(sessionId);
+          msgs.push({ role: 'tool', content: output, tool_call_id: toolCallId, tool_name: toolName });
         }),
 
-      build: (): Effect.Effect<Message[]> =>
-        Effect.succeed([...messages]),
+      build: (sessionId: string): Effect.Effect<Message[]> =>
+        Effect.succeed([...getStore(sessionId)]),
 
-      getMessages: (): Effect.Effect<Message[]> =>
-        Effect.succeed([...messages]),
+      getMessages: (sessionId: string): Effect.Effect<Message[]> =>
+        Effect.succeed([...getStore(sessionId)]),
 
-      setMessages: (msgs: Message[]): Effect.Effect<void> =>
+      setMessages: (sessionId: string, msgs: Message[]): Effect.Effect<void> =>
         Effect.sync(() => {
-          messages.length = 0;
-          messages.push(...msgs);
+          const store = getStore(sessionId);
+          store.length = 0;
+          store.push(...msgs);
         }),
 
-      clear: (): Effect.Effect<void> =>
-        Effect.sync(() => { messages.length = 0; }),
-
-      compress: (): Effect.Effect<CompressResult> =>
+      clear: (sessionId: string): Effect.Effect<void> =>
         Effect.sync(() => {
-          const result = compactMessages(messages, budget);
+          const store = stores.get(sessionId);
+          if (store) store.length = 0;
+        }),
+
+      compress: (sessionId: string): Effect.Effect<CompressResult> =>
+        Effect.sync(() => {
+          const msgs = getStore(sessionId);
+          const result = compactMessages(msgs, budget);
           if (result.ok && result.value.didCompress) {
-            messages.length = 0;
-            messages.push(...result.value.messages);
+            msgs.length = 0;
+            msgs.push(...result.value.messages);
           }
-          return result.ok ? result.value : { messages, didCompress: false };
+          return result.ok ? result.value : { messages: [...msgs], didCompress: false };
         }),
-
-      get length(): number {
-        return messages.length;
-      },
-
-      _overThreshold: (): boolean => {
-        let total = 0;
-        for (const m of messages) {
-          for (const char of m.content) {
-            total += char.charCodeAt(0) > 127 ? 1.5 : 1;
-          }
-        }
-        return Math.ceil(total / 3.5) > budget * 0.9;
-      },
-
-      _doCompact: (): void => {
-        const result = compactMessages(messages, budget);
-        if (result.ok && result.value.didCompress) {
-          messages.length = 0;
-          messages.push(...result.value.messages);
-        }
-      },
     };
-
-    return self;
   }),
 }) {}
 

@@ -1,6 +1,6 @@
+import { Effect } from 'effect';
 import { AgentError } from '../core/error';
 import type { HookService } from '../hooks/registry';
-import { Result } from '../core/result';
 import type { Sandbox } from '../sandbox';
 import type { ToolService } from './registry';
 
@@ -15,47 +15,50 @@ export class ToolExecutor {
     return this.registry;
   }
 
-  async execute(
+  execute(
     name: string,
     args: unknown,
     opts?: { signal?: AbortSignal },
-  ): Promise<Result<string, AgentError>> {
-    const toolResult = this.registry.getSync(name);
-    if (!toolResult.ok) return toolResult;
-    const tool = toolResult.value;
+  ): Effect.Effect<string, AgentError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const toolResult = self.registry.get(name);
+      if (!toolResult.ok) return yield* Effect.fail(toolResult.error);
+      const tool = toolResult.value;
 
-    if (!this.sandbox.allowTool(name)) {
-      return Result.err(AgentError.toolNotAllowed(name));
-    }
+      if (!self.sandbox.allowTool(name)) {
+        return yield* Effect.fail(AgentError.toolNotAllowed(name));
+      }
 
-    await this.hooks.emitSync('tool.execute.before', {
-      toolName: name,
-      args: args as Record<string, unknown>,
-    });
+      yield* Effect.sync(() => self.hooks.emitSync('tool.execute.before', {
+        toolName: name,
+        args: args as Record<string, unknown>,
+      }));
 
-    const start = Date.now();
-    try {
-      const parsedArgs = tool.parameters.parse(args);
-      const result = await tool.execute(parsedArgs, opts?.signal);
+      const parsedArgs = yield* Effect.sync(() => tool.parameters.parse(args));
+      const start = Date.now();
+      const result = yield* Effect.tryPromise({
+        try: () => tool.execute(parsedArgs, opts?.signal),
+        catch: (e) => e instanceof AgentError ? e : AgentError.toolExecutionFailed(name, e),
+      });
+
       const durationMs = Date.now() - start;
-      await this.hooks.emitSync('tool.execute.after', {
+      yield* Effect.sync(() => self.hooks.emitSync('tool.execute.after', {
         toolName: name,
         args: args as Record<string, unknown>,
         result,
         durationMs,
-      });
-      return Result.ok(result);
-    } catch (e) {
-      const error =
-        e instanceof AgentError
-          ? e
-          : AgentError.toolExecutionFailed(name, e);
-      await this.hooks.emitSync('tool.execute.error', {
-        toolName: name,
-        args: args as Record<string, unknown>,
-        error,
-      });
-      return Result.err(error);
-    }
+      }));
+
+      return result;
+    }).pipe(
+      Effect.tapError((error) =>
+        Effect.sync(() => self.hooks.emitSync('tool.execute.error', {
+          toolName: name,
+          args: args as Record<string, unknown>,
+          error,
+        })),
+      ),
+    );
   }
 }

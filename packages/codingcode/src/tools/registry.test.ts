@@ -20,38 +20,37 @@ function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 }
 
 describe('ToolService', () => {
-  it('should register a tool', async () => {
+  it('should register and get a tool', async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
       yield* tools.register(makeTool('test_tool'));
-      const t = yield* tools.get('test_tool');
-      return t.name;
+      const result = tools.get('test_tool');
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.name).toBe('test_tool');
     });
-    const name = await runWithLayer(program);
-    expect(name).toBe('test_tool');
+    await runWithLayer(program);
   });
 
   it('should skip duplicate tool registration (built-in priority)', async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
       yield* tools.register(makeTool('dup_tool'));
-      yield* tools.register(makeTool('dup_tool')); // duplicate, should be skipped
-      const desc = yield* tools.describeAll();
+      yield* tools.register(makeTool('dup_tool'));
+      const desc = tools.describeAll();
       return desc.filter((d) => d.name === 'dup_tool').length;
     });
     const count = await runWithLayer(program);
     expect(count).toBe(1);
   });
 
-  it('should fail get with ToolNotFound for unknown tool', async () => {
+  it('should return error for unknown tool', async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
-      return yield* tools.get('nonexistent');
+      const result = tools.get('nonexistent');
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe('TOOL_NOT_FOUND');
     });
-    const result = await Effect.runPromise(
-      program.pipe(Effect.provide(AppLayer), Effect.either) as any,
-    );
-    expect(result._tag).toBe('Left');
+    await runWithLayer(program);
   });
 
   it('should describeAll return all registered tools', async () => {
@@ -59,7 +58,7 @@ describe('ToolService', () => {
       const tools = yield* ToolService;
       yield* tools.register(makeTool('a'));
       yield* tools.register(makeTool('b'));
-      const desc = yield* tools.describeAll();
+      const desc = tools.describeAll();
       return desc.length;
     });
     const count = await runWithLayer(program);
@@ -71,21 +70,21 @@ describe('ToolService', () => {
       const tools = yield* ToolService;
       yield* tools.register(makeTool('keep'));
       yield* tools.register(makeTool('skip'));
-      const filtered = yield* tools.filter(['keep']);
+      const filtered = tools.filter(['keep']);
       return filtered.length;
     });
     const count = await runWithLayer(program);
     expect(count).toBe(1);
   });
 
-  it('getSync should work for non-Effect callers', async () => {
+  it('get is sync and returns Result', async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
       yield* tools.register(makeTool('sync_tool'));
-      return tools.getSync('sync_tool');
+      const result = tools.get('sync_tool');
+      return result;
     });
     const result = await runWithLayer(program);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.name).toBe('sync_tool');
   });
 });
