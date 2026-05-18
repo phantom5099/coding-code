@@ -38,7 +38,7 @@ function createMockLlm(chunks?: string[], responseContent?: string) {
 
 const mockExecutor = {
   execute: async () => Result.ok('done'),
-  getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
+  getRegistry: () => ({ describeAllSync: () => [], filterSync: () => [] }),
 };
 
 const MockSessionLayer = Layer.succeed(

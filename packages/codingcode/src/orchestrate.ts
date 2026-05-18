@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { ContextService } from './context/context.js';
 import { AgentService } from './agent/agent.js';
 import { SessionService, type SessionStoreState } from './session/store.js';
+import { SkillService } from './skills/index.js';
 import type { ReActEvent } from './agent/types.js';
 import type { AgentError } from './core/error.js';
 import { Result } from './core/result.js';
@@ -17,10 +18,23 @@ export const sendMessage = (
     const ctx = yield* ContextService;
     const session = yield* SessionService;
     const agent = yield* AgentService;
+    const skill = yield* SkillService;
 
     yield* agent.init({ role: state.sessionMeta?.role ?? 'coder' });
-    yield* ctx.addUser(input);
-    yield* session.recordUser(state, input);
+
+    // Check for @skill-name prefix activation
+    const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
+
+    // If a skill was activated via @prefix, inject its instruction
+    if (matchedSkill) {
+      yield* agent.init({
+        role: state.sessionMeta?.role ?? 'coder',
+        systemPrompt: matchedSkill.instruction,
+      });
+    }
+
+    yield* ctx.addUser(actualInput);
+    yield* session.recordUser(state, actualInput);
 
     const messages = yield* ctx.build();
     const raw = agent.runStream(messages, llm, executor);
@@ -93,9 +107,7 @@ async function* wrapStream(
         break;
 
       case 'assistant': {
-        // Sync to context (for auto-compaction detection)
         await Effect.runPromise(ctx.addAssistant(event.content, event.toolCalls));
-        // Persist to session
         const ev = await Effect.runPromise(
           session.recordAssistant(state, event.content, event.toolCalls as any, model),
         );

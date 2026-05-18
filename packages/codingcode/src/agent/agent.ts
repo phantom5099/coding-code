@@ -19,10 +19,10 @@ interface LLMStreamAdapter {
 }
 
 interface ToolExecutorAdapter {
-  execute(name: string, args: Record<string, unknown>): Promise<Result<string, AgentError>>;
+  execute(name: string, args: Record<string, unknown>, opts?: { signal?: AbortSignal }): Promise<Result<string, AgentError>>;
   getRegistry(): {
-    describeAll(): Array<{ name: string; description: string; schema: Record<string, unknown> }>;
-    filter(names: string[]): Array<{ name: string; description: string; schema: Record<string, unknown> }>;
+    describeAllSync(): Array<{ name: string; description: string; schema: Record<string, unknown> }>;
+    filterSync(names: string[]): Array<{ name: string; description: string; schema: Record<string, unknown> }>;
   };
 }
 
@@ -45,7 +45,6 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
 
       getRole: (): Effect.Effect<string> => Effect.succeed(config.role),
 
-      // 纯流——输入 messages，输出 ReActEvent。不感知 Context、Bus、Session。
       runStream: (
         messages: Message[],
         llm: LLMStreamAdapter,
@@ -68,11 +67,12 @@ export async function* runReActLoop(
   for (let step = 0; step < maxSteps; step++) {
     yield { type: 'step', step: step + 1, max: maxSteps };
 
+    const registry = executor.getRegistry();
     const tools: ToolDescription[] = config.availableTools
-      ? executor.getRegistry().filter(config.availableTools).map((t) => ({
+      ? registry.filterSync(config.availableTools).map((t) => ({
           name: t.name, description: t.description, parameters: t.schema,
         }))
-      : executor.getRegistry().describeAll().map((t) => ({
+      : registry.describeAllSync().map((t) => ({
           name: t.name, description: t.description, parameters: t.schema,
         }));
 
@@ -101,13 +101,40 @@ export async function* runReActLoop(
       return Result.ok(resp.content);
     }
 
-    for (const tc of toolCalls) {
-      const args = tc.arguments ?? {};
-      yield { type: 'toolStart', name: tc.name, arguments: args };
-      const toolResult = await executor.execute(tc.name, args);
-      const output = toolResult.ok ? toolResult.value : `[Error: ${toolResult.error.code}] ${toolResult.error.message}`;
-      messages.push({ role: 'tool', content: output, tool_call_id: tc.id, tool_name: tc.name });
-      yield { type: 'toolResult', id: tc.id, name: tc.name, output, ok: toolResult.ok };
+    // Fiber concurrent tool execution
+    const controllers = toolCalls.map(() => new AbortController());
+    const results = await Effect.runPromise(
+      Effect.forEach(
+        toolCalls,
+        (tc, i) =>
+          Effect.tryPromise({
+            try: () => executor.execute(tc.name, tc.arguments ?? {}, { signal: controllers[i].signal }),
+            catch: (cause) => AgentError.toolExecutionFailed(tc.name, String(cause)),
+          }).pipe(
+            Effect.map((result) => ({ id: tc.id, name: tc.name, result })),
+            Effect.catchAllCause((cause) =>
+              Effect.succeed({
+                id: tc.id,
+                name: tc.name,
+                result: Result.err(AgentError.toolExecutionFailed(tc.name, String(cause))),
+              }),
+            ),
+          ),
+        { concurrency: 'unbounded' },
+      ),
+    );
+
+    // Yield results in original order
+    for (const r of results) {
+      const output = r.result.ok ? r.result.value : `[Error: ${r.result.error.code}] ${r.result.error.message}`;
+      messages.push({ role: 'tool', content: output, tool_call_id: r.id, tool_name: r.name });
+      yield {
+        type: 'toolResult',
+        id: r.id,
+        name: r.name,
+        output,
+        ok: r.result.ok,
+      };
     }
   }
 

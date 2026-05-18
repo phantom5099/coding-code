@@ -2,21 +2,21 @@ import { Effect } from 'effect';
 import type { Context } from 'hono';
 import { AppLayer } from '../layer.js';
 
-type EffectProgram = Effect.Effect<any, any, any>;
+function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
+  return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
+}
 
 export function handler(
-  program: EffectProgram,
+  program: Effect.Effect<any, any, any>,
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
-    const result = await Effect.runPromise(
-      program.pipe(Effect.provide(AppLayer)) as Effect.Effect<any, any, never>,
-    );
+    const result = await runWithLayer(program);
     return c.json(result);
   };
 }
 
 export function sseHandler(
-  program: EffectProgram,
+  program: Effect.Effect<any, any, any>,
   opts?: { initialEvents?: Array<Record<string, unknown>> },
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
@@ -33,9 +33,7 @@ export function sseHandler(
             for (const ev of opts.initialEvents) enqueue(ev);
           }
 
-          const generator: AsyncIterable<string> = await Effect.runPromise(
-            program.pipe(Effect.provide(AppLayer)) as Effect.Effect<any, any, never>,
-          );
+          const generator: AsyncIterable<string> = await runWithLayer(program);
 
           for await (const chunk of generator) {
             enqueue({ type: 'text', text: chunk });
