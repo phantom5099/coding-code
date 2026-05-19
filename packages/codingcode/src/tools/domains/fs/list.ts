@@ -5,16 +5,10 @@ import type { ToolDefinition } from '../../types';
 
 export const listDirTool: ToolDefinition = {
   name: 'list_dir',
-  description: 'List files and directories in a given path.',
+  description: 'List the contents (files and subdirectories) of a given directory. Only top-level entries are returned; recursive listing is not supported.',
   parameters: z.object({
     path: z.string().default('.').describe('Directory path (defaults to current directory)'),
   }),
-  schema: {
-    type: 'object',
-    properties: {
-      path: { type: 'string', default: '.', description: 'Directory path (defaults to current directory)' },
-    },
-  },
   execute: async (args: unknown) => {
     const { path } = args as any;
     const dirPath = resolve(path);

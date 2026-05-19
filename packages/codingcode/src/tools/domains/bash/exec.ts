@@ -4,22 +4,12 @@ import type { ToolDefinition } from '../../types';
 
 export const bashTool: ToolDefinition = {
   name: 'execute_command',
-  description:
-    'Execute a shell command and return its output. Use for: running tests, checking git status, installing packages, building projects. Commands are sandboxed.',
+  description: 'Execute a shell command and return its output. Use for running tests, git, npm, build, and other CLI operations.',
   parameters: z.object({
     command: z.string().describe('The shell command to execute'),
     cwd: z.string().optional().describe('Working directory (defaults to project root)'),
-    timeout_ms: z.number().int().default(30000).describe('Timeout in ms'),
+    timeout_ms: z.number().int().default(30000).describe('Timeout in milliseconds'),
   }),
-  schema: {
-    type: 'object',
-    properties: {
-      command: { type: 'string', description: 'The shell command to execute' },
-      cwd: { type: 'string', description: 'Working directory (defaults to project root)' },
-      timeout_ms: { type: 'integer', default: 30000, description: 'Timeout in ms' },
-    },
-    required: ['command'],
-  },
   execute: async (args: unknown) => {
     const { command, cwd, timeout_ms } = args as any;
     const workDir = cwd || process.cwd();

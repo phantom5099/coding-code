@@ -2,39 +2,117 @@ import { Effect } from 'effect';
 
 export type HookPoint =
   | 'tool.execute.before' | 'tool.execute.after' | 'tool.execute.error'
+  | 'tool.execute.denied'
+  | 'tool.approval.pre' | 'tool.approval.post'
   | 'llm.request.before' | 'llm.response.after' | 'llm.response.error'
   | 'session.save.before' | 'session.save.after';
 
-type HookHandler = (payload: Record<string, unknown>) => void | Promise<void>;
+export interface HookDecision {
+  decision?: 'allow' | 'deny' | 'ask';
+  reason?: string;
+  modifiedInput?: Record<string, unknown>;
+  modifiedOutput?: unknown;
+}
+
+type ObserverHandler = (payload: Record<string, unknown>) => void | Promise<void>;
+type DecisionHandler = (
+  payload: Record<string, unknown>,
+) => HookDecision | null | Promise<HookDecision | null>;
+
+interface HandlerEntry {
+  id: string;
+  handler: ObserverHandler | DecisionHandler;
+  priority: number;
+  source: 'system' | 'user';
+  type: 'observer' | 'decision';
+}
+
+let entryCounter = 0;
 
 export class HookService extends Effect.Service<HookService>()('HookService', {
   effect: Effect.gen(function* () {
-    const handlers = new Map<HookPoint, Set<HookHandler>>();
+    const observers = new Map<HookPoint, HandlerEntry[]>();
+
+    function sortedEntries(point: HookPoint): HandlerEntry[] {
+      return (observers.get(point) ?? []).slice().sort((a, b) => a.priority - b.priority);
+    }
 
     return {
-      register: (point: HookPoint, handler: HookHandler): Effect.Effect<() => void> =>
+      /** Register an observation handler (fire-and-forget, no return value). */
+      register: (
+        point: HookPoint,
+        handler: ObserverHandler,
+      ): Effect.Effect<() => void> =>
         Effect.sync(() => {
-          const set = handlers.get(point) ?? new Set();
-          set.add(handler);
-          handlers.set(point, set);
+          const entry: HandlerEntry = {
+            id: `obs-${++entryCounter}`,
+            handler,
+            priority: 0,
+            source: 'user',
+            type: 'observer',
+          };
+          const set = observers.get(point) ?? [];
+          set.push(entry);
+          observers.set(point, set);
           return () => {
-            set.delete(handler);
+            const s = observers.get(point);
+            if (s) {
+              const idx = s.indexOf(entry);
+              if (idx >= 0) s.splice(idx, 1);
+            }
           };
         }),
 
-      emit: (point: HookPoint, payload: Record<string, unknown>): Effect.Effect<void> =>
-        Effect.promise(async () => {
-          const set = handlers.get(point);
-          if (!set) return;
-          for (const handler of set) await handler(payload);
+      /** Register a decision handler with priority (lower runs first). */
+      registerDecision: (
+        point: HookPoint,
+        handler: DecisionHandler,
+        opts?: { priority?: number; source?: 'system' | 'user' },
+      ): Effect.Effect<() => void> =>
+        Effect.sync(() => {
+          const entry: HandlerEntry = {
+            id: `dec-${++entryCounter}`,
+            handler,
+            priority: opts?.priority ?? 0,
+            source: opts?.source ?? 'user',
+            type: 'decision',
+          };
+          const set = observers.get(point) ?? [];
+          set.push(entry);
+          observers.set(point, set);
+          return () => {
+            const s = observers.get(point);
+            if (s) {
+              const idx = s.indexOf(entry);
+              if (idx >= 0) s.splice(idx, 1);
+            }
+          };
         }),
 
-      // Sync emit for callers outside Effect context (ToolExecutor)
-      emitSync: async (point: HookPoint, payload: Record<string, unknown>): Promise<void> => {
-        const set = handlers.get(point);
-        if (!set) return;
-        for (const handler of set) await handler(payload);
-      },
+      /** Emit an observer event (fire-and-forget all handlers). */
+      emit: (point: HookPoint, payload: Record<string, unknown>): Effect.Effect<void> =>
+        Effect.promise(async () => {
+          for (const entry of sortedEntries(point)) {
+            if (entry.type === 'observer') {
+              await (entry.handler as ObserverHandler)(payload);
+            }
+          }
+        }),
+
+      /** Emit a decision event. Handlers run in priority order; first non-null decision wins. */
+      emitDecision: (
+        point: HookPoint,
+        payload: Record<string, unknown>,
+      ): Effect.Effect<HookDecision | null> =>
+        Effect.promise(async () => {
+          for (const entry of sortedEntries(point)) {
+            if (entry.type === 'decision') {
+              const result = await (entry.handler as DecisionHandler)(payload);
+              if (result != null) return result;
+            }
+          }
+          return null;
+        }),
     };
   }),
 }) {}

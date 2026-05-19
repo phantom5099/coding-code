@@ -1,19 +1,18 @@
+import { z } from 'zod';
 import { Effect } from 'effect';
 import { AgentError } from '../core/error';
 import { Result } from '../core/result';
 import type { ToolDefinition, ToolDescription } from './types';
 
+// Module-level singleton: shared across all Effect.runPromise scopes
+const tools = new Map<string, ToolDefinition>();
+
 export class ToolService extends Effect.Service<ToolService>()('ToolService', {
   effect: Effect.gen(function* () {
-    const tools = new Map<string, ToolDefinition>();
-
     return {
       register: (tool: ToolDefinition): Effect.Effect<void> =>
         Effect.sync(() => {
-          if (tools.has(tool.name)) {
-            console.warn(`[ToolService] '${tool.name}' already registered, skipping`);
-            return;
-          }
+          if (tools.has(tool.name)) return; // skip duplicates silently
           tools.set(tool.name, tool);
         }),
 
@@ -26,7 +25,7 @@ export class ToolService extends Effect.Service<ToolService>()('ToolService', {
         Array.from(tools.values()).map((t) => ({
           name: t.name,
           description: t.description,
-          parameters: t.schema,
+          parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
         })),
 
       filter: (names: string[]): ToolDefinition[] =>

@@ -10,7 +10,6 @@ function makeTool(name: string): ToolDefinition {
     name,
     description: `Tool ${name}`,
     parameters: z.object({}),
-    schema: { type: 'object' },
     execute: async () => `result-${name}`,
   };
 }

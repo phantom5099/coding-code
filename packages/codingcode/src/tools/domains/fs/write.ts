@@ -5,20 +5,11 @@ import type { ToolDefinition } from '../../types';
 
 export const writeFileTool: ToolDefinition = {
   name: 'write_file',
-  description:
-    'Write content to a file. Creates parent directories if needed. Overwrites by default.',
+  description: 'Write content to a file, creating parent directories if needed. Overwrites existing files.',
   parameters: z.object({
     path: z.string().describe('Path to the file'),
     content: z.string().describe('Content to write'),
   }),
-  schema: {
-    type: 'object',
-    properties: {
-      path: { type: 'string', description: 'Path to the file' },
-      content: { type: 'string', description: 'Content to write' },
-    },
-    required: ['path', 'content'],
-  },
   execute: async (args: unknown) => {
     const { path, content } = args as any;
     const filePath = resolve(path);

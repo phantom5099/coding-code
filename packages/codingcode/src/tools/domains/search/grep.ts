@@ -6,22 +6,12 @@ import type { ToolDefinition } from '../../types';
 
 export const searchTool: ToolDefinition = {
   name: 'search_code',
-  description:
-    'Search for a text or regex pattern in project files. Returns matching file paths and line content. Use to find where functions, types, or patterns are defined.',
+  description: 'Search for a text or regex pattern in project files and return matching file paths and line content.',
   parameters: z.object({
     pattern: z.string().describe('Text or regex pattern to search for'),
-    glob: z.string().default('**/*').describe("File glob pattern (e.g. 'src/**/*.ts')"),
-    max_results: z.number().int().min(1).max(100).default(30).describe('Max matches to return'),
+    glob: z.string().default('**/*').describe("File glob pattern to filter which files to search (e.g. 'src/**/*.ts')"),
+    max_results: z.number().int().min(1).max(100).default(30).describe('Maximum number of matches to return'),
   }),
-  schema: {
-    type: 'object',
-    properties: {
-      pattern: { type: 'string', description: 'Text or regex pattern to search for' },
-      glob: { type: 'string', default: '**/*', description: "File glob pattern (e.g. 'src/**/*.ts')" },
-      max_results: { type: 'integer', minimum: 1, maximum: 100, default: 30, description: 'Max matches to return' },
-    },
-    required: ['pattern'],
-  },
   execute: async (args: unknown) => {
     const { pattern, glob, max_results } = args as any;
     const files = await globby(glob, {

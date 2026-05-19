@@ -17,8 +17,6 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
   const { input } = await c.req.json();
 
   const llm = c.get('llm');
-  const executor = c.get('executor');
-  const hooks = c.get('hooks');
 
   const state = await runWithLayer(
     Effect.gen(function* () {
@@ -29,7 +27,8 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
 
   if (!sessionId) sessionId = state.sessionId;
 
-  return sseHandler(sendMessage(state, input, llm, executor, hooks) as any, {
+  // sendMessage and services resolve their own dependencies via AppLayer
+  return sseHandler(sendMessage(state, input, llm) as any, {
     initialEvents: [{ type: 'session_id', sessionId }],
   })(c);
 });
