@@ -33,7 +33,7 @@ const DEFAULT_CONFIG: AppConfig = {
 export function loadConfig(configPath?: string): AppConfig {
   const paths = configPath
     ? [configPath]
-    : [resolve(process.cwd(), 'codingcode.yaml'), resolve(process.cwd(), 'codingcode.yml')];
+    : [resolve(process.cwd(), 'config/config.yaml'), resolve(process.cwd(), 'config/config.yml')];
 
   for (const p of paths) {
     if (existsSync(p)) {

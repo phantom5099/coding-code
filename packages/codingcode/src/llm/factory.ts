@@ -35,7 +35,7 @@ export interface SelectableModel {
   api_key_env: string;
 }
 
-const MODELS_FILE = resolve(process.cwd(), 'models.json');
+const MODELS_FILE = resolve(process.cwd(), 'config/models.json');
 
 let catalog: ProviderCatalog | null = null;
 let currentEntry: SelectableModel | null = null;
