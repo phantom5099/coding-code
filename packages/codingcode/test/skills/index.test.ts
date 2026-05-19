@@ -12,12 +12,12 @@ function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEST_ROOT = join(__dirname, '..', '..', '..');
-const TEST_SKILLS_DIR = join(TEST_ROOT, '.codingcode', 'skills');
+const TEST_CODINGCODE_DIR = join(TEST_ROOT, '.codingcode');
 
 describe('SkillService', () => {
   beforeEach(() => {
-    if (existsSync(TEST_SKILLS_DIR)) rmSync(TEST_SKILLS_DIR, { recursive: true, force: true });
-    const dir = join(TEST_SKILLS_DIR, 'test-basic');
+    if (existsSync(TEST_CODINGCODE_DIR)) rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    const dir = join(TEST_CODINGCODE_DIR, 'skills', 'test-basic');
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, 'SKILL.md'),
@@ -36,7 +36,7 @@ Test the skill system.
   });
 
   afterEach(() => {
-    if (existsSync(TEST_SKILLS_DIR)) rmSync(TEST_SKILLS_DIR, { recursive: true, force: true });
+    if (existsSync(TEST_CODINGCODE_DIR)) rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
   });
 
   it('should load skills from .codingcode/skills/', async () => {
@@ -70,7 +70,7 @@ Test the skill system.
 
   it('should support kebab-case skill names in @ prefix', async () => {
     // Create kebab-case skill
-    const dir = join(TEST_SKILLS_DIR, 'my-kebab-skill');
+    const dir = join(TEST_CODINGCODE_DIR, 'skills', 'my-kebab-skill');
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, 'SKILL.md'),
