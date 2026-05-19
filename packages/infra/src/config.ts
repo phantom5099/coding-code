@@ -14,11 +14,6 @@ export interface AppConfig {
     baseURL?: string;
   }>;
   activeModel?: string;
-  roles: Record<string, {
-    systemPrompt: string;
-    availableTools: string[];
-  }>;
-  activeRole?: string;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -27,7 +22,6 @@ const DEFAULT_CONFIG: AppConfig = {
   },
   maxSteps: 50,
   models: {},
-  roles: {},
 };
 
 export function loadConfig(configPath?: string): AppConfig {

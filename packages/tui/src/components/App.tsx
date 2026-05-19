@@ -19,7 +19,6 @@ export function App({ client }: AppProps) {
   const { exit } = useApp();
   const { width } = useTerminalSize();
   const [sessionId, setSessionId] = useState('unknown');
-  const [currentRole, setCurrentRole] = useState('coder');
   const runner = useCallback(
     (input: string) => client.sendMessage(input),
     [client],
@@ -104,21 +103,6 @@ export function App({ client }: AppProps) {
       } catch { /* ignore - server may not be ready */ }
       return;
     }
-    if (parsed.name === 'role') {
-      try {
-        const { roles, currentRole: cr } = await client.listRoles();
-        setPanel({
-          type: 'role',
-          items: roles.map((r: any) => ({
-            label: r.label || r.id,
-            value: r.id,
-            description: r.description || '',
-          })),
-          activeValue: cr,
-        });
-      } catch { /* ignore */ }
-      return;
-    }
     if (parsed.name === 'sessions') {
       try {
         const sessions = await client.listSessions();
@@ -162,7 +146,6 @@ export function App({ client }: AppProps) {
   });
 
   const modelW = Math.min(60, width - 4);
-  const roleW = Math.min(60, width - 4);
   const sessionW = Math.min(70, width - 4);
   const helpW = Math.min(50, width - 4);
   const helpInnerW = Math.max(1, helpW - 2);
@@ -195,40 +178,15 @@ export function App({ client }: AppProps) {
           width={modelW}
         />
       )}
-      {panel.type === 'role' && (
-        <InlinePanel
-          title={COMMAND_REGISTRY.role.title}
-          items={panel.items}
-          activeValue={panel.activeValue}
-          onSelect={async (value) => {
-            await client.switchRole(value);
-            setCurrentRole(value);
-            setStaticMessages(prev => {
-              if (prev.length === 1 && prev[0].role === 'welcome') {
-                return [{
-                  id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
-                  content: buildWelcomeContent(),
-                }];
-              }
-              return prev;
-            });
-            setPanel({ type: 'none' });
-          }}
-          onCancel={() => setPanel({ type: 'none' })}
-          width={roleW}
-        />
-      )}
       {panel.type === 'sessions' && (
         <InlinePanel
           title={COMMAND_REGISTRY.sessions.title}
           items={panel.items}
           onSelect={async (value) => {
             const history = await client.resumeSession(value);
-            const meta = history.find((e: any) => e.type === 'session_meta');
             const uiMsgs = historyToUIMessages(history);
             setStaticMessages(uiMsgs);
             setSessionId(value);
-            if (meta?.role) setCurrentRole(meta.role);
             setPanel({ type: 'none' });
             setStaticKey(k => k + 1);
           }}

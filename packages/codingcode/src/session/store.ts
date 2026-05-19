@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, rea
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
-import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, RoleSwitchEvent, CompactBoundaryEvent, SessionIndex } from './types.js';
+import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, CompactBoundaryEvent, SessionIndex } from './types.js';
 
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const SESSIONS_DIR = join(CODINGCODE_DIR, 'sessions');
@@ -62,7 +62,7 @@ function findFirstUserContent(history: SessionEvent[]): string | null {
 export class SessionService extends Effect.Service<SessionService>()('Session', {
   effect: Effect.gen(function* () {
     return {
-      create: (cwd: string, model: string, role: string, version: string, sessionId?: string): Effect.Effect<SessionStoreState> =>
+      create: (cwd: string, model: string, version: string, sessionId?: string): Effect.Effect<SessionStoreState> =>
         Effect.sync(() => {
           const state = initState(cwd, sessionId);
           ensureDirs(state.transcriptPath);
@@ -82,7 +82,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           const meta: SessionMetaEvent = {
             type: 'session_meta', sessionId: state.sessionId,
             projectSlug: state.projectSlug, cwd: state.cwd,
-            model, role, createdAt: new Date().toISOString(), version,
+            model, createdAt: new Date().toISOString(), version,
           };
           state.sessionMeta = meta;
           appendLine(state.transcriptPath, meta);
@@ -110,13 +110,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       recordToolResult: (state: SessionStoreState, parentUuid: string, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent> =>
         Effect.sync(() => {
           const event: ToolResultEvent = { type: 'tool_result', uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString() };
-          appendEvent(state, event);
-          return event;
-        }),
-
-      recordRoleSwitch: (state: SessionStoreState, fromRole: string, toRole: string): Effect.Effect<RoleSwitchEvent> =>
-        Effect.sync(() => {
-          const event: RoleSwitchEvent = { type: 'role_switch', uuid: randomUUID(), fromRole, toRole, timestamp: new Date().toISOString() };
           appendEvent(state, event);
           return event;
         }),
@@ -205,7 +198,7 @@ function listSessions(projectSlug?: string): SessionIndex[] {
         if (meta?.cwd && meta?.sessionId) {
           const h = readHistory(jsonlPath);
           const firstUser = findFirstUserContent(h);
-          results.push({ sessionId: meta.sessionId, projectSlug: meta.projectSlug, cwd: meta.cwd, model: meta.model, role: meta.role, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8) });
+          results.push({ sessionId: meta.sessionId, projectSlug: meta.projectSlug, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8) });
         }
       }
     }
@@ -225,6 +218,6 @@ function appendLine(path: string, event: object): void {
 
 function updateIndex(state: SessionStoreState): void {
   if (!state.sessionMeta) return;
-  const index: SessionIndex = { sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd, model: state.sessionMeta.model, role: state.sessionMeta.role, createdAt: state.sessionMeta.createdAt, updatedAt: new Date().toISOString(), messageCount: state.messageCount, title: state.title };
+  const index: SessionIndex = { sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd, model: state.sessionMeta.model, createdAt: state.sessionMeta.createdAt, updatedAt: new Date().toISOString(), messageCount: state.messageCount, title: state.title };
   try { writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8'); } catch { /* non-critical */ }
 }

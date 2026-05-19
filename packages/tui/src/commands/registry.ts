@@ -8,7 +8,6 @@ export interface CommandDef {
 
 export const COMMAND_REGISTRY = {
   model:    { name: 'model',    description: '选择模型',      usage: '/model',    title: '选择模型' },
-  role:     { name: 'role',     description: '选择角色',      usage: '/role',     title: '选择角色' },
   sessions: { name: 'sessions', description: '恢复历史会话',   usage: '/sessions', title: '恢复会话' },
   help:     { name: 'help',     description: '显示帮助',      usage: '/help',     title: '帮助' },
   clear:    { name: 'clear',    description: '清空对话',      usage: '/clear',    title: '清空对话',  quick: true },

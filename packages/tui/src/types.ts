@@ -13,7 +13,6 @@ export interface SessionIndex {
   projectSlug: string;
   cwd: string;
   model: string;
-  role: string;
   createdAt: string;
   updatedAt: string;
   messageCount: number;
@@ -28,6 +27,5 @@ export interface PanelItem<T = string> {
 export type PanelState =
   | { type: 'none' }
   | { type: 'model'; items: PanelItem[]; activeValue: string }
-  | { type: 'role'; items: PanelItem[]; activeValue: string }
   | { type: 'sessions'; items: PanelItem[] }
   | { type: 'help' };
