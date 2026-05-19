@@ -2,12 +2,11 @@ import { Effect } from 'effect';
 import { createServer as createNetServer } from 'net';
 import { serve } from '@hono/node-server';
 import { ToolService } from './tools/registry.js';
-import { ToolExecutor } from './tools/executor.js';
 import { HookService } from './hooks/registry.js';
 import { McpService } from './mcp/index.js';
 import { SkillService } from './skills/index.js';
 import { getLLMClient } from './llm/factory.js';
-import { DefaultSandbox } from './sandbox/index.js';
+import { SandboxService } from './sandbox/index.js';
 import { readFileTool } from './tools/domains/fs/read.js';
 import { writeFileTool } from './tools/domains/fs/write.js';
 import { listDirTool } from './tools/domains/fs/list.js';
@@ -51,6 +50,10 @@ async function main() {
     const hooks = yield* HookService;
     const mcp = yield* McpService;
     const skill = yield* SkillService;
+    const sandbox = yield* SandboxService;
+
+    // Initialize sandbox (will gracefully degrade if @vscode/sandbox-runtime is unavailable)
+    yield* sandbox.initialize({});
 
     // Register built-in tools
     yield* tools.register(readFileTool);
@@ -78,18 +81,19 @@ async function main() {
     const serverUrl = process.env.CODINGCODE_SERVER ?? `http://localhost:${port}`;
 
     if (tuiOnly) {
-      const { runTui } = yield* Effect.tryPromise(() => import('../../tui/src/index.js'));
+      const tuiPath = '../../tui/src/index.js';
+      const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
       runTui({ serverUrl });
       return;
     }
 
-    const sandbox = new DefaultSandbox();
-    const executor = new ToolExecutor(tools, hooks, sandbox);
-    const app = createServer({ llm: llmResult.value, executor, hooks });
+    // ToolExecutorService, ApprovalService, SandboxService all provided via AppLayer
+    const app = createServer({ llm: llmResult.value });
     serve({ fetch: app.fetch, port });
 
     if (!serveOnly) {
-      const { runTui } = yield* Effect.tryPromise(() => import('../../tui/src/index.js'));
+      const tuiPath = '../../tui/src/index.js';
+      const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
       runTui({ serverUrl });
     }
   });

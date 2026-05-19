@@ -156,13 +156,27 @@ interface ToolDefinition {
 
 在 `cli.ts` 中向 `ToolRegistry` 注册新工具即可——Agent 会自动将其描述传给 LLM，LLM 即可调用。
 
-### 沙箱
+### 沙箱隔离 (可选)
 
-所有工具执行经过 `DefaultSandbox` 过滤：
-- **路径白名单**: 限制文件读写范围
-- **命令过滤**: 阻止危险命令 (`rm -rf /`, `dd`, `mkfs`, fork bomb, `shutdown`, `reboot`)
-- **敏感路径保护**: `/etc/passwd`, `/etc/shadow`, `~/.ssh`, `~/.gnupg` 等不可访问
-- **超时控制**: 每个工具独立超时
+所有工具执行经过两层安全保护：
+
+**审批流水线**（始终生效）：六层决策链——规则引擎（硬 deny，如 `rm -rf /`）→ 只读白名单 → 权限模式 → 钩子策略 → 用户确认 → 审计日志。不需要额外安装，开箱即用。
+
+**OS 级沙箱**（可选，需安装 `@anthropic-ai/sandbox-runtime`）：
+
+```bash
+npm install -g @anthropic-ai/sandbox-runtime
+```
+
+安装后的增强能力：
+
+| 能力 | 说明 |
+|---|---|
+| **文件系统隔离** | 基于 bubblewrap (Linux) / sandbox-exec (macOS) 的 mount namespace，Bash 命令只能看到项目目录，`/etc`、`/home` 等不可见 |
+| **网络隔离** | 内置 HTTP/SOCKS 代理，只允许白名单域名通过，IP 地址直连被拦截 |
+| **防绕过** | 即使 prompt injection 让模型生成 `cat /etc/shadow`，沙箱层会拒绝——文件在 OS 层不可见，不依赖字符串匹配 |
+
+不安装不影响使用——审批流水线独立运行，同样能拦截危险命令。沙箱只是多一层 OS 级防御，防止绕过应用层检查的攻击。
 
 ---
 

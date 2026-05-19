@@ -7,12 +7,11 @@ import type { AgentEvent } from './bus/types.js';
 import type { AgentError } from './core/error.js';
 import { Result } from './core/result.js';
 
+// AgentService, ToolExecutorService, HookService all resolved via AppLayer — no need to pass them in
 export const sendMessage = (
   state: SessionStoreState,
   input: string,
   llm: any,
-  executor: any,
-  _hooks: any,
 ) =>
   Effect.gen(function* () {
     const ctx = yield* ContextService;
@@ -21,18 +20,17 @@ export const sendMessage = (
     const skill = yield* SkillService;
     const sid = state.sessionId;
 
-    yield* agent.init({});
-
     const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
     if (matchedSkill) {
-      yield* agent.init({ systemPrompt: matchedSkill.instruction });
+      agent.setSkillInstruction(matchedSkill.instruction);
     }
 
     yield* ctx.addUser(sid, actualInput);
     yield* session.recordUser(state, actualInput);
 
     const messages = yield* ctx.build(sid);
-    const raw = agent.runStream(messages, llm, executor);
+    // agent.runStream now resolves ToolExecutorService internally, no need to pass executor
+    const raw = agent.runStream(messages, llm);
     return wrapStream(raw, ctx, session, state, sid);
   });
 
@@ -43,15 +41,12 @@ export const resumeSession = (
   Effect.gen(function* () {
     const ctx = yield* ContextService;
     const session = yield* SessionService;
-    const agent = yield* AgentService;
     const sid = state.sessionId;
 
     const history = yield* session.readHistory(state);
     yield* ctx.clear(sid);
     const msgs = yield* session.readMessages(state);
     yield* ctx.setMessages(sid, msgs);
-
-    yield* agent.init({});
 
     return history;
   });
@@ -108,6 +103,14 @@ async function* wrapStream(
 
       case 'ToolStart':
         yield `\n[Using: ${event.name}]\n`;
+        break;
+
+      case 'ToolDenied':
+        yield `\n[Denied: ${event.name}] ${event.reason}\n`;
+        break;
+
+      case 'ApprovalRequest':
+        yield `\n[Approval: ${event.id}] ${event.tool}\n`;
         break;
 
       case 'ToolResult': {
