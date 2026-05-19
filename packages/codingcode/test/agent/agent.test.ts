@@ -24,7 +24,7 @@ describe('runReActLoop', () => {
       getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = { role: 'coder', systemPrompt: 'You are a coder', maxSteps: 25, availableTools: undefined };
+    const config = { systemPrompt: 'You are a coder', maxSteps: 25, availableTools: undefined };
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'hi' }],
@@ -56,7 +56,7 @@ describe('runReActLoop', () => {
       getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = { role: 'coder', systemPrompt: 'You are a coder', maxSteps: 25, availableTools: undefined };
+    const config = { systemPrompt: 'You are a coder', maxSteps: 25, availableTools: undefined };
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'hi' }],
@@ -100,7 +100,7 @@ describe('runReActLoop', () => {
       }),
     };
 
-    const config = { role: 'coder', systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
+    const config = { systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'read file' }],

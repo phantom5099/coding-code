@@ -52,8 +52,6 @@ const MockSessionLayer = Layer.succeed(
       Effect.succeed({ type: 'assistant' as const, uuid: 'a1', content: '', toolCalls: [], model: 'test', timestamp: new Date().toISOString() }),
     recordToolResult: () =>
       Effect.succeed({ type: 'tool_result' as const, uuid: 't1', parentUuid: 'a1', toolName: 'test', toolCallId: 'tc1', output: '', timestamp: new Date().toISOString() }),
-    recordRoleSwitch: () =>
-      Effect.succeed({ type: 'role_switch' as const, uuid: 'r1', fromRole: 'a', toRole: 'b', timestamp: new Date().toISOString() }),
     recordCompactBoundary: () =>
       Effect.succeed({ type: 'compact_boundary' as const, uuid: 'c1', summary: '', replacedRange: [0, 0] as [number, number], messageCount: 0, timestamp: new Date().toISOString() }),
     readHistory: () => Effect.succeed([]),

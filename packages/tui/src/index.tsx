@@ -52,8 +52,6 @@ export function runTui(options: TuiOptions = {}) {
     async listSessions(): Promise<any[]> { const res = await fetch(`${serverUrl}/api/sessions`); return res.json() as Promise<any[]>; },
     async listModels() { const res = await fetch(`${serverUrl}/api/models`); return res.json(); },
     async switchModel(id: string) { await fetch(`${serverUrl}/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: id }) }); },
-    async listRoles() { const res = await fetch(`${serverUrl}/api/roles`); return res.json(); },
-    async switchRole(id: string) { await fetch(`${serverUrl}/api/roles/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: id }) }); },
     getSessionId() { return currentSessionId ?? 'unknown'; },
     async clearSession() {},
   };

@@ -3,7 +3,7 @@ import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
 import type { AgentConfig, AgentEvent } from './types.js';
-import { resolveConfig, mergeConfig, type ResolvedConfig } from './config.js';
+import { resolveConfig, type ResolvedConfig } from './config.js';
 import type { ToolDescription } from '../tools/types.js';
 
 interface LLMStreamAdapter {
@@ -28,20 +28,11 @@ interface ToolExecutorAdapter {
 
 export class AgentService extends Effect.Service<AgentService>()('Agent', {
   effect: Effect.gen(function* () {
-    let config: ResolvedConfig = { role: 'coder', systemPrompt: '', maxSteps: 25, availableTools: undefined };
+    let config: ResolvedConfig = resolveConfig({});
 
     return {
       init: (cfg: AgentConfig): Effect.Effect<void> =>
-        Effect.sync(() => { config = mergeConfig(resolveConfig(cfg.role), cfg); }),
-
-      switchRole: (role: string): Effect.Effect<string> =>
-        Effect.sync(() => {
-          const oldRole = config.role;
-          config = mergeConfig(resolveConfig(role), { ...config, role, availableTools: resolveConfig(role).availableTools });
-          return oldRole;
-        }),
-
-      getRole: (): Effect.Effect<string> => Effect.succeed(config.role),
+        Effect.sync(() => { config = resolveConfig(cfg); }),
 
       runStream: (
         messages: Message[],

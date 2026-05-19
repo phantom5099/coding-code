@@ -2,21 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { ContextService } from '../../src/context/context.js';
 import { SessionService } from '../../src/session/store.js';
-import { AgentService } from '../../src/agent/agent.js';
 import { SkillService } from '../../src/skills/index.js';
 import type { SessionStoreState } from '../../src/session/store.js';
-import { sendMessage, resumeSession } from '../../src/orchestrate.js';
+import { sendMessage } from '../../src/orchestrate.js';
 import { Result } from '../../src/core/result.js';
 
 const mockState: SessionStoreState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
   transcriptPath: '/tmp/test.jsonl', indexPath: '/tmp/test.index.json',
   messageCount: 0, sessionMeta: null, title: 'test-sess',
-};
-
-const mockState2: SessionStoreState = {
-  ...mockState,
-  sessionId: 'other-session',
 };
 
 const mockLlm = {
@@ -38,7 +32,6 @@ function makeMockSessionLayer(state: SessionStoreState) {
     recordUser: () => Effect.succeed({ type: 'user' as const, uuid: 'u1', content: '', timestamp: new Date().toISOString() }),
     recordAssistant: () => Effect.succeed({ type: 'assistant' as const, uuid: 'a1', content: '', toolCalls: [], model: 'test', timestamp: new Date().toISOString() }),
     recordToolResult: () => Effect.succeed({ type: 'tool_result' as const, uuid: 't1', parentUuid: 'a1', toolName: 'test', toolCallId: 'tc1', output: '', timestamp: new Date().toISOString() }),
-    recordRoleSwitch: () => Effect.succeed({ type: 'role_switch' as const, uuid: 'r1', fromRole: 'a', toRole: 'b', timestamp: new Date().toISOString() }),
     recordCompactBoundary: () => Effect.succeed({ type: 'compact_boundary' as const, uuid: 'c1', summary: '', replacedRange: [0, 0] as [number, number], messageCount: 0, timestamp: new Date().toISOString() }),
     readHistory: () => Effect.succeed([]), readMessages: () => Effect.succeed([]), listSessions: () => Effect.succeed([]),
     getSessionId: () => state.sessionId, getMessageCount: () => 0,
@@ -61,12 +54,11 @@ describe('ContextService cross-request persistence', () => {
     );
 
     // Second "request": messages should still be there
-    const msgs = await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        return yield* ctx.getMessages(sid);
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
+    const gen = Effect.gen(function* () {
+      const ctx = yield* ContextService;
+      return yield* ctx.getMessages(sid);
+    });
+    const msgs = await Effect.runPromise(gen.pipe(Effect.provide(ContextLayer) as any)) as Array<{ role: string; content: string }>;
 
     expect(msgs).toHaveLength(2);
     expect(msgs[0]).toMatchObject({ role: 'user', content: 'hello world' });
@@ -84,12 +76,11 @@ describe('ContextService cross-request persistence', () => {
       }).pipe(Effect.provide(ContextLayer) as any),
     );
 
-    const msgsB = await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        return yield* ctx.getMessages(sidB);
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
+    const genB = Effect.gen(function* () {
+      const ctx = yield* ContextService;
+      return yield* ctx.getMessages(sidB);
+    });
+    const msgsB = await Effect.runPromise(genB.pipe(Effect.provide(ContextLayer) as any)) as Array<{ role: string; content: string }>;
 
     expect(msgsB).toHaveLength(0);
   });
@@ -111,12 +102,11 @@ describe('ContextService cross-request persistence', () => {
       }).pipe(Effect.provide(ContextLayer) as any),
     );
 
-    const msgs = await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        return yield* ctx.getMessages(sid);
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
+    const g1 = Effect.gen(function* () {
+      const ctx = yield* ContextService;
+      return yield* ctx.getMessages(sid);
+    });
+    const msgs = await Effect.runPromise(g1.pipe(Effect.provide(ContextLayer) as any)) as Array<{ role: string; content: string }>;
 
     expect(msgs).toHaveLength(0);
   });
@@ -141,16 +131,15 @@ describe('ContextService cross-request persistence', () => {
       }).pipe(Effect.provide(ContextLayer) as any),
     );
 
-    const msgs = await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        return yield* ctx.getMessages(sid);
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
+    const g2 = Effect.gen(function* () {
+      const ctx = yield* ContextService;
+      return yield* ctx.getMessages(sid);
+    });
+    const msgs2 = await Effect.runPromise(g2.pipe(Effect.provide(ContextLayer) as any)) as Array<{ role: string; content: string }>;
 
-    expect(msgs).toHaveLength(2);
-    expect(msgs[0].content).toBe('new-1');
-    expect(msgs[1].content).toBe('new-2');
+    expect(msgs2).toHaveLength(2);
+    expect(msgs2[0]!.content).toBe('new-1');
+    expect(msgs2[1]!.content).toBe('new-2');
   });
 
   it('should retain context when sendMessage and resumeSession run in separate Effect scopes', async () => {
@@ -177,14 +166,13 @@ describe('ContextService cross-request persistence', () => {
     }
 
     // Step 2: verify context persisted across Effect scopes
-    const msgs = await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        return yield* ctx.getMessages(sid);
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
+    const g3 = Effect.gen(function* () {
+      const ctx = yield* ContextService;
+      return yield* ctx.getMessages(sid);
+    }) as any;
+    const msgs3 = await Effect.runPromise(g3.pipe(Effect.provide(ContextLayer) as any)) as Array<{ role: string; content: string }>;
 
-    expect(msgs.length).toBeGreaterThanOrEqual(1);
-    expect(msgs.some((m: any) => m.role === 'user' && m.content === 'message one')).toBe(true);
+    expect(msgs3.length).toBeGreaterThanOrEqual(1);
+    expect(msgs3.some((m: any) => m.role === 'user' && m.content === 'message one')).toBe(true);
   });
 });

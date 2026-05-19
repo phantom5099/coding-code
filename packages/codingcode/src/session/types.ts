@@ -4,7 +4,6 @@ export interface SessionMetaEvent {
   projectSlug: string;
   cwd: string;
   model: string;
-  role: string;
   createdAt: string;
   version: string;
 }
@@ -35,14 +34,6 @@ export interface ToolResultEvent {
   timestamp: string;
 }
 
-export interface RoleSwitchEvent {
-  type: 'role_switch';
-  uuid: string;
-  fromRole: string;
-  toRole: string;
-  timestamp: string;
-}
-
 export interface CompactBoundaryEvent {
   type: 'compact_boundary';
   uuid: string;
@@ -57,7 +48,6 @@ export type SessionEvent =
   | UserEvent
   | AssistantEvent
   | ToolResultEvent
-  | RoleSwitchEvent
   | CompactBoundaryEvent;
 
 export interface SessionIndex {
@@ -65,7 +55,6 @@ export interface SessionIndex {
   projectSlug: string;
   cwd: string;
   model: string;
-  role: string;
   createdAt: string;
   updatedAt: string;
   messageCount: number;

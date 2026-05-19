@@ -39,7 +39,7 @@ describe('runReActLoop — concurrent tool execution', () => {
       getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = { role: 'coder', systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
+    const config = { systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'run all tools' }],
@@ -86,7 +86,7 @@ describe('runReActLoop — concurrent tool execution', () => {
       getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = { role: 'coder', systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
+    const config = { systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'run all' }],

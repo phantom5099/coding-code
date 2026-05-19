@@ -21,14 +21,11 @@ export const sendMessage = (
     const skill = yield* SkillService;
     const sid = state.sessionId;
 
-    yield* agent.init({ role: state.sessionMeta?.role ?? 'coder' });
+    yield* agent.init({});
 
     const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
     if (matchedSkill) {
-      yield* agent.init({
-        role: state.sessionMeta?.role ?? 'coder',
-        systemPrompt: matchedSkill.instruction,
-      });
+      yield* agent.init({ systemPrompt: matchedSkill.instruction });
     }
 
     yield* ctx.addUser(sid, actualInput);
@@ -54,12 +51,7 @@ export const resumeSession = (
     const msgs = yield* session.readMessages(state);
     yield* ctx.setMessages(sid, msgs);
 
-    const meta = history.find((e) => e.type === 'session_meta') as { role?: string } | undefined;
-    if (meta?.role) {
-      yield* agent.switchRole(meta.role);
-    } else {
-      yield* agent.init({ role: 'coder' });
-    }
+    yield* agent.init({});
 
     return history;
   });

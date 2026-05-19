@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { sessionsRouter } from './routes/sessions.js';
 import { messagesRouter } from './routes/messages.js';
 import { modelsRouter } from './routes/models.js';
-import { rolesRouter } from './routes/roles.js';
 
 type ServerDeps = {
   llm: any;
@@ -33,7 +32,6 @@ export function createServer(deps: ServerDeps): Hono {
   app.route('/api/sessions', sessionsRouter);
   app.route('/api', messagesRouter);
   app.route('/api/models', modelsRouter);
-  app.route('/api/roles', rolesRouter);
 
   return app;
 }
