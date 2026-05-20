@@ -4,7 +4,7 @@ import { ContextService } from '../../src/context/context.js';
 import { SessionService } from '../../src/session/store.js';
 import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
-import { sendMessage } from '../../src/orchestrate.js';
+import { sendMessage } from '../../src/orchestration/index.js';
 import { Result } from '../../src/core/result.js';
 
 const mockState = {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { withRecording } from '../src/recording.js';
+import { recordAgentEvents } from '../src/orchestration/record-agent-events.js';
 import type { AgentEvent } from '../src/agent/agent.js';
 import type { SessionStoreState } from '../src/session/store.js';
 
@@ -50,7 +50,7 @@ const mockState: SessionStoreState = {
   title: 'test',
 };
 
-describe('withRecording', () => {
+describe('recordAgentEvents', () => {
   it('passes through all events unchanged', async () => {
     const events: AgentEvent[] = [
       { _tag: 'LlmChunk', text: 'hello' },
@@ -67,7 +67,7 @@ describe('withRecording', () => {
     const { session } = makeMockSession();
 
     const result: AgentEvent[] = [];
-    for await (const event of withRecording(source(), ctx as any, session as any, mockState, 'test-sid')) {
+    for await (const event of recordAgentEvents(source(), ctx as any, session as any, mockState, 'test-sid')) {
       result.push(event);
     }
 
@@ -82,7 +82,7 @@ describe('withRecording', () => {
     const { ctx, calls: ctxCalls } = makeMockContext();
     const { session, calls: sessCalls } = makeMockSession();
 
-    for await (const _ of withRecording(source(), ctx as any, session as any, mockState, 'test-sid')) {
+    for await (const _ of recordAgentEvents(source(), ctx as any, session as any, mockState, 'test-sid')) {
       // consume
     }
 
@@ -106,7 +106,7 @@ describe('withRecording', () => {
     const { ctx, calls: ctxCalls } = makeMockContext();
     const { session, calls: sessCalls } = makeMockSession();
 
-    for await (const _ of withRecording(source(), ctx as any, session as any, mockState, 'test-sid')) {
+    for await (const _ of recordAgentEvents(source(), ctx as any, session as any, mockState, 'test-sid')) {
       // consume
     }
 
@@ -135,7 +135,7 @@ describe('withRecording', () => {
     const { ctx, calls: ctxCalls } = makeMockContext();
     const { session, calls: sessCalls } = makeMockSession();
 
-    for await (const _ of withRecording(source(), ctx as any, session as any, mockState, 'test-sid')) {
+    for await (const _ of recordAgentEvents(source(), ctx as any, session as any, mockState, 'test-sid')) {
       // consume
     }
 

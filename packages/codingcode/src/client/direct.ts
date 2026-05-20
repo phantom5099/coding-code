@@ -1,10 +1,12 @@
 import { Effect } from 'effect';
 import type { AgentEvent } from '../agent/agent.js';
-import { sendMessage, resumeSession } from '../orchestrate.js';
+import { sendMessage, resumeSession } from '../orchestration/index.js';
 import { SessionService } from '../session/store.js';
 import { ContextService } from '../context/context.js';
 import { ApprovalWaitService } from '../approval/async-confirm.js';
+import { parseApprovalResponse } from '../approval/response.js';
 import { AppLayer } from '../layer.js';
+import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
 
 export type StreamChunk = string | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> };
 
@@ -40,24 +42,9 @@ export async function* agentEventToStreamChunk(
   }
 }
 
-function parseApprovalResponse(resp: string) {
-  switch (resp) {
-    case 'allow': return { type: 'allow' as const };
-    case 'deny': return { type: 'deny' as const };
-    case 'always': return {
-      type: 'always' as const,
-      rule: { id: `user-allow-${Date.now()}`, action: 'allow' as const, toolPattern: '*', reason: 'User always allows', source: 'user' as const },
-    };
-    case 'never': return {
-      type: 'never' as const,
-      rule: { id: `user-deny-${Date.now()}`, action: 'deny' as const, toolPattern: '*', reason: 'User never allows', source: 'user' as const },
-    };
-    default: return { type: 'deny' as const };
-  }
-}
-
 export async function createDirectClient(llm: any): Promise<AgentClient> {
   let currentSessionId = '';
+  let activeLlm = llm;
 
   const runWithLayer = <T,>(eff: any): Promise<T> =>
     Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
@@ -69,12 +56,10 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
 
     async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
       const { registerEmitter, unregisterEmitter } = await import('../approval/async-confirm.js');
-      const program = sendMessage(currentSessionId || undefined, input, process.cwd(), llm);
+      const program = sendMessage(currentSessionId || undefined, input, process.cwd(), activeLlm);
       const { stream: agentGen, sessionId } = await runWithLayer(program) as any;
       currentSessionId = sessionId;
 
-      // Emitter fires during Effect.runPromise (inside the agent generator) while
-      // the generator is blocked on waitForConfirm. We must intercept it here.
       let notify: ((req: { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }) => void) | null = null;
       registerEmitter(sessionId, (id, tool, args) => {
         notify?.({ type: 'approval_request', id, tool, args });
@@ -101,8 +86,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
             pending = gen.next();
           } else {
             yield winner.value;
-            // pending gen.next() is still unresolved (generator blocked on Deferred).
-            // TUI will call sendApprovalResponse → Deferred resolved → generator resumes.
             const resumed = await pending;
             if (resumed.done) break;
             yield resumed.value;
@@ -143,24 +126,19 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async listModels() {
-      try {
-        const response = await fetch('http://localhost:8080/api/models');
-        return response.json();
-      } catch {
-        return [];
-      }
+      const modelsResult = listModels();
+      if (!modelsResult.ok) throw modelsResult.error;
+      const activeResult = getActiveEntry();
+      if (!activeResult.ok) throw activeResult.error;
+      return { models: modelsResult.value, activeId: activeResult.value.id };
     },
 
     async switchModel(id: string) {
-      try {
-        await fetch('http://localhost:8080/api/models/switch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ modelId: id }),
-        });
-      } catch {
-        // Model switching via HTTP — server may not be available in direct mode
-      }
+      const switchResult = switchActiveModel(id);
+      if (!switchResult.ok) throw switchResult.error;
+      const clientResult = await getLLMClient();
+      if (!clientResult.ok) throw clientResult.error;
+      activeLlm = clientResult.value;
     },
 
     async clearSession() {
