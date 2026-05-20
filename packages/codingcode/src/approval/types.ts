@@ -28,15 +28,3 @@ export interface PermissionRule {
   priority?: number;
   source?: 'system' | 'user';
 }
-
-export const READONLY_TOOLS = new Set([
-  'read_file',
-  'search_code',
-  'list_dir',
-  'fetch_url',
-]);
-
-export const DESTRUCTIVE_TOOLS = new Set([
-  'execute_command',
-  'Bash',
-]);

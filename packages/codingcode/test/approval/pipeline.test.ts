@@ -3,7 +3,9 @@ import { Effect } from 'effect';
 import { runPipeline } from '../../src/approval/pipeline.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import type { PermissionRule, ApprovalDecision } from '../../src/approval/types.js';
-import { READONLY_TOOLS } from '../../src/approval/types.js';
+import { READONLY_TOOL_NAMES } from '../../src/approval/presets.js';
+
+const readonlyTools = new Set(READONLY_TOOL_NAMES);
 
 const mockHooks = {
   emitPreToolUseDecision: () => Effect.succeed(null),
@@ -17,7 +19,7 @@ describe('Approval Pipeline', () => {
     ];
     const decision = await Effect.runPromise(runPipeline(
       { tool: 'Bash', input: { command: 'rm -rf /var' } },
-      { ruleEngine: createRuleEngine(rules), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(), permissionMode: 'default', hooks: mockHooks, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(rules), readonlyTools: readonlyTools, destructiveTools: new Set(), permissionMode: 'default', hooks: mockHooks, interactive: false, sessionId: 'test' },
     ));
     expect(decision.type).toBe('deny');
     expect(decision.source).toContain('rule:');
@@ -26,7 +28,7 @@ describe('Approval Pipeline', () => {
   it('Layer 2: Read-only whitelist should auto-allow', async () => {
     const decision = await Effect.runPromise(runPipeline(
       { tool: 'read_file', input: { path: '/safe/file.txt' } },
-      { ruleEngine: createRuleEngine(), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(), permissionMode: 'default', hooks: mockHooks, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(), readonlyTools: readonlyTools, destructiveTools: new Set(), permissionMode: 'default', hooks: mockHooks, interactive: false, sessionId: 'test' },
     ));
     expect(decision.type).toBe('allow');
     expect(decision.source).toBe('readonly-whitelist');
@@ -35,7 +37,7 @@ describe('Approval Pipeline', () => {
   it('Layer 3: Plan mode should deny write tools', async () => {
     const decision = await Effect.runPromise(runPipeline(
       { tool: 'write_file', input: { path: '/test.txt', content: 'data' } },
-      { ruleEngine: createRuleEngine(), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(['Bash']), permissionMode: 'plan', hooks: mockHooks, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(), readonlyTools: readonlyTools, destructiveTools: new Set(['Bash']), permissionMode: 'plan', hooks: mockHooks, interactive: false, sessionId: 'test' },
     ));
     expect(decision.type).toBe('deny');
     expect(decision.reason).toContain('plan mode');
@@ -44,7 +46,7 @@ describe('Approval Pipeline', () => {
   it('Layer 3: Plan mode should allow read-only tools', async () => {
     const decision = await Effect.runPromise(runPipeline(
       { tool: 'read_file', input: { path: '/test.txt' } },
-      { ruleEngine: createRuleEngine(), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(), permissionMode: 'plan', hooks: mockHooks, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(), readonlyTools: readonlyTools, destructiveTools: new Set(), permissionMode: 'plan', hooks: mockHooks, interactive: false, sessionId: 'test' },
     ));
     expect(decision.type).toBe('allow');
   });
@@ -52,7 +54,7 @@ describe('Approval Pipeline', () => {
   it('Layer 3: Bypass mode should allow everything', async () => {
     const decision = await Effect.runPromise(runPipeline(
       { tool: 'Bash', input: { command: 'rm -rf /' } },
-      { ruleEngine: createRuleEngine(), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(['Bash']), permissionMode: 'bypass', hooks: mockHooks, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(), readonlyTools: readonlyTools, destructiveTools: new Set(['Bash']), permissionMode: 'bypass', hooks: mockHooks, interactive: false, sessionId: 'test' },
     ));
     expect(decision.type).toBe('allow');
     expect(decision.source).toBe('permission-mode');
@@ -61,7 +63,7 @@ describe('Approval Pipeline', () => {
   it('Layer 3: AcceptEdits mode should auto-allow non-destructive tools', async () => {
     const decision = await Effect.runPromise(runPipeline(
       { tool: 'write_file', input: { path: '/test.txt' } },
-      { ruleEngine: createRuleEngine(), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(['Bash', 'execute_command']), permissionMode: 'acceptEdits', hooks: mockHooks, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(), readonlyTools: readonlyTools, destructiveTools: new Set(['Bash', 'execute_command']), permissionMode: 'acceptEdits', hooks: mockHooks, interactive: false, sessionId: 'test' },
     ));
     expect(decision.type).toBe('allow');
   });
@@ -69,7 +71,7 @@ describe('Approval Pipeline', () => {
   it('Layer 3: AcceptEdits should NOT auto-allow destructive tools', async () => {
     const decision = await Effect.runPromise(runPipeline(
       { tool: 'Bash', input: { command: 'rm file' } },
-      { ruleEngine: createRuleEngine(), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(['Bash', 'execute_command']), permissionMode: 'acceptEdits', hooks: mockHooks, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(), readonlyTools: readonlyTools, destructiveTools: new Set(['Bash', 'execute_command']), permissionMode: 'acceptEdits', hooks: mockHooks, interactive: false, sessionId: 'test' },
     ));
     // Should continue to user confirmation layer (which returns deny in non-interactive mode)
     expect(decision.type).toBe('deny');
@@ -83,7 +85,7 @@ describe('Approval Pipeline', () => {
     };
     const decision = await Effect.runPromise(runPipeline(
       { tool: 'Bash', input: { command: 'ls' } },
-      { ruleEngine: createRuleEngine(), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(['Bash']), permissionMode: 'default', hooks: hooksWithDeny, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(), readonlyTools: readonlyTools, destructiveTools: new Set(['Bash']), permissionMode: 'default', hooks: hooksWithDeny, interactive: false, sessionId: 'test' },
     ));
     expect(decision.type).toBe('deny');
     expect(decision.source).toBe('hook');
@@ -96,7 +98,7 @@ describe('Approval Pipeline', () => {
     };
     const decision = await Effect.runPromise(runPipeline(
       { tool: 'Bash', input: { command: 'ls' } },
-      { ruleEngine: createRuleEngine(), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(['Bash']), permissionMode: 'default', hooks: hooksWithAllow, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(), readonlyTools: readonlyTools, destructiveTools: new Set(['Bash']), permissionMode: 'default', hooks: hooksWithAllow, interactive: false, sessionId: 'test' },
     ));
     expect(decision.type).toBe('allow');
     expect(decision.source).toBe('hook');
@@ -110,7 +112,7 @@ describe('Approval Pipeline', () => {
     };
     await Effect.runPromise(runPipeline(
       { tool: 'read_file', input: { path: '/test.txt' } },
-      { ruleEngine: createRuleEngine(), readonlyTools: READONLY_TOOLS, destructiveTools: new Set(), permissionMode: 'default', hooks: hooksWithAudit, interactive: false, sessionId: 'test' },
+      { ruleEngine: createRuleEngine(), readonlyTools: readonlyTools, destructiveTools: new Set(), permissionMode: 'default', hooks: hooksWithAudit, interactive: false, sessionId: 'test' },
     ));
     expect(auditEntry).not.toBeNull();
     expect(auditEntry.tool).toBe('read_file');
