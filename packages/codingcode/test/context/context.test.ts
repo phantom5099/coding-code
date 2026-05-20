@@ -110,8 +110,8 @@ describe('ContextService', () => {
     {
       const program = sendMessage({ ...mockState, sessionId: sid }, 'message one', mockLlm);
       const gen: any = await Effect.runPromise((program as any).pipe(Effect.provide(fullLayer) as any));
-      const chunks: string[] = [];
-      for await (const chunk of gen) chunks.push(chunk);
+      // Consume all AgentEvents to trigger side effects
+      for await (const _event of gen) { /* consume */ }
     }
 
     // Step 2: verify context persisted across Effect scopes

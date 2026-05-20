@@ -4,7 +4,7 @@ import { useAgentRunner } from '../hooks/useAgentRunner.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
 import { generateId, historyToUIMessages } from '../utils.js';
 import type { PanelState } from '../types.js';
-import type { StreamChunk } from '../index.js';
+import type { StreamChunk, AgentClient } from '../index.js';
 import { MessageItem } from './MessageItem.js';
 import { InputBox } from './InputBox.js';
 import { LoadingIndicator } from './LoadingIndicator.js';
@@ -13,7 +13,7 @@ import { buildWelcomeContent } from './WelcomePanel.js';
 import { COMMAND_REGISTRY, parseCommand, type CommandDef, type CommandName } from '../commands/registry.js';
 
 interface AppProps {
-  client: Record<string, any>;
+  client: AgentClient;
 }
 
 export function App({ client }: AppProps) {

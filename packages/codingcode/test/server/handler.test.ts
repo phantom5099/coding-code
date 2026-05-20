@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sseHandler } from '../../src/server/handler.js';
 import { sendMessage } from '../../src/orchestrate.js';
+import { toSSEString } from '../../src/server/adapter.js';
 import { SessionService, type SessionStoreState } from '../../src/session/store.js';
 import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
@@ -113,7 +114,10 @@ describe('sseHandler + sendMessage integration', () => {
     const llm = createMockLlm(['Hello', ' ', 'world']);
     const state = createMockState();
     const program = sendMessage(state, 'hi', llm) as any;
-    const handler = sseHandler(program);
+    const handler = sseHandler(async function* () {
+      const agentGen = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as AsyncGenerator<any, void, unknown>;
+      yield* toSSEString(agentGen);
+    }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -128,7 +132,10 @@ describe('sseHandler + sendMessage integration', () => {
     const llm = createMockLlm([], '');
     const state = createMockState();
     const program = sendMessage(state, 'hi', llm) as any;
-    const handler = sseHandler(program);
+    const handler = sseHandler(async function* () {
+      const agentGen = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as AsyncGenerator<any, void, unknown>;
+      yield* toSSEString(agentGen);
+    }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -152,7 +159,10 @@ describe('sseHandler + sendMessage integration', () => {
 
     const state = createMockState();
     const program = sendMessage(state, 'read file', llm) as any;
-    const handler = sseHandler(program);
+    const handler = sseHandler(async function* () {
+      const agentGen = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as AsyncGenerator<any, void, unknown>;
+      yield* toSSEString(agentGen);
+    }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -161,9 +171,10 @@ describe('sseHandler + sendMessage integration', () => {
     expect(textEvent!.text).toContain('[Using:');
   });
 
-  it('should send error event when Effect fails', async () => {
-    const program = Effect.fail(new Error('boom'));
-    const handler = sseHandler(program as any);
+  it('should send error event when factory throws', async () => {
+    const handler = sseHandler(async function* () {
+      throw new Error('boom');
+    }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 

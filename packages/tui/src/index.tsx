@@ -1,18 +1,19 @@
 import React from 'react';
 import { render } from 'ink';
 import { App } from './components/App.js';
+import type { AgentClient, StreamChunk } from '@codingcode/core';
+
+export type { AgentClient, StreamChunk };
 
 interface TuiOptions {
   serverUrl?: string;
+  client?: AgentClient;
 }
 
-export type StreamChunk = string | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> };
-
-export function runTui(options: TuiOptions = {}) {
-  const serverUrl = options.serverUrl ?? 'http://localhost:8080';
+function createHttpClient(serverUrl: string): AgentClient {
   let currentSessionId: string | undefined;
 
-  const client = {
+  return {
     async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
       const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId || '_'}/messages`, {
         method: 'POST', body: JSON.stringify({ input }),
@@ -68,6 +69,9 @@ export function runTui(options: TuiOptions = {}) {
     getSessionId() { return currentSessionId ?? 'unknown'; },
     async clearSession() {},
   };
+}
 
+export async function runTui(options: TuiOptions = {}) {
+  const client: AgentClient = options.client ?? createHttpClient(options.serverUrl ?? 'http://localhost:8080');
   render(<App client={client} />);
 }

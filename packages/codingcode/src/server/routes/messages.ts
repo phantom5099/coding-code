@@ -4,6 +4,7 @@ import { sseHandler } from '../handler.js';
 import { sendMessage } from '../../orchestrate.js';
 import { SessionService } from '../../session/store.js';
 import { AppLayer } from '../../layer.js';
+import { toSSEString } from '../adapter.js';
 
 export const messagesRouter = new Hono();
 
@@ -27,9 +28,18 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
 
   if (sessionId === '_' || !sessionId) sessionId = state.sessionId;
 
-  // sendMessage and services resolve their own dependencies via AppLayer
-  return sseHandler(sendMessage(state, input, llm) as any, {
-    initialEvents: [{ type: 'session_id', sessionId }],
-    sessionId,
-  })(c);
+  const program = sendMessage(state, input, llm);
+
+  return sseHandler(
+    async function* () {
+      const agentGen = await Effect.runPromise(
+        program.pipe(Effect.provide(AppLayer) as any),
+      ) as AsyncGenerator<any, void, unknown>;
+      yield* toSSEString(agentGen);
+    },
+    {
+      initialEvents: [{ type: 'session_id', sessionId }],
+      sessionId,
+    },
+  )(c);
 });
