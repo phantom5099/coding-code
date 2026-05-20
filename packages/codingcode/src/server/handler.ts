@@ -18,10 +18,10 @@ export function handler(
 
 export function sseHandler(
   program: EffectProgram,
-  opts?: { initialEvents?: Array<Record<string, unknown>> },
+  opts?: { initialEvents?: Array<Record<string, unknown>>; sessionId?: string },
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
-    const sessionId = c.req.param('id') ?? 'default';
+    const sessionId = opts?.sessionId ?? c.req.param('id') ?? 'default';
     const stream = new ReadableStream({
       async start(controller) {
         const enqueue = (data: Record<string, unknown>) => {

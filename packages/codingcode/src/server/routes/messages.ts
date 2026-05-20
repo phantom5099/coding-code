@@ -25,10 +25,11 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
     }),
   );
 
-  if (!sessionId) sessionId = state.sessionId;
+  if (sessionId === '_' || !sessionId) sessionId = state.sessionId;
 
   // sendMessage and services resolve their own dependencies via AppLayer
   return sseHandler(sendMessage(state, input, llm) as any, {
     initialEvents: [{ type: 'session_id', sessionId }],
+    sessionId,
   })(c);
 });
