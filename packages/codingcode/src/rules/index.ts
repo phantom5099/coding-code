@@ -12,7 +12,7 @@ function getGlobalRulesPath(): string {
 
 /** 项目规则文件路径 */
 function getProjectRulesPath(): string {
-  return path.join(process.cwd(), ".coderules");
+  return path.join(process.cwd(), "AGENTS.md");
 }
 
 // ── Read ──
