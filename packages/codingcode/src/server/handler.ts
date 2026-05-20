@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import type { Context } from 'hono';
 import { AppLayer } from '../layer.js';
+import { approvalEmitter } from '../approval/async-confirm.js';
 
 type EffectProgram = Effect.Effect<any, any, any>;
 
@@ -28,6 +29,15 @@ export function sseHandler(
           );
         };
 
+        // 设置全局发射器：由 userConfirmAsync 调用，直接推送到 SSE 流
+        approvalEmitter.current = (
+          id: string,
+          tool: string,
+          args: Record<string, unknown>,
+        ) => {
+          enqueue({ type: 'approval_request', id, tool, args });
+        };
+
         try {
           if (opts?.initialEvents) {
             for (const ev of opts.initialEvents) enqueue(ev);
@@ -47,6 +57,8 @@ export function sseHandler(
             type: 'error',
             message: e instanceof Error ? e.message : String(e),
           });
+        } finally {
+          approvalEmitter.current = null;
         }
         controller.close();
       },

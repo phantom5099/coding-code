@@ -6,12 +6,14 @@ interface TuiOptions {
   serverUrl?: string;
 }
 
+export type StreamChunk = string | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> };
+
 export function runTui(options: TuiOptions = {}) {
   const serverUrl = options.serverUrl ?? 'http://localhost:8080';
   let currentSessionId: string | undefined;
 
   const client = {
-    async *sendMessage(input: string): AsyncGenerator<string> {
+    async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
       const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId || '_'}/messages`, {
         method: 'POST', body: JSON.stringify({ input }),
         headers: { 'Content-Type': 'application/json' },
@@ -34,6 +36,8 @@ export function runTui(options: TuiOptions = {}) {
               currentSessionId = data.sessionId;
             } else if (data.type === 'text') {
               yield data.text;
+            } else if (data.type === 'approval_request') {
+              yield { type: 'approval_request', id: data.id, tool: data.tool, args: data.args };
             } else if (data.type === 'complete') {
               return;
             } else if (data.type === 'error') {
@@ -42,6 +46,14 @@ export function runTui(options: TuiOptions = {}) {
           }
         }
       }
+    },
+
+    async sendApprovalResponse(id: string, response: string) {
+      await fetch(`${serverUrl}/api/approval/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response }),
+      });
     },
 
     async resumeSession(sid: string) {
@@ -56,10 +68,5 @@ export function runTui(options: TuiOptions = {}) {
     async clearSession() {},
   };
 
-  const { waitUntilExit } = render(<App client={client} />);
-
-  process.on('SIGINT', () => { process.exit(0); });
-  process.on('SIGTERM', () => { process.exit(0); });
-
-  return { waitUntilExit };
+  render(<App client={client} />);
 }

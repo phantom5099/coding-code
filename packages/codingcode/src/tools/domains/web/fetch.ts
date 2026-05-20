@@ -3,8 +3,7 @@ import type { ToolDefinition } from '../../types';
 
 export const webFetchTool: ToolDefinition = {
   name: 'fetch_url',
-  description:
-    'Fetch content from a URL and return its text. Use this to read API documentation, web pages, or any online resource. Supports GET requests only.',
+  description: 'Fetch content from a URL and return its text. Supports GET requests only.',
   parameters: z.object({
     url: z.string().url().describe('The URL to fetch (must be a valid absolute URL)'),
     max_length: z
@@ -15,14 +14,6 @@ export const webFetchTool: ToolDefinition = {
       .default(100_000)
       .describe('Maximum characters to return (default 100k, max 500k)'),
   }),
-  schema: {
-    type: 'object',
-    properties: {
-      url: { type: 'string', description: 'The URL to fetch (must be a valid absolute URL)' },
-      max_length: { type: 'integer', minimum: 1, maximum: 500000, default: 100000 },
-    },
-    required: ['url'],
-  },
   execute: async (args: unknown) => {
     const { url, max_length } = args as any;
     const controller = new AbortController();

@@ -1,0 +1,97 @@
+import type { PermissionRule } from './types';
+
+export const DEFAULT_DENY_RULES: PermissionRule[] = [
+  {
+    id: 'deny-rm-rf-root',
+    action: 'deny',
+    toolPattern: '*',
+    argPattern: 'rm -rf /*',
+    reason: 'rm -rf / is not allowed',
+    priority: 100,
+    source: 'system',
+  },
+  {
+    id: 'deny-sudo-raw',
+    action: 'deny',
+    toolPattern: '*',
+    argPattern: 'sudo *',
+    reason: 'Elevated commands require explicit user confirmation',
+    priority: 90,
+    source: 'system',
+  },
+  {
+    id: 'deny-curl-sh',
+    action: 'deny',
+    toolPattern: '*',
+    argPattern: 'curl */sh',
+    reason: 'Piping curl to shell is not allowed',
+    priority: 90,
+    source: 'system',
+  },
+  {
+    id: 'deny-chmod-suid',
+    action: 'deny',
+    toolPattern: '*',
+    argPattern: 'chmod u+s *',
+    reason: 'Setting SUID bit is not allowed',
+    priority: 90,
+    source: 'system',
+  },
+  {
+    id: 'deny-shutdown',
+    action: 'deny',
+    toolPattern: '*',
+    argPattern: 'shutdown',
+    reason: 'System shutdown is not allowed',
+    priority: 80,
+    source: 'system',
+  },
+  {
+    id: 'deny-etc-shadow-read',
+    action: 'deny',
+    toolPattern: 'read_file',
+    argPattern: '**/etc/shadow',
+    reason: 'Reading /etc/shadow is not allowed',
+    priority: 100,
+    source: 'system',
+  },
+  {
+    id: 'deny-etc-passwd-read',
+    action: 'deny',
+    toolPattern: 'read_file',
+    argPattern: '**/etc/passwd',
+    reason: 'Reading /etc/passwd is not allowed',
+    priority: 100,
+    source: 'system',
+  },
+  {
+    id: 'ask-ssh-key',
+    action: 'ask',
+    toolPattern: 'read_file',
+    argPattern: '**/.ssh/**',
+    reason: 'Reading SSH keys requires confirmation',
+    priority: 50,
+    source: 'system',
+  },
+  {
+    id: 'ask-env-file',
+    action: 'ask',
+    toolPattern: 'read_file',
+    argPattern: '**/.env*',
+    reason: 'Reading environment files requires confirmation',
+    priority: 50,
+    source: 'system',
+  },
+];
+
+export const READONLY_TOOL_NAMES: string[] = [
+  'read_file',
+  'search_code',
+  'list_dir',
+  'fetch_url',
+];
+
+export const DESTRUCTIVE_TOOL_NAMES: string[] = [
+  'execute_command',
+  'Bash',
+];

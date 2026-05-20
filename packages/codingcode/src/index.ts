@@ -5,7 +5,7 @@ export { ContextService } from './context/context.js';
 export { HookService } from './hooks/registry.js';
 export type { HookPoint } from './hooks/registry.js';
 export { ToolService } from './tools/registry.js';
-export { ToolExecutor } from './tools/executor.js';
+export { ToolExecutorService } from './tools/executor.js';
 export { McpService, McpClient, McpError } from './mcp/index.js';
 export type { McpStatus } from './mcp/index.js';
 export { SkillService } from './skills/index.js';

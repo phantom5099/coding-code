@@ -4,6 +4,7 @@ import { useAgentRunner } from '../hooks/useAgentRunner.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
 import { generateId, historyToUIMessages } from '../utils.js';
 import type { PanelState } from '../types.js';
+import type { StreamChunk } from '../index.js';
 import { MessageItem } from './MessageItem.js';
 import { InputBox } from './InputBox.js';
 import { LoadingIndicator } from './LoadingIndicator.js';
@@ -20,7 +21,7 @@ export function App({ client }: AppProps) {
   const { width } = useTerminalSize();
   const [sessionId, setSessionId] = useState('unknown');
   const runner = useCallback(
-    (input: string) => client.sendMessage(input),
+    (input: string) => client.sendMessage(input) as AsyncGenerator<StreamChunk>,
     [client],
   );
   const {
@@ -30,6 +31,8 @@ export function App({ client }: AppProps) {
     setActiveMessages,
     run,
     isRunning,
+    approval,
+    setApproval,
   } = useAgentRunner(runner);
   const [panel, setPanel] = useState<PanelState>({ type: 'none' });
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
@@ -122,7 +125,17 @@ export function App({ client }: AppProps) {
     }
   }, [client, run, exit, sessionId]);
 
-  useInput((_input, key) => {
+  // 审批面板：用户选择后发送响应
+  const handleApprovalResponse = useCallback(async (response: string) => {
+    if (!approval) return;
+    await client.sendApprovalResponse(approval.id, response);
+    approval.resolve(response);
+  }, [approval, client]);
+
+  useInput((input, key) => {
+    // 审批面板激活时，键盘由 InlinePanel 处理
+    if (approval) return;
+
     if (panel.type === 'help') {
       if (key.escape) setPanel({ type: 'none' });
       return;
@@ -139,7 +152,7 @@ export function App({ client }: AppProps) {
       setFocusedIndex(prev => (prev === null || prev >= activeMessages.length - 1) ? 0 : prev + 1);
       return;
     }
-    if (key.ctrl && _input === 'o' && focusedIndex !== null) {
+    if (key.ctrl && input === 'o' && focusedIndex !== null) {
       const msg = activeMessages[focusedIndex];
       if (msg) setExpandedMap(prev => ({ ...prev, [msg.id]: !prev[msg.id] }));
     }
@@ -162,7 +175,7 @@ export function App({ client }: AppProps) {
         {activeMessages.map((msg, index) => (
           <MessageItem key={msg.id} message={msg} isFocused={index === focusedIndex} width={width} expanded={expandedMap[msg.id] ?? msg.role !== 'tool'} interactive={true} />
         ))}
-        {isRunning && <LoadingIndicator />}
+        {isRunning && !approval && <LoadingIndicator />}
       </Box>
 
       {panel.type === 'model' && (
@@ -193,6 +206,40 @@ export function App({ client }: AppProps) {
           onCancel={() => setPanel({ type: 'none' })}
           width={sessionW}
         />
+      )}
+      {approval && (
+        <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1} marginY={1}>
+          <Box>
+            <Text bold color="yellow">🔒 审批请求 — </Text>
+            <Text bold>{approval.tool}</Text>
+          </Box>
+          <Box flexDirection="column" marginTop={1}>
+            {Object.entries(approval.args).map(([k, v]) => (
+              <Box key={k}>
+                <Text color="gray">  {k}: </Text>
+                <Text>{String(v).slice(0, 150)}</Text>
+              </Box>
+            ))}
+          </Box>
+          <Box marginTop={1}>
+            <Text color="gray">{'─'.repeat(Math.min(40, width - 6))}</Text>
+          </Box>
+          <InlinePanel
+            title="选择操作"
+            items={[
+              { label: '✅ 允许 (Allow)', value: 'allow' as const },
+              { label: '❌ 拒绝 (Deny)', value: 'deny' as const },
+              { label: '⭐ 总是允许 (Always)', value: 'always' as const },
+              { label: '🚫 永不 (Never)', value: 'never' as const },
+            ]}
+            onSelect={async (value) => {
+              await client.sendApprovalResponse(approval.id, value);
+              approval.resolve(value);
+            }}
+            onCancel={() => handleApprovalResponse('deny')}
+            width={Math.min(50, width - 4)}
+          />
+        </Box>
       )}
       {panel.type === 'help' && (
         <Box flexDirection="column" borderStyle="single" borderColor="green" width={helpW} paddingX={1}>

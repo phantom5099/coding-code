@@ -3,6 +3,13 @@ import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
 
+const mockToolRegistry = {
+  describeAll: () => [],
+  filter: () => [],
+  get: () => null,
+  register: () => Effect.succeed(undefined),
+};
+
 describe('runReActLoop', () => {
   it('should yield text chunks from LLM stream', async () => {
     const mockLlm = {
@@ -21,16 +28,17 @@ describe('runReActLoop', () => {
     const mockExecutor = {
       execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
         Effect.succeed('done'),
-      getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = { systemPrompt: 'You are a coder', maxSteps: 25, availableTools: undefined };
+    const maxSteps = 25;
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'hi' }],
-      config,
+      maxSteps,
+      undefined,
       mockLlm as any,
       mockExecutor as any,
+      mockToolRegistry as any,
     );
 
     const events: any[] = [];
@@ -53,16 +61,17 @@ describe('runReActLoop', () => {
     const mockExecutor = {
       execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
         Effect.succeed('done'),
-      getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = { systemPrompt: 'You are a coder', maxSteps: 25, availableTools: undefined };
+    const maxSteps = 25;
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'hi' }],
-      config,
+      maxSteps,
+      undefined,
       mockLlm as any,
       mockExecutor as any,
+      mockToolRegistry as any,
     );
 
     const events: any[] = [];
@@ -72,6 +81,55 @@ describe('runReActLoop', () => {
 
     const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
     expect(textEvents).toHaveLength(0);
+  });
+
+  it('should feed bash tool results back to LLM (regression: result was discarded)', async () => {
+    const mockLlm = {
+      completeStream: (_params: any) => ({
+        stream: (async function* () {
+          yield '\n[Using: execute_command]\n';
+        })(),
+        response: Promise.resolve(Result.ok({
+          content: '',
+          toolCalls: [{ id: 'tc1', name: 'execute_command', arguments: { command: 'git status' } }],
+        })),
+      }),
+    };
+
+    const toolRegistryWithBash = {
+      describeAll: () => [
+        { name: 'execute_command', description: 'Run shell command', parameters: { type: 'object' } },
+      ],
+      filter: () => [],
+      get: () => null,
+      register: () => Effect.succeed(undefined),
+    };
+
+    const mockExecutor = {
+      execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
+        Effect.succeed('On branch main\nnothing to commit'),
+    };
+
+    const maxSteps = 1;
+
+    const gen = runReActLoop(
+      [{ role: 'user', content: 'git status' }],
+      maxSteps,
+      undefined,
+      mockLlm as any,
+      mockExecutor as any,
+      toolRegistryWithBash as any,
+    );
+
+    const events: any[] = [];
+    for await (const event of gen) {
+      events.push(event);
+    }
+
+    const toolResults = events.filter((e: any) => e._tag === 'ToolResult');
+    expect(toolResults).toHaveLength(1);
+    expect(toolResults[0].output).toBe('On branch main\nnothing to commit');
+    expect(toolResults[0].ok).toBe(true);
   });
 
   it('should forward tool-call markers from LLM stream', async () => {
@@ -87,26 +145,29 @@ describe('runReActLoop', () => {
       }),
     };
 
+    const toolRegistryWithTool = {
+      describeAll: () => [
+        { name: 'readFile', description: 'Read a file', parameters: { type: 'object' } },
+      ],
+      filter: () => [],
+      get: () => null,
+      register: () => Effect.succeed(undefined),
+    };
+
     const mockExecutor = {
       execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
         Effect.succeed('file content'),
-      getRegistry: () => ({
-        describeAll: () => [
-          { name: 'readFile', description: 'Read a file', schema: { type: 'object' } },
-        ],
-        filter: () => [
-          { name: 'readFile', description: 'Read a file', schema: { type: 'object' } },
-        ],
-      }),
     };
 
-    const config = { systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
+    const maxSteps = 1;
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'read file' }],
-      config,
+      maxSteps,
+      undefined,
       mockLlm as any,
       mockExecutor as any,
+      toolRegistryWithTool as any,
     );
 
     const events: any[] = [];

@@ -2,18 +2,15 @@ import { Hono } from 'hono';
 import { sessionsRouter } from './routes/sessions.js';
 import { messagesRouter } from './routes/messages.js';
 import { modelsRouter } from './routes/models.js';
+import { approvalRouter } from './routes/approval.js';
 
 type ServerDeps = {
   llm: any;
-  executor: any;
-  hooks: any;
 };
 
 declare module 'hono' {
   interface ContextVariableMap {
     llm: any;
-    executor: any;
-    hooks: any;
   }
 }
 
@@ -22,8 +19,6 @@ export function createServer(deps: ServerDeps): Hono {
 
   app.use('*', async (c, next) => {
     c.set('llm', deps.llm);
-    c.set('executor', deps.executor);
-    c.set('hooks', deps.hooks);
     await next();
   });
 
@@ -32,6 +27,7 @@ export function createServer(deps: ServerDeps): Hono {
   app.route('/api/sessions', sessionsRouter);
   app.route('/api', messagesRouter);
   app.route('/api/models', modelsRouter);
+  app.route('/api', approvalRouter);
 
   return app;
 }

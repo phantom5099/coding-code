@@ -6,6 +6,7 @@ export interface ToolDefinition {
   name: string;
   description: string;
   parameters: z.ZodTypeAny;
-  schema: Record<string, unknown>;
+  /** Optional JSON Schema override. When absent, the schema is auto-generated from `parameters`. */
+  jsonSchema?: Record<string, unknown>;
   execute: (args: unknown, signal?: AbortSignal) => Promise<string>;
 }

@@ -4,6 +4,7 @@ import { sseHandler } from '../../src/server/handler.js';
 import { sendMessage } from '../../src/orchestrate.js';
 import { SessionService, type SessionStoreState } from '../../src/session/store.js';
 import { SkillService } from '../../src/skills/index.js';
+import { ToolExecutorService } from '../../src/tools/executor.js';
 import { Result } from '../../src/core/result.js';
 
 function createMockState(overrides: Partial<SessionStoreState> = {}): SessionStoreState {
@@ -33,13 +34,10 @@ function createMockLlm(chunks?: string[], responseContent?: string) {
   };
 }
 
-const mockExecutor = {
-  execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
-    Effect.succeed('done'),
-  getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
-};
-
-const mockHooks = {};
+const MockToolExecutorLayer = Layer.succeed(ToolExecutorService, ToolExecutorService.of({
+  _tag: 'ToolExecutor' as const,
+  execute: () => Effect.succeed('done'),
+}));
 
 const MockSessionLayer = Layer.succeed(
   SessionService,
@@ -75,14 +73,19 @@ const MockSkillLayer = Layer.succeed(
   }),
 );
 
-const { AgentLayer, ContextLayer } = await import('../../src/layer.js');
+const { AgentService } = await import('../../src/agent/agent.js');
+const { ContextLayer, ToolLayer, HookLayer } = await import('../../src/layer.js');
+const AgentDeps = Layer.mergeAll(MockToolExecutorLayer, ToolLayer);
+const TestAgentLayer = AgentService.Default.pipe(Layer.provide(AgentDeps));
 
 const TestLayer = Layer.mergeAll(
   MockSessionLayer,
   MockSkillLayer,
-  AgentLayer,
+  TestAgentLayer,
   ContextLayer,
+  HookLayer,
 );
+
 
 async function readSSEStream(response: Response): Promise<{ events: any[] }> {
   const reader = response.body!.getReader();
@@ -109,7 +112,7 @@ describe('sseHandler + sendMessage integration', () => {
   it('should stream text chunks and complete event', async () => {
     const llm = createMockLlm(['Hello', ' ', 'world']);
     const state = createMockState();
-    const program = sendMessage(state, 'hi', llm, mockExecutor, mockHooks) as any;
+    const program = sendMessage(state, 'hi', llm) as any;
     const handler = sseHandler(program);
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
@@ -124,7 +127,7 @@ describe('sseHandler + sendMessage integration', () => {
   it('should send complete event even when LLM returns no text', async () => {
     const llm = createMockLlm([], '');
     const state = createMockState();
-    const program = sendMessage(state, 'hi', llm, mockExecutor, mockHooks) as any;
+    const program = sendMessage(state, 'hi', llm) as any;
     const handler = sseHandler(program);
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
@@ -148,7 +151,7 @@ describe('sseHandler + sendMessage integration', () => {
     };
 
     const state = createMockState();
-    const program = sendMessage(state, 'read file', llm, mockExecutor, mockHooks) as any;
+    const program = sendMessage(state, 'read file', llm) as any;
     const handler = sseHandler(program);
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);

@@ -74,7 +74,7 @@ function mcpToolToDefinition(
     name: mcpTool.name,
     description: `[MCP:${serverName}] ${mcpTool.description || mcpTool.name}`,
     parameters: z.object({}).passthrough(),
-    schema: mcpTool.inputSchema,
+    jsonSchema: mcpTool.inputSchema,
     execute: async (args: unknown) => {
       const result = await Effect.runPromise(
         client.callTool(mcpTool.name, args as Record<string, unknown>),

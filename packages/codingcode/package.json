@@ -4,6 +4,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
+  "optionalDependencies": {
+    "@anthropic-ai/sandbox-runtime": "^1.0.0"
+  },
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.35",
     "@ai-sdk/openai": "^3.0.63",

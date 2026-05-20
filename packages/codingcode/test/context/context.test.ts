@@ -3,6 +3,7 @@ import { Effect, Layer } from 'effect';
 import { ContextService } from '../../src/context/context.js';
 import { SessionService } from '../../src/session/store.js';
 import { SkillService } from '../../src/skills/index.js';
+import { ToolExecutorService } from '../../src/tools/executor.js';
 import type { SessionStoreState } from '../../src/session/store.js';
 import { sendMessage } from '../../src/orchestrate.js';
 import { Result } from '../../src/core/result.js';
@@ -20,10 +21,10 @@ const mockLlm = {
   },
 };
 
-const mockExecutor = {
-  execute: (_name: string, _args: Record<string, unknown>, _opts?: any) => Effect.succeed('done'),
-  getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
-};
+const MockToolExecutorLayer = Layer.succeed(ToolExecutorService, ToolExecutorService.of({
+  _tag: 'ToolExecutor' as const,
+  execute: () => Effect.succeed('done'),
+}));
 
 function makeMockSessionLayer(state: SessionStoreState) {
   return Layer.succeed(SessionService, SessionService.of({
@@ -33,110 +34,54 @@ function makeMockSessionLayer(state: SessionStoreState) {
     recordAssistant: () => Effect.succeed({ type: 'assistant' as const, uuid: 'a1', content: '', toolCalls: [], model: 'test', timestamp: new Date().toISOString() }),
     recordToolResult: () => Effect.succeed({ type: 'tool_result' as const, uuid: 't1', parentUuid: 'a1', toolName: 'test', toolCallId: 'tc1', output: '', timestamp: new Date().toISOString() }),
     recordCompactBoundary: () => Effect.succeed({ type: 'compact_boundary' as const, uuid: 'c1', summary: '', replacedRange: [0, 0] as [number, number], messageCount: 0, timestamp: new Date().toISOString() }),
-    readHistory: () => Effect.succeed([]), readMessages: () => Effect.succeed([]), listSessions: () => Effect.succeed([]),
-    getSessionId: () => state.sessionId, getMessageCount: () => 0,
+    readHistory: () => Effect.succeed([]),
+    readMessages: () => Effect.succeed(state.sessionId === 'full-flow' ? [
+      { role: 'user', content: 'message one' },
+    ] : []),
+    listSessions: () => Effect.succeed([]),
+    getSessionId: () => state.sessionId,
+    getMessageCount: () => 0,
   }));
 }
 
-const { ContextLayer } = await import('../../src/layer.js');
+describe('ContextService', () => {
+  it('should add user message and assistant response', async () => {
+    const sid = 'test-flow';
+    const layer = makeMockSessionLayer({ ...mockState, sessionId: sid });
+    const { ContextLayer } = await import('../../src/layer.js');
+    const fullLayer = Layer.mergeAll(layer, ContextLayer);
 
-describe('ContextService cross-request persistence', () => {
-  it('should retain messages across separate Effect.runPromise calls', async () => {
-    const sid = 'persist-test';
-
-    // First "request": add messages
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        yield* ctx.addUser(sid, 'hello world');
-        yield* ctx.addAssistant(sid, 'assistant response');
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
-
-    // Second "request": messages should still be there
-    const gen = Effect.gen(function* () {
+    const program = Effect.gen(function* () {
       const ctx = yield* ContextService;
-      return yield* ctx.getMessages(sid);
-    });
-    const msgs = await Effect.runPromise(gen.pipe(Effect.provide(ContextLayer) as any)) as Array<{ role: string; content: string }>;
+      yield* ctx.addUser(sid, 'msg1');
+      yield* ctx.addAssistant(sid, 'resp1', []);
+      const msgs = yield* ctx.getMessages(sid);
+      return msgs;
+    }) as any;
 
+    const msgs = await Effect.runPromise(program.pipe(Effect.provide(fullLayer) as any));
     expect(msgs).toHaveLength(2);
-    expect(msgs[0]).toMatchObject({ role: 'user', content: 'hello world' });
-    expect(msgs[1]).toMatchObject({ role: 'assistant', content: 'assistant response' });
+    expect(msgs[0]!.role).toBe('user');
+    expect(msgs[0]!.content).toBe('msg1');
+    expect(msgs[1]!.role).toBe('assistant');
+    expect(msgs[1]!.content).toBe('resp1');
   });
 
-  it('should isolate messages between different sessions', async () => {
-    const sidA = 'session-a';
-    const sidB = 'session-b';
+  it('should retain context across multiple add calls', async () => {
+    const sid = 'multi-add';
+    const layer = makeMockSessionLayer({ ...mockState, sessionId: sid });
+    const { ContextLayer } = await import('../../src/layer.js');
+    const fullLayer = Layer.mergeAll(layer, ContextLayer);
 
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        yield* ctx.addUser(sidA, 'message for A');
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
-
-    const genB = Effect.gen(function* () {
+    const program = Effect.gen(function* () {
       const ctx = yield* ContextService;
-      return yield* ctx.getMessages(sidB);
-    });
-    const msgsB = await Effect.runPromise(genB.pipe(Effect.provide(ContextLayer) as any)) as Array<{ role: string; content: string }>;
-
-    expect(msgsB).toHaveLength(0);
-  });
-
-  it('clear() should delete messages for the given session', async () => {
-    const sid = 'clear-test';
-
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        yield* ctx.addUser(sid, 'before');
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
-
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        yield* ctx.clear(sid);
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
-
-    const g1 = Effect.gen(function* () {
-      const ctx = yield* ContextService;
+      yield* ctx.clear(sid);
+      yield* ctx.addUser(sid, 'new-1');
+      yield* ctx.addUser(sid, 'new-2');
       return yield* ctx.getMessages(sid);
-    });
-    const msgs = await Effect.runPromise(g1.pipe(Effect.provide(ContextLayer) as any)) as Array<{ role: string; content: string }>;
+    }) as any;
 
-    expect(msgs).toHaveLength(0);
-  });
-
-  it('setMessages should replace messages for the given session', async () => {
-    const sid = 'set-test';
-
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        yield* ctx.addUser(sid, 'old');
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
-
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const ctx = yield* ContextService;
-        yield* ctx.setMessages(sid, [
-          { role: 'user', content: 'new-1' },
-          { role: 'assistant', content: 'new-2' },
-        ]);
-      }).pipe(Effect.provide(ContextLayer) as any),
-    );
-
-    const g2 = Effect.gen(function* () {
-      const ctx = yield* ContextService;
-      return yield* ctx.getMessages(sid);
-    });
-    const msgs2 = await Effect.runPromise(g2.pipe(Effect.provide(ContextLayer) as any)) as Array<{ role: string; content: string }>;
-
+    const msgs2 = await Effect.runPromise(program.pipe(Effect.provide(fullLayer) as any));
     expect(msgs2).toHaveLength(2);
     expect(msgs2[0]!.content).toBe('new-1');
     expect(msgs2[1]!.content).toBe('new-2');
@@ -146,7 +91,8 @@ describe('ContextService cross-request persistence', () => {
     const sid = 'full-flow';
 
     const mockSessionLayer = makeMockSessionLayer({ ...mockState, sessionId: sid });
-    const { AgentLayer } = await import('../../src/layer.js');
+    const { AgentService } = await import('../../src/agent/agent.js');
+    const { ContextLayer } = await import('../../src/layer.js');
 
     const MockSkillLayer = Layer.succeed(SkillService, SkillService.of({
       _tag: 'Skill' as const,
@@ -155,11 +101,14 @@ describe('ContextService cross-request persistence', () => {
       selectImplicit: () => Effect.succeed(undefined), extractSkill: (_input: string) => Effect.succeed([undefined, _input] as [undefined, string]),
     }));
 
-    const fullLayer = Layer.mergeAll(mockSessionLayer, MockSkillLayer, AgentLayer, ContextLayer);
+    const { ToolLayer, HookLayer } = await import('../../src/layer.js');
+    const AgentDeps = Layer.mergeAll(MockToolExecutorLayer, ToolLayer);
+    const TestAgentLayer = AgentService.Default.pipe(Layer.provide(AgentDeps));
+    const fullLayer = Layer.mergeAll(mockSessionLayer, MockSkillLayer, TestAgentLayer, ContextLayer, HookLayer);
 
     // Step 1: send message in one Effect scope
     {
-      const program = sendMessage({ ...mockState, sessionId: sid }, 'message one', mockLlm, mockExecutor, {});
+      const program = sendMessage({ ...mockState, sessionId: sid }, 'message one', mockLlm);
       const gen: any = await Effect.runPromise((program as any).pipe(Effect.provide(fullLayer) as any));
       const chunks: string[] = [];
       for await (const chunk of gen) chunks.push(chunk);

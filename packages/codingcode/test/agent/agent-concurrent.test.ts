@@ -3,6 +3,13 @@ import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
 
+const mockToolRegistry = {
+  describeAll: () => [],
+  filter: () => [],
+  get: () => null,
+  register: () => Effect.succeed(undefined),
+};
+
 describe('runReActLoop — concurrent tool execution', () => {
   it('should execute multiple tool calls concurrently', async () => {
     const executionOrder: string[] = [];
@@ -36,16 +43,17 @@ describe('runReActLoop — concurrent tool execution', () => {
           executionOrder.push(name);
           return `result-${name}`;
         }),
-      getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = { systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
+    const maxSteps = 1;
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'run all tools' }],
-      config,
+      maxSteps,
+      undefined,
       mockLlm as any,
       mockExecutor as any,
+      mockToolRegistry as any,
     );
 
     const events: any[] = [];
@@ -83,16 +91,17 @@ describe('runReActLoop — concurrent tool execution', () => {
         name === 'bad_tool'
           ? Effect.fail(new Error('Simulated failure') as any)
           : Effect.succeed(`result-${name}`),
-      getRegistry: () => ({ describeAll: () => [], filter: () => [] }),
     };
 
-    const config = { systemPrompt: 'You are a coder', maxSteps: 1, availableTools: undefined };
+    const maxSteps = 1;
 
     const gen = runReActLoop(
       [{ role: 'user', content: 'run all' }],
-      config,
+      maxSteps,
+      undefined,
       mockLlm as any,
       mockExecutor as any,
+      mockToolRegistry as any,
     );
 
     const events: any[] = [];
