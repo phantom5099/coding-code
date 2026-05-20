@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { webSearchTool } from '../../tools/domains/web/search';
+import { webSearchTool } from '../../src/tools/domains/web/search.js';
 
 describe('webSearchTool', () => {
   it('should have correct tool name and schema', () => {

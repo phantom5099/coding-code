@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { editFileTool } from '../../tools/domains/fs/edit';
+import { editFileTool } from '../../src/tools/domains/fs/edit.js';
 import { writeFile, readFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
