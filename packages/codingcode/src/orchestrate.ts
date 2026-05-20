@@ -21,16 +21,12 @@ export const sendMessage = (
     const sid = state.sessionId;
 
     const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
-    if (matchedSkill) {
-      agent.setSkillInstruction(matchedSkill.instruction);
-    }
 
     yield* ctx.addUser(sid, actualInput);
     yield* session.recordUser(state, actualInput);
 
     const messages = yield* ctx.build(sid);
-    // agent.runStream now resolves ToolExecutorService internally, no need to pass executor
-    const raw = agent.runStream(messages, llm);
+    const raw = agent.runStream(messages, llm, sid, matchedSkill?.instruction);
     return wrapStream(raw, ctx, session, state, sid);
   });
 

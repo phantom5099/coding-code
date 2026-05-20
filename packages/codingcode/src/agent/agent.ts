@@ -26,8 +26,8 @@ type ToolResultUnion =
   | { type: 'denied'; id: string; name: string; reason: string }
   | { type: 'error'; id: string; name: string; output: string };
 
-function execTool(executor: ToolExecutorService, tc: ToolCall): Effect.Effect<ToolResultUnion> {
-  return executor.execute(tc.name, tc.arguments ?? {}).pipe(
+function execTool(executor: ToolExecutorService, tc: ToolCall, sessionId: string): Effect.Effect<ToolResultUnion> {
+  return executor.execute(tc.name, tc.arguments ?? {}, { sessionId }).pipe(
     Effect.matchEffect({
       onSuccess: (output): Effect.Effect<ToolResultUnion> =>
         Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
@@ -51,18 +51,15 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
     const executor = yield* ToolExecutorService;
     const toolRegistry = yield* ToolService;
     const maxSteps = resolveConfig().maxSteps;
-    let skillInstruction: string | undefined;
 
     return {
-      setSkillInstruction: (instruction: string): void => {
-        skillInstruction = instruction;
-      },
-
       runStream: (
         messages: Message[],
         llm: LLMStreamAdapter,
+        sessionId: string,
+        skillInstruction?: string,
       ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> =>
-        runReActLoop(messages, maxSteps, skillInstruction, llm, executor, toolRegistry),
+        runReActLoop(messages, maxSteps, llm, executor, toolRegistry, sessionId, skillInstruction),
     };
   }),
 }) {}
@@ -70,10 +67,11 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
 export async function* runReActLoop(
   initialMessages: Message[],
   maxSteps: number,
-  skillInstruction: string | undefined,
   llm: LLMStreamAdapter,
   executor: ToolExecutorService,
   toolRegistry: ToolService,
+  sessionId: string,
+  skillInstruction?: string,
 ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> {
   const messages = [...initialMessages];
   const basePrompt = buildSystemPrompt({
@@ -132,7 +130,7 @@ export async function* runReActLoop(
 
     // Safe tools — parallel
     const safeResults = await Effect.runPromise(
-      Effect.forEach(safeTools, (tc) => execTool(executor, tc), { concurrency: 'unbounded' }),
+      Effect.forEach(safeTools, (tc) => execTool(executor, tc, sessionId), { concurrency: 'unbounded' }),
     );
 
     for (const r of safeResults) {
@@ -146,7 +144,7 @@ export async function* runReActLoop(
     // Bash tools — serial (avoid race conditions)
     const bashResults: ToolResultUnion[] = [];
     for (const tc of bashTools) {
-      const r = await Effect.runPromise(execTool(executor, tc));
+      const r = await Effect.runPromise(execTool(executor, tc, sessionId));
       bashResults.push(r);
       if (r.type === 'denied') {
         yield { _tag: 'ToolDenied', name: r.name, reason: r.reason };

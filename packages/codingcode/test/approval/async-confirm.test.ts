@@ -18,10 +18,10 @@ describe('ApprovalWaitService', () => {
       // Fork waitForConfirm so it runs in background
       yield* Effect.fork(Effect.gen(function* () {
         yield* Effect.sleep('10 millis');
-        yield* svc.resolveConfirm(id, { type: 'allow' });
+        yield* svc.resolveConfirm(id, 'test-session', { type: 'allow' });
       }));
 
-      return yield* svc.waitForConfirm(id);
+      return yield* svc.waitForConfirm(id, 'test-session');
     }));
 
     await expect(result).resolves.toEqual({ type: 'allow' });
@@ -30,7 +30,7 @@ describe('ApprovalWaitService', () => {
   it('resolveConfirm should return false for unknown id', async () => {
     const result = await run(Effect.gen(function* () {
       const svc = yield* ApprovalWaitService;
-      return yield* svc.resolveConfirm('nonexistent', { type: 'deny' });
+      return yield* svc.resolveConfirm('nonexistent', 'test-session', { type: 'deny' });
     }));
     expect(result).toBe(false);
   });
@@ -39,7 +39,7 @@ describe('ApprovalWaitService', () => {
     const result = await run(Effect.gen(function* () {
       const svc = yield* ApprovalWaitService;
 
-      yield* Effect.fork(svc.waitForConfirm('pending-1'));
+      yield* Effect.fork(svc.waitForConfirm('pending-1', 'test-session'));
       yield* Effect.sleep('5 millis');
 
       return yield* svc.getPending();

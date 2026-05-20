@@ -50,10 +50,10 @@ describe('runReActLoop — concurrent tool execution', () => {
     const gen = runReActLoop(
       [{ role: 'user', content: 'run all tools' }],
       maxSteps,
-      undefined,
       mockLlm as any,
       mockExecutor as any,
       mockToolRegistry as any,
+      'test-session',
     );
 
     const events: any[] = [];
@@ -98,10 +98,10 @@ describe('runReActLoop — concurrent tool execution', () => {
     const gen = runReActLoop(
       [{ role: 'user', content: 'run all' }],
       maxSteps,
-      undefined,
       mockLlm as any,
       mockExecutor as any,
       mockToolRegistry as any,
+      'test-session',
     );
 
     const events: any[] = [];

@@ -46,6 +46,8 @@ export interface PipelineOptions {
   onAlways?: (rule: PermissionRule) => void;
   /** Called when user selects Never — allows caller to persist the rule. */
   onNever?: (rule: PermissionRule) => void;
+  /** Session ID for session-scoped approval routing. */
+  sessionId: string;
 }
 
 const LAYER_NAMES = [
@@ -137,7 +139,7 @@ export function runPipeline(
       layers.push(LAYER_NAMES[4]);
       const confirmResult = yield* (
         opts.asyncConfirm && opts.asyncConfirmService
-          ? userConfirmAsync(request.tool, request.input, opts.asyncConfirmService)
+          ? userConfirmAsync(request.tool, request.input, opts.asyncConfirmService, opts.sessionId)
           : userConfirm(request.tool, request.input, opts.interactive ? 'interactive' : 'default-deny')
       );
 
