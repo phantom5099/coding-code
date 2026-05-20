@@ -49,7 +49,8 @@ export function runTui(options: TuiOptions = {}) {
     },
 
     async sendApprovalResponse(id: string, response: string) {
-      await fetch(`${serverUrl}/api/approval/${id}`, {
+      if (!currentSessionId) return;
+      await fetch(`${serverUrl}/api/sessions/${currentSessionId}/approval/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ response }),

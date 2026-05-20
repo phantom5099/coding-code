@@ -15,7 +15,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
     function execute(
       name: string,
       args: unknown,
-      opts?: { signal?: AbortSignal },
+      opts?: { signal?: AbortSignal; sessionId?: string },
     ): Effect.Effect<string, AgentError> {
       return Effect.gen(function* () {
         // All services captured from outer closure — no yield* needed for them
@@ -27,6 +27,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         const decision = yield* approval.evaluate({
           tool: name,
           input: args as Record<string, unknown>,
+          sessionId: opts?.sessionId ?? 'default',
         });
 
         if (decision.type === 'deny') {

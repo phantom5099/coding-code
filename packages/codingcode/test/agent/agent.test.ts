@@ -35,10 +35,10 @@ describe('runReActLoop', () => {
     const gen = runReActLoop(
       [{ role: 'user', content: 'hi' }],
       maxSteps,
-      undefined,
       mockLlm as any,
       mockExecutor as any,
       mockToolRegistry as any,
+      'test-session',
     );
 
     const events: any[] = [];
@@ -68,10 +68,10 @@ describe('runReActLoop', () => {
     const gen = runReActLoop(
       [{ role: 'user', content: 'hi' }],
       maxSteps,
-      undefined,
       mockLlm as any,
       mockExecutor as any,
       mockToolRegistry as any,
+      'test-session',
     );
 
     const events: any[] = [];
@@ -115,10 +115,10 @@ describe('runReActLoop', () => {
     const gen = runReActLoop(
       [{ role: 'user', content: 'git status' }],
       maxSteps,
-      undefined,
       mockLlm as any,
       mockExecutor as any,
       toolRegistryWithBash as any,
+      'test-session',
     );
 
     const events: any[] = [];
@@ -164,10 +164,10 @@ describe('runReActLoop', () => {
     const gen = runReActLoop(
       [{ role: 'user', content: 'read file' }],
       maxSteps,
-      undefined,
       mockLlm as any,
       mockExecutor as any,
       toolRegistryWithTool as any,
+      'test-session',
     );
 
     const events: any[] = [];

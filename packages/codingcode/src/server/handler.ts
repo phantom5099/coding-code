@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type { Context } from 'hono';
 import { AppLayer } from '../layer.js';
-import { approvalEmitter } from '../approval/async-confirm.js';
+import { registerEmitter, unregisterEmitter } from '../approval/async-confirm.js';
 
 type EffectProgram = Effect.Effect<any, any, any>;
 
@@ -21,6 +21,7 @@ export function sseHandler(
   opts?: { initialEvents?: Array<Record<string, unknown>> },
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
+    const sessionId = c.req.param('id') ?? 'default';
     const stream = new ReadableStream({
       async start(controller) {
         const enqueue = (data: Record<string, unknown>) => {
@@ -29,14 +30,10 @@ export function sseHandler(
           );
         };
 
-        // 设置全局发射器：由 userConfirmAsync 调用，直接推送到 SSE 流
-        approvalEmitter.current = (
-          id: string,
-          tool: string,
-          args: Record<string, unknown>,
-        ) => {
+        // 注册 session 级别发射器
+        registerEmitter(sessionId, (id, tool, args) => {
           enqueue({ type: 'approval_request', id, tool, args });
-        };
+        });
 
         try {
           if (opts?.initialEvents) {
@@ -58,7 +55,7 @@ export function sseHandler(
             message: e instanceof Error ? e.message : String(e),
           });
         } finally {
-          approvalEmitter.current = null;
+          unregisterEmitter(sessionId);
         }
         controller.close();
       },

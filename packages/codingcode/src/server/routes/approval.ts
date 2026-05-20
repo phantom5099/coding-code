@@ -2,8 +2,9 @@ import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { ApprovalWaitService } from '../../approval/async-confirm';
 import { AppLayer } from '../../layer';
+import type { ConfirmResult } from '../../approval/confirmation';
 
-function parseResponse(response: string): ReturnType<typeof import('../../approval/confirmation')['buildResult']> {
+function parseResponse(response: string): ConfirmResult {
   switch (response) {
     case 'allow': return { type: 'allow' as const };
     case 'deny': return { type: 'deny' as const };
@@ -21,14 +22,15 @@ function parseResponse(response: string): ReturnType<typeof import('../../approv
 
 const router = new Hono();
 
-router.post('/approval/:id', async (c) => {
+router.post('/sessions/:sessionId/approval/:id', async (c) => {
   const id = c.req.param('id');
+  const sessionId = c.req.param('sessionId');
   const { response } = await c.req.json<{ response: string }>();
 
   const result = await Effect.runPromise(
     Effect.gen(function* () {
       const svc = yield* ApprovalWaitService;
-      return yield* svc.resolveConfirm(id, parseResponse(response));
+      return yield* svc.resolveConfirm(id, sessionId, parseResponse(response));
     }).pipe(Effect.provide(AppLayer) as any),
   );
 

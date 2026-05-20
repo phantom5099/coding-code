@@ -1,7 +1,7 @@
 import * as readline from 'node:readline';
 import { Effect } from 'effect';
 import type { PermissionRule } from './types';
-import { ApprovalWaitService, approvalEmitter } from './async-confirm';
+import { ApprovalWaitService } from './async-confirm';
 
 export type ConfirmResult =
   | { type: 'allow' }
@@ -97,16 +97,14 @@ export function userConfirmAsync(
   tool: string,
   args: Record<string, unknown>,
   waitSvc: ApprovalWaitService,
+  sessionId: string,
 ): Effect.Effect<ConfirmResult> {
   return Effect.gen(function* () {
-    const id = `apr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = `apr_${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    // Emit approval request via module-level emitter (set by SSE handler)
-    if (approvalEmitter.current) {
-      approvalEmitter.current(id, tool, args);
-    }
+    yield* waitSvc.emitApprovalRequest(sessionId, id, tool, args);
 
     // Suspend until resolveConfirm is called
-    return yield* waitSvc.waitForConfirm(id);
+    return yield* waitSvc.waitForConfirm(id, sessionId);
   });
 }

@@ -4,7 +4,7 @@ import type { PermissionMode, PermissionRule, ApprovalDecision } from './types';
 import { createRuleEngine, type RuleEngine } from './rule-engine';
 import { DEFAULT_DENY_RULES, READONLY_TOOL_NAMES, DESTRUCTIVE_TOOL_NAMES } from './presets';
 import { runPipeline, type PipelineHooks } from './pipeline';
-import { approvalEmitter, ApprovalWaitService } from './async-confirm';
+import { ApprovalWaitService, hasEmitter } from './async-confirm';
 
 export class ApprovalService extends Effect.Service<ApprovalService>()('Approval', {
   effect: Effect.gen(function* () {
@@ -30,10 +30,9 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
         tool: string;
         input: Record<string, unknown>;
         context?: Record<string, unknown>;
+        sessionId: string;
       }): Effect.Effect<ApprovalDecision> =>
         Effect.gen(function* () {
-          // Check if an approval emitter is set (we're inside an SSE handler)
-          const hasAsyncEmitter = approvalEmitter.current !== null;
           return yield* runPipeline(
             { tool: request.tool, input: request.input, context: request.context },
             {
@@ -43,10 +42,11 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               permissionMode,
               hooks: buildPipelineHooks(),
               interactive: process.stdin.isTTY ?? false,
-              asyncConfirm: hasAsyncEmitter,
+              asyncConfirm: hasEmitter(request.sessionId),
               asyncConfirmService: approvalWait,
               onAlways: (rule) => ruleEngine.addRule(rule),
               onNever: (rule) => ruleEngine.addRule(rule),
+              sessionId: request.sessionId,
             },
           );
         }),
