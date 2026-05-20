@@ -5,7 +5,6 @@ import type {
   PermissionRule,
   ToolCallRequest,
 } from './types';
-import { READONLY_TOOLS } from './types';
 import type { RuleEngine } from './rule-engine';
 import type { ConfirmResult } from './confirmation';
 import { userConfirm, userConfirmAsync } from './confirmation';

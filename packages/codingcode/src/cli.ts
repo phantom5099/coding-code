@@ -9,10 +9,13 @@ import { getLLMClient } from './llm/factory.js';
 import { SandboxService } from './sandbox/index.js';
 import { readFileTool } from './tools/domains/fs/read.js';
 import { writeFileTool } from './tools/domains/fs/write.js';
+import { editFileTool } from './tools/domains/fs/edit.js';
 import { listDirTool } from './tools/domains/fs/list.js';
 import { bashTool } from './tools/domains/bash/exec.js';
 import { searchTool } from './tools/domains/search/grep.js';
+import { globTool } from './tools/domains/search/glob.js';
 import { webFetchTool } from './tools/domains/web/fetch.js';
+import { webSearchTool } from './tools/domains/web/search.js';
 import { createServer } from './server/index.js';
 import { AppLayer } from './layer.js';
 import { loadConfig } from '../../infra/src/config.js';
@@ -58,10 +61,13 @@ async function main() {
     // Register built-in tools
     yield* tools.register(readFileTool);
     yield* tools.register(writeFileTool);
+    yield* tools.register(editFileTool);
     yield* tools.register(listDirTool);
     yield* tools.register(bashTool);
     yield* tools.register(searchTool);
+    yield* tools.register(globTool);
     yield* tools.register(webFetchTool);
+    yield* tools.register(webSearchTool);
 
     // Connect MCP servers (auto-registers tools to ToolService)
     yield* mcp.connectAll(process.cwd());

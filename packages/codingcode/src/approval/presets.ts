@@ -87,8 +87,10 @@ export const DEFAULT_DENY_RULES: PermissionRule[] = [
 export const READONLY_TOOL_NAMES: string[] = [
   'read_file',
   'search_code',
+  'search_files',
   'list_dir',
   'fetch_url',
+  'web_search',
 ];
 
 export const DESTRUCTIVE_TOOL_NAMES: string[] = [
