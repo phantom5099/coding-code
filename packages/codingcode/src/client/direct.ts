@@ -68,10 +68,50 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
+      const { registerEmitter, unregisterEmitter } = await import('../approval/async-confirm.js');
       const program = sendMessage(currentSessionId || undefined, input, process.cwd(), llm);
       const { stream: agentGen, sessionId } = await runWithLayer(program) as any;
       currentSessionId = sessionId;
-      yield* agentEventToStreamChunk(agentGen);
+
+      // Emitter fires during Effect.runPromise (inside the agent generator) while
+      // the generator is blocked on waitForConfirm. We must intercept it here.
+      let notify: ((req: { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }) => void) | null = null;
+      registerEmitter(sessionId, (id, tool, args) => {
+        notify?.({ type: 'approval_request', id, tool, args });
+      });
+
+      try {
+        const gen = agentEventToStreamChunk(agentGen);
+        let pending = gen.next();
+
+        while (true) {
+          const approvalPromise = new Promise<{ type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }>((resolve) => {
+            notify = resolve;
+          });
+
+          const winner = await Promise.race([
+            pending.then((c): { tag: 'chunk'; value: IteratorResult<StreamChunk, void> } => ({ tag: 'chunk', value: c })),
+            approvalPromise.then((req): { tag: 'approval'; value: typeof req } => ({ tag: 'approval', value: req })),
+          ]);
+
+          if (winner.tag === 'chunk') {
+            notify = null;
+            if (winner.value.done) break;
+            yield winner.value.value;
+            pending = gen.next();
+          } else {
+            yield winner.value;
+            // pending gen.next() is still unresolved (generator blocked on Deferred).
+            // TUI will call sendApprovalResponse → Deferred resolved → generator resumes.
+            const resumed = await pending;
+            if (resumed.done) break;
+            yield resumed.value;
+            pending = gen.next();
+          }
+        }
+      } finally {
+        unregisterEmitter(sessionId);
+      }
     },
 
     async sendApprovalResponse(id: string, response: string) {
