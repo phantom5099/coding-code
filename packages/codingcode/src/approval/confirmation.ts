@@ -9,8 +9,6 @@ export type ConfirmResult =
   | { type: 'always'; rule: PermissionRule }
   | { type: 'never'; rule: PermissionRule };
 
-const TIMEOUT_MS = 60_000;
-
 async function promptUser(question: string): Promise<string> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -18,13 +16,9 @@ async function promptUser(question: string): Promise<string> {
     terminal: true,
   });
   try {
-    const timeout = new Promise<string>((_, reject) =>
-      setTimeout(() => reject(new Error('Timed out')), TIMEOUT_MS),
-    );
-    const input = new Promise<string>((resolve) => {
+    return await new Promise<string>((resolve) => {
       rl.question(question, (ans) => resolve(ans.trim().toLowerCase()));
     });
-    return await Promise.race([input, timeout]);
   } finally {
     rl.close();
   }
@@ -82,9 +76,7 @@ export function userConfirm(
 
     const question = `\n[Approval] Tool "${tool}" wants to run:\n${serializedArgs}\nAllow? (Y)es / (N)o / (A)lways / Neve_r / (V)iew full: `;
 
-    const answer = yield* Effect.tryPromise(() => promptUser(question)).pipe(
-      Effect.catchAll(() => Effect.succeed('n')),
-    );
+    const answer = yield* Effect.promise(() => promptUser(question));
 
     if (answer === 'v') {
       console.log('\nFull arguments:', JSON.stringify(args, null, 2));
