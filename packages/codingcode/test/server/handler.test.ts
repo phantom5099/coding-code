@@ -2,24 +2,22 @@ import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sseHandler } from '../../src/server/handler.js';
 import { sendMessage } from '../../src/orchestrate.js';
-import { SessionService, type SessionStoreState } from '../../src/session/store.js';
+import { toSSEString } from '../../src/server/adapter.js';
+import { SessionService } from '../../src/session/store.js';
 import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
 import { Result } from '../../src/core/result.js';
 
-function createMockState(overrides: Partial<SessionStoreState> = {}): SessionStoreState {
-  return {
-    sessionId: 'test-session',
-    cwd: '/tmp/test',
-    projectSlug: 'test',
-    transcriptPath: '/tmp/test.jsonl',
-    indexPath: '/tmp/test.index.json',
-    messageCount: 0,
-    sessionMeta: null,
-    title: 'test-sess',
-    ...overrides,
-  };
-}
+const mockState = {
+  sessionId: 'test-session',
+  cwd: '/tmp/test',
+  projectSlug: 'test',
+  transcriptPath: '/tmp/test.jsonl',
+  indexPath: '/tmp/test.index.json',
+  messageCount: 0,
+  sessionMeta: null,
+  title: 'test-sess',
+};
 
 function createMockLlm(chunks?: string[], responseContent?: string) {
   return {
@@ -43,7 +41,7 @@ const MockSessionLayer = Layer.succeed(
   SessionService,
   SessionService.of({
     _tag: 'Session' as const,
-    create: () => Effect.succeed(createMockState()),
+    create: () => Effect.succeed(mockState),
     recordUser: () =>
       Effect.succeed({ type: 'user' as const, uuid: 'u1', content: '', timestamp: new Date().toISOString() }),
     recordAssistant: () =>
@@ -111,9 +109,11 @@ async function readSSEStream(response: Response): Promise<{ events: any[] }> {
 describe('sseHandler + sendMessage integration', () => {
   it('should stream text chunks and complete event', async () => {
     const llm = createMockLlm(['Hello', ' ', 'world']);
-    const state = createMockState();
-    const program = sendMessage(state, 'hi', llm) as any;
-    const handler = sseHandler(program);
+    const program = sendMessage('test-session', 'hi', '/tmp/test', llm) as any;
+    const handler = sseHandler(async function* () {
+      const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
+      yield* toSSEString(stream);
+    }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -126,9 +126,11 @@ describe('sseHandler + sendMessage integration', () => {
 
   it('should send complete event even when LLM returns no text', async () => {
     const llm = createMockLlm([], '');
-    const state = createMockState();
-    const program = sendMessage(state, 'hi', llm) as any;
-    const handler = sseHandler(program);
+    const program = sendMessage('test-session', 'hi', '/tmp/test', llm) as any;
+    const handler = sseHandler(async function* () {
+      const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
+      yield* toSSEString(stream);
+    }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -150,9 +152,11 @@ describe('sseHandler + sendMessage integration', () => {
       }),
     };
 
-    const state = createMockState();
-    const program = sendMessage(state, 'read file', llm) as any;
-    const handler = sseHandler(program);
+    const program = sendMessage('test-session', 'read file', '/tmp/test', llm) as any;
+    const handler = sseHandler(async function* () {
+      const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
+      yield* toSSEString(stream);
+    }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -161,9 +165,10 @@ describe('sseHandler + sendMessage integration', () => {
     expect(textEvent!.text).toContain('[Using:');
   });
 
-  it('should send error event when Effect fails', async () => {
-    const program = Effect.fail(new Error('boom'));
-    const handler = sseHandler(program as any);
+  it('should send error event when factory throws', async () => {
+    const handler = sseHandler(async function* () {
+      throw new Error('boom');
+    }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 

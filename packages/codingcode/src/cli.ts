@@ -78,12 +78,11 @@ async function main() {
 
     // Find available port
     const port = yield* Effect.tryPromise(() => findAvailablePort(basePort));
-    const serverUrl = process.env.CODINGCODE_SERVER ?? `http://localhost:${port}`;
 
     if (tuiOnly) {
       const tuiPath = '../../tui/src/index.js';
       const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
-      runTui({ serverUrl });
+      runTui({ llm: llmResult.value });
       return;
     }
 
@@ -94,7 +93,7 @@ async function main() {
     if (!serveOnly) {
       const tuiPath = '../../tui/src/index.js';
       const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
-      runTui({ serverUrl });
+      runTui({ llm: llmResult.value });
     }
   });
 

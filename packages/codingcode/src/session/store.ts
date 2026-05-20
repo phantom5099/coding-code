@@ -174,6 +174,22 @@ function readMessages(path: string): Message[] {
         break;
     }
   }
+
+  // Strip trailing assistant messages whose tool_calls lack matching tool_results
+  // (session interrupted mid-execution). The LLM API rejects these.
+  const resolvedIds = new Set<string>();
+  for (const m of messages) {
+    if (m.role === 'tool') resolvedIds.add((m as any).tool_call_id);
+  }
+  while (messages.length > 0) {
+    const last = messages[messages.length - 1];
+    if (last.role !== 'assistant') break;
+    const tcs = (last as any).tool_calls as Array<{ id: string }> | undefined;
+    if (!tcs || tcs.length === 0) break;
+    if (tcs.every((tc) => resolvedIds.has(tc.id))) break;
+    messages.pop();
+  }
+
   return messages;
 }
 

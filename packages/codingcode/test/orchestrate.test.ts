@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sendMessage } from '../src/orchestrate.js';
-import { SessionService, type SessionStoreState } from '../src/session/store.js';
+import { SessionService } from '../src/session/store.js';
 import { SkillService } from '../src/skills/index.js';
 import { ToolExecutorService } from '../src/tools/executor.js';
 import { Result } from '../src/core/result.js';
 
-const mockState: SessionStoreState = {
+const mockState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
   transcriptPath: '/tmp/test.jsonl', indexPath: '/tmp/test.index.json',
   messageCount: 0, sessionMeta: null, title: 'test-sess',
@@ -49,25 +49,28 @@ const TestAgentLayer = AgentService.Default.pipe(Layer.provide(AgentDeps));
 const TestLayer = Layer.mergeAll(MockSessionLayer, MockSkillLayer, TestAgentLayer, ContextLayer, HookLayer);
 
 describe('sendMessage stream', () => {
-  it('should yield text chunks from LLM', async () => {
-    const program = sendMessage(mockState, 'hi', mockLlm);
-    const generator: any = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any));
+  it('should yield AgentEvent chunks from LLM', async () => {
+    const program = sendMessage('test-session', 'hi', '/tmp/test', mockLlm);
+    const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
 
-    const chunks: string[] = [];
-    for await (const chunk of generator) chunks.push(chunk);
+    const events: any[] = [];
+    for await (const event of stream) events.push(event);
 
-    expect(chunks).toContain('Hello');
-    expect(chunks).toContain(' ');
-    expect(chunks).toContain('world');
+    const textChunks = events
+      .filter((e: any) => e._tag === 'LlmChunk')
+      .map((e: any) => e.text);
+    expect(textChunks).toContain('Hello');
+    expect(textChunks).toContain(' ');
+    expect(textChunks).toContain('world');
   });
 
-  it('should not return empty stream for normal LLM response', async () => {
-    const program = sendMessage(mockState, 'hi', mockLlm);
-    const generator: any = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any));
+  it('should not return empty event stream for normal LLM response', async () => {
+    const program = sendMessage('test-session', 'hi', '/tmp/test', mockLlm);
+    const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
 
-    const chunks: string[] = [];
-    for await (const chunk of generator) chunks.push(chunk);
+    const events: any[] = [];
+    for await (const event of stream) events.push(event);
 
-    expect(chunks.length).toBeGreaterThan(0);
+    expect(events.length).toBeGreaterThan(0);
   });
 });

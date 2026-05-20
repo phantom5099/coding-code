@@ -34,29 +34,13 @@ sessionsRouter.post('/', async (c) => {
 sessionsRouter.post('/:id/resume', async (c) => {
   const sessionId = c.req.param('id');
   const body = await c.req.json() as any;
-
-  const state = await runWithLayer(
-    Effect.gen(function* () {
-      const svc = yield* SessionService;
-      return yield* svc.create(body.cwd ?? process.cwd(), 'unknown', '0.1.0', sessionId);
-    }),
-  );
-
-  const result = await runWithLayer(resumeSession(state, body.cwd ?? process.cwd()) as any);
+  const result = await runWithLayer(resumeSession(sessionId, body.cwd ?? process.cwd()) as any);
   return c.json(result);
 });
 
 sessionsRouter.post('/:id/compact', async (c) => {
   const sessionId = c.req.param('id');
   const body = await c.req.json() as any;
-
-  const state = await runWithLayer(
-    Effect.gen(function* () {
-      const svc = yield* SessionService;
-      return yield* svc.create(body.cwd ?? process.cwd(), 'unknown', '0.1.0', sessionId);
-    }),
-  );
-
-  const result = await runWithLayer(compact(state) as any);
+  const result = await runWithLayer(compact(sessionId, body.cwd ?? process.cwd()) as any);
   return c.json(result);
 });

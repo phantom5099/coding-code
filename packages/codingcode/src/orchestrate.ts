@@ -1,16 +1,14 @@
 import { Effect } from 'effect';
 import { ContextService } from './context/context.js';
 import { AgentService } from './agent/agent.js';
-import { SessionService, type SessionStoreState } from './session/store.js';
+import { SessionService } from './session/store.js';
 import { SkillService } from './skills/index.js';
-import type { AgentEvent } from './agent/agent.js';
-import type { AgentError } from './core/error.js';
-import { Result } from './core/result.js';
+import { withRecording } from './recording.js';
 
-// AgentService, ToolExecutorService, HookService all resolved via AppLayer — no need to pass them in
 export const sendMessage = (
-  state: SessionStoreState,
+  sessionId: string | undefined,
   input: string,
+  cwd: string,
   llm: any,
 ) =>
   Effect.gen(function* () {
@@ -18,6 +16,8 @@ export const sendMessage = (
     const session = yield* SessionService;
     const agent = yield* AgentService;
     const skill = yield* SkillService;
+
+    const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
 
     const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
@@ -27,16 +27,17 @@ export const sendMessage = (
 
     const messages = yield* ctx.build(sid);
     const raw = agent.runStream(messages, llm, sid, matchedSkill?.instruction);
-    return wrapStream(raw, ctx, session, state, sid);
+    return { stream: withRecording(raw, ctx, session, state, sid), sessionId: sid };
   });
 
 export const resumeSession = (
-  state: SessionStoreState,
-  _cwd: string,
+  sessionId: string,
+  cwd: string,
 ) =>
   Effect.gen(function* () {
     const ctx = yield* ContextService;
     const session = yield* SessionService;
+    const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
 
     const history = yield* session.readHistory(state);
@@ -47,10 +48,11 @@ export const resumeSession = (
     return history;
   });
 
-export const compact = (state: SessionStoreState) =>
+export const compact = (sessionId: string, cwd: string) =>
   Effect.gen(function* () {
     const ctx = yield* ContextService;
     const session = yield* SessionService;
+    const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
 
     const result = yield* ctx.compress(sid);
@@ -64,64 +66,3 @@ export const compact = (state: SessionStoreState) =>
     }
     return result;
   });
-
-async function* wrapStream(
-  source: AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown>,
-  ctx: ContextService,
-  session: SessionService,
-  state: SessionStoreState,
-  sid: string,
-): AsyncGenerator<string, Result<string, AgentError>, unknown> {
-  let assistantUuid: string | undefined;
-  const model = state.sessionMeta?.model ?? 'unknown';
-
-  while (true) {
-    const next = await source.next();
-    if (next.done) return next.value;
-
-    const event = next.value;
-    switch (event._tag) {
-      case 'LlmChunk':
-        yield event.text;
-        break;
-
-      case 'Step':
-        break;
-
-      case 'Assistant': {
-        await Effect.runPromise(ctx.addAssistant(sid, event.content, event.toolCalls));
-        const ev = await Effect.runPromise(
-          session.recordAssistant(state, event.content, event.toolCalls as any, model),
-        );
-        assistantUuid = (ev as any).uuid;
-        break;
-      }
-
-      case 'ToolStart':
-        yield `\n[Using: ${event.name}]\n`;
-        break;
-
-      case 'ToolDenied':
-        yield `\n[Denied: ${event.name}] ${event.reason}\n`;
-        break;
-
-      case 'ApprovalRequest':
-        yield `\n[Approval: ${event.id}] ${event.tool}\n`;
-        break;
-
-      case 'ToolResult': {
-        await Effect.runPromise(ctx.addToolResult(sid, event.id, event.output, event.name));
-        if (assistantUuid) {
-          await Effect.runPromise(
-            session.recordToolResult(state, assistantUuid, event.name, event.id, event.output),
-          );
-        }
-        break;
-      }
-
-      case 'Error':
-      case 'Done':
-        break;
-    }
-  }
-}

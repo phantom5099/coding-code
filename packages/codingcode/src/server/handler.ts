@@ -17,7 +17,7 @@ export function handler(
 }
 
 export function sseHandler(
-  program: EffectProgram,
+  createGenerator: () => AsyncGenerator<string, void, unknown>,
   opts?: { initialEvents?: Array<Record<string, unknown>>; sessionId?: string },
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
@@ -30,7 +30,6 @@ export function sseHandler(
           );
         };
 
-        // 注册 session 级别发射器
         registerEmitter(sessionId, (id, tool, args) => {
           enqueue({ type: 'approval_request', id, tool, args });
         });
@@ -40,9 +39,7 @@ export function sseHandler(
             for (const ev of opts.initialEvents) enqueue(ev);
           }
 
-          const generator: AsyncIterable<string> = await Effect.runPromise(
-            program.pipe(Effect.provide(AppLayer) as any),
-          );
+          const generator = createGenerator();
 
           for await (const chunk of generator) {
             enqueue({ type: 'text', text: chunk });

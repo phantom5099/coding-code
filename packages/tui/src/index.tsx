@@ -1,73 +1,17 @@
 import React from 'react';
 import { render } from 'ink';
 import { App } from './components/App.js';
+import { createDirectClient } from '@codingcode/core';
+import type { AgentClient, StreamChunk } from '@codingcode/core';
+
+export type { AgentClient, StreamChunk };
 
 interface TuiOptions {
-  serverUrl?: string;
+  llm?: any;
+  client?: AgentClient;
 }
 
-export type StreamChunk = string | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> };
-
-export function runTui(options: TuiOptions = {}) {
-  const serverUrl = options.serverUrl ?? 'http://localhost:8080';
-  let currentSessionId: string | undefined;
-
-  const client = {
-    async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
-      const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId || '_'}/messages`, {
-        method: 'POST', body: JSON.stringify({ input }),
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No body');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
-            if (data.type === 'session_id') {
-              currentSessionId = data.sessionId;
-            } else if (data.type === 'text') {
-              yield data.text;
-            } else if (data.type === 'approval_request') {
-              yield { type: 'approval_request', id: data.id, tool: data.tool, args: data.args };
-            } else if (data.type === 'complete') {
-              return;
-            } else if (data.type === 'error') {
-              throw new Error(data.message);
-            }
-          }
-        }
-      }
-    },
-
-    async sendApprovalResponse(id: string, response: string) {
-      if (!currentSessionId) return;
-      await fetch(`${serverUrl}/api/sessions/${currentSessionId}/approval/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response }),
-      });
-    },
-
-    async resumeSession(sid: string) {
-      currentSessionId = sid;
-      const res = await fetch(`${serverUrl}/api/sessions/${sid}/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: process.cwd() }) });
-      return res.json();
-    },
-    async listSessions(): Promise<any[]> { const res = await fetch(`${serverUrl}/api/sessions`); return res.json() as Promise<any[]>; },
-    async listModels() { const res = await fetch(`${serverUrl}/api/models`); return res.json(); },
-    async switchModel(id: string) { await fetch(`${serverUrl}/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: id }) }); },
-    getSessionId() { return currentSessionId ?? 'unknown'; },
-    async clearSession() {},
-  };
-
+export async function runTui(options: TuiOptions = {}) {
+  const client: AgentClient = options.client ?? await createDirectClient(options.llm);
   render(<App client={client} />);
 }
