@@ -10,7 +10,7 @@ export { McpService, McpClient, McpError } from './mcp/index.js';
 export type { McpStatus } from './mcp/index.js';
 export { SkillService } from './skills/index.js';
 export type { Skill, SkillServiceApi } from './skills/index.js';
-export type { AgentEvent } from './bus/types.js';
+export type { AgentEvent } from './agent/agent.js';
 export { AgentError } from './core/error.js';
 export { Result } from './core/result.js';
 export { compactMessages, type CompressResult } from './context/compaction.js';

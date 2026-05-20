@@ -2,8 +2,18 @@ import { Effect } from 'effect';
 import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
-import type { AgentEvent } from '../bus/types.js';
 import type { ToolDescription } from '../tools/types.js';
+
+export type AgentEvent =
+  | { readonly _tag: 'LlmChunk'; readonly text: string }
+  | { readonly _tag: 'Assistant'; readonly content: string; readonly toolCalls?: ToolCall[] }
+  | { readonly _tag: 'ToolStart'; readonly name: string; readonly args: Record<string, unknown> }
+  | { readonly _tag: 'ToolDenied'; readonly name: string; readonly reason: string }
+  | { readonly _tag: 'ApprovalRequest'; readonly id: string; readonly tool: string; readonly args: Record<string, unknown> }
+  | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean }
+  | { readonly _tag: 'Step'; readonly step: number; readonly max: number }
+  | { readonly _tag: 'Error'; readonly error: AgentError }
+  | { readonly _tag: 'Done'; readonly content: string };
 import { ToolService } from '../tools/registry.js';
 import { ToolExecutorService } from '../tools/executor.js';
 import { buildSystemPrompt } from '../prompts/index.js';

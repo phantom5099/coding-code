@@ -3,7 +3,7 @@ import { ContextService } from './context/context.js';
 import { AgentService } from './agent/agent.js';
 import { SessionService, type SessionStoreState } from './session/store.js';
 import { SkillService } from './skills/index.js';
-import type { AgentEvent } from './bus/types.js';
+import type { AgentEvent } from './agent/agent.js';
 import type { AgentError } from './core/error.js';
 import { Result } from './core/result.js';
 
