@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { AppLayer } from '../../layer.js';
 import { SessionService } from '../../session/store.js';
-import { compact, resumeSession } from '../../orchestrate.js';
+import { compact, resumeSession } from '../../orchestration/index.js';
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { sseHandler } from '../handler.js';
-import { sendMessage } from '../../orchestrate.js';
+import { sendMessage } from '../../orchestration/index.js';
 import { AppLayer } from '../../layer.js';
 import { toSSEString } from '../adapter.js';
 

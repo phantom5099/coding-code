@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
-import { ContextService } from './context/context.js';
-import { AgentService } from './agent/agent.js';
-import { SessionService } from './session/store.js';
-import { SkillService } from './skills/index.js';
-import { withRecording } from './recording.js';
+import { ContextService } from '../context/context.js';
+import { AgentService } from '../agent/agent.js';
+import { SessionService } from '../session/store.js';
+import { SkillService } from '../skills/index.js';
+import { recordAgentEvents } from './record-agent-events.js';
 
 export const sendMessage = (
   sessionId: string | undefined,
@@ -27,7 +27,7 @@ export const sendMessage = (
 
     const messages = yield* ctx.build(sid);
     const raw = agent.runStream(messages, llm, sid, matchedSkill?.instruction);
-    return { stream: withRecording(raw, ctx, session, state, sid), sessionId: sid };
+    return { stream: recordAgentEvents(raw, ctx, session, state, sid), sessionId: sid };
   });
 
 export const resumeSession = (

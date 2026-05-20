@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { sendMessage } from '../src/orchestrate.js';
+import { sendMessage } from '../src/orchestration/index.js';
 import { SessionService } from '../src/session/store.js';
 import { SkillService } from '../src/skills/index.js';
 import { ToolExecutorService } from '../src/tools/executor.js';
