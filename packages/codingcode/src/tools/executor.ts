@@ -4,6 +4,12 @@ import { ToolService } from './registry';
 import { HookService } from '../hooks/registry';
 import { ApprovalService } from '../approval/index';
 import type { ToolDefinition } from './types';
+import type { ToolCall } from '../core/types';
+
+export type ToolResultUnion =
+  | { type: 'ok'; id: string; name: string; output: string }
+  | { type: 'denied'; id: string; name: string; reason: string }
+  | { type: 'error'; id: string; name: string; output: string };
 
 export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('ToolExecutor', {
   effect: Effect.gen(function* () {
@@ -105,6 +111,58 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
       );
     }
 
-    return { execute };
+    function execSingle(tc: ToolCall, sessionId?: string): Effect.Effect<ToolResultUnion> {
+      return execute(tc.name, tc.arguments ?? {}, { sessionId }).pipe(
+        Effect.matchEffect({
+          onSuccess: (output): Effect.Effect<ToolResultUnion> =>
+            Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
+          onFailure: (err): Effect.Effect<ToolResultUnion> => {
+            if (err instanceof AgentError && err.code === 'TOOL_NOT_ALLOWED') {
+              return Effect.succeed({ type: 'denied' as const, id: tc.id, name: tc.name, reason: err.message });
+            }
+            const code = err instanceof AgentError ? err.code : 'TOOL_EXECUTION_FAILED';
+            const msg = err instanceof AgentError ? err.message : String(err);
+            return Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: `[Error: ${code}] ${msg}` });
+          },
+        }),
+        Effect.catchAllDefect((defect) =>
+          Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: `[Unexpected] ${String(defect)}` }),
+        ),
+      );
+    }
+
+    function executeBatch(toolCalls: ToolCall[], sessionId?: string): Effect.Effect<ToolResultUnion[]> {
+      return Effect.gen(function* () {
+        // Separate safe & destructive tools: safe tools run in parallel, Bash runs serially
+        const safeTools: ToolCall[] = [];
+        const bashTools: ToolCall[] = [];
+
+        for (const tc of toolCalls) {
+          if (tc.name === 'execute_command' || tc.name === 'Bash') {
+            bashTools.push(tc);
+          } else {
+            safeTools.push(tc);
+          }
+        }
+
+        // Safe tools — parallel
+        const safeResults = yield* Effect.forEach(
+          safeTools,
+          (tc) => execSingle(tc, sessionId),
+          { concurrency: 'unbounded' },
+        );
+
+        // Bash tools — serial (avoid race conditions)
+        const bashResults: ToolResultUnion[] = [];
+        for (const tc of bashTools) {
+          const r = yield* execSingle(tc, sessionId);
+          bashResults.push(r);
+        }
+
+        return [...safeResults, ...bashResults];
+      });
+    }
+
+    return { execute, executeBatch };
   }),
 }) {}

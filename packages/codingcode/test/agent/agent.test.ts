@@ -108,6 +108,10 @@ describe('runReActLoop', () => {
     const mockExecutor = {
       execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
         Effect.succeed('On branch main\nnothing to commit'),
+      executeBatch: (toolCalls: any[]) =>
+        Effect.succeed(
+          toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: 'On branch main\nnothing to commit' })),
+        ),
     };
 
     const maxSteps = 1;
@@ -157,6 +161,10 @@ describe('runReActLoop', () => {
     const mockExecutor = {
       execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
         Effect.succeed('file content'),
+      executeBatch: (toolCalls: any[]) =>
+        Effect.succeed(
+          toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: 'file content' })),
+        ),
     };
 
     const maxSteps = 1;

@@ -43,6 +43,19 @@ describe('runReActLoop — concurrent tool execution', () => {
           executionOrder.push(name);
           return `result-${name}`;
         }),
+      executeBatch: (toolCalls: any[], _sessionId?: string) =>
+        Effect.forEach(toolCalls, (tc: any) =>
+          mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(
+            Effect.matchEffect({
+              onSuccess: (output) => Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
+              onFailure: (err) => Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: String(err) }),
+            }),
+            Effect.catchAllDefect((defect) =>
+              Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: String(defect) }),
+            ),
+          ),
+          { concurrency: 'unbounded' },
+        ),
     };
 
     const maxSteps = 1;
@@ -91,6 +104,19 @@ describe('runReActLoop — concurrent tool execution', () => {
         name === 'bad_tool'
           ? Effect.fail(new Error('Simulated failure') as any)
           : Effect.succeed(`result-${name}`),
+      executeBatch: (toolCalls: any[], _sessionId?: string) =>
+        Effect.forEach(toolCalls, (tc: any) =>
+          mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(
+            Effect.matchEffect({
+              onSuccess: (output) => Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
+              onFailure: (err) => Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: String(err) }),
+            }),
+            Effect.catchAllDefect((defect) =>
+              Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: String(defect) }),
+            ),
+          ),
+          { concurrency: 'unbounded' },
+        ),
     };
 
     const maxSteps = 1;

@@ -21,31 +21,6 @@ interface LLMStreamAdapter {
   };
 }
 
-type ToolResultUnion =
-  | { type: 'ok'; id: string; name: string; output: string }
-  | { type: 'denied'; id: string; name: string; reason: string }
-  | { type: 'error'; id: string; name: string; output: string };
-
-function execTool(executor: ToolExecutorService, tc: ToolCall, sessionId: string): Effect.Effect<ToolResultUnion> {
-  return executor.execute(tc.name, tc.arguments ?? {}, { sessionId }).pipe(
-    Effect.matchEffect({
-      onSuccess: (output): Effect.Effect<ToolResultUnion> =>
-        Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
-      onFailure: (err): Effect.Effect<ToolResultUnion> => {
-        if (err instanceof AgentError && err.code === 'TOOL_NOT_ALLOWED') {
-          return Effect.succeed({ type: 'denied' as const, id: tc.id, name: tc.name, reason: err.message });
-        }
-        const code = err instanceof AgentError ? err.code : 'TOOL_EXECUTION_FAILED';
-        const msg = err instanceof AgentError ? err.message : String(err);
-        return Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: `[Error: ${code}] ${msg}` });
-      },
-    }),
-    Effect.catchAllDefect((defect) =>
-      Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: `[Unexpected] ${String(defect)}` }),
-    ),
-  );
-}
-
 export class AgentService extends Effect.Service<AgentService>()('Agent', {
   effect: Effect.gen(function* () {
     const executor = yield* ToolExecutorService;
@@ -116,36 +91,12 @@ export async function* runReActLoop(
       return Result.ok(resp.content);
     }
 
-    // Separate safe & destructive tools: safe tools run in parallel, Bash runs serially
-    const safeTools: ToolCall[] = [];
-    const bashTools: ToolCall[] = [];
-
-    for (const tc of toolCalls) {
-      if (tc.name === 'execute_command' || tc.name === 'Bash') {
-        bashTools.push(tc);
-      } else {
-        safeTools.push(tc);
-      }
-    }
-
-    // Safe tools — parallel
-    const safeResults = await Effect.runPromise(
-      Effect.forEach(safeTools, (tc) => execTool(executor, tc, sessionId), { concurrency: 'unbounded' }),
+    // Execute all tools — safe tools in parallel, Bash tools serially
+    const allResults = await Effect.runPromise(
+      executor.executeBatch(toolCalls, sessionId),
     );
 
-    for (const r of safeResults) {
-      if (r.type === 'denied') {
-        yield { _tag: 'ToolDenied', name: r.name, reason: r.reason };
-      } else {
-        yield { _tag: 'ToolResult', id: r.id, name: r.name, output: r.output, ok: r.type === 'ok' };
-      }
-    }
-
-    // Bash tools — serial (avoid race conditions)
-    const bashResults: ToolResultUnion[] = [];
-    for (const tc of bashTools) {
-      const r = await Effect.runPromise(execTool(executor, tc, sessionId));
-      bashResults.push(r);
+    for (const r of allResults) {
       if (r.type === 'denied') {
         yield { _tag: 'ToolDenied', name: r.name, reason: r.reason };
       } else {
@@ -154,12 +105,11 @@ export async function* runReActLoop(
     }
 
     // Feed results back to LLM — denied tools still get a message so the LLM knows
-    const allResults = [...safeResults, ...bashResults];
     for (const r of allResults) {
       if (messages.find(m => (m as any).tool_call_id === r.id)) continue;
       const content = r.type === 'denied'
-        ? `[Denied] Tool "${r.name}" was denied: ${(r as any).reason as string}`
-        : (r as any).output ?? '';
+        ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
+        : r.output ?? '';
       messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
     }
   }
