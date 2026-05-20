@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { withRecording } from '../../src/orchestrate/recording.js';
-import type { AgentEvent } from '../../src/agent/agent.js';
-import type { SessionStoreState } from '../../src/session/store.js';
+import { withRecording } from '../src/recording.js';
+import type { AgentEvent } from '../src/agent/agent.js';
+import type { SessionStoreState } from '../src/session/store.js';
 
 function makeMockContext() {
   const calls: Array<{ method: string; args: any[] }> = [];

@@ -1,14 +1,14 @@
 import { Effect } from 'effect';
 import { ContextService } from './context/context.js';
 import { AgentService } from './agent/agent.js';
-import { SessionService, type SessionStoreState } from './session/store.js';
+import { SessionService } from './session/store.js';
 import { SkillService } from './skills/index.js';
-import { withRecording } from './orchestrate/recording.js';
+import { withRecording } from './recording.js';
 
-// AgentService, ToolExecutorService, HookService all resolved via AppLayer — no need to pass them in
 export const sendMessage = (
-  state: SessionStoreState,
+  sessionId: string | undefined,
   input: string,
+  cwd: string,
   llm: any,
 ) =>
   Effect.gen(function* () {
@@ -16,6 +16,8 @@ export const sendMessage = (
     const session = yield* SessionService;
     const agent = yield* AgentService;
     const skill = yield* SkillService;
+
+    const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
 
     const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
@@ -25,16 +27,17 @@ export const sendMessage = (
 
     const messages = yield* ctx.build(sid);
     const raw = agent.runStream(messages, llm, sid, matchedSkill?.instruction);
-    return withRecording(raw, ctx, session, state, sid);
+    return { stream: withRecording(raw, ctx, session, state, sid), sessionId: sid };
   });
 
 export const resumeSession = (
-  state: SessionStoreState,
-  _cwd: string,
+  sessionId: string,
+  cwd: string,
 ) =>
   Effect.gen(function* () {
     const ctx = yield* ContextService;
     const session = yield* SessionService;
+    const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
 
     const history = yield* session.readHistory(state);
@@ -45,10 +48,11 @@ export const resumeSession = (
     return history;
   });
 
-export const compact = (state: SessionStoreState) =>
+export const compact = (sessionId: string, cwd: string) =>
   Effect.gen(function* () {
     const ctx = yield* ContextService;
     const session = yield* SessionService;
+    const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
 
     const result = yield* ctx.compress(sid);

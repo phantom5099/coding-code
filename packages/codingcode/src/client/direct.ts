@@ -57,20 +57,10 @@ function parseApprovalResponse(resp: string) {
 }
 
 export async function createDirectClient(llm: any): Promise<AgentClient> {
-  let state: any = null;
   let currentSessionId = '';
 
   const runWithLayer = <T,>(eff: any): Promise<T> =>
     Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
-
-  const initResult = await runWithLayer(
-    Effect.gen(function* () {
-      const svc = yield* SessionService;
-      return yield* svc.create(process.cwd(), 'unknown', '0.1.0');
-    }),
-  );
-  state = initResult;
-  currentSessionId = (initResult as any).sessionId;
 
   return {
     getSessionId() {
@@ -78,8 +68,9 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
-      const program = sendMessage(state, input, llm);
-      const agentGen = await runWithLayer(program) as AsyncGenerator<AgentEvent, any, unknown>;
+      const program = sendMessage(currentSessionId || undefined, input, process.cwd(), llm);
+      const { stream: agentGen, sessionId } = await runWithLayer(program) as any;
+      currentSessionId = sessionId;
       yield* agentEventToStreamChunk(agentGen);
     },
 
@@ -94,16 +85,12 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async resumeSession(sid: string) {
-      const result = await runWithLayer(
+      currentSessionId = sid;
+      return runWithLayer(
         Effect.gen(function* () {
-          const svc = yield* SessionService;
-          const st = yield* svc.create(process.cwd(), 'unknown', '0.1.0', sid);
-          return st;
+          return yield* resumeSession(sid, process.cwd());
         }),
       );
-      state = result;
-      currentSessionId = (result as any).sessionId;
-      return runWithLayer(resumeSession(state, process.cwd()));
     },
 
     async listSessions() {

@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
-import type { AgentEvent } from '../agent/agent.js';
-import type { ContextService } from '../context/context.js';
-import type { SessionService, SessionStoreState } from '../session/store.js';
+import type { AgentEvent } from './agent/agent.js';
+import type { ContextService } from './context/context.js';
+import type { SessionService, SessionStoreState } from './session/store.js';
 
 export async function* withRecording(
   source: AsyncGenerator<AgentEvent, any, unknown>,

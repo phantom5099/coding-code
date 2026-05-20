@@ -4,11 +4,10 @@ import { ContextService } from '../../src/context/context.js';
 import { SessionService } from '../../src/session/store.js';
 import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
-import type { SessionStoreState } from '../../src/session/store.js';
 import { sendMessage } from '../../src/orchestrate.js';
 import { Result } from '../../src/core/result.js';
 
-const mockState: SessionStoreState = {
+const mockState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
   transcriptPath: '/tmp/test.jsonl', indexPath: '/tmp/test.index.json',
   messageCount: 0, sessionMeta: null, title: 'test-sess',
@@ -26,7 +25,7 @@ const MockToolExecutorLayer = Layer.succeed(ToolExecutorService, ToolExecutorSer
   execute: () => Effect.succeed('done'),
 }));
 
-function makeMockSessionLayer(state: SessionStoreState) {
+function makeMockSessionLayer(state: any) {
   return Layer.succeed(SessionService, SessionService.of({
     _tag: 'Session' as const,
     create: () => Effect.succeed(state),
@@ -108,8 +107,8 @@ describe('ContextService', () => {
 
     // Step 1: send message in one Effect scope
     {
-      const program = sendMessage({ ...mockState, sessionId: sid }, 'message one', mockLlm);
-      const gen: any = await Effect.runPromise((program as any).pipe(Effect.provide(fullLayer) as any));
+      const program = sendMessage(sid, 'message one', '/tmp/test', mockLlm);
+      const { stream: gen } = await Effect.runPromise((program as any).pipe(Effect.provide(fullLayer) as any)) as any;
       // Consume all AgentEvents to trigger side effects
       for await (const _event of gen) { /* consume */ }
     }

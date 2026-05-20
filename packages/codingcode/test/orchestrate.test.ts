@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sendMessage } from '../src/orchestrate.js';
-import { SessionService, type SessionStoreState } from '../src/session/store.js';
+import { SessionService } from '../src/session/store.js';
 import { SkillService } from '../src/skills/index.js';
 import { ToolExecutorService } from '../src/tools/executor.js';
 import { Result } from '../src/core/result.js';
 
-const mockState: SessionStoreState = {
+const mockState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
   transcriptPath: '/tmp/test.jsonl', indexPath: '/tmp/test.index.json',
   messageCount: 0, sessionMeta: null, title: 'test-sess',
@@ -50,11 +50,11 @@ const TestLayer = Layer.mergeAll(MockSessionLayer, MockSkillLayer, TestAgentLaye
 
 describe('sendMessage stream', () => {
   it('should yield AgentEvent chunks from LLM', async () => {
-    const program = sendMessage(mockState, 'hi', mockLlm);
-    const generator: any = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any));
+    const program = sendMessage('test-session', 'hi', '/tmp/test', mockLlm);
+    const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
 
     const events: any[] = [];
-    for await (const event of generator) events.push(event);
+    for await (const event of stream) events.push(event);
 
     const textChunks = events
       .filter((e: any) => e._tag === 'LlmChunk')
@@ -65,11 +65,11 @@ describe('sendMessage stream', () => {
   });
 
   it('should not return empty event stream for normal LLM response', async () => {
-    const program = sendMessage(mockState, 'hi', mockLlm);
-    const generator: any = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any));
+    const program = sendMessage('test-session', 'hi', '/tmp/test', mockLlm);
+    const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
 
     const events: any[] = [];
-    for await (const event of generator) events.push(event);
+    for await (const event of stream) events.push(event);
 
     expect(events.length).toBeGreaterThan(0);
   });
