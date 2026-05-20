@@ -20,7 +20,7 @@ export { ApprovalWaitService } from './approval/async-confirm.js';
 export { createServer } from './server/index.js';
 export { createDirectClient, agentEventToStreamChunk } from './client/direct.js';
 export type { AgentClient, StreamChunk } from './client/direct.js';
-export { createHttpClient } from './server/client.js';
+export { createHttpClient } from './client/http.js';
 export { handler, sseHandler } from './server/handler.js';
 export { formatEventForTransport, toSSEString } from './server/adapter.js';
 export { withRecording } from './recording.js';

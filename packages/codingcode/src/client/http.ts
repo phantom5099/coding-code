@@ -1,4 +1,4 @@
-import type { AgentClient, StreamChunk } from '../client/direct.js';
+import type { AgentClient, StreamChunk } from './direct.js';
 
 export type { AgentClient, StreamChunk };
 
