@@ -11,17 +11,7 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
         Effect.gen(function* () {
           const d = yield* Deferred.make<ConfirmResult, never>();
           pending.set(id, d);
-
-          // 60s timeout → auto deny
-          yield* Effect.fork(
-            Effect.sleep('60 seconds').pipe(
-              Effect.flatMap(() => Deferred.succeed(d, { type: 'deny' } as ConfirmResult)),
-              Effect.catchAll(() => Effect.void),
-            ),
-          );
-
-          const result = yield* Deferred.await(d);
-          return result;
+          return yield* Deferred.await(d);
         }),
 
       resolveConfirm: (id: string, result: ConfirmResult): Effect.Effect<boolean> =>
