@@ -60,5 +60,11 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     async switchModel(id: string) { await fetch(`${serverUrl}/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: id }) }); },
     getSessionId() { return currentSessionId ?? 'unknown'; },
     async clearSession() {},
+    async classifyLastCompletedChanges() { return null; },
+    async revertLastCompleted() {},
+    async revertCheckpoint() {},
+    async forwardLastRevert() {},
+    async hasForwardStack() { return false; },
+    async getCheckpoints() { return []; },
   };
 }

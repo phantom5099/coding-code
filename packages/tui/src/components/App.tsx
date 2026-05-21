@@ -119,6 +119,19 @@ export function App({ client }: AppProps) {
       } catch { /* ignore */ }
       return;
     }
+    if (parsed.name === 'checkpoint') {
+      try {
+        const checkpoints = await client.getCheckpoints();
+        setPanel({ type: 'checkpoint-list', checkpoints });
+      } catch (e: any) {
+        setStaticMessages(prev => [...prev, {
+          id: generateId(), timestamp: Date.now(), role: 'system' as const,
+          content: `[Checkpoint Error] ${e.message || e}`,
+        }]);
+        return;
+      }
+      return;
+    }
     if (parsed.name === 'help') {
       setPanel({ type: 'help' });
       return;
@@ -205,6 +218,53 @@ export function App({ client }: AppProps) {
           }}
           onCancel={() => setPanel({ type: 'none' })}
           width={sessionW}
+        />
+      )}
+      {panel.type === 'checkpoint-list' && (
+        <InlinePanel
+          title={COMMAND_REGISTRY.checkpoint.title}
+          items={
+            panel.checkpoints.length === 0
+              ? [{ label: '无已完成的检查点', value: '' as const }]
+              : panel.checkpoints.map((cp) => ({
+                  label: `${cp.title || '(无标题)'}  ${cp.agentModified.length + cp.unknownSource.length} 个文件`,
+                  value: cp.turnId.toString(),
+                }))
+          }
+          onSelect={async (value) => {
+            const cp = panel.checkpoints.find((c) => c.turnId.toString() === value);
+            if (!cp) return;
+            const hasForward = await client.hasForwardStack();
+            setPanel({ type: 'checkpoint-action', cp, hasForward });
+          }}
+          onCancel={() => setPanel({ type: 'none' })}
+          width={Math.min(60, width - 4)}
+        />
+      )}
+      {panel.type === 'checkpoint-action' && (
+        <InlinePanel
+          title={`${COMMAND_REGISTRY.checkpoint.title} — ${panel.cp.title || '(无标题)'}`}
+          items={[
+            ...(panel.cp.agentModified.length + panel.cp.unknownSource.length > 0
+              ? [
+                  { label: `仅回退 Agent 修改的文件 (${panel.cp.agentModified.length} 个)`, value: 'agent' as const },
+                  { label: `回退全部文件 (${panel.cp.agentModified.length + panel.cp.unknownSource.length} 个)`, value: 'all' as const },
+                ]
+              : [{ label: '无变更文件', value: '' as const }]),
+            ...(panel.hasForward
+              ? [{ label: '前进到最新状态', value: 'forward' as const }]
+              : []),
+          ]}
+          onSelect={async (value) => {
+            if (value === 'forward') {
+              await client.forwardLastRevert();
+            } else if (value === 'agent' || value === 'all') {
+              await client.revertCheckpoint(panel.cp.turnId, value);
+            }
+            setPanel({ type: 'none' });
+          }}
+          onCancel={() => setPanel({ type: 'none' })}
+          width={Math.min(60, width - 4)}
         />
       )}
       {approval && (

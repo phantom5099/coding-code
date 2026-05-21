@@ -3,6 +3,8 @@ import { ContextService } from '../context/context.js';
 import { AgentService } from '../agent/agent.js';
 import { SessionService } from '../session/store.js';
 import { SkillService } from '../skills/index.js';
+import { CheckpointService } from '../checkpoint/checkpoint-service.js';
+import { turnIdBySession, projectPathBySession } from '../checkpoint/bootstrap.js';
 import { recordAgentEvents } from './record-agent-events.js';
 
 export const sendMessage = (
@@ -16,18 +18,42 @@ export const sendMessage = (
     const session = yield* SessionService;
     const agent = yield* AgentService;
     const skill = yield* SkillService;
+    const checkpoint = yield* CheckpointService;
 
     const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
+
+    // Increment turn and update the session mappings for Ledger hooks
+    const turnId = session.incrementTurn(state);
+    turnIdBySession.set(sid, turnId);
+    projectPathBySession.set(sid, state.cwd);
 
     const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
 
     yield* ctx.addUser(sid, actualInput);
     yield* session.recordUser(state, actualInput);
 
+    // Snapshot filesystem + include turn title for checkpoint UI
+    const projectPath = state.cwd;
+    const turnTitle = actualInput.trim().slice(0, 5) || '(empty)';
+    checkpoint.snapshotBaseline(projectPath, sid, turnId, turnTitle);
+
     const messages = yield* ctx.build(sid);
     const raw = agent.runStream(messages, llm, sid, matchedSkill?.instruction);
-    return { stream: recordAgentEvents(raw, ctx, session, state, sid), sessionId: sid };
+    const stream = recordAgentEvents(raw, ctx, session, state, sid);
+
+    // Wrap the stream to snapshot after agent finishes
+    const wrapped = async function* () {
+      try {
+        for await (const event of stream) {
+          yield event;
+        }
+      } finally {
+        checkpoint.snapshotFinal(projectPath, sid, turnId);
+      }
+    }();
+
+    return { stream: wrapped, sessionId: sid };
   });
 
 export const resumeSession = (

@@ -6,6 +6,7 @@ import { ContextService } from '../context/context.js';
 import { ApprovalWaitService } from '../approval/async-confirm.js';
 import { parseApprovalResponse } from '../approval/response.js';
 import { AppLayer } from '../layer.js';
+import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
 
 export type StreamChunk = string | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> };
@@ -19,6 +20,12 @@ export interface AgentClient {
   switchModel(id: string): Promise<void>;
   getSessionId(): string;
   clearSession(): Promise<void>;
+  classifyLastCompletedChanges(): Promise<{ agentModified: string[]; unknownSource: string[] } | null>;
+  revertLastCompleted(mode: 'agent' | 'all'): Promise<void>;
+  revertCheckpoint(turnId: number, mode: 'agent' | 'all'): Promise<void>;
+  forwardLastRevert(): Promise<void>;
+  hasForwardStack(): Promise<boolean>;
+  getCheckpoints(): Promise<Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }>>;
 }
 
 export async function* agentEventToStreamChunk(
@@ -146,6 +153,89 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         Effect.gen(function* () {
           const ctx = yield* ContextService;
           yield* ctx.clear(currentSessionId);
+        }),
+      );
+    },
+
+    async classifyLastCompletedChanges() {
+      if (!currentSessionId) return null;
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          const projectPath = process.cwd();
+          const turnIds = checkpoint.getCompletedTurns(projectPath, currentSessionId);
+          if (turnIds.length === 0) return null;
+          const lastTurn = turnIds[turnIds.length - 1];
+          if (lastTurn === undefined) return null;
+          return checkpoint.classifyChanges(projectPath, currentSessionId, lastTurn);
+        }),
+      );
+    },
+
+    async revertLastCompleted(mode: 'agent' | 'all') {
+      if (!currentSessionId) return;
+      await runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          const projectPath = process.cwd();
+          const turnIds = checkpoint.getCompletedTurns(projectPath, currentSessionId);
+          if (turnIds.length === 0) return;
+          const lastTurn = turnIds[turnIds.length - 1];
+          if (lastTurn === undefined) return;
+          const changes = checkpoint.classifyChanges(projectPath, currentSessionId, lastTurn);
+          if (!changes) return;
+
+          const files = mode === 'agent' ? changes.agentModified : [...changes.agentModified, ...changes.unknownSource];
+          if (files.length > 0) {
+            checkpoint.revertFiles(projectPath, currentSessionId, lastTurn, files);
+          }
+        }),
+      );
+    },
+
+    async revertCheckpoint(turnId: number, mode: 'agent' | 'all') {
+      if (!currentSessionId) return;
+      await runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          const projectPath = process.cwd();
+          const changes = checkpoint.classifyChanges(projectPath, currentSessionId, turnId);
+          if (!changes) return;
+          const files = mode === 'agent' ? changes.agentModified : [...changes.agentModified, ...changes.unknownSource];
+          if (files.length > 0) {
+            checkpoint.revertFiles(projectPath, currentSessionId, turnId, files);
+          }
+        }),
+      );
+    },
+
+    async forwardLastRevert() {
+      if (!currentSessionId) return;
+      await runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          checkpoint.forward(process.cwd(), currentSessionId);
+        }),
+      );
+    },
+
+    async hasForwardStack() {
+      if (!currentSessionId) return false;
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.hasForwardStack(process.cwd(), currentSessionId);
+        }),
+      );
+    },
+
+
+    async getCheckpoints() {
+      if (!currentSessionId) return [];
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.getCheckpoints(process.cwd(), currentSessionId);
         }),
       );
     },

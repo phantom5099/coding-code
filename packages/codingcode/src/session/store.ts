@@ -9,8 +9,16 @@ import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolRes
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const SESSIONS_DIR = join(CODINGCODE_DIR, 'sessions');
 
+function normalizePath(p: string): string {
+  let s = p.replaceAll('\\', '/');
+  s = s.replace(/^\/([a-zA-Z])\//, (_, letter: string) => `${letter.toLowerCase()}:/`);
+  s = s.replace(/^([A-Z]):/, (_, letter: string) => letter.toLowerCase() + ':');
+  return s;
+}
+
 function makeProjectSlug(cwd: string): string {
-  const hash = createHash('sha256').update(cwd).digest('hex');
+  const normalized = normalizePath(cwd);
+  const hash = createHash('sha256').update(normalized).digest('hex');
   return hash.slice(0, 16);
 }
 
@@ -44,6 +52,7 @@ export interface SessionStoreState {
   messageCount: number;
   sessionMeta: SessionMetaEvent | null;
   title: string;
+  currentTurnId: number;
 }
 
 function makeTitle(content: string): string {
@@ -92,7 +101,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
       recordUser: (state: SessionStoreState, content: string): Effect.Effect<UserEvent> =>
         Effect.sync(() => {
-          const event: UserEvent = { type: 'user', uuid: randomUUID(), content, timestamp: new Date().toISOString() };
+          const event: UserEvent = { type: 'user', turnId: state.currentTurnId, uuid: randomUUID(), content, timestamp: new Date().toISOString() };
           if (state.title === state.sessionId.slice(0, 8)) {
             state.title = makeTitle(content);
           }
@@ -102,14 +111,14 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
       recordAssistant: (state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], model: string): Effect.Effect<AssistantEvent> =>
         Effect.sync(() => {
-          const event: AssistantEvent = { type: 'assistant', uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString() };
+          const event: AssistantEvent = { type: 'assistant', turnId: state.currentTurnId, uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString() };
           appendEvent(state, event);
           return event;
         }),
 
       recordToolResult: (state: SessionStoreState, parentUuid: string, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent> =>
         Effect.sync(() => {
-          const event: ToolResultEvent = { type: 'tool_result', uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString() };
+          const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString() };
           appendEvent(state, event);
           return event;
         }),
@@ -132,6 +141,12 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
       getSessionId: (state: SessionStoreState): string => state.sessionId,
       getMessageCount: (state: SessionStoreState): number => state.messageCount,
+
+      incrementTurn: (state: SessionStoreState): number => {
+        state.currentTurnId += 1;
+        updateIndex(state);
+        return state.currentTurnId;
+      },
     };
   }),
 }) {}
@@ -140,10 +155,18 @@ function initState(cwd: string, sessionId?: string): SessionStoreState {
   const id = sessionId ?? randomUUID();
   const projectSlug = makeProjectSlug(cwd);
   const transcriptPath = join(SESSIONS_DIR, projectSlug, `${id}.jsonl`);
+  const indexPath = transcriptPath.replace('.jsonl', '.index.json');
+  let currentTurnId = 0;
+  try {
+    if (existsSync(indexPath)) {
+      const idx = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
+      currentTurnId = idx.currentTurnId ?? 0;
+    }
+  } catch { /* ignore corrupt index */ }
   return {
     sessionId: id, cwd, projectSlug, transcriptPath,
-    indexPath: transcriptPath.replace('.jsonl', '.index.json'),
-    messageCount: 0, sessionMeta: null, title: id.slice(0, 8),
+    indexPath,
+    messageCount: 0, sessionMeta: null, title: id.slice(0, 8), currentTurnId,
   };
 }
 
@@ -214,7 +237,7 @@ function listSessions(projectSlug?: string): SessionIndex[] {
         if (meta?.cwd && meta?.sessionId) {
           const h = readHistory(jsonlPath);
           const firstUser = findFirstUserContent(h);
-          results.push({ sessionId: meta.sessionId, projectSlug: meta.projectSlug, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8) });
+          results.push({ sessionId: meta.sessionId, projectSlug: meta.projectSlug, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8), currentTurnId: 0 });
         }
       }
     }
@@ -234,6 +257,6 @@ function appendLine(path: string, event: object): void {
 
 function updateIndex(state: SessionStoreState): void {
   if (!state.sessionMeta) return;
-  const index: SessionIndex = { sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd, model: state.sessionMeta.model, createdAt: state.sessionMeta.createdAt, updatedAt: new Date().toISOString(), messageCount: state.messageCount, title: state.title };
+  const index: SessionIndex = { sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd, model: state.sessionMeta.model, createdAt: state.sessionMeta.createdAt, updatedAt: new Date().toISOString(), messageCount: state.messageCount, title: state.title, currentTurnId: state.currentTurnId };
   try { writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8'); } catch { /* non-critical */ }
 }

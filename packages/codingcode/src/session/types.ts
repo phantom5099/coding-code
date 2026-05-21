@@ -10,6 +10,7 @@ export interface SessionMetaEvent {
 
 export interface UserEvent {
   type: 'user';
+  turnId: number;
   uuid: string;
   content: string;
   timestamp: string;
@@ -17,6 +18,7 @@ export interface UserEvent {
 
 export interface AssistantEvent {
   type: 'assistant';
+  turnId: number;
   uuid: string;
   content: string;
   toolCalls: Array<{ id: string; name: string; arguments: string }>;
@@ -26,6 +28,7 @@ export interface AssistantEvent {
 
 export interface ToolResultEvent {
   type: 'tool_result';
+  turnId: number;
   uuid: string;
   parentUuid: string;
   toolName: string;
@@ -59,4 +62,5 @@ export interface SessionIndex {
   updatedAt: string;
   messageCount: number;
   title: string;
+  currentTurnId: number;
 }

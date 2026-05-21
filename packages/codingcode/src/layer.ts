@@ -10,6 +10,7 @@ import { SandboxService } from './sandbox/index';
 import { ApprovalService } from './approval/index';
 import { ApprovalWaitService } from './approval/async-confirm';
 import { ToolExecutorService } from './tools/executor';
+import { CheckpointService } from './checkpoint/checkpoint-service';
 
 export const AgentLayer = AgentService.Default;
 export const SessionLayer = SessionService.Default;
@@ -41,6 +42,12 @@ const ExecutorLayer = ToolExecutorService.Default.pipe(
   Layer.provide(ExecutorDeps),
 );
 
+/** Checkpoint depends on HookService (for bootstrap observers). */
+const CheckpointDeps = Layer.mergeAll(HookLayer);
+export const CheckpointLayer = CheckpointService.Default.pipe(
+  Layer.provide(CheckpointDeps),
+);
+
 /** Agent depends on ToolExecutor + ToolService. */
 const AgentDeps = Layer.mergeAll(ExecutorLayer, ToolLayer);
 const AgentWithDeps = AgentLayer.pipe(Layer.provide(AgentDeps));
@@ -56,4 +63,5 @@ export const AppLayer = Layer.mergeAll(
   SandboxLayer,
   ApprovalLayer,
   ApprovalWaitLayer,
+  CheckpointLayer,
 );

@@ -12,6 +12,54 @@ interface InlinePanelProps<T = string> {
   maxHeight?: number;
 }
 
+function charWidth(char: string): number {
+  const codePoint = char.codePointAt(0) ?? 0;
+  if (
+    (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
+    (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
+    (codePoint >= 0xac00 && codePoint <= 0xd7af) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xfe10 && codePoint <= 0xfe6f) ||
+    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+    (codePoint >= 0x1f300 && codePoint <= 0x1faff)
+  ) {
+    return 2;
+  }
+  return 1;
+}
+
+export function truncateToDisplayWidth(value: string, maxWidth: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (maxWidth <= 0) return '';
+
+  let width = 0;
+  let result = '';
+  for (const char of normalized) {
+    const nextWidth = width + charWidth(char);
+    if (nextWidth > maxWidth) {
+      while (result && width + 1 > maxWidth) {
+        const last = Array.from(result).pop() ?? '';
+        result = result.slice(0, -last.length);
+        width -= charWidth(last);
+      }
+      return result + '…';
+    }
+    result += char;
+    width = nextWidth;
+  }
+
+  return result;
+}
+
+export function getVisiblePanelRange(selectedIdx: number, itemCount: number, maxHeight: number): [number, number] {
+  if (itemCount <= 0 || maxHeight <= 0) return [0, 0];
+  const visibleHeight = Math.min(itemCount, maxHeight);
+  const selected = Math.max(0, Math.min(selectedIdx, itemCount - 1));
+  const start = Math.min(Math.max(0, selected - visibleHeight + 1), Math.max(0, itemCount - visibleHeight));
+  return [start, start + visibleHeight];
+}
+
 export function InlinePanel<T extends string>({
   title,
   items,
@@ -49,10 +97,18 @@ export function InlinePanel<T extends string>({
     );
   }, [items, searchText]);
 
+  useEffect(() => {
+    if (selectedIdx >= filtered.length) {
+      setSelectedIdx(Math.max(0, filtered.length - 1));
+    }
+  }, [filtered.length, selectedIdx]);
+
+  const clampedSelectedIdx = Math.max(0, Math.min(selectedIdx, filtered.length - 1));
+
   useInput((input, key) => {
     if (key.escape) { onCancel(); return; }
     if (key.return) {
-      const item = filtered[selectedIdx];
+      const item = filtered[clampedSelectedIdx];
       if (item) onSelect(item.value);
       return;
     }
@@ -75,10 +131,13 @@ export function InlinePanel<T extends string>({
     }
   });
 
-  const panelWidth = Math.min(60, width - 4);
-  const innerW = Math.max(1, panelWidth - 2);
+  const panelWidth = Math.max(10, width);
+  const innerW = Math.max(1, panelWidth - 4);
   const lineStr = '─'.repeat(innerW);
   const visibleHeight = Math.min(filtered.length, maxHeight);
+  const [visibleStart, visibleEnd] = getVisiblePanelRange(clampedSelectedIdx, filtered.length, maxHeight);
+  const visibleItems = filtered.slice(visibleStart, visibleEnd);
+  const itemWidth = Math.max(1, innerW - 1);
 
   return (
     <Box flexDirection="column" borderStyle="single" borderColor="magenta" width={panelWidth} paddingX={1}>
@@ -96,13 +155,14 @@ export function InlinePanel<T extends string>({
             <Text color="red">没有匹配的选项</Text>
           </Box>
         ) : (
-          filtered.map((item, i) => {
-            const isSelected = i === selectedIdx;
+          visibleItems.map((item, offset) => {
+            const index = visibleStart + offset;
+            const isSelected = index === clampedSelectedIdx;
             const isActive = item.value === activeValue;
             const indicator = isSelected ? '▸' : ' ';
             const dot = isActive ? '●' : ' ';
             const desc = item.description ? ` · ${item.description}` : '';
-            const line = `${indicator} ${dot} ${item.label}${desc}`;
+            const line = truncateToDisplayWidth(`${indicator} ${dot} ${item.label}${desc}`, itemWidth);
 
             return (
               <Box key={item.value}>
