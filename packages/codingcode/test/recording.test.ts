@@ -46,6 +46,7 @@ const mockState: SessionStoreState = {
   transcriptPath: '/tmp/t.jsonl',
   indexPath: '/tmp/t.index.json',
   messageCount: 0,
+  currentTurnId: 0,
   sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
   title: 'test',
 };

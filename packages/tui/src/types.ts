@@ -29,4 +29,5 @@ export type PanelState =
   | { type: 'model'; items: PanelItem[]; activeValue: string }
   | { type: 'sessions'; items: PanelItem[] }
   | { type: 'approval'; id: string; tool: string; args: Record<string, unknown> }
+  | { type: 'checkpoint'; agentCount: number; unknownCount: number; hasForward: boolean }
   | { type: 'help' };

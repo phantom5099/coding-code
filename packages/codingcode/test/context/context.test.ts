@@ -6,11 +6,12 @@ import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
 import { sendMessage } from '../../src/orchestration/index.js';
 import { Result } from '../../src/core/result.js';
+import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
 
 const mockState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
   transcriptPath: '/tmp/test.jsonl', indexPath: '/tmp/test.index.json',
-  messageCount: 0, sessionMeta: null, title: 'test-sess',
+  messageCount: 0, currentTurnId: 0, sessionMeta: null, title: 'test-sess',
 };
 
 const mockLlm = {
@@ -29,9 +30,9 @@ function makeMockSessionLayer(state: any) {
   return Layer.succeed(SessionService, SessionService.of({
     _tag: 'Session' as const,
     create: () => Effect.succeed(state),
-    recordUser: () => Effect.succeed({ type: 'user' as const, uuid: 'u1', content: '', timestamp: new Date().toISOString() }),
-    recordAssistant: () => Effect.succeed({ type: 'assistant' as const, uuid: 'a1', content: '', toolCalls: [], model: 'test', timestamp: new Date().toISOString() }),
-    recordToolResult: () => Effect.succeed({ type: 'tool_result' as const, uuid: 't1', parentUuid: 'a1', toolName: 'test', toolCallId: 'tc1', output: '', timestamp: new Date().toISOString() }),
+    recordUser: () => Effect.succeed({ type: 'user' as const, uuid: 'u1', content: '', turnId: 0, timestamp: new Date().toISOString() }),
+    recordAssistant: () => Effect.succeed({ type: 'assistant' as const, uuid: 'a1', content: '', toolCalls: [], model: 'test', turnId: 0, timestamp: new Date().toISOString() }),
+    recordToolResult: () => Effect.succeed({ type: 'tool_result' as const, uuid: 't1', parentUuid: 'a1', toolName: 'test', toolCallId: 'tc1', output: '', turnId: 0, timestamp: new Date().toISOString() }),
     recordCompactBoundary: () => Effect.succeed({ type: 'compact_boundary' as const, uuid: 'c1', summary: '', replacedRange: [0, 0] as [number, number], messageCount: 0, timestamp: new Date().toISOString() }),
     readHistory: () => Effect.succeed([]),
     readMessages: () => Effect.succeed(state.sessionId === 'full-flow' ? [
@@ -40,6 +41,7 @@ function makeMockSessionLayer(state: any) {
     listSessions: () => Effect.succeed([]),
     getSessionId: () => state.sessionId,
     getMessageCount: () => 0,
+    incrementTurn: () => 0,
   }));
 }
 
@@ -103,7 +105,17 @@ describe('ContextService', () => {
     const { ToolLayer, HookLayer } = await import('../../src/layer.js');
     const AgentDeps = Layer.mergeAll(MockToolExecutorLayer, ToolLayer);
     const TestAgentLayer = AgentService.Default.pipe(Layer.provide(AgentDeps));
-    const fullLayer = Layer.mergeAll(mockSessionLayer, MockSkillLayer, TestAgentLayer, ContextLayer, HookLayer);
+    const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.of({
+      _tag: 'Checkpoint' as const,
+      snapshotBaseline: () => {},
+      snapshotFinal: () => {},
+      classifyChanges: () => null,
+      getCompletedTurns: () => [],
+      revertFiles: () => {},
+      forward: () => null,
+      hasForwardStack: () => false,
+    }));
+    const fullLayer = Layer.mergeAll(mockSessionLayer, MockSkillLayer, MockCheckpointLayer, TestAgentLayer, ContextLayer, HookLayer);
 
     // Step 1: send message in one Effect scope
     {

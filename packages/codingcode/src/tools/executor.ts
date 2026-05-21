@@ -80,6 +80,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         yield* hooks.emit('tool.execute.before', {
           toolName: name,
           args: finalArgs,
+          sessionId: opts?.sessionId,
         });
 
         const parsedArgs = yield* Effect.sync(() => tool.parameters.parse(finalArgs));
@@ -97,6 +98,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           args: finalArgs,
           result,
           durationMs: Date.now() - start,
+          sessionId: opts?.sessionId,
         });
 
         return result;

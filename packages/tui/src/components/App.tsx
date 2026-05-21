@@ -119,6 +119,21 @@ export function App({ client }: AppProps) {
       } catch { /* ignore */ }
       return;
     }
+    if (parsed.name === 'checkpoint') {
+      try {
+        const [changes, hasForward] = await Promise.all([
+          client.classifyLastCompletedChanges(),
+          client.hasForwardStack(),
+        ]);
+        setPanel({
+          type: 'checkpoint',
+          agentCount: changes?.agentModified.length ?? 0,
+          unknownCount: changes?.unknownSource.length ?? 0,
+          hasForward,
+        });
+      } catch { /* ignore */ }
+      return;
+    }
     if (parsed.name === 'help') {
       setPanel({ type: 'help' });
       return;
@@ -205,6 +220,32 @@ export function App({ client }: AppProps) {
           }}
           onCancel={() => setPanel({ type: 'none' })}
           width={sessionW}
+        />
+      )}
+      {panel.type === 'checkpoint' && (
+        <InlinePanel
+          title={COMMAND_REGISTRY.checkpoint.title}
+          items={[
+            ...(panel.agentCount + panel.unknownCount > 0
+              ? [
+                  { label: `仅回退 Agent 修改的文件 (${panel.agentCount} 个)`, value: 'agent' as const },
+                  { label: `回退全部文件 (${panel.agentCount + panel.unknownCount} 个)`, value: 'all' as const },
+                ]
+              : [{ label: '无文件变更可回退', value: '' as const }]),
+            ...(panel.hasForward
+              ? [{ label: '前进到最新状态', value: 'forward' as const }]
+              : []),
+          ]}
+          onSelect={async (value) => {
+            if (value === 'forward') {
+              await client.forwardLastRevert();
+            } else if (value === 'agent' || value === 'all') {
+              await client.revertLastCompleted(value);
+            }
+            setPanel({ type: 'none' });
+          }}
+          onCancel={() => setPanel({ type: 'none' })}
+          width={Math.min(60, width - 4)}
         />
       )}
       {approval && (
