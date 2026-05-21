@@ -127,7 +127,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       return runWithLayer(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.listSessions();
+          return yield* svc.listSessions(process.cwd());
         }),
       );
     },

@@ -5,7 +5,7 @@ import { tmpdir, homedir } from 'os';
 import { randomUUID, createHash } from 'crypto';
 import { Effect, Layer } from 'effect';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { normalizePath } from '../../src/checkpoint/shadow-git.js';
+import { projectSlugFromPath } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { turnIdBySession, projectPathBySession } from '../../src/checkpoint/bootstrap.js';
 
@@ -23,7 +23,7 @@ describe('CheckpointService', () => {
 
   afterEach(() => {
     try { rmSync(projectPath, { recursive: true, force: true }); } catch { /* ignore */ }
-    const hash = createHash('sha256').update(normalizePath(projectPath)).digest('hex').slice(0, 16);
+    const hash = projectSlugFromPath(projectPath);
     const shadowsDir = join(homedir(), '.codingcode', 'checkpoints');
     try { rmSync(join(shadowsDir, `${hash}.git`), { recursive: true, force: true }); } catch { /* ignore */ }
     try { rmSync(join(shadowsDir, `${hash}.lock`), { force: true }); } catch { /* ignore */ }

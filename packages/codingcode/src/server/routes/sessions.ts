@@ -11,10 +11,11 @@ function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 export const sessionsRouter = new Hono();
 
 sessionsRouter.get('/', async (c) => {
+  const cwd = c.req.query('cwd') ?? process.cwd();
   const sessions = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
-      return yield* svc.listSessions();
+      return yield* svc.listSessions(cwd);
     }),
   );
   return c.json(sessions);

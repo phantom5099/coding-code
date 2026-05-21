@@ -55,7 +55,11 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       const res = await fetch(`${serverUrl}/api/sessions/${sid}/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: process.cwd() }) });
       return res.json();
     },
-    async listSessions(): Promise<any[]> { const res = await fetch(`${serverUrl}/api/sessions`); return res.json() as Promise<any[]>; },
+    async listSessions(): Promise<any[]> {
+      const cwd = encodeURIComponent(process.cwd());
+      const res = await fetch(`${serverUrl}/api/sessions?cwd=${cwd}`);
+      return res.json() as Promise<any[]>;
+    },
     async listModels() { const res = await fetch(`${serverUrl}/api/models`); return res.json(); },
     async switchModel(id: string) { await fetch(`${serverUrl}/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: id }) }); },
     getSessionId() { return currentSessionId ?? 'unknown'; },

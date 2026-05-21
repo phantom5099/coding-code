@@ -4,8 +4,8 @@ import { existsSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
 import type { HookService } from '../hooks/registry.js';
+import { projectSlugFromPath } from '../core/path.js';
 import { Ledger } from './ledger.js';
-import { normalizePath } from './shadow-git.js';
 
 /**
  * In-memory mapping: sessionId → currentTurnId.
@@ -31,8 +31,7 @@ const ledgerCache = new Map<string, Ledger>();
 const pendingHash = new Map<string, string>();
 
 function getLedger(projectPath: string): Ledger {
-  const normalized = normalizePath(projectPath);
-  const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+  const hash = projectSlugFromPath(projectPath);
   const shadowDir = join(homedir(), '.codingcode', 'checkpoints', `${hash}.git`);
   let ledger = ledgerCache.get(shadowDir);
   if (!ledger) {
