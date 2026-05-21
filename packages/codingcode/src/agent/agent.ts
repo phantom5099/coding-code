@@ -17,6 +17,7 @@ export type AgentEvent =
 import { ToolService } from '../tools/registry.js';
 import { ToolExecutorService } from '../tools/executor.js';
 import { buildSystemPrompt } from '../prompts/index.js';
+import { getWorkspaceCwd } from '../core/workspace.js';
 import { resolveConfig } from './config.js';
 
 interface LLMStreamAdapter {
@@ -60,7 +61,7 @@ export async function* runReActLoop(
 ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> {
   const messages = [...initialMessages];
   const basePrompt = buildSystemPrompt({
-    cwd: process.cwd(),
+    cwd: getWorkspaceCwd(),
     platform: process.platform,
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
   });

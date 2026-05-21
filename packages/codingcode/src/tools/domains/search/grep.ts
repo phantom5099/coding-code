@@ -3,6 +3,7 @@ import { globby } from 'globby';
 import { readFile } from 'fs/promises';
 import { relative } from 'path';
 import type { ToolDefinition } from '../../types';
+import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const searchTool: ToolDefinition = {
   name: 'search_code',
@@ -15,6 +16,7 @@ export const searchTool: ToolDefinition = {
   execute: async (args: unknown) => {
     const { pattern, glob, max_results } = args as any;
     const files = await globby(glob, {
+      cwd: getWorkspaceCwd(),
       gitignore: true,
       ignore: ['node_modules/**', 'dist/**', '.git/**', '*.lockb', '*.lock', '*.min.js'],
       absolute: true,
@@ -32,7 +34,7 @@ export const searchTool: ToolDefinition = {
         for (let i = 0; i < lines.length && results.length < max_results; i++) {
           const line = lines[i];
           if (line && regex.test(line)) {
-            const relPath = relative(process.cwd(), file);
+            const relPath = relative(getWorkspaceCwd(), file);
             results.push(`${relPath}:${i + 1}: ${line.trim().slice(0, 120)}`);
           }
         }

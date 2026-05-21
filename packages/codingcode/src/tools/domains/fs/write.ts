@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { writeFile, mkdir } from 'fs/promises';
-import { resolve, dirname, relative } from 'path';
+import { dirname, relative } from 'path';
 import type { ToolDefinition } from '../../types';
+import { getWorkspaceCwd, resolveInWorkspace } from '../../../core/workspace.js';
 
 export const writeFileTool: ToolDefinition = {
   name: 'write_file',
@@ -12,10 +13,10 @@ export const writeFileTool: ToolDefinition = {
   }),
   execute: async (args: unknown) => {
     const { path, content } = args as any;
-    const filePath = resolve(path);
+    const filePath = resolveInWorkspace(path);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, content);
-    const relPath = relative(process.cwd(), filePath) || '.';
+    const relPath = relative(getWorkspaceCwd(), filePath) || '.';
     return `File written: ${relPath} (${content.split('\n').length} lines, ${content.length} bytes)`;
   },
 };

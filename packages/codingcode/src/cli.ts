@@ -19,6 +19,7 @@ import { webSearchTool } from './tools/domains/web/search.js';
 import { createServer } from './server/index.js';
 import { AppLayer } from './layer.js';
 import { loadConfig } from '../../infra/src/config.js';
+import { getWorkspaceCwd, initWorkspace, parseWorkspaceArgs } from './core/workspace.js';
 
 function findAvailablePort(startPort: number): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -42,10 +43,15 @@ function findAvailablePort(startPort: number): Promise<number> {
 }
 
 async function main() {
-  const args = process.argv.slice(2);
+  const installRoot = process.cwd();
+  const { workspaceCwd, args } = parseWorkspaceArgs(process.argv.slice(2));
+  initWorkspace({ installRoot, workspaceCwd });
+  if (workspaceCwd) {
+    console.log(`Workspace: ${getWorkspaceCwd()}`);
+  }
   const serveOnly = args.includes('serve');
   const tuiOnly = args.includes('tui');
-  const config = loadConfig();
+  const config = loadConfig(undefined, installRoot);
   const basePort = config.server.port;
 
   const program = Effect.gen(function* () {
@@ -70,10 +76,10 @@ async function main() {
     yield* tools.register(webSearchTool);
 
     // Connect MCP servers (auto-registers tools to ToolService)
-    yield* mcp.connectAll(process.cwd());
+    yield* mcp.connectAll(getWorkspaceCwd());
 
     // Load skills
-    yield* skill.loadAll(process.cwd());
+    yield* skill.loadAll(getWorkspaceCwd());
 
     // Initialize LLM
     const llmResult = yield* Effect.tryPromise(() => getLLMClient());

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { readFile, writeFile } from 'fs/promises';
-import { resolve } from 'path';
 import type { ToolDefinition } from '../../types';
+import { resolveInWorkspace } from '../../../core/workspace.js';
 
 export const editFileTool: ToolDefinition = {
   name: 'edit_file',
@@ -14,7 +14,7 @@ export const editFileTool: ToolDefinition = {
   }),
   execute: async (args: unknown) => {
     const { path, old_string, new_string } = args as { path: string; old_string: string; new_string: string };
-    const filePath = resolve(path);
+    const filePath = resolveInWorkspace(path);
     const content = await readFile(filePath, 'utf-8');
 
     let idx = 0;

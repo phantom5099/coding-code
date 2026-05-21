@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { readFile } from 'fs/promises';
-import { resolve } from 'path';
 import type { ToolDefinition } from '../../types';
+import { resolveInWorkspace } from '../../../core/workspace.js';
 
 export const readFileTool: ToolDefinition = {
   name: 'read_file',
@@ -13,7 +13,7 @@ export const readFileTool: ToolDefinition = {
   }),
   execute: async (args: unknown) => {
     const { path, offset, limit } = args as any;
-    const filePath = resolve(path);
+    const filePath = resolveInWorkspace(path);
     const content = await readFile(filePath, 'utf-8');
     const lines = content.split('\n');
     const start = Math.max(0, offset - 1);

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { readdir, stat } from 'fs/promises';
 import { resolve, relative } from 'path';
 import type { ToolDefinition } from '../../types';
+import { getWorkspaceCwd, resolveInWorkspace } from '../../../core/workspace.js';
 
 export const listDirTool: ToolDefinition = {
   name: 'list_dir',
@@ -11,7 +12,7 @@ export const listDirTool: ToolDefinition = {
   }),
   execute: async (args: unknown) => {
     const { path } = args as any;
-    const dirPath = resolve(path);
+    const dirPath = resolveInWorkspace(path);
     const entries = await readdir(dirPath, { withFileTypes: true });
     const items = await Promise.all(
       entries.map(async (e) => {
@@ -24,6 +25,6 @@ export const listDirTool: ToolDefinition = {
         }
       }),
     );
-    return `Contents of ${relative(process.cwd(), dirPath) || '.'}:\n${items.join('\n')}`;
+    return `Contents of ${relative(getWorkspaceCwd(), dirPath) || '.'}:\n${items.join('\n')}`;
   },
 };

@@ -1,26 +1,15 @@
 import { Effect } from 'effect';
-import { createHash, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
+import { AgentError } from '../core/error.js';
+import { normalizePath, projectSlugFromPath } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, CompactBoundaryEvent, SessionIndex } from './types.js';
 
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const SESSIONS_DIR = join(CODINGCODE_DIR, 'sessions');
-
-function normalizePath(p: string): string {
-  let s = p.replaceAll('\\', '/');
-  s = s.replace(/^\/([a-zA-Z])\//, (_, letter: string) => `${letter.toLowerCase()}:/`);
-  s = s.replace(/^([A-Z]):/, (_, letter: string) => letter.toLowerCase() + ':');
-  return s;
-}
-
-function makeProjectSlug(cwd: string): string {
-  const normalized = normalizePath(cwd);
-  const hash = createHash('sha256').update(normalized).digest('hex');
-  return hash.slice(0, 16);
-}
 
 function ensureDirs(transcriptPath: string): void {
   if (!existsSync(CODINGCODE_DIR)) mkdirSync(CODINGCODE_DIR, { recursive: true });
@@ -40,6 +29,46 @@ function quickReadMeta(path: string): SessionMetaEvent | null {
     return JSON.parse(firstLine) as SessionMetaEvent;
   } catch {
     return null;
+  }
+}
+
+export function findSessionIndex(sessionId: string): SessionIndex | null {
+  if (!existsSync(SESSIONS_DIR)) return null;
+  for (const slug of readdirSync(SESSIONS_DIR)) {
+    const dir = join(SESSIONS_DIR, slug);
+    const idxPath = join(dir, `${sessionId}.index.json`);
+    if (existsSync(idxPath)) {
+      try {
+        const index = JSON.parse(readFileSync(idxPath, 'utf8')) as SessionIndex;
+        if (index.sessionId === sessionId) return index;
+      } catch { /* corrupt */ }
+    }
+    const jsonlPath = join(dir, `${sessionId}.jsonl`);
+    if (!existsSync(jsonlPath)) continue;
+    const meta = quickReadMeta(jsonlPath);
+    if (meta?.sessionId !== sessionId) continue;
+    const h = readHistory(jsonlPath);
+    const firstUser = findFirstUserContent(h);
+    return {
+      sessionId: meta.sessionId,
+      projectSlug: meta.projectSlug,
+      cwd: meta.cwd,
+      model: meta.model,
+      createdAt: meta.createdAt,
+      updatedAt: meta.createdAt,
+      messageCount: h.filter((e) => e.type !== 'session_meta').length,
+      title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8),
+      currentTurnId: 0,
+    };
+  }
+  return null;
+}
+
+function assertResumeWorkspace(cwd: string, sessionId: string): void {
+  const index = findSessionIndex(sessionId);
+  if (!index) throw AgentError.sessionNotFound(sessionId);
+  if (projectSlugFromPath(cwd) !== index.projectSlug) {
+    throw AgentError.sessionWorkspaceMismatch(sessionId, index.cwd);
   }
 }
 
@@ -73,6 +102,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
     return {
       create: (cwd: string, model: string, version: string, sessionId?: string): Effect.Effect<SessionStoreState> =>
         Effect.sync(() => {
+          if (sessionId) assertResumeWorkspace(cwd, sessionId);
           const state = initState(cwd, sessionId);
           ensureDirs(state.transcriptPath);
 
@@ -136,8 +166,11 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       readMessages: (state: SessionStoreState): Effect.Effect<Message[]> =>
         Effect.sync(() => readMessages(state.transcriptPath)),
 
-      listSessions: (): Effect.Effect<SessionIndex[]> =>
-        Effect.sync(() => listSessions()),
+      listSessions: (cwd?: string): Effect.Effect<SessionIndex[]> =>
+        Effect.sync(() => listSessions(cwd ? projectSlugFromPath(cwd) : undefined)),
+
+      findSessionIndex: (sessionId: string): Effect.Effect<SessionIndex | null> =>
+        Effect.sync(() => findSessionIndex(sessionId)),
 
       getSessionId: (state: SessionStoreState): string => state.sessionId,
       getMessageCount: (state: SessionStoreState): number => state.messageCount,
@@ -153,7 +186,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
 function initState(cwd: string, sessionId?: string): SessionStoreState {
   const id = sessionId ?? randomUUID();
-  const projectSlug = makeProjectSlug(cwd);
+  const normalizedCwd = normalizePath(cwd);
+  const projectSlug = projectSlugFromPath(normalizedCwd);
   const transcriptPath = join(SESSIONS_DIR, projectSlug, `${id}.jsonl`);
   const indexPath = transcriptPath.replace('.jsonl', '.index.json');
   let currentTurnId = 0;
@@ -164,7 +198,7 @@ function initState(cwd: string, sessionId?: string): SessionStoreState {
     }
   } catch { /* ignore corrupt index */ }
   return {
-    sessionId: id, cwd, projectSlug, transcriptPath,
+    sessionId: id, cwd: normalizedCwd, projectSlug, transcriptPath,
     indexPath,
     messageCount: 0, sessionMeta: null, title: id.slice(0, 8), currentTurnId,
   };

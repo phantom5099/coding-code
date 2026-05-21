@@ -1,25 +1,13 @@
 import { spawnSync } from 'child_process';
-import { createHash } from 'crypto';
 import { existsSync, mkdirSync, statSync, writeFileSync, unlinkSync, openSync, closeSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
+import { normalizePath, projectSlugFromPath } from '../core/path.js';
+
+export { normalizePath } from '../core/path.js';
 
 const SHADOWS_DIR = join(homedir(), '.codingcode', 'checkpoints');
 const NULL_DEVICE = process.platform === 'win32' ? 'NUL' : '/dev/null';
-
-/** Normalize a path to always produce the same hash for the same directory:
- *  - Convert POSIX /c/... → c:/... (Git Bash paths on Windows)
- *  - Convert backslashes to forward slashes
- *  - Lowercase drive letter
- *  Does NOT call path.resolve() since it mishandles /c/... on Windows. */
-export function normalizePath(p: string): string {
-  let s = p.replaceAll('\\', '/');
-  // Convert POSIX-style drive letter: /c/... → c:/...
-  s = s.replace(/^\/([a-zA-Z])\//, (_, letter: string) => `${letter.toLowerCase()}:/`);
-  // Lowercase explicit drive letter: C: → c:
-  s = s.replace(/^([A-Z]):/, (_, letter: string) => letter.toLowerCase() + ':');
-  return s;
-}
 
 const IGNORE_RULES = [
   'node_modules/', '.venv/', 'venv/', 'dist/', 'build/',
@@ -38,7 +26,7 @@ export class ShadowGit {
   constructor(projectPath: string) {
     // Normalize path so same dir always produces same hash (resolve + forward slash + lowercase drive)
     this.projectPath = normalizePath(projectPath);
-    const hash = createHash('sha256').update(this.projectPath).digest('hex').slice(0, 16);
+    const hash = projectSlugFromPath(this.projectPath);
     this.gitDir = join(SHADOWS_DIR, `${hash}.git`);
     this.lockPath = join(SHADOWS_DIR, `${hash}.lock`);
   }
