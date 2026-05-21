@@ -34,8 +34,9 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     let _ledger: Ledger | null = null;
 
     function ensure(projectPath: string): ShadowGit {
-      if (!_sg || _sg.projectPath !== projectPath) {
-        _sg = new ShadowGit(projectPath);
+      const normalized = projectPath.replace(/\\/g, '/');
+      if (!_sg || _sg.projectPath !== normalized) {
+        _sg = new ShadowGit(normalized);
         _sg.init();
       }
       return _sg;

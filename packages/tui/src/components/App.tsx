@@ -120,18 +120,26 @@ export function App({ client }: AppProps) {
       return;
     }
     if (parsed.name === 'checkpoint') {
+      let changes: { agentModified: string[]; unknownSource: string[] } | null = null;
+      let hasForward = false;
       try {
-        const [changes, hasForward] = await Promise.all([
+        [changes, hasForward] = await Promise.all([
           client.classifyLastCompletedChanges(),
           client.hasForwardStack(),
         ]);
-        setPanel({
-          type: 'checkpoint',
-          agentCount: changes?.agentModified.length ?? 0,
-          unknownCount: changes?.unknownSource.length ?? 0,
-          hasForward,
-        });
-      } catch { /* ignore */ }
+      } catch (e: any) {
+        setStaticMessages(prev => [...prev, {
+          id: generateId(), timestamp: Date.now(), role: 'system' as const,
+          content: `[Checkpoint Error] ${e.message || e}`,
+        }]);
+        return;
+      }
+      setPanel({
+        type: 'checkpoint',
+        agentCount: changes?.agentModified.length ?? 0,
+        unknownCount: changes?.unknownSource.length ?? 0,
+        hasForward,
+      });
       return;
     }
     if (parsed.name === 'help') {

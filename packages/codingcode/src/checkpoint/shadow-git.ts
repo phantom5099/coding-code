@@ -22,8 +22,9 @@ export class ShadowGit {
   private lockFd: number | null = null;
 
   constructor(projectPath: string) {
-    this.projectPath = projectPath;
-    const hash = createHash('sha256').update(projectPath).digest('hex').slice(0, 16);
+    // Normalize path separators so same dir always produces same hash
+    this.projectPath = projectPath.replace(/\\/g, '/');
+    const hash = createHash('sha256').update(this.projectPath).digest('hex').slice(0, 16);
     this.gitDir = join(SHADOWS_DIR, `${hash}.git`);
     this.lockPath = join(SHADOWS_DIR, `${hash}.lock`);
   }

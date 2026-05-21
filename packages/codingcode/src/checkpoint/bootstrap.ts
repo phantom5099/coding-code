@@ -12,15 +12,22 @@ import { Ledger } from './ledger.js';
  */
 export const turnIdBySession = new Map<string, number>();
 
+/** Track whether bootstrap has already run for this hook service. */
+const bootstrappedHooks = new WeakSet<HookService>();
+
 /**
  * Register hook observers that record file-modifying tool calls to the Ledger.
- * Must be called after HookService and project path are available.
+ * Idempotent — safe to call multiple times with the same HookService.
  */
 export function bootstrapCheckpoint(
   hooks: HookService,
   projectPath: string,
 ): void {
-  const projectHash = createHash('sha256').update(projectPath).digest('hex').slice(0, 16);
+  if (bootstrappedHooks.has(hooks)) return;
+  bootstrappedHooks.add(hooks);
+
+  const normalizedPath = projectPath.replace(/\\/g, '/');
+  const projectHash = createHash('sha256').update(normalizedPath).digest('hex').slice(0, 16);
   const shadowDir = join(homedir(), '.codingcode', 'checkpoints', `${projectHash}.git`);
   const ledger = new Ledger(shadowDir);
 
