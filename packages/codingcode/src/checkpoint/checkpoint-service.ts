@@ -179,31 +179,6 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         return result;
       },
 
-      debugInfo: (projectPath: string, sessionId: string): Record<string, unknown> => {
-        const sg = ensure(projectPath);
-        const prefix = `turn-${shortSid(sessionId)}-`;
-        const turns: Record<string, unknown> = {};
-        for (let i = 1; i <= 5; i++) {
-          const b = sg.findCommitByMessage(`${prefix}${i}-baseline`);
-          const f = sg.findCommitByMessage(`${prefix}${i}-final`);
-          turns[`turn-${i}`] = { baseline: !!b, final: !!f };
-          if (!b && !f) break;
-        }
-        // List ALL commit messages in the repo
-        const allLog = sg.git('log', '--all', '--format=%H %s');
-        const commits = allLog.stdout.trim().split('\n').filter(Boolean);
-        // Check git repo validity
-        const status = sg.git('status', '--porcelain');
-        return {
-          projectPath: sg.projectPath,
-          gitDir: sg.gitDir,
-          sessionHash: shortSid(sessionId),
-          turns,
-          totalCommits: commits.length,
-          commitMessages: commits.slice(0, 10),
-          workingTreeStatus: status.stdout.trim().split('\n').filter(Boolean).slice(0, 10),
-        };
-      },
     };
   }),
 }) {}

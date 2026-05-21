@@ -25,7 +25,6 @@ export interface AgentClient {
   revertCheckpoint(turnId: number, mode: 'agent' | 'all'): Promise<void>;
   forwardLastRevert(): Promise<void>;
   hasForwardStack(): Promise<boolean>;
-  checkpointDebug(): Promise<Record<string, unknown>>;
   getCheckpoints(): Promise<Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }>>;
 }
 
@@ -230,15 +229,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       );
     },
 
-    async checkpointDebug() {
-      if (!currentSessionId) return {};
-      return runWithLayer(
-        Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return checkpoint.debugInfo(process.cwd(), currentSessionId);
-        }),
-      );
-    },
 
     async getCheckpoints() {
       if (!currentSessionId) return [];

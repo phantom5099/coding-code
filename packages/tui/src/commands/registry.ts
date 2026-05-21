@@ -10,7 +10,6 @@ export const COMMAND_REGISTRY = {
   model:    { name: 'model',    description: '选择模型',      usage: '/model',    title: '选择模型' },
   sessions: { name: 'sessions', description: '恢复历史会话',   usage: '/sessions', title: '恢复会话' },
   checkpoint: { name: 'checkpoint', description: '管理文件快照，回退/前进', usage: '/checkpoint', title: '检查点' },
-  'checkpoint-debug': { name: 'checkpoint-debug', description: '检查点调试信息', usage: '/checkpoint-debug', title: '检查点调试' },
   help:     { name: 'help',     description: '显示帮助',      usage: '/help',     title: '帮助' },
   clear:    { name: 'clear',    description: '清空对话',      usage: '/clear',    title: '清空对话',  quick: true },
   exit:     { name: 'exit',     description: '退出',          usage: '/exit',     title: '退出',      quick: true },
