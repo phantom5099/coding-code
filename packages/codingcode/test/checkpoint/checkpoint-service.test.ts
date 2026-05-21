@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { tmpdir, homedir } from 'os';
 import { randomUUID, createHash } from 'crypto';
 import { Effect, Layer } from 'effect';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
 import { normalizePath } from '../../src/checkpoint/shadow-git.js';
 import { HookService } from '../../src/hooks/registry.js';
+import { turnIdBySession, projectPathBySession } from '../../src/checkpoint/bootstrap.js';
 
 describe('CheckpointService', () => {
   let projectPath: string;
@@ -66,7 +67,7 @@ describe('CheckpointService', () => {
 
       const result = svc.classifyChanges(projectPath, 's1', 1);
       expect(result).not.toBeNull();
-      expect(result!.unknownSource).toContain('file.txt');
+      expect(result!.unknownSource).toContain(resolve(projectPath, 'file.txt'));
       expect(result!.agentModified).toEqual([]);
     });
   });
@@ -110,5 +111,51 @@ describe('CheckpointService', () => {
       svc.snapshotFinal(projectPath, 's4', 1);
       expect(svc.hasForwardStack(projectPath, 's4')).toBe(false);
     });
+  });
+
+  it('classifyChanges tracks agentModified via hook ledger entries', async () => {
+    const filePath = join(projectPath, 'agent-file.txt');
+    writeFileSync(filePath, 'v1', 'utf8');
+
+    // Simulate the orchestration flow: set session mappings before tools run
+    turnIdBySession.set('agent-test', 1);
+    projectPathBySession.set('agent-test', projectPath);
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        const svc = yield* CheckpointService;
+
+        svc.snapshotBaseline(projectPath, 'agent-test', 1);
+
+        // Emit hooks as if write_file tool was called with an absolute path
+        const absPath = resolve(filePath);
+        yield* hooks.emit('tool.execute.before', {
+          toolName: 'write_file',
+          args: { path: absPath, content: 'v2' },
+          sessionId: 'agent-test',
+        });
+
+        writeFileSync(filePath, 'v2', 'utf8');
+
+        yield* hooks.emit('tool.execute.after', {
+          toolName: 'write_file',
+          args: { path: absPath, content: 'v2' },
+          result: 'ok',
+          durationMs: 5,
+          sessionId: 'agent-test',
+        });
+
+        svc.snapshotFinal(projectPath, 'agent-test', 1);
+
+        const result = svc.classifyChanges(projectPath, 'agent-test', 1);
+        expect(result).not.toBeNull();
+        expect(result!.agentModified).toContain(absPath);
+        expect(result!.unknownSource).toEqual([]);
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    turnIdBySession.delete('agent-test');
+    projectPathBySession.delete('agent-test');
   });
 });

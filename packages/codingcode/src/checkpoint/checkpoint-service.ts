@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { ShadowGit, normalizePath } from './shadow-git.js';
 import { Ledger } from './ledger.js';
 import { bootstrapCheckpoint } from './bootstrap.js';
@@ -28,10 +28,11 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
   effect: Effect.gen(function* () {
     // Register Ledger hook observers at service creation time
     const hooks = yield* HookService;
-    bootstrapCheckpoint(hooks, process.cwd());
+    bootstrapCheckpoint(hooks);
 
     let _sg: ShadowGit | null = null;
     let _ledger: Ledger | null = null;
+    let _ledgerGitDir: string | null = null;
 
     function ensure(projectPath: string): ShadowGit {
       const normalized = normalizePath(projectPath);
@@ -43,7 +44,10 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     }
 
     function ledger(sg: ShadowGit): Ledger {
-      if (!_ledger) _ledger = new Ledger(sg.gitDir);
+      if (!_ledger || _ledgerGitDir !== sg.gitDir) {
+        _ledger = new Ledger(sg.gitDir);
+        _ledgerGitDir = sg.gitDir;
+      }
       return _ledger;
     }
 
@@ -76,7 +80,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!baseline || !final) return null;
 
         const allChanges = sg.diffFiles(baseline, final);
-        const allFiles = [...new Set(allChanges.map((c) => c.file))];
+        const allFiles = [...new Set(allChanges.map((c) => resolve(projectPath, c.file)))];
         const agentFiles = new Set(ledger(sg).getAgentFiles(turnId, sessionId));
 
         return {
@@ -166,7 +170,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
 
           // Inline classify logic (can't use `this` in arrow function)
           const allChanges = sg.diffFiles(bCommit, fCommit);
-          const allFiles = [...new Set(allChanges.map((c) => c.file))];
+          const allFiles = [...new Set(allChanges.map((c) => resolve(projectPath, c.file)))];
           const agentFiles = new Set(ledger(sg).getAgentFiles(i, sessionId));
 
           result.push({

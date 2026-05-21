@@ -1,6 +1,7 @@
+import { Effect } from 'effect';
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { homedir } from 'os';
 import type { HookService } from '../hooks/registry.js';
 import { Ledger } from './ledger.js';
@@ -13,8 +14,33 @@ import { normalizePath } from './shadow-git.js';
  */
 export const turnIdBySession = new Map<string, number>();
 
+/**
+ * In-memory mapping: sessionId → projectPath.
+ * Updated by orchestration on each sendMessage call.
+ * Read by hook observers to find the correct Ledger for the session's project.
+ */
+export const projectPathBySession = new Map<string, string>();
+
 /** Track whether bootstrap has already run for this hook service. */
 const bootstrappedHooks = new WeakSet<HookService>();
+
+/** Cache ledger instances by shadow git directory path. */
+const ledgerCache = new Map<string, Ledger>();
+
+/** Carry file hash from tool.execute.before to tool.execute.after (separate payload objects). */
+const pendingHash = new Map<string, string>();
+
+function getLedger(projectPath: string): Ledger {
+  const normalized = normalizePath(projectPath);
+  const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+  const shadowDir = join(homedir(), '.codingcode', 'checkpoints', `${hash}.git`);
+  let ledger = ledgerCache.get(shadowDir);
+  if (!ledger) {
+    ledger = new Ledger(shadowDir);
+    ledgerCache.set(shadowDir, ledger);
+  }
+  return ledger;
+}
 
 /**
  * Register hook observers that record file-modifying tool calls to the Ledger.
@@ -22,54 +48,55 @@ const bootstrappedHooks = new WeakSet<HookService>();
  */
 export function bootstrapCheckpoint(
   hooks: HookService,
-  projectPath: string,
 ): void {
   if (bootstrappedHooks.has(hooks)) return;
   bootstrappedHooks.add(hooks);
 
-  const normalizedPath = normalizePath(projectPath);
-  const projectHash = createHash('sha256').update(normalizedPath).digest('hex').slice(0, 16);
-  const shadowDir = join(homedir(), '.codingcode', 'checkpoints', `${projectHash}.git`);
-  const ledger = new Ledger(shadowDir);
-
   // Pre-execution: record file hash before modification
-  hooks.register('tool.execute.before', async (payload) => {
+  Effect.runSync(hooks.register('tool.execute.before', async (payload) => {
     const toolName = payload.toolName as string;
     if (toolName !== 'edit_file' && toolName !== 'write_file') return;
 
     const args = payload.args as Record<string, unknown> | undefined;
-    const path = args?.path as string | undefined;
-    if (!path) return;
+    const rawPath = args?.path as string | undefined;
+    if (!rawPath) return;
 
-    const beforeHash = fileHash(path);
-    (payload as any)._ledgerHashBefore = beforeHash;
-  });
+    const resolvedPath = resolve(rawPath);
+    pendingHash.set(resolvedPath, fileHash(resolvedPath));
+  }));
 
   // Post-execution: record the full entry
-  hooks.register('tool.execute.after', async (payload) => {
+  Effect.runSync(hooks.register('tool.execute.after', async (payload) => {
     const sessionId = payload.sessionId as string | undefined;
     if (!sessionId) return;
     const turnId = turnIdBySession.get(sessionId);
     if (turnId === undefined) return;
+    const projectPath = projectPathBySession.get(sessionId);
+    if (!projectPath) return;
 
     const toolName = payload.toolName as string;
+    if (toolName !== 'edit_file' && toolName !== 'write_file') return;
+
     const args = payload.args as Record<string, unknown> | undefined;
-    const path = args?.path as string | undefined;
-    if (!path) return;
+    const rawPath = args?.path as string | undefined;
+    if (!rawPath) return;
+    const resolvedPath = resolve(rawPath);
 
-    const hashBefore = (payload as any)._ledgerHashBefore as string ?? '';
-    const hashAfter = fileHash(path);
+    const hashBefore = pendingHash.get(resolvedPath) ?? '';
+    pendingHash.delete(resolvedPath);
 
-    ledger.record({
+    const hashAfter = fileHash(resolvedPath);
+
+    getLedger(projectPath).record({
       turnId,
       sessionId,
       type: toolName,
-      path,
+      path: resolvedPath,
       hashBefore,
       hashAfter,
       timestamp: new Date().toISOString(),
     });
-  });
+  }));
 }
 
 function fileHash(filePath: string): string {

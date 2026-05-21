@@ -4,7 +4,7 @@ import { AgentService } from '../agent/agent.js';
 import { SessionService } from '../session/store.js';
 import { SkillService } from '../skills/index.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
-import { turnIdBySession } from '../checkpoint/bootstrap.js';
+import { turnIdBySession, projectPathBySession } from '../checkpoint/bootstrap.js';
 import { recordAgentEvents } from './record-agent-events.js';
 
 export const sendMessage = (
@@ -23,9 +23,10 @@ export const sendMessage = (
     const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
 
-    // Increment turn and update the session→turnId mapping for Ledger hooks
+    // Increment turn and update the session mappings for Ledger hooks
     const turnId = session.incrementTurn(state);
     turnIdBySession.set(sid, turnId);
+    projectPathBySession.set(sid, state.cwd);
 
     const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
 
