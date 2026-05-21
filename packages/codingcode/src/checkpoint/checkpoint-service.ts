@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
-import { ShadowGit } from './shadow-git.js';
+import { ShadowGit, normalizePath } from './shadow-git.js';
 import { Ledger } from './ledger.js';
 import { bootstrapCheckpoint } from './bootstrap.js';
 import { HookService } from '../hooks/registry.js';
@@ -34,7 +34,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     let _ledger: Ledger | null = null;
 
     function ensure(projectPath: string): ShadowGit {
-      const normalized = projectPath.replace(/\\/g, '/');
+      const normalized = normalizePath(projectPath);
       if (!_sg || _sg.projectPath !== normalized) {
         _sg = new ShadowGit(normalized);
         _sg.init();
@@ -87,7 +87,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       getCompletedTurns: (projectPath: string, sessionId: string): number[] => {
         const sg = ensure(projectPath);
         const ids: number[] = [];
-        const prefix = commitMsg(sessionId, 0, '').slice(0, -1); // remove the 0
+        const prefix = `turn-${shortSid(sessionId)}-`;
         for (let i = 1; i <= 10000; i++) {
           const b = sg.findCommitByMessage(`${prefix}${i}-baseline`);
           const f = sg.findCommitByMessage(`${prefix}${i}-final`);
@@ -146,6 +146,32 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           const stack: ForwardEntry[] = JSON.parse(readFileSync(fwdPath, 'utf8'));
           return stack.length > 0;
         } catch { return false; }
+      },
+
+      debugInfo: (projectPath: string, sessionId: string): Record<string, unknown> => {
+        const sg = ensure(projectPath);
+        const prefix = `turn-${shortSid(sessionId)}-`;
+        const turns: Record<string, unknown> = {};
+        for (let i = 1; i <= 5; i++) {
+          const b = sg.findCommitByMessage(`${prefix}${i}-baseline`);
+          const f = sg.findCommitByMessage(`${prefix}${i}-final`);
+          turns[`turn-${i}`] = { baseline: !!b, final: !!f };
+          if (!b && !f) break;
+        }
+        // List ALL commit messages in the repo
+        const allLog = sg.git('log', '--all', '--format=%H %s');
+        const commits = allLog.stdout.trim().split('\n').filter(Boolean);
+        // Check git repo validity
+        const status = sg.git('status', '--porcelain');
+        return {
+          projectPath: sg.projectPath,
+          gitDir: sg.gitDir,
+          sessionHash: shortSid(sessionId),
+          turns,
+          totalCommits: commits.length,
+          commitMessages: commits.slice(0, 10),
+          workingTreeStatus: status.stdout.trim().split('\n').filter(Boolean).slice(0, 10),
+        };
       },
     };
   }),

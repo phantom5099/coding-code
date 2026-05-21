@@ -9,8 +9,16 @@ import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolRes
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const SESSIONS_DIR = join(CODINGCODE_DIR, 'sessions');
 
+function normalizePath(p: string): string {
+  let s = p.replaceAll('\\', '/');
+  s = s.replace(/^\/([a-zA-Z])\//, (_, letter: string) => `${letter.toLowerCase()}:/`);
+  s = s.replace(/^([A-Z]):/, (_, letter: string) => letter.toLowerCase() + ':');
+  return s;
+}
+
 function makeProjectSlug(cwd: string): string {
-  const hash = createHash('sha256').update(cwd).digest('hex');
+  const normalized = normalizePath(cwd);
+  const hash = createHash('sha256').update(normalized).digest('hex');
   return hash.slice(0, 16);
 }
 

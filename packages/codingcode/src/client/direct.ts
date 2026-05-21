@@ -24,6 +24,7 @@ export interface AgentClient {
   revertLastCompleted(mode: 'agent' | 'all'): Promise<void>;
   forwardLastRevert(): Promise<void>;
   hasForwardStack(): Promise<boolean>;
+  checkpointDebug(): Promise<Record<string, unknown>>;
 }
 
 export async function* agentEventToStreamChunk(
@@ -207,6 +208,16 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
           return checkpoint.hasForwardStack(process.cwd(), currentSessionId);
+        }),
+      );
+    },
+
+    async checkpointDebug() {
+      if (!currentSessionId) return {};
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.debugInfo(process.cwd(), currentSessionId);
         }),
       );
     },

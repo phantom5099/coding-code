@@ -7,6 +7,20 @@ import { join } from 'path';
 const SHADOWS_DIR = join(homedir(), '.codingcode', 'checkpoints');
 const NULL_DEVICE = process.platform === 'win32' ? 'NUL' : '/dev/null';
 
+/** Normalize a path to always produce the same hash for the same directory:
+ *  - Convert POSIX /c/... → c:/... (Git Bash paths on Windows)
+ *  - Convert backslashes to forward slashes
+ *  - Lowercase drive letter
+ *  Does NOT call path.resolve() since it mishandles /c/... on Windows. */
+export function normalizePath(p: string): string {
+  let s = p.replaceAll('\\', '/');
+  // Convert POSIX-style drive letter: /c/... → c:/...
+  s = s.replace(/^\/([a-zA-Z])\//, (_, letter: string) => `${letter.toLowerCase()}:/`);
+  // Lowercase explicit drive letter: C: → c:
+  s = s.replace(/^([A-Z]):/, (_, letter: string) => letter.toLowerCase() + ':');
+  return s;
+}
+
 const IGNORE_RULES = [
   'node_modules/', '.venv/', 'venv/', 'dist/', 'build/',
   '*.log', '.env', '.env.*', '*.tmp', '*.temp', '.DS_Store', 'Thumbs.db',
@@ -22,8 +36,8 @@ export class ShadowGit {
   private lockFd: number | null = null;
 
   constructor(projectPath: string) {
-    // Normalize path separators so same dir always produces same hash
-    this.projectPath = projectPath.replace(/\\/g, '/');
+    // Normalize path so same dir always produces same hash (resolve + forward slash + lowercase drive)
+    this.projectPath = normalizePath(projectPath);
     const hash = createHash('sha256').update(this.projectPath).digest('hex').slice(0, 16);
     this.gitDir = join(SHADOWS_DIR, `${hash}.git`);
     this.lockPath = join(SHADOWS_DIR, `${hash}.lock`);
@@ -85,6 +99,11 @@ export class ShadowGit {
     const result = this.run('log', '--all', '--grep', pattern, '--format=%H');
     const hash = result.stdout.trim();
     return hash || null;
+  }
+
+  /** Public git command wrapper — used by CheckpointService for diagnostics. */
+  git(...args: string[]): { stdout: string; stderr: string; status: number | null } {
+    return this.run(...args);
   }
 
   shouldFallback(): boolean {

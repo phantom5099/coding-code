@@ -64,5 +64,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     async revertLastCompleted() {},
     async forwardLastRevert() {},
     async hasForwardStack() { return false; },
+    async checkpointDebug() { return {}; },
   };
 }

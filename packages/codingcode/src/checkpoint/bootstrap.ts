@@ -4,6 +4,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import type { HookService } from '../hooks/registry.js';
 import { Ledger } from './ledger.js';
+import { normalizePath } from './shadow-git.js';
 
 /**
  * In-memory mapping: sessionId → currentTurnId.
@@ -26,7 +27,7 @@ export function bootstrapCheckpoint(
   if (bootstrappedHooks.has(hooks)) return;
   bootstrappedHooks.add(hooks);
 
-  const normalizedPath = projectPath.replace(/\\/g, '/');
+  const normalizedPath = normalizePath(projectPath);
   const projectHash = createHash('sha256').update(normalizedPath).digest('hex').slice(0, 16);
   const shadowDir = join(homedir(), '.codingcode', 'checkpoints', `${projectHash}.git`);
   const ledger = new Ledger(shadowDir);

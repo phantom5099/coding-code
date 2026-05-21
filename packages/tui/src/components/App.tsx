@@ -142,6 +142,21 @@ export function App({ client }: AppProps) {
       });
       return;
     }
+    if (parsed.name === 'checkpoint-debug') {
+      try {
+        const info = await client.checkpointDebug();
+        setStaticMessages(prev => [...prev, {
+          id: generateId(), timestamp: Date.now(), role: 'system' as const,
+          content: `[Checkpoint Debug]\n${JSON.stringify(info, null, 2)}`,
+        }]);
+      } catch (e: any) {
+        setStaticMessages(prev => [...prev, {
+          id: generateId(), timestamp: Date.now(), role: 'system' as const,
+          content: `[Checkpoint Debug Error] ${e.message || e}`,
+        }]);
+      }
+      return;
+    }
     if (parsed.name === 'help') {
       setPanel({ type: 'help' });
       return;
