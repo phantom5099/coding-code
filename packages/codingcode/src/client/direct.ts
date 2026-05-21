@@ -22,9 +22,11 @@ export interface AgentClient {
   clearSession(): Promise<void>;
   classifyLastCompletedChanges(): Promise<{ agentModified: string[]; unknownSource: string[] } | null>;
   revertLastCompleted(mode: 'agent' | 'all'): Promise<void>;
+  revertCheckpoint(turnId: number, mode: 'agent' | 'all'): Promise<void>;
   forwardLastRevert(): Promise<void>;
   hasForwardStack(): Promise<boolean>;
   checkpointDebug(): Promise<Record<string, unknown>>;
+  getCheckpoints(): Promise<Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }>>;
 }
 
 export async function* agentEventToStreamChunk(
@@ -192,6 +194,22 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       );
     },
 
+    async revertCheckpoint(turnId: number, mode: 'agent' | 'all') {
+      if (!currentSessionId) return;
+      await runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          const projectPath = process.cwd();
+          const changes = checkpoint.classifyChanges(projectPath, currentSessionId, turnId);
+          if (!changes) return;
+          const files = mode === 'agent' ? changes.agentModified : [...changes.agentModified, ...changes.unknownSource];
+          if (files.length > 0) {
+            checkpoint.revertFiles(projectPath, currentSessionId, turnId, files);
+          }
+        }),
+      );
+    },
+
     async forwardLastRevert() {
       if (!currentSessionId) return;
       await runWithLayer(
@@ -218,6 +236,16 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
           return checkpoint.debugInfo(process.cwd(), currentSessionId);
+        }),
+      );
+    },
+
+    async getCheckpoints() {
+      if (!currentSessionId) return [];
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.getCheckpoints(process.cwd(), currentSessionId);
         }),
       );
     },

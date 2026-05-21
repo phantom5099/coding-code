@@ -62,8 +62,10 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     async clearSession() {},
     async classifyLastCompletedChanges() { return null; },
     async revertLastCompleted() {},
+    async revertCheckpoint() {},
     async forwardLastRevert() {},
     async hasForwardStack() { return false; },
     async checkpointDebug() { return {}; },
+    async getCheckpoints() { return []; },
   };
 }

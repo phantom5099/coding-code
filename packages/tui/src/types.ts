@@ -24,10 +24,18 @@ export interface PanelItem<T = string> {
   description?: string;
 }
 
+export interface CheckpointInfo {
+  turnId: number;
+  title: string;
+  agentModified: string[];
+  unknownSource: string[];
+}
+
 export type PanelState =
   | { type: 'none' }
   | { type: 'model'; items: PanelItem[]; activeValue: string }
   | { type: 'sessions'; items: PanelItem[] }
   | { type: 'approval'; id: string; tool: string; args: Record<string, unknown> }
-  | { type: 'checkpoint'; agentCount: number; unknownCount: number; hasForward: boolean }
+  | { type: 'checkpoint-list'; checkpoints: CheckpointInfo[] }
+  | { type: 'checkpoint-action'; cp: CheckpointInfo; hasForward: boolean }
   | { type: 'help' };

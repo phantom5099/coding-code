@@ -27,14 +27,15 @@ export const sendMessage = (
     const turnId = session.incrementTurn(state);
     turnIdBySession.set(sid, turnId);
 
-    // Snapshot filesystem before agent executes
-    const projectPath = state.cwd;
-    checkpoint.snapshotBaseline(projectPath, sid, turnId);
-
     const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
 
     yield* ctx.addUser(sid, actualInput);
     yield* session.recordUser(state, actualInput);
+
+    // Snapshot filesystem + include turn title for checkpoint UI
+    const projectPath = state.cwd;
+    const turnTitle = actualInput.trim().slice(0, 5) || '(empty)';
+    checkpoint.snapshotBaseline(projectPath, sid, turnId, turnTitle);
 
     const messages = yield* ctx.build(sid);
     const raw = agent.runStream(messages, llm, sid, matchedSkill?.instruction);

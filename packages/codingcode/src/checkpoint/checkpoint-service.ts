@@ -52,10 +52,11 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     }
 
     return {
-      snapshotBaseline: (projectPath: string, sessionId: string, turnId: number): void => {
+      snapshotBaseline: (projectPath: string, sessionId: string, turnId: number, title?: string): void => {
         const sg = ensure(projectPath);
+        const msg = title ? `${commitMsg(sessionId, turnId, 'baseline')} ${title}` : commitMsg(sessionId, turnId, 'baseline');
         sg.lock();
-        try { sg.commit(commitMsg(sessionId, turnId, 'baseline')); }
+        try { sg.commit(msg); }
         finally { sg.unlock(); }
       },
 
@@ -146,6 +147,36 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           const stack: ForwardEntry[] = JSON.parse(readFileSync(fwdPath, 'utf8'));
           return stack.length > 0;
         } catch { return false; }
+      },
+
+      getCheckpoints: (
+        projectPath: string, sessionId: string,
+      ): Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }> => {
+        const sg = ensure(projectPath);
+        const prefix = `turn-${shortSid(sessionId)}-`;
+        const result: Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }> = [];
+        for (let i = 1; i <= 10000; i++) {
+          const bCommit = sg.findCommitByMessage(`${prefix}${i}-baseline`);
+          const fCommit = sg.findCommitByMessage(`${prefix}${i}-final`);
+          if (!bCommit || !fCommit) { if (result.length === 0 && i === 1) continue; else break; }
+          // Extract title from baseline commit message
+          const msgResult = sg.git('log', '--all', '--grep', `${prefix}${i}-baseline`, '--format=%s', '-1');
+          const fullMsg = msgResult.stdout.trim();
+          const title = fullMsg.includes(' ') ? fullMsg.split(' ').slice(1).join(' ') : '';
+
+          // Inline classify logic (can't use `this` in arrow function)
+          const allChanges = sg.diffFiles(bCommit, fCommit);
+          const allFiles = [...new Set(allChanges.map((c) => c.file))];
+          const agentFiles = new Set(ledger(sg).getAgentFiles(i, sessionId));
+
+          result.push({
+            turnId: i,
+            title,
+            agentModified: allFiles.filter((f) => agentFiles.has(f)),
+            unknownSource: allFiles.filter((f) => !agentFiles.has(f)),
+          });
+        }
+        return result;
       },
 
       debugInfo: (projectPath: string, sessionId: string): Record<string, unknown> => {

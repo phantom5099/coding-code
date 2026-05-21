@@ -80,7 +80,9 @@ export class ShadowGit {
 
   checkoutFiles(commit: string, files: string[]): void {
     if (files.length === 0) return;
-    this.run('checkout', commit, '--', ...files);
+    // restore --source handles both existing files (restores content) and
+    // non-existing files at baseline (deletes them) — unlike checkout which errors
+    this.run('restore', '--source', commit, '--', ...files);
   }
 
   /** git diff --name-status between two commits. Returns [{ status, file }] */
