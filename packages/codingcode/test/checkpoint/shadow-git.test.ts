@@ -23,6 +23,8 @@ describe('ShadowGit', () => {
 
   afterEach(() => {
     try { rmSync(projectPath, { recursive: true, force: true }); } catch { /* ignore */ }
+    try { rmSync(sg.gitDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try { rmSync(sg['lockPath'] as string, { force: true }); } catch { /* ignore */ }
   });
 
   it('initializes a bare repository', () => {

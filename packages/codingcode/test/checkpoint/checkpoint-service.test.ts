@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { tmpdir } from 'os';
-import { randomUUID } from 'crypto';
+import { tmpdir, homedir } from 'os';
+import { randomUUID, createHash } from 'crypto';
 import { Effect, Layer } from 'effect';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { normalizePath } from '../../src/checkpoint/shadow-git.js';
 import { HookService } from '../../src/hooks/registry.js';
 
 describe('CheckpointService', () => {
@@ -21,6 +22,15 @@ describe('CheckpointService', () => {
 
   afterEach(() => {
     try { rmSync(projectPath, { recursive: true, force: true }); } catch { /* ignore */ }
+    const hash = createHash('sha256').update(normalizePath(projectPath)).digest('hex').slice(0, 16);
+    const shadowsDir = join(homedir(), '.codingcode', 'checkpoints');
+    try { rmSync(join(shadowsDir, `${hash}.git`), { recursive: true, force: true }); } catch { /* ignore */ }
+    try { rmSync(join(shadowsDir, `${hash}.lock`), { force: true }); } catch { /* ignore */ }
+    // Clean forward files for known test session IDs
+    for (const sid of ['s1', 's2', 's3', 's4']) {
+      const shortHash = createHash('sha256').update(sid).digest('hex').slice(0, 8);
+      try { rmSync(join(shadowsDir, `forward-${shortHash}.json`), { force: true }); } catch { /* ignore */ }
+    }
   });
 
   function run<T>(fn: (svc: CheckpointService) => T): T {
