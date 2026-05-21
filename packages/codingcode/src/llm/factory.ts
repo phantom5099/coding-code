@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { AgentError } from '../core/error';
+import { getInstallRoot } from '../core/workspace.js';
 import { Result } from '../core/result';
 import type { LLMClient } from './client';
 import { OpenAIProvider } from './providers/openai';
@@ -35,7 +36,9 @@ export interface SelectableModel {
   api_key_env: string;
 }
 
-const MODELS_FILE = resolve(process.cwd(), 'config/models.json');
+function modelsFile(): string {
+  return resolve(getInstallRoot(), 'config/models.json');
+}
 
 let catalog: ProviderCatalog | null = null;
 let currentEntry: SelectableModel | null = null;
@@ -43,11 +46,12 @@ let currentClient: LLMClient | null = null;
 
 function loadCatalog(): Result<ProviderCatalog, AgentError> {
   if (catalog) return Result.ok(catalog);
-  if (!existsSync(MODELS_FILE)) {
-    return Result.err(AgentError.configMissing(MODELS_FILE));
+  const path = modelsFile();
+  if (!existsSync(path)) {
+    return Result.err(AgentError.configMissing(path));
   }
   try {
-    const raw = readFileSync(MODELS_FILE, 'utf-8');
+    const raw = readFileSync(path, 'utf-8');
     const parsed = JSON.parse(raw) as ProviderCatalog;
     if (!parsed.providers || parsed.providers.length === 0) {
       return Result.err(new AgentError('CONFIG_INVALID', 'models.json has no providers defined'));

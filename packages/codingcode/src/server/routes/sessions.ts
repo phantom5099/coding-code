@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { AppLayer } from '../../layer.js';
 import { SessionService } from '../../session/store.js';
 import { compact, resumeSession } from '../../orchestration/index.js';
+import { resolveWorkspaceCwd } from '../../core/workspace.js';
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
@@ -11,7 +12,7 @@ function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 export const sessionsRouter = new Hono();
 
 sessionsRouter.get('/', async (c) => {
-  const cwd = c.req.query('cwd') ?? process.cwd();
+  const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   const sessions = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
@@ -26,7 +27,7 @@ sessionsRouter.post('/', async (c) => {
   const state = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
-      return yield* svc.create(body.cwd ?? process.cwd(), body.model ?? 'unknown', '0.1.0');
+      return yield* svc.create(resolveWorkspaceCwd(body.cwd), body.model ?? 'unknown', '0.1.0');
     }),
   );
   return c.json({ sessionId: state.sessionId });
@@ -35,13 +36,13 @@ sessionsRouter.post('/', async (c) => {
 sessionsRouter.post('/:id/resume', async (c) => {
   const sessionId = c.req.param('id');
   const body = await c.req.json() as any;
-  const result = await runWithLayer(resumeSession(sessionId, body.cwd ?? process.cwd()) as any);
+  const result = await runWithLayer(resumeSession(sessionId, resolveWorkspaceCwd(body.cwd)) as any);
   return c.json(result);
 });
 
 sessionsRouter.post('/:id/compact', async (c) => {
   const sessionId = c.req.param('id');
   const body = await c.req.json() as any;
-  const result = await runWithLayer(compact(sessionId, body.cwd ?? process.cwd()) as any);
+  const result = await runWithLayer(compact(sessionId, resolveWorkspaceCwd(body.cwd)) as any);
   return c.json(result);
 });

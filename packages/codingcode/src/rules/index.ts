@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { spawn } from "node:child_process";
+import { getWorkspaceCwd } from "../core/workspace.js";
 
 // ── Paths ──
 
@@ -12,7 +13,7 @@ function getGlobalRulesPath(): string {
 
 /** 项目规则文件路径 */
 function getProjectRulesPath(): string {
-  return path.join(process.cwd(), "AGENTS.md");
+  return path.join(getWorkspaceCwd(), "AGENTS.md");
 }
 
 // ── Read ──

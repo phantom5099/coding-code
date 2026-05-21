@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { spawn } from 'child_process';
 import type { ToolDefinition } from '../../types';
+import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const bashTool: ToolDefinition = {
   name: 'execute_command',
@@ -12,7 +13,7 @@ export const bashTool: ToolDefinition = {
   }),
   execute: async (args: unknown) => {
     const { command, cwd, timeout_ms } = args as any;
-    const workDir = cwd || process.cwd();
+    const workDir = cwd || getWorkspaceCwd();
     return new Promise<string>((resolve) => {
       const proc = spawn(command, {
         shell: true,

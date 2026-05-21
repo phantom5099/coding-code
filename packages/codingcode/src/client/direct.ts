@@ -8,6 +8,7 @@ import { parseApprovalResponse } from '../approval/response.js';
 import { AppLayer } from '../layer.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
+import { getWorkspaceCwd } from '../core/workspace.js';
 
 export type StreamChunk = string | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> };
 
@@ -63,7 +64,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
 
     async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
       const { registerEmitter, unregisterEmitter } = await import('../approval/async-confirm.js');
-      const program = sendMessage(currentSessionId || undefined, input, process.cwd(), activeLlm);
+      const program = sendMessage(currentSessionId || undefined, input, getWorkspaceCwd(), activeLlm);
       const { stream: agentGen, sessionId } = await runWithLayer(program) as any;
       currentSessionId = sessionId;
 
@@ -118,7 +119,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       currentSessionId = sid;
       return runWithLayer(
         Effect.gen(function* () {
-          return yield* resumeSession(sid, process.cwd());
+          return yield* resumeSession(sid, getWorkspaceCwd());
         }),
       );
     },
@@ -127,7 +128,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       return runWithLayer(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.listSessions(process.cwd());
+          return yield* svc.listSessions(getWorkspaceCwd());
         }),
       );
     },
@@ -162,7 +163,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       return runWithLayer(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          const projectPath = process.cwd();
+          const projectPath = getWorkspaceCwd();
           const turnIds = checkpoint.getCompletedTurns(projectPath, currentSessionId);
           if (turnIds.length === 0) return null;
           const lastTurn = turnIds[turnIds.length - 1];
@@ -177,7 +178,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       await runWithLayer(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          const projectPath = process.cwd();
+          const projectPath = getWorkspaceCwd();
           const turnIds = checkpoint.getCompletedTurns(projectPath, currentSessionId);
           if (turnIds.length === 0) return;
           const lastTurn = turnIds[turnIds.length - 1];
@@ -198,7 +199,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       await runWithLayer(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          const projectPath = process.cwd();
+          const projectPath = getWorkspaceCwd();
           const changes = checkpoint.classifyChanges(projectPath, currentSessionId, turnId);
           if (!changes) return;
           const files = mode === 'agent' ? changes.agentModified : [...changes.agentModified, ...changes.unknownSource];
@@ -214,7 +215,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       await runWithLayer(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          checkpoint.forward(process.cwd(), currentSessionId);
+          checkpoint.forward(getWorkspaceCwd(), currentSessionId);
         }),
       );
     },
@@ -224,7 +225,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       return runWithLayer(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          return checkpoint.hasForwardStack(process.cwd(), currentSessionId);
+          return checkpoint.hasForwardStack(getWorkspaceCwd(), currentSessionId);
         }),
       );
     },
@@ -235,7 +236,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       return runWithLayer(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          return checkpoint.getCheckpoints(process.cwd(), currentSessionId);
+          return checkpoint.getCheckpoints(getWorkspaceCwd(), currentSessionId);
         }),
       );
     },

@@ -2,6 +2,15 @@ export { AgentService } from './agent/agent.js';
 export { SessionService, findSessionIndex } from './session/store.js';
 export type { SessionStoreState } from './session/store.js';
 export { normalizePath, projectSlugFromPath } from './core/path.js';
+export {
+  initWorkspace,
+  parseWorkspaceArgs,
+  getWorkspaceCwd,
+  getInstallRoot,
+  resolveWorkspaceCwd,
+  getWorkspaceSlug,
+  resolveInWorkspace,
+} from './core/workspace.js';
 export { ContextService } from './context/context.js';
 export { HookService } from './hooks/registry.js';
 export type { HookPoint } from './hooks/registry.js';

@@ -24,10 +24,11 @@ const DEFAULT_CONFIG: AppConfig = {
   models: {},
 };
 
-export function loadConfig(configPath?: string): AppConfig {
+export function loadConfig(configPath?: string, installRoot?: string): AppConfig {
+  const root = installRoot ?? process.cwd();
   const paths = configPath
     ? [configPath]
-    : [resolve(process.cwd(), 'config/config.yaml'), resolve(process.cwd(), 'config/config.yml')];
+    : [resolve(root, 'config/config.yaml'), resolve(root, 'config/config.yml')];
 
   for (const p of paths) {
     if (existsSync(p)) {

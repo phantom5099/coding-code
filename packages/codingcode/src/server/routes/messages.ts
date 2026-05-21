@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { sseHandler } from '../handler.js';
 import { sendMessage } from '../../orchestration/index.js';
+import { getWorkspaceCwd } from '../../core/workspace.js';
 import { AppLayer } from '../../layer.js';
 import { toSSEString } from '../adapter.js';
 
@@ -19,7 +20,7 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
   const program = sendMessage(
     sessionId === '_' || !sessionId ? undefined : sessionId,
     input,
-    process.cwd(),
+    getWorkspaceCwd(),
     llm,
   );
 
