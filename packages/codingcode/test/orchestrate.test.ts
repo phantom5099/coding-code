@@ -11,6 +11,7 @@ const mockState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
   transcriptPath: '/tmp/test.jsonl', indexPath: '/tmp/test.index.json',
   messageCount: 0, currentTurnId: 0, sessionMeta: null, title: 'test-sess',
+  tokenCountEstimate: 0,
 };
 
 const mockLlm = {

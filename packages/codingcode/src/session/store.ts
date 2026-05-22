@@ -88,6 +88,7 @@ export interface SessionStoreState {
   sessionMeta: SessionMetaEvent | null;
   title: string;
   currentTurnId: number;
+  tokenCountEstimate: number;
 }
 
 function makeTitle(content: string): string {
@@ -141,14 +142,14 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           if (state.title === state.sessionId.slice(0, 8)) {
             state.title = makeTitle(content);
           }
-          appendEvent(state, event);
+          appendEvent(state, event, estimateTokensForContent(content));
           return event;
         }),
 
       recordAssistant: (state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], model: string): Effect.Effect<AssistantEvent> =>
         Effect.sync(() => {
           const event: AssistantEvent = { type: 'assistant', turnId: state.currentTurnId, uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString() };
-          appendEvent(state, event);
+          appendEvent(state, event, estimateTokensForContent(content));
           return event;
         }),
 
@@ -156,7 +157,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         Effect.sync(() => {
           const tokenCount = estimateTokensForContent(output);
           const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString(), tokenCount };
-          appendEvent(state, event);
+          appendEvent(state, event, tokenCount);
           return event;
         }),
 
@@ -191,16 +192,19 @@ function initState(cwd: string, sessionId?: string): SessionStoreState {
   const transcriptPath = join(SESSIONS_DIR, projectSlug, `${id}.jsonl`);
   const indexPath = transcriptPath.replace('.jsonl', '.index.json');
   let currentTurnId = 0;
+  let tokenCountEstimate = 0;
   try {
     if (existsSync(indexPath)) {
       const idx = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
       currentTurnId = idx.currentTurnId ?? 0;
+      tokenCountEstimate = idx.tokenCountEstimate ?? 0;
     }
   } catch { /* ignore corrupt index */ }
   return {
     sessionId: id, cwd: normalizedCwd, projectSlug, transcriptPath,
     indexPath,
     messageCount: 0, sessionMeta: null, title: id.slice(0, 8), currentTurnId,
+    tokenCountEstimate,
   };
 }
 
@@ -279,18 +283,21 @@ function listSessions(projectSlug?: string): SessionIndex[] {
   return results;
 }
 
-function appendEvent(state: SessionStoreState, event: SessionEvent): void {
+function appendEvent(state: SessionStoreState, event: SessionEvent, tokenDelta: number = 0): void {
   appendLine(state.transcriptPath, event);
   state.messageCount++;
-  updateIndex(state);
+  updateIndex(state, tokenDelta);
 }
 
 function appendLine(path: string, event: object): void {
   appendFileSync(path, JSON.stringify(event) + '\n', 'utf8');
 }
 
-function updateIndex(state: SessionStoreState): void {
+function updateIndex(state: SessionStoreState, tokenDelta: number = 0): void {
   if (!state.sessionMeta) return;
+  // Authoritative in-memory state for token count to avoid races with async writes.
+  state.tokenCountEstimate = Math.max(0, state.tokenCountEstimate + tokenDelta);
+  // Fields that may have been mutated by appendProjection on disk: read fresh.
   const current = readCurrentIndex(state.indexPath);
   const index: SessionIndex = {
     sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd,
@@ -299,7 +306,7 @@ function updateIndex(state: SessionStoreState): void {
     updatedAt: new Date().toISOString(),
     messageCount: state.messageCount, title: state.title,
     currentTurnId: state.currentTurnId,
-    tokenCountEstimate: current?.tokenCountEstimate ?? 0,
+    tokenCountEstimate: state.tokenCountEstimate,
     projectedRanges: current?.projectedRanges ?? [],
     lastUncoveredByteOffset: current?.lastUncoveredByteOffset ?? 0,
     lastProjectionAt: current?.lastProjectionAt,

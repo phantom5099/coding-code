@@ -76,13 +76,15 @@ export const resumeSession = (
     return history;
   });
 
-export const compact = (sessionId: string, cwd: string) =>
+export const compact = (sessionId: string, cwd: string, llm: any = null) =>
   Effect.gen(function* () {
     const ctx = yield* ContextService;
     const session = yield* SessionService;
     const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
 
-    // Delegate to Compressor via context service; no compact_boundary written
-    return yield* ctx.compress(sid);
+    // Delegate to Compressor via context service; no compact_boundary written.
+    // The llm is passed through so L5 can call it (or its configured
+    // compactionModel) for the five-section summary.
+    return yield* ctx.compress(sid, llm);
   });

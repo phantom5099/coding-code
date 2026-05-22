@@ -26,7 +26,6 @@ export interface ContextConfig {
   prefixTurnsProtected: number;
   minTurnsBetweenCompactions: number;
   L5KeepRecentTurns: number;
-  compactionFuseMaxFailures: number;
   compactionModel: string;
   archiveTtlDays: number;
   checkpointKeep: number;
@@ -63,7 +62,6 @@ const DEFAULT_CONTEXT: ContextConfig = {
   prefixTurnsProtected: 1,
   minTurnsBetweenCompactions: 5,
   L5KeepRecentTurns: 10,
-  compactionFuseMaxFailures: 3,
   compactionModel: 'haiku',
   archiveTtlDays: 30,
   checkpointKeep: 50,

@@ -20,7 +20,10 @@ export function applyProjections(
     if (proj.type !== 'range') continue;
     const [start, end] = proj.turnRange;
     const startIdx = result.findIndex((m) => m.turnId === start);
-    const endIdx = result.findLastIndex((m) => m.turnId === end);
+    let endIdx = -1;
+    for (let i = result.length - 1; i >= 0; i--) {
+      if (result[i]!.turnId === end) { endIdx = i; break; }
+    }
     if (startIdx !== -1 && endIdx !== -1 && startIdx <= endIdx) {
       const summaryEnriched: EnrichedMessage[] = proj.summaryMessages.map((msg, i) => ({
         message: msg,

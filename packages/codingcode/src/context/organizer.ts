@@ -5,7 +5,7 @@ import { estimateTokens } from './utils/tokens.js';
 
 export function assemblePayload(
   sessionId: string,
-  pendingUser: Message,
+  pendingUser: Message | null,
   pinned: Message[],
   config: ContextConfig,
 ): Message[] {
@@ -15,7 +15,7 @@ export function assemblePayload(
   // Strip trailing incomplete assistant messages (API rejects them)
   const cleaned = stripOrphanToolCalls(base);
 
-  const full = [...pinned, ...cleaned, pendingUser];
+  const full = pendingUser ? [...pinned, ...cleaned, pendingUser] : [...pinned, ...cleaned];
   return fitToBudget(full, config, pinned.length);
 }
 

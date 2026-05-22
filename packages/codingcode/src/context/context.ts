@@ -1,9 +1,17 @@
 import { Effect } from 'effect';
 import type { Message, ToolCall } from '../core/types.js';
 import { getContextConfig } from './config.js';
-import { estimateTokens } from './utils/tokens.js';
 import { run, runL5, type CompressResult } from './compressor/index.js';
+import { assemblePayload } from './organizer.js';
+import { findSessionIndex } from '../session/store.js';
+import type { LLMClient } from '../llm/client.js';
 
+/**
+ * Per-session in-memory message log. This is the *append buffer*; the
+ * persistent truth lives in JSONL. `build()` ignores this buffer and
+ * reconstructs the LLM view from JSONL + projections every call so that
+ * compression effects always become visible.
+ */
 const stores = new Map<string, Message[]>();
 
 function getStore(sessionId: string): Message[] {
@@ -40,18 +48,42 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
           msgs.push({ role: 'tool', content: output, tool_call_id: toolCallId, tool_name: toolName });
         }),
 
-      appendTurnEnd: (sessionId: string, llm?: any): Effect.Effect<void> =>
-        Effect.sync(() => {
-          const msgs = getStore(sessionId);
+      /**
+       * Called at the end of each agent turn. Uses the cheap O(1) gate from
+       * `index.tokenCountEstimate` (maintained incrementally by recordX +
+       * appendProjection) instead of rebuilding the full LLM view just to
+       * count tokens. The Compressor itself does the precise accounting when
+       * it actually needs to act.
+       */
+      appendTurnEnd: (sessionId: string, llm: LLMClient | null = null): Effect.Effect<CompressResult> =>
+        Effect.promise(async () => {
           const config = getContextConfig();
-          const usage = estimateTokens(msgs);
+          const idx = findSessionIndex(sessionId);
+          const usage = idx?.tokenCountEstimate ?? 0;
           if (usage > config.defaultMaxTokens * config.thresholds.budgetReduction) {
-            run(sessionId, usage, llm, config);
+            return await run(sessionId, usage, llm, config);
           }
+          return { didCompress: false, released: 0 };
         }),
 
-      build: (sessionId: string): Effect.Effect<Message[]> =>
-        Effect.succeed([...getStore(sessionId)]),
+      /**
+       * Build the message array to send to the LLM next. Uses the projection
+       * pipeline (raw JSONL → applyProjections → L1 → L3 → fitToBudget).
+       *
+       * The optional `pendingUser` lets the caller append the about-to-be-sent
+       * user message; if omitted, only the persisted history is returned.
+       */
+      build: (sessionId: string, pendingUser?: Message, pinned: Message[] = []): Effect.Effect<Message[]> =>
+        Effect.sync(() => {
+          const config = getContextConfig();
+          try {
+            return assemblePayload(sessionId, pendingUser ?? null, pinned, config);
+          } catch {
+            // Session not yet persisted (e.g. very first call before recordUser):
+            // fall back to in-memory log.
+            return [...getStore(sessionId)];
+          }
+        }),
 
       getMessages: (sessionId: string): Effect.Effect<Message[]> =>
         Effect.succeed([...getStore(sessionId)]),
@@ -69,11 +101,12 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
           if (store) store.length = 0;
         }),
 
-      compress: (sessionId: string): Effect.Effect<CompressResult> =>
-        Effect.sync(() => {
+      compress: (sessionId: string, llm: LLMClient | null = null): Effect.Effect<CompressResult> =>
+        Effect.promise(async () => {
           const config = getContextConfig();
-          return runL5(sessionId, config);
+          return await runL5(sessionId, config, llm);
         }),
     };
   }),
 }) {}
+
