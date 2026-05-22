@@ -10,6 +10,36 @@ const mockToolRegistry = {
   register: () => Effect.succeed(undefined),
 };
 
+const mockCtx = {
+  build: (_sessionId: string) => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
+  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: false, released: 0 }),
+  compress: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: true, released: 1000 }),
+};
+
+const mockSession = {
+  recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
+    Effect.sync(() => ({ uuid: 'a1' })),
+  recordToolResult: (_state: any, _parentUuid: string, _toolName: string, _toolCallId: string, _output: string) =>
+    Effect.sync(() => ({})),
+};
+
+const mockCheckpoint = {
+  snapshotFinal: () => {},
+};
+
+const mockState = {
+  sessionId: 'test-sid',
+  cwd: '/tmp',
+  projectSlug: 'test',
+  transcriptPath: '/tmp/test.jsonl',
+  indexPath: '/tmp/test.index.json',
+  messageCount: 0,
+  currentTurnId: 1,
+  sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
+  title: 'test',
+  tokenCountEstimate: 0,
+};
+
 describe('runReActLoop', () => {
   it('should yield text chunks from LLM stream', async () => {
     const mockLlm = {
@@ -25,22 +55,15 @@ describe('runReActLoop', () => {
       }),
     };
 
-    const mockExecutor = {
-      execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
-        Effect.succeed('done'),
-    };
-
-    const maxSteps = 25;
-
     const gen = runReActLoop(
-      [{ role: 'user', content: 'hi' }],
-      maxSteps,
+      mockState,
+      25,
       mockLlm as any,
-      mockExecutor as any,
+      null as any,
       mockToolRegistry as any,
-      'test-session',
-      1,
-      '/tmp',
+      mockCtx as any,
+      mockSession as any,
+      mockCheckpoint as any,
     );
 
     const events: any[] = [];
@@ -60,22 +83,15 @@ describe('runReActLoop', () => {
       }),
     };
 
-    const mockExecutor = {
-      execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
-        Effect.succeed('done'),
-    };
-
-    const maxSteps = 25;
-
     const gen = runReActLoop(
-      [{ role: 'user', content: 'hi' }],
-      maxSteps,
+      mockState,
+      25,
       mockLlm as any,
-      mockExecutor as any,
+      null as any,
       mockToolRegistry as any,
-      'test-session',
-      1,
-      '/tmp',
+      mockCtx as any,
+      mockSession as any,
+      mockCheckpoint as any,
     );
 
     const events: any[] = [];
@@ -87,7 +103,7 @@ describe('runReActLoop', () => {
     expect(textEvents).toHaveLength(0);
   });
 
-  it('should feed bash tool results back to LLM (regression: result was discarded)', async () => {
+  it('should feed bash tool results back to LLM', async () => {
     const mockLlm = {
       completeStream: (_params: any) => ({
         stream: (async function* () {
@@ -118,17 +134,15 @@ describe('runReActLoop', () => {
         ),
     };
 
-    const maxSteps = 1;
-
     const gen = runReActLoop(
-      [{ role: 'user', content: 'git status' }],
-      maxSteps,
+      mockState,
+      1,
       mockLlm as any,
       mockExecutor as any,
       toolRegistryWithBash as any,
-      'test-session',
-      1,
-      '/tmp',
+      mockCtx as any,
+      mockSession as any,
+      mockCheckpoint as any,
     );
 
     const events: any[] = [];
@@ -173,17 +187,15 @@ describe('runReActLoop', () => {
         ),
     };
 
-    const maxSteps = 1;
-
     const gen = runReActLoop(
-      [{ role: 'user', content: 'read file' }],
-      maxSteps,
+      mockState,
+      1,
       mockLlm as any,
       mockExecutor as any,
       toolRegistryWithTool as any,
-      'test-session',
-      1,
-      '/tmp',
+      mockCtx as any,
+      mockSession as any,
+      mockCheckpoint as any,
     );
 
     const events: any[] = [];

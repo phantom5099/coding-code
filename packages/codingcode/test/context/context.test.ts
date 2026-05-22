@@ -24,6 +24,28 @@ const mockLlm = {
 const MockToolExecutorLayer = Layer.succeed(ToolExecutorService, ToolExecutorService.of({
   _tag: 'ToolExecutor' as const,
   execute: () => Effect.succeed('done'),
+  executeBatch: (toolCalls: any[]) => Effect.succeed(
+    toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: '' })),
+  ),
+}));
+
+const MockContextLayer = Layer.succeed(ContextService, ContextService.of({
+  _tag: 'Context' as any,
+  build: () => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
+  compress: () => Effect.succeed({ didCompress: true, released: 0 }),
+  appendTurnEnd: () => Effect.succeed({ didCompress: false, released: 0 }),
+}));
+
+const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.of({
+  _tag: 'Checkpoint' as const,
+  snapshotBaseline: () => {},
+  snapshotFinal: () => {},
+  classifyChanges: () => null,
+  getCompletedTurns: () => [],
+  revertFiles: () => {},
+  forward: () => null,
+  hasForwardStack: () => false,
+  getCheckpoints: () => [],
 }));
 
 function makeMockSessionLayer(state: any) {
@@ -41,6 +63,7 @@ function makeMockSessionLayer(state: any) {
     getSessionId: () => state.sessionId,
     getMessageCount: () => 0,
     incrementTurn: () => 0,
+    findSessionIndex: () => Effect.succeed(null),
   }));
 }
 
@@ -50,8 +73,6 @@ describe('ContextService', () => {
 
     const mockSessionLayer = makeMockSessionLayer({ ...mockState, sessionId: sid });
     const { AgentService } = await import('../../src/agent/agent.js');
-    const { ContextLayer } = await import('../../src/layer.js');
-
     const MockSkillLayer = Layer.succeed(SkillService, SkillService.of({
       _tag: 'Skill' as const,
       loadAll: () => Effect.succeed(undefined), getAll: () => Effect.succeed([]),
@@ -60,19 +81,20 @@ describe('ContextService', () => {
     }));
 
     const { ToolLayer, HookLayer } = await import('../../src/layer.js');
-    const AgentDeps = Layer.mergeAll(MockToolExecutorLayer, ToolLayer);
-    const TestAgentLayer = AgentService.Default.pipe(Layer.provide(AgentDeps));
-    const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.of({
-      _tag: 'Checkpoint' as const,
-      snapshotBaseline: () => {},
-      snapshotFinal: () => {},
-      classifyChanges: () => null,
-      getCompletedTurns: () => [],
-      revertFiles: () => {},
-      forward: () => null,
-      hasForwardStack: () => false,
-    }));
-    const fullLayer = Layer.mergeAll(mockSessionLayer, MockSkillLayer, MockCheckpointLayer, TestAgentLayer, ContextLayer, HookLayer);
+    const AllDeps = Layer.mergeAll(
+      MockToolExecutorLayer,
+      ToolLayer,
+      MockContextLayer,
+      mockSessionLayer,
+      MockCheckpointLayer,
+      MockSkillLayer,
+      HookLayer,
+    );
+
+    const fullLayer = Layer.mergeAll(
+      AgentService.Default.pipe(Layer.provide(AllDeps)),
+      AllDeps,
+    );
 
     let sid1: string = '';
     // Step 1: send message in one Effect scope
