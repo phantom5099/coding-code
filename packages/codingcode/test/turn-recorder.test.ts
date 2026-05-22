@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { recordAgentEvents } from '../src/orchestration/record-agent-events.js';
+import { recordTurn } from '../src/orchestration/turn-recorder.js';
 import type { AgentEvent } from '../src/agent/agent.js';
 import type { SessionStoreState } from '../src/session/store.js';
 
@@ -9,13 +9,9 @@ function makeMockContext() {
   return {
     calls,
     ctx: {
-      addAssistant: (...args: any[]) => {
-        calls.push({ method: 'addAssistant', args });
-        return Effect.succeed(undefined);
-      },
-      addToolResult: (...args: any[]) => {
-        calls.push({ method: 'addToolResult', args });
-        return Effect.succeed(undefined);
+      appendTurnEnd: (...args: any[]) => {
+        calls.push({ method: 'appendTurnEnd', args });
+        return Effect.succeed({ didCompress: false, released: 0 });
       },
     },
   };
@@ -39,6 +35,18 @@ function makeMockSession() {
   };
 }
 
+function makeMockCheckpoint() {
+  const calls: Array<{ method: string; args: any[] }> = [];
+  return {
+    calls,
+    checkpoint: {
+      snapshotFinal: (...args: any[]) => {
+        calls.push({ method: 'snapshotFinal', args });
+      },
+    },
+  };
+}
+
 const mockState: SessionStoreState = {
   sessionId: 'test-sid',
   cwd: '/tmp',
@@ -49,9 +57,10 @@ const mockState: SessionStoreState = {
   currentTurnId: 0,
   sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
   title: 'test',
+  tokenCountEstimate: 0,
 };
 
-describe('recordAgentEvents', () => {
+describe('recordTurn', () => {
   it('passes through all events unchanged', async () => {
     const events: AgentEvent[] = [
       { _tag: 'LlmChunk', text: 'hello' },
@@ -66,31 +75,33 @@ describe('recordAgentEvents', () => {
 
     const { ctx } = makeMockContext();
     const { session } = makeMockSession();
+    const { checkpoint } = makeMockCheckpoint();
 
     const result: AgentEvent[] = [];
-    for await (const event of recordAgentEvents(source(), ctx as any, session as any, mockState, 'test-sid')) {
+    for await (const event of recordTurn(source(), { session: session as any, ctx: ctx as any, checkpoint: checkpoint as any },
+      { state: mockState, sid: 'test-sid', turnId: 1, projectPath: '/tmp', llm: null })) {
       result.push(event);
     }
 
     expect(result).toEqual(events);
   });
 
-  it('records Assistant to context and session', async () => {
+  it('records Assistant to session only', async () => {
     async function* source() {
       yield { _tag: 'Assistant', content: 'answer', toolCalls: [] } as AgentEvent;
     }
 
     const { ctx, calls: ctxCalls } = makeMockContext();
     const { session, calls: sessCalls } = makeMockSession();
+    const { checkpoint } = makeMockCheckpoint();
 
-    for await (const _ of recordAgentEvents(source(), ctx as any, session as any, mockState, 'test-sid')) {
+    for await (const _ of recordTurn(source(), { session: session as any, ctx: ctx as any, checkpoint: checkpoint as any },
+      { state: mockState, sid: 'test-sid', turnId: 1, projectPath: '/tmp', llm: null })) {
       // consume
     }
 
     expect(ctxCalls).toHaveLength(1);
-    expect(ctxCalls[0]!.method).toBe('addAssistant');
-    expect(ctxCalls[0]!.args[0]).toBe('test-sid');
-    expect(ctxCalls[0]!.args[1]).toBe('answer');
+    expect(ctxCalls[0]!.method).toBe('appendTurnEnd');
 
     expect(sessCalls).toHaveLength(1);
     expect(sessCalls[0]!.method).toBe('recordAssistant');
@@ -98,7 +109,7 @@ describe('recordAgentEvents', () => {
     expect(sessCalls[0]!.args[3]).toBe('test-model');
   });
 
-  it('records ToolResult to context and session', async () => {
+  it('records ToolResult to session only', async () => {
     async function* source() {
       yield { _tag: 'Assistant', content: 'using tool', toolCalls: [{ id: 'tc1', name: 'readFile', arguments: { path: '/x' } }] } as AgentEvent;
       yield { _tag: 'ToolResult', id: 'tc1', name: 'readFile', output: 'file content', ok: true } as AgentEvent;
@@ -106,20 +117,18 @@ describe('recordAgentEvents', () => {
 
     const { ctx, calls: ctxCalls } = makeMockContext();
     const { session, calls: sessCalls } = makeMockSession();
+    const { checkpoint } = makeMockCheckpoint();
 
-    for await (const _ of recordAgentEvents(source(), ctx as any, session as any, mockState, 'test-sid')) {
+    for await (const _ of recordTurn(source(), { session: session as any, ctx: ctx as any, checkpoint: checkpoint as any },
+      { state: mockState, sid: 'test-sid', turnId: 1, projectPath: '/tmp', llm: null })) {
       // consume
     }
 
-    expect(ctxCalls).toHaveLength(2);
-    expect(ctxCalls[1]!.method).toBe('addToolResult');
-    expect(ctxCalls[1]!.args[0]).toBe('test-sid');
-    expect(ctxCalls[1]!.args[1]).toBe('tc1');
-    expect(ctxCalls[1]!.args[2]).toBe('file content');
+    expect(ctxCalls).toHaveLength(1);
+    expect(ctxCalls[0]!.method).toBe('appendTurnEnd');
 
     expect(sessCalls).toHaveLength(2);
     expect(sessCalls[1]!.method).toBe('recordToolResult');
-    // args: state, assistantUuid, toolName, toolCallId, output
     expect(sessCalls[1]!.args[2]).toBe('readFile');
     expect(sessCalls[1]!.args[3]).toBe('tc1');
     expect(sessCalls[1]!.args[4]).toBe('file content');
@@ -135,12 +144,58 @@ describe('recordAgentEvents', () => {
 
     const { ctx, calls: ctxCalls } = makeMockContext();
     const { session, calls: sessCalls } = makeMockSession();
+    const { checkpoint } = makeMockCheckpoint();
 
-    for await (const _ of recordAgentEvents(source(), ctx as any, session as any, mockState, 'test-sid')) {
+    for await (const _ of recordTurn(source(), { session: session as any, ctx: ctx as any, checkpoint: checkpoint as any },
+      { state: mockState, sid: 'test-sid', turnId: 1, projectPath: '/tmp', llm: null })) {
       // consume
     }
 
-    expect(ctxCalls).toHaveLength(0);
+    expect(ctxCalls).toHaveLength(1);
+    expect(ctxCalls[0]!.method).toBe('appendTurnEnd');
     expect(sessCalls).toHaveLength(0);
+  });
+
+  it('calls snapshotFinal on stream completion', async () => {
+    async function* source() {
+      yield { _tag: 'Done', content: 'done' } as AgentEvent;
+    }
+
+    const { ctx } = makeMockContext();
+    const { session } = makeMockSession();
+    const { checkpoint, calls: checkpointCalls } = makeMockCheckpoint();
+
+    for await (const _ of recordTurn(source(), { session: session as any, ctx: ctx as any, checkpoint: checkpoint as any },
+      { state: mockState, sid: 'test-sid', turnId: 1, projectPath: '/tmp', llm: null })) {
+      // consume
+    }
+
+    expect(checkpointCalls).toHaveLength(1);
+    expect(checkpointCalls[0]!.method).toBe('snapshotFinal');
+    expect(checkpointCalls[0]!.args[1]).toBe('test-sid');
+    expect(checkpointCalls[0]!.args[2]).toBe(1);
+  });
+
+  it('calls finally even if stream errors', async () => {
+    async function* source() {
+      yield { _tag: 'LlmChunk', text: 'hi' } as AgentEvent;
+      throw new Error('stream error');
+    }
+
+    const { ctx } = makeMockContext();
+    const { session } = makeMockSession();
+    const { checkpoint, calls: checkpointCalls } = makeMockCheckpoint();
+
+    try {
+      for await (const _ of recordTurn(source(), { session: session as any, ctx: ctx as any, checkpoint: checkpoint as any },
+        { state: mockState, sid: 'test-sid', turnId: 1, projectPath: '/tmp', llm: null })) {
+        // consume
+      }
+    } catch {
+      // expected
+    }
+
+    expect(checkpointCalls).toHaveLength(1);
+    expect(checkpointCalls[0]!.method).toBe('snapshotFinal');
   });
 });

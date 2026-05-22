@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { AgentEvent } from '../agent/agent.js';
-import { sendMessage, resumeSession } from '../orchestration/index.js';
+import { sendMessage } from '../orchestration/index.js';
 import { SessionService } from '../session/store.js';
 import { ContextService } from '../context/context.js';
 import { ApprovalWaitService } from '../approval/async-confirm.js';
@@ -20,7 +20,6 @@ export interface AgentClient {
   listModels(): Promise<any>;
   switchModel(id: string): Promise<void>;
   getSessionId(): string;
-  clearSession(): Promise<void>;
   classifyLastCompletedChanges(): Promise<{ agentModified: string[]; unknownSource: string[] } | null>;
   revertLastCompleted(mode: 'agent' | 'all'): Promise<void>;
   revertCheckpoint(turnId: number, mode: 'agent' | 'all'): Promise<void>;
@@ -119,7 +118,9 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       currentSessionId = sid;
       return runWithLayer(
         Effect.gen(function* () {
-          return yield* resumeSession(sid, getWorkspaceCwd());
+          const svc = yield* SessionService;
+          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', '0.1.0', sid);
+          return yield* svc.readHistory(state);
         }),
       );
     },
@@ -147,15 +148,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       const clientResult = await getLLMClient();
       if (!clientResult.ok) throw clientResult.error;
       activeLlm = clientResult.value;
-    },
-
-    async clearSession() {
-      await runWithLayer(
-        Effect.gen(function* () {
-          const ctx = yield* ContextService;
-          yield* ctx.clear(currentSessionId);
-        }),
-      );
     },
 
     async classifyLastCompletedChanges() {
@@ -229,7 +221,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         }),
       );
     },
-
 
     async getCheckpoints() {
       if (!currentSessionId) return [];

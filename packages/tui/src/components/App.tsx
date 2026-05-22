@@ -79,7 +79,6 @@ export function App({ client }: AppProps) {
     if (cmd.quick) {
       if (parsed.name === 'exit') { exit(); return; }
       if (parsed.name === 'clear') {
-        await client.clearSession();
         setStaticMessages([{
           id: generateId(), timestamp: Date.now(), role: 'welcome' as const,
           content: buildWelcomeContent(),

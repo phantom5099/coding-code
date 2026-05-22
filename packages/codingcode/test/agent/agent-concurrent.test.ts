@@ -67,6 +67,8 @@ describe('runReActLoop — concurrent tool execution', () => {
       mockExecutor as any,
       mockToolRegistry as any,
       'test-session',
+      1,
+      '/tmp',
     );
 
     const events: any[] = [];
@@ -128,6 +130,8 @@ describe('runReActLoop — concurrent tool execution', () => {
       mockExecutor as any,
       mockToolRegistry as any,
       'test-session',
+      1,
+      '/tmp',
     );
 
     const events: any[] = [];

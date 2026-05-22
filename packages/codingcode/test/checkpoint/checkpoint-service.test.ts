@@ -7,7 +7,6 @@ import { Effect, Layer } from 'effect';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
 import { projectSlugFromPath } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/registry.js';
-import { turnIdBySession, projectPathBySession } from '../../src/checkpoint/bootstrap.js';
 
 describe('CheckpointService', () => {
   let projectPath: string;
@@ -117,10 +116,6 @@ describe('CheckpointService', () => {
     const filePath = join(projectPath, 'agent-file.txt');
     writeFileSync(filePath, 'v1', 'utf8');
 
-    // Simulate the orchestration flow: set session mappings before tools run
-    turnIdBySession.set('agent-test', 1);
-    projectPathBySession.set('agent-test', projectPath);
-
     await Effect.runPromise(
       Effect.gen(function* () {
         const hooks = yield* HookService;
@@ -129,11 +124,14 @@ describe('CheckpointService', () => {
         svc.snapshotBaseline(projectPath, 'agent-test', 1);
 
         // Emit hooks as if write_file tool was called with an absolute path
+        // Pass turnId and projectPath through the payload
         const absPath = resolve(filePath);
         yield* hooks.emit('tool.execute.before', {
           toolName: 'write_file',
           args: { path: absPath, content: 'v2' },
           sessionId: 'agent-test',
+          turnId: 1,
+          projectPath: projectPath,
         });
 
         writeFileSync(filePath, 'v2', 'utf8');
@@ -144,6 +142,8 @@ describe('CheckpointService', () => {
           result: 'ok',
           durationMs: 5,
           sessionId: 'agent-test',
+          turnId: 1,
+          projectPath: projectPath,
         });
 
         svc.snapshotFinal(projectPath, 'agent-test', 1);
@@ -154,8 +154,5 @@ describe('CheckpointService', () => {
         expect(result!.unknownSource).toEqual([]);
       }).pipe(Effect.provide(testLayer)),
     );
-
-    turnIdBySession.delete('agent-test');
-    projectPathBySession.delete('agent-test');
   });
 });

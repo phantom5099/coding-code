@@ -7,23 +7,6 @@ import type { HookService } from '../hooks/registry.js';
 import { projectSlugFromPath } from '../core/path.js';
 import { Ledger } from './ledger.js';
 
-/**
- * In-memory mapping: sessionId → currentTurnId.
- * Updated by orchestration when incrementTurn is called.
- * Read by hook observers to tag Ledger entries.
- */
-export const turnIdBySession = new Map<string, number>();
-
-/**
- * In-memory mapping: sessionId → projectPath.
- * Updated by orchestration on each sendMessage call.
- * Read by hook observers to find the correct Ledger for the session's project.
- */
-export const projectPathBySession = new Map<string, string>();
-
-/** Track whether bootstrap has already run for this hook service. */
-const bootstrappedHooks = new WeakSet<HookService>();
-
 /** Cache ledger instances by shadow git directory path. */
 const ledgerCache = new Map<string, Ledger>();
 
@@ -48,9 +31,6 @@ function getLedger(projectPath: string): Ledger {
 export function bootstrapCheckpoint(
   hooks: HookService,
 ): void {
-  if (bootstrappedHooks.has(hooks)) return;
-  bootstrappedHooks.add(hooks);
-
   // Pre-execution: record file hash before modification
   Effect.runSync(hooks.register('tool.execute.before', async (payload) => {
     const toolName = payload.toolName as string;
@@ -68,9 +48,9 @@ export function bootstrapCheckpoint(
   Effect.runSync(hooks.register('tool.execute.after', async (payload) => {
     const sessionId = payload.sessionId as string | undefined;
     if (!sessionId) return;
-    const turnId = turnIdBySession.get(sessionId);
+    const turnId = payload.turnId as number | undefined;
     if (turnId === undefined) return;
-    const projectPath = projectPathBySession.get(sessionId);
+    const projectPath = payload.projectPath as string | undefined;
     if (!projectPath) return;
 
     const toolName = payload.toolName as string;

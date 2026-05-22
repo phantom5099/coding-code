@@ -63,7 +63,7 @@ const TestLayer = Layer.mergeAll(MockSessionLayer, MockSkillLayer, MockCheckpoin
 
 describe('sendMessage stream', () => {
   it('should yield AgentEvent chunks from LLM', async () => {
-    const program = sendMessage('test-session', 'hi', '/tmp/test', mockLlm);
+    const program = sendMessage(undefined, 'hi', '/tmp/test', mockLlm);
     const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
 
     const events: any[] = [];
@@ -78,12 +78,12 @@ describe('sendMessage stream', () => {
   });
 
   it('should not return empty event stream for normal LLM response', async () => {
-    const program = sendMessage('test-session', 'hi', '/tmp/test', mockLlm);
+    const program = sendMessage(undefined, 'hi', '/tmp/test', mockLlm);
     const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
 
     const events: any[] = [];
     for await (const event of stream) events.push(event);
 
-    expect(events.length).toBeGreaterThan(0);
+    expect(events.filter((e: any) => e._tag !== 'Step')).toHaveLength(4);
   });
 });
