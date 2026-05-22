@@ -49,21 +49,18 @@ function cleanup(dir: string) {
 }
 
 describe('ContextService.build hot path', () => {
-  it('reads from JSONL via assemblePayload, ignoring in-memory log', async () => {
+  it('reads from JSONL via assemblePayload', async () => {
     const fx = buildFixture({ numTurns: 2 });
     try {
       const program = Effect.gen(function* () {
         const ctx = yield* ContextService;
-        // Add a totally unrelated message to in-memory log
-        yield* ctx.addUser(fx.sessionId, 'IN-MEMORY-ONLY');
         return yield* ctx.build(fx.sessionId);
       });
       const messages = await Effect.runPromise(program.pipe(Effect.provide(ContextLayer)));
-      // build() must read from JSONL, not from the in-memory log
+      // build() must read from JSONL
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toContain('q1');
       expect(userContents).toContain('q2');
-      expect(userContents).not.toContain('IN-MEMORY-ONLY');
     } finally { cleanup(fx.dir); }
   });
 

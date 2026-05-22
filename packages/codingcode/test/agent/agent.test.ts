@@ -39,6 +39,8 @@ describe('runReActLoop', () => {
       mockExecutor as any,
       mockToolRegistry as any,
       'test-session',
+      1,
+      '/tmp',
     );
 
     const events: any[] = [];
@@ -72,6 +74,8 @@ describe('runReActLoop', () => {
       mockExecutor as any,
       mockToolRegistry as any,
       'test-session',
+      1,
+      '/tmp',
     );
 
     const events: any[] = [];
@@ -123,6 +127,8 @@ describe('runReActLoop', () => {
       mockExecutor as any,
       toolRegistryWithBash as any,
       'test-session',
+      1,
+      '/tmp',
     );
 
     const events: any[] = [];
@@ -176,6 +182,8 @@ describe('runReActLoop', () => {
       mockExecutor as any,
       toolRegistryWithTool as any,
       'test-session',
+      1,
+      '/tmp',
     );
 
     const events: any[] = [];

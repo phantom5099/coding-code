@@ -43,9 +43,11 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
         messages: Message[],
         llm: LLMStreamAdapter,
         sessionId: string,
+        turnId: number,
+        projectPath: string,
         skillInstruction?: string,
       ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> =>
-        runReActLoop(messages, maxSteps, llm, executor, toolRegistry, sessionId, skillInstruction),
+        runReActLoop(messages, maxSteps, llm, executor, toolRegistry, sessionId, turnId, projectPath, skillInstruction),
     };
   }),
 }) {}
@@ -57,6 +59,8 @@ export async function* runReActLoop(
   executor: ToolExecutorService,
   toolRegistry: ToolService,
   sessionId: string,
+  turnId: number,
+  projectPath: string,
   skillInstruction?: string,
 ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> {
   const messages = [...initialMessages];
@@ -104,7 +108,7 @@ export async function* runReActLoop(
 
     // Execute all tools — safe tools in parallel, Bash tools serially
     const allResults = await Effect.runPromise(
-      executor.executeBatch(toolCalls, sessionId),
+      executor.executeBatch(toolCalls, sessionId, { turnId, projectPath }),
     );
 
     for (const r of allResults) {
