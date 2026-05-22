@@ -5,9 +5,13 @@ import { Result } from '../core/result.js';
 import type { ToolDescription } from '../tools/types.js';
 import { ToolService } from '../tools/registry.js';
 import { ToolExecutorService } from '../tools/executor.js';
+import { ContextService } from '../context/context.js';
+import { SessionService, type SessionStoreState } from '../session/store.js';
+import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { buildSystemPrompt } from '../prompts/index.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 import { resolveConfig } from './config.js';
+import { getContextConfig } from '../context/config.js';
 
 export type AgentEvent =
   | { readonly _tag: 'LlmChunk'; readonly text: string }
@@ -37,34 +41,34 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
   effect: Effect.gen(function* () {
     const executor = yield* ToolExecutorService;
     const toolRegistry = yield* ToolService;
+    const ctx = yield* ContextService;
+    const session = yield* SessionService;
+    const checkpoint = yield* CheckpointService;
     const maxSteps = resolveConfig().maxSteps;
 
     return {
       runStream: (
-        messages: Message[],
+        state: SessionStoreState,
         llm: LLMStreamAdapter,
-        sessionId: string,
-        turnId: number,
-        projectPath: string,
         skillInstruction?: string,
       ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> =>
-        runReActLoop(messages, maxSteps, llm, executor, toolRegistry, sessionId, turnId, projectPath, skillInstruction),
+        runReActLoop(state, maxSteps, llm, executor, toolRegistry, ctx, session, checkpoint, skillInstruction),
     };
   }),
 }) {}
 
 export async function* runReActLoop(
-  initialMessages: Message[],
+  state: SessionStoreState,
   maxSteps: number,
   llm: LLMStreamAdapter,
   executor: ToolExecutorService,
   toolRegistry: ToolService,
-  sessionId: string,
-  turnId: number,
-  projectPath: string,
+  ctx: ContextService,
+  session: SessionService,
+  checkpoint: CheckpointService,
   skillInstruction?: string,
 ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> {
-  const messages = [...initialMessages];
+  const projectPath = state.cwd;
   const basePrompt = buildSystemPrompt({
     cwd: getWorkspaceCwd(),
     platform: process.platform,
@@ -73,59 +77,94 @@ export async function* runReActLoop(
   const system = skillInstruction
     ? `${basePrompt}\n\n## Skill Instructions\n\n${skillInstruction}`
     : basePrompt;
+  const config = getContextConfig();
+  const maxOverflowRetries = config.reactiveCompactMaxRetries;
+  const model = state.sessionMeta?.model ?? 'unknown';
 
-  for (let step = 0; step < maxSteps; step++) {
-    yield { _tag: 'Step', step: step + 1, max: maxSteps };
+  for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
+    const messages = Effect.runSync(ctx.build(state.sessionId));
+    let lastResult: Result<string, AgentError> | null = null;
+    let overflow = false;
 
-    const tools: ToolDescription[] = toolRegistry.describeAll();
+    for (let step = 0; step < maxSteps; step++) {
+      yield { _tag: 'Step', step: step + 1, max: maxSteps };
 
-    const { stream: rawStream, response: respPromise } = llm.completeStream({
-      messages, system, tools, maxSteps: 1,
-    });
+      const tools: ToolDescription[] = toolRegistry.describeAll();
 
-    for await (const chunk of rawStream) {
-      yield { _tag: 'LlmChunk', text: chunk };
-    }
+      const { stream: rawStream, response: respPromise } = llm.completeStream({
+        messages, system, tools, maxSteps: 1,
+      });
 
-    const llmResult = await respPromise;
-    if (!llmResult.ok) {
-      yield { _tag: 'Error', error: llmResult.error };
-      return Result.err(llmResult.error);
-    }
+      for await (const chunk of rawStream) {
+        yield { _tag: 'LlmChunk', text: chunk };
+      }
 
-    const resp = llmResult.value;
-    const toolCalls = resp.toolCalls;
-    const assistantMsg: Message = { role: 'assistant', content: resp.content };
-    if (toolCalls && toolCalls.length > 0) {
-      (assistantMsg as any).tool_calls = toolCalls;
-    }
-    messages.push(assistantMsg);
-    yield { _tag: 'Assistant', content: resp.content, toolCalls };
+      const llmResult = await respPromise;
+      if (!llmResult.ok) {
+        if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
+          const aggressiveConfig = { ...config, L5KeepRecentTurns: config.reactiveCompactKeepTurns };
+          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, null, aggressiveConfig));
+          yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released };
+          overflow = true;
+          break;
+        }
+        yield { _tag: 'Error', error: llmResult.error };
+        lastResult = Result.err(llmResult.error);
+        break;
+      }
 
-    if (!toolCalls || toolCalls.length === 0) {
-      yield { _tag: 'Done', content: resp.content };
-      return Result.ok(resp.content);
-    }
+      const resp = llmResult.value;
+      const toolCalls = resp.toolCalls;
+      const assistantMsg: Message = { role: 'assistant', content: resp.content };
+      if (toolCalls && toolCalls.length > 0) {
+        (assistantMsg as any).tool_calls = toolCalls;
+      }
+      messages.push(assistantMsg);
+      yield { _tag: 'Assistant', content: resp.content, toolCalls };
 
-    const allResults = await Effect.runPromise(
-      executor.executeBatch(toolCalls, sessionId, { turnId, projectPath }),
-    );
+      // Persist assistant event
+      const recordResult = Effect.runSync(session.recordAssistant(state, resp.content, toolCalls as any, model));
+      const assistantUuid = (recordResult as any).uuid;
 
-    for (const r of allResults) {
-      if (r.type === 'denied') {
-        yield { _tag: 'ToolDenied', name: r.name, reason: r.reason };
-      } else {
-        yield { _tag: 'ToolResult', id: r.id, name: r.name, output: r.output, ok: r.type === 'ok' };
+      if (!toolCalls || toolCalls.length === 0) {
+        yield { _tag: 'Done', content: resp.content };
+        lastResult = Result.ok(resp.content);
+        break;
+      }
+
+      const allResults = await Effect.runPromise(
+        executor.executeBatch(toolCalls, state.sessionId, { turnId: state.currentTurnId, projectPath }),
+      );
+
+      for (const r of allResults) {
+        if (r.type === 'denied') {
+          yield { _tag: 'ToolDenied', name: r.name, reason: r.reason };
+        } else {
+          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: r.output, ok: r.type === 'ok' };
+        }
+        // Persist tool result
+        Effect.runSync(session.recordToolResult(state, assistantUuid, r.name, r.id, r.output ?? ''));
+      }
+
+      for (const r of allResults) {
+        if (messages.find(m => (m as any).tool_call_id === r.id)) continue;
+        const content = r.type === 'denied'
+          ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
+          : r.output ?? '';
+        messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
       }
     }
 
-    for (const r of allResults) {
-      if (messages.find(m => (m as any).tool_call_id === r.id)) continue;
-      const content = r.type === 'denied'
-        ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
-        : r.output ?? '';
-      messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
-    }
+    if (overflow) continue;
+
+    // Turn completed — snapshot and compact
+    checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
+    await Effect.runPromise(ctx.appendTurnEnd(state.sessionId, llm));
+    if (lastResult) return lastResult;
+
+    // Max steps exhausted without result
+    yield { _tag: 'Error', error: AgentError.maxStepsReached(maxSteps) };
+    return Result.err(AgentError.maxStepsReached(maxSteps));
   }
 
   yield { _tag: 'Error', error: AgentError.maxStepsReached(maxSteps) };

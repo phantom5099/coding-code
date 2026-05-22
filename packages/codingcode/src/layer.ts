@@ -48,8 +48,8 @@ export const CheckpointLayer = CheckpointService.Default.pipe(
   Layer.provide(CheckpointDeps),
 );
 
-/** Agent depends on ToolExecutor + ToolService. */
-const AgentDeps = Layer.mergeAll(ExecutorLayer, ToolLayer);
+/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService. */
+const AgentDeps = Layer.mergeAll(ExecutorLayer, ToolLayer, ContextLayer, SessionLayer, CheckpointLayer);
 const AgentWithDeps = AgentLayer.pipe(Layer.provide(AgentDeps));
 
 /** Final application layer — all services merged. */

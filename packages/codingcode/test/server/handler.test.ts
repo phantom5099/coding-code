@@ -4,6 +4,7 @@ import { sseHandler } from '../../src/server/handler.js';
 import { sendMessage } from '../../src/orchestration/index.js';
 import { toSSEString } from '../../src/server/adapter.js';
 import { SessionService } from '../../src/session/store.js';
+import { ContextService } from '../../src/context/context.js';
 import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
 import { Result } from '../../src/core/result.js';
@@ -37,6 +38,9 @@ function createMockLlm(chunks?: string[], responseContent?: string) {
 const MockToolExecutorLayer = Layer.succeed(ToolExecutorService, ToolExecutorService.of({
   _tag: 'ToolExecutor' as const,
   execute: () => Effect.succeed('done'),
+  executeBatch: (toolCalls: any[]) => Effect.succeed(
+    toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: '' })),
+  ),
 }));
 
 const MockSessionLayer = Layer.succeed(
@@ -56,8 +60,16 @@ const MockSessionLayer = Layer.succeed(
     getSessionId: () => 'test',
     getMessageCount: () => 0,
     incrementTurn: () => 0,
+    findSessionIndex: () => Effect.succeed(null),
   }),
 );
+
+const MockContextLayer = Layer.succeed(ContextService, ContextService.of({
+  _tag: 'Context' as any,
+  build: () => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
+  compress: () => Effect.succeed({ didCompress: true, released: 0 }),
+  appendTurnEnd: () => Effect.succeed({ didCompress: false, released: 0 }),
+}));
 
 const MockSkillLayer = Layer.succeed(
   SkillService,
@@ -73,9 +85,7 @@ const MockSkillLayer = Layer.succeed(
 );
 
 const { AgentService } = await import('../../src/agent/agent.js');
-const { ContextLayer, ToolLayer, HookLayer } = await import('../../src/layer.js');
-const AgentDeps = Layer.mergeAll(MockToolExecutorLayer, ToolLayer);
-const TestAgentLayer = AgentService.Default.pipe(Layer.provide(AgentDeps));
+const { ToolLayer, HookLayer } = await import('../../src/layer.js');
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.of({
   _tag: 'Checkpoint' as const,
@@ -86,15 +96,22 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.o
   revertFiles: () => {},
   forward: () => null,
   hasForwardStack: () => false,
+  getCheckpoints: () => [],
 }));
 
-const TestLayer = Layer.mergeAll(
+const AllDeps = Layer.mergeAll(
+  MockToolExecutorLayer,
+  ToolLayer,
+  MockContextLayer,
   MockSessionLayer,
-  MockSkillLayer,
   MockCheckpointLayer,
-  TestAgentLayer,
-  ContextLayer,
+  MockSkillLayer,
   HookLayer,
+);
+
+const TestLayer = Layer.mergeAll(
+  AgentService.Default.pipe(Layer.provide(AllDeps)),
+  AllDeps,
 );
 
 
