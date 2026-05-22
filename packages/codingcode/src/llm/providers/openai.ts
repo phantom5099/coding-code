@@ -3,6 +3,7 @@ import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
 import { Result } from '../../core/result';
 import { AgentError } from '../../core/error';
+import { mapLlmError } from '../errors.js';
 import type { LLMClient } from '../client';
 import type { LLMRequest, LLMResponse } from '../types';
 import type { SelectableModel } from '../factory';
@@ -117,7 +118,7 @@ export class OpenAIProvider implements LLMClient {
       }
       return Result.ok(response);
     } catch (e) {
-      return Result.err(AgentError.llmFailed(e));
+      return Result.err(mapLlmError('openai', e));
     }
   }
 
@@ -149,7 +150,7 @@ export class OpenAIProvider implements LLMClient {
         const parsed = parseResponseMessages(resp.messages as ModelMessage[]);
         return Result.ok(parsed);
       } catch (e) {
-        return Result.err(AgentError.llmFailed(e));
+        return Result.err(mapLlmError('openai', e));
       }
     })();
 

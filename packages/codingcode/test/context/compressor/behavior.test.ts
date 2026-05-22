@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { run, runL5 } from '../../../src/context/compressor/index.js';
+import { run, compactWithLLM } from '../../../src/context/compressor/index.js';
 import { loadProjectionStore } from '../../../src/session/projection-store.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { LLMClient } from '../../../src/llm/client.js';
@@ -60,22 +60,26 @@ function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
   return {
     defaultMaxTokens: 1000,
     reservedTokens: 0,
-    thresholds: { budgetReduction: 0.1, prune: 0.2, slidingWindow: 0.3, collapse: 0.4, compaction: 0.5 },
-    budgetReductionMaxTokensPerTool: 100,
-    budgetReductionKeepLines: 5,
+    thresholds: { budgetReduction: 0.1, prune: 0.2, compaction: 0.5 },
     pruneProtectedTokens: 100,
     pruneMinRelease: 1,
-    slidingWindowCandidates: [10, 6, 4, 2],
-    collapseMinTokens: 50,
-    collapseSummaryMaxTokens: 100,
     toolsExemptFromPrune: [],
-    toolsExemptFromTruncation: [],
     prefixTurnsProtected: 1,
     minTurnsBetweenCompactions: 3,
     L5KeepRecentTurns: 2,
     compactionModel: '',
     archiveTtlDays: 30,
     checkpointKeep: 50,
+    l1ThresholdTokens: 2000,
+    l1TruncateKeepHeadLines: 5,
+    l1TruncateKeepTailLines: 15,
+    l1PersistPreviewChars: 2000,
+    l1PersistableTools: ['execute_command', 'fetch_url'],
+    reactiveCompactMaxRetries: 1,
+    reactiveCompactKeepTurns: 3,
+    snipMaxMessages: 100,
+    snipKeepHead: 3,
+    microKeepRecentTools: 5,
     ...overrides,
   };
 }
@@ -130,16 +134,14 @@ describe('compressor behavior', () => {
     });
   });
 
-  describe('fall-through L2→L4→L5', () => {
-    it('falls through to L5 when prune and collapse have no candidates', async () => {
+  describe('fall-through to L5', () => {
+    it('falls through to L5 when prune has no candidates', async () => {
       const fx = makeFixture({ numTurns: 6, toolContentSize: 4000, toolName: 'Read' });
       try {
-        // Whitelist Read for both L2 and L4; usage way above all thresholds.
         const cfg = tinyConfig({
           toolsExemptFromPrune: ['Read'],
           prefixTurnsProtected: 0,
           pruneProtectedTokens: 0,
-          collapseMinTokens: 999_999, // disable L4
           minTurnsBetweenCompactions: 2,
           L5KeepRecentTurns: 2,
         });
@@ -160,7 +162,7 @@ describe('compressor behavior', () => {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, L5KeepRecentTurns: 2 });
         const summary = '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
-        await runL5(fx.sessionId, cfg, llm);
+        await compactWithLLM(fx.sessionId, cfg, llm);
         const store = loadProjectionStore(fx.sessionId);
         const ranges = store.projections.filter((p) => p.type === 'range') as any[];
         expect(ranges.length).toBe(1);
@@ -176,7 +178,7 @@ describe('compressor behavior', () => {
       try {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 5, L5KeepRecentTurns: 1 });
         const llm = makeMockLLM('summary');
-        const result = await runL5(fx.sessionId, cfg, llm);
+        const result = await compactWithLLM(fx.sessionId, cfg, llm);
         expect(result.didCompress).toBe(false);
         const store = loadProjectionStore(fx.sessionId);
         expect(store.projections.filter((p) => p.type === 'range')).toHaveLength(0);
@@ -187,7 +189,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, L5KeepRecentTurns: 2 });
-        const result = await runL5(fx.sessionId, cfg, null);
+        const result = await compactWithLLM(fx.sessionId, cfg, null);
         expect(result.didCompress).toBe(false);
         const store = loadProjectionStore(fx.sessionId);
         expect(store.projections.filter((p) => p.type === 'range')).toHaveLength(0);
@@ -223,7 +225,7 @@ describe('compressor behavior', () => {
         };
 
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, L5KeepRecentTurns: 2 });
-        await runL5(fx.sessionId, cfg, captureLLM);
+        await compactWithLLM(fx.sessionId, cfg, captureLLM);
 
         // Assert: t1's raw 4000-char content should NOT appear; the replacement should.
         expect(capturedUserContent).toContain('[Old tool result content cleared]');
@@ -245,7 +247,7 @@ describe('compressor behavior', () => {
       try {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, L5KeepRecentTurns: 2 });
         const llm = makeMockLLM('## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne');
-        await runL5(fx.sessionId, cfg, llm);
+        await compactWithLLM(fx.sessionId, cfg, llm);
 
         const idx = JSON.parse(readFileSync(fx.indexPath, 'utf8')) as SessionIndex;
         expect(idx.projectionCount).toBe(1);

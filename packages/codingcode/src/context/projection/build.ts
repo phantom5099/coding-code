@@ -4,9 +4,9 @@ import { loadRawEvents, eventToEnriched } from '../../session/jsonl-reader.js';
 import { loadProjectionStore } from '../../session/projection-store.js';
 import { applyProjections } from './apply.js';
 import { estimateTokensForContent } from '../utils/tokens.js';
+import { persistToolResult } from '../persist/store.js';
 
 export function buildMessagesForQuery(sessionId: string, config: ContextConfig): EnrichedMessage[] {
-  // 1. Load raw events → EnrichedMessage[]
   const rawEvents = loadRawEvents(sessionId);
   let enriched: EnrichedMessage[] = [];
   for (const ev of rawEvents) {
@@ -14,57 +14,40 @@ export function buildMessagesForQuery(sessionId: string, config: ContextConfig):
     if (e) enriched.push(e);
   }
 
-  // 2. Apply projections
   const { projections } = loadProjectionStore(sessionId);
   enriched = applyProjections(enriched, projections);
 
-  // 3. L1: Budget reduction on raw tool messages
-  enriched = applyL1BudgetReduction(enriched, config);
-
-  // 4. L3: Sliding window by turn count
-  enriched = applyL3SlidingWindow(enriched, config);
+  enriched = applyL1(enriched, config, sessionId);
 
   return enriched;
 }
 
-function applyL1BudgetReduction(
+function applyL1(
   enriched: EnrichedMessage[],
   config: ContextConfig,
+  sessionId: string,
 ): EnrichedMessage[] {
   return enriched.map((e) => {
     if (e.message.role !== 'tool') return e;
     if (e.source.kind === 'projection') return e;
-    if (estimateTokensForContent(e.message.content) <= config.budgetReductionMaxTokensPerTool) return e;
+    if (estimateTokensForContent(e.message.content) <= config.l1ThresholdTokens) return e;
 
-    const lines = e.message.content.split('\n');
-    if (lines.length <= config.budgetReductionKeepLines) return e;
-
-    const kept = lines.slice(-config.budgetReductionKeepLines);
-    return {
-      ...e,
-      message: {
-        ...e.message,
-        content: `[…${lines.length - config.budgetReductionKeepLines} lines omitted]\n` + kept.join('\n'),
-      },
-    };
+    const toolName = (e.message as any).tool_name ?? '';
+    const toolCallId = (e.message as any).tool_call_id ?? '';
+    if (!config.l1PersistableTools.includes(toolName)) return e;
+    return persistAndShrink(e, sessionId, toolCallId, config);
   });
 }
 
-function applyL3SlidingWindow(
-  enriched: EnrichedMessage[],
+function persistAndShrink(
+  e: EnrichedMessage,
+  sessionId: string,
+  toolCallId: string,
   config: ContextConfig,
-): EnrichedMessage[] {
-  for (const candidate of config.slidingWindowCandidates) {
-    const maxTurns = candidate;
-    // Count distinct turns
-    const turnSet = new Set<number>();
-    for (const e of enriched) turnSet.add(e.turnId);
-    if (turnSet.size <= maxTurns) return enriched;
-
-    // Keep the most recent `maxTurns` turns
-    const sortedTurns = [...turnSet].sort((a, b) => a - b);
-    const keepFrom = sortedTurns[sortedTurns.length - maxTurns]!;
-    return enriched.filter((e) => e.turnId >= keepFrom);
-  }
-  return enriched;
+): EnrichedMessage {
+  const { path } = persistToolResult(sessionId, toolCallId, e.message.content);
+  const preview = e.message.content.slice(0, config.l1PersistPreviewChars);
+  const content = `${preview}\n\n[…full output persisted at: ${path}. Use Read tool to access if needed.]`;
+  return { ...e, message: { ...e.message, content } };
 }
+
