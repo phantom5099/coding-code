@@ -35,23 +35,14 @@ export interface ToolResultEvent {
   toolCallId: string;
   output: string;
   timestamp: string;
-}
-
-export interface CompactBoundaryEvent {
-  type: 'compact_boundary';
-  uuid: string;
-  summary: string;
-  replacedRange: [number, number];
-  messageCount: number;
-  timestamp: string;
+  tokenCount: number;
 }
 
 export type SessionEvent =
   | SessionMetaEvent
   | UserEvent
   | AssistantEvent
-  | ToolResultEvent
-  | CompactBoundaryEvent;
+  | ToolResultEvent;
 
 export interface SessionIndex {
   sessionId: string;
@@ -63,4 +54,10 @@ export interface SessionIndex {
   messageCount: number;
   title: string;
   currentTurnId: number;
+  tokenCountEstimate: number;
+  projectedRanges: Array<[number, number]>;
+  lastUncoveredByteOffset: number;
+  lastProjectionAt?: string;
+  projectionCount: number;
+  lastCompressionFailures: number;
 }

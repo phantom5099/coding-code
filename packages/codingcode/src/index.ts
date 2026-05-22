@@ -23,7 +23,6 @@ export type { Skill, SkillServiceApi } from './skills/index.js';
 export type { AgentEvent } from './agent/agent.js';
 export { AgentError } from './core/error.js';
 export { Result } from './core/result.js';
-export { compactMessages, type CompressResult } from './context/compaction.js';
 export { sendMessage, resumeSession, compact } from './orchestration/index.js';
 export { AppLayer, AgentLayer, SessionLayer, ContextLayer, ToolLayer, HookLayer, McpLayer, SkillLayer, ApprovalLayer, CheckpointLayer } from './layer.js';
 export { ApprovalWaitService } from './approval/async-confirm.js';

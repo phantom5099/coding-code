@@ -42,7 +42,7 @@ export const sendMessage = (
     const raw = agent.runStream(messages, llm, sid, matchedSkill?.instruction);
     const stream = recordAgentEvents(raw, ctx, session, state, sid);
 
-    // Wrap the stream to snapshot after agent finishes
+    // Wrap the stream to snapshot and compress after agent finishes
     const wrapped = async function* () {
       try {
         for await (const event of stream) {
@@ -51,6 +51,8 @@ export const sendMessage = (
       } finally {
         checkpoint.snapshotFinal(projectPath, sid, turnId);
       }
+      // Compression check after stream fully consumed and snapshot saved
+      await Effect.runPromise(ctx.appendTurnEnd(sid, llm));
     }();
 
     return { stream: wrapped, sessionId: sid };
@@ -74,21 +76,15 @@ export const resumeSession = (
     return history;
   });
 
-export const compact = (sessionId: string, cwd: string) =>
+export const compact = (sessionId: string, cwd: string, llm: any = null) =>
   Effect.gen(function* () {
     const ctx = yield* ContextService;
     const session = yield* SessionService;
     const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
     const sid = state.sessionId;
 
-    const result = yield* ctx.compress(sid);
-    if (result.didCompress) {
-      yield* session.recordCompactBoundary(
-        state,
-        result.summary ?? '',
-        result.replacedRange ?? [0, 0],
-        result.messageCount ?? 0,
-      );
-    }
-    return result;
+    // Delegate to Compressor via context service; no compact_boundary written.
+    // The llm is passed through so L5 can call it (or its configured
+    // compactionModel) for the five-section summary.
+    return yield* ctx.compress(sid, llm);
   });

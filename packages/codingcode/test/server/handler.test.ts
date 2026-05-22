@@ -49,9 +49,7 @@ const MockSessionLayer = Layer.succeed(
     recordAssistant: () =>
       Effect.succeed({ type: 'assistant' as const, uuid: 'a1', content: '', toolCalls: [], model: 'test', turnId: 0, timestamp: new Date().toISOString() }),
     recordToolResult: () =>
-      Effect.succeed({ type: 'tool_result' as const, uuid: 't1', parentUuid: 'a1', toolName: 'test', toolCallId: 'tc1', output: '', turnId: 0, timestamp: new Date().toISOString() }),
-    recordCompactBoundary: () =>
-      Effect.succeed({ type: 'compact_boundary' as const, uuid: 'c1', summary: '', replacedRange: [0, 0] as [number, number], messageCount: 0, timestamp: new Date().toISOString() }),
+      Effect.succeed({ type: 'tool_result' as const, uuid: 't1', parentUuid: 'a1', toolName: 'test', toolCallId: 'tc1', output: '', turnId: 0, timestamp: new Date().toISOString(), tokenCount: 0 }),
     readHistory: () => Effect.succeed([]),
     readMessages: () => Effect.succeed([]),
     listSessions: () => Effect.succeed([]),
