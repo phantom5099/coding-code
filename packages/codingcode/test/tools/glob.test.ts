@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { globTool } from '../../src/tools/domains/search/glob.js';
+import { globTool } from '../../src/tools/domains/fs/glob.js';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { resolve, join } from 'path';
 import { tmpdir } from 'os';

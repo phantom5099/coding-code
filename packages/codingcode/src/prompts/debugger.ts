@@ -7,7 +7,6 @@ export const debuggerPromptSet: PromptSet = {
   maxSteps: 20,
   toolNames: [
     "read_file",
-    "list_dir",
     "execute_command",
     "search_code",
   ],

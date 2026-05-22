@@ -1,15 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { listDirTool } from '../../src/tools/domains/fs/list.js';
 import { readFileTool } from '../../src/tools/domains/fs/read.js';
 import { writeFileTool } from '../../src/tools/domains/fs/write.js';
 import { bashTool } from '../../src/tools/domains/bash/exec.js';
-import { searchTool } from '../../src/tools/domains/search/grep.js';
+import { searchTool } from '../../src/tools/domains/fs/grep.js';
 import { webFetchTool } from '../../src/tools/domains/web/fetch.js';
 import { z } from 'zod';
 import type { ToolDefinition } from '../../src/tools/types.js';
 
 const allTools: ToolDefinition[] = [
-  listDirTool,
   readFileTool,
   writeFileTool,
   bashTool,

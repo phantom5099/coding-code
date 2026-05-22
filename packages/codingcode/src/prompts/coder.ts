@@ -8,7 +8,6 @@ export const coderPromptSet: PromptSet = {
   toolNames: [
     "read_file",
     "write_file",
-    "list_dir",
     "execute_command",
     "search_code",
     "fetch_url",
