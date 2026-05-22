@@ -3,6 +3,11 @@ import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
 import type { ToolDescription } from '../tools/types.js';
+import { ToolService } from '../tools/registry.js';
+import { ToolExecutorService } from '../tools/executor.js';
+import { buildSystemPrompt } from '../prompts/index.js';
+import { getWorkspaceCwd } from '../core/workspace.js';
+import { resolveConfig } from './config.js';
 
 export type AgentEvent =
   | { readonly _tag: 'LlmChunk'; readonly text: string }
@@ -12,13 +17,9 @@ export type AgentEvent =
   | { readonly _tag: 'ApprovalRequest'; readonly id: string; readonly tool: string; readonly args: Record<string, unknown> }
   | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean }
   | { readonly _tag: 'Step'; readonly step: number; readonly max: number }
+  | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
   | { readonly _tag: 'Done'; readonly content: string };
-import { ToolService } from '../tools/registry.js';
-import { ToolExecutorService } from '../tools/executor.js';
-import { buildSystemPrompt } from '../prompts/index.js';
-import { getWorkspaceCwd } from '../core/workspace.js';
-import { resolveConfig } from './config.js';
 
 interface LLMStreamAdapter {
   completeStream(params: {
@@ -106,7 +107,6 @@ export async function* runReActLoop(
       return Result.ok(resp.content);
     }
 
-    // Execute all tools — safe tools in parallel, Bash tools serially
     const allResults = await Effect.runPromise(
       executor.executeBatch(toolCalls, sessionId, { turnId, projectPath }),
     );
@@ -119,7 +119,6 @@ export async function* runReActLoop(
       }
     }
 
-    // Feed results back to LLM — denied tools still get a message so the LLM knows
     for (const r of allResults) {
       if (messages.find(m => (m as any).tool_call_id === r.id)) continue;
       const content = r.type === 'denied'

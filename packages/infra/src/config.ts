@@ -5,8 +5,6 @@ import { parse as parseYaml } from 'yaml';
 export interface ContextThresholdsConfig {
   budgetReduction: number;
   prune: number;
-  slidingWindow: number;
-  collapse: number;
   compaction: number;
 }
 
@@ -14,21 +12,25 @@ export interface ContextConfig {
   defaultMaxTokens: number;
   reservedTokens: number;
   thresholds: ContextThresholdsConfig;
-  budgetReductionMaxTokensPerTool: number;
-  budgetReductionKeepLines: number;
   pruneProtectedTokens: number;
   pruneMinRelease: number;
-  slidingWindowCandidates: number[];
-  collapseMinTokens: number;
-  collapseSummaryMaxTokens: number;
   toolsExemptFromPrune: string[];
-  toolsExemptFromTruncation: string[];
   prefixTurnsProtected: number;
   minTurnsBetweenCompactions: number;
   L5KeepRecentTurns: number;
   compactionModel: string;
   archiveTtlDays: number;
   checkpointKeep: number;
+  l1ThresholdTokens: number;
+  l1TruncateKeepHeadLines: number;
+  l1TruncateKeepTailLines: number;
+  l1PersistPreviewChars: number;
+  l1PersistableTools: string[];
+  reactiveCompactMaxRetries: number;
+  reactiveCompactKeepTurns: number;
+  snipMaxMessages: number;
+  snipKeepHead: number;
+  microKeepRecentTools: number;
 }
 
 export interface AppConfig {
@@ -49,22 +51,26 @@ export interface AppConfig {
 const DEFAULT_CONTEXT: ContextConfig = {
   defaultMaxTokens: 200000,
   reservedTokens: 20000,
-  thresholds: { budgetReduction: 0.6, prune: 0.7, slidingWindow: 0.75, collapse: 0.8, compaction: 0.9 },
-  budgetReductionMaxTokensPerTool: 2000,
-  budgetReductionKeepLines: 20,
+  thresholds: { budgetReduction: 0.6, prune: 0.7, compaction: 0.9 },
   pruneProtectedTokens: 40000,
   pruneMinRelease: 20000,
-  slidingWindowCandidates: [10, 6, 4, 2],
-  collapseMinTokens: 500,
-  collapseSummaryMaxTokens: 1500,
   toolsExemptFromPrune: ['Read'],
-  toolsExemptFromTruncation: ['Read'],
   prefixTurnsProtected: 1,
   minTurnsBetweenCompactions: 5,
   L5KeepRecentTurns: 10,
   compactionModel: 'haiku',
   archiveTtlDays: 30,
   checkpointKeep: 50,
+  l1ThresholdTokens: 2000,
+  l1TruncateKeepHeadLines: 5,
+  l1TruncateKeepTailLines: 15,
+  l1PersistPreviewChars: 2000,
+  l1PersistableTools: ['execute_command', 'fetch_url'],
+  reactiveCompactMaxRetries: 1,
+  reactiveCompactKeepTurns: 3,
+  snipMaxMessages: 100,
+  snipKeepHead: 3,
+  microKeepRecentTools: 5,
 };
 
 const DEFAULT_CONFIG: AppConfig = {

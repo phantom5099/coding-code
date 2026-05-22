@@ -1,7 +1,7 @@
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
 import { buildMessagesForQuery } from './projection/build.js';
-import { estimateTokens } from './utils/tokens.js';
+import { estimateTokens, estimateTokensForContent } from './utils/tokens.js';
 
 export function assemblePayload(
   sessionId: string,
@@ -25,14 +25,23 @@ export function fitToBudget(
   pinnedCount: number = 0,
 ): Message[] {
   const budget = config.defaultMaxTokens - config.reservedTokens;
-  const usage = estimateTokens(messages);
+  let usage = estimateTokens(messages);
   if (usage <= budget) return messages;
 
-  // Remove oldest non-pinned messages one by one until within budget
   const result = [...messages];
-  while (result.length > pinnedCount && estimateTokens(result) > budget) {
-    const removed = result.splice(pinnedCount, 1);
-    if (removed.length === 0) break;
+  let i = pinnedCount;
+  while (i < result.length && usage > budget) {
+    // Skip non-user messages that might have been left orphaned
+    if (result[i]?.role !== 'user') { i++; continue; }
+
+    // Find end of this user turn (next user message or array end)
+    let end = i + 1;
+    while (end < result.length && result[end]?.role !== 'user') {
+      end++;
+    }
+
+    const removed = result.splice(i, end - i);
+    usage -= removed.reduce((s, m) => s + estimateTokensForContent(m.content), 0);
   }
   return result;
 }
