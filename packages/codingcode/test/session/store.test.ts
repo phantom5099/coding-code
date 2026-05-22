@@ -50,6 +50,11 @@ describe('SessionService resume workspace', () => {
         messageCount: 0,
         title: sessionId.slice(0, 8),
         currentTurnId: 0,
+        tokenCountEstimate: 0,
+        projectedRanges: [],
+        lastUncoveredByteOffset: 0,
+        projectionCount: 0,
+        lastCompressionFailures: 0,
       }, null, 2),
       'utf8',
     );

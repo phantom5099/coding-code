@@ -1,12 +1,13 @@
 import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync, truncateSync } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { normalizePath, projectSlugFromPath } from '../core/path.js';
-import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, CompactBoundaryEvent, SessionIndex } from './types.js';
+import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SessionIndex } from './types.js';
+import { estimateTokensForContent } from '../context/utils/tokens.js';
 
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const SESSIONS_DIR = join(CODINGCODE_DIR, 'sessions');
@@ -59,6 +60,11 @@ export function findSessionIndex(sessionId: string): SessionIndex | null {
       messageCount: h.filter((e) => e.type !== 'session_meta').length,
       title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8),
       currentTurnId: 0,
+      tokenCountEstimate: 0,
+      projectedRanges: [],
+      lastUncoveredByteOffset: 0,
+      projectionCount: 0,
+      lastCompressionFailures: 0,
     };
   }
   return null;
@@ -148,14 +154,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
       recordToolResult: (state: SessionStoreState, parentUuid: string, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent> =>
         Effect.sync(() => {
-          const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString() };
-          appendEvent(state, event);
-          return event;
-        }),
-
-      recordCompactBoundary: (state: SessionStoreState, summary: string, replacedRange: [number, number], messageCount: number): Effect.Effect<CompactBoundaryEvent> =>
-        Effect.sync(() => {
-          const event: CompactBoundaryEvent = { type: 'compact_boundary', uuid: randomUUID(), summary, replacedRange, messageCount, timestamp: new Date().toISOString() };
+          const tokenCount = estimateTokensForContent(output);
+          const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString(), tokenCount };
           appendEvent(state, event);
           return event;
         }),
@@ -271,7 +271,7 @@ function listSessions(projectSlug?: string): SessionIndex[] {
         if (meta?.cwd && meta?.sessionId) {
           const h = readHistory(jsonlPath);
           const firstUser = findFirstUserContent(h);
-          results.push({ sessionId: meta.sessionId, projectSlug: meta.projectSlug, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8), currentTurnId: 0 });
+          results.push({ sessionId: meta.sessionId, projectSlug: meta.projectSlug, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8), currentTurnId: 0, tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0, projectionCount: 0, lastCompressionFailures: 0 });
         }
       }
     }
@@ -291,6 +291,49 @@ function appendLine(path: string, event: object): void {
 
 function updateIndex(state: SessionStoreState): void {
   if (!state.sessionMeta) return;
-  const index: SessionIndex = { sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd, model: state.sessionMeta.model, createdAt: state.sessionMeta.createdAt, updatedAt: new Date().toISOString(), messageCount: state.messageCount, title: state.title, currentTurnId: state.currentTurnId };
-  try { writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8'); } catch { /* non-critical */ }
+  const current = readCurrentIndex(state.indexPath);
+  const index: SessionIndex = {
+    sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd,
+    model: state.sessionMeta.model,
+    createdAt: state.sessionMeta.createdAt,
+    updatedAt: new Date().toISOString(),
+    messageCount: state.messageCount, title: state.title,
+    currentTurnId: state.currentTurnId,
+    tokenCountEstimate: current?.tokenCountEstimate ?? 0,
+    projectedRanges: current?.projectedRanges ?? [],
+    lastUncoveredByteOffset: current?.lastUncoveredByteOffset ?? 0,
+    lastProjectionAt: current?.lastProjectionAt,
+    projectionCount: current?.projectionCount ?? 0,
+    lastCompressionFailures: current?.lastCompressionFailures ?? 0,
+  };
+  enqueueWrite(state.sessionId, state.indexPath, index);
+}
+
+function readCurrentIndex(indexPath: string): Partial<SessionIndex> | null {
+  try { return JSON.parse(readFileSync(indexPath, 'utf8')); } catch { return null; }
+}
+
+// Serialized write queue per session: ensures ordered, non-overlapping writes
+const writeQueues = new Map<string, Promise<void>>();
+
+function enqueueWrite(sessionId: string, path: string, data: unknown): void {
+  const prev = writeQueues.get(sessionId) ?? Promise.resolve();
+  const task = prev
+    .then(() => { writeFileSync(path, JSON.stringify(data, null, 2), 'utf8'); })
+    .catch((err) => { console.error(`write queue error for ${path}:`, err); });
+  writeQueues.set(sessionId, task);
+}
+
+export function enqueueTask(sessionId: string, fn: () => void): void {
+  const prev = writeQueues.get(sessionId) ?? Promise.resolve();
+  const task = prev.then(() => { try { fn(); } catch (err) { console.error(`enqueueTask error for ${sessionId}:`, err); } });
+  writeQueues.set(sessionId, task);
+}
+
+export function truncateJsonl(path: string, byteOffset: number): void {
+  try {
+    truncateSync(path, byteOffset);
+  } catch (err) {
+    console.error(`truncateJsonl error for ${path}:`, err);
+  }
 }

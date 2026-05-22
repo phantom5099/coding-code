@@ -3,3 +3,30 @@ server:
 
 # 主 agent 最大循环轮数，默认 50
 maxSteps: 50
+
+# 上下文管理阈值（可选；省略时均使用代码内默认值）
+context:
+  defaultMaxTokens: 200000
+  reservedTokens: 20000
+  thresholds:
+    budgetReduction: 0.6
+    prune: 0.7
+    slidingWindow: 0.75
+    collapse: 0.8
+    compaction: 0.9
+  budgetReductionMaxTokensPerTool: 2000
+  budgetReductionKeepLines: 20
+  pruneProtectedTokens: 40000
+  pruneMinRelease: 20000
+  slidingWindowCandidates: [10, 6, 4, 2]
+  collapseMinTokens: 500
+  collapseSummaryMaxTokens: 1500
+  toolsExemptFromPrune: [Read]
+  toolsExemptFromTruncation: [Read]
+  prefixTurnsProtected: 1
+  minTurnsBetweenCompactions: 5
+  L5KeepRecentTurns: 10
+  compactionFuseMaxFailures: 3
+  compactionModel: haiku
+  archiveTtlDays: 30
+  checkpointKeep: 50

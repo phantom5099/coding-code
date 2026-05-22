@@ -1,9 +1,10 @@
 import { Effect } from 'effect';
 import type { Message, ToolCall } from '../core/types.js';
-import { compactMessages, type CompressResult } from './compaction.js';
+import { getContextConfig } from './config.js';
+import { estimateTokens } from './utils/tokens.js';
+import { run, runL5, type CompressResult } from './compressor/index.js';
 
 const stores = new Map<string, Message[]>();
-const budget = 200_000;
 
 function getStore(sessionId: string): Message[] {
   let msgs = stores.get(sessionId);
@@ -14,34 +15,13 @@ function getStore(sessionId: string): Message[] {
   return msgs;
 }
 
-function overThreshold(msgs: Message[]): boolean {
-  let total = 0;
-  for (const m of msgs) {
-    for (const char of m.content) {
-      total += char.charCodeAt(0) > 127 ? 1.5 : 1;
-    }
-  }
-  return Math.ceil(total / 3.5) > budget * 0.9;
-}
-
-function doCompact(msgs: Message[]): void {
-  const result = compactMessages(msgs, budget);
-  if (result.ok && result.value.didCompress) {
-    msgs.length = 0;
-    msgs.push(...result.value.messages);
-  }
-}
-
 export class ContextService extends Effect.Service<ContextService>()('Context', {
   effect: Effect.gen(function* () {
     return {
       addUser: (sessionId: string, content: string): Effect.Effect<void> =>
-        Effect.gen(function* () {
+        Effect.sync(() => {
           const msgs = getStore(sessionId);
           msgs.push({ role: 'user', content });
-          if (msgs.length > 0 && overThreshold(msgs)) {
-            doCompact(msgs);
-          }
         }),
 
       addAssistant: (sessionId: string, content: string, toolCalls?: ToolCall[]): Effect.Effect<void> =>
@@ -52,15 +32,22 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
             (msg as any).tool_calls = toolCalls;
           }
           msgs.push(msg);
-          if (overThreshold(msgs)) {
-            doCompact(msgs);
-          }
         }),
 
       addToolResult: (sessionId: string, toolCallId: string, output: string, toolName?: string): Effect.Effect<void> =>
         Effect.sync(() => {
           const msgs = getStore(sessionId);
           msgs.push({ role: 'tool', content: output, tool_call_id: toolCallId, tool_name: toolName });
+        }),
+
+      appendTurnEnd: (sessionId: string, llm?: any): Effect.Effect<void> =>
+        Effect.sync(() => {
+          const msgs = getStore(sessionId);
+          const config = getContextConfig();
+          const usage = estimateTokens(msgs);
+          if (usage > config.defaultMaxTokens * config.thresholds.budgetReduction) {
+            run(sessionId, usage, llm, config);
+          }
         }),
 
       build: (sessionId: string): Effect.Effect<Message[]> =>
@@ -84,16 +71,9 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
 
       compress: (sessionId: string): Effect.Effect<CompressResult> =>
         Effect.sync(() => {
-          const msgs = getStore(sessionId);
-          const result = compactMessages(msgs, budget);
-          if (result.ok && result.value.didCompress) {
-            msgs.length = 0;
-            msgs.push(...result.value.messages);
-          }
-          return result.ok ? result.value : { messages: [...msgs], didCompress: false };
+          const config = getContextConfig();
+          return runL5(sessionId, config);
         }),
     };
   }),
 }) {}
-
-export type { CompressResult } from './compaction.js';
