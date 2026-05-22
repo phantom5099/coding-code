@@ -6,7 +6,6 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { SessionService } from '../../src/session/store.js';
 import { ContextService } from '../../src/context/context.js';
-import { __setContextConfigForTest } from '../../src/context/config.js';
 import { appendProjection } from '../../src/session/projection-store.js';
 import type { SessionIndex } from '../../src/session/types.js';
 
@@ -16,7 +15,6 @@ describe('tokenCountEstimate incremental maintenance', () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
-    __setContextConfigForTest({} as any);
     for (const d of tempDirs.splice(0)) {
       if (existsSync(d)) rmSync(d, { recursive: true, force: true });
     }

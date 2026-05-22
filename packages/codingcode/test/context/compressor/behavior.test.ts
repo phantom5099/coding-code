@@ -5,7 +5,6 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { run, runL5 } from '../../../src/context/compressor/index.js';
 import { loadProjectionStore } from '../../../src/session/projection-store.js';
-import { __setContextConfigForTest } from '../../../src/context/config.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
@@ -93,10 +92,6 @@ function makeMockLLM(content: string): LLMClient {
 }
 
 describe('compressor behavior', () => {
-  afterEach(() => {
-    __setContextConfigForTest({} as any);
-  });
-
   describe('L2 prune protection', () => {
     it('does not prune tools in protected recent turns (prefixTurnsProtected)', async () => {
       const fx = makeFixture({ numTurns: 3, toolContentSize: 4000 });

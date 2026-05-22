@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { Message, ToolCall } from '../core/types.js';
-import { getContextConfig } from './config.js';
+import { getContextConfig, type ContextConfig } from './config.js';
 import { run, runL5, type CompressResult } from './compressor/index.js';
 import { assemblePayload } from './organizer.js';
 import { findSessionIndex } from '../session/store.js';
@@ -55,13 +55,13 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
        * count tokens. The Compressor itself does the precise accounting when
        * it actually needs to act.
        */
-      appendTurnEnd: (sessionId: string, llm: LLMClient | null = null): Effect.Effect<CompressResult> =>
+      appendTurnEnd: (sessionId: string, llm: LLMClient | null = null, config?: ContextConfig): Effect.Effect<CompressResult> =>
         Effect.promise(async () => {
-          const config = getContextConfig();
+          const cfg = config ?? getContextConfig();
           const idx = findSessionIndex(sessionId);
           const usage = idx?.tokenCountEstimate ?? 0;
-          if (usage > config.defaultMaxTokens * config.thresholds.budgetReduction) {
-            return await run(sessionId, usage, llm, config);
+          if (usage > cfg.defaultMaxTokens * cfg.thresholds.budgetReduction) {
+            return await run(sessionId, usage, llm, cfg);
           }
           return { didCompress: false, released: 0 };
         }),
@@ -73,11 +73,11 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
        * The optional `pendingUser` lets the caller append the about-to-be-sent
        * user message; if omitted, only the persisted history is returned.
        */
-      build: (sessionId: string, pendingUser?: Message, pinned: Message[] = []): Effect.Effect<Message[]> =>
+      build: (sessionId: string, pendingUser?: Message, pinned: Message[] = [], config?: ContextConfig): Effect.Effect<Message[]> =>
         Effect.sync(() => {
-          const config = getContextConfig();
+          const cfg = config ?? getContextConfig();
           try {
-            return assemblePayload(sessionId, pendingUser ?? null, pinned, config);
+            return assemblePayload(sessionId, pendingUser ?? null, pinned, cfg);
           } catch {
             // Session not yet persisted (e.g. very first call before recordUser):
             // fall back to in-memory log.
@@ -101,10 +101,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
           if (store) store.length = 0;
         }),
 
-      compress: (sessionId: string, llm: LLMClient | null = null): Effect.Effect<CompressResult> =>
+      compress: (sessionId: string, llm: LLMClient | null = null, config?: ContextConfig): Effect.Effect<CompressResult> =>
         Effect.promise(async () => {
-          const config = getContextConfig();
-          return await runL5(sessionId, config, llm);
+          const cfg = config ?? getContextConfig();
+          return await runL5(sessionId, cfg, llm);
         }),
     };
   }),

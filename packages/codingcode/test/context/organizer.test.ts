@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { fitToBudget } from '../../src/context/organizer.js';
 import type { Message } from '../../src/core/types.js';
 import type { ContextConfig } from '../../src/context/config.js';
-import { __setContextConfigForTest } from '../../src/context/config.js';
 
 function msg(content: string, role: Message['role'] = 'user'): Message {
   return { role, content };

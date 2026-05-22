@@ -6,7 +6,6 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { ContextService } from '../../src/context/context.js';
 import { appendProjection } from '../../src/session/projection-store.js';
-import { __setContextConfigForTest } from '../../src/context/config.js';
 import type { SessionIndex } from '../../src/session/types.js';
 
 const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
@@ -50,10 +49,6 @@ function cleanup(dir: string) {
 }
 
 describe('ContextService.build hot path', () => {
-  afterEach(() => {
-    __setContextConfigForTest({} as any);
-  });
-
   it('reads from JSONL via assemblePayload, ignoring in-memory log', async () => {
     const fx = buildFixture({ numTurns: 2 });
     try {
