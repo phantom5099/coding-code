@@ -1,29 +1,18 @@
 import { existsSync, readFileSync, openSync, readSync, closeSync, statSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import type { SessionEvent, SessionIndex } from './types.js';
 import type { EnrichedMessage } from '../context/projection/types.js';
 import { estimateTokensForContent } from '../context/utils/tokens.js';
-
-function findSessionDir(sessionId: string): string | null {
-  const { readdirSync } = require('fs') as typeof import('fs');
-  const dir = join(homedir(), '.codingcode', 'sessions');
-  if (!existsSync(dir)) return null;
-  for (const slug of readdirSync(dir)) {
-    const projectDir = join(dir, slug);
-    if (existsSync(join(projectDir, `${sessionId}.jsonl`))) return projectDir;
-  }
-  return null;
-}
+import { resolveSessionDir } from './store.js';
 
 function transcriptPath(sessionId: string): string {
-  const dir = findSessionDir(sessionId);
+  const dir = resolveSessionDir(sessionId);
   if (!dir) throw new Error(`Session ${sessionId} not found`);
   return join(dir, `${sessionId}.jsonl`);
 }
 
 function indexPath(sessionId: string): string {
-  const dir = findSessionDir(sessionId);
+  const dir = resolveSessionDir(sessionId);
   if (!dir) throw new Error(`Session ${sessionId} not found`);
   return join(dir, `${sessionId}.index.json`);
 }

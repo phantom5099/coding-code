@@ -1,19 +1,15 @@
-import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import type { ProjectionEntry, ProjectionStore } from '../context/projection/types.js';
 import type { SessionIndex, SessionEvent } from './types.js';
 import { computeUncoveredOffset, loadAllRawEvents } from './jsonl-reader.js';
 import { estimateTokensForContent } from '../context/utils/tokens.js';
+import { resolveSessionDir } from './store.js';
 
 function sessionDir(sessionId: string): string {
-  const dir = join(homedir(), '.codingcode', 'sessions');
-  if (!existsSync(dir)) throw new Error('.codingcode/sessions not found');
-  for (const slug of readdirSync(dir)) {
-    const projectDir = join(dir, slug);
-    if (existsSync(join(projectDir, `${sessionId}.jsonl`))) return projectDir;
-  }
-  throw new Error(`Session ${sessionId} not found`);
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) throw new Error(`Session ${sessionId} not found`);
+  return dir;
 }
 
 function projectionsPath(sessionId: string): string {

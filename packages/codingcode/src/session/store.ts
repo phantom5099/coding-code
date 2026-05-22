@@ -12,6 +12,15 @@ import { estimateTokensForContent } from '../context/utils/tokens.js';
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const SESSIONS_DIR = join(CODINGCODE_DIR, 'sessions');
 
+export function resolveSessionDir(sessionId: string): string | null {
+  if (!existsSync(SESSIONS_DIR)) return null;
+  for (const slug of readdirSync(SESSIONS_DIR)) {
+    const projectDir = join(SESSIONS_DIR, slug);
+    if (existsSync(join(projectDir, `${sessionId}.jsonl`))) return projectDir;
+  }
+  return null;
+}
+
 function ensureDirs(transcriptPath: string): void {
   if (!existsSync(CODINGCODE_DIR)) mkdirSync(CODINGCODE_DIR, { recursive: true });
   if (!existsSync(SESSIONS_DIR)) mkdirSync(SESSIONS_DIR, { recursive: true });
