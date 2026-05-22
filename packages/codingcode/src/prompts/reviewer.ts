@@ -7,7 +7,6 @@ export const reviewerPromptSet: PromptSet = {
   maxSteps: 10,
   toolNames: [
     "read_file",
-    "list_dir",
     "search_code",
   ],
   buildSystem: (env: { cwd: string; platform: string; shell: string }) => `You are a code review specialist — an AI agent that helps review code for quality, correctness, and best practices.

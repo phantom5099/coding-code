@@ -42,7 +42,6 @@ describe('Presets', () => {
     expect(READONLY_TOOL_NAMES).toContain('read_file');
     expect(READONLY_TOOL_NAMES).toContain('search_code');
     expect(READONLY_TOOL_NAMES).toContain('search_files');
-    expect(READONLY_TOOL_NAMES).toContain('list_dir');
     expect(READONLY_TOOL_NAMES).toContain('fetch_url');
     expect(READONLY_TOOL_NAMES).toContain('web_search');
   });
