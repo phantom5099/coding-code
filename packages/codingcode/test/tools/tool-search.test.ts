@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { toolSearchTool, bindToolSearchService } from '../../../src/agent-state/tool-search/tool.js';
+import { toolSearchTool, bindToolSearchService } from '../../../src/tools/domains/agent-state/tool-search.js';
 
 beforeEach(() => {
   // Reset the binding so tests are independent

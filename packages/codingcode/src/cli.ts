@@ -19,9 +19,9 @@ import { createServer } from './server/index.js';
 import { AppLayer } from './layer.js';
 import { loadConfig } from '../../infra/src/config.js';
 import { getWorkspaceCwd, initWorkspace, parseWorkspaceArgs } from './core/workspace.js';
-import { todoWriteTool } from './agent-state/todo/tools.js';
-import { todoReadTool } from './agent-state/todo/tools.js';
-import { toolSearchTool, bindToolSearchService } from './agent-state/tool-search/tool.js';
+import { todoWriteTool } from './tools/domains/agent-state/todo-write.js';
+import { todoReadTool } from './tools/domains/agent-state/todo-read.js';
+import { toolSearchTool, bindToolSearchService } from './tools/domains/agent-state/tool-search.js';
 import { ToolSearchService } from './agent-state/tool-search/service.js';
 
 function findAvailablePort(startPort: number): Promise<number> {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { AgentError } from '../../core/error';
-import type { ToolDefinition } from '../../tools/types';
+import { AgentError } from '../../../core/error';
+import type { ToolDefinition } from '../../types';
 
 export interface ToolSearchApi {
   search: (agentId: string, query: string) => Array<{ name: string; shortDescription?: string }>;

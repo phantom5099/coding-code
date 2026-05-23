@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { z } from 'zod';
 import { sharedTodoStore } from '../../../src/agent-state/todo/service.js';
-import { todoWriteTool, todoReadTool } from '../../../src/agent-state/todo/tools.js';
+import { todoWriteTool } from '../../../src/tools/domains/agent-state/todo-write.js';
+import { todoReadTool } from '../../../src/tools/domains/agent-state/todo-read.js';
 
 beforeEach(() => { sharedTodoStore.reset(); });
 
