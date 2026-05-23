@@ -25,7 +25,7 @@ import { toolSearchTool, bindToolSearchService } from './tools/domains/agent-sta
 import { ToolSearchService } from './tools/tool-search-service.js';
 import { SubagentRegistry, EXPLORE_PROFILE, GENERAL_PROFILE } from './subagent/registry.js';
 import { loadAgentProfiles } from './subagent/loader.js';
-import { createDispatchAgentTool } from './subagent/dispatch-tool.js';
+import { createDispatchAgentTool } from './tools/domains/subagent/dispatch.js';
 import { AgentIdResolver } from './agent-state/agent-id.js';
 import { ApprovalService } from './approval/index.js';
 import { SessionService } from './session/store.js';

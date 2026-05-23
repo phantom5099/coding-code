@@ -1,6 +1,6 @@
 import { expect, it, describe, vi } from 'vitest';
 import { Effect } from 'effect';
-import { createDispatchAgentTool } from '../../src/subagent/dispatch-tool';
+import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch';
 import { SubagentRegistry, EXPLORE_PROFILE } from '../../src/subagent/registry';
 import { SubagentRegistryLayer } from '../../src/layer';
 

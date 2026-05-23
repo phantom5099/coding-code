@@ -1,12 +1,12 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { Effect } from 'effect';
-import type { ToolDefinition } from '../tools/types.js';
-import type { SubagentRegistry } from './registry.js';
-import type { SessionService } from '../session/store.js';
-import type { AgentIdResolver } from '../agent-state/agent-id.js';
-import type { ApprovalService } from '../approval/index.js';
-import type { HookService } from '../hooks/registry.js';
+import type { ToolDefinition } from '../../types.js';
+import type { SubagentRegistry } from '../../../subagent/registry.js';
+import type { SessionService } from '../../../session/store.js';
+import type { AgentIdResolver } from '../../../agent-state/agent-id.js';
+import type { ApprovalService } from '../../../approval/index.js';
+import type { HookService } from '../../../hooks/registry.js';
 
 interface DispatchAgentDeps {
   session: SessionService;
