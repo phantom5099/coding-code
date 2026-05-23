@@ -36,7 +36,10 @@ export const bootstrapApplication = (cwd: string) =>
     const hooks = yield* HookService;
     const toolSearchSvc = yield* ToolSearchService;
 
-    yield* sandbox.initialize({});
+    yield* sandbox.initialize({
+      denyReadPaths: ['/etc/shadow', '/etc/passwd'],
+      denyWritePaths: ['/', '/etc', '/sys', '/proc'],
+    });
 
     yield* tools.register(readFileTool);
     yield* tools.register(writeFileTool);
