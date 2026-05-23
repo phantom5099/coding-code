@@ -7,6 +7,10 @@ export interface ToolExecCtx {
   sessionId?: string;
   turnId?: number;
   projectPath?: string;
+  agentRunner?: {
+    agentService: any; // AgentService — use any to avoid circular imports
+    llm: any; // LLMStreamAdapter — use any to avoid circular imports
+  };
 }
 
 export interface ToolDefinition {

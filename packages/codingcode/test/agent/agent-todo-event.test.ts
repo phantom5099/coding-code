@@ -95,6 +95,10 @@ describe('TodoUpdate event', () => {
         ctx: mockCtx as any,
         session: mockSession as any,
         checkpoint: mockCheckpoint as any,
+        hooks: {
+          emit: () => Effect.succeed(undefined),
+          emitDecision: () => Effect.succeed(null),
+        } as any,
       },
     );
 
@@ -132,6 +136,10 @@ describe('TodoUpdate event', () => {
         ctx: mockCtx as any,
         session: mockSession as any,
         checkpoint: mockCheckpoint as any,
+        hooks: {
+          emit: () => Effect.succeed(undefined),
+          emitDecision: () => Effect.succeed(null),
+        } as any,
       },
     );
 

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { ToolService } from '../../../src/tools/registry.js';
-import { ToolSearchService } from '../../../src/tools/tool-search-service.js';
-import type { ToolDefinition } from '../../../src/tools/types.js';
+import { ToolService } from '../../src/tools/registry.js';
+import { ToolSearchService } from '../../src/tools/tool-search-service.js';
+import type { ToolDefinition } from '../../src/tools/types.js';
 import { z } from 'zod';
 
 const toolLayer = ToolService.Default;

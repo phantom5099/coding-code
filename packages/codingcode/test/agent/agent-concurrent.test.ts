@@ -67,6 +67,10 @@ function makeDeps(overrides?: Record<string, any>) {
     ctx: mockCtx as any,
     session: mockSession as any,
     checkpoint: mockCheckpoint as any,
+    hooks: {
+      emit: () => Effect.succeed(undefined),
+      emitDecision: () => Effect.succeed(null),
+    } as any,
     ...overrides,
   };
 }
@@ -74,7 +78,7 @@ function makeDeps(overrides?: Record<string, any>) {
 describe('runReActLoop — concurrent tool execution', () => {
   it('should execute multiple tool calls concurrently', async () => {
     const executionOrder: string[] = [];
-    const resolveBarrier = new Promise<void>((r) => setTimeout(r, 50));
+    const resolveBarrier = new Promise<void>((r) => setTimeout(r, 100));
 
     const mockLlm = {
       completeStream: (_params: any) => ({

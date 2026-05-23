@@ -1,20 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { toolSearchTool, bindToolSearchService } from '../../../src/tools/domains/agent-state/tool-search.js';
+import { describe, it, expect } from 'vitest';
+import { createToolSearchTool } from '../../src/tools/domains/agent-state/tool-search.js';
 
-beforeEach(() => {
-  // Reset the binding so tests are independent
-  (bindToolSearchService as any)(null);
-});
-
-describe('tool_search tool', () => {
+describe('createToolSearchTool', () => {
   it('returns loaded tool list when matches found', async () => {
-    bindToolSearchService({
+    const tool = createToolSearchTool({
       search: (_agentId: string, _query: string) => [
         { name: 'todo_write', shortDescription: 'Write tasks' },
       ],
     });
 
-    const result = await toolSearchTool.execute(
+    const result = await tool.execute(
       { query: 'todo' },
       { agentId: 'test-agent' },
     );
@@ -23,11 +18,11 @@ describe('tool_search tool', () => {
   });
 
   it('returns no-match message when no hits', async () => {
-    bindToolSearchService({
+    const tool = createToolSearchTool({
       search: () => [],
     });
 
-    const result = await toolSearchTool.execute(
+    const result = await tool.execute(
       { query: 'zzznonexistent' },
       { agentId: 'test-agent' },
     );
@@ -35,15 +30,24 @@ describe('tool_search tool', () => {
   });
 
   it('throws if agentId is missing', async () => {
-    bindToolSearchService({ search: () => [] });
+    const tool = createToolSearchTool({ search: () => [] });
     await expect(
-      toolSearchTool.execute({ query: 'anything' }, {}),
+      tool.execute({ query: 'anything' }, {}),
     ).rejects.toThrow('tool_search requires agentId');
   });
 
-  it('throws if service not bound', async () => {
-    await expect(
-      toolSearchTool.execute({ query: 'anything' }, { agentId: 'x' }),
-    ).rejects.toThrow('tool_search service not bound');
+  it('each tool instance uses its own svc closure', async () => {
+    const tool1 = createToolSearchTool({
+      search: () => [{ name: 'tool_a' }],
+    });
+    const tool2 = createToolSearchTool({
+      search: () => [{ name: 'tool_b' }],
+    });
+
+    const r1 = await tool1.execute({ query: 'x' }, { agentId: 'a' });
+    const r2 = await tool2.execute({ query: 'x' }, { agentId: 'a' });
+
+    expect(r1).toContain('tool_a');
+    expect(r2).toContain('tool_b');
   });
 });

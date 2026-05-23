@@ -12,7 +12,9 @@ export type ErrorCode =
   | 'CONFIG_INVALID'
   | 'SESSION_CORRUPTED'
   | 'SESSION_NOT_FOUND'
-  | 'SESSION_WORKSPACE_MISMATCH';
+  | 'SESSION_WORKSPACE_MISMATCH'
+  | 'AGENT_ABORTED'
+  | 'STOP_LOOP';
 
 export class AgentError extends Error {
   constructor(

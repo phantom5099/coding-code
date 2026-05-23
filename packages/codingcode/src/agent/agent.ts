@@ -16,6 +16,7 @@ import { ToolSearchService } from '../tools/tool-search-service.js';
 import { AgentIdResolver } from '../agent-state/agent-id.js';
 import { sharedTodoStore } from '../agent-state/todo/service.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
+import { HookService } from '../hooks/registry.js';
 
 export type AgentEvent =
   | { readonly _tag: 'LlmChunk'; readonly text: string }
@@ -36,6 +37,14 @@ export interface RunStreamOptions {
   agentId?: string;
   skillInstruction?: string;
   systemPromptVariant?: SystemPromptVariant;
+  systemOverride?: string;
+  coreAllowlist?: ReadonlySet<string>;
+  abortSignal?: AbortSignal;
+  parentAgentId?: string;
+  agentName?: string;
+  maxStepsOverride?: number;
+  maxStopContinuations?: number;
+  approvalOverride?: any;
 }
 
 interface LLMStreamAdapter {
@@ -59,6 +68,7 @@ interface RunReActDeps {
   ctx: ContextService;
   session: SessionService;
   checkpoint: CheckpointService;
+  hooks: any; // HookService
 }
 
 export class AgentService extends Effect.Service<AgentService>()('Agent', {
@@ -70,13 +80,14 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
     const ctx = yield* ContextService;
     const session = yield* SessionService;
     const checkpoint = yield* CheckpointService;
+    const hooks = yield* HookService;
     const maxSteps = resolveConfig().maxSteps;
 
     return {
       runStream: (opts: RunStreamOptions): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> =>
         runReActLoop(opts, {
           maxSteps, executor, toolRegistry, toolSearch, agentIdResolver,
-          ctx, session, checkpoint,
+          ctx, session, checkpoint, hooks,
         }),
     };
   }),
@@ -89,35 +100,65 @@ export async function* runReActLoop(
   const { state, llm, skillInstruction, systemPromptVariant } = opts;
   const agentId = opts.agentId ?? deps.agentIdResolver.resolve(state.sessionId);
   const projectPath = state.cwd;
-  const basePrompt = buildSystemPrompt({
+
+  // Build system prompt
+  const basePrompt = opts.systemOverride ?? buildSystemPrompt({
     cwd: getWorkspaceCwd(),
     platform: process.platform,
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
     variant: systemPromptVariant ?? 'default',
   });
-  const system = skillInstruction
-    ? `${basePrompt}\n\n## Skill Instructions\n\n${skillInstruction}`
-    : basePrompt;
+  const skillInstructionStr = opts.skillInstruction ? `\n\n## Skill Instructions\n\n${opts.skillInstruction}` : '';
+  const system = `${basePrompt}${skillInstructionStr}`;
+
   const config = getContextConfig();
   const maxOverflowRetries = config.reactiveCompactMaxRetries;
   const model = state.sessionMeta?.model ?? 'unknown';
+  const maxSteps = opts.maxStepsOverride ?? deps.maxSteps;
 
-  const { executor, toolRegistry, toolSearch, ctx, session, checkpoint } = deps;
+  const { executor, toolRegistry, toolSearch, ctx, session, checkpoint, hooks } = deps;
+
+  // For stop hook continue logic
+  let stopContinuations = 0;
+  const maxStopContinuations = opts.maxStopContinuations ?? 2;
 
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
     const messages = Effect.runSync(ctx.build(state.sessionId));
     let lastResult: Result<string, AgentError> | null = null;
     let overflow = false;
 
-    for (let step = 0; step < deps.maxSteps; step++) {
-      yield { _tag: 'Step', step: step + 1, max: deps.maxSteps };
+    // Emit turn.start hook
+    await Effect.runPromise(hooks.emit('agent.turn.start', { agentId, sessionId: state.sessionId }));
 
-      const tools: ToolDescription[] = buildToolsForAgent(toolRegistry, toolSearch, agentId);
+    for (let step = 0; step < maxSteps; step++) {
+      yield { _tag: 'Step', step: step + 1, max: maxSteps };
+
+      // Check abort signal
+      if (opts.abortSignal?.aborted) {
+        yield { _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') };
+        await Effect.runPromise(hooks.emit('agent.turn.end', {
+          agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'aborted'
+        }));
+        return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
+      }
+
+      // Build tools with coreAllowlist filter
+      const tools: ToolDescription[] = buildToolsForAgent(toolRegistry, toolSearch, agentId, opts.coreAllowlist);
       const catalog = buildDeferredCatalogContent(toolSearch, agentId);
       const systemWithCatalog = catalog ? `${system}\n\n${catalog}` : system;
 
+      // Emit step.before hook and collect transient messages
+      const stepBeforePayload = { agentId, step: step + 1, sessionId: state.sessionId };
+      await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
+
+      // Build LLM messages: original messages + step.before transients
+      const llmMessages = [...messages];
+
+      // Add step.before transient messages (if any)
+      // Note: transient messages are not persisted to JSONL
+
       const { stream: rawStream, response: respPromise } = llm.completeStream({
-        messages, system: systemWithCatalog, tools, maxSteps: 1,
+        messages: llmMessages, system: systemWithCatalog, tools, maxSteps: 1,
       });
 
       for await (const chunk of rawStream) {
@@ -135,6 +176,9 @@ export async function* runReActLoop(
         }
         yield { _tag: 'Error', error: llmResult.error };
         lastResult = Result.err(llmResult.error);
+        await Effect.runPromise(hooks.emit('agent.turn.end', {
+          agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'error'
+        }));
         break;
       }
 
@@ -152,13 +196,48 @@ export async function* runReActLoop(
       const assistantUuid = (recordResult as any).uuid;
 
       if (!toolCalls || toolCalls.length === 0) {
+        // LLM done - check stop hook before returning
+        const stopHookPayload = {
+          agentId, sessionId: state.sessionId, content: resp.content, turnId: state.currentTurnId
+        };
+        const stopDecision: any = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', stopHookPayload));
+
+        if (stopDecision && stopDecision.decision === 'continue') {
+          // Continue for another iteration
+          if (stopContinuations >= maxStopContinuations) {
+            yield { _tag: 'Error', error: new AgentError('STOP_LOOP', 'max stop continuations exceeded') };
+            await Effect.runPromise(hooks.emit('agent.turn.end', {
+              agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'error'
+            }));
+            return Result.err(new AgentError('STOP_LOOP', 'max stop continuations exceeded'));
+          }
+          stopContinuations++;
+          const injection = stopDecision.injection ?? '(continue)';
+          Effect.runSync(session.recordUser(state, injection));
+          messages.push({ role: 'user', content: injection });
+          // Continue to next iteration of for loop
+          continue;
+        }
+
+        // Normal completion
         yield { _tag: 'Done', content: resp.content };
         lastResult = Result.ok(resp.content);
+        await Effect.runPromise(hooks.emit('agent.turn.end', {
+          agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'done'
+        }));
         break;
       }
 
+      // Execute tool calls with approvalOverride and agentRunner
       const allResults = await Effect.runPromise(
-        executor.executeBatch(toolCalls, state.sessionId, { turnId: state.currentTurnId, projectPath, agentId }),
+        executor.executeBatch(toolCalls, state.sessionId, {
+          turnId: state.currentTurnId,
+          projectPath,
+          agentId,
+          signal: opts.abortSignal,
+          approval: opts.approvalOverride,
+          agentRunner: { agentService: undefined, llm }, // Will be set at dispatch time
+        }),
       );
 
       for (const r of allResults) {
@@ -187,6 +266,7 @@ export async function* runReActLoop(
           break;
         }
       }
+
     }
 
     if (overflow) continue;
@@ -197,10 +277,16 @@ export async function* runReActLoop(
     if (lastResult) return lastResult;
 
     // Max steps exhausted without result
-    yield { _tag: 'Error', error: AgentError.maxStepsReached(deps.maxSteps) };
-    return Result.err(AgentError.maxStepsReached(deps.maxSteps));
+    yield { _tag: 'Error', error: AgentError.maxStepsReached(maxSteps) };
+    await Effect.runPromise(hooks.emit('agent.turn.end', {
+      agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'maxSteps'
+    }));
+    return Result.err(AgentError.maxStepsReached(maxSteps));
   }
 
-  yield { _tag: 'Error', error: AgentError.maxStepsReached(deps.maxSteps) };
-  return Result.err(AgentError.maxStepsReached(deps.maxSteps));
+  yield { _tag: 'Error', error: AgentError.maxStepsReached(maxSteps) };
+  await Effect.runPromise(hooks.emit('agent.turn.end', {
+    agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'maxSteps'
+  }));
+  return Result.err(AgentError.maxStepsReached(maxSteps));
 }

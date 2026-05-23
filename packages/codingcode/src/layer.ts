@@ -14,6 +14,7 @@ import { CheckpointService } from './checkpoint/checkpoint-service';
 import { TodoService } from './agent-state/todo/service';
 import { ToolSearchService } from './tools/tool-search-service';
 import { AgentIdResolver } from './agent-state/agent-id';
+import { SubagentRegistry } from './subagent/registry';
 
 export const AgentLayer = AgentService.Default;
 export const SessionLayer = SessionService.Default;
@@ -23,6 +24,7 @@ export const HookLayer = HookService.Default;
 export const SkillLayer = SkillService.Default;
 export const SandboxLayer = SandboxService.Default;
 export const ApprovalWaitLayer = ApprovalWaitService.Default;
+export const SubagentRegistryLayer = SubagentRegistry.Default;
 /** ApprovalService depends on HookService + ApprovalWaitService — provide them eagerly. */
 export const ApprovalLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer)),
@@ -59,10 +61,10 @@ export const ToolSearchLayer = ToolSearchService.Default.pipe(
   Layer.provide(ToolLayer),
 );
 
-/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService + TodoService + ToolSearchService + AgentIdResolver. */
+/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService + TodoService + ToolSearchService + AgentIdResolver + SubagentRegistryLayer. */
 const AgentDeps = Layer.mergeAll(
   ExecutorLayer, ToolLayer, ContextLayer, SessionLayer, CheckpointLayer,
-  TodoLayer, ToolSearchLayer, AgentIdResolverLayer,
+  TodoLayer, ToolSearchLayer, AgentIdResolverLayer, SubagentRegistryLayer, HookLayer,
 );
 const AgentWithDeps = AgentLayer.pipe(Layer.provide(AgentDeps));
 
@@ -82,4 +84,5 @@ export const AppLayer = Layer.mergeAll(
   TodoLayer,
   ToolSearchLayer,
   AgentIdResolverLayer,
+  SubagentRegistryLayer,
 );

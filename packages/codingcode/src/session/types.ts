@@ -6,6 +6,9 @@ export interface SessionMetaEvent {
   model: string;
   createdAt: string;
   version: string;
+  parentSessionId?: string;
+  parentAgentId?: string;
+  agentName?: string;
 }
 
 export interface UserEvent {

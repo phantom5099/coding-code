@@ -7,10 +7,18 @@ export function buildToolsForAgent(
   registry: ToolService,
   toolSearch: ToolSearchService,
   agentId: string,
+  coreAllowlist?: ReadonlySet<string>,
 ): ToolDescription[] {
-  const core = registry.allCore();
+  let core = registry.allCore();
+  if (coreAllowlist) {
+    core = core.filter(t => coreAllowlist.has(t.name));
+  }
   const loadedDeferred = registry.allDeferred().filter(t => toolSearch.isLoaded(agentId, t.name));
-  return [...core, ...loadedDeferred].map(t => ({
+  let deferred = loadedDeferred;
+  if (coreAllowlist) {
+    deferred = deferred.filter(t => coreAllowlist.has(t.name));
+  }
+  return [...core, ...deferred].map(t => ({
     name: t.name,
     description: t.description,
     parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
