@@ -8,10 +8,13 @@ import { ToolExecutorService } from '../tools/executor.js';
 import { ContextService } from '../context/context.js';
 import { SessionService, type SessionStoreState } from '../session/store.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
-import { buildSystemPrompt } from '../prompts/index.js';
+import { buildSystemPrompt, type SystemPromptVariant } from '../prompts/index.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
+import { ToolSearchService } from '../agent-state/tool-search/service.js';
+import { AgentIdResolver } from '../agent-state/agent-id.js';
+import { buildToolsForAgent, buildDeferredCatalogMessage } from './build-tools.js';
 
 export type AgentEvent =
   | { readonly _tag: 'LlmChunk'; readonly text: string }
@@ -25,6 +28,14 @@ export type AgentEvent =
   | { readonly _tag: 'Error'; readonly error: AgentError }
   | { readonly _tag: 'Done'; readonly content: string };
 
+export interface RunStreamOptions {
+  state: SessionStoreState;
+  llm: LLMStreamAdapter;
+  agentId?: string;
+  skillInstruction?: string;
+  systemPromptVariant?: SystemPromptVariant;
+}
+
 interface LLMStreamAdapter {
   completeStream(params: {
     messages: Message[];
@@ -37,42 +48,50 @@ interface LLMStreamAdapter {
   };
 }
 
+interface RunReActDeps {
+  maxSteps: number;
+  executor: ToolExecutorService;
+  toolRegistry: ToolService;
+  toolSearch: ToolSearchService;
+  agentIdResolver: AgentIdResolver;
+  ctx: ContextService;
+  session: SessionService;
+  checkpoint: CheckpointService;
+}
+
 export class AgentService extends Effect.Service<AgentService>()('Agent', {
   effect: Effect.gen(function* () {
     const executor = yield* ToolExecutorService;
     const toolRegistry = yield* ToolService;
+    const toolSearch = yield* ToolSearchService;
+    const agentIdResolver = yield* AgentIdResolver;
     const ctx = yield* ContextService;
     const session = yield* SessionService;
     const checkpoint = yield* CheckpointService;
     const maxSteps = resolveConfig().maxSteps;
 
     return {
-      runStream: (
-        state: SessionStoreState,
-        llm: LLMStreamAdapter,
-        skillInstruction?: string,
-      ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> =>
-        runReActLoop(state, maxSteps, llm, executor, toolRegistry, ctx, session, checkpoint, skillInstruction),
+      runStream: (opts: RunStreamOptions): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> =>
+        runReActLoop(opts, {
+          maxSteps, executor, toolRegistry, toolSearch, agentIdResolver,
+          ctx, session, checkpoint,
+        }),
     };
   }),
 }) {}
 
 export async function* runReActLoop(
-  state: SessionStoreState,
-  maxSteps: number,
-  llm: LLMStreamAdapter,
-  executor: ToolExecutorService,
-  toolRegistry: ToolService,
-  ctx: ContextService,
-  session: SessionService,
-  checkpoint: CheckpointService,
-  skillInstruction?: string,
+  opts: RunStreamOptions,
+  deps: RunReActDeps,
 ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> {
+  const { state, llm, skillInstruction, systemPromptVariant } = opts;
+  const agentId = opts.agentId ?? deps.agentIdResolver.resolve(state.sessionId);
   const projectPath = state.cwd;
   const basePrompt = buildSystemPrompt({
     cwd: getWorkspaceCwd(),
     platform: process.platform,
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
+    variant: systemPromptVariant ?? 'default',
   });
   const system = skillInstruction
     ? `${basePrompt}\n\n## Skill Instructions\n\n${skillInstruction}`
@@ -81,18 +100,22 @@ export async function* runReActLoop(
   const maxOverflowRetries = config.reactiveCompactMaxRetries;
   const model = state.sessionMeta?.model ?? 'unknown';
 
+  const { executor, toolRegistry, toolSearch, ctx, session, checkpoint } = deps;
+
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
     const messages = Effect.runSync(ctx.build(state.sessionId));
     let lastResult: Result<string, AgentError> | null = null;
     let overflow = false;
 
-    for (let step = 0; step < maxSteps; step++) {
-      yield { _tag: 'Step', step: step + 1, max: maxSteps };
+    for (let step = 0; step < deps.maxSteps; step++) {
+      yield { _tag: 'Step', step: step + 1, max: deps.maxSteps };
 
-      const tools: ToolDescription[] = toolRegistry.describeAll();
+      const tools: ToolDescription[] = buildToolsForAgent(toolRegistry, toolSearch, agentId);
+      const catalog = buildDeferredCatalogMessage(toolSearch, agentId);
+      const llmMessages = catalog ? [...messages, catalog] : messages;
 
       const { stream: rawStream, response: respPromise } = llm.completeStream({
-        messages, system, tools, maxSteps: 1,
+        messages: llmMessages, system, tools, maxSteps: 1,
       });
 
       for await (const chunk of rawStream) {
@@ -133,17 +156,18 @@ export async function* runReActLoop(
       }
 
       const allResults = await Effect.runPromise(
-        executor.executeBatch(toolCalls, state.sessionId, { turnId: state.currentTurnId, projectPath }),
+        executor.executeBatch(toolCalls, state.sessionId, { turnId: state.currentTurnId, projectPath, agentId }),
       );
 
       for (const r of allResults) {
+        const resultOut = r.type === 'denied' ? '' : r.output;
         if (r.type === 'denied') {
           yield { _tag: 'ToolDenied', name: r.name, reason: r.reason };
         } else {
-          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: r.output, ok: r.type === 'ok' };
+          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: r.type === 'ok' };
         }
         // Persist tool result
-        Effect.runSync(session.recordToolResult(state, assistantUuid, r.name, r.id, r.output ?? ''));
+        Effect.runSync(session.recordToolResult(state, assistantUuid, r.name, r.id, resultOut));
       }
 
       for (const r of allResults) {
@@ -159,14 +183,14 @@ export async function* runReActLoop(
 
     // Turn completed — snapshot and compact
     checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
-    await Effect.runPromise(ctx.appendTurnEnd(state.sessionId, llm));
+    await Effect.runPromise(ctx.appendTurnEnd(state.sessionId, llm as any));
     if (lastResult) return lastResult;
 
     // Max steps exhausted without result
-    yield { _tag: 'Error', error: AgentError.maxStepsReached(maxSteps) };
-    return Result.err(AgentError.maxStepsReached(maxSteps));
+    yield { _tag: 'Error', error: AgentError.maxStepsReached(deps.maxSteps) };
+    return Result.err(AgentError.maxStepsReached(deps.maxSteps));
   }
 
-  yield { _tag: 'Error', error: AgentError.maxStepsReached(maxSteps) };
-  return Result.err(AgentError.maxStepsReached(maxSteps));
+  yield { _tag: 'Error', error: AgentError.maxStepsReached(deps.maxSteps) };
+  return Result.err(AgentError.maxStepsReached(deps.maxSteps));
 }

@@ -1,5 +1,10 @@
 import { getAllRules } from '../rules/index.js';
 
+export const TASK_TRACKING_GUIDELINES = `## Task tracking & deferred tools
+- For multi-step work, use todo_write to record the plan and todo_read to check progress.
+- Do not rely on memory for current todo state; call todo_read when uncertain.
+- Some tools are listed as deferred — call tool_search with relevant keywords before using them.`;
+
 const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that helps users write, read, search, and modify code.
 
 ## Rules
@@ -18,17 +23,34 @@ const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that h
 
 Respond in the user's language. Use code blocks for code.`;
 
-export function buildSystemPrompt(env: { cwd: string; platform: string; shell: string }): string {
-  let prompt = DEFAULT_SYSTEM_PROMPT
-    .replace('{{cwd}}', env.cwd)
-    .replace('{{platform}}', env.platform)
-    .replace('{{shell}}', env.shell);
+export type SystemPromptVariant = 'default' | 'minimal';
+
+export interface SystemPromptOptions {
+  cwd: string;
+  platform: string;
+  shell: string;
+  variant?: SystemPromptVariant;
+  includeTaskTracking?: boolean;
+}
+
+function renderBase(opts: SystemPromptOptions): string {
+  return DEFAULT_SYSTEM_PROMPT
+    .replace('{{cwd}}', opts.cwd)
+    .replace('{{platform}}', opts.platform)
+    .replace('{{shell}}', opts.shell);
+}
+
+export function buildSystemPrompt(opts: SystemPromptOptions): string {
+  const variant = opts.variant ?? 'default';
+  const includeTaskTracking = opts.includeTaskTracking ?? (variant === 'default');
+
+  let prompt = renderBase(opts);
+  if (includeTaskTracking) prompt += `\n\n${TASK_TRACKING_GUIDELINES}`;
 
   const rules = getAllRules();
   if (rules) {
     prompt += `\n\n## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`;
   }
-
   return prompt;
 }
 

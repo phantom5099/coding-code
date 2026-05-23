@@ -19,6 +19,10 @@ import { createServer } from './server/index.js';
 import { AppLayer } from './layer.js';
 import { loadConfig } from '../../infra/src/config.js';
 import { getWorkspaceCwd, initWorkspace, parseWorkspaceArgs } from './core/workspace.js';
+import { todoWriteTool } from './agent-state/todo/tools.js';
+import { todoReadTool } from './agent-state/todo/tools.js';
+import { toolSearchTool, bindToolSearchService } from './agent-state/tool-search/tool.js';
+import { ToolSearchService } from './agent-state/tool-search/service.js';
 
 function findAvailablePort(startPort: number): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -72,6 +76,15 @@ async function main() {
     yield* tools.register(globTool);
     yield* tools.register(webFetchTool);
     yield* tools.register(webSearchTool);
+
+    // Register deferred state-management tools
+    yield* tools.register(todoWriteTool);
+    yield* tools.register(todoReadTool);
+    yield* tools.register(toolSearchTool);
+
+    // Bind ToolSearchService for tool_search tool (needs Effect runtime)
+    const toolSearchSvc = yield* ToolSearchService;
+    bindToolSearchService(toolSearchSvc);
 
     // Connect MCP servers (auto-registers tools to ToolService)
     yield* mcp.connectAll(getWorkspaceCwd());

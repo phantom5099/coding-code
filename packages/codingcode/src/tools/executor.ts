@@ -21,7 +21,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
     function execute(
       name: string,
       args: unknown,
-      opts?: { signal?: AbortSignal; sessionId?: string; turnId?: number; projectPath?: string },
+      opts?: { signal?: AbortSignal; sessionId?: string; turnId?: number; projectPath?: string; agentId?: string },
     ): Effect.Effect<string, AgentError> {
       return Effect.gen(function* () {
         // All services captured from outer closure — no yield* needed for them
@@ -88,7 +88,13 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         const parsedArgs = yield* Effect.sync(() => tool.parameters.parse(finalArgs));
         const start = Date.now();
         const result = yield* Effect.tryPromise({
-          try: () => tool.execute(parsedArgs, opts?.signal),
+          try: () => tool.execute(parsedArgs, {
+            signal: opts?.signal,
+            agentId: opts?.agentId,
+            sessionId: opts?.sessionId,
+            turnId: opts?.turnId,
+            projectPath: opts?.projectPath,
+          }),
           catch: (e) =>
             e instanceof AgentError
               ? e
@@ -117,7 +123,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
       );
     }
 
-    function execSingle(tc: ToolCall, sessionId?: string, opts?: { turnId?: number; projectPath?: string }): Effect.Effect<ToolResultUnion> {
+    function execSingle(tc: ToolCall, sessionId?: string, opts?: { turnId?: number; projectPath?: string; agentId?: string }): Effect.Effect<ToolResultUnion> {
       return execute(tc.name, tc.arguments ?? {}, { sessionId, ...opts }).pipe(
         Effect.matchEffect({
           onSuccess: (output): Effect.Effect<ToolResultUnion> =>
@@ -137,7 +143,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
       );
     }
 
-    function executeBatch(toolCalls: ToolCall[], sessionId?: string, opts?: { turnId?: number; projectPath?: string }): Effect.Effect<ToolResultUnion[]> {
+    function executeBatch(toolCalls: ToolCall[], sessionId?: string, opts?: { turnId?: number; projectPath?: string; agentId?: string }): Effect.Effect<ToolResultUnion[]> {
       return Effect.gen(function* () {
         // Separate safe & destructive tools: safe tools run in parallel, Bash runs serially
         const safeTools: ToolCall[] = [];

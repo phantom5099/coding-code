@@ -11,6 +11,9 @@ import { ApprovalService } from './approval/index';
 import { ApprovalWaitService } from './approval/async-confirm';
 import { ToolExecutorService } from './tools/executor';
 import { CheckpointService } from './checkpoint/checkpoint-service';
+import { TodoService } from './agent-state/todo/service';
+import { ToolSearchService } from './agent-state/tool-search/service';
+import { AgentIdResolver } from './agent-state/agent-id';
 
 export const AgentLayer = AgentService.Default;
 export const SessionLayer = SessionService.Default;
@@ -48,13 +51,25 @@ export const CheckpointLayer = CheckpointService.Default.pipe(
   Layer.provide(CheckpointDeps),
 );
 
-/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService. */
-const AgentDeps = Layer.mergeAll(ExecutorLayer, ToolLayer, ContextLayer, SessionLayer, CheckpointLayer);
+export const TodoLayer = TodoService.Default;
+
+export const AgentIdResolverLayer = AgentIdResolver.Default;
+
+export const ToolSearchLayer = ToolSearchService.Default.pipe(
+  Layer.provide(ToolLayer),
+);
+
+/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService + TodoService + ToolSearchService + AgentIdResolver. */
+const AgentDeps = Layer.mergeAll(
+  ExecutorLayer, ToolLayer, ContextLayer, SessionLayer, CheckpointLayer,
+  TodoLayer, ToolSearchLayer, AgentIdResolverLayer,
+);
 const AgentWithDeps = AgentLayer.pipe(Layer.provide(AgentDeps));
 
 /** Final application layer — all services merged. */
 export const AppLayer = Layer.mergeAll(
   AgentWithDeps,
+  ExecutorLayer,
   SessionLayer,
   ContextLayer,
   InfraLayer,
@@ -64,4 +79,7 @@ export const AppLayer = Layer.mergeAll(
   ApprovalLayer,
   ApprovalWaitLayer,
   CheckpointLayer,
+  TodoLayer,
+  ToolSearchLayer,
+  AgentIdResolverLayer,
 );

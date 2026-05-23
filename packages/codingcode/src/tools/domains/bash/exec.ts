@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { spawn } from 'child_process';
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types';
 import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const bashTool: ToolDefinition = {
@@ -11,7 +11,7 @@ export const bashTool: ToolDefinition = {
     cwd: z.string().optional().describe('Working directory (defaults to project root)'),
     timeout_ms: z.number().int().default(30000).describe('Timeout in milliseconds'),
   }),
-  execute: async (args: unknown) => {
+  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
     const { command, cwd, timeout_ms } = args as any;
     const workDir = cwd || getWorkspaceCwd();
     return new Promise<string>((resolve) => {

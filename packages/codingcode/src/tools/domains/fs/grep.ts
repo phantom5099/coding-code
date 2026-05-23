@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { globby } from 'globby';
 import { readFile } from 'fs/promises';
 import { relative } from 'path';
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types';
 import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const searchTool: ToolDefinition = {
@@ -13,7 +13,7 @@ export const searchTool: ToolDefinition = {
     glob: z.string().default('**/*').describe("File glob pattern to filter which files to search (e.g. 'src/**/*.ts')"),
     max_results: z.number().int().min(1).max(100).default(30).describe('Maximum number of matches to return'),
   }),
-  execute: async (args: unknown) => {
+  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
     const { pattern, glob, max_results } = args as any;
     const files = await globby(glob, {
       cwd: getWorkspaceCwd(),
