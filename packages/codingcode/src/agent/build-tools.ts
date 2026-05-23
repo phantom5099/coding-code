@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import type { ToolDescription, Message } from '../core/types';
+import type { ToolDescription } from '../core/types';
 import type { ToolService } from '../tools/registry';
 import type { ToolSearchService } from '../tools/tool-search-service';
-import type { ToolDedupService } from '../tools/dedup/service';
 
 export function buildToolsForAgent(
   registry: ToolService,
@@ -41,25 +40,4 @@ export function buildDeferredCatalogContent(
     ...lines,
     '</available-deferred-tools>',
   ].join('\n');
-}
-
-export function buildRepeatReminder(
-  dedup: ToolDedupService,
-  agentId: string,
-): Message | null {
-  const dups = dedup.summary(agentId).filter(d => d.count >= 3);
-  if (dups.length === 0) return null;
-  const lines = dups.map(d => {
-    const argsStr = JSON.stringify(d.args).slice(0, 100);
-    return `- ${d.name} ${argsStr} (×${d.count})`;
-  });
-  return {
-    role: 'system',
-    content: [
-      '<repeated-tool-calls>',
-      'You recently repeated identical tool calls. The cached result has not changed. Either use prior output or change parameters.',
-      ...lines,
-      '</repeated-tool-calls>',
-    ].join('\n'),
-  };
 }

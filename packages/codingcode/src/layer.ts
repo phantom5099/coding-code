@@ -14,7 +14,6 @@ import { CheckpointService } from './checkpoint/checkpoint-service';
 import { TodoService } from './agent-state/todo/service';
 import { ToolSearchService } from './tools/tool-search-service';
 import { AgentIdResolver } from './agent-state/agent-id';
-import { ToolDedupService } from './tools/dedup/service';
 import { SubagentRegistry } from './subagent/registry';
 
 export const AgentLayer = AgentService.Default;
@@ -25,7 +24,6 @@ export const HookLayer = HookService.Default;
 export const SkillLayer = SkillService.Default;
 export const SandboxLayer = SandboxService.Default;
 export const ApprovalWaitLayer = ApprovalWaitService.Default;
-export const ToolDedupLayer = ToolDedupService.Default;
 export const SubagentRegistryLayer = SubagentRegistry.Default;
 /** ApprovalService depends on HookService + ApprovalWaitService — provide them eagerly. */
 export const ApprovalLayer = ApprovalService.Default.pipe(
@@ -38,13 +36,12 @@ const InfraLayer = Layer.mergeAll(ToolLayer, HookLayer);
 /** MCP depends on ToolLayer + HookLayer. */
 export const McpLayer = McpService.Default.pipe(Layer.provide(InfraLayer));
 
-/** ToolExecutor depends on ToolLayer + HookLayer + ApprovalLayer + SandboxLayer + ToolDedupLayer. */
+/** ToolExecutor depends on ToolLayer + HookLayer + ApprovalLayer + SandboxLayer. */
 const ExecutorDeps = Layer.mergeAll(
   ToolLayer,
   HookLayer,
   ApprovalLayer,
   SandboxLayer,
-  ToolDedupLayer,
 );
 const ExecutorLayer = ToolExecutorService.Default.pipe(
   Layer.provide(ExecutorDeps),
@@ -64,10 +61,10 @@ export const ToolSearchLayer = ToolSearchService.Default.pipe(
   Layer.provide(ToolLayer),
 );
 
-/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService + TodoService + ToolSearchService + AgentIdResolver + ToolDedupLayer + SubagentRegistryLayer. */
+/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService + TodoService + ToolSearchService + AgentIdResolver + SubagentRegistryLayer. */
 const AgentDeps = Layer.mergeAll(
   ExecutorLayer, ToolLayer, ContextLayer, SessionLayer, CheckpointLayer,
-  TodoLayer, ToolSearchLayer, AgentIdResolverLayer, ToolDedupLayer, SubagentRegistryLayer, HookLayer,
+  TodoLayer, ToolSearchLayer, AgentIdResolverLayer, SubagentRegistryLayer, HookLayer,
 );
 const AgentWithDeps = AgentLayer.pipe(Layer.provide(AgentDeps));
 
@@ -87,6 +84,5 @@ export const AppLayer = Layer.mergeAll(
   TodoLayer,
   ToolSearchLayer,
   AgentIdResolverLayer,
-  ToolDedupLayer,
   SubagentRegistryLayer,
 );

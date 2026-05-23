@@ -39,7 +39,6 @@ describe('runReActLoop — stop hook', () => {
         recordUser: () => Effect.succeed({ uuid: 'm1' }),
       } as any,
       checkpoint: { snapshotFinal: () => {} } as any,
-      dedup: null,
       hooks: {
         emit: vi.fn(() => Effect.succeed(undefined)),
         emitDecision: vi.fn(() => Effect.succeed(null)),

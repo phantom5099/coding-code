@@ -44,7 +44,6 @@ describe('runReActLoop — loop options', () => {
         recordUser: () => Effect.succeed({ uuid: 'm1' }),
       } as any,
       checkpoint: { snapshotFinal: () => {} } as any,
-      dedup: null,
       hooks: mockHooks,
       ...overrides,
     };

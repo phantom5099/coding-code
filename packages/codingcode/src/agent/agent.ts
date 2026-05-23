@@ -15,7 +15,7 @@ import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
 import { AgentIdResolver } from '../agent-state/agent-id.js';
 import { sharedTodoStore } from '../agent-state/todo/service.js';
-import { buildToolsForAgent, buildDeferredCatalogContent, buildRepeatReminder } from './build-tools.js';
+import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
 
 export type AgentEvent =
@@ -69,7 +69,6 @@ interface RunReActDeps {
   ctx: ContextService;
   session: SessionService;
   checkpoint: CheckpointService;
-  dedup: any; // ToolDedupService
   hooks: any; // HookService
 }
 
@@ -83,14 +82,13 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
     const session = yield* SessionService;
     const checkpoint = yield* CheckpointService;
     const hooks = yield* HookService;
-    // dedup will be injected via layer dependency
     const maxSteps = resolveConfig().maxSteps;
 
     return {
       runStream: (opts: RunStreamOptions): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> =>
         runReActLoop(opts, {
           maxSteps, executor, toolRegistry, toolSearch, agentIdResolver,
-          ctx, session, checkpoint, hooks, dedup: undefined as any,
+          ctx, session, checkpoint, hooks,
         }),
     };
   }),
@@ -155,16 +153,8 @@ export async function* runReActLoop(
       const stepBeforePayload = { agentId, step: step + 1, sessionId: state.sessionId };
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
-      // Build LLM messages: original messages + repeat reminder + step.before transients
+      // Build LLM messages: original messages + step.before transients
       const llmMessages = [...messages];
-
-      // Add repeat reminder if any repeats detected
-      if (deps.dedup) {
-        const reminder = buildRepeatReminder(deps.dedup, agentId);
-        if (reminder) {
-          llmMessages.push(reminder);
-        }
-      }
 
       // Add step.before transient messages (if any)
       // Note: transient messages are not persisted to JSONL
@@ -279,12 +269,6 @@ export async function* runReActLoop(
         }
       }
 
-      // Record dedup if service available
-      if (deps.dedup) {
-        for (const tc of toolCalls) {
-          deps.dedup.record(agentId, tc.name, tc.arguments, tc.id);
-        }
-      }
     }
 
     if (overflow) continue;

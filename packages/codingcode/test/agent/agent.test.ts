@@ -67,7 +67,6 @@ function makeDeps(overrides?: Record<string, any>) {
     ctx: mockCtx as any,
     session: mockSession as any,
     checkpoint: mockCheckpoint as any,
-    dedup: null as any,
     hooks: {
       emit: () => Effect.succeed(undefined),
       emitDecision: () => Effect.succeed(null),
