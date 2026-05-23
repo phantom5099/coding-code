@@ -11,7 +11,7 @@ import { ApprovalService } from './approval/index';
 import { ApprovalWaitService } from './approval/async-confirm';
 import { ToolExecutorService } from './tools/executor';
 import { CheckpointService } from './checkpoint/checkpoint-service';
-import { TodoService } from './agent-state/todo/service';
+import { TodoService } from './agent-state/todo';
 import { ToolSearchService } from './tools/tool-search-service';
 import { AgentIdResolver } from './agent-state/agent-id';
 import { SubagentRegistry } from './subagent/registry';

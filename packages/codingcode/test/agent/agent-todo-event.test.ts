@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
-import { sharedTodoStore } from '../../src/agent-state/todo/service.js';
+import { sharedTodoStore } from '../../src/agent-state/todo.js';
 
 const mockToolRegistry = {
   describeAll: () => [],

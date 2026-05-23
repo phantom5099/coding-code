@@ -14,7 +14,7 @@ import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
 import { AgentIdResolver } from '../agent-state/agent-id.js';
-import { sharedTodoStore } from '../agent-state/todo/service.js';
+import { sharedTodoStore } from '../agent-state/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
 

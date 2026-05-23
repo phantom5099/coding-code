@@ -1,7 +1,14 @@
 import { Effect } from 'effect';
-import type { Todo, TodoStatus } from './types';
 
-const store = new Map<string, Todo[]>();
+export type TodoStatus = 'pending' | 'completed' | 'cancelled';
+
+export interface Todo {
+  step: string;
+  status: TodoStatus;
+}
+
+export const TODO_MAX_ITEMS = 20;
+export const TODO_MAX_STEP_LEN = 60;
 
 export interface TodoCounts {
   pending: number;
@@ -14,6 +21,8 @@ export function countByStatus(plan: Todo[]): TodoCounts {
   for (const t of plan) c[t.status]++;
   return c;
 }
+
+const store = new Map<string, Todo[]>();
 
 export const sharedTodoStore = {
   read: (agentId: string): Todo[] => store.get(agentId) ?? [],

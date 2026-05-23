@@ -7,7 +7,7 @@ import { SkillService } from '../src/skills/index.js';
 import { ToolExecutorService } from '../src/tools/executor.js';
 import { CheckpointService } from '../src/checkpoint/checkpoint-service.js';
 import { Result } from '../src/core/result.js';
-import { TodoService } from '../src/agent-state/todo/service.js';
+import { TodoService } from '../src/agent-state/todo.js';
 import { ToolSearchService } from '../src/tools/tool-search-service.js';
 import { AgentIdResolver } from '../src/agent-state/agent-id.js';
 
