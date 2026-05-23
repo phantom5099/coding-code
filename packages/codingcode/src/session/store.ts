@@ -116,7 +116,7 @@ function findFirstUserContent(history: SessionEvent[]): string | null {
 export class SessionService extends Effect.Service<SessionService>()('Session', {
   effect: Effect.gen(function* () {
     return {
-      create: (cwd: string, model: string, version: string, sessionId?: string): Effect.Effect<SessionStoreState> =>
+      create: (cwd: string, model: string, version: string, sessionId?: string, opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }): Effect.Effect<SessionStoreState> =>
         Effect.sync(() => {
           if (sessionId) assertResumeWorkspace(cwd, sessionId);
           const state = initState(cwd, sessionId);
@@ -138,6 +138,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             type: 'session_meta', sessionId: state.sessionId,
             projectSlug: state.projectSlug, cwd: state.cwd,
             model, createdAt: new Date().toISOString(), version,
+            ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
+            ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
+            ...(opts?.agentName && { agentName: opts.agentName }),
           };
           state.sessionMeta = meta;
           appendLine(state.transcriptPath, meta);

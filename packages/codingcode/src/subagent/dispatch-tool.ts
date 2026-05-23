@@ -1,0 +1,135 @@
+import { randomUUID } from 'crypto';
+import { z } from 'zod';
+import { Effect } from 'effect';
+import type { ToolDefinition } from '../tools/types.js';
+import type { SubagentRegistry } from './registry.js';
+import type { SessionService } from '../session/store.js';
+import type { AgentIdResolver } from '../agent-state/agent-id.js';
+import type { ApprovalService } from '../approval/index.js';
+import type { HookService } from '../hooks/registry.js';
+
+interface DispatchAgentDeps {
+  session: SessionService;
+  agentIdResolver: AgentIdResolver;
+  approval: ApprovalService;
+  hooks: HookService;
+  registry: SubagentRegistry;
+}
+
+export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition {
+  return {
+    name: 'dispatch_agent',
+    description: 'Spawn an isolated subagent with its own context. Available profiles: ' +
+      deps.registry.list().map(p => `"${p.name}" (${p.description})`).join(', '),
+    shortDescription: 'Spawn isolated subagent',
+    deferred: true,
+    parameters: z.object({
+      agent: z.string().describe('subagent profile name'),
+      prompt: z.string().min(1).describe('task description for the subagent'),
+    }),
+    execute: async (args: any, ctx: any) => {
+      const { agent: agentName, prompt } = args;
+
+      // Get profile
+      const profile = deps.registry.get(agentName);
+      if (!profile) {
+        throw new Error(`Unknown subagent: ${agentName}`);
+      }
+
+      if (!ctx?.agentRunner?.agentService || !ctx?.agentRunner?.llm) {
+        throw new Error('dispatch_agent requires agentRunner context');
+      }
+
+      const { agentService, llm } = ctx.agentRunner;
+
+      // Emit spawn.before hook
+      const spawnDecision: any = await Effect.runPromise(
+        (deps.hooks as any).emitDecision('agent.subagent.spawn.before', {
+          profile: agentName,
+          prompt,
+          parentAgentId: ctx?.agentId,
+        }),
+      );
+
+      if (spawnDecision && spawnDecision.decision === 'deny') {
+        throw new Error(`Subagent spawn denied: ${spawnDecision.reason ?? 'no reason provided'}`);
+      }
+
+      // Create child session with parent metadata
+      const childSessionId = randomUUID();
+      const childAgentId = deps.agentIdResolver.resolve(childSessionId);
+
+      const createEffect = (deps.session as any).create(
+        ctx?.projectPath ?? process.cwd(),
+        ctx?.model ?? 'subagent',
+        '0.1.0',
+        childSessionId,
+        {
+          parentSessionId: ctx?.sessionId,
+          parentAgentId: ctx?.agentId,
+          agentName: agentName,
+        },
+      );
+
+      await Effect.runPromise(createEffect);
+
+      // Fork approval service with readonly if needed
+      const forkEffect = (deps.approval as any).fork({ readonly: profile.readonly });
+      const childApproval = await Effect.runPromise(forkEffect);
+
+      // Build coreAllowlist if profile specifies tools
+      const coreAllowlist = profile.tools ? new Set(profile.tools.filter(t => t !== 'dispatch_agent')) : undefined;
+
+      // Run subagent in isolated context
+      const stream = agentService.runStream({
+        state: {
+          sessionId: childSessionId,
+          cwd: ctx?.projectPath ?? process.cwd(),
+          currentTurnId: randomUUID(),
+          sessionMeta: { model: ctx?.model ?? 'unknown', version: '0.1.0', createdAt: new Date().toISOString() },
+          title: `Subagent: ${agentName}`,
+          tokenCountEstimate: 0,
+        },
+        llm,
+        agentId: childAgentId,
+        systemOverride: profile.systemPrompt,
+        coreAllowlist,
+        abortSignal: ctx?.signal,
+        parentAgentId: ctx?.agentId,
+        agentName: agentName,
+        maxStepsOverride: profile.maxSteps,
+        approvalOverride: childApproval,
+      });
+
+      // Collect events and extract final result
+      let finalContent = '';
+      for await (const event of stream) {
+        if (event._tag === 'Done') {
+          finalContent = event.content;
+        } else if (event._tag === 'Error') {
+          // Emit error but collect what we have
+          await Effect.runPromise(
+            (deps.hooks as any).emit('agent.subagent.complete', {
+              childSessionId,
+              profile: agentName,
+              status: 'error',
+              error: event.error,
+            }),
+          );
+          throw new Error(`Subagent failed: ${event.error.message}`);
+        }
+      }
+
+      // Emit completion hook
+      await Effect.runPromise(
+        (deps.hooks as any).emit('agent.subagent.complete', {
+          childSessionId,
+          profile: agentName,
+          status: 'done',
+        }),
+      );
+
+      return finalContent || '(subagent completed without output)';
+    },
+  };
+}

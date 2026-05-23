@@ -95,6 +95,11 @@ describe('TodoUpdate event', () => {
         ctx: mockCtx as any,
         session: mockSession as any,
         checkpoint: mockCheckpoint as any,
+        dedup: null as any,
+        hooks: {
+          emit: async () => {},
+          emitDecision: async () => null,
+        } as any,
       },
     );
 
@@ -132,6 +137,11 @@ describe('TodoUpdate event', () => {
         ctx: mockCtx as any,
         session: mockSession as any,
         checkpoint: mockCheckpoint as any,
+        dedup: null as any,
+        hooks: {
+          emit: async () => {},
+          emitDecision: async () => null,
+        } as any,
       },
     );
 

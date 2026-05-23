@@ -23,6 +23,12 @@ import { todoWriteTool } from './tools/domains/agent-state/todo-write.js';
 import { todoReadTool } from './tools/domains/agent-state/todo-read.js';
 import { toolSearchTool, bindToolSearchService } from './tools/domains/agent-state/tool-search.js';
 import { ToolSearchService } from './tools/tool-search-service.js';
+import { SubagentRegistry, EXPLORE_PROFILE, GENERAL_PROFILE } from './subagent/registry.js';
+import { loadAgentProfiles } from './subagent/loader.js';
+import { createDispatchAgentTool } from './subagent/dispatch-tool.js';
+import { AgentIdResolver } from './agent-state/agent-id.js';
+import { ApprovalService } from './approval/index.js';
+import { SessionService } from './session/store.js';
 
 function findAvailablePort(startPort: number): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -85,6 +91,32 @@ async function main() {
     // Bind ToolSearchService for tool_search tool (needs Effect runtime)
     const toolSearchSvc = yield* ToolSearchService;
     bindToolSearchService(toolSearchSvc);
+
+    // Setup subagent profiles and dispatch tool
+    const subagentRegistry = yield* SubagentRegistry;
+    const session = yield* SessionService;
+    const approval = yield* ApprovalService;
+    const agentIdResolver = yield* AgentIdResolver;
+
+    // Register built-in profiles
+    subagentRegistry.register(EXPLORE_PROFILE);
+    subagentRegistry.register(GENERAL_PROFILE);
+
+    // Load custom profiles from project
+    const customProfiles = loadAgentProfiles(getWorkspaceCwd());
+    for (const profile of customProfiles) {
+      subagentRegistry.register(profile);
+    }
+
+    // Register dispatch_agent tool
+    const dispatchTool = createDispatchAgentTool({
+      session,
+      agentIdResolver,
+      approval,
+      hooks,
+      registry: subagentRegistry,
+    });
+    yield* tools.register(dispatchTool);
 
     // Connect MCP servers (auto-registers tools to ToolService)
     yield* mcp.connectAll(getWorkspaceCwd());

@@ -21,7 +21,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
     function execute(
       name: string,
       args: unknown,
-      opts?: { signal?: AbortSignal; sessionId?: string; turnId?: number; projectPath?: string; agentId?: string },
+      opts?: { signal?: AbortSignal; sessionId?: string; turnId?: number; projectPath?: string; agentId?: string; approval?: any; agentRunner?: any },
     ): Effect.Effect<string, AgentError> {
       return Effect.gen(function* () {
         // All services captured from outer closure — no yield* needed for them
@@ -30,7 +30,8 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         const tool = toolResult.value as ToolDefinition;
 
         // 1. Approval pipeline (Layers 1-6)
-        const decision = yield* approval.evaluate({
+        const decisionApproval = opts?.approval ?? approval;
+        const decision = yield* decisionApproval.evaluate({
           tool: name,
           input: args as Record<string, unknown>,
           sessionId: opts?.sessionId ?? 'default',
@@ -94,6 +95,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
             sessionId: opts?.sessionId,
             turnId: opts?.turnId,
             projectPath: opts?.projectPath,
+            agentRunner: opts?.agentRunner,
           }),
           catch: (e) =>
             e instanceof AgentError
@@ -123,7 +125,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
       );
     }
 
-    function execSingle(tc: ToolCall, sessionId?: string, opts?: { turnId?: number; projectPath?: string; agentId?: string }): Effect.Effect<ToolResultUnion> {
+    function execSingle(tc: ToolCall, sessionId?: string, opts?: { turnId?: number; projectPath?: string; agentId?: string; signal?: AbortSignal; approval?: any; agentRunner?: any }): Effect.Effect<ToolResultUnion> {
       return execute(tc.name, tc.arguments ?? {}, { sessionId, ...opts }).pipe(
         Effect.matchEffect({
           onSuccess: (output): Effect.Effect<ToolResultUnion> =>
@@ -143,7 +145,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
       );
     }
 
-    function executeBatch(toolCalls: ToolCall[], sessionId?: string, opts?: { turnId?: number; projectPath?: string; agentId?: string }): Effect.Effect<ToolResultUnion[]> {
+    function executeBatch(toolCalls: ToolCall[], sessionId?: string, opts?: { turnId?: number; projectPath?: string; agentId?: string; signal?: AbortSignal; approval?: any; agentRunner?: any }): Effect.Effect<ToolResultUnion[]> {
       return Effect.gen(function* () {
         // Separate safe & destructive tools: safe tools run in parallel, Bash runs serially
         const safeTools: ToolCall[] = [];
@@ -160,13 +162,24 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         // Safe tools — parallel
         const safeResults = yield* Effect.forEach(
           safeTools,
-          (tc) => execSingle(tc, sessionId, opts),
+          (tc) => {
+            // Check abort before each tool
+            if (opts?.signal?.aborted) {
+              return Effect.succeed({ type: 'denied' as const, id: tc.id, name: tc.name, reason: 'aborted' });
+            }
+            return execSingle(tc, sessionId, opts);
+          },
           { concurrency: 'unbounded' },
         );
 
         // Bash tools — serial (avoid race conditions)
         const bashResults: ToolResultUnion[] = [];
         for (const tc of bashTools) {
+          // Check abort before each tool
+          if (opts?.signal?.aborted) {
+            bashResults.push({ type: 'denied' as const, id: tc.id, name: tc.name, reason: 'aborted' });
+            continue;
+          }
           const r = yield* execSingle(tc, sessionId, opts);
           bashResults.push(r);
         }
