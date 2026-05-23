@@ -38,7 +38,6 @@ export interface RunStreamOptions {
   skillInstruction?: string;
   systemPromptVariant?: SystemPromptVariant;
   systemOverride?: string;
-  systemSuffix?: string;
   coreAllowlist?: ReadonlySet<string>;
   abortSignal?: AbortSignal;
   parentAgentId?: string;
@@ -109,9 +108,8 @@ export async function* runReActLoop(
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
     variant: systemPromptVariant ?? 'default',
   });
-  const systemSuffix = opts.systemSuffix ?? '';
   const skillInstructionStr = opts.skillInstruction ? `\n\n## Skill Instructions\n\n${opts.skillInstruction}` : '';
-  const system = `${basePrompt}${systemSuffix}${skillInstructionStr}`;
+  const system = `${basePrompt}${skillInstructionStr}`;
 
   const config = getContextConfig();
   const maxOverflowRetries = config.reactiveCompactMaxRetries;
