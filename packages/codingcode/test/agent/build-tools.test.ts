@@ -3,7 +3,7 @@ import { Effect, Layer } from 'effect';
 import { z } from 'zod';
 import { ToolService } from '../../src/tools/registry.js';
 import { ToolSearchService } from '../../src/agent-state/tool-search/service.js';
-import { buildToolsForAgent, buildDeferredCatalogMessage } from '../../src/agent/build-tools.js';
+import { buildToolsForAgent, buildDeferredCatalogContent } from '../../src/agent/build-tools.js';
 import type { ToolDefinition } from '../../src/tools/types.js';
 
 const toolLayer = ToolService.Default;
@@ -82,8 +82,8 @@ describe('buildToolsForAgent', () => {
   });
 });
 
-describe('buildDeferredCatalogMessage', () => {
-  it('returns message with unloaded deferred tools', async () => {
+describe('buildDeferredCatalogContent', () => {
+  it('returns content with unloaded deferred tools', async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
       const toolSearch = yield* ToolSearchService;
@@ -92,11 +92,10 @@ describe('buildDeferredCatalogMessage', () => {
       // Use a unique name to avoid cross-test interference
       yield* tools.register(makeTool('zzz_custom_deferred', 'Custom deferred', true));
 
-      const msg = buildDeferredCatalogMessage(toolSearch, 'agent-msg');
-      expect(msg).not.toBeNull();
-      expect(msg!.role).toBe('system');
-      expect(msg!.content).toContain('zzz_custom_deferred');
-      expect(msg!.content).toContain('<available-deferred-tools>');
+      const content = buildDeferredCatalogContent(toolSearch, 'agent-msg');
+      expect(content).not.toBeNull();
+      expect(content!).toContain('zzz_custom_deferred');
+      expect(content!).toContain('<available-deferred-tools>');
     });
     await run(program);
   });
@@ -110,12 +109,12 @@ describe('buildDeferredCatalogMessage', () => {
       yield* tools.register(makeTool('zzz_another_deferred', undefined, true));
       toolSearch.search('agent-loaded-all', 'another');
 
-      const msg = buildDeferredCatalogMessage(toolSearch, 'agent-loaded-all');
+      const content = buildDeferredCatalogContent(toolSearch, 'agent-loaded-all');
       // If there are only deferred tools and we loaded them all, should be null
       // But other tests also registered deferred tools — those are unloaded for this agent
       // So this might not be null. We check that zzz_another_deferred is NOT in the message.
-      if (msg) {
-        expect(msg!.content).not.toContain('zzz_another_deferred');
+      if (content) {
+        expect(content!).not.toContain('zzz_another_deferred');
       }
     });
     await run(program);
@@ -130,16 +129,16 @@ describe('buildDeferredCatalogMessage', () => {
       yield* tools.register(makeTool('zzz_secret_tool', undefined, true));
       toolSearch.search('agent-alpha', 'secret');
 
-      const alphaMsg = buildDeferredCatalogMessage(toolSearch, 'agent-alpha');
-      const betaMsg = buildDeferredCatalogMessage(toolSearch, 'agent-beta');
+      const alphaContent = buildDeferredCatalogContent(toolSearch, 'agent-alpha');
+      const betaContent = buildDeferredCatalogContent(toolSearch, 'agent-beta');
 
       // alpha loaded it, so alpha's catalog should not list zzz_secret_tool
-      if (alphaMsg) {
-        expect(alphaMsg!.content).not.toContain('zzz_secret_tool');
+      if (alphaContent) {
+        expect(alphaContent!).not.toContain('zzz_secret_tool');
       }
       // beta didn't load it, so beta's catalog should list it
-      expect(betaMsg).not.toBeNull();
-      expect(betaMsg!.content).toContain('zzz_secret_tool');
+      expect(betaContent).not.toBeNull();
+      expect(betaContent!).toContain('zzz_secret_tool');
     });
     await run(program);
   });

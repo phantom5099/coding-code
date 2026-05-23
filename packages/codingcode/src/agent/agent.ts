@@ -14,7 +14,8 @@ import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../agent-state/tool-search/service.js';
 import { AgentIdResolver } from '../agent-state/agent-id.js';
-import { buildToolsForAgent, buildDeferredCatalogMessage } from './build-tools.js';
+import { sharedTodoStore } from '../agent-state/todo/service.js';
+import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
 
 export type AgentEvent =
   | { readonly _tag: 'LlmChunk'; readonly text: string }
@@ -26,7 +27,8 @@ export type AgentEvent =
   | { readonly _tag: 'Step'; readonly step: number; readonly max: number }
   | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
-  | { readonly _tag: 'Done'; readonly content: string };
+  | { readonly _tag: 'Done'; readonly content: string }
+  | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'completed' | 'cancelled' }> };
 
 export interface RunStreamOptions {
   state: SessionStoreState;
@@ -111,11 +113,11 @@ export async function* runReActLoop(
       yield { _tag: 'Step', step: step + 1, max: deps.maxSteps };
 
       const tools: ToolDescription[] = buildToolsForAgent(toolRegistry, toolSearch, agentId);
-      const catalog = buildDeferredCatalogMessage(toolSearch, agentId);
-      const llmMessages = catalog ? [...messages, catalog] : messages;
+      const catalog = buildDeferredCatalogContent(toolSearch, agentId);
+      const systemWithCatalog = catalog ? `${system}\n\n${catalog}` : system;
 
       const { stream: rawStream, response: respPromise } = llm.completeStream({
-        messages: llmMessages, system, tools, maxSteps: 1,
+        messages, system: systemWithCatalog, tools, maxSteps: 1,
       });
 
       for await (const chunk of rawStream) {
@@ -176,6 +178,14 @@ export async function* runReActLoop(
           ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
           : r.output ?? '';
         messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
+      }
+
+      // Emit TodoUpdate when todo tools are called this turn
+      for (const r of allResults) {
+        if (r.name === 'todo_write' || r.name === 'todo_read') {
+          yield { _tag: 'TodoUpdate', items: sharedTodoStore.read(agentId) as any };
+          break;
+        }
       }
     }
 

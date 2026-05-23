@@ -10,7 +10,9 @@ import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 
-export type StreamChunk = string | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> };
+export type StreamChunk = string
+  | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
+  | { type: 'todo_update'; items: ReadonlyArray<{ step: string; status: string }> };
 
 export interface AgentClient {
   sendMessage(input: string): AsyncGenerator<StreamChunk>;
@@ -44,6 +46,9 @@ export async function* agentEventToStreamChunk(
         break;
       case 'ApprovalRequest':
         yield { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
+        break;
+      case 'TodoUpdate':
+        yield { type: 'todo_update', items: event.items as any };
         break;
     }
   }
