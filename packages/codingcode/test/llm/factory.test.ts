@@ -23,7 +23,7 @@ describe('getActiveEntry - activeModel priority', () => {
 
   it('uses activeModel from config.yaml when it matches a catalog entry', async () => {
     vi.doMock('@codingcode/infra', () => ({
-      loadConfig: () => ({ activeModel: 'model-y@provider-a' }),
+      loadConfig: () => ({ activeModel: { model: 'model-y', apiKeyEnv: 'API_KEY_A' } }),
     }));
     vi.doMock('fs', async (importOriginal: any) => {
       const orig = await importOriginal();
@@ -38,7 +38,7 @@ describe('getActiveEntry - activeModel priority', () => {
     const { getActiveEntry } = await import('../../src/llm/factory.js');
     const result = getActiveEntry();
     expect(result.ok).toBe(true);
-    expect(result.value?.id).toBe('model-y@provider-a');
+    expect(result.value?.id).toBe('model-y@API_KEY_A');
   });
 
   it('returns error when activeModel is not set in config', async () => {
@@ -55,7 +55,7 @@ describe('getActiveEntry - activeModel priority', () => {
 
   it('returns error when activeModel does not match any catalog entry', async () => {
     vi.doMock('@codingcode/infra', () => ({
-      loadConfig: () => ({ activeModel: 'nonexistent@unknown' }),
+      loadConfig: () => ({ activeModel: { model: 'nonexistent', apiKeyEnv: 'UNKNOWN_KEY' } }),
     }));
     vi.doMock('fs', async (importOriginal: any) => {
       const orig = await importOriginal();
@@ -71,6 +71,6 @@ describe('getActiveEntry - activeModel priority', () => {
     const result = getActiveEntry();
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe('CONFIG_INVALID');
-    expect(result.error?.message).toContain('nonexistent@unknown');
+    expect(result.error?.message).toContain('nonexistent');
   });
 });

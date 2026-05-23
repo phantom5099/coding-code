@@ -33,6 +33,11 @@ export interface ContextConfig {
   microKeepRecentTools: number;
 }
 
+export interface ActiveModelConfig {
+  model: string;
+  apiKeyEnv: string;
+}
+
 export interface AppConfig {
   server: {
     port: number;
@@ -45,7 +50,7 @@ export interface AppConfig {
     apiKey?: string;
     baseURL?: string;
   }>;
-  activeModel?: string;
+  activeModel?: ActiveModelConfig;
   context: ContextConfig;
 }
 

@@ -68,7 +68,7 @@ function flattenModels(cat: ProviderCatalog): SelectableModel[] {
   for (const p of cat.providers) {
     for (const m of p.models) {
       result.push({
-        id: `${m.id}@${p.name}`,
+        id: `${m.id}@${p.api_key_env}`,
         provider: p.name,
         driver: p.driver,
         name: m.name,
@@ -90,17 +90,17 @@ export function listModels(): Result<SelectableModel[], AgentError> {
 export function getActiveEntry(): Result<SelectableModel, AgentError> {
   if (currentEntry) return Result.ok(currentEntry);
 
-  const configActiveModel = loadConfig().activeModel;
-  if (!configActiveModel) {
-    return Result.err(new AgentError('CONFIG_INVALID', 'No active model configured. Set activeModel in config.yaml (e.g. activeModel: "model-id@provider")'));
+  const cfg = loadConfig().activeModel;
+  if (!cfg) {
+    return Result.err(new AgentError('CONFIG_INVALID', 'No active model configured. Set activeModel in config.yaml with model and apiKeyEnv fields'));
   }
 
   const catResult = loadCatalog();
   if (!catResult.ok) return catResult;
 
-  const found = flattenModels(catResult.value).find((m) => m.id === configActiveModel);
+  const found = flattenModels(catResult.value).find((m) => m.model === cfg.model && m.api_key_env === cfg.apiKeyEnv);
   if (!found) {
-    return Result.err(new AgentError('CONFIG_INVALID', `Model "${configActiveModel}" not found in models.json`));
+    return Result.err(new AgentError('CONFIG_INVALID', `Model "${cfg.model}" with apiKeyEnv "${cfg.apiKeyEnv}" not found in models.json`));
   }
 
   currentEntry = found;

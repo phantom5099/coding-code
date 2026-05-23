@@ -30,7 +30,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         const tool = toolResult.value as ToolDefinition;
 
         // 1. Approval pipeline (Layers 1-6)
-        const decisionApproval = opts?.approval ?? approval;
+        const decisionApproval: typeof approval = opts?.approval ?? approval;
         const decision = yield* decisionApproval.evaluate({
           tool: name,
           input: args as Record<string, unknown>,
