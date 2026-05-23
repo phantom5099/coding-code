@@ -1,4 +1,5 @@
 import { expect, it, describe, vi } from 'vitest';
+import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent';
 import { Result } from '../../src/core/result';
 import type { RunStreamOptions } from '../../src/agent/agent';
@@ -14,71 +15,79 @@ describe('runReActLoop — stop hook', () => {
     tokenCountEstimate: 0,
   };
 
+  function baseMockDeps(overrides: Record<string, any> = {}) {
+    return {
+      maxSteps: 5,
+      executor: {} as any,
+      toolRegistry: {
+        allCore: () => [],
+        allDeferred: () => [],
+      } as any,
+      toolSearch: {
+        isLoaded: () => false,
+        listUnloadedDeferred: () => [],
+      } as any,
+      agentIdResolver: { resolve: () => 'agent-id' } as any,
+      ctx: {
+        build: () => Effect.succeed([]),
+        compress: () => Effect.succeed({ released: 0 }),
+        appendTurnEnd: () => Effect.succeed(undefined),
+      } as any,
+      session: {
+        recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+        recordToolResult: () => Effect.succeed({}),
+        recordUser: () => Effect.succeed({ uuid: 'm1' }),
+      } as any,
+      checkpoint: { snapshotFinal: () => {} } as any,
+      dedup: null,
+      hooks: {
+        emit: vi.fn(() => Effect.succeed(undefined)),
+        emitDecision: vi.fn(() => Effect.succeed(null)),
+      },
+      ...overrides,
+    };
+  }
+
   it('should continue iteration when stop hook returns continue decision', async () => {
     let callCount = 0;
     const mockLlm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve(() => {
-          callCount++;
-          if (callCount === 1) {
-            // First call returns no tool calls (normally would end)
-            return Result.ok({
-              content: `Response ${callCount}`,
-              toolCalls: [],
-            });
-          } else {
-            // Second call after continue
-            return Result.ok({
-              content: `Response ${callCount}`,
-              toolCalls: [],
-            });
-          }
-        })(),
-      })),
+      completeStream: vi.fn(() => {
+        callCount++;
+        return {
+          stream: (async function* () {})(),
+          response: Promise.resolve(
+            Result.ok({ content: `Response ${callCount}`, toolCalls: [] }),
+          ),
+        };
+      }),
     };
 
-    const emitDecisionFn = vi.fn(async (point: string) => {
+    const emitDecisionFn = vi.fn((point: string) => {
       if (point === 'agent.turn.stop') {
-        return { decision: 'continue', injection: 'Run again' };
+        return Effect.succeed({ decision: 'continue', injection: 'Run again' });
       }
-      return null;
+      return Effect.succeed(null);
     });
 
-    const mockDeps = {
+    const deps = baseMockDeps({
       maxSteps: 5,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: { resolve: () => 'agent-id' } as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {
-        recordUser: () => ({ uuid: 'msg-id' }),
-      } as any,
-      checkpoint: {} as any,
-      dedup: null,
       hooks: {
-        emit: vi.fn(async () => {}),
+        emit: vi.fn(() => Effect.succeed(undefined)),
         emitDecision: emitDecisionFn,
       },
-    };
+    });
 
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, deps);
     const events = [];
     for await (const event of gen) {
       events.push(event);
     }
 
-    // Should have processed the continue decision
     expect(emitDecisionFn).toHaveBeenCalledWith(
       'agent.turn.stop',
       expect.objectContaining({ sessionId: mockState.sessionId }),
@@ -90,55 +99,36 @@ describe('runReActLoop — stop hook', () => {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
         response: Promise.resolve(
-          Result.ok({
-            content: 'Response',
-            toolCalls: [],
-          }),
+          Result.ok({ content: 'Response', toolCalls: [] }),
         ),
       })),
     };
 
-    const mockDeps = {
+    const deps = baseMockDeps({
       maxSteps: 10,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: { resolve: () => 'agent-id' } as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {
-        recordUser: () => ({ uuid: 'msg-id' }),
-      } as any,
-      checkpoint: {} as any,
-      dedup: null,
       hooks: {
-        emit: vi.fn(async () => {}),
-        emitDecision: vi.fn(async (point: string) => {
+        emit: vi.fn(() => Effect.succeed(undefined)),
+        emitDecision: vi.fn((point: string) => {
           if (point === 'agent.turn.stop') {
-            // Always want to continue
-            return { decision: 'continue', injection: 'Continue' };
+            return Effect.succeed({ decision: 'continue', injection: 'Continue' });
           }
-          return null;
+          return Effect.succeed(null);
         }),
       },
-    };
+    });
 
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
-      maxStopContinuations: 2, // Allow only 2 continuations
+      maxStopContinuations: 2,
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, deps);
     const events = [];
     for await (const event of gen) {
       events.push(event);
     }
 
-    // Should error when exceeding maxStopContinuations
     const errorEvent = events.find((e: any) => e._tag === 'Error');
     expect(errorEvent).toBeDefined();
     expect(errorEvent?.error?.code).toBe('STOP_LOOP');
@@ -149,56 +139,37 @@ describe('runReActLoop — stop hook', () => {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
         response: Promise.resolve(
-          Result.ok({
-            content: 'Response',
-            toolCalls: [],
-          }),
+          Result.ok({ content: 'Response', toolCalls: [] }),
         ),
       })),
     };
 
     let continueCount = 0;
-    const mockDeps = {
+    const deps = baseMockDeps({
       maxSteps: 10,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: { resolve: () => 'agent-id' } as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {
-        recordUser: () => ({ uuid: 'msg-id' }),
-      } as any,
-      checkpoint: {} as any,
-      dedup: null,
       hooks: {
-        emit: vi.fn(async () => {}),
-        emitDecision: vi.fn(async (point: string) => {
+        emit: vi.fn(() => Effect.succeed(undefined)),
+        emitDecision: vi.fn((point: string) => {
           if (point === 'agent.turn.stop') {
             continueCount++;
-            return { decision: 'continue', injection: 'Continue' };
+            return Effect.succeed({ decision: 'continue', injection: 'Continue' });
           }
-          return null;
+          return Effect.succeed(null);
         }),
       },
-    };
+    });
 
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
-      // No maxStopContinuations specified, should default to 2
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, deps);
     const events = [];
     for await (const event of gen) {
       events.push(event);
     }
 
-    // Should have attempted 3 times (initial + 2 continues) before erroring
     expect(continueCount).toBeGreaterThanOrEqual(2);
   });
 
@@ -210,93 +181,65 @@ describe('runReActLoop — stop hook', () => {
         return {
           stream: (async function* () {})(),
           response: Promise.resolve(
-            Result.ok({
-              content: 'Response',
-              toolCalls: [],
-            }),
+            Result.ok({ content: 'Response', toolCalls: [] }),
           ),
         };
       }),
     };
 
-    const mockDeps = {
+    const deps = baseMockDeps({
       maxSteps: 5,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: { resolve: () => 'agent-id' } as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {} as any,
-      checkpoint: {} as any,
-      dedup: null,
       hooks: {
-        emit: vi.fn(async () => {}),
-        emitDecision: vi.fn(async () => null), // Return null - no continue
+        emit: vi.fn(() => Effect.succeed(undefined)),
+        emitDecision: vi.fn(() => Effect.succeed(null)),
       },
-    };
+    });
 
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, deps);
     const events = [];
     for await (const event of gen) {
       events.push(event);
     }
 
-    // Should have only called LLM once and returned Done
     expect(llmCalls).toBe(1);
     const doneEvent = events.find((e: any) => e._tag === 'Done');
     expect(doneEvent).toBeDefined();
   });
 
   it('should use injection message to record user event', async () => {
-    const recordUserFn = vi.fn(() => ({ uuid: 'msg-id' }));
+    const recordUserFn = vi.fn(() => Effect.succeed({ uuid: 'msg-id' }));
 
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
         response: Promise.resolve(
-          Result.ok({
-            content: 'Response',
-            toolCalls: [],
-          }),
+          Result.ok({ content: 'Response', toolCalls: [] }),
         ),
       })),
     };
 
-    const mockDeps = {
+    const deps = baseMockDeps({
       maxSteps: 5,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: { resolve: () => 'agent-id' } as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
       session: {
+        recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+        recordToolResult: () => Effect.succeed({}),
         recordUser: recordUserFn,
       } as any,
-      checkpoint: {} as any,
-      dedup: null,
       hooks: {
-        emit: vi.fn(async () => {}),
-        emitDecision: vi.fn(async (point: string) => {
+        emit: vi.fn(() => Effect.succeed(undefined)),
+        emitDecision: vi.fn((point: string) => {
           if (point === 'agent.turn.stop') {
-            return { decision: 'continue', injection: 'Custom injection message' };
+            return Effect.succeed({ decision: 'continue', injection: 'Custom injection message' });
           }
-          return null;
+          return Effect.succeed(null);
         }),
       },
-    };
+    });
 
     const opts: RunStreamOptions = {
       state: mockState,
@@ -304,13 +247,12 @@ describe('runReActLoop — stop hook', () => {
       maxStopContinuations: 1,
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, deps);
     const events = [];
     for await (const event of gen) {
       events.push(event);
     }
 
-    // Should have recorded the injection message
     expect(recordUserFn).toHaveBeenCalledWith(
       mockState,
       'Custom injection message',
@@ -318,46 +260,34 @@ describe('runReActLoop — stop hook', () => {
   });
 
   it('should use default injection if not provided', async () => {
-    const recordUserFn = vi.fn(() => ({ uuid: 'msg-id' }));
+    const recordUserFn = vi.fn(() => Effect.succeed({ uuid: 'msg-id' }));
 
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
         response: Promise.resolve(
-          Result.ok({
-            content: 'Response',
-            toolCalls: [],
-          }),
+          Result.ok({ content: 'Response', toolCalls: [] }),
         ),
       })),
     };
 
-    const mockDeps = {
+    const deps = baseMockDeps({
       maxSteps: 5,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: { resolve: () => 'agent-id' } as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
       session: {
+        recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+        recordToolResult: () => Effect.succeed({}),
         recordUser: recordUserFn,
       } as any,
-      checkpoint: {} as any,
-      dedup: null,
       hooks: {
-        emit: vi.fn(async () => {}),
-        emitDecision: vi.fn(async (point: string) => {
+        emit: vi.fn(() => Effect.succeed(undefined)),
+        emitDecision: vi.fn((point: string) => {
           if (point === 'agent.turn.stop') {
-            return { decision: 'continue' }; // No injection provided
+            return Effect.succeed({ decision: 'continue' });
           }
-          return null;
+          return Effect.succeed(null);
         }),
       },
-    };
+    });
 
     const opts: RunStreamOptions = {
       state: mockState,
@@ -365,13 +295,12 @@ describe('runReActLoop — stop hook', () => {
       maxStopContinuations: 1,
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, deps);
     const events = [];
     for await (const event of gen) {
       events.push(event);
     }
 
-    // Should have recorded default injection
     expect(recordUserFn).toHaveBeenCalledWith(
       mockState,
       '(continue)',

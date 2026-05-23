@@ -47,7 +47,7 @@ export function buildRepeatReminder(
   dedup: ToolDedupService,
   agentId: string,
 ): Message | null {
-  const dups = dedup.summary(agentId).filter(d => d.count >= 2);
+  const dups = dedup.summary(agentId).filter(d => d.count >= 3);
   if (dups.length === 0) return null;
   const lines = dups.map(d => {
     const argsStr = JSON.stringify(d.args).slice(0, 100);

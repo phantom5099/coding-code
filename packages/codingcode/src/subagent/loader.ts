@@ -30,12 +30,17 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
       else if (value === 'false') value = false;
       else if (value === 'null' || value === '') value = null;
       else if (typeof value === 'string' && !isNaN(Number(value))) value = Number(value);
-      // Handle arrays in YAML style
+      // Handle arrays: JSON ["a","b"] or YAML-style [a, b, c]
       else if (typeof value === 'string' && value.startsWith('[') && value.endsWith(']')) {
         try {
           value = JSON.parse(value);
         } catch {
-          // Keep as string if not valid JSON
+          const inner = value.slice(1, -1).trim();
+          if (inner) {
+            value = inner.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+          } else {
+            value = [];
+          }
         }
       }
       frontmatter[key] = value;

@@ -2,10 +2,19 @@ import { expect, it, describe, vi } from 'vitest';
 import { Effect } from 'effect';
 import { createDispatchAgentTool } from '../../src/subagent/dispatch-tool';
 import { SubagentRegistry, EXPLORE_PROFILE } from '../../src/subagent/registry';
+import { SubagentRegistryLayer } from '../../src/layer';
 
 describe('dispatch_agent tool', () => {
-  it('should create dispatch tool with description listing available profiles', () => {
-    const registry = Effect.runSync(SubagentRegistry);
+  async function makeRegistry(): Promise<SubagentRegistry> {
+    return await Effect.runPromise(
+      Effect.gen(function* () { return yield* SubagentRegistry; }).pipe(
+        Effect.provide(SubagentRegistryLayer),
+      ),
+    );
+  }
+
+  it('should create dispatch tool with description listing available profiles', async () => {
+    const registry = await makeRegistry();
     registry.register(EXPLORE_PROFILE);
 
     const deps = {
@@ -23,8 +32,9 @@ describe('dispatch_agent tool', () => {
     expect(tool.description).toContain('Available profiles');
   });
 
-  it('should have deferred flag set to true', () => {
-    const registry = Effect.runSync(SubagentRegistry);
+  it('should have deferred flag set to true', async () => {
+    const registry = await makeRegistry();
+
     const deps = {
       session: {} as any,
       agentIdResolver: {} as any,
@@ -39,7 +49,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should validate agent profile exists', async () => {
-    const registry = Effect.runSync(SubagentRegistry);
+    const registry = await makeRegistry();
     registry.register(EXPLORE_PROFILE);
 
     const deps = {
@@ -64,7 +74,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should require agentRunner context', async () => {
-    const registry = Effect.runSync(SubagentRegistry);
+    const registry = await makeRegistry();
     registry.register(EXPLORE_PROFILE);
 
     const deps = {
@@ -89,11 +99,11 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should emit spawn.before hook', async () => {
-    const registry = Effect.runSync(SubagentRegistry);
+    const registry = await makeRegistry();
     registry.register(EXPLORE_PROFILE);
 
-    const emitDecisionFn = vi.fn(async () => null);
-    const emitFn = vi.fn(async () => {});
+    const emitDecisionFn = vi.fn(() => Effect.succeed(null));
+    const emitFn = vi.fn(() => Effect.succeed(undefined));
 
     const deps = {
       session: {
@@ -101,7 +111,14 @@ describe('dispatch_agent tool', () => {
       },
       agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
-        fork: () => Effect.succeed({ getPermissionMode: () => 'default' }),
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
       },
       hooks: {
         emit: emitFn,
@@ -139,7 +156,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should respect spawn.before deny decision', async () => {
-    const registry = Effect.runSync(SubagentRegistry);
+    const registry = await makeRegistry();
     registry.register(EXPLORE_PROFILE);
 
     const deps = {
@@ -147,11 +164,11 @@ describe('dispatch_agent tool', () => {
       agentIdResolver: {} as any,
       approval: {} as any,
       hooks: {
-        emit: async () => {},
-        emitDecision: async () => ({
+        emit: (() => Effect.succeed(undefined)) as any,
+        emitDecision: (() => Effect.succeed({
           decision: 'deny',
           reason: 'Not allowed',
-        }),
+        })) as any,
       },
       registry,
     };
@@ -176,10 +193,10 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should emit completion hook', async () => {
-    const registry = Effect.runSync(SubagentRegistry);
+    const registry = await makeRegistry();
     registry.register(EXPLORE_PROFILE);
 
-    const emitFn = vi.fn(async () => {});
+    const emitFn = vi.fn(() => Effect.succeed(undefined));
 
     const deps = {
       session: {
@@ -187,11 +204,18 @@ describe('dispatch_agent tool', () => {
       },
       agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
-        fork: () => Effect.succeed({ getPermissionMode: () => 'default' }),
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
       },
       hooks: {
         emit: emitFn,
-        emitDecision: async () => null,
+        emitDecision: () => Effect.succeed(null),
       },
       registry,
     };
@@ -224,7 +248,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should pass systemPrompt from profile', async () => {
-    const registry = Effect.runSync(SubagentRegistry);
+    const registry = await makeRegistry();
 
     const customProfile = {
       ...EXPLORE_PROFILE,
@@ -249,11 +273,18 @@ describe('dispatch_agent tool', () => {
       },
       agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
-        fork: () => Effect.succeed({ getPermissionMode: () => 'default' }),
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
       },
       hooks: {
-        emit: async () => {},
-        emitDecision: async () => null,
+        emit: () => Effect.succeed(undefined),
+        emitDecision: () => Effect.succeed(null),
       },
       registry,
     };
@@ -273,7 +304,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should filter dispatch_agent from coreAllowlist', async () => {
-    const registry = Effect.runSync(SubagentRegistry);
+    const registry = await makeRegistry();
 
     const toolListProfile = {
       name: 'tool-list',
@@ -299,11 +330,18 @@ describe('dispatch_agent tool', () => {
       },
       agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
-        fork: () => Effect.succeed({ getPermissionMode: () => 'default' }),
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
       },
       hooks: {
-        emit: async () => {},
-        emitDecision: async () => null,
+        emit: () => Effect.succeed(undefined),
+        emitDecision: () => Effect.succeed(null),
       },
       registry,
     };
@@ -327,10 +365,10 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should handle subagent error', async () => {
-    const registry = Effect.runSync(SubagentRegistry);
+    const registry = await makeRegistry();
     registry.register(EXPLORE_PROFILE);
 
-    const emitFn = vi.fn(async () => {});
+    const emitFn = vi.fn(() => Effect.succeed(undefined));
 
     const agentService = {
       runStream: async function* () {
@@ -344,11 +382,18 @@ describe('dispatch_agent tool', () => {
       },
       agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
-        fork: () => Effect.succeed({ getPermissionMode: () => 'default' }),
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
       },
       hooks: {
         emit: emitFn,
-        emitDecision: async () => null,
+        emitDecision: () => Effect.succeed(null),
       },
       registry,
     };

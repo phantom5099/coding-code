@@ -69,8 +69,8 @@ function makeDeps(overrides?: Record<string, any>) {
     checkpoint: mockCheckpoint as any,
     dedup: null as any,
     hooks: {
-      emit: async () => {},
-      emitDecision: async () => null,
+      emit: () => Effect.succeed(undefined),
+      emitDecision: () => Effect.succeed(null),
     } as any,
     ...overrides,
   };

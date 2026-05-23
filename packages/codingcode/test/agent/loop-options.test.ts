@@ -1,4 +1,5 @@
 import { expect, it, describe, vi } from 'vitest';
+import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent';
 import { Result } from '../../src/core/result';
 import type { RunStreamOptions } from '../../src/agent/agent';
@@ -15,9 +16,39 @@ describe('runReActLoop — loop options', () => {
   };
 
   const mockHooks = {
-    emit: vi.fn(async () => {}),
-    emitDecision: vi.fn(async () => null),
+    emit: vi.fn(() => Effect.succeed(undefined)),
+    emitDecision: vi.fn(() => Effect.succeed(null)),
   };
+
+  function baseMockDeps(overrides: Record<string, any> = {}) {
+    return {
+      maxSteps: 1,
+      executor: {} as any,
+      toolRegistry: {
+        allCore: () => [],
+        allDeferred: () => [],
+      } as any,
+      toolSearch: {
+        isLoaded: () => false,
+        listUnloadedDeferred: () => [],
+      } as any,
+      agentIdResolver: { resolve: () => 'agent-id' } as any,
+      ctx: {
+        build: () => Effect.succeed([]),
+        compress: () => Effect.succeed({ released: 0 }),
+        appendTurnEnd: () => Effect.succeed(undefined),
+      } as any,
+      session: {
+        recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+        recordToolResult: () => Effect.succeed({}),
+        recordUser: () => Effect.succeed({ uuid: 'm1' }),
+      } as any,
+      checkpoint: { snapshotFinal: () => {} } as any,
+      dedup: null,
+      hooks: mockHooks,
+      ...overrides,
+    };
+  }
 
   it('should accept systemOverride to replace base prompt', async () => {
     const mockLlm = {
@@ -32,30 +63,13 @@ describe('runReActLoop — loop options', () => {
       })),
     };
 
-    const mockDeps = {
-      maxSteps: 1,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: {} as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {} as any,
-      checkpoint: {} as any,
-      dedup: null,
-      hooks: mockHooks,
-    };
-
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
       systemOverride: 'Custom system prompt',
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, baseMockDeps());
     const events = [];
     for await (const event of gen) {
       events.push(event);
@@ -76,32 +90,14 @@ describe('runReActLoop — loop options', () => {
       })),
     };
 
-    const mockDeps = {
-      maxSteps: 10,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: {} as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {} as any,
-      checkpoint: {} as any,
-      dedup: null,
-      hooks: mockHooks,
-    };
-
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
       abortSignal: controller.signal,
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, baseMockDeps({ maxSteps: 10 }));
 
-    // Immediately abort
     controller.abort();
 
     const events = [];
@@ -109,7 +105,6 @@ describe('runReActLoop — loop options', () => {
       events.push(event);
     }
 
-    // Should have error event for abort
     const errorEvent = events.find((e: any) => e._tag === 'Error');
     expect(errorEvent).toBeDefined();
     expect(errorEvent?.error?.code).toBe('AGENT_ABORTED');
@@ -128,46 +123,18 @@ describe('runReActLoop — loop options', () => {
       })),
     };
 
-    const mockToolRegistry = {
-      getAll: () => [
-        { name: 'allowed_tool', execute: async () => {} },
-        { name: 'denied_tool', execute: async () => {} },
-      ],
-    };
-
-    const mockDeps = {
-      maxSteps: 1,
-      executor: {} as any,
-      toolRegistry: mockToolRegistry,
-      toolSearch: {
-        search: () => Promise.resolve([]),
-      } as any,
-      agentIdResolver: {} as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {} as any,
-      checkpoint: {} as any,
-      dedup: null,
-      hooks: mockHooks,
-    };
-
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
       coreAllowlist: new Set(['allowed_tool']),
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, baseMockDeps());
     const events = [];
     for await (const event of gen) {
       events.push(event);
     }
 
-    // Should have called buildToolsForAgent with coreAllowlist
-    // This is tested indirectly through the agent execution
     expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
   });
 
@@ -184,36 +151,18 @@ describe('runReActLoop — loop options', () => {
       })),
     };
 
-    const mockDeps = {
-      maxSteps: 100, // default
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: {} as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {} as any,
-      checkpoint: {} as any,
-      dedup: null,
-      hooks: mockHooks,
-    };
-
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
-      maxStepsOverride: 5, // override to 5
+      maxStepsOverride: 5,
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, baseMockDeps({ maxSteps: 100 }));
     const events = [];
     for await (const event of gen) {
       events.push(event);
     }
 
-    // Check if Step events respect the override
     const stepEvents = events.filter((e: any) => e._tag === 'Step');
     expect(stepEvents.some((e: any) => e.max === 5)).toBe(true);
   });
@@ -232,24 +181,7 @@ describe('runReActLoop — loop options', () => {
     };
 
     const mockApproval = {
-      evaluate: async () => ({ type: 'allow' as const }),
-    };
-
-    const mockDeps = {
-      maxSteps: 1,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: {} as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {} as any,
-      checkpoint: {} as any,
-      dedup: null,
-      hooks: mockHooks,
+      evaluate: () => Effect.succeed({ decision: 'allow' }),
     };
 
     const opts: RunStreamOptions = {
@@ -258,7 +190,7 @@ describe('runReActLoop — loop options', () => {
       approvalOverride: mockApproval as any,
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, baseMockDeps());
     const events = [];
     for await (const event of gen) {
       events.push(event);
@@ -280,35 +212,17 @@ describe('runReActLoop — loop options', () => {
       })),
     };
 
-    const mockDeps = {
-      maxSteps: 1,
-      executor: {} as any,
-      toolRegistry: {} as any,
-      toolSearch: {} as any,
-      agentIdResolver: { resolve: () => 'agent-id' } as any,
-      ctx: {
-        build: () => [],
-        compress: async () => ({ released: 0 }),
-        appendTurnEnd: async () => {},
-      } as any,
-      session: {} as any,
-      checkpoint: {} as any,
-      dedup: null,
-      hooks: mockHooks,
-    };
-
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
     };
 
-    const gen = runReActLoop(opts, mockDeps);
+    const gen = runReActLoop(opts, baseMockDeps());
     const events = [];
     for await (const event of gen) {
       events.push(event);
     }
 
-    // Check turn hooks were emitted
     expect(mockHooks.emit).toHaveBeenCalledWith(
       'agent.turn.start',
       expect.objectContaining({ sessionId: mockState.sessionId }),

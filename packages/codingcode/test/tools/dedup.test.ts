@@ -17,9 +17,10 @@ describe('ToolDedupService', () => {
         const agentId = 'agent-1';
 
         dedup.record(agentId, 'read_file', { path: '/test.txt' }, 'call-1');
+        dedup.record(agentId, 'read_file', { path: '/test.txt' }, 'call-2');
 
-        const summary = dedup.summary(agentId);
-        expect(summary.length).toBeGreaterThan(0);
+        const isFirst = dedup.isFirst(agentId, 'read_file', { path: '/test.txt' });
+        expect(isFirst).toBe(false);
       }),
     );
   });
@@ -130,7 +131,9 @@ describe('ToolDedupService', () => {
         const agentId = 'agent-1';
 
         dedup.record(agentId, 'read_file', { path: '/test.txt' }, 'call-1');
-        dedup.record(agentId, 'bash', { command: 'ls' }, 'call-2');
+        dedup.record(agentId, 'read_file', { path: '/test.txt' }, 'call-2');
+        dedup.record(agentId, 'bash', { command: 'ls' }, 'call-3');
+        dedup.record(agentId, 'bash', { command: 'ls' }, 'call-4');
 
         const summary = dedup.summary(agentId);
         expect(summary.some(e => e.name === 'read_file')).toBe(true);
