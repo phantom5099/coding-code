@@ -5,10 +5,11 @@ import { AppLayer } from '../../src/layer.js';
 import type { ToolDefinition } from '../../src/tools/types.js';
 import { z } from 'zod';
 
-function makeTool(name: string): ToolDefinition {
+function makeTool(name: string, deferred?: boolean): ToolDefinition {
   return {
     name,
     description: `Tool ${name}`,
+    deferred,
     parameters: z.object({}),
     execute: async () => `result-${name}`,
   };
@@ -85,5 +86,55 @@ describe('ToolService', () => {
     });
     const result = await runWithLayer(program);
     expect(result.ok).toBe(true);
+  });
+
+  it('allDeferred returns only deferred tools', async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* ToolService;
+      yield* svc.register(makeTool('core_a'));
+      yield* svc.register(makeTool('deferred_b', true));
+      yield* svc.register(makeTool('core_c'));
+      yield* svc.register(makeTool('deferred_d', true));
+      const deferred = svc.allDeferred();
+      expect(deferred).toHaveLength(2);
+      expect(deferred.every(t => t.deferred === true)).toBe(true);
+      expect(deferred.map(t => t.name).sort()).toEqual(['deferred_b', 'deferred_d']);
+    });
+    await runWithLayer(program);
+  });
+
+  it('allCore returns only non-deferred tools', async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* ToolService;
+      yield* svc.register(makeTool('core_a'));
+      yield* svc.register(makeTool('deferred_b', true));
+      yield* svc.register(makeTool('core_c'));
+      const core = svc.allCore();
+      expect(core.every(t => t.deferred !== true)).toBe(true);
+      const names = core.map(t => t.name);
+      expect(names).toContain('core_a');
+      expect(names).toContain('core_c');
+      expect(names).not.toContain('deferred_b');
+    });
+    await runWithLayer(program);
+  });
+
+  it('getDef returns undefined for unknown tool', async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* ToolService;
+      expect(svc.getDef('nonexistent')).toBeUndefined();
+    });
+    await runWithLayer(program);
+  });
+
+  it('getDef returns tool by name', async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* ToolService;
+      yield* svc.register(makeTool('some_tool'));
+      const def = svc.getDef('some_tool');
+      expect(def).toBeDefined();
+      expect(def!.name).toBe('some_tool');
+    });
+    await runWithLayer(program);
   });
 });

@@ -8,6 +8,23 @@ const mockToolRegistry = {
   filter: () => [],
   get: () => null,
   register: () => Effect.succeed(undefined),
+  allCore: () => [],
+  allDeferred: () => [],
+  getDef: () => undefined,
+};
+
+const mockToolSearch = {
+  isLoaded: () => false,
+  listLoaded: () => [],
+  listUnloadedDeferred: () => [],
+  search: () => [],
+  reset: () => {},
+};
+
+const mockAgentIdResolver = {
+  resolve: (sid: string) => `agent-${sid}`,
+  bind: () => {},
+  reset: () => {},
 };
 
 const mockCtx = {
@@ -39,6 +56,20 @@ const mockState = {
   title: 'test',
   tokenCountEstimate: 0,
 };
+
+function makeDeps(overrides?: Record<string, any>) {
+  return {
+    maxSteps: 25,
+    executor: null as any,
+    toolRegistry: mockToolRegistry as any,
+    toolSearch: mockToolSearch as any,
+    agentIdResolver: mockAgentIdResolver as any,
+    ctx: mockCtx as any,
+    session: mockSession as any,
+    checkpoint: mockCheckpoint as any,
+    ...overrides,
+  };
+}
 
 describe('runReActLoop — concurrent tool execution', () => {
   it('should execute multiple tool calls concurrently', async () => {
@@ -89,14 +120,8 @@ describe('runReActLoop — concurrent tool execution', () => {
     };
 
     const gen = runReActLoop(
-      mockState,
-      1,
-      mockLlm as any,
-      mockExecutor as any,
-      mockToolRegistry as any,
-      mockCtx as any,
-      mockSession as any,
-      mockCheckpoint as any,
+      { state: mockState, llm: mockLlm as any },
+      makeDeps({ maxSteps: 1, executor: mockExecutor as any }),
     );
 
     const events: any[] = [];
@@ -150,14 +175,8 @@ describe('runReActLoop — concurrent tool execution', () => {
     };
 
     const gen = runReActLoop(
-      mockState,
-      1,
-      mockLlm as any,
-      mockExecutor as any,
-      mockToolRegistry as any,
-      mockCtx as any,
-      mockSession as any,
-      mockCheckpoint as any,
+      { state: mockState, llm: mockLlm as any },
+      makeDeps({ maxSteps: 1, executor: mockExecutor as any }),
     );
 
     const events: any[] = [];

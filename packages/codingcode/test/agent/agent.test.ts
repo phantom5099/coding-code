@@ -8,6 +8,23 @@ const mockToolRegistry = {
   filter: () => [],
   get: () => null,
   register: () => Effect.succeed(undefined),
+  allCore: () => [],
+  allDeferred: () => [],
+  getDef: () => undefined,
+};
+
+const mockToolSearch = {
+  isLoaded: () => false,
+  listLoaded: () => [],
+  listUnloadedDeferred: () => [],
+  search: () => [],
+  reset: () => {},
+};
+
+const mockAgentIdResolver = {
+  resolve: (sid: string) => `agent-${sid}`,
+  bind: () => {},
+  reset: () => {},
 };
 
 const mockCtx = {
@@ -40,6 +57,20 @@ const mockState = {
   tokenCountEstimate: 0,
 };
 
+function makeDeps(overrides?: Record<string, any>) {
+  return {
+    maxSteps: 25,
+    executor: null as any,
+    toolRegistry: mockToolRegistry as any,
+    toolSearch: mockToolSearch as any,
+    agentIdResolver: mockAgentIdResolver as any,
+    ctx: mockCtx as any,
+    session: mockSession as any,
+    checkpoint: mockCheckpoint as any,
+    ...overrides,
+  };
+}
+
 describe('runReActLoop', () => {
   it('should yield text chunks from LLM stream', async () => {
     const mockLlm = {
@@ -56,14 +87,8 @@ describe('runReActLoop', () => {
     };
 
     const gen = runReActLoop(
-      mockState,
-      25,
-      mockLlm as any,
-      null as any,
-      mockToolRegistry as any,
-      mockCtx as any,
-      mockSession as any,
-      mockCheckpoint as any,
+      { state: mockState, llm: mockLlm as any },
+      makeDeps(),
     );
 
     const events: any[] = [];
@@ -84,14 +109,8 @@ describe('runReActLoop', () => {
     };
 
     const gen = runReActLoop(
-      mockState,
-      25,
-      mockLlm as any,
-      null as any,
-      mockToolRegistry as any,
-      mockCtx as any,
-      mockSession as any,
-      mockCheckpoint as any,
+      { state: mockState, llm: mockLlm as any },
+      makeDeps(),
     );
 
     const events: any[] = [];
@@ -117,32 +136,24 @@ describe('runReActLoop', () => {
     };
 
     const toolRegistryWithBash = {
+      ...mockToolRegistry,
       describeAll: () => [
         { name: 'execute_command', description: 'Run shell command', parameters: { type: 'object' } },
       ],
-      filter: () => [],
-      get: () => null,
-      register: () => Effect.succeed(undefined),
     };
 
     const mockExecutor = {
       execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
         Effect.succeed('On branch main\nnothing to commit'),
-      executeBatch: (toolCalls: any[]) =>
+      executeBatch: (_toolCalls: any[]) =>
         Effect.succeed(
-          toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: 'On branch main\nnothing to commit' })),
+          _toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: 'On branch main\nnothing to commit' })),
         ),
     };
 
     const gen = runReActLoop(
-      mockState,
-      1,
-      mockLlm as any,
-      mockExecutor as any,
-      toolRegistryWithBash as any,
-      mockCtx as any,
-      mockSession as any,
-      mockCheckpoint as any,
+      { state: mockState, llm: mockLlm as any },
+      makeDeps({ maxSteps: 1, toolRegistry: toolRegistryWithBash as any, executor: mockExecutor as any }),
     );
 
     const events: any[] = [];
@@ -170,32 +181,24 @@ describe('runReActLoop', () => {
     };
 
     const toolRegistryWithTool = {
+      ...mockToolRegistry,
       describeAll: () => [
         { name: 'readFile', description: 'Read a file', parameters: { type: 'object' } },
       ],
-      filter: () => [],
-      get: () => null,
-      register: () => Effect.succeed(undefined),
     };
 
     const mockExecutor = {
       execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
         Effect.succeed('file content'),
-      executeBatch: (toolCalls: any[]) =>
+      executeBatch: (_toolCalls: any[]) =>
         Effect.succeed(
-          toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: 'file content' })),
+          _toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: 'file content' })),
         ),
     };
 
     const gen = runReActLoop(
-      mockState,
-      1,
-      mockLlm as any,
-      mockExecutor as any,
-      toolRegistryWithTool as any,
-      mockCtx as any,
-      mockSession as any,
-      mockCheckpoint as any,
+      { state: mockState, llm: mockLlm as any },
+      makeDeps({ maxSteps: 1, toolRegistry: toolRegistryWithTool as any, executor: mockExecutor as any }),
     );
 
     const events: any[] = [];
