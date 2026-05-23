@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { ToolService } from '../../../src/tools/registry.js';
-import { ToolSearchService } from '../../../src/agent-state/tool-search/service.js';
+import { ToolSearchService } from '../../../src/tools/tool-search-service.js';
 import type { ToolDefinition } from '../../../src/tools/types.js';
 import { z } from 'zod';
 
@@ -109,7 +109,6 @@ describe('ToolSearchService', () => {
       yield* tools.register(makeDeferred('web_search', 'Search the web'));
 
       const svc = yield* ToolSearchService;
-      // "task" matches shortDescription "Write task list", "write" matches name "todo_write"
       const hits = svc.search('agent-and', 'task list');
       expect(hits).toHaveLength(1);
       expect(hits[0]!.name).toBe('todo_write');

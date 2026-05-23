@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
-import { ToolService } from '../../tools/registry';
-import type { ToolDefinition } from '../../tools/types';
+import { ToolService } from './registry';
+import type { ToolDefinition } from './types';
 
 const loaded = new Map<string, Set<string>>();
 

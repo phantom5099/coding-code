@@ -12,7 +12,7 @@ import { ApprovalWaitService } from './approval/async-confirm';
 import { ToolExecutorService } from './tools/executor';
 import { CheckpointService } from './checkpoint/checkpoint-service';
 import { TodoService } from './agent-state/todo/service';
-import { ToolSearchService } from './agent-state/tool-search/service';
+import { ToolSearchService } from './tools/tool-search-service';
 import { AgentIdResolver } from './agent-state/agent-id';
 
 export const AgentLayer = AgentService.Default;

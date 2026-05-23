@@ -12,7 +12,7 @@ import { buildSystemPrompt, type SystemPromptVariant } from '../prompts/index.js
 import { getWorkspaceCwd } from '../core/workspace.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
-import { ToolSearchService } from '../agent-state/tool-search/service.js';
+import { ToolSearchService } from '../tools/tool-search-service.js';
 import { AgentIdResolver } from '../agent-state/agent-id.js';
 import { sharedTodoStore } from '../agent-state/todo/service.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { z } from 'zod';
 import { ToolService } from '../../src/tools/registry.js';
-import { ToolSearchService } from '../../src/agent-state/tool-search/service.js';
+import { ToolSearchService } from '../../src/tools/tool-search-service.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from '../../src/agent/build-tools.js';
 import type { ToolDefinition } from '../../src/tools/types.js';
 

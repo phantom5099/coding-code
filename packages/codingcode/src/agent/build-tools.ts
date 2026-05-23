@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ToolDescription } from '../core/types';
 import type { ToolService } from '../tools/registry';
-import type { ToolSearchService } from '../agent-state/tool-search/service';
+import type { ToolSearchService } from '../tools/tool-search-service';
 
 export function buildToolsForAgent(
   registry: ToolService,

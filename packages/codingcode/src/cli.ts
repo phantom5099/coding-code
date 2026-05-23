@@ -22,7 +22,7 @@ import { getWorkspaceCwd, initWorkspace, parseWorkspaceArgs } from './core/works
 import { todoWriteTool } from './tools/domains/agent-state/todo-write.js';
 import { todoReadTool } from './tools/domains/agent-state/todo-read.js';
 import { toolSearchTool, bindToolSearchService } from './tools/domains/agent-state/tool-search.js';
-import { ToolSearchService } from './agent-state/tool-search/service.js';
+import { ToolSearchService } from './tools/tool-search-service.js';
 
 function findAvailablePort(startPort: number): Promise<number> {
   return new Promise((resolve, reject) => {
