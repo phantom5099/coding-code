@@ -38,5 +38,5 @@ export { TodoService } from './agent-state/todo/service.js';
 export { ToolSearchService } from './tools/tool-search-service.js';
 export { AgentIdResolver } from './agent-state/agent-id.js';
 export type { Todo, TodoStatus } from './agent-state/todo/types.js';
-export { TASK_TRACKING_GUIDELINES, buildSystemPrompt } from './prompts/index.js';
+export { DEFERRED_TOOLS_GUIDELINES, buildSystemPrompt } from './prompts/index.js';
 export type { SystemPromptVariant, SystemPromptOptions } from './prompts/index.js';

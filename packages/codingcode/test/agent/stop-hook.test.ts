@@ -18,6 +18,7 @@ describe('runReActLoop — stop hook', () => {
   function baseMockDeps(overrides: Record<string, any> = {}) {
     return {
       maxSteps: 5,
+      maxStopContinuations: 2,
       executor: {} as any,
       toolRegistry: {
         allCore: () => [],

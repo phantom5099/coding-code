@@ -1,5 +1,4 @@
 {
-  "active": "deepseek",
   "providers": [
     {
       "name": "openai",

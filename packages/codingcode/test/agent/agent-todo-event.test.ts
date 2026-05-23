@@ -88,6 +88,7 @@ describe('TodoUpdate event', () => {
       { state: mockState, llm: mockLlm as any },
       {
         maxSteps: 1,
+        maxStopContinuations: 2,
         executor: mockExecutor as any,
         toolRegistry: mockToolRegistry as any,
         toolSearch: mockToolSearch as any,
@@ -129,6 +130,7 @@ describe('TodoUpdate event', () => {
       { state: { ...mockState, sessionId: 'non-todo' }, llm: mockLlm as any },
       {
         maxSteps: 1,
+        maxStopContinuations: 2,
         executor: mockExecutor as any,
         toolRegistry: mockToolRegistry as any,
         toolSearch: mockToolSearch as any,

@@ -4,6 +4,22 @@ import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispat
 import { SubagentRegistry, EXPLORE_PROFILE } from '../../src/subagent/registry';
 import { SubagentRegistryLayer } from '../../src/layer';
 
+const mockModelEntry = {
+  id: 'fast-model@provider-b',
+  provider: 'provider-b',
+  driver: 'openai',
+  name: 'Fast Model',
+  model: 'fast-model',
+  base_url: 'https://api.b.com',
+  api_key_env: 'API_KEY_B',
+};
+const mockSubagentLlm = { _tag: 'subagent-llm' };
+
+vi.mock('../../src/llm/factory.js', () => ({
+  listModels: vi.fn(() => ({ ok: true, value: [mockModelEntry] })),
+  createClient: vi.fn(async () => ({ ok: true, value: mockSubagentLlm })),
+}));
+
 describe('dispatch_agent tool', () => {
   async function makeRegistry(): Promise<SubagentRegistry> {
     return await Effect.runPromise(
@@ -418,5 +434,132 @@ describe('dispatch_agent tool', () => {
       'agent.subagent.complete',
       expect.objectContaining({ status: 'error' }),
     );
+  });
+
+  it('should use parent llm when profile has no model field', async () => {
+    const registry = await makeRegistry();
+    registry.register(EXPLORE_PROFILE); // EXPLORE_PROFILE has no model field
+
+    const runStreamCalls: any[] = [];
+    const agentService = {
+      runStream: (opts: any) => {
+        runStreamCalls.push(opts);
+        return (async function* () { yield { _tag: 'Done', content: 'Done' }; })();
+      },
+    };
+    const parentLlm = { _tag: 'parent-llm' };
+
+    const deps = {
+      session: { create: () => Effect.sync(() => ({})) },
+      agentIdResolver: { resolve: () => 'child-agent' },
+      approval: {
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
+      },
+      hooks: {
+        emit: () => Effect.succeed(undefined),
+        emitDecision: () => Effect.succeed(null),
+      },
+      registry,
+    };
+
+    const tool = createDispatchAgentTool(deps as any);
+    await tool.execute(
+      { agent: 'explore', prompt: 'test' },
+      { agentRunner: { agentService, llm: parentLlm }, agentId: 'parent', sessionId: 'parent-session' },
+    );
+
+    expect(runStreamCalls[0].llm).toBe(parentLlm);
+  });
+
+  it('should create a new llm client when profile specifies a model', async () => {
+    const registry = await makeRegistry();
+
+    const modelProfile = {
+      ...EXPLORE_PROFILE,
+      name: 'model-agent',
+      model: 'fast-model@provider-b',
+    };
+    registry.register(modelProfile);
+
+    const runStreamCalls: any[] = [];
+    const agentService = {
+      runStream: (opts: any) => {
+        runStreamCalls.push(opts);
+        return (async function* () { yield { _tag: 'Done', content: 'Done' }; })();
+      },
+    };
+    const parentLlm = { _tag: 'parent-llm' };
+
+    const deps = {
+      session: { create: () => Effect.sync(() => ({})) },
+      agentIdResolver: { resolve: () => 'child-agent' },
+      approval: {
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
+      },
+      hooks: {
+        emit: () => Effect.succeed(undefined),
+        emitDecision: () => Effect.succeed(null),
+      },
+      registry,
+    };
+
+    const tool = createDispatchAgentTool(deps as any);
+    await tool.execute(
+      { agent: 'model-agent', prompt: 'test' },
+      { agentRunner: { agentService, llm: parentLlm }, agentId: 'parent', sessionId: 'parent-session' },
+    );
+
+    // Should use the resolved subagent LLM, not the parent's
+    expect(runStreamCalls[0].llm).toBe(mockSubagentLlm);
+    expect(runStreamCalls[0].llm).not.toBe(parentLlm);
+  });
+
+  it('should throw when profile model is not found in catalog', async () => {
+    const registry = await makeRegistry();
+
+    const badProfile = {
+      ...EXPLORE_PROFILE,
+      name: 'bad-model-agent',
+      model: 'nonexistent-model@unknown',
+    };
+    registry.register(badProfile);
+
+    const deps = {
+      session: {} as any,
+      agentIdResolver: {} as any,
+      approval: {} as any,
+      hooks: {
+        emit: () => Effect.succeed(undefined),
+        emitDecision: () => Effect.succeed(null),
+      },
+      registry,
+    };
+
+    const tool = createDispatchAgentTool(deps as any);
+
+    try {
+      await tool.execute(
+        { agent: 'bad-model-agent', prompt: 'test' },
+        { agentRunner: { agentService: {}, llm: {} } },
+      );
+      expect.fail('Should have thrown error');
+    } catch (e: any) {
+      expect(e.message).toContain('unknown model');
+      expect(e.message).toContain('nonexistent-model@unknown');
+    }
   });
 });

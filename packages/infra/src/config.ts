@@ -38,6 +38,7 @@ export interface AppConfig {
     port: number;
   };
   maxSteps: number;
+  maxStopContinuations: number;
   models: Record<string, {
     provider: string;
     model: string;
@@ -78,6 +79,7 @@ const DEFAULT_CONFIG: AppConfig = {
     port: 8080,
   },
   maxSteps: 50,
+  maxStopContinuations: 2,
   models: {},
   context: DEFAULT_CONTEXT,
 };

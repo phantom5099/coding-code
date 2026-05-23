@@ -6,6 +6,7 @@ import { Result } from '../core/result';
 import type { LLMClient } from './client';
 import { OpenAIProvider } from './providers/openai';
 import { DeepSeekProvider } from './providers/deepseek';
+import { loadConfig } from '@codingcode/infra';
 
 export interface ModelDescriptor {
   id: string;
@@ -22,7 +23,6 @@ export interface ProviderEntry {
 }
 
 interface ProviderCatalog {
-  active: string;
   providers: ProviderEntry[];
 }
 
@@ -90,30 +90,20 @@ export function listModels(): Result<SelectableModel[], AgentError> {
 export function getActiveEntry(): Result<SelectableModel, AgentError> {
   if (currentEntry) return Result.ok(currentEntry);
 
+  const configActiveModel = loadConfig().activeModel;
+  if (!configActiveModel) {
+    return Result.err(new AgentError('CONFIG_INVALID', 'No active model configured. Set activeModel in config.yaml (e.g. activeModel: "model-id@provider")'));
+  }
+
   const catResult = loadCatalog();
   if (!catResult.ok) return catResult;
-  const cat = catResult.value;
 
-  const activeProviderName = cat.active;
-  const provider = cat.providers.find((p) => p.name === activeProviderName);
-  if (!provider) {
-    return Result.err(new AgentError('CONFIG_INVALID', `Active provider "${activeProviderName}" not found in models.json`));
+  const found = flattenModels(catResult.value).find((m) => m.id === configActiveModel);
+  if (!found) {
+    return Result.err(new AgentError('CONFIG_INVALID', `Model "${configActiveModel}" not found in models.json`));
   }
 
-  const model = provider.models.find((m) => m.id === provider.default_model);
-  if (!model) {
-    return Result.err(new AgentError('CONFIG_INVALID', `Default model "${provider.default_model}" not found in provider "${provider.name}"`));
-  }
-
-  currentEntry = {
-    id: `${model.id}@${provider.name}`,
-    provider: provider.name,
-    driver: provider.driver,
-    name: model.name,
-    model: model.id,
-    base_url: provider.base_url,
-    api_key_env: provider.api_key_env,
-  };
+  currentEntry = found;
   return Result.ok(currentEntry);
 }
 

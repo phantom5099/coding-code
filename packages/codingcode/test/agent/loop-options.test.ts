@@ -23,6 +23,7 @@ describe('runReActLoop — loop options', () => {
   function baseMockDeps(overrides: Record<string, any> = {}) {
     return {
       maxSteps: 1,
+      maxStopContinuations: 2,
       executor: {} as any,
       toolRegistry: {
         allCore: () => [],
@@ -190,6 +191,29 @@ describe('runReActLoop — loop options', () => {
     };
 
     const gen = runReActLoop(opts, baseMockDeps());
+    const events = [];
+    for await (const event of gen) {
+      events.push(event);
+    }
+
+    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
+  });
+
+  it('should use maxStopContinuations from deps when opts does not override', async () => {
+    const mockLlm = {
+      completeStream: vi.fn(() => ({
+        stream: (async function* () {})(),
+        response: Promise.resolve(Result.ok({ content: 'Done', toolCalls: [] })),
+      })),
+    };
+
+    const opts: RunStreamOptions = {
+      state: mockState,
+      llm: mockLlm as any,
+      // maxStopContinuations not set in opts → should use deps value
+    };
+
+    const gen = runReActLoop(opts, baseMockDeps({ maxStopContinuations: 5 }));
     const events = [];
     for await (const event of gen) {
       events.push(event);
