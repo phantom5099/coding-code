@@ -66,15 +66,15 @@ function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
     toolsExemptFromPrune: [],
     prefixTurnsProtected: 1,
     minTurnsBetweenCompactions: 3,
-    L5KeepRecentTurns: 2,
+    keepRecentTurns: 2,
     compactionModel: '',
     archiveTtlDays: 30,
     checkpointKeep: 50,
-    l1ThresholdTokens: 2000,
-    l1TruncateKeepHeadLines: 5,
-    l1TruncateKeepTailLines: 15,
-    l1PersistPreviewChars: 2000,
-    l1PersistableTools: ['execute_command', 'fetch_url'],
+    thresholdTokens: 2000,
+    truncateKeepHeadLines: 5,
+    truncateKeepTailLines: 15,
+    persistPreviewChars: 2000,
+    persistableTools: ['execute_command', 'fetch_url'],
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
     snipMaxMessages: 100,
@@ -143,7 +143,7 @@ describe('compressor behavior', () => {
           prefixTurnsProtected: 0,
           pruneProtectedTokens: 0,
           minTurnsBetweenCompactions: 2,
-          L5KeepRecentTurns: 2,
+          keepRecentTurns: 2,
         });
         const llm = makeMockLLM('## Compacted History\n\n### Goal\nx\n\n### Instructions\ny\n\n### Discoveries\nz\n\n### Accomplished\nw\n\n### Relevant Files\nv');
         const result = await run(fx.sessionId, 100000, llm, cfg);
@@ -159,7 +159,7 @@ describe('compressor behavior', () => {
     it('writes RangeProjection with five-section system summary', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, L5KeepRecentTurns: 2 });
+        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
         const summary = '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
         await compactWithLLM(fx.sessionId, cfg, llm);
@@ -176,7 +176,7 @@ describe('compressor behavior', () => {
     it('skips L5 when not enough turns to satisfy minTurnsBetweenCompactions', async () => {
       const fx = makeFixture({ numTurns: 3 });
       try {
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 5, L5KeepRecentTurns: 1 });
+        const cfg = tinyConfig({ minTurnsBetweenCompactions: 5, keepRecentTurns: 1 });
         const llm = makeMockLLM('summary');
         const result = await compactWithLLM(fx.sessionId, cfg, llm);
         expect(result.didCompress).toBe(false);
@@ -188,7 +188,7 @@ describe('compressor behavior', () => {
     it('returns no-op when no LLM available', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, L5KeepRecentTurns: 2 });
+        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
         const result = await compactWithLLM(fx.sessionId, cfg, null);
         expect(result.didCompress).toBe(false);
         const store = loadProjectionStore(fx.sessionId);
@@ -224,7 +224,7 @@ describe('compressor behavior', () => {
           modelInfo: { provider: 'capture', model: 'capture', maxTokens: 1000, supportsToolCalling: false, supportsStreaming: false },
         };
 
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, L5KeepRecentTurns: 2 });
+        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
         await compactWithLLM(fx.sessionId, cfg, captureLLM);
 
         // Assert: t1's raw 4000-char content should NOT appear; the replacement should.
@@ -245,7 +245,7 @@ describe('compressor behavior', () => {
     it('updates projectedRanges, projectionCount, lastUncoveredByteOffset after L5', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, L5KeepRecentTurns: 2 });
+        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
         const llm = makeMockLLM('## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne');
         await compactWithLLM(fx.sessionId, cfg, llm);
 

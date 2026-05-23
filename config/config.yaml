@@ -25,7 +25,7 @@ context:
   toolsExemptFromTruncation: [Read, todo_write, todo_read, tool_search]
   prefixTurnsProtected: 1
   minTurnsBetweenCompactions: 5
-  L5KeepRecentTurns: 10
+  keepRecentTurns: 10
   compactionModel: haiku
   archiveTtlDays: 30
   checkpointKeep: 50

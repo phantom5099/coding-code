@@ -14,15 +14,15 @@ describe('L1 budget reduction - dual-path strategy', () => {
   it('should leave tool messages under threshold unchanged', () => {
     // This test validates the logic without needing the full build.ts implementation
     const config: Partial<ContextConfig> = {
-      l1ThresholdTokens: 2000,
-      l1PersistableTools: ['execute_command', 'fetch_url'],
-      l1TruncateKeepHeadLines: 5,
-      l1TruncateKeepTailLines: 15,
+      thresholdTokens: 2000,
+      persistableTools: ['execute_command', 'fetch_url'],
+      truncateKeepHeadLines: 5,
+      truncateKeepTailLines: 15,
     };
 
     const shortContent = 'a'.repeat(100); // Well under threshold
     const tokens = Math.ceil(shortContent.length / 4);
-    expect(tokens).toBeLessThan(config.l1ThresholdTokens!);
+    expect(tokens).toBeLessThan(config.thresholdTokens!);
   });
 
   it('should classify tools correctly for persist vs truncate', () => {

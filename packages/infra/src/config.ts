@@ -17,15 +17,15 @@ export interface ContextConfig {
   toolsExemptFromPrune: string[];
   prefixTurnsProtected: number;
   minTurnsBetweenCompactions: number;
-  L5KeepRecentTurns: number;
+  keepRecentTurns: number;
   compactionModel: string;
   archiveTtlDays: number;
   checkpointKeep: number;
-  l1ThresholdTokens: number;
-  l1TruncateKeepHeadLines: number;
-  l1TruncateKeepTailLines: number;
-  l1PersistPreviewChars: number;
-  l1PersistableTools: string[];
+  thresholdTokens: number;
+  truncateKeepHeadLines: number;
+  truncateKeepTailLines: number;
+  persistPreviewChars: number;
+  persistableTools: string[];
   reactiveCompactMaxRetries: number;
   reactiveCompactKeepTurns: number;
   snipMaxMessages: number;
@@ -63,15 +63,15 @@ const DEFAULT_CONTEXT: ContextConfig = {
   toolsExemptFromPrune: ['Read', 'todo_write', 'todo_read', 'tool_search'],
   prefixTurnsProtected: 1,
   minTurnsBetweenCompactions: 5,
-  L5KeepRecentTurns: 10,
+  keepRecentTurns: 10,
   compactionModel: 'haiku',
   archiveTtlDays: 30,
   checkpointKeep: 50,
-  l1ThresholdTokens: 2000,
-  l1TruncateKeepHeadLines: 5,
-  l1TruncateKeepTailLines: 15,
-  l1PersistPreviewChars: 2000,
-  l1PersistableTools: ['execute_command', 'fetch_url'],
+  thresholdTokens: 2000,
+  truncateKeepHeadLines: 5,
+  truncateKeepTailLines: 15,
+  persistPreviewChars: 2000,
+  persistableTools: ['execute_command', 'fetch_url'],
   reactiveCompactMaxRetries: 1,
   reactiveCompactKeepTurns: 3,
   snipMaxMessages: 100,

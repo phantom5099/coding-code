@@ -168,7 +168,7 @@ export async function* runReActLoop(
       const llmResult = await respPromise;
       if (!llmResult.ok) {
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
-          const aggressiveConfig = { ...config, L5KeepRecentTurns: config.reactiveCompactKeepTurns };
+          const aggressiveConfig = { ...config, keepRecentTurns: config.reactiveCompactKeepTurns };
           const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, null, aggressiveConfig));
           yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released };
           overflow = true;

@@ -30,11 +30,11 @@ function applyL1(
   return enriched.map((e) => {
     if (e.message.role !== 'tool') return e;
     if (e.source.kind === 'projection') return e;
-    if (estimateTokensForContent(e.message.content) <= config.l1ThresholdTokens) return e;
+    if (estimateTokensForContent(e.message.content) <= config.thresholdTokens) return e;
 
     const toolName = (e.message as any).tool_name ?? '';
     const toolCallId = (e.message as any).tool_call_id ?? '';
-    if (!config.l1PersistableTools.includes(toolName)) return e;
+    if (!config.persistableTools.includes(toolName)) return e;
     return persistAndShrink(e, sessionId, toolCallId, config);
   });
 }
@@ -46,7 +46,7 @@ function persistAndShrink(
   config: ContextConfig,
 ): EnrichedMessage {
   const { path } = persistToolResult(sessionId, toolCallId, e.message.content);
-  const preview = e.message.content.slice(0, config.l1PersistPreviewChars);
+  const preview = e.message.content.slice(0, config.persistPreviewChars);
   const content = `${preview}\n\n[…full output persisted at: ${path}. Use Read tool to access if needed.]`;
   return { ...e, message: { ...e.message, content } };
 }

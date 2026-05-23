@@ -174,19 +174,19 @@ function tryTruncateTools(ctx: CompressContext): number {
   for (const e of view.projected) {
     if (e.message.role !== 'tool') continue;
     if (e.source.kind === 'projection') continue;
-    if (estimateTokensForContent(e.message.content) <= config.l1ThresholdTokens) continue;
+    if (estimateTokensForContent(e.message.content) <= config.thresholdTokens) continue;
 
     const toolName = e.message.tool_name ?? '';
-    if (config.l1PersistableTools.includes(toolName)) continue; // L1a handles persist
+    if (config.persistableTools.includes(toolName)) continue; // L1a handles persist
 
     const content = e.message.content;
     const lines = content.split('\n');
     const total = lines.length;
-    if (total <= config.l1TruncateKeepHeadLines + config.l1TruncateKeepTailLines) continue;
+    if (total <= config.truncateKeepHeadLines + config.truncateKeepTailLines) continue;
 
-    const head = lines.slice(0, config.l1TruncateKeepHeadLines).join('\n');
-    const tail = lines.slice(-config.l1TruncateKeepTailLines).join('\n');
-    const omitted = total - config.l1TruncateKeepHeadLines - config.l1TruncateKeepTailLines;
+    const head = lines.slice(0, config.truncateKeepHeadLines).join('\n');
+    const tail = lines.slice(-config.truncateKeepTailLines).join('\n');
+    const omitted = total - config.truncateKeepHeadLines - config.truncateKeepTailLines;
     const hint = buildRecoveryHint(toolName);
     const summary = `${head}\n\n[…${omitted} lines omitted${hint ? '; ' + hint : ''}]\n\n${tail}`;
 
@@ -290,7 +290,7 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
   const { sessionId, config, currentTurnId, view } = ctx;
 
   const startTurn = 1;
-  const endTurn = currentTurnId - config.L5KeepRecentTurns;
+  const endTurn = currentTurnId - config.keepRecentTurns;
   if (endTurn < startTurn) return 0;
   const turnsInRange = endTurn - startTurn + 1;
   if (turnsInRange < config.minTurnsBetweenCompactions) return 0;
