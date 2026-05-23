@@ -7,6 +7,7 @@ import type { SessionService } from '../../../session/store.js';
 import type { AgentIdResolver } from '../../../agent-state/agent-id.js';
 import type { ApprovalService } from '../../../approval/index.js';
 import type { HookService } from '../../../hooks/registry.js';
+import { listModels, createClient } from '../../../llm/factory.js';
 
 interface DispatchAgentDeps {
   session: SessionService;
@@ -40,7 +41,18 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         throw new Error('dispatch_agent requires agentRunner context');
       }
 
-      const { agentService, llm } = ctx.agentRunner;
+      const { agentService, llm: parentLlm } = ctx.agentRunner;
+
+      let llm = parentLlm;
+      if (profile.model) {
+        const modelsResult = listModels();
+        if (!modelsResult.ok) throw new Error(`Failed to list models: ${modelsResult.error.message}`);
+        const entry = modelsResult.value.find((m) => m.id === profile.model);
+        if (!entry) throw new Error(`Subagent profile "${agentName}" specifies unknown model: ${profile.model}`);
+        const clientResult = await createClient(entry);
+        if (!clientResult.ok) throw new Error(`Failed to create client for model "${profile.model}": ${clientResult.error.message}`);
+        llm = clientResult.value;
+      }
 
       // Emit spawn.before hook
       const spawnDecision: any = await Effect.runPromise(

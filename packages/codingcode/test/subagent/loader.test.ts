@@ -158,4 +158,33 @@ System prompt.`;
     expect(results).toHaveLength(1);
     expect(results[0].readonly).toBe(false);
   });
+
+  it('should parse model field from frontmatter', () => {
+    const profile = `---
+name: model-agent
+description: Agent with specific model
+model: gpt-4o@openai
+---
+System prompt.`;
+
+    writeFileSync(join(testDir, '.codingcode', 'agents', 'model.md'), profile);
+
+    const results = loadAgentProfiles(testDir);
+    expect(results).toHaveLength(1);
+    expect(results[0].model).toBe('gpt-4o@openai');
+  });
+
+  it('should leave model undefined when not specified in frontmatter', () => {
+    const profile = `---
+name: no-model-agent
+description: Agent without model
+---
+System prompt.`;
+
+    writeFileSync(join(testDir, '.codingcode', 'agents', 'no-model.md'), profile);
+
+    const results = loadAgentProfiles(testDir);
+    expect(results).toHaveLength(1);
+    expect(results[0].model).toBeUndefined();
+  });
 });

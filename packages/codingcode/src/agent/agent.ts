@@ -14,7 +14,7 @@ import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
 import { AgentIdResolver } from '../agent-state/agent-id.js';
-import { sharedTodoStore } from '../agent-state/todo/service.js';
+import { sharedTodoStore } from '../agent-state/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
 
@@ -61,6 +61,7 @@ interface LLMStreamAdapter {
 
 interface RunReActDeps {
   maxSteps: number;
+  maxStopContinuations: number;
   executor: ToolExecutorService;
   toolRegistry: ToolService;
   toolSearch: ToolSearchService;
@@ -81,12 +82,12 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
     const session = yield* SessionService;
     const checkpoint = yield* CheckpointService;
     const hooks = yield* HookService;
-    const maxSteps = resolveConfig().maxSteps;
+    const { maxSteps, maxStopContinuations } = resolveConfig();
 
     return {
       runStream: (opts: RunStreamOptions): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> =>
         runReActLoop(opts, {
-          maxSteps, executor, toolRegistry, toolSearch, agentIdResolver,
+          maxSteps, maxStopContinuations, executor, toolRegistry, toolSearch, agentIdResolver,
           ctx, session, checkpoint, hooks,
         }),
     };
@@ -102,14 +103,13 @@ export async function* runReActLoop(
   const projectPath = state.cwd;
 
   // Build system prompt
-  const basePrompt = opts.systemOverride ?? buildSystemPrompt({
+  const system = opts.systemOverride ?? buildSystemPrompt({
     cwd: getWorkspaceCwd(),
     platform: process.platform,
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
     variant: systemPromptVariant ?? 'default',
+    skillInstruction: opts.skillInstruction,
   });
-  const skillInstructionStr = opts.skillInstruction ? `\n\n## Skill Instructions\n\n${opts.skillInstruction}` : '';
-  const system = `${basePrompt}${skillInstructionStr}`;
 
   const config = getContextConfig();
   const maxOverflowRetries = config.reactiveCompactMaxRetries;
@@ -120,7 +120,7 @@ export async function* runReActLoop(
 
   // For stop hook continue logic
   let stopContinuations = 0;
-  const maxStopContinuations = opts.maxStopContinuations ?? 2;
+  const maxStopContinuations = opts.maxStopContinuations ?? deps.maxStopContinuations;
 
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
     const messages = Effect.runSync(ctx.build(state.sessionId));
@@ -168,7 +168,7 @@ export async function* runReActLoop(
       const llmResult = await respPromise;
       if (!llmResult.ok) {
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
-          const aggressiveConfig = { ...config, L5KeepRecentTurns: config.reactiveCompactKeepTurns };
+          const aggressiveConfig = { ...config, keepRecentTurns: config.reactiveCompactKeepTurns };
           const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, null, aggressiveConfig));
           yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released };
           overflow = true;
@@ -240,6 +240,7 @@ export async function* runReActLoop(
         }),
       );
 
+      let todoPrinted = false;
       for (const r of allResults) {
         const resultOut = r.type === 'denied' ? '' : r.output;
         if (r.type === 'denied') {
@@ -247,23 +248,16 @@ export async function* runReActLoop(
         } else {
           yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: r.type === 'ok' };
         }
-        // Persist tool result
         Effect.runSync(session.recordToolResult(state, assistantUuid, r.name, r.id, resultOut));
-      }
-
-      for (const r of allResults) {
-        if (messages.find(m => (m as any).tool_call_id === r.id)) continue;
-        const content = r.type === 'denied'
-          ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
-          : r.output ?? '';
-        messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
-      }
-
-      // Emit TodoUpdate when todo tools are called this turn
-      for (const r of allResults) {
-        if (r.name === 'todo_write' || r.name === 'todo_read') {
+        if (!messages.find(m => (m as any).tool_call_id === r.id)) {
+          const content = r.type === 'denied'
+            ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
+            : r.output ?? '';
+          messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
+        }
+        if (!todoPrinted && (r.name === 'todo_write' || r.name === 'todo_read')) {
           yield { _tag: 'TodoUpdate', items: sharedTodoStore.read(agentId) as any };
-          break;
+          todoPrinted = true;
         }
       }
 

@@ -60,6 +60,7 @@ const mockState = {
 function makeDeps(overrides?: Record<string, any>) {
   return {
     maxSteps: 25,
+    maxStopContinuations: 2,
     executor: null as any,
     toolRegistry: mockToolRegistry as any,
     toolSearch: mockToolSearch as any,

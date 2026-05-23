@@ -11,6 +11,9 @@ export interface ToolExecCtx {
     agentService: any; // AgentService — use any to avoid circular imports
     llm: any; // LLMStreamAdapter — use any to avoid circular imports
   };
+  sandbox?: {
+    wrapCommand: (command: string) => Promise<string>;
+  };
 }
 
 export interface ToolDefinition {

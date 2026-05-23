@@ -11,11 +11,14 @@ export const bashTool: ToolDefinition = {
     cwd: z.string().optional().describe('Working directory (defaults to project root)'),
     timeout_ms: z.number().int().default(30000).describe('Timeout in milliseconds'),
   }),
-  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
+  execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { command, cwd, timeout_ms } = args as any;
     const workDir = cwd || getWorkspaceCwd();
+    const finalCommand = ctx?.sandbox
+      ? await ctx.sandbox.wrapCommand(command)
+      : command;
     return new Promise<string>((resolve) => {
-      const proc = spawn(command, {
+      const proc = spawn(finalCommand, {
         shell: true,
         cwd: workDir,
         env: process.env,

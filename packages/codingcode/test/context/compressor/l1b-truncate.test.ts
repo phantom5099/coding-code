@@ -47,15 +47,15 @@ function l1bCfg(): ContextConfig {
     toolsExemptFromPrune: [],
     prefixTurnsProtected: 0,
     minTurnsBetweenCompactions: 1,
-    L5KeepRecentTurns: 999,
+    keepRecentTurns: 999,
     compactionModel: '',
     archiveTtlDays: 30,
     checkpointKeep: 50,
-    l1ThresholdTokens: 1, // trigger on any content
-    l1TruncateKeepHeadLines: 2,
-    l1TruncateKeepTailLines: 2,
-    l1PersistPreviewChars: 2000,
-    l1PersistableTools: [], // Read is NOT persistable → goes to truncation
+    thresholdTokens: 1, // trigger on any content
+    truncateKeepHeadLines: 2,
+    truncateKeepTailLines: 2,
+    persistPreviewChars: 2000,
+    persistableTools: [], // Read is NOT persistable → goes to truncation
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
     snipMaxMessages: 999,
@@ -89,7 +89,7 @@ describe('L1b truncation', () => {
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 'short');
     try {
-      const cfg = { ...l1bCfg(), l1ThresholdTokens: 9999 };
+      const cfg = { ...l1bCfg(), thresholdTokens: 9999 };
       run(sessionId, 1000, null, cfg);
       const store = loadProjectionStore(sessionId);
       expect(store.projections.filter((p) => p.type === 'message')).toHaveLength(0);

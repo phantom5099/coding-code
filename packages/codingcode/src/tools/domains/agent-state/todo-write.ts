@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import { AgentError } from '../../../core/error';
 import type { ToolDefinition } from '../../types';
-import { sharedTodoStore, countByStatus } from '../../../agent-state/todo/service';
-import { TODO_MAX_ITEMS, TODO_MAX_STEP_LEN, type Todo } from '../../../agent-state/todo/types';
+import { sharedTodoStore, countByStatus, TODO_MAX_ITEMS, TODO_MAX_STEP_LEN, type Todo } from '../../../agent-state/todo';
 
 const todoSchema = z.object({
   plan: z.array(z.object({

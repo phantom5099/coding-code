@@ -82,6 +82,7 @@ export function loadAgentProfiles(projectCwd: string): SubagentProfile[] {
           tools: Array.isArray(frontmatter.tools) ? frontmatter.tools.map(String) : undefined,
           readonly: Boolean(frontmatter.readonly),
           maxSteps: typeof frontmatter.maxSteps === 'number' ? frontmatter.maxSteps : undefined,
+          model: typeof frontmatter.model === 'string' ? frontmatter.model : undefined,
         };
 
         profiles.push(profile);

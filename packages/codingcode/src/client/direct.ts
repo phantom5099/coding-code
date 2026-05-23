@@ -143,8 +143,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       const modelsResult = listModels();
       if (!modelsResult.ok) throw modelsResult.error;
       const activeResult = getActiveEntry();
-      if (!activeResult.ok) throw activeResult.error;
-      return { models: modelsResult.value, activeId: activeResult.value.id };
+      return { models: modelsResult.value, activeId: activeResult.ok ? activeResult.value.id : null };
     },
 
     async switchModel(id: string) {

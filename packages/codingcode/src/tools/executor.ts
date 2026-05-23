@@ -3,6 +3,7 @@ import { AgentError } from '../core/error';
 import { ToolService } from './registry';
 import { HookService } from '../hooks/registry';
 import { ApprovalService } from '../approval/index';
+import { SandboxService } from '../sandbox/index';
 import type { ToolDefinition } from './types';
 import type { ToolCall } from '../core/types';
 
@@ -17,6 +18,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
     const registry = yield* ToolService;
     const hooks = yield* HookService;
     const approval = yield* ApprovalService;
+    const sandbox = yield* SandboxService;
 
     function execute(
       name: string,
@@ -30,7 +32,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         const tool = toolResult.value as ToolDefinition;
 
         // 1. Approval pipeline (Layers 1-6)
-        const decisionApproval = opts?.approval ?? approval;
+        const decisionApproval: typeof approval = opts?.approval ?? approval;
         const decision = yield* decisionApproval.evaluate({
           tool: name,
           input: args as Record<string, unknown>,
@@ -96,6 +98,9 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
             turnId: opts?.turnId,
             projectPath: opts?.projectPath,
             agentRunner: opts?.agentRunner,
+            sandbox: {
+              wrapCommand: (cmd: string) => Effect.runPromise(sandbox.wrapCommand(cmd)),
+            },
           }),
           catch: (e) =>
             e instanceof AgentError

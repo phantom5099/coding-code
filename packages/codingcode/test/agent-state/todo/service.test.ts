@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { sharedTodoStore, countByStatus } from '../../../src/agent-state/todo/service.js';
-import type { Todo } from '../../../src/agent-state/todo/types.js';
+import { sharedTodoStore, countByStatus } from '../../../src/agent-state/todo.js';
+import type { Todo } from '../../../src/agent-state/todo.js';
 
 describe('TodoService (module-level store)', () => {
   beforeEach(() => { sharedTodoStore.reset(); });

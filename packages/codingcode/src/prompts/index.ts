@@ -1,8 +1,6 @@
 import { getAllRules } from '../rules/index.js';
 
-export const TASK_TRACKING_GUIDELINES = `## Task tracking & deferred tools
-- For multi-step work, use todo_write to record the plan and todo_read to check progress.
-- Do not rely on memory for current todo state; call todo_read when uncertain.
+export const DEFERRED_TOOLS_GUIDELINES = `## Deferred tools
 - Some tools are listed as deferred — call tool_search with relevant keywords before using them.`;
 
 const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that helps users write, read, search, and modify code.
@@ -30,7 +28,7 @@ export interface SystemPromptOptions {
   platform: string;
   shell: string;
   variant?: SystemPromptVariant;
-  includeTaskTracking?: boolean;
+  skillInstruction?: string;
 }
 
 function renderBase(opts: SystemPromptOptions): string {
@@ -42,15 +40,19 @@ function renderBase(opts: SystemPromptOptions): string {
 
 export function buildSystemPrompt(opts: SystemPromptOptions): string {
   const variant = opts.variant ?? 'default';
-  const includeTaskTracking = opts.includeTaskTracking ?? (variant === 'default');
 
   let prompt = renderBase(opts);
-  if (includeTaskTracking) prompt += `\n\n${TASK_TRACKING_GUIDELINES}`;
+  if (variant === 'default') prompt += `\n\n${DEFERRED_TOOLS_GUIDELINES}`;
 
   const rules = getAllRules();
   if (rules) {
     prompt += `\n\n## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`;
   }
+
+  if (opts.skillInstruction) {
+    prompt += `\n\n## Skill Instructions\n\n${opts.skillInstruction}`;
+  }
+
   return prompt;
 }
 

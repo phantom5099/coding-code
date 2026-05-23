@@ -7,6 +7,7 @@ export interface SubagentProfile {
   tools?: string[];
   readonly?: boolean;
   maxSteps?: number;
+  model?: string;
 }
 
 export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('SubagentRegistry', {
