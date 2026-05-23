@@ -54,7 +54,7 @@ const DEFAULT_CONTEXT: ContextConfig = {
   thresholds: { budgetReduction: 0.6, prune: 0.7, compaction: 0.9 },
   pruneProtectedTokens: 40000,
   pruneMinRelease: 20000,
-  toolsExemptFromPrune: ['Read'],
+  toolsExemptFromPrune: ['Read', 'todo_write', 'todo_read', 'tool_search'],
   prefixTurnsProtected: 1,
   minTurnsBetweenCompactions: 5,
   L5KeepRecentTurns: 10,

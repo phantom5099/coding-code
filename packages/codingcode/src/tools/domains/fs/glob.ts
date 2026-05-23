@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { globby } from 'globby';
 import { relative } from 'path';
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types';
 import { getWorkspaceCwd, resolveInWorkspace } from '../../../core/workspace.js';
 
 export const globTool: ToolDefinition = {
@@ -13,7 +13,7 @@ export const globTool: ToolDefinition = {
     path: z.string().default('.').describe('Base directory for the search (default: current working directory)'),
     max_results: z.number().int().min(1).max(500).default(50).describe('Maximum number of file paths to return'),
   }),
-  execute: async (args: unknown) => {
+  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
     const { pattern, path, max_results } = args as { pattern: string; path: string; max_results: number };
     const basePath = resolveInWorkspace(path);
 

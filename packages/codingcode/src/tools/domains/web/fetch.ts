@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types';
 
 export const webFetchTool: ToolDefinition = {
   name: 'fetch_url',
@@ -14,7 +14,7 @@ export const webFetchTool: ToolDefinition = {
       .default(100_000)
       .describe('Maximum characters to return (default 100k, max 500k)'),
   }),
-  execute: async (args: unknown) => {
+  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
     const { url, max_length } = args as any;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15_000);

@@ -9,6 +9,9 @@ import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
 import { Result } from '../../src/core/result.js';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { TodoService } from '../../src/agent-state/todo/service.js';
+import { ToolSearchService } from '../../src/tools/tool-search-service.js';
+import { AgentIdResolver } from '../../src/agent-state/agent-id.js';
 
 const mockState = {
   sessionId: 'test-session',
@@ -99,6 +102,17 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.o
   getCheckpoints: () => [],
 }));
 
+const MockTodoLayer = Layer.succeed(TodoService, TodoService.of({
+  _tag: 'TodoService' as const, read: () => [], write: () => {}, reset: () => {},
+}));
+const MockToolSearchLayer = Layer.succeed(ToolSearchService, ToolSearchService.of({
+  _tag: 'ToolSearchService' as const, isLoaded: () => false, listLoaded: () => [],
+  listUnloadedDeferred: () => [], search: () => [], reset: () => {},
+}));
+const MockAgentIdResolverLayer = Layer.succeed(AgentIdResolver, AgentIdResolver.of({
+  _tag: 'AgentIdResolver' as const, resolve: (sid: string) => `agent-${sid}`, bind: () => {}, reset: () => {},
+}));
+
 const AllDeps = Layer.mergeAll(
   MockToolExecutorLayer,
   ToolLayer,
@@ -107,6 +121,9 @@ const AllDeps = Layer.mergeAll(
   MockCheckpointLayer,
   MockSkillLayer,
   HookLayer,
+  MockTodoLayer,
+  MockToolSearchLayer,
+  MockAgentIdResolverLayer,
 );
 
 const TestLayer = Layer.mergeAll(

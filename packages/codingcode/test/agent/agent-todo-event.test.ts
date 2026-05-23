@@ -1,0 +1,146 @@
+import { describe, it, expect } from 'vitest';
+import { Effect } from 'effect';
+import { runReActLoop } from '../../src/agent/agent.js';
+import { Result } from '../../src/core/result.js';
+import { sharedTodoStore } from '../../src/agent-state/todo/service.js';
+
+const mockToolRegistry = {
+  describeAll: () => [],
+  filter: () => [],
+  get: () => null,
+  register: () => Effect.succeed(undefined),
+  allCore: () => [],
+  allDeferred: () => [],
+  getDef: () => undefined,
+};
+
+const mockToolSearch = {
+  isLoaded: () => false,
+  listLoaded: () => [],
+  listUnloadedDeferred: () => [],
+  search: () => [],
+  reset: () => {},
+};
+
+const mockAgentIdResolver = {
+  resolve: (sid: string) => `agent-${sid}`,
+  bind: () => {},
+  reset: () => {},
+};
+
+const mockCtx = {
+  build: (_sessionId: string) => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
+  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: false, released: 0 }),
+  compress: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: true, released: 1000 }),
+};
+
+const mockSession = {
+  recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
+    Effect.sync(() => ({ uuid: 'a1' })),
+  recordToolResult: (_state: any, _parentUuid: string, _toolName: string, _toolCallId: string, _output: string) =>
+    Effect.sync(() => ({})),
+};
+
+const mockCheckpoint = {
+  snapshotFinal: () => {},
+};
+
+const mockState = {
+  sessionId: 'test-todo-sid',
+  cwd: '/tmp',
+  projectSlug: 'test',
+  transcriptPath: '/tmp/test.jsonl',
+  indexPath: '/tmp/test.index.json',
+  messageCount: 0,
+  currentTurnId: 1,
+  sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
+  title: 'test',
+  tokenCountEstimate: 0,
+};
+
+const mockLlm = {
+  completeStream: (_params: any) => ({
+    stream: (async function* () {})(),
+    response: Promise.resolve(Result.ok({
+      content: '',
+      toolCalls: [
+        { id: 'tc1', name: 'execute_command', arguments: { command: 'echo hi' } },
+      ],
+    })),
+  }),
+};
+
+describe('TodoUpdate event', () => {
+  it('should yield TodoUpdate when todo_write tool is called', async () => {
+    sharedTodoStore.write('agent-test-todo-sid', [
+      { step: 'setup', status: 'pending' },
+      { step: 'test', status: 'completed' },
+    ]);
+
+    const mockExecutor = {
+      execute: () => Effect.succeed('done'),
+      executeBatch: () => Effect.succeed([
+        { type: 'ok' as const, id: 'tc1', name: 'todo_write', output: 'pending=1 completed=1 cancelled=0' },
+      ]),
+    };
+
+    const gen = runReActLoop(
+      { state: mockState, llm: mockLlm as any },
+      {
+        maxSteps: 1,
+        executor: mockExecutor as any,
+        toolRegistry: mockToolRegistry as any,
+        toolSearch: mockToolSearch as any,
+        agentIdResolver: mockAgentIdResolver as any,
+        ctx: mockCtx as any,
+        session: mockSession as any,
+        checkpoint: mockCheckpoint as any,
+      },
+    );
+
+    const events: any[] = [];
+    for await (const event of gen) {
+      events.push(event);
+    }
+
+    const todoUpdates = events.filter((e: any) => e._tag === 'TodoUpdate');
+    expect(todoUpdates).toHaveLength(1);
+    expect(todoUpdates[0].items).toEqual([
+      { step: 'setup', status: 'pending' },
+      { step: 'test', status: 'completed' },
+    ]);
+  });
+
+  it('should not yield TodoUpdate when non-todo tools are called', async () => {
+    sharedTodoStore.write('agent-non-todo', []);
+
+    const mockExecutor = {
+      execute: () => Effect.succeed('done'),
+      executeBatch: () => Effect.succeed([
+        { type: 'ok' as const, id: 'tc1', name: 'read_file', output: 'file content' },
+      ]),
+    };
+
+    const gen = runReActLoop(
+      { state: { ...mockState, sessionId: 'non-todo' }, llm: mockLlm as any },
+      {
+        maxSteps: 1,
+        executor: mockExecutor as any,
+        toolRegistry: mockToolRegistry as any,
+        toolSearch: mockToolSearch as any,
+        agentIdResolver: mockAgentIdResolver as any,
+        ctx: mockCtx as any,
+        session: mockSession as any,
+        checkpoint: mockCheckpoint as any,
+      },
+    );
+
+    const events: any[] = [];
+    for await (const event of gen) {
+      events.push(event);
+    }
+
+    const todoUpdates = events.filter((e: any) => e._tag === 'TodoUpdate');
+    expect(todoUpdates).toHaveLength(0);
+  });
+});

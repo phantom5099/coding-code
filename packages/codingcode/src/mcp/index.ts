@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { loadMcpConfig } from './config';
 import { McpClient, McpError } from './client';
 import type { McpStatus } from './types';
-import type { ToolDefinition } from '../tools/types';
+import type { ToolDefinition, ToolExecCtx } from '../tools/types';
 import { ToolService } from '../tools/registry';
 
 export { McpError, McpClient };
@@ -75,7 +75,7 @@ function mcpToolToDefinition(
     description: `[MCP:${serverName}] ${mcpTool.description || mcpTool.name}`,
     parameters: z.object({}).passthrough(),
     jsonSchema: mcpTool.inputSchema,
-    execute: async (args: unknown) => {
+    execute: async (args: unknown, _ctx?: ToolExecCtx) => {
       const result = await Effect.runPromise(
         client.callTool(mcpTool.name, args as Record<string, unknown>),
       );

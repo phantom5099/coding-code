@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { readFile } from 'fs/promises';
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types';
 import { resolveInWorkspace } from '../../../core/workspace.js';
 
 export const readFileTool: ToolDefinition = {
@@ -11,7 +11,7 @@ export const readFileTool: ToolDefinition = {
     offset: z.number().int().min(1).default(1).describe('Line to start reading from (1-indexed)'),
     limit: z.number().int().min(1).max(500).default(200).describe('Maximum number of lines to read'),
   }),
-  execute: async (args: unknown) => {
+  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
     const { path, offset, limit } = args as any;
     const filePath = resolveInWorkspace(path);
     const content = await readFile(filePath, 'utf-8');

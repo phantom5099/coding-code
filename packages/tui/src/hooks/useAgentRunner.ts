@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { UIMessage } from '../types.js';
 import type { StreamChunk } from '../index.js';
 import { generateId } from '../utils.js';
@@ -29,6 +29,7 @@ export function useAgentRunner(runner: (input: string) => AsyncGenerator<StreamC
 
     const assistantId = generateId();
     let assistantContent = '';
+    const pendingTodods: UIMessage[] = [];
 
     setActiveMessages([{
       id: assistantId,
@@ -86,17 +87,39 @@ export function useAgentRunner(runner: (input: string) => AsyncGenerator<StreamC
           });
           // 用户已选择 → 关闭面板，继续流
           setApproval(null);
+        } else if ((chunk as any).type === 'todo_update') {
+          const items = (chunk as any).items as Array<{ step: string; status: string }>;
+          const pending = items.filter(t => t.status === 'pending');
+          const completed = items.filter(t => t.status === 'completed');
+          const cancelled = items.filter(t => t.status === 'cancelled');
+          const summary = `${pending.length} 进行中, ${completed.length} 已完成` +
+            (cancelled.length > 0 ? `, ${cancelled.length} 已取消` : '');
+          pendingTodods.push({
+            id: generateId(),
+            timestamp: Date.now(),
+            role: 'tool',
+            content: items.map(t => {
+              const icon = t.status === 'completed' ? '✓' : t.status === 'cancelled' ? '✗' : '○';
+              return `${icon} ${t.step}`;
+            }).join('\n'),
+            toolName: `Todo (${summary})`,
+          });
+          continue;
         }
       }
 
       setActiveMessages([]);
-      setStaticMessages(prev => [...prev, {
-        id: assistantId,
-        timestamp: Date.now(),
-        role: 'assistant',
-        content: assistantContent,
-        isStreaming: false,
-      }]);
+      setStaticMessages(prev => [
+        ...prev,
+        {
+          id: assistantId,
+          timestamp: Date.now(),
+          role: 'assistant',
+          content: assistantContent,
+          isStreaming: false,
+        },
+        ...pendingTodods,
+      ]);
     } catch (err: any) {
       setActiveMessages([]);
       setStaticMessages(prev => [...prev, {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types';
 
 export const webSearchTool: ToolDefinition = {
   name: 'web_search',
@@ -9,7 +9,7 @@ export const webSearchTool: ToolDefinition = {
     query: z.string().describe('The search query string'),
     max_results: z.number().int().min(1).max(20).default(8).describe('Maximum number of results to return'),
   }),
-  execute: async (args: unknown) => {
+  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
     const { query, max_results } = args as { query: string; max_results: number };
 
     const controller = new AbortController();

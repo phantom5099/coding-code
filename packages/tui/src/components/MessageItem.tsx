@@ -4,6 +4,19 @@ import type { UIMessage } from '../types.js';
 import { CodeBlock } from './CodeBlock.js';
 import { parseCodeBlocks, formatTime } from '../utils.js';
 
+/** Render a single todo step line with colored status icon and step text */
+function TodoStep({ line }: { line: string }) {
+  const icon = line[0];
+  const step = line.slice(2);
+  if (icon === '✓') {
+    return <Text color="green">{line}</Text>;
+  }
+  if (icon === '✗') {
+    return <Text color="red" dimColor>{line}</Text>;
+  }
+  return <Text color="yellow">{line}</Text>;
+}
+
 interface Props {
   message: UIMessage;
   isFocused?: boolean;
@@ -31,6 +44,34 @@ export function MessageItem({ message, isFocused = false, width, expanded = true
   }
 
   if (message.role === 'tool') {
+    // Todo messages: render with colored status icons
+    if (message.toolName?.startsWith('Todo')) {
+      const lines = message.content.split('\n');
+      if (interactive && !expanded) {
+        return (
+          <Box flexDirection="column" marginY={1} paddingLeft={2}>
+            <Box>
+              {focusPrefix}
+              <Text color="gray" wrap="wrap">[todo] {message.toolName} · Ctrl+O 展开</Text>
+            </Box>
+          </Box>
+        );
+      }
+      return (
+        <Box flexDirection="column" marginY={1} paddingLeft={2}>
+          <Box>
+            {focusPrefix}
+            <Text color="magenta" bold>[todo] {message.toolName}</Text>
+          </Box>
+          <Box flexDirection="column" paddingLeft={1}>
+            {lines.map((line, i) => (
+              <TodoStep key={i} line={line} />
+            ))}
+          </Box>
+        </Box>
+      );
+    }
+    // Regular tool messages
     if (interactive && !expanded) {
       return (
         <Box flexDirection="column" marginY={1} paddingLeft={2}>

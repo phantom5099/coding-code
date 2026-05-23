@@ -32,6 +32,14 @@ export class ToolService extends Effect.Service<ToolService>()('ToolService', {
         names
           .map((n) => tools.get(n))
           .filter((t): t is ToolDefinition => t !== undefined),
+
+      allDeferred: (): ToolDefinition[] =>
+        Array.from(tools.values()).filter(t => t.deferred === true),
+
+      allCore: (): ToolDefinition[] =>
+        Array.from(tools.values()).filter(t => t.deferred !== true),
+
+      getDef: (name: string): ToolDefinition | undefined => tools.get(name),
     };
   }),
 }) {}
