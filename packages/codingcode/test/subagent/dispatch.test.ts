@@ -5,7 +5,7 @@ import { SubagentRegistry, EXPLORE_PROFILE } from '../../src/subagent/registry';
 import { SubagentRegistryLayer } from '../../src/layer';
 
 const mockModelEntry = {
-  id: 'fast-model@provider-b',
+  id: 'fast-model@API_KEY_B',
   provider: 'provider-b',
   driver: 'openai',
   name: 'Fast Model',
@@ -16,7 +16,12 @@ const mockModelEntry = {
 const mockSubagentLlm = { _tag: 'subagent-llm' };
 
 vi.mock('../../src/llm/factory.js', () => ({
-  listModels: vi.fn(() => ({ ok: true, value: [mockModelEntry] })),
+  findModel: vi.fn((target: string) => {
+    if (target === 'fast-model@API_KEY_B') {
+      return mockModelEntry;
+    }
+    return null;
+  }),
   createClient: vi.fn(async () => ({ ok: true, value: mockSubagentLlm })),
 }));
 
@@ -484,7 +489,7 @@ describe('dispatch_agent tool', () => {
     const modelProfile = {
       ...EXPLORE_PROFILE,
       name: 'model-agent',
-      model: 'fast-model@provider-b',
+      model: 'fast-model@API_KEY_B',
     };
     registry.register(modelProfile);
 

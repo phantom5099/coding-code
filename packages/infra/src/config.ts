@@ -18,6 +18,9 @@ export interface ContextConfig {
   prefixTurnsProtected: number;
   minTurnsBetweenCompactions: number;
   keepRecentTurns: number;
+  /** Model for context compaction. Empty string falls back to main session LLM.
+   *  Use full id format "model@API_KEY_ENV" to avoid ambiguity (e.g. "deepseek-chat@DEEPSEEK_API_KEY").
+   *  Can also use bare model id (e.g. "deepseek-chat") or display name, first match wins. */
   compactionModel: string;
   archiveTtlDays: number;
   checkpointKeep: number;
@@ -41,6 +44,9 @@ export interface MemoryTypeConfig {
 
 export interface MemoryConfig {
   enabled: boolean;
+  /** Model for memory operations. Empty string falls back to main session LLM.
+   *  Use full id format "model@API_KEY_ENV" to avoid ambiguity (e.g. "deepseek-chat@DEEPSEEK_API_KEY").
+   *  Can also use bare model id (e.g. "deepseek-chat") or display name, first match wins. */
   model: string;
   projectFile: string;
   userFile: string;
@@ -82,7 +88,7 @@ const DEFAULT_CONTEXT: ContextConfig = {
   prefixTurnsProtected: 1,
   minTurnsBetweenCompactions: 5,
   keepRecentTurns: 10,
-  compactionModel: 'haiku',
+  compactionModel: '',
   archiveTtlDays: 30,
   checkpointKeep: 50,
   thresholdTokens: 2000,

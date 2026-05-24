@@ -87,6 +87,26 @@ export function listModels(): Result<SelectableModel[], AgentError> {
   return Result.ok(flattenModels(catResult.value));
 }
 
+/**
+ * Find a model by identifier with priority:
+ *  1. Exact match on full id (e.g. "deepseek-chat@DEEPSEEK_API_KEY")
+ *  2. First match on bare model id (e.g. "deepseek-chat")
+ *  3. First match on display name (e.g. "DeepSeek Chat")
+ * Returns null if not found, ensuring no ambiguity when multiple providers have same model name.
+ */
+export function findModel(target: string): SelectableModel | null {
+  const listResult = listModels();
+  if (!listResult.ok) return null;
+
+  const models = listResult.value;
+  // Priority 1: exact match on full id
+  const exactMatch = models.find((m) => m.id === target);
+  if (exactMatch) return exactMatch;
+
+  // Priority 2 & 3: first match on model id or name
+  return models.find((m) => m.model === target || m.name === target) || null;
+}
+
 export function getActiveEntry(): Result<SelectableModel, AgentError> {
   if (currentEntry) return Result.ok(currentEntry);
 
