@@ -13,6 +13,11 @@ export const COMMAND_REGISTRY = {
   help:     { name: 'help',     description: '显示帮助',      usage: '/help',     title: '帮助' },
   clear:    { name: 'clear',    description: '清空对话',      usage: '/clear',    title: '清空对话',  quick: true },
   exit:     { name: 'exit',     description: '退出',          usage: '/exit',     title: '退出',      quick: true },
+  compact:  { name: 'compact',  description: '手动压缩上下文', usage: '/compact',  title: '压缩上下文', quick: true },
+  memory:   { name: 'memory',   description: '查看/切换 Memory', usage: '/memory [on|off]', title: 'Memory', quick: true },
+  subagent: { name: 'subagent', description: '查看/切换 Subagent', usage: '/subagent [on|off]', title: 'Subagent', quick: true },
+  mcp:      { name: 'mcp',      description: '管理 MCP 服务器', usage: '/mcp',    title: 'MCP 服务器' },
+  skill:    { name: 'skill',    description: '管理 Skill',    usage: '/skill',    title: 'Skill' },
 } as const;
 
 export type CommandName = keyof typeof COMMAND_REGISTRY;

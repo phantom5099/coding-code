@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export interface ContextThresholdsConfig {
   budgetReduction: number;
@@ -148,6 +148,28 @@ function deepMerge<T extends Record<string, unknown>>(base: T, override: Partial
 
 function isObject(val: unknown): val is Record<string, unknown> {
   return typeof val === 'object' && val !== null && !Array.isArray(val);
+}
+
+export function updateMemoryEnabled(enabled: boolean, configPath?: string, installRoot?: string): void {
+  const root = installRoot ?? process.cwd();
+  const paths = configPath
+    ? [configPath]
+    : [resolve(root, 'config/config.yaml'), resolve(root, 'config/config.yml')];
+
+  let targetPath = paths[0]!;
+  let existing: Record<string, unknown> = {};
+
+  for (const p of paths) {
+    if (existsSync(p)) {
+      existing = parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>;
+      targetPath = p;
+      break;
+    }
+  }
+
+  const memory = (existing.memory as Record<string, unknown>) ?? {};
+  existing.memory = { ...memory, enabled };
+  writeFileSync(targetPath, stringifyYaml(existing), 'utf8');
 }
 
 export function loadConfig(configPath?: string, installRoot?: string): AppConfig {

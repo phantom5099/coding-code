@@ -9,6 +9,11 @@ import { AppLayer } from '../layer.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
+import { SubagentRegistry } from '../subagent/registry.js';
+import { McpService } from '../mcp/index.js';
+import type { McpStatus } from '../mcp/types.js';
+import { SkillService } from '../skills/index.js';
+import { getMemoryEnabled, setMemoryEnabled } from '../memory/index.js';
 
 export type StreamChunk = string
   | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
@@ -28,6 +33,16 @@ export interface AgentClient {
   forwardLastRevert(): Promise<void>;
   hasForwardStack(): Promise<boolean>;
   getCheckpoints(): Promise<Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }>>;
+  compact(): Promise<void>;
+  getMemoryEnabled(): Promise<boolean>;
+  setMemoryEnabled(enabled: boolean): Promise<void>;
+  getSubagentEnabled(): Promise<boolean>;
+  setSubagentEnabled(enabled: boolean): Promise<void>;
+  getMcpStatus(): Promise<McpStatus[]>;
+  disableMcp(name: string): Promise<void>;
+  enableMcp(name: string): Promise<void>;
+  listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
+  toggleSkill(name: string, enabled: boolean): Promise<void>;
 }
 
 export async function* agentEventToStreamChunk(
@@ -232,6 +247,87 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
           return checkpoint.getCheckpoints(getWorkspaceCwd(), currentSessionId);
+        }),
+      );
+    },
+
+    async compact() {
+      if (!currentSessionId) return;
+      await runWithLayer(
+        Effect.gen(function* () {
+          const ctx = yield* ContextService;
+          return yield* ctx.compress(currentSessionId, null);
+        }),
+      );
+    },
+
+    async getMemoryEnabled() {
+      return getMemoryEnabled();
+    },
+
+    async setMemoryEnabled(enabled: boolean) {
+      setMemoryEnabled(enabled);
+    },
+
+    async getSubagentEnabled() {
+      return runWithLayer(
+        Effect.gen(function* () {
+          const registry = yield* SubagentRegistry;
+          return registry.isEnabled();
+        }),
+      );
+    },
+
+    async setSubagentEnabled(enabled: boolean) {
+      await runWithLayer(
+        Effect.gen(function* () {
+          const registry = yield* SubagentRegistry;
+          registry.setEnabled(enabled);
+        }),
+      );
+    },
+
+    async getMcpStatus() {
+      return runWithLayer(
+        Effect.gen(function* () {
+          const mcp = yield* McpService;
+          return yield* mcp.status();
+        }),
+      );
+    },
+
+    async disableMcp(name: string) {
+      await runWithLayer(
+        Effect.gen(function* () {
+          const mcp = yield* McpService;
+          return yield* mcp.disable(name);
+        }),
+      );
+    },
+
+    async enableMcp(name: string) {
+      await runWithLayer(
+        Effect.gen(function* () {
+          const mcp = yield* McpService;
+          return yield* mcp.enable(name);
+        }),
+      );
+    },
+
+    async listSkills() {
+      return runWithLayer(
+        Effect.gen(function* () {
+          const skill = yield* SkillService;
+          return yield* skill.listWithStatus();
+        }),
+      );
+    },
+
+    async toggleSkill(name: string, enabled: boolean) {
+      await runWithLayer(
+        Effect.gen(function* () {
+          const skill = yield* SkillService;
+          return yield* (enabled ? skill.enableSkill(name) : skill.disableSkill(name));
         }),
       );
     },

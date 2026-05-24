@@ -19,6 +19,7 @@ export interface McpServerConfig {
 export interface McpStatus {
   name: string;
   connected: boolean;
+  disabled: boolean;
   toolCount: number;
   transport: 'stdio' | 'http';
   reconnectAttempts: number;

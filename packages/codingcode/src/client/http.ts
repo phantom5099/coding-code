@@ -1,4 +1,5 @@
 import type { AgentClient, StreamChunk } from './direct.js';
+import type { McpStatus } from '../mcp/types.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 
 export type { AgentClient, StreamChunk };
@@ -65,10 +66,69 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     async switchModel(id: string) { await fetch(`${serverUrl}/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: id }) }); },
     getSessionId() { return currentSessionId ?? 'unknown'; },
     async classifyLastCompletedChanges() { return null; },
-    async revertLastCompleted() {},
-    async revertCheckpoint() {},
+    async revertLastCompleted(_mode: 'agent' | 'all') {},
+    async revertCheckpoint(_turnId: number, _mode: 'agent' | 'all') {},
     async forwardLastRevert() {},
     async hasForwardStack() { return false; },
     async getCheckpoints() { return []; },
+
+    async compact() {
+      if (!currentSessionId) return;
+      await fetch(`${serverUrl}/api/sessions/${currentSessionId}/compact`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: getWorkspaceCwd() }),
+      });
+    },
+
+    async getMemoryEnabled() {
+      const res = await fetch(`${serverUrl}/api/agent/memory`);
+      const data = await res.json() as { enabled: boolean };
+      return data.enabled;
+    },
+
+    async setMemoryEnabled(enabled: boolean) {
+      await fetch(`${serverUrl}/api/agent/memory`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+      });
+    },
+
+    async getSubagentEnabled() {
+      const res = await fetch(`${serverUrl}/api/agent/subagent`);
+      const data = await res.json() as { enabled: boolean };
+      return data.enabled;
+    },
+
+    async setSubagentEnabled(enabled: boolean) {
+      await fetch(`${serverUrl}/api/agent/subagent`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+      });
+    },
+
+    async getMcpStatus(): Promise<McpStatus[]> {
+      const res = await fetch(`${serverUrl}/api/agent/mcp`);
+      return res.json() as Promise<McpStatus[]>;
+    },
+
+    async disableMcp(name: string) {
+      await fetch(`${serverUrl}/api/agent/mcp/disable`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+      });
+    },
+
+    async enableMcp(name: string) {
+      await fetch(`${serverUrl}/api/agent/mcp/enable`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+      });
+    },
+
+    async listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>> {
+      const res = await fetch(`${serverUrl}/api/agent/skills`);
+      return res.json() as Promise<Array<{ name: string; description: string; enabled: boolean }>>;
+    },
+
+    async toggleSkill(name: string, enabled: boolean) {
+      await fetch(`${serverUrl}/api/agent/skills`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, enabled }),
+      });
+    },
   };
 }

@@ -3,13 +3,18 @@ import { findSessionIndex } from '../session/store.js';
 import type { SessionEvent } from '../session/types.js';
 import { readMemoryFile, resolveProjectMemoryPath, resolveUserMemoryPath, extractAutoBlock, replaceAutoBlock, mergeAutoBlocks, enforceMaxBytes, writeMemoryFileAtomic, stripMarkersForPrompt } from './storage.js';
 import { resolveMemoryLLM } from './llm-resolver.js';
-import { getMemoryConfig, getEffectiveTypes } from './config.js';
+import { getMemoryConfig, getEffectiveTypes, updateMemoryEnabled } from './config.js';
 import { extractMemory, type StructuredTranscript } from './extractor.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 
+let _runtimeEnabled: boolean | null = null;
+
+export function setMemoryEnabled(v: boolean): void { _runtimeEnabled = v; updateMemoryEnabled(v); }
+export function getMemoryEnabled(): boolean { return _runtimeEnabled ?? getMemoryConfig().enabled; }
+
 export function loadMemoryForPrompt(cwd: string): string {
+  if (!getMemoryEnabled()) return '';
   const cfg = getMemoryConfig();
-  if (!cfg.enabled) return '';
 
   const projectPath = resolveProjectMemoryPath(cwd, cfg);
   const userPath = resolveUserMemoryPath(cfg);
@@ -87,10 +92,10 @@ export async function flushSessionToMemory(
   sessionId: string,
   llm: LLMStreamAdapter | null,
 ): Promise<{ written: boolean; bytes: number }> {
-  const cfg = getMemoryConfig();
-  if (!cfg.enabled) {
+  if (!getMemoryEnabled()) {
     return { written: false, bytes: 0 };
   }
+  const cfg = getMemoryConfig();
 
   const sessionIndex = findSessionIndex(sessionId);
   if (!sessionIndex) {

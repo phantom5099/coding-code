@@ -13,6 +13,7 @@ export interface SubagentProfile {
 export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('SubagentRegistry', {
   effect: Effect.gen(function* () {
     const map = new Map<string, SubagentProfile>();
+    let _enabled = true;
 
     return {
       register: (profile: SubagentProfile): void => {
@@ -29,7 +30,11 @@ export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('Subage
 
       reset: (): void => {
         map.clear();
+        _enabled = true;
       },
+
+      setEnabled: (v: boolean): void => { _enabled = v; },
+      isEnabled: (): boolean => _enabled,
     };
   }),
 }) {}

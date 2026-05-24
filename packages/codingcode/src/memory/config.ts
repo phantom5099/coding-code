@@ -1,6 +1,7 @@
-import { loadConfig, DEFAULT_MEMORY_TYPES, type MemoryConfig, type MemoryTypeConfig } from '@codingcode/infra';
+import { loadConfig, DEFAULT_MEMORY_TYPES, type MemoryConfig, type MemoryTypeConfig, updateMemoryEnabled } from '@codingcode/infra';
 
 export type { MemoryConfig, MemoryTypeConfig };
+export { updateMemoryEnabled };
 
 export function getMemoryConfig(): MemoryConfig {
   return loadConfig().memory;

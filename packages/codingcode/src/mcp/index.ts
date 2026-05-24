@@ -13,6 +13,7 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
   effect: Effect.gen(function* () {
     const tools = yield* ToolService;
     const clients = new Map<string, McpClient>();
+    const _disabled = new Set<string>();
 
     return {
       connectAll: (projectRoot: string): Effect.Effect<number> =>
@@ -34,7 +35,7 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
             if (!result) continue;
             clients.set(cfg.name, result.client);
             for (const mt of result.mcpTools) {
-              yield* tools.register(mcpToolToDefinition(cfg.name, mt, result.client));
+              yield* tools.register(mcpToolToDefinition(cfg.name, mt, result.client, _disabled));
               count++;
             }
           }
@@ -51,11 +52,18 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
           clients.clear();
         }),
 
+      disable: (name: string): Effect.Effect<void> =>
+        Effect.sync(() => { _disabled.add(name); }),
+
+      enable: (name: string): Effect.Effect<void> =>
+        Effect.sync(() => { _disabled.delete(name); }),
+
       status: (): Effect.Effect<McpStatus[]> =>
         Effect.sync(() =>
           Array.from(clients.entries()).map(([name, client]) => ({
             name,
             connected: client.connected,
+            disabled: _disabled.has(name),
             toolCount: client.tools.length,
             transport: client.transportType,
             reconnectAttempts: 0,
@@ -69,6 +77,7 @@ function mcpToolToDefinition(
   serverName: string,
   mcpTool: { name: string; description: string; inputSchema: Record<string, unknown> },
   client: McpClient,
+  disabled: Set<string>,
 ): ToolDefinition {
   return {
     name: mcpTool.name,
@@ -76,6 +85,7 @@ function mcpToolToDefinition(
     parameters: z.object({}).passthrough(),
     jsonSchema: mcpTool.inputSchema,
     execute: async (args: unknown, _ctx?: ToolExecCtx) => {
+      if (disabled.has(serverName)) throw new Error(`MCP server '${serverName}' is disabled`);
       const result = await Effect.runPromise(
         client.callTool(mcpTool.name, args as Record<string, unknown>),
       );

@@ -112,4 +112,42 @@ describe('SubagentRegistry', () => {
       }),
     );
   });
+
+  it('should default to enabled=true', async () => {
+    await Effect.runPromise(
+      testEffect((registry) => {
+        expect(registry.isEnabled()).toBe(true);
+      }),
+    );
+  });
+
+  it('should allow disabling via setEnabled(false)', async () => {
+    await Effect.runPromise(
+      testEffect((registry) => {
+        registry.setEnabled(false);
+        expect(registry.isEnabled()).toBe(false);
+      }),
+    );
+  });
+
+  it('should allow re-enabling via setEnabled(true)', async () => {
+    await Effect.runPromise(
+      testEffect((registry) => {
+        registry.setEnabled(false);
+        registry.setEnabled(true);
+        expect(registry.isEnabled()).toBe(true);
+      }),
+    );
+  });
+
+  it('should restore enabled=true after reset()', async () => {
+    await Effect.runPromise(
+      testEffect((registry) => {
+        registry.setEnabled(false);
+        expect(registry.isEnabled()).toBe(false);
+        registry.reset();
+        expect(registry.isEnabled()).toBe(true);
+      }),
+    );
+  });
 });

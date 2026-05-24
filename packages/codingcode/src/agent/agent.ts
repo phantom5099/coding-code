@@ -48,7 +48,7 @@ export interface RunStreamOptions {
   approvalOverride?: any;
 }
 
-interface LLMStreamAdapter {
+export interface LLMStreamAdapter {
   completeStream(params: {
     messages: Message[];
     system?: string;

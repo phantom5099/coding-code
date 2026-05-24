@@ -37,6 +37,10 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         throw new Error(`Unknown subagent: ${agentName}`);
       }
 
+      if (!deps.registry.isEnabled()) {
+        throw new Error('Subagent is disabled');
+      }
+
       if (!ctx?.agentRunner?.agentService || !ctx?.agentRunner?.llm) {
         throw new Error('dispatch_agent requires agentRunner context');
       }

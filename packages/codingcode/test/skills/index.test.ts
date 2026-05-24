@@ -151,4 +151,51 @@ Testing kebab-case name parsing.
     const count = await runWithLayer(program);
     expect(count).toBe(1);
   });
+
+  it('disableSkill should hide skill from findByName and select', async () => {
+    const program = Effect.gen(function* () {
+      const skill = yield* SkillService;
+      yield* skill.loadAll(TEST_ROOT);
+      yield* skill.disableSkill('test-basic');
+      const byName = yield* skill.findByName('test-basic');
+      const selected = yield* skill.select('@test-basic do something');
+      return { byName, selected };
+    });
+
+    const result = await runWithLayer(program);
+    expect(result.byName).toBeUndefined();
+    expect(result.selected).toBeUndefined();
+  });
+
+  it('enableSkill should restore skill visibility after disable', async () => {
+    const program = Effect.gen(function* () {
+      const skill = yield* SkillService;
+      yield* skill.loadAll(TEST_ROOT);
+      yield* skill.disableSkill('test-basic');
+      yield* skill.enableSkill('test-basic');
+      const found = yield* skill.findByName('test-basic');
+      return found;
+    });
+
+    const result = await runWithLayer(program);
+    expect(result).toBeDefined();
+    expect(result!.name).toBe('test-basic');
+  });
+
+  it('listWithStatus should reflect enabled/disabled state', async () => {
+    const program = Effect.gen(function* () {
+      const skill = yield* SkillService;
+      yield* skill.loadAll(TEST_ROOT);
+      const before = yield* skill.listWithStatus();
+      yield* skill.disableSkill('test-basic');
+      const after = yield* skill.listWithStatus();
+      return { before, after };
+    });
+
+    const { before, after } = await runWithLayer(program);
+    const beforeEntry = before.find(s => s.name === 'test-basic');
+    const afterEntry = after.find(s => s.name === 'test-basic');
+    expect(beforeEntry?.enabled).toBe(true);
+    expect(afterEntry?.enabled).toBe(false);
+  });
 });

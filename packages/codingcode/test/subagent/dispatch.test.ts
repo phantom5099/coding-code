@@ -567,4 +567,33 @@ describe('dispatch_agent tool', () => {
       expect(e.message).toContain('nonexistent-model@unknown');
     }
   });
+
+  it('should throw when subagent registry is disabled', async () => {
+    const registry = await makeRegistry();
+    registry.register(EXPLORE_PROFILE);
+    registry.setEnabled(false);
+
+    const deps = {
+      session: {} as any,
+      agentIdResolver: {} as any,
+      approval: {} as any,
+      hooks: {
+        emit: (() => Effect.succeed(undefined)) as any,
+        emitDecision: (() => Effect.succeed(null)) as any,
+      },
+      registry,
+    };
+
+    const tool = createDispatchAgentTool(deps as any);
+
+    try {
+      await tool.execute(
+        { agent: 'explore', prompt: 'test' },
+        { agentRunner: { agentService: {}, llm: {} } },
+      );
+      expect.fail('Should have thrown error');
+    } catch (e: any) {
+      expect(e.message).toContain('Subagent is disabled');
+    }
+  });
 });

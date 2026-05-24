@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { loadMemoryForPrompt, flushSessionToMemory } from '../../src/memory/index.js';
+import { loadMemoryForPrompt, flushSessionToMemory, getMemoryEnabled, setMemoryEnabled } from '../../src/memory/index.js';
 import type { MemoryConfig } from '@codingcode/infra';
 import type { LLMStreamAdapter } from '../../src/agent/agent.js';
 
@@ -40,6 +40,7 @@ vi.mock('../../src/memory/config.js', () => ({
     { name: 'project', description: 'Project info', enabled: true },
     { name: 'reference', description: 'References', enabled: true },
   ]),
+  updateMemoryEnabled: vi.fn(),
 }));
 
 describe('Memory Index', () => {
@@ -157,6 +158,49 @@ describe('Memory Index', () => {
 
       // This will fail to find session, so returns false
       const result = await flushSessionToMemory('session', null);
+      expect(result.written).toBe(false);
+    });
+  });
+
+  describe('runtime memory toggle', () => {
+    afterEach(() => {
+      setMemoryEnabled(false);
+    });
+
+    it('setMemoryEnabled(true) makes getMemoryEnabled return true', () => {
+      setMemoryEnabled(true);
+      expect(getMemoryEnabled()).toBe(true);
+    });
+
+    it('setMemoryEnabled(false) makes getMemoryEnabled return false', () => {
+      setMemoryEnabled(false);
+      expect(getMemoryEnabled()).toBe(false);
+    });
+
+    it('toggle sequence works correctly', () => {
+      setMemoryEnabled(true);
+      expect(getMemoryEnabled()).toBe(true);
+      setMemoryEnabled(false);
+      expect(getMemoryEnabled()).toBe(false);
+    });
+
+    it('loadMemoryForPrompt returns empty when runtime disabled', () => {
+      setMemoryEnabled(false);
+      const result = loadMemoryForPrompt(tmpDir);
+      expect(result).toBe('');
+    });
+
+    it('loadMemoryForPrompt does not short-circuit when runtime enabled', () => {
+      setMemoryEnabled(true);
+      expect(getMemoryEnabled()).toBe(true);
+      // No memory files → still empty, but NOT because of disabled check
+      const result = loadMemoryForPrompt(tmpDir);
+      expect(result).toBe('');
+    });
+
+    it('flushSessionToMemory returns early when runtime disabled', async () => {
+      setMemoryEnabled(false);
+      const result = await flushSessionToMemory('any-session', null);
       expect(result.written).toBe(false);
     });
   });

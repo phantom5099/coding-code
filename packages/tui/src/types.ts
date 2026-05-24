@@ -31,6 +31,21 @@ export interface CheckpointInfo {
   unknownSource: string[];
 }
 
+export interface McpServerStatus {
+  name: string;
+  connected: boolean;
+  disabled: boolean;
+  toolCount: number;
+  transport: 'stdio' | 'http';
+  reconnectAttempts: number;
+}
+
+export interface SkillStatus {
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
 export type PanelState =
   | { type: 'none' }
   | { type: 'model'; items: PanelItem[]; activeValue: string }
@@ -38,4 +53,6 @@ export type PanelState =
   | { type: 'approval'; id: string; tool: string; args: Record<string, unknown> }
   | { type: 'checkpoint-list'; checkpoints: CheckpointInfo[] }
   | { type: 'checkpoint-action'; cp: CheckpointInfo; hasForward: boolean }
-  | { type: 'help' };
+  | { type: 'help' }
+  | { type: 'mcp'; servers: McpServerStatus[] }
+  | { type: 'skill'; skills: SkillStatus[] };

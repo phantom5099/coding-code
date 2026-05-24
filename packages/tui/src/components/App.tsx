@@ -11,7 +11,6 @@ import { LoadingIndicator } from './LoadingIndicator.js';
 import { InlinePanel } from './InlinePanel.js';
 import { buildWelcomeContent } from './WelcomePanel.js';
 import { COMMAND_REGISTRY, parseCommand, type CommandDef, type CommandName } from '../commands/registry.js';
-
 interface AppProps {
   client: AgentClient;
 }
@@ -87,6 +86,69 @@ export function App({ client }: AppProps) {
         setStaticKey(k => k + 1);
         return;
       }
+      if (parsed.name === 'compact') {
+        try {
+          await client.compact();
+          setStaticMessages(prev => [...prev, {
+            id: generateId(), timestamp: Date.now(), role: 'system' as const,
+            content: '[Compact] 上下文已压缩',
+          }]);
+        } catch (e: any) {
+          setStaticMessages(prev => [...prev, {
+            id: generateId(), timestamp: Date.now(), role: 'system' as const,
+            content: `[Compact Error] ${e.message || e}`,
+          }]);
+        }
+        return;
+      }
+      if (parsed.name === 'memory') {
+        try {
+          const arg = parsed.args.trim().toLowerCase();
+          if (arg === 'on' || arg === 'off') {
+            await client.setMemoryEnabled(arg === 'on');
+            setStaticMessages(prev => [...prev, {
+              id: generateId(), timestamp: Date.now(), role: 'system' as const,
+              content: `[Memory] 已${arg === 'on' ? '开启' : '关闭'}`,
+            }]);
+          } else {
+            const enabled = await client.getMemoryEnabled();
+            setStaticMessages(prev => [...prev, {
+              id: generateId(), timestamp: Date.now(), role: 'system' as const,
+              content: `[Memory] 当前: ${enabled ? '开启' : '关闭'}  用法: /memory on|off`,
+            }]);
+          }
+        } catch (e: any) {
+          setStaticMessages(prev => [...prev, {
+            id: generateId(), timestamp: Date.now(), role: 'system' as const,
+            content: `[Memory Error] ${e.message || e}`,
+          }]);
+        }
+        return;
+      }
+      if (parsed.name === 'subagent') {
+        try {
+          const arg = parsed.args.trim().toLowerCase();
+          if (arg === 'on' || arg === 'off') {
+            await client.setSubagentEnabled(arg === 'on');
+            setStaticMessages(prev => [...prev, {
+              id: generateId(), timestamp: Date.now(), role: 'system' as const,
+              content: `[Subagent] 已${arg === 'on' ? '开启' : '关闭'}`,
+            }]);
+          } else {
+            const enabled = await client.getSubagentEnabled();
+            setStaticMessages(prev => [...prev, {
+              id: generateId(), timestamp: Date.now(), role: 'system' as const,
+              content: `[Subagent] 当前: ${enabled ? '开启' : '关闭'}  用法: /subagent on|off`,
+            }]);
+          }
+        } catch (e: any) {
+          setStaticMessages(prev => [...prev, {
+            id: generateId(), timestamp: Date.now(), role: 'system' as const,
+            content: `[Subagent Error] ${e.message || e}`,
+          }]);
+        }
+        return;
+      }
       return;
     }
 
@@ -133,6 +195,30 @@ export function App({ client }: AppProps) {
     }
     if (parsed.name === 'help') {
       setPanel({ type: 'help' });
+      return;
+    }
+    if (parsed.name === 'mcp') {
+      try {
+        const servers = await client.getMcpStatus();
+        setPanel({ type: 'mcp', servers });
+      } catch (e: any) {
+        setStaticMessages(prev => [...prev, {
+          id: generateId(), timestamp: Date.now(), role: 'system' as const,
+          content: `[MCP Error] ${e.message || e}`,
+        }]);
+      }
+      return;
+    }
+    if (parsed.name === 'skill') {
+      try {
+        const skills = await client.listSkills();
+        setPanel({ type: 'skill', skills });
+      } catch (e: any) {
+        setStaticMessages(prev => [...prev, {
+          id: generateId(), timestamp: Date.now(), role: 'system' as const,
+          content: `[Skill Error] ${e.message || e}`,
+        }]);
+      }
       return;
     }
   }, [client, run, exit, sessionId]);
@@ -299,6 +385,60 @@ export function App({ client }: AppProps) {
             width={Math.min(50, width - 4)}
           />
         </Box>
+      )}
+      {panel.type === 'mcp' && (
+        <InlinePanel
+          title={COMMAND_REGISTRY.mcp.title}
+          items={
+            panel.servers.length === 0
+              ? [{ label: '无已配置的 MCP 服务器', value: '' }]
+              : panel.servers.map(s => ({
+                  label: `${s.disabled ? '○' : '●'} ${s.name}  (${s.disabled ? '已禁用' : `已连接, ${s.toolCount} 个工具`})`,
+                  value: s.name,
+                }))
+          }
+          onSelect={async (value) => {
+            if (!value) return;
+            const server = panel.servers.find(s => s.name === value);
+            if (!server) return;
+            try {
+              if (server.disabled) {
+                await client.enableMcp(value);
+              } else {
+                await client.disableMcp(value);
+              }
+              const updated = await client.getMcpStatus();
+              setPanel({ type: 'mcp', servers: updated });
+            } catch { setPanel({ type: 'none' }); }
+          }}
+          onCancel={() => setPanel({ type: 'none' })}
+          width={Math.min(60, width - 4)}
+        />
+      )}
+      {panel.type === 'skill' && (
+        <InlinePanel
+          title={COMMAND_REGISTRY.skill.title}
+          items={
+            panel.skills.length === 0
+              ? [{ label: '无已加载的 Skill', value: '' }]
+              : panel.skills.map(s => ({
+                  label: `${s.enabled ? '✓' : '✗'} ${s.name}  ${s.description}`,
+                  value: s.name,
+                }))
+          }
+          onSelect={async (value) => {
+            if (!value) return;
+            const skill = panel.skills.find(s => s.name === value);
+            if (!skill) return;
+            try {
+              await client.toggleSkill(value, !skill.enabled);
+              const updated = await client.listSkills();
+              setPanel({ type: 'skill', skills: updated });
+            } catch { setPanel({ type: 'none' }); }
+          }}
+          onCancel={() => setPanel({ type: 'none' })}
+          width={Math.min(70, width - 4)}
+        />
       )}
       {panel.type === 'help' && (
         <Box flexDirection="column" borderStyle="single" borderColor="green" width={helpW} paddingX={1}>
