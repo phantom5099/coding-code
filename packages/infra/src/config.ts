@@ -33,6 +33,23 @@ export interface ContextConfig {
   microKeepRecentTools: number;
 }
 
+export interface MemoryTypeConfig {
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+export interface MemoryConfig {
+  enabled: boolean;
+  model: string;
+  projectFile: string;
+  userFile: string;
+  maxBytes: number;
+  promptMaxBytes: number;
+  extraTypes: MemoryTypeConfig[];
+  disabledTypes: string[];
+}
+
 export interface ActiveModelConfig {
   model: string;
   apiKeyEnv: string;
@@ -52,6 +69,7 @@ export interface AppConfig {
   }>;
   activeModel?: ActiveModelConfig;
   context: ContextConfig;
+  memory: MemoryConfig;
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
@@ -79,6 +97,23 @@ const DEFAULT_CONTEXT: ContextConfig = {
   microKeepRecentTools: 5,
 };
 
+export const DEFAULT_MEMORY_TYPES: MemoryTypeConfig[] = [
+  { name: 'user', description: '用户角色、技能栈、工作偏好及对 Agent 的纠正', enabled: true },
+  { name: 'project', description: '架构决策、技术选型、部署信息', enabled: true },
+  { name: 'reference', description: '外部资源、文档、Dashboard 链接', enabled: true },
+];
+
+export const DEFAULT_MEMORY: MemoryConfig = {
+  enabled: false,
+  model: '',
+  projectFile: '.codingcode/memory.md',
+  userFile: '~/.codingcode/memory.md',
+  maxBytes: 16384,
+  promptMaxBytes: 8192,
+  extraTypes: [],
+  disabledTypes: [],
+};
+
 const DEFAULT_CONFIG: AppConfig = {
   server: {
     port: 8080,
@@ -87,6 +122,7 @@ const DEFAULT_CONFIG: AppConfig = {
   maxStopContinuations: 2,
   models: {},
   context: DEFAULT_CONTEXT,
+  memory: DEFAULT_MEMORY,
 };
 
 function deepMerge<T extends Record<string, unknown>>(base: T, override: Partial<T>): T {

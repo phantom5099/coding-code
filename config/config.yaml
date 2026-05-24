@@ -29,3 +29,17 @@ context:
   compactionModel: haiku
   archiveTtlDays: 30
   checkpointKeep: 50
+
+# 长期记忆模块（跨会话记忆）
+memory:
+  enabled: false
+  model: ''
+  projectFile: .codingcode/memory.md
+  userFile: ~/.codingcode/memory.md
+  maxBytes: 16384
+  promptMaxBytes: 8192
+  # disabledTypes: [feedback]        # 关闭默认类型
+  # extraTypes:                      # 追加自定义类型（默认 3 种自动保留）
+  #   - name: my_custom
+  #     description: 我的自定义记忆类型
+  #     enabled: true
