@@ -17,6 +17,7 @@ import { AgentIdResolver } from '../agent-state/agent-id.js';
 import { sharedTodoStore } from '../agent-state/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
+import { loadMemoryForPrompt, flushSessionToMemory } from '../memory/index.js';
 
 export type AgentEvent =
   | { readonly _tag: 'LlmChunk'; readonly text: string }
@@ -103,13 +104,16 @@ export async function* runReActLoop(
   const projectPath = state.cwd;
 
   // Build system prompt
-  const system = opts.systemOverride ?? buildSystemPrompt({
+  const basePrompt = opts.systemOverride ?? buildSystemPrompt({
     cwd: getWorkspaceCwd(),
     platform: process.platform,
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
     variant: systemPromptVariant ?? 'default',
     skillInstruction: opts.skillInstruction,
   });
+
+  const memoryBlock = loadMemoryForPrompt(projectPath);
+  const system = [basePrompt, memoryBlock].filter(Boolean).join('\n\n');
 
   const config = getContextConfig();
   const maxOverflowRetries = config.reactiveCompactMaxRetries;
@@ -139,6 +143,7 @@ export async function* runReActLoop(
         await Effect.runPromise(hooks.emit('agent.turn.end', {
           agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'aborted'
         }));
+        flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
         return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
       }
 
@@ -209,6 +214,7 @@ export async function* runReActLoop(
             await Effect.runPromise(hooks.emit('agent.turn.end', {
               agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'error'
             }));
+            flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
             return Result.err(new AgentError('STOP_LOOP', 'max stop continuations exceeded'));
           }
           stopContinuations++;
@@ -268,6 +274,10 @@ export async function* runReActLoop(
     // Turn completed — snapshot and compact
     checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
     await Effect.runPromise(ctx.appendTurnEnd(state.sessionId, llm as any));
+
+    // Fire-and-forget memory flush
+    flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
+
     if (lastResult) return lastResult;
 
     // Max steps exhausted without result
@@ -275,6 +285,7 @@ export async function* runReActLoop(
     await Effect.runPromise(hooks.emit('agent.turn.end', {
       agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'maxSteps'
     }));
+    flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
     return Result.err(AgentError.maxStepsReached(maxSteps));
   }
 
@@ -282,5 +293,6 @@ export async function* runReActLoop(
   await Effect.runPromise(hooks.emit('agent.turn.end', {
     agentId, sessionId: state.sessionId, turnId: state.currentTurnId, status: 'maxSteps'
   }));
+  flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
   return Result.err(AgentError.maxStepsReached(maxSteps));
 }

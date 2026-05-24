@@ -1,0 +1,103 @@
+import type { LLMStreamAdapter } from '../agent/agent.js';
+import type { MemoryTypeConfig } from '@codingcode/infra';
+
+export interface StructuredTranscript {
+  userOnly: string;
+  userAndAssistant: string;
+  userAndTools: string;
+}
+
+export async function extractMemory(opts: {
+  currentAuto: string;
+  transcript: StructuredTranscript;
+  types: MemoryTypeConfig[];
+  llm: LLMStreamAdapter;
+}): Promise<string | null> {
+  const { currentAuto, transcript, types, llm } = opts;
+
+  const typeDescriptions = types
+    .map((t) => `- **${t.name}**: ${t.description}`)
+    .join('\n');
+
+  const typeGuidelineMap: Record<string, string> = {
+    user: '- **user**: 从 [user] 标签提取用户角色、技能栈、对 Agent 的工作偏好及纠正',
+    project: '- **project**: 从 [user] 和 [assistant] 标签提取架构决策、技术选型、部署信息',
+    reference: '- **reference**: 从 [user] 和 [tool:*] 标签提取外部资源、文档、Dashboard 链接',
+  };
+
+  const typeGuidance = types
+    .map(t => typeGuidelineMap[t.name])
+    .filter(Boolean)
+    .join('\n');
+
+  const formatExamples = types
+    .map(t => {
+      switch (t.name) {
+        case 'user':
+          return '### user\n- 要点一\n- 要点二';
+        case 'project':
+          return '### project\n- 架构决策';
+        case 'reference':
+          return '### reference\n- [标题](URL)';
+        default:
+          return '';
+      }
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
+  const systemPrompt = `从下面的会话记录中提取值得长期记忆的内容，输出 <memory>...</memory> 块。
+如果本次会话没有值得长期记忆的内容，输出 <memory></memory>。
+
+<existing_memory>
+${currentAuto}
+</existing_memory>
+
+<new_transcript>
+[user] ${transcript.userOnly}
+---
+[user+assistant] ${transcript.userAndAssistant}
+---
+[user+tool] ${transcript.userAndTools}
+</new_transcript>
+
+规则：
+- 如果新信息与 existing_memory 中的条目矛盾，用新信息替换，不保留旧条目
+- 如果会话内同一事项前后不一致，以最新出现的为准
+- 只输出有内容的 ### 小节，忽略临时调试、一次性任务、报错堆栈
+
+记忆类型及信息来源：
+${typeGuidance}
+
+格式：
+${formatExamples}`;
+
+  try {
+    const result = llm.completeStream({
+      messages: [],
+      system: systemPrompt,
+    });
+
+    let output = '';
+    for await (const chunk of result.stream) {
+      output += chunk;
+    }
+
+    const response = await result.response;
+    if (!response.ok) {
+      return null;
+    }
+
+    const fullOutput = response.value.content || output;
+    const memoryMatch = fullOutput.match(/<memory>([\s\S]*?)<\/memory>/);
+
+    if (!memoryMatch) {
+      return null;
+    }
+
+    const extracted = memoryMatch[1].trim();
+    return extracted || null;
+  } catch {
+    return null;
+  }
+}
