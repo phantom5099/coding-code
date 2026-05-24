@@ -56,7 +56,3 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   return prompt;
 }
 
-export type { AgentRole, PromptSet } from "./types.js";
-export { coderPromptSet } from "./coder.js";
-export { debuggerPromptSet } from "./debugger.js";
-export { reviewerPromptSet } from "./reviewer.js";
