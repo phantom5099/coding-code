@@ -43,3 +43,7 @@ memory:
   #   - name: my_custom
   #     description: 我的自定义记忆类型
   #     enabled: true
+
+activeModel:
+  model: deepseek-v4-flash
+  apiKeyEnv: SANSE_API_KEY

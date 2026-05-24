@@ -13,7 +13,6 @@ import { ToolExecutorService } from './tools/executor';
 import { CheckpointService } from './checkpoint/checkpoint-service';
 import { TodoService } from './agent-state/todo';
 import { ToolSearchService } from './tools/tool-search-service';
-import { AgentIdResolver } from './agent-state/agent-id';
 import { SubagentRegistry } from './subagent/registry';
 
 export const AgentLayer = AgentService.Default;
@@ -55,16 +54,14 @@ export const CheckpointLayer = CheckpointService.Default.pipe(
 
 export const TodoLayer = TodoService.Default;
 
-export const AgentIdResolverLayer = AgentIdResolver.Default;
-
 export const ToolSearchLayer = ToolSearchService.Default.pipe(
   Layer.provide(ToolLayer),
 );
 
-/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService + TodoService + ToolSearchService + AgentIdResolver + SubagentRegistryLayer. */
+/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService + TodoService + ToolSearchService + SubagentRegistryLayer. */
 const AgentDeps = Layer.mergeAll(
   ExecutorLayer, ToolLayer, ContextLayer, SessionLayer, CheckpointLayer,
-  TodoLayer, ToolSearchLayer, AgentIdResolverLayer, SubagentRegistryLayer, HookLayer,
+  TodoLayer, ToolSearchLayer, SubagentRegistryLayer, HookLayer,
 );
 const AgentWithDeps = AgentLayer.pipe(Layer.provide(AgentDeps));
 
@@ -83,6 +80,5 @@ export const AppLayer = Layer.mergeAll(
   CheckpointLayer,
   TodoLayer,
   ToolSearchLayer,
-  AgentIdResolverLayer,
   SubagentRegistryLayer,
 );

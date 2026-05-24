@@ -5,7 +5,6 @@ import { McpService } from '../mcp/index.js';
 import { SkillService } from '../skills/index.js';
 import { SubagentRegistry, EXPLORE_PROFILE, GENERAL_PROFILE } from '../subagent/registry.js';
 import { SessionService } from '../session/store.js';
-import { AgentIdResolver } from '../agent-state/agent-id.js';
 import { ApprovalService } from '../approval/index.js';
 import { HookService } from '../hooks/registry.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
@@ -31,7 +30,6 @@ export const bootstrapApplication = (cwd: string) =>
     const skill = yield* SkillService;
     const subagentRegistry = yield* SubagentRegistry;
     const session = yield* SessionService;
-    const agentIdResolver = yield* AgentIdResolver;
     const approval = yield* ApprovalService;
     const hooks = yield* HookService;
     const toolSearchSvc = yield* ToolSearchService;
@@ -60,7 +58,7 @@ export const bootstrapApplication = (cwd: string) =>
     }
 
     yield* tools.register(
-      createDispatchAgentTool({ session, agentIdResolver, approval, hooks, registry: subagentRegistry }),
+      createDispatchAgentTool({ session, approval, hooks, registry: subagentRegistry }),
     );
 
     yield* mcp.connectAll(cwd);

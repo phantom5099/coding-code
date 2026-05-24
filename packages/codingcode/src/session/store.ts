@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync, truncateSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync, truncateSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
@@ -16,7 +16,14 @@ export function resolveSessionDir(sessionId: string): string | null {
   if (!existsSync(SESSIONS_DIR)) return null;
   for (const slug of readdirSync(SESSIONS_DIR)) {
     const projectDir = join(SESSIONS_DIR, slug);
+    try { if (!statSync(projectDir).isDirectory()) continue; } catch { continue; }
     if (existsSync(join(projectDir, `${sessionId}.jsonl`))) return projectDir;
+    for (const entry of readdirSync(projectDir)) {
+      const entryPath = join(projectDir, entry);
+      try { if (!statSync(entryPath).isDirectory()) continue; } catch { continue; }
+      const subagentDir = join(entryPath, 'subagents');
+      if (existsSync(join(subagentDir, `${sessionId}.jsonl`))) return subagentDir;
+    }
   }
   return null;
 }
@@ -43,40 +50,37 @@ function quickReadMeta(path: string): SessionMetaEvent | null {
 }
 
 export function findSessionIndex(sessionId: string): SessionIndex | null {
-  if (!existsSync(SESSIONS_DIR)) return null;
-  for (const slug of readdirSync(SESSIONS_DIR)) {
-    const dir = join(SESSIONS_DIR, slug);
-    const idxPath = join(dir, `${sessionId}.index.json`);
-    if (existsSync(idxPath)) {
-      try {
-        const index = JSON.parse(readFileSync(idxPath, 'utf8')) as SessionIndex;
-        if (index.sessionId === sessionId) return index;
-      } catch { /* corrupt */ }
-    }
-    const jsonlPath = join(dir, `${sessionId}.jsonl`);
-    if (!existsSync(jsonlPath)) continue;
-    const meta = quickReadMeta(jsonlPath);
-    if (meta?.sessionId !== sessionId) continue;
-    const h = readHistory(jsonlPath);
-    const firstUser = findFirstUserContent(h);
-    return {
-      sessionId: meta.sessionId,
-      projectSlug: meta.projectSlug,
-      cwd: meta.cwd,
-      model: meta.model,
-      createdAt: meta.createdAt,
-      updatedAt: meta.createdAt,
-      messageCount: h.filter((e) => e.type !== 'session_meta').length,
-      title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8),
-      currentTurnId: 0,
-      tokenCountEstimate: 0,
-      projectedRanges: [],
-      lastUncoveredByteOffset: 0,
-      projectionCount: 0,
-      lastCompressionFailures: 0,
-    };
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) return null;
+  const idxPath = join(dir, `${sessionId}.index.json`);
+  if (existsSync(idxPath)) {
+    try {
+      const index = JSON.parse(readFileSync(idxPath, 'utf8')) as SessionIndex;
+      if (index.sessionId === sessionId) return index;
+    } catch { /* corrupt */ }
   }
-  return null;
+  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+  if (!existsSync(jsonlPath)) return null;
+  const meta = quickReadMeta(jsonlPath);
+  if (meta?.sessionId !== sessionId) return null;
+  const h = readHistory(jsonlPath);
+  const firstUser = findFirstUserContent(h);
+  return {
+    sessionId: meta.sessionId,
+    projectSlug: meta.projectSlug,
+    cwd: meta.cwd,
+    model: meta.model,
+    createdAt: meta.createdAt,
+    updatedAt: meta.createdAt,
+    messageCount: h.filter((e) => e.type !== 'session_meta').length,
+    title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8),
+    currentTurnId: 0,
+    tokenCountEstimate: 0,
+    projectedRanges: [],
+    lastUncoveredByteOffset: 0,
+    projectionCount: 0,
+    lastCompressionFailures: 0,
+  };
 }
 
 function assertResumeWorkspace(cwd: string, sessionId: string): void {
@@ -118,8 +122,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
     return {
       create: (cwd: string, model: string, version: string, sessionId?: string, opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }): Effect.Effect<SessionStoreState> =>
         Effect.sync(() => {
-          if (sessionId) assertResumeWorkspace(cwd, sessionId);
-          const state = initState(cwd, sessionId);
+          if (sessionId && !opts?.parentSessionId) assertResumeWorkspace(cwd, sessionId);
+          const state = initState(cwd, sessionId, opts?.parentSessionId);
           ensureDirs(state.transcriptPath);
 
           if (existsSync(state.transcriptPath)) {
@@ -197,11 +201,13 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
   }),
 }) {}
 
-function initState(cwd: string, sessionId?: string): SessionStoreState {
+function initState(cwd: string, sessionId?: string, parentSessionId?: string): SessionStoreState {
   const id = sessionId ?? randomUUID();
   const normalizedCwd = normalizePath(cwd);
   const projectSlug = projectSlugFromPath(normalizedCwd);
-  const transcriptPath = join(SESSIONS_DIR, projectSlug, `${id}.jsonl`);
+  const transcriptPath = parentSessionId
+    ? join(SESSIONS_DIR, projectSlug, parentSessionId, 'subagents', `${id}.jsonl`)
+    : join(SESSIONS_DIR, projectSlug, `${id}.jsonl`);
   const indexPath = transcriptPath.replace('.jsonl', '.index.json');
   let currentTurnId = 0;
   let tokenCountEstimate = 0;

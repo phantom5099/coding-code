@@ -40,7 +40,6 @@ describe('dispatch_agent tool', () => {
 
     const deps = {
       session: {} as any,
-      agentIdResolver: {} as any,
       approval: {} as any,
       hooks: {} as any,
       registry,
@@ -53,12 +52,11 @@ describe('dispatch_agent tool', () => {
     expect(tool.description).toContain('Available profiles');
   });
 
-  it('should have deferred flag set to true', async () => {
+  it('should be a core tool (not deferred)', async () => {
     const registry = await makeRegistry();
 
     const deps = {
       session: {} as any,
-      agentIdResolver: {} as any,
       approval: {} as any,
       hooks: {} as any,
       registry,
@@ -66,7 +64,7 @@ describe('dispatch_agent tool', () => {
 
     const tool = createDispatchAgentTool(deps);
 
-    expect(tool.deferred).toBe(true);
+    expect(tool.deferred).toBeFalsy();
   });
 
   it('should validate agent profile exists', async () => {
@@ -75,7 +73,6 @@ describe('dispatch_agent tool', () => {
 
     const deps = {
       session: {} as any,
-      agentIdResolver: {} as any,
       approval: {} as any,
       hooks: {} as any,
       registry,
@@ -100,7 +97,6 @@ describe('dispatch_agent tool', () => {
 
     const deps = {
       session: {} as any,
-      agentIdResolver: {} as any,
       approval: {} as any,
       hooks: {} as any,
       registry,
@@ -129,8 +125,9 @@ describe('dispatch_agent tool', () => {
     const deps = {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
-      agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
         fork: () => Effect.succeed({
           getPermissionMode: () => 'default',
@@ -182,7 +179,6 @@ describe('dispatch_agent tool', () => {
 
     const deps = {
       session: {} as any,
-      agentIdResolver: {} as any,
       approval: {} as any,
       hooks: {
         emit: (() => Effect.succeed(undefined)) as any,
@@ -222,8 +218,9 @@ describe('dispatch_agent tool', () => {
     const deps = {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
-      agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
         fork: () => Effect.succeed({
           getPermissionMode: () => 'default',
@@ -291,8 +288,9 @@ describe('dispatch_agent tool', () => {
     const deps = {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
-      agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
         fork: () => Effect.succeed({
           getPermissionMode: () => 'default',
@@ -348,8 +346,9 @@ describe('dispatch_agent tool', () => {
     const deps = {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
-      agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
         fork: () => Effect.succeed({
           getPermissionMode: () => 'default',
@@ -400,8 +399,9 @@ describe('dispatch_agent tool', () => {
     const deps = {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
-      agentIdResolver: { resolve: () => 'child-agent' },
       approval: {
         fork: () => Effect.succeed({
           getPermissionMode: () => 'default',
@@ -455,8 +455,11 @@ describe('dispatch_agent tool', () => {
     const parentLlm = { _tag: 'parent-llm' };
 
     const deps = {
-      session: { create: () => Effect.sync(() => ({})) },
-      agentIdResolver: { resolve: () => 'child-agent' },
+      session: {
+        create: () => Effect.sync(() => ({})),
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+      },
       approval: {
         fork: () => Effect.succeed({
           getPermissionMode: () => 'default',
@@ -503,8 +506,11 @@ describe('dispatch_agent tool', () => {
     const parentLlm = { _tag: 'parent-llm' };
 
     const deps = {
-      session: { create: () => Effect.sync(() => ({})) },
-      agentIdResolver: { resolve: () => 'child-agent' },
+      session: {
+        create: () => Effect.sync(() => ({})),
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+      },
       approval: {
         fork: () => Effect.succeed({
           getPermissionMode: () => 'default',
@@ -545,7 +551,6 @@ describe('dispatch_agent tool', () => {
 
     const deps = {
       session: {} as any,
-      agentIdResolver: {} as any,
       approval: {} as any,
       hooks: {
         emit: () => Effect.succeed(undefined),
@@ -575,7 +580,6 @@ describe('dispatch_agent tool', () => {
 
     const deps = {
       session: {} as any,
-      agentIdResolver: {} as any,
       approval: {} as any,
       hooks: {
         emit: (() => Effect.succeed(undefined)) as any,
@@ -595,5 +599,106 @@ describe('dispatch_agent tool', () => {
     } catch (e: any) {
       expect(e.message).toContain('Subagent is disabled');
     }
+  });
+
+  it('should call session.create with plain UUID sessionId and parentSessionId in opts', async () => {
+    const registry = await makeRegistry();
+    registry.register(EXPLORE_PROFILE);
+
+    const createCalls: any[] = [];
+    const agentService = {
+      runStream: async function* () { yield { _tag: 'Done', content: 'done' }; },
+    };
+
+    const deps = {
+      session: {
+        create: (...args: any[]) => {
+          createCalls.push(args);
+          return Effect.sync(() => ({}));
+        },
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+      },
+      approval: {
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
+      },
+      hooks: {
+        emit: () => Effect.succeed(undefined),
+        emitDecision: () => Effect.succeed(null),
+      },
+      registry,
+    };
+
+    const tool = createDispatchAgentTool(deps as any);
+    await tool.execute(
+      { agent: 'explore', prompt: 'task' },
+      { agentRunner: { agentService, llm: {} }, agentId: 'main:parent', sessionId: 'parent-session-uuid' },
+    );
+
+    expect(createCalls.length).toBe(1);
+    const [, , , childUuid, opts] = createCalls[0];
+    // sessionId must be a plain UUID (no colon)
+    expect(typeof childUuid).toBe('string');
+    expect(childUuid).toMatch(/^[0-9a-f-]{36}$/);
+    expect(childUuid).not.toContain(':');
+    // opts must carry parentSessionId from ctx
+    expect(opts?.parentSessionId).toBe('parent-session-uuid');
+    expect(opts?.agentName).toBe('explore');
+  });
+
+  it('runStream receives agentId as profile.name:childUuid', async () => {
+    const registry = await makeRegistry();
+    registry.register(EXPLORE_PROFILE);
+
+    const createCalls: any[] = [];
+    const runStreamCalls: any[] = [];
+    const agentService = {
+      runStream: (opts: any) => {
+        runStreamCalls.push(opts);
+        return (async function* () { yield { _tag: 'Done', content: 'done' }; })();
+      },
+    };
+
+    const deps = {
+      session: {
+        create: (...args: any[]) => {
+          createCalls.push(args);
+          return Effect.sync(() => ({}));
+        },
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+      },
+      approval: {
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
+      },
+      hooks: {
+        emit: () => Effect.succeed(undefined),
+        emitDecision: () => Effect.succeed(null),
+      },
+      registry,
+    };
+
+    const tool = createDispatchAgentTool(deps as any);
+    await tool.execute(
+      { agent: 'explore', prompt: 'task' },
+      { agentRunner: { agentService, llm: {} }, agentId: 'main:parent', sessionId: 'p' },
+    );
+
+    const childUuid = createCalls[0][3];
+    expect(runStreamCalls[0].agentId).toBe(`explore:${childUuid}`);
   });
 });

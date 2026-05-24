@@ -4,14 +4,12 @@ import { Effect } from 'effect';
 import type { ToolDefinition } from '../../types.js';
 import type { SubagentRegistry } from '../../../subagent/registry.js';
 import type { SessionService } from '../../../session/store.js';
-import type { AgentIdResolver } from '../../../agent-state/agent-id.js';
 import type { ApprovalService } from '../../../approval/index.js';
 import type { HookService } from '../../../hooks/registry.js';
 import { findModel, createClient } from '../../../llm/factory.js';
 
 interface DispatchAgentDeps {
   session: SessionService;
-  agentIdResolver: AgentIdResolver;
   approval: ApprovalService;
   hooks: HookService;
   registry: SubagentRegistry;
@@ -23,7 +21,6 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
     description: 'Spawn an isolated subagent with its own context. Available profiles: ' +
       deps.registry.list().map(p => `"${p.name}" (${p.description})`).join(', '),
     shortDescription: 'Spawn isolated subagent',
-    deferred: true,
     parameters: z.object({
       agent: z.string().describe('subagent profile name'),
       prompt: z.string().min(1).describe('task description for the subagent'),
@@ -69,15 +66,15 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         throw new Error(`Subagent spawn denied: ${spawnDecision.reason ?? 'no reason provided'}`);
       }
 
-      // Create child session with parent metadata
-      const childSessionId = randomUUID();
-      const childAgentId = deps.agentIdResolver.resolve(childSessionId);
+      // Create subagent transcript nested under parent session
+      const childUuid = randomUUID();
+      const childAgentId = `${profile.name}:${childUuid}`;
 
       const createEffect = (deps.session as any).create(
         ctx?.projectPath ?? process.cwd(),
         ctx?.model ?? 'subagent',
         '0.1.0',
-        childSessionId,
+        childUuid,
         {
           parentSessionId: ctx?.sessionId,
           parentAgentId: ctx?.agentId,
@@ -85,7 +82,9 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         },
       );
 
-      await Effect.runPromise(createEffect);
+      const childState = await Effect.runPromise(createEffect);
+      (deps.session as any).incrementTurn(childState);
+      await Effect.runPromise((deps.session as any).recordUser(childState, prompt));
 
       // Fork approval service with readonly if needed
       const forkEffect = (deps.approval as any).fork({ readonly: profile.readonly });
@@ -96,14 +95,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
 
       // Run subagent in isolated context
       const stream = agentService.runStream({
-        state: {
-          sessionId: childSessionId,
-          cwd: ctx?.projectPath ?? process.cwd(),
-          currentTurnId: randomUUID(),
-          sessionMeta: { model: ctx?.model ?? 'unknown', version: '0.1.0', createdAt: new Date().toISOString() },
-          title: `Subagent: ${agentName}`,
-          tokenCountEstimate: 0,
-        },
+        state: childState,
         llm,
         agentId: childAgentId,
         systemOverride: profile.systemPrompt,
@@ -124,7 +116,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
           // Emit error but collect what we have
           await Effect.runPromise(
             (deps.hooks as any).emit('agent.subagent.complete', {
-              childSessionId,
+              childSessionId: childUuid,
               profile: agentName,
               status: 'error',
               error: event.error,
@@ -137,7 +129,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       // Emit completion hook
       await Effect.runPromise(
         (deps.hooks as any).emit('agent.subagent.complete', {
-          childSessionId,
+          childSessionId: childUuid,
           profile: agentName,
           status: 'done',
         }),

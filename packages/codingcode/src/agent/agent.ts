@@ -13,7 +13,6 @@ import { getWorkspaceCwd } from '../core/workspace.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
-import { AgentIdResolver } from '../agent-state/agent-id.js';
 import { sharedTodoStore } from '../agent-state/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
@@ -66,7 +65,7 @@ interface RunReActDeps {
   executor: ToolExecutorService;
   toolRegistry: ToolService;
   toolSearch: ToolSearchService;
-  agentIdResolver: AgentIdResolver;
+  agentService: { runStream: (opts: RunStreamOptions) => AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> };
   ctx: ContextService;
   session: SessionService;
   checkpoint: CheckpointService;
@@ -78,20 +77,22 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
     const executor = yield* ToolExecutorService;
     const toolRegistry = yield* ToolService;
     const toolSearch = yield* ToolSearchService;
-    const agentIdResolver = yield* AgentIdResolver;
     const ctx = yield* ContextService;
     const session = yield* SessionService;
     const checkpoint = yield* CheckpointService;
     const hooks = yield* HookService;
     const { maxSteps, maxStopContinuations } = resolveConfig();
 
-    return {
-      runStream: (opts: RunStreamOptions): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> =>
+    const service: { runStream: (opts: RunStreamOptions) => AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> } = {
+      runStream: (opts: RunStreamOptions) =>
         runReActLoop(opts, {
-          maxSteps, maxStopContinuations, executor, toolRegistry, toolSearch, agentIdResolver,
+          maxSteps, maxStopContinuations, executor, toolRegistry, toolSearch,
+          agentService: service,
           ctx, session, checkpoint, hooks,
         }),
     };
+
+    return service;
   }),
 }) {}
 
@@ -100,7 +101,7 @@ export async function* runReActLoop(
   deps: RunReActDeps,
 ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> {
   const { state, llm, skillInstruction, systemPromptVariant } = opts;
-  const agentId = opts.agentId ?? deps.agentIdResolver.resolve(state.sessionId);
+  const agentId = opts.agentId ?? `main:${state.sessionId}`;
   const projectPath = state.cwd;
 
   // Build system prompt
@@ -242,7 +243,7 @@ export async function* runReActLoop(
           agentId,
           signal: opts.abortSignal,
           approval: opts.approvalOverride,
-          agentRunner: { agentService: undefined, llm }, // Will be set at dispatch time
+          agentRunner: { agentService: deps.agentService, llm },
         }),
       );
 

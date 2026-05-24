@@ -332,6 +332,30 @@
           }
         }
       ]
+    },
+    {
+      "name": "sansen",
+      "driver": "openai",
+      "base_url": "https://token.sensenova.cn/v1",
+      "api_key_env": "SANSE_API_KEY",
+      "default_model": "deepseek-v4-flash",
+      "models": [
+        {
+          "id": "sensenova-6.7-flash-lite",
+          "name": "sensenova-6.7-flash-lite",
+          "max_output_tokens": 8192,
+          "context_window": 262144,
+          "capabilities": {}
+        },
+        {
+          "id": "deepseek-v4-flash",
+          "name": "deepseek-v4-flash",
+          "max_output_tokens": 8192,
+          "description": "DeepSeek V4 Flash is a high-performance conversational model by DeepSeek, supporting thinking/non-thinking modes, 256K context window, and tool calling.",
+          "context_window": 262144,
+          "capabilities": {}
+        }
+      ]
     }
   ]
 }

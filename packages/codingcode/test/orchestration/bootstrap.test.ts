@@ -8,7 +8,6 @@ import { SandboxService } from '../../src/sandbox/index.js';
 import { McpService } from '../../src/mcp/index.js';
 import { SkillService } from '../../src/skills/index.js';
 import { SessionService } from '../../src/session/store.js';
-import { AgentIdResolver } from '../../src/agent-state/agent-id.js';
 import { ApprovalService } from '../../src/approval/index.js';
 import { HookService } from '../../src/hooks/registry.js';
 
@@ -29,10 +28,6 @@ const skillLayer = Layer.succeed(SkillService, {
 } as any);
 
 const sessionLayer = Layer.succeed(SessionService, {} as any);
-
-const agentIdLayer = Layer.succeed(AgentIdResolver, {
-  resolve: (_: string) => 'test-agent-id',
-} as any);
 
 const approvalLayer = Layer.succeed(ApprovalService, {
   fork: (_: any) => Effect.succeed({} as any),
@@ -57,7 +52,6 @@ const testLayer = Layer.mergeAll(
   mcpLayer,
   skillLayer,
   sessionLayer,
-  agentIdLayer,
   approvalLayer,
   hooksLayer,
 );
@@ -111,7 +105,7 @@ describe('bootstrapApplication', () => {
     const layer = Layer.mergeAll(
       toolLayer, toolSearchLayer, registryLayer,
       sandboxLayer, trackingMcpLayer, skillLayer,
-      sessionLayer, agentIdLayer, approvalLayer, hooksLayer,
+      sessionLayer, approvalLayer, hooksLayer,
     );
 
     const program = bootstrapApplication('/project/root');
@@ -131,7 +125,7 @@ describe('bootstrapApplication', () => {
     const layer = Layer.mergeAll(
       toolLayer, toolSearchLayer, registryLayer,
       sandboxLayer, mcpLayer, trackingSkillLayer,
-      sessionLayer, agentIdLayer, approvalLayer, hooksLayer,
+      sessionLayer, approvalLayer, hooksLayer,
     );
 
     const program = bootstrapApplication('/project/root');

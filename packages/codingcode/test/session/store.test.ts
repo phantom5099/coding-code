@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir, homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Cause, Effect, Exit } from 'effect';
-import { SessionService, findSessionIndex } from '../../src/session/store.js';
+import { SessionService, findSessionIndex, resolveSessionDir } from '../../src/session/store.js';
 import { projectSlugFromPath, normalizePath } from '../../src/core/path.js';
 import { AgentError } from '../../src/core/error.js';
 
@@ -131,5 +131,94 @@ describe('SessionService resume workspace', () => {
     const err = Cause.squash((exit as Exit.Failure<unknown, never>).cause);
     expect(err).toBeInstanceOf(AgentError);
     expect((err as AgentError).code).toBe('SESSION_NOT_FOUND');
+  });
+});
+
+describe('SessionService subagent transcript', () => {
+  let projectDir: string;
+  let parentSessionId: string;
+  let childUuid: string;
+  let slug: string;
+
+  beforeEach(() => {
+    projectDir = join(tmpdir(), `sub-proj-${randomUUID().slice(0, 8)}`);
+    mkdirSync(projectDir, { recursive: true });
+    parentSessionId = randomUUID();
+    childUuid = randomUUID();
+    slug = projectSlugFromPath(projectDir);
+  });
+
+  afterEach(() => {
+    try { rmSync(projectDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(
+        join(homedir(), '.codingcode', 'sessions', slug, parentSessionId),
+        { recursive: true, force: true },
+      );
+    } catch { /* ignore */ }
+  });
+
+  it('create with parentSessionId stores transcript under parent session subagents dir', async () => {
+    const state = await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.create(projectDir, 'test', '0.1.0', childUuid, {
+          parentSessionId,
+          agentName: 'explore',
+        });
+      }).pipe(Effect.provide(SessionService.Default)),
+    );
+
+    expect(state.sessionId).toBe(childUuid);
+    const expectedPath = join(
+      homedir(), '.codingcode', 'sessions', slug, parentSessionId, 'subagents', `${childUuid}.jsonl`,
+    );
+    expect(existsSync(expectedPath)).toBe(true);
+  });
+
+  it('resolveSessionDir finds subagent transcript in nested directory', async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.create(projectDir, 'test', '0.1.0', childUuid, { parentSessionId });
+      }).pipe(Effect.provide(SessionService.Default)),
+    );
+
+    const dir = resolveSessionDir(childUuid);
+    expect(dir).not.toBeNull();
+    expect(dir).toContain('subagents');
+    expect(existsSync(join(dir!, `${childUuid}.jsonl`))).toBe(true);
+  });
+
+  it('listSessions does not return subagent transcripts', async () => {
+    const parentId = randomUUID();
+    const parentPath = join(
+      homedir(), '.codingcode', 'sessions', slug, `${parentId}.jsonl`,
+    );
+    mkdirSync(join(homedir(), '.codingcode', 'sessions', slug), { recursive: true });
+    writeFileSync(parentPath, JSON.stringify({
+      type: 'session_meta', sessionId: parentId, projectSlug: slug,
+      cwd: normalizePath(projectDir), model: 'test', createdAt: new Date().toISOString(), version: '0.1.0',
+    }) + '\n', 'utf8');
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.create(projectDir, 'test', '0.1.0', childUuid, { parentSessionId: parentId });
+      }).pipe(Effect.provide(SessionService.Default)),
+    );
+
+    const listed = await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.listSessions(projectDir);
+      }).pipe(Effect.provide(SessionService.Default)),
+    );
+
+    expect(listed.some((s) => s.sessionId === parentId)).toBe(true);
+    expect(listed.some((s) => s.sessionId === childUuid)).toBe(false);
+
+    try { rmSync(parentPath, { force: true }); } catch { /* ignore */ }
+    try { rmSync(parentPath.replace('.jsonl', '.index.json'), { force: true }); } catch { /* ignore */ }
   });
 });

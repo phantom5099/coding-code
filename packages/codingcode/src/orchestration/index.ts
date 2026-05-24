@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { AgentService, type AgentEvent } from '../agent/agent.js';
+import { AgentService } from '../agent/agent.js';
 import { SessionService } from '../session/store.js';
 import { SkillService } from '../skills/index.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
@@ -27,7 +27,7 @@ export const sendMessage = (
     const turnTitle = actualInput.trim().slice(0, 5) || '(empty)';
     checkpoint.snapshotBaseline(state.cwd, sid, turnId, turnTitle);
 
-    const stream = agent.runStream({ state, llm, skillInstruction: matchedSkill?.instruction });
+    const stream = agent.runStream({ state, llm, skillInstruction: matchedSkill?.instruction, agentId: `main:${state.sessionId}` });
 
     return { stream, sessionId: sid };
   });

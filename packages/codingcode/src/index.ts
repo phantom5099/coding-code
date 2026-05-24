@@ -36,7 +36,6 @@ export { CheckpointService } from './checkpoint/checkpoint-service.js';
 export { ShadowGit, Ledger } from './checkpoint/index.js';
 export { TodoService } from './agent-state/todo.js';
 export { ToolSearchService } from './tools/tool-search-service.js';
-export { AgentIdResolver } from './agent-state/agent-id.js';
 export type { Todo, TodoStatus } from './agent-state/todo.js';
 export { DEFERRED_TOOLS_GUIDELINES, buildSystemPrompt } from './prompts/index.js';
 export type { SystemPromptVariant, SystemPromptOptions } from './prompts/index.js';

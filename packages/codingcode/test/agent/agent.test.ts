@@ -21,10 +21,8 @@ const mockToolSearch = {
   reset: () => {},
 };
 
-const mockAgentIdResolver = {
-  resolve: (sid: string) => `agent-${sid}`,
-  bind: () => {},
-  reset: () => {},
+const mockAgentService = {
+  runStream: () => { throw new Error('not implemented'); },
 };
 
 const mockCtx = {
@@ -64,7 +62,7 @@ function makeDeps(overrides?: Record<string, any>) {
     executor: null as any,
     toolRegistry: mockToolRegistry as any,
     toolSearch: mockToolSearch as any,
-    agentIdResolver: mockAgentIdResolver as any,
+    agentService: mockAgentService as any,
     ctx: mockCtx as any,
     session: mockSession as any,
     checkpoint: mockCheckpoint as any,

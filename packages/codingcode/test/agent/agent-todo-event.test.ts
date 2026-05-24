@@ -22,10 +22,8 @@ const mockToolSearch = {
   reset: () => {},
 };
 
-const mockAgentIdResolver = {
-  resolve: (sid: string) => `agent-${sid}`,
-  bind: () => {},
-  reset: () => {},
+const mockAgentService = {
+  runStream: () => { throw new Error('not implemented'); },
 };
 
 const mockCtx = {
@@ -72,7 +70,7 @@ const mockLlm = {
 
 describe('TodoUpdate event', () => {
   it('should yield TodoUpdate when todo_write tool is called', async () => {
-    sharedTodoStore.write('agent-test-todo-sid', [
+    sharedTodoStore.write('main:test-todo-sid', [
       { step: 'setup', status: 'pending' },
       { step: 'test', status: 'completed' },
     ]);
@@ -92,7 +90,7 @@ describe('TodoUpdate event', () => {
         executor: mockExecutor as any,
         toolRegistry: mockToolRegistry as any,
         toolSearch: mockToolSearch as any,
-        agentIdResolver: mockAgentIdResolver as any,
+        agentService: mockAgentService as any,
         ctx: mockCtx as any,
         session: mockSession as any,
         checkpoint: mockCheckpoint as any,
@@ -134,7 +132,7 @@ describe('TodoUpdate event', () => {
         executor: mockExecutor as any,
         toolRegistry: mockToolRegistry as any,
         toolSearch: mockToolSearch as any,
-        agentIdResolver: mockAgentIdResolver as any,
+        agentService: mockAgentService as any,
         ctx: mockCtx as any,
         session: mockSession as any,
         checkpoint: mockCheckpoint as any,
