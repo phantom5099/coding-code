@@ -3,27 +3,18 @@ import { join } from 'path'
 import { app } from 'electron'
 import type { Thread } from '@shared/types'
 
-interface StoreSettings {
-  disabledMcpServers: string[]
-  disabledSkills: string[]
-}
-
 interface StoreData {
   threads: Record<string, Thread>
-  activeModel: string
   approvalPolicy: 'suggest' | 'auto-edit' | 'full-auto'
   workspace: { rootPath: string; name: string }
   sessionIds: Record<string, string>
-  settings: StoreSettings
 }
 
 const DEFAULTS: StoreData = {
   threads: {},
-  activeModel: 'deepseek-v4-flash',
   approvalPolicy: 'suggest',
   workspace: { rootPath: '', name: '' },
   sessionIds: {},
-  settings: { disabledMcpServers: [], disabledSkills: [] },
 }
 
 let _storePath: string | null = null
@@ -47,13 +38,12 @@ function load(): StoreData {
         ...DEFAULTS,
         ...parsed,
         sessionIds: parsed.sessionIds ?? {},
-        settings: { ...DEFAULTS.settings, ...(parsed.settings ?? {}) },
       }
     } else {
-      _data = { ...DEFAULTS, settings: { ...DEFAULTS.settings } }
+      _data = { ...DEFAULTS }
     }
   } catch {
-    _data = { ...DEFAULTS, settings: { ...DEFAULTS.settings } }
+    _data = { ...DEFAULTS }
   }
   return _data!
 }
@@ -80,13 +70,6 @@ export const storeService = {
     delete load().threads[id]
     save()
   },
-  getActiveModel(): string {
-    return load().activeModel
-  },
-  setActiveModel(model: string): void {
-    load().activeModel = model
-    save()
-  },
   getApprovalPolicy(): 'suggest' | 'auto-edit' | 'full-auto' {
     return load().approvalPolicy
   },
@@ -106,20 +89,6 @@ export const storeService = {
   },
   setSessionId(threadId: string, sessionId: string): void {
     load().sessionIds[threadId] = sessionId
-    save()
-  },
-  getDisabledMcpServers(): string[] {
-    return load().settings.disabledMcpServers
-  },
-  setDisabledMcpServers(names: string[]): void {
-    load().settings.disabledMcpServers = names
-    save()
-  },
-  getDisabledSkills(): string[] {
-    return load().settings.disabledSkills
-  },
-  setDisabledSkills(names: string[]): void {
-    load().settings.disabledSkills = names
     save()
   },
 }

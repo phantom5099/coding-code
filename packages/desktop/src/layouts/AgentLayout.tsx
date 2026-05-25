@@ -4,20 +4,24 @@ import AgentSidebar from '../agent/AgentSidebar'
 import AgentWorkspace from '../agent/AgentWorkspace'
 import SettingsPage from '../settings/SettingsPage'
 
-export default function AgentLayout() {
-  // Mount agent IPC subscriptions (loads threads, registers event handlers)
-  useAgent()
+const isWindows = window.electronAPI?.platform === 'win32'
 
+export default function AgentLayout() {
+  useAgent()
   const view = useGlobalStore((s) => s.ui.view)
 
-  if (view === 'settings') {
-    return <SettingsPage />
-  }
-
   return (
-    <div className="flex h-full overflow-hidden">
-      <AgentSidebar />
-      <AgentWorkspace />
-    </div>
+    <>
+      {/* Spacer for Windows titleBarOverlay (36px native controls region) */}
+      {isWindows && <div className="h-9 shrink-0" />}
+      {view === 'settings' ? (
+        <SettingsPage />
+      ) : (
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <AgentSidebar />
+          <AgentWorkspace />
+        </div>
+      )}
+    </>
   )
 }

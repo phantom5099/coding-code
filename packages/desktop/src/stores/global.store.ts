@@ -194,8 +194,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           title: meta?.title ?? 'New Conversation',
           cwd: meta?.cwd ?? '',
           turns: [turn],
-          model: s.agent.model,
-          approvalPolicy: s.agent.approvalPolicy,
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }

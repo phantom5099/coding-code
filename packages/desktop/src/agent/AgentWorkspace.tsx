@@ -8,39 +8,21 @@ import MessageStream from './MessageStream'
 function ContextIndicator({ threadId }: { threadId: string }) {
   const contextUsage = useGlobalStore((s) => s.agent.contextUsage)
   const setContextUsage = useGlobalStore((s) => s.setContextUsage)
-
   if (!contextUsage) return null
-
   const pct = Math.min(contextUsage.used / contextUsage.contextWindow, 1)
   const color = pct < 0.4 ? '#4ec9b0' : pct < 0.75 ? '#e5c07b' : '#f44747'
-  const r = 8
+  const r = 7
   const circ = 2 * Math.PI * r
-  const dash = circ * (1 - pct)
-
-  const handleCompress = async () => {
-    await window.electronAPI?.compressContext?.(threadId)
-    setContextUsage(null)
-  }
-
   return (
-    <button
-      type="button"
-      onClick={handleCompress}
-      title={`上下文: ${Math.round(pct * 100)}% (${contextUsage.used.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens)\n点击压缩历史`}
-      className="w-5 h-5 flex items-center justify-center hover:opacity-80 transition-opacity"
-    >
-      <svg width="20" height="20" viewBox="0 0 20 20">
-        <circle cx="10" cy="10" r={r} fill="none" stroke="#2a2a2a" strokeWidth="2.5" />
-        <circle
-          cx="10" cy="10" r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth="2.5"
-          strokeDasharray={circ}
-          strokeDashoffset={dash}
-          strokeLinecap="round"
-          transform="rotate(-90 10 10)"
-        />
+    <button type="button"
+      onClick={async () => { await window.electronAPI?.compressContext?.(threadId); setContextUsage(null) }}
+      title={`上下文: ${Math.round(pct * 100)}% (${contextUsage.used.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens)\n点击压缩`}
+      className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition-opacity">
+      <svg width="18" height="18" viewBox="0 0 18 18">
+        <circle cx="9" cy="9" r={r} fill="none" stroke="#2a2a2a" strokeWidth="2.5" />
+        <circle cx="9" cy="9" r={r} fill="none" stroke={color} strokeWidth="2.5"
+          strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
+          strokeLinecap="round" transform="rotate(-90 9 9)" />
       </svg>
     </button>
   )
@@ -54,7 +36,6 @@ function ModelSelector() {
   const setModel = useGlobalStore((s) => s.setModel)
   const [open, setOpen] = useState(false)
 
-  // Group by provider
   const groups = models.reduce<Record<string, typeof models>>((acc, m) => {
     if (!acc[m.provider]) acc[m.provider] = []
     acc[m.provider]!.push(m)
@@ -62,57 +43,33 @@ function ModelSelector() {
   }, {})
 
   const currentModel = models.find((m) => m.id === model)
-  const displayName = currentModel
-    ? currentModel.name
-    : model.split('-').slice(-2).join(' ')
-
-  const handleSelect = async (id: string) => {
-    setModel(id)
-    setOpen(false)
-    await window.electronAPI?.setModel?.(id)
-  }
+  const displayName = currentModel?.name ?? (model ? model.split('-').slice(-2).join(' ') : '')
 
   return (
     <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 px-2 py-1 text-xs text-[#555] hover:text-[#aaa] hover:bg-[#2a2a2a] rounded-lg transition-colors font-mono"
-      >
-        <span className="max-w-[120px] truncate">{displayName || '选择模型'}</span>
-        <span className="text-[#3c3c3c]">▾</span>
+      <button type="button" onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors">
+        <span className="max-w-[160px] truncate">{displayName || '选择模型'}</span>
+        <span className="text-[#3c3c3c] text-[10px]">▾</span>
       </button>
-
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-full right-0 mb-1 bg-[#1e1e1e] border border-[#3c3c3c] rounded-lg shadow-xl min-w-[220px] z-50 py-1 max-h-[400px] overflow-y-auto">
+          <div className="absolute bottom-full right-0 mb-2 bg-[#1e1e1e] border border-[#333] rounded-xl shadow-2xl min-w-[260px] z-50 py-1.5 max-h-[400px] overflow-y-auto">
             {Object.entries(groups).map(([provider, providerModels]) => (
               <div key={provider}>
-                <div className="px-3 py-1 text-[10px] font-semibold text-[#4a4a4a] uppercase tracking-wider">
-                  {provider}
-                </div>
+                <div className="px-3 py-1.5 text-[11px] font-semibold text-[#444] uppercase tracking-wider">{provider}</div>
                 {providerModels.map((m) => (
-                  <button
-                    type="button"
-                    key={m.id}
-                    onClick={() => handleSelect(m.id)}
-                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-[#094771] transition-colors flex items-center gap-2 ${
-                      m.id === model ? 'text-[#4ec9b0]' : 'text-[#ccc]'
-                    }`}
-                  >
-                    {m.id === model && <span className="shrink-0">✓</span>}
-                    <span className={`flex-1 ${m.id === model ? '' : 'ml-3'}`}>{m.name}</span>
-                    <span className="text-[#3c3c3c] text-[10px] shrink-0">
-                      {(m.context_window / 1000).toFixed(0)}k
-                    </span>
+                  <button type="button" key={m.id} onClick={async () => { setModel(m.id); setOpen(false); await window.electronAPI?.setModel?.(m.id) }}
+                    className={`w-full text-left px-3 py-2 text-[14px] hover:bg-[#094771] transition-colors flex items-center gap-2 ${m.id === model ? 'text-[#4ec9b0]' : 'text-[#ccc]'}`}>
+                    <span className="w-4 shrink-0 text-center text-[12px]">{m.id === model ? '✓' : ''}</span>
+                    <span className="flex-1">{m.name}</span>
+                    <span className="text-[#3c3c3c] text-[12px] shrink-0">{(m.context_window / 1000).toFixed(0)}k</span>
                   </button>
                 ))}
               </div>
             ))}
-            {models.length === 0 && (
-              <div className="px-3 py-2 text-xs text-[#444]">无可用模型</div>
-            )}
+            {models.length === 0 && <div className="px-3 py-3 text-[14px] text-[#444]">无可用模型</div>}
           </div>
         </>
       )}
@@ -122,12 +79,7 @@ function ModelSelector() {
 
 // ─── InputBox ──────────────────────────────────────────────────────────────
 
-interface InputBoxProps {
-  centered?: boolean
-  threadId: string
-}
-
-function InputBox({ centered, threadId }: InputBoxProps) {
+function InputBox({ centered, threadId }: { centered?: boolean; threadId: string }) {
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isStreaming = useGlobalStore((s) => s.agent.isStreaming)
@@ -143,56 +95,55 @@ function InputBox({ centered, threadId }: InputBoxProps) {
     sendMessage(threadId, trimmed, workspace.rootPath || undefined)
   }, [text, isStreaming, sendMessage, threadId, workspace.rootPath])
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-  }
-
-  const handlePolicyChange = async (p: 'suggest' | 'auto-edit' | 'full-auto') => {
-    setApprovalPolicy(p)
-    await window.electronAPI?.setApprovalPolicy?.(p)
-  }
-
   const POLICY_LABELS: Record<string, string> = { suggest: '自动审查', 'auto-edit': '自动编辑', 'full-auto': '全自动' }
   const POLICY_NEXT: Record<string, 'auto-edit' | 'full-auto' | 'suggest'> = {
     suggest: 'auto-edit', 'auto-edit': 'full-auto', 'full-auto': 'suggest',
   }
 
   return (
-    <div className={`relative ${centered ? 'w-full max-w-[680px]' : 'px-4 pb-3 pt-2'}`}>
-      <div className="rounded-xl border border-[#2d2d2d] bg-[#1a1a1a] hover:border-[#3c3c3c] focus-within:border-[#3a5a7a] transition-colors shadow-lg">
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="可向 AI 询问任何事"
-          disabled={isStreaming}
-          rows={3}
-          className="w-full bg-transparent px-4 pt-3 pb-1 text-sm text-[#d4d4d4] placeholder-[#3a3a3a] resize-none outline-none leading-relaxed disabled:opacity-50"
-        />
-        <div className="flex items-center gap-2 px-3 pb-3 pt-1">
+    <div className={centered ? 'w-full max-w-[740px]' : 'px-5 pb-5 pt-2'}>
+      <div className="rounded-2xl border border-[#2d2d2d] bg-[#1c1c1c] hover:border-[#3a3a3a] focus-within:border-[#3a5a7a] transition-colors shadow-xl overflow-hidden">
+        {/* Row 1: textarea + send button side by side */}
+        <div className="flex items-center gap-2 pr-3">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+            placeholder="可向 AI 询问任何事"
+            disabled={isStreaming}
+            rows={3}
+            className="flex-1 bg-transparent px-5 pt-4 pb-3 text-[15px] text-[#d4d4d4] placeholder-[#333] resize-none outline-none leading-relaxed disabled:opacity-50"
+          />
+          {/* Send / Stop — vertically centered to the right of textarea */}
+          {isStreaming ? (
+            <button type="button" onClick={() => abort(threadId)}
+              className="w-9 h-9 shrink-0 flex items-center justify-center bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#ccc] rounded-full transition-colors text-sm">
+              ■
+            </button>
+          ) : (
+            <button type="button" onClick={handleSend} disabled={!text.trim()}
+              className="w-9 h-9 shrink-0 flex items-center justify-center bg-white disabled:bg-[#2a2a2a] disabled:text-[#444] text-[#111] rounded-full transition-colors font-bold text-base">
+              ↑
+            </button>
+          )}
+        </div>
+        {/* Row 2: toolbar */}
+        <div className="flex items-center gap-2 px-3 pb-3 pt-0">
           <button type="button"
-            onClick={() => handlePolicyChange(POLICY_NEXT[approvalPolicy] ?? 'auto-edit')}
-            className="flex items-center gap-1 px-2 py-1 text-xs text-[#666] hover:text-[#aaa] hover:bg-[#2a2a2a] rounded-lg transition-colors">
-            <span className="text-[#569cd6]">⊙</span>
+            onClick={async () => {
+              const next = POLICY_NEXT[approvalPolicy] ?? 'auto-edit'
+              setApprovalPolicy(next)
+              await window.electronAPI?.setApprovalPolicy?.(next)
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors">
+            <span className="text-[#569cd6] text-[10px]">⊙</span>
             <span>{POLICY_LABELS[approvalPolicy] ?? '自动审查'}</span>
-            <span className="text-[#3c3c3c]">▾</span>
+            <span className="text-[#3c3c3c] text-[10px]">▾</span>
           </button>
-
           <div className="ml-auto flex items-center gap-2">
             <ContextIndicator threadId={threadId} />
             <ModelSelector />
-            {isStreaming ? (
-              <button type="button" onClick={() => abort(threadId)}
-                className="w-7 h-7 flex items-center justify-center bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#ccc] rounded-lg transition-colors text-sm">
-                ■
-              </button>
-            ) : (
-              <button type="button" onClick={handleSend} disabled={!text.trim()}
-                className="w-7 h-7 flex items-center justify-center bg-[#ccc] disabled:bg-[#2a2a2a] disabled:text-[#444] text-[#111] rounded-lg transition-colors text-sm font-bold">
-                ↑
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -209,9 +160,9 @@ export default function AgentWorkspace() {
 
   if (!currentThreadId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-5 bg-[#111] overflow-hidden px-4">
-        <h2 className="text-2xl font-medium text-[#ddd] tracking-tight select-none">
-          要在 <span className="text-white">{workspace.name || workspace.rootPath.split(/[\\/]/).pop() || '当前目录'}</span> 中构建什么？
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-[#111] overflow-hidden px-6">
+        <h2 className="text-[22px] font-medium text-[#ccc] tracking-tight select-none">
+          在 <span className="text-white font-semibold">{workspace.name || workspace.rootPath.split(/[\\/]/).pop() || '当前目录'}</span> 中构建什么？
         </h2>
         <InputBox centered threadId={activeThreadId} />
       </div>
@@ -221,7 +172,7 @@ export default function AgentWorkspace() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#111]">
       <MessageStream threadId={currentThreadId} />
-      <div className="shrink-0 pb-1">
+      <div className="shrink-0">
         <InputBox threadId={currentThreadId} />
       </div>
     </div>

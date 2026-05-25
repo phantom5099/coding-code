@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 interface SkillEntry {
   name: string
   description: string
-  source: 'global' | 'project'
   disabled: boolean
 }
 
@@ -13,9 +12,14 @@ export default function SkillPanel() {
 
   const load = async () => {
     setLoading(true)
-    const data = await window.electronAPI?.getSkills?.()
-    setSkills(data ?? [])
-    setLoading(false)
+    try {
+      const data = await window.electronAPI?.getSkills?.()
+      setSkills(data ?? [])
+    } catch {
+      setSkills([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -26,38 +30,29 @@ export default function SkillPanel() {
   }
 
   if (loading) {
-    return <div className="px-4 py-6 text-xs text-[#444]">加载中…</div>
+    return <div className="px-6 py-8 text-[14px] text-[#444]">加载中…</div>
   }
 
   return (
-    <div className="px-4 py-4">
-      <p className="text-xs text-[#444] mb-4">
+    <div className="px-6 py-5">
+      <p className="text-[13px] text-[#444] mb-5">
         来自 <span className="font-mono text-[#555]">~/.codingcode/skills/</span> 和 <span className="font-mono text-[#555]">.codingcode/skills/</span>
       </p>
 
       {skills.length === 0 ? (
-        <div className="text-xs text-[#444] py-4 text-center">
+        <div className="text-[14px] text-[#444] py-8 text-center leading-loose">
           未找到 Skill<br />
-          <span className="text-[#333]">在 .codingcode/skills/ 目录下创建 skill 文件夹以添加</span>
+          <span className="text-[13px] text-[#333]">在 .codingcode/skills/ 目录下创建 skill 文件夹以添加</span>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {skills.map((s) => (
-            <div key={`${s.source}:${s.name}`}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+            <div key={s.name}
+              className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a]">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-[#ddd] truncate">{s.name}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    s.source === 'project'
-                      ? 'bg-[#1a3a1a] text-[#4ec9b0]'
-                      : 'bg-[#2a2a3a] text-[#9cdcfe]'
-                  }`}>
-                    {s.source === 'project' ? '项目' : '全局'}
-                  </span>
-                </div>
+                <span className="text-[15px] text-[#ddd] truncate block">{s.name}</span>
                 {s.description && (
-                  <div className="text-[11px] text-[#555] mt-0.5 truncate">{s.description}</div>
+                  <div className="text-[13px] text-[#555] mt-1 truncate">{s.description}</div>
                 )}
               </div>
               <Toggle checked={!s.disabled} onChange={(v) => toggle(s.name, !v)} />

@@ -32,7 +32,6 @@ export function registerSettingsHandlers(): void {
     return skills.map((s) => ({
       name: s.name,
       description: s.description,
-      source: 'global' as const,
       disabled: !s.enabled,
     }))
   })

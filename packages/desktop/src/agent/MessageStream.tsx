@@ -36,7 +36,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
 
   if (!thread || allItems.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[#555] text-sm select-none">
+      <div className="flex-1 flex items-center justify-center text-[#444] text-[15px] select-none">
         发送消息开始对话
       </div>
     )
@@ -48,7 +48,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     const { item } = entry
     const streaming = item.type === 'message' && item.partial ? streamingContent[item.id] : undefined
     return (
-      <div className="px-4 py-1">
+      <div className="px-6 py-0.5">
         <MessageItem
           key={item.id}
           item={item}
@@ -76,11 +76,11 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="py-4">
-        {allItems.map(({ item }, index) => {
+      <div className="pt-8 pb-4 max-w-[820px] mx-auto">
+        {allItems.map(({ item }) => {
           const streaming = item.type === 'message' && item.partial ? streamingContent[item.id] : undefined
           return (
-            <div key={item.id} className="px-4 py-1">
+            <div key={item.id} className="px-6 py-0.5">
               <MessageItem
                 item={item}
                 streamingContent={streaming}

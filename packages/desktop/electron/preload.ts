@@ -3,6 +3,7 @@ import type { Item } from '../shared/types'
 
 const api = {
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
+  platform: process.platform,
 
   // File system
   readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:readFile', path),
@@ -43,7 +44,7 @@ const api = {
     ipcRenderer.invoke('settings:getMcp'),
   setMcpDisabled: (name: string, disabled: boolean): Promise<void> =>
     ipcRenderer.invoke('settings:setMcpDisabled', name, disabled),
-  getSkills: (): Promise<{name: string; description: string; source: 'global'|'project'; disabled: boolean}[]> =>
+  getSkills: (): Promise<{name: string; description: string; disabled: boolean}[]> =>
     ipcRenderer.invoke('settings:getSkills'),
   setSkillDisabled: (name: string, disabled: boolean): Promise<void> =>
     ipcRenderer.invoke('settings:setSkillDisabled', name, disabled),
@@ -61,11 +62,7 @@ const api = {
     ipcRenderer.on('agent:chunk', (_e, payload) => cb(payload))
     return () => ipcRenderer.removeAllListeners('agent:chunk')
   },
-  onAgentUsage: (cb: (payload: { threadId: string; promptTokens: number; totalTokens: number; contextWindow: number }) => void) => {
-    ipcRenderer.on('agent:usage', (_e, payload) => cb(payload))
-    return () => ipcRenderer.removeAllListeners('agent:usage')
-  },
-  onAgentDone: (cb: (payload: { threadId: string; turnId: string; error?: string; usage?: { promptTokens: number; totalTokens: number; contextWindow: number } }) => void) => {
+  onAgentDone: (cb: (payload: { threadId: string; turnId: string; error?: string }) => void) => {
     ipcRenderer.on('agent:done', (_e, payload) => cb(payload))
     return () => ipcRenderer.removeAllListeners('agent:done')
   },

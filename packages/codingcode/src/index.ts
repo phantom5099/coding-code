@@ -39,5 +39,4 @@ export { ToolSearchService } from './tools/tool-search-service.js';
 export type { Todo, TodoStatus } from './agent-state/todo.js';
 export { DEFERRED_TOOLS_GUIDELINES, buildSystemPrompt } from './prompts/index.js';
 export type { SystemPromptVariant, SystemPromptOptions } from './prompts/index.js';
-export { getLLMClient, listModels, getActiveEntry, switchModel as switchActiveModel } from './llm/factory.js';
-export type { SelectableModel } from './llm/factory.js';
+export { getLLMClient } from './llm/factory.js';

@@ -40,34 +40,39 @@ export default function MessageItem({ item, streamingContent, threadId, onApprov
     const content = (item.partial && streamingContent) ? streamingContent : item.content
     const isUser = item.role === 'user'
 
-    return (
-      <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
-        {isUser ? (
-          <div className="max-w-[75%] px-3 py-2 rounded-2xl rounded-br-sm bg-[#0e639c] text-white text-sm leading-relaxed whitespace-pre-wrap break-words">
+    if (isUser) {
+      return (
+        <div className="flex justify-end mb-4">
+          <div className="max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[#2a2a2a] text-[#e8e8e8] text-[15px] leading-relaxed whitespace-pre-wrap break-words">
             {content}
           </div>
-        ) : (
-          <div className="max-w-[85%] text-sm text-[#d4d4d4] leading-relaxed">
-            {parseMarkdown(content)}
-            {item.partial && <span className="inline-block w-1.5 h-4 bg-[#569cd6] animate-pulse ml-0.5 align-middle" />}
-          </div>
-        )}
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex justify-start mb-4">
+        <div className="max-w-[88%] text-[15px] text-[#d4d4d4] leading-relaxed">
+          {parseMarkdown(content)}
+          {item.partial && <span className="inline-block w-1.5 h-[1.1em] bg-[#569cd6] animate-pulse ml-0.5 align-middle" />}
+        </div>
       </div>
     )
   }
 
   if (item.type === 'reasoning') {
     return (
-      <div className="mb-2">
+      <div className="mb-3">
         <button
+          type="button"
           onClick={() => setReasoningOpen((v) => !v)}
-          className="flex items-center gap-1 text-xs text-[#666] hover:text-[#888] transition-colors"
+          className="flex items-center gap-1.5 text-[13px] text-[#555] hover:text-[#888] transition-colors"
         >
-          <span className={`transition-transform ${reasoningOpen ? 'rotate-90' : ''}`}>▶</span>
+          <span className={`transition-transform text-[10px] ${reasoningOpen ? 'rotate-90' : ''}`}>▶</span>
           思考过程
         </button>
         {reasoningOpen && (
-          <div className="mt-1 pl-3 border-l border-[#3c3c3c] text-xs text-[#888] whitespace-pre-wrap leading-relaxed">
+          <div className="mt-2 pl-3 border-l-2 border-[#2a2a2a] text-[13px] text-[#777] whitespace-pre-wrap leading-relaxed">
             {item.content}
           </div>
         )}
@@ -89,8 +94,8 @@ export default function MessageItem({ item, streamingContent, threadId, onApprov
   if (item.type === 'tool_result') {
     const isError = item.exitCode !== undefined && item.exitCode !== 0
     return (
-      <div className="mb-2">
-        <div className={`text-xs mb-1 ${isError ? 'text-[#f44747]' : 'text-[#4ec9b0]'}`}>
+      <div className="mb-3">
+        <div className={`text-[13px] mb-1.5 ${isError ? 'text-[#f44747]' : 'text-[#4ec9b0]'}`}>
           {isError ? `✗ 退出码 ${item.exitCode}` : '✓ 执行结果'}
         </div>
         <CodeBlock code={item.output.slice(0, 4000)} />
@@ -100,8 +105,8 @@ export default function MessageItem({ item, streamingContent, threadId, onApprov
 
   if (item.type === 'error') {
     return (
-      <div className="mb-2 px-3 py-2 rounded bg-[#3d1515] border border-[#f44747] text-[#f44747] text-sm">
-        ✗ {item.message}
+      <div className="mb-3 px-4 py-3 rounded-lg bg-[#2a1515] border border-[#5a2020] text-[#f47777] text-[14px] leading-relaxed">
+        {item.message}
       </div>
     )
   }

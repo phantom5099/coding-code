@@ -1,10 +1,6 @@
 server:
   port: 8080
-
-# 主 agent 最大循环轮数，默认 50
 maxSteps: 50
-
-# 上下文管理阈值（可选；省略时均使用代码内默认值）
 context:
   defaultMaxTokens: 200000
   reservedTokens: 20000
@@ -18,32 +14,36 @@ context:
   budgetReductionKeepLines: 20
   pruneProtectedTokens: 40000
   pruneMinRelease: 20000
-  slidingWindowCandidates: [10, 6, 4, 2]
+  slidingWindowCandidates:
+    - 10
+    - 6
+    - 4
+    - 2
   collapseMinTokens: 500
   collapseSummaryMaxTokens: 1500
-  toolsExemptFromPrune: [Read, todo_write, todo_read, tool_search]
-  toolsExemptFromTruncation: [Read, todo_write, todo_read, tool_search]
+  toolsExemptFromPrune:
+    - Read
+    - todo_write
+    - todo_read
+    - tool_search
+  toolsExemptFromTruncation:
+    - Read
+    - todo_write
+    - todo_read
+    - tool_search
   prefixTurnsProtected: 1
   minTurnsBetweenCompactions: 5
   keepRecentTurns: 10
   compactionModel: haiku
   archiveTtlDays: 30
   checkpointKeep: 50
-
-# 长期记忆模块（跨会话记忆）
 memory:
   enabled: false
-  model: ''
+  model: ""
   projectFile: .codingcode/memory.md
   userFile: ~/.codingcode/memory.md
   maxBytes: 16384
   promptMaxBytes: 8192
-  # disabledTypes: [feedback]        # 关闭默认类型
-  # extraTypes:                      # 追加自定义类型（默认 3 种自动保留）
-  #   - name: my_custom
-  #     description: 我的自定义记忆类型
-  #     enabled: true
-
 activeModel:
-  model: deepseek-v4-flash
-  apiKeyEnv: SANSE_API_KEY
+  model: kimi-k2.5
+  apiKeyEnv: KIMI_API_KEY

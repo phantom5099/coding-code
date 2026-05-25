@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useGlobalStore } from '../stores/global.store'
 import type { Thread } from '@shared/types'
 
@@ -48,7 +48,19 @@ export default function AgentSidebar() {
 
   const allThreads = Object.values(threads).sort((a: Thread, b: Thread) => b.updatedAt - a.updatedAt)
   const groups = groupByProject(allThreads, workspace.name, workspace.rootPath)
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set([workspace.rootPath]))
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set())
+
+  // Auto-expand workspace project when rootPath loads
+  useEffect(() => {
+    if (workspace.rootPath) {
+      setExpandedProjects((prev) => {
+        if (prev.has(workspace.rootPath)) return prev
+        const next = new Set(prev)
+        next.add(workspace.rootPath)
+        return next
+      })
+    }
+  }, [workspace.rootPath])
 
   const toggleProject = (cwd: string) =>
     setExpandedProjects((prev) => {
@@ -59,9 +71,9 @@ export default function AgentSidebar() {
 
   if (sidebarCollapsed) {
     return (
-      <div className="flex flex-col items-center w-10 shrink-0 bg-[#161616] border-r border-[#2a2a2a] pt-2 gap-1">
+      <div className="flex flex-col items-center w-10 shrink-0 bg-[#161616] border-r border-[#222] pt-2 gap-1">
         <button type="button" onClick={toggleSidebar} title="展开侧边栏"
-          className="w-7 h-7 flex items-center justify-center text-[#666] hover:text-[#ccc] hover:bg-[#2a2a2a] rounded transition-colors">
+          className="w-7 h-7 flex items-center justify-center text-[#555] hover:text-[#ccc] hover:bg-[#252525] rounded transition-colors">
           ›
         </button>
       </div>
@@ -69,29 +81,29 @@ export default function AgentSidebar() {
   }
 
   return (
-    <div className="flex flex-col shrink-0 bg-[#161616] border-r border-[#2a2a2a] w-56">
+    <div className="flex flex-col shrink-0 bg-[#161616] border-r border-[#222] w-64">
       {/* 新对话 */}
-      <div className="px-3 pt-3 pb-2">
+      <div className="px-4 pt-5 pb-2">
         <button type="button" onClick={() => setCurrentThread(null)}
-          className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-[#bbb] hover:text-white hover:bg-[#2a2a2a] transition-colors border border-[#2d2d2d] hover:border-[#3c3c3c]">
+          className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-[14px] text-[#bbb] hover:text-white hover:bg-[#252525] transition-colors border border-[#2a2a2a] hover:border-[#3a3a3a]">
           <span className="text-base leading-none">+</span>
           <span>新对话</span>
         </button>
       </div>
 
       {/* 功能导航 */}
-      <nav className="px-2 pb-2 space-y-0.5">
+      <nav className="px-2 pt-1 pb-3 space-y-0.5">
         <NavItem icon="🔍" label="搜索" shortcut="Ctrl+G" />
         <NavItem icon="🔌" label="插件" />
         <NavItem icon="⚡" label="自动化" />
       </nav>
 
-      <div className="mx-3 border-t border-[#2a2a2a]" />
+      <div className="mx-3 border-t border-[#222]" />
 
       {/* 项目列表 */}
-      <div className="flex-1 overflow-y-auto py-2 min-h-0">
-        <div className="px-3 pb-1">
-          <span className="text-[10px] font-semibold text-[#4a4a4a] uppercase tracking-wider">项目</span>
+      <div className="flex-1 overflow-y-auto py-3 min-h-0">
+        <div className="px-3 pb-1.5">
+          <span className="text-[11px] font-semibold text-[#444] uppercase tracking-wider">项目</span>
         </div>
         {groups.map((group) => (
           <ProjectSection
@@ -104,17 +116,18 @@ export default function AgentSidebar() {
           />
         ))}
         {groups.length === 0 && (
-          <div className="px-3 py-3 text-xs text-[#444]">暂无项目</div>
+          <div className="px-3 py-4 text-[13px] text-[#3a3a3a]">暂无项目</div>
         )}
       </div>
 
-      <div className="mx-3 border-t border-[#2a2a2a]" />
+      <div className="mx-3 border-t border-[#222]" />
 
       {/* 底部 */}
-      <div className="px-2 py-2 flex items-center gap-1">
+      <div className="px-2 py-2.5">
         <button type="button" onClick={() => useGlobalStore.getState().setView('settings')}
-          className="flex items-center gap-2 px-2 py-1.5 text-xs text-[#666] hover:text-[#ccc] hover:bg-[#2a2a2a] rounded flex-1 transition-colors">
-          <span>⚙</span> 设置
+          className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#555] hover:text-[#ccc] hover:bg-[#252525] rounded-lg transition-colors">
+          <span>⚙</span>
+          <span>设置</span>
         </button>
       </div>
     </div>
@@ -124,10 +137,10 @@ export default function AgentSidebar() {
 function NavItem({ icon, label, shortcut }: { icon: string; label: string; shortcut?: string }) {
   return (
     <button type="button"
-      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-[#777] hover:text-[#ccc] hover:bg-[#1e1e1e] transition-colors">
-      <span className="w-4 text-center shrink-0 text-sm">{icon}</span>
+      className="w-full flex items-center gap-2.5 px-4 py-2 rounded-lg text-[14px] text-[#666] hover:text-[#ccc] hover:bg-[#1e1e1e] transition-colors">
+      <span className="w-4 text-center shrink-0">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
-      {shortcut && <span className="text-[10px] text-[#3c3c3c]">{shortcut}</span>}
+      {shortcut && <span className="text-[11px] text-[#333]">{shortcut}</span>}
     </button>
   )
 }
@@ -142,31 +155,34 @@ function ProjectSection({ group, expanded, onToggle, currentThreadId, onSelectTh
   return (
     <div>
       <button type="button" onClick={onToggle}
-        className="w-full flex items-center gap-1.5 px-3 py-1.5 text-sm text-[#888] hover:text-[#ccc] hover:bg-[#1a1a1a] transition-colors">
+        className="w-full flex items-center gap-2 px-4 py-2 text-[14px] text-[#777] hover:text-[#ccc] hover:bg-[#1c1c1c] transition-colors">
         <span className={`text-[9px] transition-transform shrink-0 ${expanded ? 'rotate-90' : ''}`}>▶</span>
         <span className="shrink-0">📁</span>
         <span className="flex-1 text-left truncate font-medium">{group.name}</span>
+        {group.threads.length > 0 && (
+          <span className="text-[12px] text-[#3a3a3a] shrink-0">{group.threads.length}</span>
+        )}
       </button>
       {expanded && (
-        <div className="ml-5 mr-1">
-          {group.threads.slice(0, 8).map((t) => (
+        <div className="ml-7 mr-2 mb-1">
+          {group.threads.slice(0, 10).map((t) => (
             <button type="button" key={t.id} onClick={() => onSelectThread(t.id)}
-              className={`w-full text-left px-3 py-1.5 rounded flex flex-col gap-0 transition-colors ${
+              className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
                 currentThreadId === t.id
                   ? 'bg-[#0d2d4a] text-[#cde]'
-                  : 'text-[#777] hover:bg-[#1a1a1a] hover:text-[#ccc]'
+                  : 'text-[#666] hover:bg-[#1c1c1c] hover:text-[#bbb]'
               }`}>
-              <span className="text-xs truncate leading-snug">{t.title || '未命名对话'}</span>
-              <span className="text-[10px] text-[#444]">{relativeTime(t.updatedAt)}</span>
+              <span className="flex-1 text-[14px] truncate">{t.title || '未命名对话'}</span>
+              <span className="text-[12px] text-[#3a3a3a] shrink-0">{relativeTime(t.updatedAt)}</span>
             </button>
           ))}
-          {group.threads.length > 8 && (
-            <button type="button" className="w-full text-left px-3 py-0.5 text-[10px] text-[#444] hover:text-[#666]">
-              展开显示
+          {group.threads.length > 10 && (
+            <button type="button" className="w-full text-left px-3 py-1.5 text-[12px] text-[#3a3a3a] hover:text-[#555] transition-colors">
+              +{group.threads.length - 10} 条更多
             </button>
           )}
           {group.threads.length === 0 && (
-            <div className="px-3 py-1 text-[10px] text-[#3a3a3a]">暂无对话</div>
+            <div className="px-3 py-2 text-[13px] text-[#333]">暂无对话</div>
           )}
         </div>
       )}

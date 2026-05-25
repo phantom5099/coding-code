@@ -19,8 +19,6 @@ export interface Thread {
   title: string
   cwd: string
   turns: Turn[]
-  model: string
-  approvalPolicy: 'suggest' | 'auto-edit' | 'full-auto'
   createdAt: number
   updatedAt: number
 }

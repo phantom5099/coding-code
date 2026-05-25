@@ -40,27 +40,17 @@ export function useAgent() {
     const offChunk = window.electronAPI?.onAgentChunk?.((payload) => {
       applyChunk(payload.threadId, payload.turnId, payload.chunk)
     })
-    const offUsage = window.electronAPI?.onAgentUsage?.((payload) => {
-      if (payload.threadId === useGlobalStore.getState().agent.currentThreadId) {
-        setContextUsage({ used: payload.totalTokens, contextWindow: payload.contextWindow })
-      }
-    })
     const offDone = window.electronAPI?.onAgentDone?.((payload) => {
       completeTurn(payload.threadId, payload.turnId, payload.error ? 'error' : 'completed')
-      if (payload.usage) {
-        setContextUsage({ used: payload.usage.totalTokens, contextWindow: payload.usage.contextWindow })
-      }
-      // Reload threads to get updated title/cwd from main process
       window.electronAPI?.getThreads?.().then((threads) => {
         loadThreads(threads as Parameters<typeof loadThreads>[0])
       })
     })
     return () => {
       offChunk?.()
-      offUsage?.()
       offDone?.()
     }
-  }, [applyChunk, completeTurn, loadThreads, setContextUsage])
+  }, [applyChunk, completeTurn, loadThreads])
 
   const sendMessage = useCallback(
     async (threadId: string, content: string, cwd?: string) => {

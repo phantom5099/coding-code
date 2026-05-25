@@ -20,6 +20,13 @@ function createWindow(): BrowserWindow {
     backgroundColor: '#1e1e1e',
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 12, y: 12 },
+    ...(process.platform === 'win32' ? {
+      titleBarOverlay: {
+        color: '#1a1a1a',
+        symbolColor: '#858585',
+        height: 36,
+      },
+    } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/preload.js'),
       contextIsolation: true,

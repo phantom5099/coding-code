@@ -31,8 +31,6 @@ export async function runAgent(opts: {
       title: userMessage.slice(0, 60),
       cwd,
       turns: [],
-      model: '',
-      approvalPolicy: storeService.getApprovalPolicy(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }

@@ -38,7 +38,7 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
 
   ipcMain.handle('agent:getModels', async () => {
     const { models } = await listModels()
-    return models.map((m) => ({
+    return models.map((m: Record<string, unknown>) => ({
       id: m.id,
       name: m.name,
       provider: m.provider,
@@ -47,7 +47,6 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
   })
 
   ipcMain.handle('agent:setModel', async (_e, modelId: string) => {
-    storeService.setActiveModel(modelId)
     await switchModel(modelId)
   })
 
@@ -59,7 +58,7 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
     const workspace = storeService.getWorkspace()
     const { activeId } = await listModels()
     return {
-      activeModel: activeId ?? storeService.getActiveModel(),
+      activeModel: activeId ?? '',
       approvalPolicy: storeService.getApprovalPolicy(),
       workspace,
     }

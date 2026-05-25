@@ -1,6 +1,6 @@
 import { resolve } from 'path'
 import { app } from 'electron'
-import type { AgentClient, SelectableModel } from '@codingcode/core'
+import type { AgentClient } from '@codingcode/core'
 
 // Per-thread clients
 const clients = new Map<string, AgentClient>()
@@ -10,12 +10,7 @@ const activeGens = new Map<string, AsyncGenerator<any>>()
 let _ready = false
 
 function getInstallRoot(): string {
-  // In dev: app.getAppPath() = packages/desktop/out/main, go up 3 to repo root
-  // In prod: app.getAppPath() = app.asar root, config is in resourcesPath
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    return resolve(app.getAppPath(), '../../../')
-  }
-  return resolve(app.getAppPath(), '../../../')
+  return resolve(app.getAppPath(), '../../')
 }
 
 export async function initBackend(workspaceCwd: string): Promise<void> {
@@ -60,24 +55,16 @@ export function abortAndClear(threadId: string): void {
   }
 }
 
-export async function listModels(): Promise<{ models: SelectableModel[]; activeId: string | null }> {
-  const { listModels: coreListModels, getActiveEntry } = await import('@codingcode/core')
-  const modelsResult = coreListModels()
-  const models = modelsResult.ok ? modelsResult.value : []
-  const activeResult = getActiveEntry()
-  const activeId = activeResult.ok ? activeResult.value.id : null
-  return { models, activeId }
+export async function listModels(): Promise<any> {
+  const client = await getOrCreateClient('__meta__')
+  return client.listModels()
 }
 
 export async function switchModel(id: string): Promise<void> {
-  const { switchActiveModel, getLLMClient } = await import('@codingcode/core')
-  const result = switchActiveModel(id)
-  if (!result.ok) throw new Error(result.error.message)
-  // Refresh all existing clients
-  const newLlm = await getLLMClient()
-  if (!newLlm.ok) throw new Error(newLlm.error.message)
-  for (const client of clients.values()) {
-    await client.switchModel(id)
+  const meta = await getOrCreateClient('__meta__')
+  await meta.switchModel(id)
+  for (const [threadId, client] of clients) {
+    if (threadId !== '__meta__') await client.switchModel(id)
   }
 }
 

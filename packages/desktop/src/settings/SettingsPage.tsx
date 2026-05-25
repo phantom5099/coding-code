@@ -10,33 +10,25 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>('mcp')
 
   return (
-    <div className="flex flex-col h-full bg-[#111] text-[#ccc]">
+    <div className="flex flex-col flex-1 min-h-0 bg-[#111] text-[#ccc]">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2a2a2a] shrink-0">
-        <button
-          type="button"
-          onClick={() => setView('agent')}
-          className="text-[#555] hover:text-[#ccc] transition-colors text-lg leading-none"
-          title="返回"
-        >
+      <div className="flex items-center gap-4 px-6 py-4 border-b border-[#222] shrink-0">
+        <button type="button" onClick={() => setView('agent')}
+          className="text-[#555] hover:text-[#ccc] transition-colors text-xl leading-none">
           ←
         </button>
-        <span className="text-sm font-medium text-[#ddd]">设置</span>
+        <span className="text-[16px] font-medium text-[#ddd]">设置</span>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 px-4 pt-3 pb-0 border-b border-[#2a2a2a] shrink-0">
+      <div className="flex gap-1 px-6 pt-4 border-b border-[#222] shrink-0">
         {(['mcp', 'skills'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`px-3 py-1.5 text-sm rounded-t transition-colors ${
+          <button key={t} type="button" onClick={() => setTab(t)}
+            className={`px-4 py-2 text-[14px] rounded-t transition-colors ${
               tab === t
                 ? 'text-[#ddd] border-b-2 border-[#569cd6]'
                 : 'text-[#555] hover:text-[#aaa]'
-            }`}
-          >
+            }`}>
             {t === 'mcp' ? 'MCP 服务器' : 'Skills'}
           </button>
         ))}
