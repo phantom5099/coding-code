@@ -5,12 +5,12 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { loadProjectionStore, appendProjection } from '../../src/session/projection-store.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('multi-session isolation', () => {
   it('concurrent sessions have independent projection stores', () => {
     const slug = randomUUID();
-    const dir = join(SESSIONS_DIR, slug);
+    const dir = join(PROJECT_BASE, slug, 'sessions');
     mkdirSync(dir, { recursive: true });
 
     const sids = [randomUUID(), randomUUID(), randomUUID()];

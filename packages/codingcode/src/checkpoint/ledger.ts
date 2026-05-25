@@ -13,13 +13,13 @@ export interface LedgerEntry {
 
 /**
  * File change ledger — JSONL log of every file-modifying tool call.
- * Stored alongside the Shadow Git repo: ~/.codingcode/checkpoints/<hash>-ledger.jsonl
+ * Stored inside the project checkpoint folder: project/<encoded>/checkpoint/repo-ledger.jsonl
  */
 export class Ledger {
   private readonly path: string;
 
-  constructor(shadowDir: string) {
-    this.path = join(shadowDir.replace('.git', '-ledger.jsonl'));
+  constructor(checkpointDir: string) {
+    this.path = join(checkpointDir, 'repo-ledger.jsonl');
   }
 
   record(entry: LedgerEntry): void {

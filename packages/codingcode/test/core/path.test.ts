@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizePath, projectSlugFromPath } from '../../src/core/path.js';
+import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
 import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
 
 describe('core/path', () => {
@@ -9,18 +9,26 @@ describe('core/path', () => {
     expect(normalizePath('c:/Users/proj')).toBe('c:/Users/proj');
   });
 
-  it('projectSlugFromPath returns same slug for equivalent paths', () => {
-    const a = projectSlugFromPath('C:\\Users\\proj');
-    const b = projectSlugFromPath('/c/Users/proj');
-    const c = projectSlugFromPath('c:/Users/proj');
+  it('encodeProjectPath returns same encoded path for equivalent paths', () => {
+    const a = encodeProjectPath('C:\\Users\\proj');
+    const b = encodeProjectPath('/c/Users/proj');
+    const c = encodeProjectPath('c:/Users/proj');
     expect(a).toBe(b);
     expect(b).toBe(c);
-    expect(a).toHaveLength(16);
+    expect(a).toBe('c-users-proj');
   });
 
-  it('ShadowGit uses same slug as projectSlugFromPath', () => {
+  it('encodeProjectPath handles spaces', () => {
+    expect(encodeProjectPath('c:/my project/foo bar')).toBe('c-my-project-foo-bar');
+  });
+
+  it('encodeProjectPath handles Unix paths', () => {
+    expect(encodeProjectPath('/home/user/my-project')).toBe('home-user-my-project');
+  });
+
+  it('ShadowGit gitDir uses encoded project path', () => {
     const path = '/tmp/my-project';
     const sg = new ShadowGit(path);
-    expect(sg.gitDir).toContain(projectSlugFromPath(path));
+    expect(sg.gitDir).toContain(encodeProjectPath(path));
   });
 });

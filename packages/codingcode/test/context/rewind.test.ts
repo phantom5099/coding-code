@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { loadProjectionStore, appendProjection, rewindProjections } from '../../src/session/projection-store.js';
 import { enqueueTask, truncateJsonl } from '../../src/session/store.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('rewind', () => {
   let sessionId: string;
@@ -16,7 +16,7 @@ describe('rewind', () => {
   beforeEach(() => {
     sessionId = randomUUID();
     slug = randomUUID();
-    const sessionDir = join(SESSIONS_DIR, slug);
+    const sessionDir = join(PROJECT_BASE, slug, 'sessions');
     mkdirSync(sessionDir, { recursive: true });
     transcriptPath = join(sessionDir, `${sessionId}.jsonl`);
 
@@ -57,7 +57,7 @@ describe('rewind', () => {
   });
 
   afterEach(() => {
-    const dir = join(SESSIONS_DIR, slug);
+    const dir = join(PROJECT_BASE, slug, 'sessions');
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 

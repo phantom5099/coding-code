@@ -1,7 +1,7 @@
 export interface SessionMetaEvent {
   type: 'session_meta';
   sessionId: string;
-  projectSlug: string;
+  projectPath: string;
   cwd: string;
   model: string;
   createdAt: string;
@@ -49,7 +49,7 @@ export type SessionEvent =
 
 export interface SessionIndex {
   sessionId: string;
-  projectSlug: string;
+  projectPath: string;
   cwd: string;
   model: string;
   createdAt: string;

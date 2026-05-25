@@ -1,27 +1,27 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync, unlinkSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { loadProjectionStore, appendProjection, rewindProjections, computeRanges } from '../../src/session/projection-store.js';
 import type { ProjectionEntry } from '../../src/context/projection/types.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('projection-store', () => {
   let sessionId: string;
-  let slug: string;
+  let encoded: string;
 
   beforeEach(() => {
     sessionId = randomUUID();
-    slug = randomUUID();
-    const sessionDir = join(SESSIONS_DIR, slug);
-    mkdirSync(sessionDir, { recursive: true });
-    writeFileSync(join(sessionDir, `${sessionId}.jsonl`), '', 'utf8');
+    encoded = randomUUID();
+    const sessionsDir = join(PROJECT_BASE, encoded, 'sessions');
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(sessionsDir, `${sessionId}.jsonl`), '', 'utf8');
   });
 
   afterEach(() => {
-    const dir = join(SESSIONS_DIR, slug);
+    const dir = join(PROJECT_BASE, encoded);
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 

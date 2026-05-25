@@ -15,7 +15,7 @@ import { ToolSearchService } from '../../src/tools/tool-search-service.js';
 const mockState = {
   sessionId: 'test-session',
   cwd: '/tmp/test',
-  projectSlug: 'test',
+  projectPath: 'test',
   transcriptPath: '/tmp/test.jsonl',
   indexPath: '/tmp/test.index.json',
   messageCount: 0,

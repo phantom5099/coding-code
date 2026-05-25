@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { estimateTokensForContent } from '../../src/context/utils/tokens.js';
 import { getContextConfig } from '../../src/context/config.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('appendTurnEnd', () => {
   const projectSlug = randomUUID();
@@ -14,13 +14,13 @@ describe('appendTurnEnd', () => {
 
   beforeEach(() => {
     sessionId = randomUUID();
-    const sessionDir = join(SESSIONS_DIR, projectSlug);
+    const sessionDir = join(PROJECT_BASE, projectSlug, 'sessions');
     mkdirSync(sessionDir, { recursive: true });
     writeFileSync(join(sessionDir, `${sessionId}.jsonl`), '', 'utf8');
   });
 
   afterEach(() => {
-    const dir = join(SESSIONS_DIR, projectSlug);
+    const dir = join(PROJECT_BASE, projectSlug, 'sessions');
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 

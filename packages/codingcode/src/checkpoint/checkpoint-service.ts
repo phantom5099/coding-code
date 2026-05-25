@@ -45,7 +45,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
 
     function ledger(sg: ShadowGit): Ledger {
       if (!_ledger || _ledgerGitDir !== sg.gitDir) {
-        _ledger = new Ledger(sg.gitDir);
+        _ledger = new Ledger(dirname(sg.gitDir));
         _ledgerGitDir = sg.gitDir;
       }
       return _ledger;

@@ -9,7 +9,7 @@ import { ContextService } from '../../src/context/context.js';
 import { appendProjection } from '../../src/session/projection-store.js';
 import type { SessionIndex } from '../../src/session/types.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('tokenCountEstimate incremental maintenance', () => {
   const tempDirs: string[] = [];
@@ -21,7 +21,7 @@ describe('tokenCountEstimate incremental maintenance', () => {
   });
 
   it('increments index.tokenCountEstimate after each record*', async () => {
-    const cwd = join(SESSIONS_DIR, '__tmp__', randomUUID());
+    const cwd = join(PROJECT_BASE, '__tmp__', randomUUID());
     mkdirSync(cwd, { recursive: true });
     tempDirs.push(dirname(cwd));
 
@@ -54,7 +54,7 @@ describe('tokenCountEstimate incremental maintenance', () => {
     // Set up a session with a chunky tool_result, then write a prune projection.
     const sessionId = randomUUID();
     const slug = randomUUID();
-    const dir = join(SESSIONS_DIR, slug);
+    const dir = join(PROJECT_BASE, slug, 'sessions');
     mkdirSync(dir, { recursive: true });
     tempDirs.push(dir);
 
@@ -64,7 +64,7 @@ describe('tokenCountEstimate incremental maintenance', () => {
     const toolTokens = Math.ceil(toolContent.length / 3.5);
 
     const lines = [
-      { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'q', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'r', toolCalls: [{ id: 'tc1', name: 'bash', arguments: '{}' }], model: 'test', timestamp: new Date().toISOString() },
       { type: 'tool_result', turnId: 1, uuid: 't1', parentUuid: 'a1', toolName: 'bash', toolCallId: 'tc1', output: toolContent, timestamp: new Date().toISOString(), tokenCount: toolTokens },
@@ -72,7 +72,7 @@ describe('tokenCountEstimate incremental maintenance', () => {
     writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
     const idx0: SessionIndex = {
-      sessionId, projectSlug: slug, cwd: '/tmp', model: 'test',
+      sessionId, projectPath: slug, cwd: '/tmp', model: 'test',
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       messageCount: 3, title: 't', currentTurnId: 1,
       tokenCountEstimate: toolTokens + 4, // tool + tiny user + tiny assistant
@@ -102,18 +102,18 @@ describe('tokenCountEstimate incremental maintenance', () => {
     // threshold; assert appendTurnEnd attempts to run() (will no-op if no LLM).
     const sessionId = randomUUID();
     const slug = randomUUID();
-    const dir = join(SESSIONS_DIR, slug);
+    const dir = join(PROJECT_BASE, slug, 'sessions');
     mkdirSync(dir, { recursive: true });
     tempDirs.push(dir);
 
     const transcriptPath = join(dir, `${sessionId}.jsonl`);
     const indexPath = join(dir, `${sessionId}.index.json`);
 
-    // Empty-ish JSONL so collectAllRawTools yields nothing â†’ run() exits cleanly.
-    writeFileSync(transcriptPath, JSON.stringify({ type: 'session_meta', sessionId, projectSlug: slug, cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' }) + '\n', 'utf8');
+    // Empty-ish JSONL so collectAllRawTools yields nothing â†?run() exits cleanly.
+    writeFileSync(transcriptPath, JSON.stringify({ type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' }) + '\n', 'utf8');
 
     const idx: SessionIndex = {
-      sessionId, projectSlug: slug, cwd: '/tmp', model: 'test',
+      sessionId, projectPath: slug, cwd: '/tmp', model: 'test',
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       messageCount: 0, title: 't', currentTurnId: 0,
       tokenCountEstimate: 999_999, // way above any threshold

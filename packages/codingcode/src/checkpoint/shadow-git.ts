@@ -2,11 +2,11 @@ import { spawnSync } from 'child_process';
 import { existsSync, mkdirSync, statSync, writeFileSync, unlinkSync, openSync, closeSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { normalizePath, projectSlugFromPath } from '../core/path.js';
+import { normalizePath, encodeProjectPath } from '../core/path.js';
 
 export { normalizePath } from '../core/path.js';
 
-const SHADOWS_DIR = join(homedir(), '.codingcode', 'checkpoints');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 const NULL_DEVICE = process.platform === 'win32' ? 'NUL' : '/dev/null';
 
 const IGNORE_RULES = [
@@ -24,11 +24,11 @@ export class ShadowGit {
   private lockFd: number | null = null;
 
   constructor(projectPath: string) {
-    // Normalize path so same dir always produces same hash (resolve + forward slash + lowercase drive)
+    // Normalize path so same dir always produces same encoding (forward slash + lowercase drive)
     this.projectPath = normalizePath(projectPath);
-    const hash = projectSlugFromPath(this.projectPath);
-    this.gitDir = join(SHADOWS_DIR, `${hash}.git`);
-    this.lockPath = join(SHADOWS_DIR, `${hash}.lock`);
+    const encoded = encodeProjectPath(this.projectPath);
+    this.gitDir = join(PROJECT_BASE, encoded, 'checkpoint', 'repo.git');
+    this.lockPath = join(PROJECT_BASE, encoded, 'checkpoint', 'repo.lock');
   }
 
   init(): void {

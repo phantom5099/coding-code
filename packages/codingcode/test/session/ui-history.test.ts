@@ -5,10 +5,10 @@ import { join } from 'path'
 import { homedir } from 'os'
 
 // Helper to write a fake session JSONL for testing
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions')
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project')
 
 function writeTestSession(slug: string, sessionId: string, lines: object[]): string {
-  const dir = join(SESSIONS_DIR, slug)
+  const dir = join(PROJECT_BASE, slug, 'sessions')
   mkdirSync(dir, { recursive: true })
   const path = join(dir, `${sessionId}.jsonl`)
   writeFileSync(path, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8')
@@ -16,7 +16,7 @@ function writeTestSession(slug: string, sessionId: string, lines: object[]): str
 }
 
 function cleanupSession(slug: string, sessionId: string): void {
-  const dir = join(SESSIONS_DIR, slug)
+  const dir = join(PROJECT_BASE, slug, 'sessions')
   const jsonl = join(dir, `${sessionId}.jsonl`)
   const idx = join(dir, `${sessionId}.index.json`)
   try { if (existsSync(jsonl)) unlinkSync(jsonl) } catch {}
@@ -33,7 +33,7 @@ describe('readUIHistory', () => {
     const sessionId = 'test-ui-history-basic'
     const slug = 'test-project'
     writeTestSession(slug, sessionId, [
-      { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
+      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
       { type: 'user', turnId: 0, uuid: 'u1', content: 'Hello', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 0, uuid: 'a1', content: 'Hi there', toolCalls: [], model: 'claude', timestamp: new Date().toISOString() },
     ])
@@ -56,7 +56,7 @@ describe('readUIHistory', () => {
     const sessionId = 'test-ui-history-turns'
     const slug = 'test-project'
     writeTestSession(slug, sessionId, [
-      { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
+      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
       { type: 'user', turnId: 0, uuid: 'u1', content: 'First', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 0, uuid: 'a1', content: 'Reply 1', toolCalls: [], model: 'claude', timestamp: new Date().toISOString() },
       { type: 'user', turnId: 1, uuid: 'u2', content: 'Second', timestamp: new Date().toISOString() },
@@ -81,7 +81,7 @@ describe('readUIHistory', () => {
     const sessionId = 'test-ui-history-tools'
     const slug = 'test-project'
     writeTestSession(slug, sessionId, [
-      { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
+      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
       { type: 'user', turnId: 0, uuid: 'u1', content: 'Run ls', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 0, uuid: 'a1', content: '', toolCalls: [{ id: 'tc1', name: 'bash', arguments: '{"command":"ls"}' }], model: 'claude', timestamp: new Date().toISOString() },
       { type: 'tool_result', turnId: 0, uuid: 'tr1', parentUuid: 'a1', toolName: 'bash', toolCallId: 'tc1', output: 'file.txt', timestamp: new Date().toISOString(), tokenCount: 5 },
@@ -107,7 +107,7 @@ describe('deleteSession', () => {
     const sessionId = 'test-delete-session'
     const slug = 'test-project'
     const path = writeTestSession(slug, sessionId, [
-      { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
+      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
     ])
 
     expect(existsSync(path)).toBe(true)
@@ -119,9 +119,9 @@ describe('deleteSession', () => {
     const sessionId = 'test-delete-with-subagents'
     const slug = 'test-project'
     const path = writeTestSession(slug, sessionId, [
-      { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
+      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
     ])
-    const subagentDir = join(SESSIONS_DIR, slug, sessionId, 'subagents')
+    const subagentDir = join(PROJECT_BASE, slug, 'sessions', sessionId, 'subagents')
     mkdirSync(subagentDir, { recursive: true })
     writeFileSync(join(subagentDir, 'child.jsonl'), '', 'utf8')
 

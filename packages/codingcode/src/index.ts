@@ -1,14 +1,14 @@
 export { AgentService } from './agent/agent.js';
 export { SessionService, findSessionIndex, readUIHistory, deleteSession, listSessions } from './session/store.js';
 export type { SessionStoreState } from './session/store.js';
-export { normalizePath, projectSlugFromPath } from './core/path.js';
+export { normalizePath, encodeProjectPath } from './core/path.js';
 export {
   initWorkspace,
   parseWorkspaceArgs,
   getWorkspaceCwd,
   getInstallRoot,
   resolveWorkspaceCwd,
-  getWorkspaceSlug,
+  getWorkspacePath,
   resolveInWorkspace,
   getConfig,
 } from './core/workspace.js';

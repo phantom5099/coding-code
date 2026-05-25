@@ -1,25 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rmSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { rmSync, existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import { Ledger } from '../../src/checkpoint/ledger.js';
 
 describe('Ledger', () => {
-  let shadowDir: string;
+  let checkpointDir: string;
   let ledger: Ledger;
 
   beforeEach(() => {
-    // Use a temp path that looks like a git dir path — Ledger derives storage from it
-    const hash = randomUUID().slice(0, 8);
-    shadowDir = join(tmpdir(), `ledger-test-${hash}.git`);
-    ledger = new Ledger(shadowDir);
+    checkpointDir = join(tmpdir(), `ledger-test-${randomUUID().slice(0, 8)}`);
+    mkdirSync(checkpointDir, { recursive: true });
+    ledger = new Ledger(checkpointDir);
   });
 
   afterEach(() => {
-    // Clean up the ledger file
-    const ledgerFile = shadowDir.replace('.git', '-ledger.jsonl');
-    try { rmSync(ledgerFile, { force: true }); } catch { /* ignore */ }
+    try { rmSync(join(checkpointDir, 'repo-ledger.jsonl'), { force: true }); } catch { /* ignore */ }
   });
 
   it('records and retrieves entries', () => {
