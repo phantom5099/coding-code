@@ -102,7 +102,6 @@ export default function AgentSidebar() {
       {/* 功能导航 */}
       <nav className="px-2 pt-1 pb-3 space-y-0.5">
         <NavItem icon="🔍" label="搜索" shortcut="Ctrl+G" />
-        <NavItem icon="🔌" label="插件" />
         <NavItem icon="⚡" label="自动化" />
       </nav>
 

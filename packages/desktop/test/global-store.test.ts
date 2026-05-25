@@ -10,7 +10,6 @@ beforeEach(() => {
       approvalPolicy: 'suggest',
       model: '',
       models: [],
-      isStreaming: false,
       contextUsage: null,
       streamingContent: {},
     },
@@ -33,7 +32,7 @@ describe('global store - agent streaming actions', () => {
     expect(thread).toBeDefined()
     expect(thread.turns).toHaveLength(1)
     expect(thread.turns[0].id).toBe(turnId)
-    expect(useGlobalStore.getState().agent.isStreaming).toBe(true)
+    expect(thread.turns.some((t) => t.status === 'running')).toBe(true)
   })
 
   it('applyChunk adds streaming assistant item to turn.items and accumulates content', () => {
@@ -113,7 +112,7 @@ describe('global store - agent streaming actions', () => {
 
     const updatedTurn = useGlobalStore.getState().agent.threads[threadId].turns[0]
     expect(updatedTurn.status).toBe('completed')
-    expect(useGlobalStore.getState().agent.isStreaming).toBe(false)
+    expect(updatedTurn.items.every((i) => useGlobalStore.getState().agent.streamingContent[i.id] === undefined)).toBe(true)
   })
 })
 
@@ -164,5 +163,44 @@ describe('global store - loadThreads', () => {
     useGlobalStore.getState().loadThreads([])
 
     expect(useGlobalStore.getState().agent.threads[threadId]).toBeUndefined()
+  })
+})
+
+describe('global store - per-thread isStreaming derivation', () => {
+  it('thread A running does not affect thread B isStreaming', () => {
+    const threadA = 'thread-a'
+    const threadB = 'thread-b'
+
+    useGlobalStore.getState().startTurn(threadA, { id: 'turn-a', items: [], status: 'running' })
+    useGlobalStore.getState().startTurn(threadB, { id: 'turn-b', items: [], status: 'running' })
+
+    const isStreamingA = () =>
+      useGlobalStore.getState().agent.threads[threadA]?.turns.some((t) => t.status === 'running') ?? false
+    const isStreamingB = () =>
+      useGlobalStore.getState().agent.threads[threadB]?.turns.some((t) => t.status === 'running') ?? false
+
+    expect(isStreamingA()).toBe(true)
+    expect(isStreamingB()).toBe(true)
+
+    useGlobalStore.getState().completeTurn(threadA, 'turn-a', 'completed')
+
+    // Thread A done, Thread B still running
+    expect(isStreamingA()).toBe(false)
+    expect(isStreamingB()).toBe(true)
+  })
+
+  it('thread with no running turns is not streaming', () => {
+    const threadId = 'thread-x'
+    const isStreaming = () =>
+      useGlobalStore.getState().agent.threads[threadId]?.turns.some((t) => t.status === 'running') ?? false
+
+    // Thread not yet created
+    expect(isStreaming()).toBe(false)
+
+    useGlobalStore.getState().startTurn(threadId, { id: 'turn-1', items: [], status: 'running' })
+    expect(isStreaming()).toBe(true)
+
+    useGlobalStore.getState().completeTurn(threadId, 'turn-1', 'completed')
+    expect(isStreaming()).toBe(false)
   })
 })
