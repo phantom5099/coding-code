@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync, truncateSync, statSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync, truncateSync, statSync, unlinkSync, rmSync } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
@@ -367,8 +367,10 @@ export function deleteSession(sessionId: string): void {
   if (!dir) return;
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
   const idxPath = join(dir, `${sessionId}.index.json`);
+  const subagentDir = join(dir, sessionId);
   try { if (existsSync(jsonlPath)) unlinkSync(jsonlPath); } catch {}
   try { if (existsSync(idxPath)) unlinkSync(idxPath); } catch {}
+  try { if (existsSync(subagentDir)) rmSync(subagentDir, { recursive: true, force: true }); } catch {}
 }
 
 function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string; items: object[]; status: string }> {

@@ -115,6 +115,23 @@ describe('deleteSession', () => {
     expect(existsSync(path)).toBe(false)
   })
 
+  it('removes subagents directory when present', () => {
+    const sessionId = 'test-delete-with-subagents'
+    const slug = 'test-project'
+    const path = writeTestSession(slug, sessionId, [
+      { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/test', model: 'claude', createdAt: new Date().toISOString(), version: '1' },
+    ])
+    const subagentDir = join(SESSIONS_DIR, slug, sessionId, 'subagents')
+    mkdirSync(subagentDir, { recursive: true })
+    writeFileSync(join(subagentDir, 'child.jsonl'), '', 'utf8')
+
+    expect(existsSync(path)).toBe(true)
+    expect(existsSync(subagentDir)).toBe(true)
+    deleteSession(sessionId)
+    expect(existsSync(path)).toBe(false)
+    expect(existsSync(subagentDir)).toBe(false)
+  })
+
   it('does nothing for unknown session', () => {
     expect(() => deleteSession('nonexistent-session-id-xyz')).not.toThrow()
   })
