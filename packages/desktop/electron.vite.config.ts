@@ -5,7 +5,7 @@ import { resolve } from 'path'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ['@codingcode/core', '@codingcode/infra'] })],
     build: {
       lib: {
         entry: resolve('electron/main.ts'),

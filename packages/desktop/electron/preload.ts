@@ -29,12 +29,24 @@ const api = {
   getModels: (): Promise<unknown[]> => ipcRenderer.invoke('agent:getModels'),
   setModel: (modelId: string): Promise<void> => ipcRenderer.invoke('agent:setModel', modelId),
   setApprovalPolicy: (policy: string): Promise<void> => ipcRenderer.invoke('agent:setApprovalPolicy', policy),
-  getSettings: (): Promise<{ activeModel: string; approvalPolicy: string }> => ipcRenderer.invoke('agent:getSettings'),
+  getSettings: (): Promise<{ activeModel: string; approvalPolicy: string; workspace: { rootPath: string; name: string } }> =>
+    ipcRenderer.invoke('agent:getSettings'),
+  compressContext: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:compressContext', threadId),
 
   // Git
   gitStatus: (): Promise<unknown> => ipcRenderer.invoke('git:status'),
   gitBranches: (): Promise<string[]> => ipcRenderer.invoke('git:branches'),
   gitSwitchBranch: (branch: string): Promise<void> => ipcRenderer.invoke('git:switchBranch', branch),
+
+  // Settings (MCP / Skills)
+  getMcp: (): Promise<{name: string; transport: 'stdio'|'http'; disabled: boolean; toolCount: number}[]> =>
+    ipcRenderer.invoke('settings:getMcp'),
+  setMcpDisabled: (name: string, disabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('settings:setMcpDisabled', name, disabled),
+  getSkills: (): Promise<{name: string; description: string; source: 'global'|'project'; disabled: boolean}[]> =>
+    ipcRenderer.invoke('settings:getSkills'),
+  setSkillDisabled: (name: string, disabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('settings:setSkillDisabled', name, disabled),
 
   // Events: main → renderer
   onFsChange: (cb: (payload: { path: string; type: 'add' | 'change' | 'unlink' }) => void) => {
@@ -49,7 +61,11 @@ const api = {
     ipcRenderer.on('agent:chunk', (_e, payload) => cb(payload))
     return () => ipcRenderer.removeAllListeners('agent:chunk')
   },
-  onAgentDone: (cb: (payload: { threadId: string; turnId: string; error?: string }) => void) => {
+  onAgentUsage: (cb: (payload: { threadId: string; promptTokens: number; totalTokens: number; contextWindow: number }) => void) => {
+    ipcRenderer.on('agent:usage', (_e, payload) => cb(payload))
+    return () => ipcRenderer.removeAllListeners('agent:usage')
+  },
+  onAgentDone: (cb: (payload: { threadId: string; turnId: string; error?: string; usage?: { promptTokens: number; totalTokens: number; contextWindow: number } }) => void) => {
     ipcRenderer.on('agent:done', (_e, payload) => cb(payload))
     return () => ipcRenderer.removeAllListeners('agent:done')
   },

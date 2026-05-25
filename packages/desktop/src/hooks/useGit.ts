@@ -16,7 +16,7 @@ export function useGit() {
       setGit(status as GitStatus)
     })
 
-    return () => off?.()
+    return () => { off?.() }
   }, [setGit])
 
   const switchBranch = async (branch: string) => {

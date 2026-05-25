@@ -18,6 +18,8 @@ export function formatEventForTransport(event: AgentEvent): string | null {
       return null;
     case 'TodoUpdate':
       return JSON.stringify({ type: 'todo_update', items: event.items });
+    default:
+      return null;
   }
 }
 

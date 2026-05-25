@@ -17,6 +17,11 @@ import { getMemoryEnabled, setMemoryEnabled } from '../memory/index.js';
 
 export type StreamChunk = string
   | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
+  | { type: 'tool_start'; name: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean }
+  | { type: 'tool_denied'; name: string; reason: string }
+  | { type: 'error'; message: string }
+  | { type: 'done' }
   | { type: 'todo_update'; items: ReadonlyArray<{ step: string; status: string }> };
 
 export interface AgentClient {
@@ -54,13 +59,22 @@ export async function* agentEventToStreamChunk(
         yield event.text;
         break;
       case 'ToolStart':
-        yield `\n[Using: ${event.name}]\n`;
+        yield { type: 'tool_start', name: event.name, args: event.args };
+        break;
+      case 'ToolResult':
+        yield { type: 'tool_result', id: event.id, name: event.name, output: event.output, ok: event.ok };
         break;
       case 'ToolDenied':
-        yield `\n[Denied: ${event.name}] ${event.reason}\n`;
+        yield { type: 'tool_denied', name: event.name, reason: event.reason };
         break;
       case 'ApprovalRequest':
         yield { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
+        break;
+      case 'Error':
+        yield { type: 'error', message: event.error.message ?? String(event.error) };
+        break;
+      case 'Done':
+        yield { type: 'done' };
         break;
       case 'TodoUpdate':
         yield { type: 'todo_update', items: event.items as any };

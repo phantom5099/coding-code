@@ -43,7 +43,9 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   }
 
   const renderItem = (index: number) => {
-    const { item } = allItems[index]
+    const entry = allItems[index]
+    if (!entry) return null
+    const { item } = entry
     const streaming = item.type === 'message' && item.partial ? streamingContent[item.id] : undefined
     return (
       <div className="px-4 py-1">

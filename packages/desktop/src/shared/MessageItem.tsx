@@ -22,7 +22,7 @@ function parseMarkdown(text: string): React.ReactNode {
       if (codeMatch.index > 0) {
         blocks.push(<span key={key++} className="whitespace-pre-wrap">{remaining.slice(0, codeMatch.index)}</span>)
       }
-      blocks.push(<CodeBlock key={key++} code={codeMatch[2]} language={codeMatch[1] || undefined} />)
+      blocks.push(<CodeBlock key={key++} code={codeMatch[2] ?? ''} language={codeMatch[1] || undefined} />)
       remaining = remaining.slice(codeMatch.index + codeMatch[0].length)
     } else {
       blocks.push(<span key={key++} className="whitespace-pre-wrap">{remaining}</span>)

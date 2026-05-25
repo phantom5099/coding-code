@@ -11,6 +11,7 @@ import { loadConfig, updateActiveModel } from '@codingcode/infra';
 export interface ModelDescriptor {
   id: string;
   name: string;
+  context_window?: number;
 }
 
 export interface ProviderEntry {
@@ -34,6 +35,7 @@ export interface SelectableModel {
   model: string;
   base_url: string;
   api_key_env: string;
+  context_window: number;
 }
 
 function modelsFile(): string {
@@ -75,6 +77,7 @@ function flattenModels(cat: ProviderCatalog): SelectableModel[] {
         model: m.id,
         base_url: p.base_url,
         api_key_env: p.api_key_env,
+        context_window: m.context_window ?? 128000,
       });
     }
   }

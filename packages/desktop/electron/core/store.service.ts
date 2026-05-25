@@ -1,14 +1,20 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import type { Thread } from '@shared/types'
+
+interface StoreSettings {
+  disabledMcpServers: string[]
+  disabledSkills: string[]
+}
 
 interface StoreData {
   threads: Record<string, Thread>
   activeModel: string
   approvalPolicy: 'suggest' | 'auto-edit' | 'full-auto'
   workspace: { rootPath: string; name: string }
-  messageHistory: Record<string, unknown[]>
+  sessionIds: Record<string, string>
+  settings: StoreSettings
 }
 
 const DEFAULTS: StoreData = {
@@ -16,7 +22,8 @@ const DEFAULTS: StoreData = {
   activeModel: 'deepseek-v4-flash',
   approvalPolicy: 'suggest',
   workspace: { rootPath: '', name: '' },
-  messageHistory: {},
+  sessionIds: {},
+  settings: { disabledMcpServers: [], disabledSkills: [] },
 }
 
 let _storePath: string | null = null
@@ -35,12 +42,18 @@ function load(): StoreData {
   const path = getStorePath()
   try {
     if (existsSync(path)) {
-      _data = { ...DEFAULTS, ...JSON.parse(readFileSync(path, 'utf-8')) }
+      const parsed = JSON.parse(readFileSync(path, 'utf-8'))
+      _data = {
+        ...DEFAULTS,
+        ...parsed,
+        sessionIds: parsed.sessionIds ?? {},
+        settings: { ...DEFAULTS.settings, ...(parsed.settings ?? {}) },
+      }
     } else {
-      _data = { ...DEFAULTS }
+      _data = { ...DEFAULTS, settings: { ...DEFAULTS.settings } }
     }
   } catch {
-    _data = { ...DEFAULTS }
+    _data = { ...DEFAULTS, settings: { ...DEFAULTS.settings } }
   }
   return _data!
 }
@@ -88,11 +101,25 @@ export const storeService = {
     load().workspace = { rootPath, name }
     save()
   },
-  getMessageHistory(threadId: string): unknown[] {
-    return load().messageHistory[threadId] ?? []
+  getSessionId(threadId: string): string | undefined {
+    return load().sessionIds[threadId]
   },
-  setMessageHistory(threadId: string, messages: unknown[]): void {
-    load().messageHistory[threadId] = messages
+  setSessionId(threadId: string, sessionId: string): void {
+    load().sessionIds[threadId] = sessionId
+    save()
+  },
+  getDisabledMcpServers(): string[] {
+    return load().settings.disabledMcpServers
+  },
+  setDisabledMcpServers(names: string[]): void {
+    load().settings.disabledMcpServers = names
+    save()
+  },
+  getDisabledSkills(): string[] {
+    return load().settings.disabledSkills
+  },
+  setDisabledSkills(names: string[]): void {
+    load().settings.disabledSkills = names
     save()
   },
 }

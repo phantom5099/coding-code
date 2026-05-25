@@ -112,11 +112,9 @@ export default function AgentSidebar() {
 
       {/* 底部 */}
       <div className="px-2 py-2 flex items-center gap-1">
-        <button type="button" className="flex items-center gap-2 px-2 py-1.5 text-xs text-[#666] hover:text-[#ccc] hover:bg-[#2a2a2a] rounded flex-1 transition-colors">
+        <button type="button" onClick={() => useGlobalStore.getState().setView('settings')}
+          className="flex items-center gap-2 px-2 py-1.5 text-xs text-[#666] hover:text-[#ccc] hover:bg-[#2a2a2a] rounded flex-1 transition-colors">
           <span>⚙</span> 设置
-        </button>
-        <button type="button" className="px-2 py-1 text-[10px] bg-[#1a3a5c] hover:bg-[#1e4d7a] text-[#569cd6] rounded transition-colors font-medium">
-          升级
         </button>
       </div>
     </div>

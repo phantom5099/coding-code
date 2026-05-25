@@ -2,8 +2,16 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type { FileNode, GitStatus, Item, OpenFile, Project, TerminalSession, Thread, Turn } from '@shared/types'
 
+export interface ModelEntry {
+  id: string
+  name: string
+  provider: string
+  context_window: number
+}
+
 interface UIState {
   mode: 'agent' | 'ide'
+  view: 'agent' | 'settings'
   sidebarCollapsed: boolean
   sidebarWidth: number
   rightPanelWidth: number
@@ -29,7 +37,9 @@ interface AgentState {
   threads: Record<string, Thread>
   approvalPolicy: 'suggest' | 'auto-edit' | 'full-auto'
   model: string
+  models: ModelEntry[]
   isStreaming: boolean
+  contextUsage: { used: number; contextWindow: number } | null
   // itemId → accumulated streaming text (partial assistant messages)
   streamingContent: Record<string, string>
 }
@@ -51,6 +61,7 @@ interface GlobalState {
 
 interface GlobalActions {
   setMode: (mode: 'agent' | 'ide') => void
+  setView: (view: UIState['view']) => void
   toggleSidebar: () => void
   setSidebarWidth: (w: number) => void
   setRightPanelWidth: (w: number) => void
@@ -71,11 +82,13 @@ interface GlobalActions {
   upsertThread: (thread: Thread) => void
   setApprovalPolicy: (policy: AgentState['approvalPolicy']) => void
   setModel: (model: string) => void
+  setModels: (models: ModelEntry[]) => void
+  setContextUsage: (usage: { used: number; contextWindow: number } | null) => void
   setStreaming: (v: boolean) => void
   setCursor: (line: number, col: number) => void
   loadThreads: (threads: Thread[]) => void
   // Fine-grained agent streaming actions
-  startTurn: (threadId: string, turn: Turn) => void
+  startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void
   completeTurn: (threadId: string, turnId: string, status: 'completed' | 'error') => void
 }
@@ -91,6 +104,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
   immer((set) => ({
     ui: {
       mode: 'agent',
+      view: 'agent',
       sidebarCollapsed: false,
       sidebarWidth: 220,
       rightPanelWidth: 320,
@@ -115,7 +129,9 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       threads: {},
       approvalPolicy: 'suggest',
       model: '',
+      models: [],
       isStreaming: false,
+      contextUsage: null,
       streamingContent: {},
     },
     editor: {
@@ -124,6 +140,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     },
 
     setMode: (mode) => set((s) => { s.ui.mode = mode }),
+    setView: (view) => set((s) => { s.ui.view = view }),
     toggleSidebar: () => set((s) => { s.ui.sidebarCollapsed = !s.ui.sidebarCollapsed }),
     setSidebarWidth: (w) => set((s) => { s.ui.sidebarWidth = w }),
     setRightPanelWidth: (w) => set((s) => { s.ui.rightPanelWidth = w }),
@@ -158,6 +175,8 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     upsertThread: (thread) => set((s) => { s.agent.threads[thread.id] = thread }),
     setApprovalPolicy: (policy) => set((s) => { s.agent.approvalPolicy = policy }),
     setModel: (model) => set((s) => { s.agent.model = model }),
+    setModels: (models) => set((s) => { s.agent.models = models }),
+    setContextUsage: (usage) => set((s) => { s.agent.contextUsage = usage }),
     setStreaming: (v) => set((s) => { s.agent.isStreaming = v }),
     setCursor: (line, col) => set((s) => { s.editor.cursorLine = line; s.editor.cursorCol = col }),
 
@@ -166,14 +185,14 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       for (const t of threads) s.agent.threads[t.id] = t
     }),
 
-    startTurn: (threadId, turn) => set((s) => {
+    startTurn: (threadId, turn, meta) => set((s) => {
       const thread = s.agent.threads[threadId]
       if (!thread) {
         s.agent.threads[threadId] = {
           id: threadId,
           projectId: '',
-          title: 'New Conversation',
-          cwd: '',
+          title: meta?.title ?? 'New Conversation',
+          cwd: meta?.cwd ?? '',
           turns: [turn],
           model: s.agent.model,
           approvalPolicy: s.agent.approvalPolicy,

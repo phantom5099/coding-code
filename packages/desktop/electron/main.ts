@@ -4,8 +4,10 @@ import { createMenu } from './menu'
 import { registerAgentHandlers } from './ipc/agent.handler'
 import { registerFsHandlers } from './ipc/fs.handler'
 import { registerGitHandlers } from './ipc/git.handler'
+import { registerSettingsHandlers } from './ipc/settings.handler'
 import { startPolling } from './core/git.service'
 import { storeService } from './core/store.service'
+import { initBackend } from './core/backend'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -40,7 +42,10 @@ function createWindow(): BrowserWindow {
   return win
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const workspace = storeService.getWorkspace()
+  await initBackend(workspace.rootPath || process.cwd())
+
   mainWindow = createWindow()
 
   createMenu(mainWindow)
@@ -50,6 +55,7 @@ app.whenReady().then(() => {
   registerAgentHandlers(() => mainWindow)
   registerFsHandlers()
   registerGitHandlers()
+  registerSettingsHandlers()
 
   startPolling(mainWindow, () => storeService.getWorkspace().rootPath || process.cwd())
 

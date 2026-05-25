@@ -1,17 +1,15 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { runAgent, abortAgent, approveTool, rejectTool } from '../core/agent-loop'
+import { runAgent, abortAgent, approveToolCall, rejectToolCall } from '../core/agent-loop'
 import { storeService } from '../core/store.service'
-import { listAllModels } from '../core/model-config'
+import { listModels, switchModel, getOrCreateClient } from '../core/backend'
 
 export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null): void {
-  ipcMain.handle('agent:sendMessage', (_e, threadId: string, turnId: string, message: string, cwd?: string, attachments?: string[]) => {
+  ipcMain.handle('agent:sendMessage', (_e, threadId: string, turnId: string, message: string, cwd?: string) => {
     const win = getMainWindow()
     if (!win) return
-    const model = storeService.getActiveModel()
-    const policy = storeService.getApprovalPolicy()
     const workspace = storeService.getWorkspace()
     const runCwd = cwd || workspace.rootPath || process.cwd()
-    runAgent({ threadId, turnId, userMessage: message, cwd: runCwd, model, policy, win }).catch((err) => {
+    runAgent({ threadId, turnId, userMessage: message, cwd: runCwd, win }).catch((err) => {
       if (!win.isDestroyed()) {
         win.webContents.send('agent:done', { threadId, turnId, error: String(err) })
       }
@@ -23,11 +21,11 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
   })
 
   ipcMain.handle('agent:approveTool', (_e, threadId: string, callId: string) => {
-    approveTool(threadId, callId)
+    return approveToolCall(threadId, callId)
   })
 
   ipcMain.handle('agent:rejectTool', (_e, threadId: string, callId: string) => {
-    rejectTool(threadId, callId)
+    return rejectToolCall(threadId, callId)
   })
 
   ipcMain.handle('agent:getThreads', () => {
@@ -38,22 +36,37 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
     storeService.deleteThread(threadId)
   })
 
-  ipcMain.handle('agent:getModels', () => {
-    return listAllModels()
+  ipcMain.handle('agent:getModels', async () => {
+    const { models } = await listModels()
+    return models.map((m) => ({
+      id: m.id,
+      name: m.name,
+      provider: m.provider,
+      context_window: m.context_window,
+    }))
   })
 
-  ipcMain.handle('agent:setModel', (_e, modelId: string) => {
+  ipcMain.handle('agent:setModel', async (_e, modelId: string) => {
     storeService.setActiveModel(modelId)
+    await switchModel(modelId)
   })
 
   ipcMain.handle('agent:setApprovalPolicy', (_e, policy: 'suggest' | 'auto-edit' | 'full-auto') => {
     storeService.setApprovalPolicy(policy)
   })
 
-  ipcMain.handle('agent:getSettings', () => {
+  ipcMain.handle('agent:getSettings', async () => {
+    const workspace = storeService.getWorkspace()
+    const { activeId } = await listModels()
     return {
-      activeModel: storeService.getActiveModel(),
+      activeModel: activeId ?? storeService.getActiveModel(),
       approvalPolicy: storeService.getApprovalPolicy(),
+      workspace,
     }
+  })
+
+  ipcMain.handle('agent:compressContext', async (_e, threadId: string) => {
+    const client = await getOrCreateClient(threadId)
+    await client.compact()
   })
 }

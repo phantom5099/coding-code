@@ -1,22 +1,8 @@
 import type { BrowserWindow } from 'electron'
-import type { Item, Thread, Turn } from '@shared/types'
-import { streamCompletion } from './llm.client'
-import type { LLMMessage } from './llm.client'
-import { getProviderConfig } from './model-config'
-import { getLLMTools, executeTool } from './tools'
-import { requiresApproval } from './approval.service'
+import type { Item, Turn } from '@shared/types'
+import type { StreamChunk } from '@codingcode/core'
+import { getOrCreateClient, setActiveGen, abortAndClear, deleteClient } from './backend'
 import { storeService } from './store.service'
-
-const SYSTEM_PROMPT = `You are a coding assistant. You have access to tools that let you read files, write files, run shell commands, and search code.
-When the user asks you to do something, think step by step and use the appropriate tools.
-Always be concise and helpful. When you complete a task, summarize what you did.`
-
-interface ThreadContext {
-  abort: AbortController
-  pendingApprovals: Map<string, (approved: boolean) => void>
-}
-
-const activeContexts = new Map<string, ThreadContext>()
 
 function send(win: BrowserWindow, channel: string, payload: unknown): void {
   if (!win.isDestroyed()) win.webContents.send(channel, payload)
@@ -31,16 +17,11 @@ export async function runAgent(opts: {
   turnId: string
   userMessage: string
   cwd: string
-  model: string
-  policy: 'suggest' | 'auto-edit' | 'full-auto'
   win: BrowserWindow
 }): Promise<void> {
-  const { threadId, turnId, userMessage, cwd, model, policy, win } = opts
+  const { threadId, turnId, userMessage, cwd, win } = opts
 
-  activeContexts.get(threadId)?.abort.abort()
-  const abort = new AbortController()
-  const pendingApprovals = new Map<string, (approved: boolean) => void>()
-  activeContexts.set(threadId, { abort, pendingApprovals })
+  abortAndClear(threadId)
 
   let thread = storeService.getThread(threadId)
   if (!thread) {
@@ -50,182 +31,160 @@ export async function runAgent(opts: {
       title: userMessage.slice(0, 60),
       cwd,
       turns: [],
-      model,
-      approvalPolicy: policy,
+      model: '',
+      approvalPolicy: storeService.getApprovalPolicy(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     }
   }
 
-  const userItem: Item = { id: randomId(), type: 'message', role: 'user', content: userMessage }
-  const turn: Turn = { id: turnId, items: [userItem], status: 'running' }
+  const turn: Turn = { id: turnId, items: [], status: 'running' }
   thread.turns.push(turn)
 
-  // Load message history from store
-  const messages: LLMMessage[] = storeService.getMessageHistory(threadId) as LLMMessage[]
-  messages.push({ role: 'user', content: userMessage })
+  const userItem: Item = { id: randomId(), type: 'message', role: 'user', content: userMessage }
+  turn.items.push(userItem)
+  send(win, 'agent:chunk', { threadId, turnId, chunk: userItem })
 
-  const providerConfig = getProviderConfig(model)
-  if (!providerConfig) {
-    const errItem: Item = { id: randomId(), type: 'error', message: `Model not found: ${model}` }
+  let client
+  try {
+    client = await getOrCreateClient(threadId)
+    const existingSessionId = storeService.getSessionId(threadId)
+    if (existingSessionId && !client.getSessionId()) {
+      await client.resumeSession(existingSessionId)
+    }
+  } catch (err) {
+    const errItem: Item = { id: randomId(), type: 'error', message: String(err) }
     turn.items.push(errItem)
     turn.status = 'error'
     send(win, 'agent:chunk', { threadId, turnId, chunk: errItem })
-    send(win, 'agent:done', { threadId, turnId, error: 'Model not configured' })
+    send(win, 'agent:done', { threadId, turnId, error: String(err) })
     storeService.upsertThread(thread)
-    activeContexts.delete(threadId)
     return
   }
 
-  const tools = getLLMTools()
-  const MAX_STEPS = 50
-  let step = 0
+  const gen = client.sendMessage(userMessage)
+  setActiveGen(threadId, gen)
 
-  while (step < MAX_STEPS) {
-    step++
-    if (abort.signal.aborted) break
+  // Track current assistant message being built up
+  let currentMsgId: string | null = null
+  let currentMsgContent = ''
 
-    const toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }> = []
-    let textContent = ''
-    const assistantMsgId = randomId()
-    let hasText = false
-
-    const streamError = await new Promise<string | null>((resolve) => {
-      streamCompletion(
-        providerConfig.baseUrl,
-        providerConfig.apiKey,
-        providerConfig.modelId,
-        [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
-        tools,
-        {
-          onText(delta) {
-            if (!hasText) {
-              hasText = true
-              const startItem: Item = { id: assistantMsgId, type: 'message', role: 'assistant', content: '', partial: true }
-              send(win, 'agent:chunk', { threadId, turnId, chunk: startItem })
-            }
-            textContent += delta
-            const deltaItem: Item = { id: assistantMsgId, type: 'message', role: 'assistant', content: delta, partial: true }
-            send(win, 'agent:chunk', { threadId, turnId, chunk: deltaItem })
-          },
-          onToolCall(call) {
-            toolCalls.push(call)
-          },
-          onError(err) {
-            resolve(err)
-          },
-          onDone() {
-            resolve(null)
-          },
-        },
-        abort.signal
-      )
-    })
-
-    if (abort.signal.aborted) break
-
-    if (streamError) {
-      const errItem: Item = { id: randomId(), type: 'error', message: streamError }
-      turn.items.push(errItem)
-      send(win, 'agent:chunk', { threadId, turnId, chunk: errItem })
-      break
-    }
-
-    // Commit accumulated text as complete message item
-    if (hasText) {
-      const msgItem: Item = { id: assistantMsgId, type: 'message', role: 'assistant', content: textContent, partial: false }
-      turn.items.push(msgItem)
-      send(win, 'agent:chunk', { threadId, turnId, chunk: msgItem })
-    }
-
-    if (toolCalls.length === 0) break
-
-    // Build assistant message with tool_calls for history
-    messages.push({
-      role: 'assistant',
-      content: textContent,
-      tool_calls: toolCalls.map((tc) => ({
-        id: tc.id,
-        type: 'function',
-        function: { name: tc.name, arguments: JSON.stringify(tc.args) },
-      })),
-    })
-
-    for (const tc of toolCalls) {
-      if (abort.signal.aborted) break
-
-      const needsApproval = requiresApproval(tc.name, tc.args, policy)
-      const toolItem: Item = {
-        id: tc.id,
-        type: 'tool_call',
-        name: tc.name,
-        args: tc.args,
-        status: needsApproval ? 'pending' : 'running',
-      }
-      turn.items.push(toolItem)
-      send(win, 'agent:chunk', { threadId, turnId, chunk: toolItem })
-
-      if (needsApproval) {
-        const approved = await new Promise<boolean>((resolve) => {
-          pendingApprovals.set(tc.id, resolve)
-        })
-
-        if (!approved) {
-          const rejectedItem: Item = { id: tc.id, type: 'tool_call', name: tc.name, args: tc.args, status: 'rejected' }
-          const idx = turn.items.findLastIndex((i) => i.id === tc.id)
-          if (idx >= 0) turn.items[idx] = rejectedItem
-          send(win, 'agent:chunk', { threadId, turnId, chunk: rejectedItem })
-          messages.push({ role: 'tool', content: 'Tool call rejected by user.', tool_call_id: tc.id, name: tc.name })
-          continue
-        }
-
-        const runningItem: Item = { id: tc.id, type: 'tool_call', name: tc.name, args: tc.args, status: 'running' }
-        const idx = turn.items.findLastIndex((i) => i.id === tc.id)
-        if (idx >= 0) turn.items[idx] = runningItem
-        send(win, 'agent:chunk', { threadId, turnId, chunk: runningItem })
-      }
-
-      const result = await executeTool(tc.name, tc.args as Record<string, unknown>, cwd, abort.signal)
-      const resultItem: Item = {
-        id: randomId(),
-        type: 'tool_result',
-        callId: tc.id,
-        output: result.output,
-        exitCode: result.exitCode,
-      }
-      turn.items.push(resultItem)
-      send(win, 'agent:chunk', { threadId, turnId, chunk: resultItem })
-      messages.push({ role: 'tool', content: result.output, tool_call_id: tc.id, name: tc.name })
-    }
+  const flushMsg = () => {
+    if (currentMsgId === null) return
+    const finalItem: Item = { id: currentMsgId, type: 'message', role: 'assistant', content: currentMsgContent, partial: false }
+    const idx = turn.items.findLastIndex((i: Item) => i.id === currentMsgId)
+    if (idx >= 0) turn.items[idx] = finalItem
+    send(win, 'agent:chunk', { threadId, turnId, chunk: finalItem })
+    currentMsgId = null
+    currentMsgContent = ''
   }
 
-  turn.status = abort.signal.aborted ? 'error' : 'completed'
-  thread.updatedAt = Date.now()
-  storeService.upsertThread(thread)
-  storeService.setMessageHistory(threadId, messages)
-  activeContexts.delete(threadId)
-  send(win, 'agent:done', { threadId, turnId })
+  try {
+    for await (const chunk of gen) {
+      if (typeof chunk === 'string') {
+        if (!currentMsgId) {
+          currentMsgId = randomId()
+          currentMsgContent = ''
+          const startItem: Item = { id: currentMsgId, type: 'message', role: 'assistant', content: '', partial: true }
+          turn.items.push(startItem)
+          send(win, 'agent:chunk', { threadId, turnId, chunk: startItem })
+        }
+        currentMsgContent += chunk
+        const deltaItem: Item = { id: currentMsgId, type: 'message', role: 'assistant', content: chunk, partial: true }
+        send(win, 'agent:chunk', { threadId, turnId, chunk: deltaItem })
+      } else {
+        flushMsg()
+        handleStructuredChunk(chunk, threadId, turnId, turn, win)
+      }
+    }
+    flushMsg()
+    turn.status = 'completed'
+  } catch (err) {
+    flushMsg()
+    const errItem: Item = { id: randomId(), type: 'error', message: String(err) }
+    turn.items.push(errItem)
+    turn.status = 'error'
+    send(win, 'agent:chunk', { threadId, turnId, chunk: errItem })
+  } finally {
+    abortAndClear(threadId)
+    thread.updatedAt = Date.now()
+    const sessionId = client.getSessionId()
+    if (sessionId) storeService.setSessionId(threadId, sessionId)
+    storeService.upsertThread(thread)
+    send(win, 'agent:done', { threadId, turnId })
+  }
+}
+
+function handleStructuredChunk(
+  chunk: Exclude<StreamChunk, string>,
+  threadId: string,
+  turnId: string,
+  turn: Turn,
+  win: BrowserWindow,
+): void {
+  switch (chunk.type) {
+    case 'tool_start': {
+      const item: Item = { id: randomId(), type: 'tool_call', name: chunk.name, args: chunk.args, status: 'running' }
+      turn.items.push(item)
+      send(win, 'agent:chunk', { threadId, turnId, chunk: item })
+      break
+    }
+    case 'approval_request': {
+      const item: Item = { id: chunk.id, type: 'tool_call', name: chunk.tool, args: chunk.args, status: 'pending' }
+      turn.items.push(item)
+      send(win, 'agent:chunk', { threadId, turnId, chunk: item })
+      break
+    }
+    case 'tool_result': {
+      // Update matching tool_call status to done
+      const tcIdx = turn.items.findLastIndex((i: Item) => i.type === 'tool_call' && i.name === chunk.name)
+      if (tcIdx >= 0) {
+        const existing = turn.items[tcIdx] as Item & { type: 'tool_call' }
+        const updated: Item = { ...existing, status: 'approved' }
+        turn.items[tcIdx] = updated
+        send(win, 'agent:chunk', { threadId, turnId, chunk: updated })
+      }
+      const item: Item = { id: randomId(), type: 'tool_result', callId: chunk.id, output: chunk.output, exitCode: chunk.ok ? 0 : 1 }
+      turn.items.push(item)
+      send(win, 'agent:chunk', { threadId, turnId, chunk: item })
+      break
+    }
+    case 'tool_denied': {
+      const tcIdx = turn.items.findLastIndex((i: Item) => i.type === 'tool_call' && i.name === chunk.name)
+      if (tcIdx >= 0) {
+        const existing = turn.items[tcIdx] as Item & { type: 'tool_call' }
+        const rejected: Item = { ...existing, status: 'rejected' }
+        turn.items[tcIdx] = rejected
+        send(win, 'agent:chunk', { threadId, turnId, chunk: rejected })
+      }
+      break
+    }
+    case 'error': {
+      const item: Item = { id: randomId(), type: 'error', message: chunk.message }
+      turn.items.push(item)
+      send(win, 'agent:chunk', { threadId, turnId, chunk: item })
+      break
+    }
+    case 'todo_update':
+      // not rendered in desktop for now
+      break
+    case 'done':
+      // signals natural completion, handled in loop exit
+      break
+  }
 }
 
 export function abortAgent(threadId: string): void {
-  activeContexts.get(threadId)?.abort.abort()
-  activeContexts.delete(threadId)
+  abortAndClear(threadId)
+  deleteClient(threadId)
 }
 
-export function approveTool(threadId: string, callId: string): void {
-  const ctx = activeContexts.get(threadId)
-  const fn = ctx?.pendingApprovals.get(callId)
-  if (fn) {
-    ctx!.pendingApprovals.delete(callId)
-    fn(true)
-  }
+export async function approveToolCall(threadId: string, callId: string): Promise<void> {
+  const client = await getOrCreateClient(threadId)
+  await client.sendApprovalResponse(callId, 'y')
 }
 
-export function rejectTool(threadId: string, callId: string): void {
-  const ctx = activeContexts.get(threadId)
-  const fn = ctx?.pendingApprovals.get(callId)
-  if (fn) {
-    ctx!.pendingApprovals.delete(callId)
-    fn(false)
-  }
+export async function rejectToolCall(threadId: string, callId: string): Promise<void> {
+  const client = await getOrCreateClient(threadId)
+  await client.sendApprovalResponse(callId, 'n')
 }
