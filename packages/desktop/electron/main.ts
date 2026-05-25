@@ -1,6 +1,13 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { createMenu } from './menu'
+import { registerAgentHandlers } from './ipc/agent.handler'
+import { registerFsHandlers } from './ipc/fs.handler'
+import { registerGitHandlers } from './ipc/git.handler'
+import { startPolling } from './core/git.service'
+import { storeService } from './core/store.service'
+
+let mainWindow: BrowserWindow | null = null
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -34,15 +41,21 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
-  const win = createWindow()
+  mainWindow = createWindow()
 
-  createMenu(win)
+  createMenu(mainWindow)
 
   ipcMain.handle('ping', () => 'pong')
 
+  registerAgentHandlers(() => mainWindow)
+  registerFsHandlers()
+  registerGitHandlers()
+
+  startPolling(mainWindow, () => storeService.getWorkspace().rootPath || process.cwd())
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      mainWindow = createWindow()
     }
   })
 })

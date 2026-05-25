@@ -8,14 +8,16 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "verify": "electron-vite build && node scripts/verify.mjs"
+    "verify": "electron-vite build && node scripts/verify.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
-    "electron-store": "^10.0.1",
     "immer": "^10.1.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-resizable-panels": "^2.1.7",
+    "react-virtuoso": "^4.12.6",
+    "simple-git": "^3.27.0",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
