@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync, truncateSync, statSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync, truncateSync, statSync, unlinkSync, rmSync } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
@@ -272,14 +272,13 @@ function readMessages(path: string): Message[] {
   return messages;
 }
 
-function listSessions(projectSlug?: string): SessionIndex[] {
+export function listSessions(projectSlug?: string): SessionIndex[] {
   const results: SessionIndex[] = [];
   const projects = projectSlug ? [projectSlug] : existsSync(SESSIONS_DIR) ? readdirSync(SESSIONS_DIR) : [];
   for (const slug of projects) {
     const dir = join(SESSIONS_DIR, slug);
     if (!existsSync(dir)) continue;
     for (const file of readdirSync(dir).filter((f) => f.endsWith('.jsonl'))) {
-      const id = file.replace('.jsonl', '');
       const jsonlPath = join(dir, file);
       const idxPath = jsonlPath.replace('.jsonl', '.index.json');
       let index: SessionIndex | null = null;
@@ -361,4 +360,54 @@ export function truncateJsonl(path: string, byteOffset: number): void {
   } catch (err) {
     console.error(`truncateJsonl error for ${path}:`, err);
   }
+}
+
+export function deleteSession(sessionId: string): void {
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) return;
+  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+  const idxPath = join(dir, `${sessionId}.index.json`);
+  const subagentDir = join(dir, sessionId);
+  try { if (existsSync(jsonlPath)) unlinkSync(jsonlPath); } catch {}
+  try { if (existsSync(idxPath)) unlinkSync(idxPath); } catch {}
+  try { if (existsSync(subagentDir)) rmSync(subagentDir, { recursive: true, force: true }); } catch {}
+}
+
+function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string; items: object[]; status: string }> {
+  const turnsMap = new Map<number, { id: string; items: object[]; status: string }>();
+  for (const event of events) {
+    if (event.type === 'session_meta') continue;
+    let turn = turnsMap.get(event.turnId);
+    if (!turn) {
+      turn = { id: String(event.turnId), items: [], status: 'completed' };
+      turnsMap.set(event.turnId, turn);
+    }
+    switch (event.type) {
+      case 'user':
+        turn.items.push({ id: event.uuid, type: 'message', role: 'user', content: event.content });
+        break;
+      case 'assistant':
+        if (event.content) {
+          turn.items.push({ id: event.uuid, type: 'message', role: 'assistant', content: event.content });
+        }
+        for (const tc of event.toolCalls ?? []) {
+          let args: object;
+          try { args = JSON.parse(tc.arguments); } catch { args = {}; }
+          turn.items.push({ id: tc.id, type: 'tool_call', name: tc.name, args, status: 'approved' });
+        }
+        break;
+      case 'tool_result':
+        turn.items.push({ id: event.uuid, type: 'tool_result', callId: event.toolCallId, output: event.output });
+        break;
+    }
+  }
+  return [...turnsMap.values()].sort((a, b) => Number(a.id) - Number(b.id));
+}
+
+export function readUIHistory(sessionId: string): Array<{ id: string; items: object[]; status: string }> {
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) return [];
+  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+  const events = readHistory(jsonlPath);
+  return sessionEventsToTurns(events);
 }

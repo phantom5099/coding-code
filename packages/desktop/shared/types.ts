@@ -1,17 +1,11 @@
 export type ItemType = 'message' | 'reasoning' | 'tool_call' | 'tool_result' | 'error'
 
 export type Item =
-  | { type: 'message'; role: 'user' | 'assistant'; content: string }
-  | { type: 'reasoning'; content: string; isVisible: boolean }
-  | {
-      type: 'tool_call'
-      id: string
-      name: string
-      args: object
-      status: 'pending' | 'approved' | 'rejected' | 'running'
-    }
-  | { type: 'tool_result'; callId: string; output: string; exitCode?: number }
-  | { type: 'error'; message: string }
+  | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
+  | { id: string; type: 'reasoning'; content: string; isVisible: boolean }
+  | { id: string; type: 'tool_call'; name: string; args: object; status: 'pending' | 'approved' | 'rejected' | 'running' }
+  | { id: string; type: 'tool_result'; callId: string; output: string; exitCode?: number }
+  | { id: string; type: 'error'; message: string }
 
 export interface Turn {
   id: string
@@ -25,8 +19,6 @@ export interface Thread {
   title: string
   cwd: string
   turns: Turn[]
-  model: string
-  approvalPolicy: 'suggest' | 'auto-edit' | 'full-auto'
   createdAt: number
   updatedAt: number
 }

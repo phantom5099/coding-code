@@ -1,5 +1,5 @@
 export { AgentService } from './agent/agent.js';
-export { SessionService, findSessionIndex } from './session/store.js';
+export { SessionService, findSessionIndex, readUIHistory, deleteSession, listSessions } from './session/store.js';
 export type { SessionStoreState } from './session/store.js';
 export { normalizePath, projectSlugFromPath } from './core/path.js';
 export {
@@ -10,6 +10,7 @@ export {
   resolveWorkspaceCwd,
   getWorkspaceSlug,
   resolveInWorkspace,
+  getConfig,
 } from './core/workspace.js';
 export { ContextService } from './context/context.js';
 export { HookService } from './hooks/registry.js';
@@ -19,7 +20,7 @@ export { ToolExecutorService } from './tools/executor.js';
 export { McpService, McpClient, McpError } from './mcp/index.js';
 export type { McpStatus } from './mcp/index.js';
 export { SkillService } from './skills/index.js';
-export type { Skill, SkillServiceApi } from './skills/index.js';
+export type { Skill } from './skills/index.js';
 export type { AgentEvent } from './agent/agent.js';
 export { AgentError } from './core/error.js';
 export { Result } from './core/result.js';
@@ -39,3 +40,10 @@ export { ToolSearchService } from './tools/tool-search-service.js';
 export type { Todo, TodoStatus } from './agent-state/todo.js';
 export { DEFERRED_TOOLS_GUIDELINES, buildSystemPrompt } from './prompts/index.js';
 export type { SystemPromptVariant, SystemPromptOptions } from './prompts/index.js';
+export { bootstrapApplication } from './orchestration/bootstrap.js';
+export { SubagentRegistry, EXPLORE_PROFILE, GENERAL_PROFILE, getSubagentEnabledState, setSubagentEnabledState } from './subagent/registry.js';
+export type { SubagentProfile } from './subagent/registry.js';
+export { loadAgentProfiles } from './subagent/loader.js';
+export { getLLMClient } from './llm/factory.js';
+export { loadConfig, ensureUserConfig } from '@codingcode/infra';
+export type { AppConfig } from '@codingcode/infra';

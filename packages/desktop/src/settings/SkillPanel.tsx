@@ -1,0 +1,79 @@
+import { useState, useEffect } from 'react'
+
+interface SkillEntry {
+  name: string
+  description: string
+  disabled: boolean
+}
+
+export default function SkillPanel() {
+  const [skills, setSkills] = useState<SkillEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await window.electronAPI?.getSkills?.()
+      setSkills(data ?? [])
+    } catch {
+      setSkills([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const toggle = async (name: string, disabled: boolean) => {
+    await window.electronAPI?.setSkillDisabled?.(name, disabled)
+    setSkills((prev) => prev.map((s) => s.name === name ? { ...s, disabled } : s))
+  }
+
+  if (loading) {
+    return <div className="px-6 py-8 text-[14px] text-[#444]">加载中…</div>
+  }
+
+  return (
+    <div className="px-6 py-5">
+
+      {skills.length === 0 ? (
+        <div className="text-[14px] text-[#444] py-8 text-center leading-loose">
+          未找到 Skill<br />
+          <span className="text-[13px] text-[#333]">在 .codingcode/skills/ 目录下创建 skill 文件夹以添加</span>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {skills.map((s) => (
+            <div key={s.name}
+              className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a]">
+              <div className="flex-1 min-w-0">
+                <span className="text-[15px] text-[#ddd] truncate block">{s.name}</span>
+                {s.description && (
+                  <div className="text-[13px] text-[#555] mt-1 truncate">{s.description}</div>
+                )}
+              </div>
+              <Toggle checked={!s.disabled} onChange={(v) => toggle(s.name, !v)} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      title={checked ? '已启用' : '已禁用'}
+      onClick={() => onChange(!checked)}
+      className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${
+        checked ? 'bg-[#569cd6]' : 'bg-[#3a3a3a]'
+      }`}
+    >
+      <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+        checked ? 'translate-x-4' : 'translate-x-0.5'
+      }`} />
+    </button>
+  )
+}

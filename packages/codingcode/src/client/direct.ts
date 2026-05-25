@@ -9,7 +9,8 @@ import { AppLayer } from '../layer.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
-import { SubagentRegistry } from '../subagent/registry.js';
+import { getSubagentEnabledState, setSubagentEnabledState, EXPLORE_PROFILE, GENERAL_PROFILE } from '../subagent/registry.js';
+import { loadAgentProfiles } from '../subagent/loader.js';
 import { McpService } from '../mcp/index.js';
 import type { McpStatus } from '../mcp/types.js';
 import { SkillService } from '../skills/index.js';
@@ -17,6 +18,11 @@ import { getMemoryEnabled, setMemoryEnabled } from '../memory/index.js';
 
 export type StreamChunk = string
   | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
+  | { type: 'tool_start'; name: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean }
+  | { type: 'tool_denied'; name: string; reason: string }
+  | { type: 'error'; message: string }
+  | { type: 'done' }
   | { type: 'todo_update'; items: ReadonlyArray<{ step: string; status: string }> };
 
 export interface AgentClient {
@@ -43,6 +49,7 @@ export interface AgentClient {
   enableMcp(name: string): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(name: string, enabled: boolean): Promise<void>;
+  listAgents(): Promise<Array<{ name: string; description: string; tools?: string[]; readonly?: boolean; maxSteps?: number; model?: string }>>;
 }
 
 export async function* agentEventToStreamChunk(
@@ -54,13 +61,22 @@ export async function* agentEventToStreamChunk(
         yield event.text;
         break;
       case 'ToolStart':
-        yield `\n[Using: ${event.name}]\n`;
+        yield { type: 'tool_start', name: event.name, args: event.args };
+        break;
+      case 'ToolResult':
+        yield { type: 'tool_result', id: event.id, name: event.name, output: event.output, ok: event.ok };
         break;
       case 'ToolDenied':
-        yield `\n[Denied: ${event.name}] ${event.reason}\n`;
+        yield { type: 'tool_denied', name: event.name, reason: event.reason };
         break;
       case 'ApprovalRequest':
         yield { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
+        break;
+      case 'Error':
+        yield { type: 'error', message: event.error.message ?? String(event.error) };
+        break;
+      case 'Done':
+        yield { type: 'done' };
         break;
       case 'TodoUpdate':
         yield { type: 'todo_update', items: event.items as any };
@@ -113,10 +129,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
             pending = gen.next();
           } else {
             yield winner.value;
-            const resumed = await pending;
-            if (resumed.done) break;
-            yield resumed.value;
-            pending = gen.next();
+            // Re-enter loop with fresh notify; same `pending` continues racing
           }
         }
       } finally {
@@ -270,21 +283,11 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async getSubagentEnabled() {
-      return runWithLayer(
-        Effect.gen(function* () {
-          const registry = yield* SubagentRegistry;
-          return registry.isEnabled();
-        }),
-      );
+      return getSubagentEnabledState();
     },
 
     async setSubagentEnabled(enabled: boolean) {
-      await runWithLayer(
-        Effect.gen(function* () {
-          const registry = yield* SubagentRegistry;
-          registry.setEnabled(enabled);
-        }),
-      );
+      setSubagentEnabledState(enabled);
     },
 
     async getMcpStatus() {
@@ -330,6 +333,12 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
           return yield* (enabled ? skill.enableSkill(name) : skill.disableSkill(name));
         }),
       );
+    },
+
+    async listAgents() {
+      const cwd = getWorkspaceCwd();
+      const custom = loadAgentProfiles(cwd);
+      return [EXPLORE_PROFILE, GENERAL_PROFILE, ...custom];
     },
   };
 }

@@ -10,10 +10,13 @@ export interface SubagentProfile {
   model?: string;
 }
 
+let _globalSubagentEnabled = true;
+export function getSubagentEnabledState(): boolean { return _globalSubagentEnabled; }
+export function setSubagentEnabledState(v: boolean): void { _globalSubagentEnabled = v; }
+
 export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('SubagentRegistry', {
   effect: Effect.gen(function* () {
     const map = new Map<string, SubagentProfile>();
-    let _enabled = true;
 
     return {
       register: (profile: SubagentProfile): void => {
@@ -30,11 +33,11 @@ export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('Subage
 
       reset: (): void => {
         map.clear();
-        _enabled = true;
+        _globalSubagentEnabled = true;
       },
 
-      setEnabled: (v: boolean): void => { _enabled = v; },
-      isEnabled: (): boolean => _enabled,
+      setEnabled: (v: boolean): void => { _globalSubagentEnabled = v; },
+      isEnabled: (): boolean => _globalSubagentEnabled,
     };
   }),
 }) {}

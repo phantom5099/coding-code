@@ -7,13 +7,13 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "outDir": "./out/renderer",
-    "rootDir": "./src",
+    "rootDir": ".",
     "composite": false,
     "declaration": false,
     "paths": {
       "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "out", "electron", "shared"]
+  "include": ["src/**/*", "shared/**/*"],
+  "exclude": ["node_modules", "out", "electron"]
 }

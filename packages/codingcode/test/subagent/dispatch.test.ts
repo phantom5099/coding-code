@@ -1,8 +1,9 @@
-import { expect, it, describe, vi } from 'vitest';
+import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
 import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch';
-import { SubagentRegistry, EXPLORE_PROFILE } from '../../src/subagent/registry';
+import { SubagentRegistry, EXPLORE_PROFILE, setSubagentEnabledState } from '../../src/subagent/registry';
 import { SubagentRegistryLayer } from '../../src/layer';
+import { registerEmitter, unregisterEmitter, hasEmitter } from '../../src/approval/async-confirm';
 
 const mockModelEntry = {
   id: 'fast-model@API_KEY_B',
@@ -26,6 +27,10 @@ vi.mock('../../src/llm/factory.js', () => ({
 }));
 
 describe('dispatch_agent tool', () => {
+  beforeEach(() => {
+    // Reset module-level enabled state between tests to prevent state pollution
+    setSubagentEnabledState(true);
+  });
   async function makeRegistry(): Promise<SubagentRegistry> {
     return await Effect.runPromise(
       Effect.gen(function* () { return yield* SubagentRegistry; }).pipe(
@@ -603,6 +608,7 @@ describe('dispatch_agent tool', () => {
 
   it('should call session.create with plain UUID sessionId and parentSessionId in opts', async () => {
     const registry = await makeRegistry();
+    registry.setEnabled(true);
     registry.register(EXPLORE_PROFILE);
 
     const createCalls: any[] = [];
@@ -655,6 +661,7 @@ describe('dispatch_agent tool', () => {
 
   it('runStream receives agentId as profile.name:childUuid', async () => {
     const registry = await makeRegistry();
+    registry.setEnabled(true);
     registry.register(EXPLORE_PROFILE);
 
     const createCalls: any[] = [];
@@ -700,5 +707,117 @@ describe('dispatch_agent tool', () => {
 
     const childUuid = createCalls[0][3];
     expect(runStreamCalls[0].agentId).toBe(`explore:${childUuid}`);
+  });
+
+  it('registers delegated emitter for child session when parentSessionId is provided', async () => {
+    const registry = await makeRegistry();
+    registry.setEnabled(true);
+    registry.register(EXPLORE_PROFILE);
+
+    const parentSid = 'parent-emitter-test-' + Math.random().toString(36).slice(2);
+    let capturedChildUuid: string | undefined;
+
+    // Register a parent emitter
+    registerEmitter(parentSid, () => {});
+
+    let createCalls: any[] = [];
+    const agentService = {
+      runStream: async function* () { yield { _tag: 'Done', content: 'done' }; },
+    };
+
+    const deps = {
+      session: {
+        create: (...args: any[]) => {
+          createCalls.push(args);
+          return Effect.sync(() => ({}));
+        },
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+      },
+      approval: {
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
+      },
+      hooks: {
+        emit: () => Effect.succeed(undefined),
+        emitDecision: () => Effect.succeed(null),
+      },
+      registry,
+    };
+
+    const tool = createDispatchAgentTool(deps as any);
+    await tool.execute(
+      { agent: 'explore', prompt: 'task' },
+      { agentRunner: { agentService, llm: {} }, agentId: 'parent', sessionId: parentSid },
+    );
+
+    capturedChildUuid = createCalls[0][3];
+
+    // After completion, child emitter should be cleaned up
+    expect(hasEmitter(capturedChildUuid!)).toBe(false);
+
+    unregisterEmitter(parentSid);
+  });
+
+  it('unregisters child emitter even when subagent throws an error', async () => {
+    const registry = await makeRegistry();
+    registry.setEnabled(true);
+    registry.register(EXPLORE_PROFILE);
+
+    const parentSid = 'parent-error-test-' + Math.random().toString(36).slice(2);
+    registerEmitter(parentSid, () => {});
+
+    let createCalls: any[] = [];
+    const agentService = {
+      runStream: async function* () {
+        yield { _tag: 'Error', error: { message: 'boom' } };
+      },
+    };
+
+    const deps = {
+      session: {
+        create: (...args: any[]) => {
+          createCalls.push(args);
+          return Effect.sync(() => ({}));
+        },
+        incrementTurn: () => 1,
+        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+      },
+      approval: {
+        fork: () => Effect.succeed({
+          getPermissionMode: () => 'default',
+          evaluate: () => Effect.succeed({ decision: 'allow' }),
+          addRule: () => Effect.succeed(undefined),
+          removeRule: () => Effect.succeed(undefined),
+          setPermissionMode: () => Effect.succeed(undefined),
+          fork: () => Effect.fail(new Error('nested')),
+        }),
+      },
+      hooks: {
+        emit: () => Effect.succeed(undefined),
+        emitDecision: () => Effect.succeed(null),
+      },
+      registry,
+    };
+
+    const tool = createDispatchAgentTool(deps as any);
+    try {
+      await tool.execute(
+        { agent: 'explore', prompt: 'task' },
+        { agentRunner: { agentService, llm: {} }, agentId: 'parent', sessionId: parentSid },
+      );
+    } catch {}
+
+    const capturedChildUuid = createCalls[0]?.[3];
+    expect(capturedChildUuid).toBeDefined();
+    expect(hasEmitter(capturedChildUuid)).toBe(false);
+
+    unregisterEmitter(parentSid);
   });
 });

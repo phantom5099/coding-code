@@ -3,7 +3,7 @@ import { serve } from '@hono/node-server';
 import { getLLMClient } from './llm/factory.js';
 import { createServer } from './server/index.js';
 import { AppLayer } from './layer.js';
-import { loadConfig } from '../../infra/src/config.js';
+import { loadConfig, ensureUserConfig } from '../../infra/src/config.js';
 import { getWorkspaceCwd, initWorkspace, parseWorkspaceArgs } from './core/workspace.js';
 import { bootstrapApplication } from './orchestration/bootstrap.js';
 import { findAvailablePort } from './server/port-discovery.js';
@@ -11,13 +11,14 @@ import { findAvailablePort } from './server/port-discovery.js';
 async function main() {
   const installRoot = process.cwd();
   const { workspaceCwd, args } = parseWorkspaceArgs(process.argv.slice(2));
-  initWorkspace({ installRoot, workspaceCwd });
+  ensureUserConfig();
+  const config = loadConfig();
+  initWorkspace({ installRoot, workspaceCwd, config });
   if (workspaceCwd) {
     console.log(`Workspace: ${getWorkspaceCwd()}`);
   }
   const serveOnly = args.includes('serve');
   const tuiOnly = args.includes('tui');
-  const config = loadConfig(undefined, installRoot);
   const basePort = config.server.port;
 
   const program = Effect.gen(function* () {

@@ -44,29 +44,6 @@ export function useAgentRunner(runner: (input: string) => AsyncGenerator<StreamC
 
       for await (const chunk of stream) {
         if (typeof chunk === 'string') {
-          if (chunk.startsWith('[Using:')) {
-            const toolName = chunk.replace('[Using:', '').replace(']', '').trim();
-            setStaticMessages(prev => [...prev, {
-              id: generateId(),
-              timestamp: Date.now(),
-              role: 'tool',
-              content: '',
-              toolName,
-            }]);
-            continue;
-          }
-          if (chunk.startsWith('[Denied:')) {
-            const rest = chunk.replace('[Denied:', '').trim();
-            const [toolName, ...reasonParts] = rest.split(']');
-            setStaticMessages(prev => [...prev, {
-              id: generateId(),
-              timestamp: Date.now(),
-              role: 'system',
-              content: `⛔ Tool "${toolName}" was denied: ${reasonParts.join(']').trim() || 'not allowed'}`,
-              toolName: toolName,
-            }]);
-            continue;
-          }
           assistantContent += chunk;
           setActiveMessages([{
             id: assistantId,
@@ -74,6 +51,22 @@ export function useAgentRunner(runner: (input: string) => AsyncGenerator<StreamC
             role: 'assistant',
             content: assistantContent,
             isStreaming: true,
+          }]);
+        } else if (chunk.type === 'tool_start') {
+          setStaticMessages(prev => [...prev, {
+            id: generateId(),
+            timestamp: Date.now(),
+            role: 'tool',
+            content: '',
+            toolName: chunk.name,
+          }]);
+        } else if (chunk.type === 'tool_denied') {
+          setStaticMessages(prev => [...prev, {
+            id: generateId(),
+            timestamp: Date.now(),
+            role: 'system',
+            content: `⛔ Tool "${chunk.name}" was denied: ${chunk.reason || 'not allowed'}`,
+            toolName: chunk.name,
           }]);
         } else if (chunk.type === 'approval_request') {
           // 收到审批请求 → 显示 InlinePanel，暂停流读取
@@ -87,8 +80,8 @@ export function useAgentRunner(runner: (input: string) => AsyncGenerator<StreamC
           });
           // 用户已选择 → 关闭面板，继续流
           setApproval(null);
-        } else if ((chunk as any).type === 'todo_update') {
-          const items = (chunk as any).items as Array<{ step: string; status: string }>;
+        } else if (chunk.type === 'todo_update') {
+          const items = chunk.items as Array<{ step: string; status: string }>;
           const pending = items.filter(t => t.status === 'pending');
           const completed = items.filter(t => t.status === 'completed');
           const cancelled = items.filter(t => t.status === 'cancelled');
@@ -104,8 +97,15 @@ export function useAgentRunner(runner: (input: string) => AsyncGenerator<StreamC
             }).join('\n'),
             toolName: `Todo (${summary})`,
           });
-          continue;
+        } else if (chunk.type === 'error') {
+          setStaticMessages(prev => [...prev, {
+            id: generateId(),
+            timestamp: Date.now(),
+            role: 'system',
+            content: `[Error] ${chunk.message}`,
+          }]);
         }
+        // tool_result and done are intentionally ignored in TUI
       }
 
       setActiveMessages([]);

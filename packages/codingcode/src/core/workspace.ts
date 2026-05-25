@@ -2,15 +2,19 @@ import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 import { AgentError } from './error.js';
 import { projectSlugFromPath } from './path.js';
+import { type AppConfig, DEFAULT_CONFIG } from '@codingcode/infra';
 
 let installRoot = process.cwd();
 let workspaceCwd = process.cwd();
+let _config: AppConfig = DEFAULT_CONFIG;
 
 export interface WorkspaceInit {
   /** Directory where config/models.json lives (default: cwd at process start). */
   installRoot?: string;
   /** Agent working directory (default: installRoot). Set via --cwd. */
   workspaceCwd?: string;
+  /** Pre-loaded app config. Hosts must load config before calling initWorkspace. */
+  config?: AppConfig;
 }
 
 /** Parse `--cwd <path>` / `--cwd=<path>` from CLI args; returns remaining flags. */
@@ -45,6 +49,7 @@ export function initWorkspace(opts: WorkspaceInit = {}): void {
   if (!statSync(workspaceCwd).isDirectory()) {
     throw new AgentError('CONFIG_INVALID', `Workspace path is not a directory: ${workspaceCwd}`);
   }
+  if (opts.config) _config = opts.config;
 }
 
 /** Config / models.json root (where `npm start` was run). */
@@ -70,4 +75,8 @@ export function getWorkspaceSlug(): string {
 /** Resolve a path relative to the configured workspace (absolute paths unchanged). */
 export function resolveInWorkspace(path: string): string {
   return resolve(workspaceCwd, path);
+}
+
+export function getConfig(): AppConfig {
+  return _config;
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { tmpdir } from 'os';
 
 const mockCatalog = {
   providers: [
@@ -16,6 +17,27 @@ const mockCatalog = {
   ],
 };
 
+function mockFs() {
+  vi.doMock('fs', async (importOriginal: any) => {
+    const orig = await importOriginal();
+    return {
+      ...orig,
+      existsSync: (p: string) => (p.includes('models.json') ? true : orig.existsSync(p)),
+      readFileSync: (p: string, enc?: any) =>
+        p.includes('models.json') ? JSON.stringify(mockCatalog) : orig.readFileSync(p, enc),
+    };
+  });
+}
+
+async function initWith(activeModel: { model: string; apiKeyEnv: string } | undefined) {
+  const { initWorkspace } = await import('../../src/core/workspace.js');
+  initWorkspace({
+    installRoot: tmpdir(),
+    workspaceCwd: tmpdir(),
+    config: { activeModel } as any,
+  });
+}
+
 describe('switchModel - persists to config', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -23,41 +45,27 @@ describe('switchModel - persists to config', () => {
 
   it('calls updateActiveModel with model and api_key_env after switching', async () => {
     const updateActiveModel = vi.fn();
-    vi.doMock('@codingcode/infra', () => ({
-      loadConfig: () => ({ activeModel: { model: 'model-x', apiKeyEnv: 'API_KEY_A' } }),
-      updateActiveModel,
-    }));
-    vi.doMock('fs', async (importOriginal: any) => {
+    vi.doMock('@codingcode/infra', async (importOriginal: any) => {
       const orig = await importOriginal();
-      return {
-        ...orig,
-        existsSync: (p: string) => (p.includes('models.json') ? true : orig.existsSync(p)),
-        readFileSync: (p: string, enc?: any) =>
-          p.includes('models.json') ? JSON.stringify(mockCatalog) : orig.readFileSync(p, enc),
-      };
+      return { ...orig, updateActiveModel };
     });
+    mockFs();
+    await initWith({ model: 'model-x', apiKeyEnv: 'API_KEY_A' });
 
     const { switchModel } = await import('../../src/llm/factory.js');
     const result = switchModel('model-y@API_KEY_A');
     expect(result.ok).toBe(true);
-    expect(updateActiveModel).toHaveBeenCalledWith('model-y', 'API_KEY_A', undefined, expect.any(String));
+    expect(updateActiveModel).toHaveBeenCalledWith('model-y', 'API_KEY_A');
   });
 
   it('does not call updateActiveModel when model id is not found', async () => {
     const updateActiveModel = vi.fn();
-    vi.doMock('@codingcode/infra', () => ({
-      loadConfig: () => ({ activeModel: { model: 'model-x', apiKeyEnv: 'API_KEY_A' } }),
-      updateActiveModel,
-    }));
-    vi.doMock('fs', async (importOriginal: any) => {
+    vi.doMock('@codingcode/infra', async (importOriginal: any) => {
       const orig = await importOriginal();
-      return {
-        ...orig,
-        existsSync: (p: string) => (p.includes('models.json') ? true : orig.existsSync(p)),
-        readFileSync: (p: string, enc?: any) =>
-          p.includes('models.json') ? JSON.stringify(mockCatalog) : orig.readFileSync(p, enc),
-      };
+      return { ...orig, updateActiveModel };
     });
+    mockFs();
+    await initWith({ model: 'model-x', apiKeyEnv: 'API_KEY_A' });
 
     const { switchModel } = await import('../../src/llm/factory.js');
     const result = switchModel('nonexistent@API_KEY_A');
@@ -71,19 +79,9 @@ describe('getActiveEntry - activeModel priority', () => {
     vi.resetModules();
   });
 
-  it('uses activeModel from config.yaml when it matches a catalog entry', async () => {
-    vi.doMock('@codingcode/infra', () => ({
-      loadConfig: () => ({ activeModel: { model: 'model-y', apiKeyEnv: 'API_KEY_A' } }),
-    }));
-    vi.doMock('fs', async (importOriginal: any) => {
-      const orig = await importOriginal();
-      return {
-        ...orig,
-        existsSync: (p: string) => (p.includes('models.json') ? true : orig.existsSync(p)),
-        readFileSync: (p: string, enc?: any) =>
-          p.includes('models.json') ? JSON.stringify(mockCatalog) : orig.readFileSync(p, enc),
-      };
-    });
+  it('uses activeModel from config when it matches a catalog entry', async () => {
+    mockFs();
+    await initWith({ model: 'model-y', apiKeyEnv: 'API_KEY_A' });
 
     const { getActiveEntry } = await import('../../src/llm/factory.js');
     const result = getActiveEntry();
@@ -92,9 +90,7 @@ describe('getActiveEntry - activeModel priority', () => {
   });
 
   it('returns error when activeModel is not set in config', async () => {
-    vi.doMock('@codingcode/infra', () => ({
-      loadConfig: () => ({ activeModel: undefined }),
-    }));
+    await initWith(undefined);
 
     const { getActiveEntry } = await import('../../src/llm/factory.js');
     const result = getActiveEntry();
@@ -104,18 +100,8 @@ describe('getActiveEntry - activeModel priority', () => {
   });
 
   it('returns error when activeModel does not match any catalog entry', async () => {
-    vi.doMock('@codingcode/infra', () => ({
-      loadConfig: () => ({ activeModel: { model: 'nonexistent', apiKeyEnv: 'UNKNOWN_KEY' } }),
-    }));
-    vi.doMock('fs', async (importOriginal: any) => {
-      const orig = await importOriginal();
-      return {
-        ...orig,
-        existsSync: (p: string) => (p.includes('models.json') ? true : orig.existsSync(p)),
-        readFileSync: (p: string, enc?: any) =>
-          p.includes('models.json') ? JSON.stringify(mockCatalog) : orig.readFileSync(p, enc),
-      };
-    });
+    mockFs();
+    await initWith({ model: 'nonexistent', apiKeyEnv: 'UNKNOWN_KEY' });
 
     const { getActiveEntry } = await import('../../src/llm/factory.js');
     const result = getActiveEntry();

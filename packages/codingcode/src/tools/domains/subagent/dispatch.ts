@@ -7,6 +7,7 @@ import type { SessionService } from '../../../session/store.js';
 import type { ApprovalService } from '../../../approval/index.js';
 import type { HookService } from '../../../hooks/registry.js';
 import { findModel, createClient } from '../../../llm/factory.js';
+import { delegateEmitter, unregisterEmitter } from '../../../approval/async-confirm.js';
 
 interface DispatchAgentDeps {
   session: SessionService;
@@ -90,6 +91,12 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       const forkEffect = (deps.approval as any).fork({ readonly: profile.readonly });
       const childApproval = await Effect.runPromise(forkEffect);
 
+      // Delegate parent's emitter to child so subagent approval requests reach the desktop UI
+      const parentSessionId = ctx?.sessionId;
+      if (parentSessionId) {
+        delegateEmitter(childUuid, parentSessionId);
+      }
+
       // Build coreAllowlist if profile specifies tools
       const coreAllowlist = profile.tools ? new Set(profile.tools.filter(t => t !== 'dispatch_agent')) : undefined;
 
@@ -109,21 +116,24 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
 
       // Collect events and extract final result
       let finalContent = '';
-      for await (const event of stream) {
-        if (event._tag === 'Done') {
-          finalContent = event.content;
-        } else if (event._tag === 'Error') {
-          // Emit error but collect what we have
-          await Effect.runPromise(
-            (deps.hooks as any).emit('agent.subagent.complete', {
-              childSessionId: childUuid,
-              profile: agentName,
-              status: 'error',
-              error: event.error,
-            }),
-          );
-          throw new Error(`Subagent failed: ${event.error.message}`);
+      try {
+        for await (const event of stream) {
+          if (event._tag === 'Done') {
+            finalContent = event.content;
+          } else if (event._tag === 'Error') {
+            await Effect.runPromise(
+              (deps.hooks as any).emit('agent.subagent.complete', {
+                childSessionId: childUuid,
+                profile: agentName,
+                status: 'error',
+                error: event.error,
+              }),
+            );
+            throw new Error(`Subagent failed: ${event.error.message}`);
+          }
         }
+      } finally {
+        unregisterEmitter(childUuid);
       }
 
       // Emit completion hook
