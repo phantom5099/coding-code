@@ -21,16 +21,10 @@ export default function App() {
   return (
     <div className="h-screen flex flex-col bg-[#1e1e1e] text-[#cccccc] overflow-hidden select-none">
       {/* Both layouts stay mounted; visibility toggled via display to preserve Monaco + PTY state */}
-      <div
-        style={{ display: mode === 'agent' ? 'flex' : 'none' }}
-        className="flex-1 flex flex-col overflow-hidden"
-      >
+      <div className={`${mode === 'agent' ? 'flex' : 'hidden'} flex-1 flex-col overflow-hidden`}>
         <AgentLayout />
       </div>
-      <div
-        style={{ display: mode === 'ide' ? 'flex' : 'none' }}
-        className="flex-1 flex flex-col overflow-hidden"
-      >
+      <div className={`${mode === 'ide' ? 'flex' : 'hidden'} flex-1 flex-col overflow-hidden`}>
         <IDELayout />
       </div>
     </div>

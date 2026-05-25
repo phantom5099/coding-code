@@ -1,5 +1,6 @@
 node_modules/
 dist/
+packages/desktop/out/
 .env
 .env.example
 *.lockb
