@@ -94,7 +94,10 @@ function ModelSelector() {
 function InputBox({ centered, threadId }: { centered?: boolean; threadId: string }) {
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const isStreaming = useGlobalStore((s) => s.agent.isStreaming)
+  const isStreaming = useGlobalStore((s) => {
+    const turns = s.agent.threads[threadId]?.turns
+    return turns ? turns.some((t) => t.status === 'running') : false
+  })
   const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy)
   const workspace = useGlobalStore((s) => s.workspace)
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)

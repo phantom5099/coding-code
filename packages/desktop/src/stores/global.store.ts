@@ -38,7 +38,6 @@ interface AgentState {
   approvalPolicy: 'suggest' | 'auto-edit' | 'full-auto'
   model: string
   models: ModelEntry[]
-  isStreaming: boolean
   contextUsage: { used: number; contextWindow: number } | null
   // itemId → accumulated streaming text (partial assistant messages)
   streamingContent: Record<string, string>
@@ -85,7 +84,6 @@ interface GlobalActions {
   setModel: (model: string) => void
   setModels: (models: ModelEntry[]) => void
   setContextUsage: (usage: { used: number; contextWindow: number } | null) => void
-  setStreaming: (v: boolean) => void
   setCursor: (line: number, col: number) => void
   loadThreads: (threads: Thread[]) => void
   // Fine-grained agent streaming actions
@@ -131,7 +129,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       approvalPolicy: 'suggest',
       model: '',
       models: [],
-      isStreaming: false,
       contextUsage: null,
       streamingContent: {},
     },
@@ -182,7 +179,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     setModel: (model) => set((s) => { s.agent.model = model }),
     setModels: (models) => set((s) => { s.agent.models = models }),
     setContextUsage: (usage) => set((s) => { s.agent.contextUsage = usage }),
-    setStreaming: (v) => set((s) => { s.agent.isStreaming = v }),
     setCursor: (line, col) => set((s) => { s.editor.cursorLine = line; s.editor.cursorCol = col }),
 
     loadThreads: (threads) => set((s) => {
@@ -217,7 +213,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         thread.turns.push(turn)
         thread.updatedAt = Date.now()
       }
-      s.agent.isStreaming = true
     }),
 
     applyChunk: (threadId, turnId, chunk) => set((s) => {
@@ -275,7 +270,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         turn.status = status
         thread.updatedAt = Date.now()
       }
-      s.agent.isStreaming = false
       // Clear any remaining streaming content for items in this turn
       if (turn) {
         for (const item of turn.items) {
