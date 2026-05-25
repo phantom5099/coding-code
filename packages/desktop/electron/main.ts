@@ -24,7 +24,6 @@ function createWindow(): BrowserWindow {
       titleBarOverlay: {
         color: '#1a1a1a',
         symbolColor: '#858585',
-        height: 36,
       },
     } : {}),
     webPreferences: {

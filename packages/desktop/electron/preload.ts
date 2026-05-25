@@ -27,6 +27,7 @@ const api = {
   rejectTool: (threadId: string, callId: string): Promise<void> => ipcRenderer.invoke('agent:rejectTool', threadId, callId),
   getThreads: (): Promise<unknown[]> => ipcRenderer.invoke('agent:getThreads'),
   deleteThread: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:deleteThread', threadId),
+  loadHistory: (threadId: string): Promise<unknown[]> => ipcRenderer.invoke('agent:loadHistory', threadId),
   getModels: (): Promise<unknown[]> => ipcRenderer.invoke('agent:getModels'),
   setModel: (modelId: string): Promise<void> => ipcRenderer.invoke('agent:setModel', modelId),
   setApprovalPolicy: (policy: string): Promise<void> => ipcRenderer.invoke('agent:setApprovalPolicy', policy),

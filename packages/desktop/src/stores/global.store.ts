@@ -80,6 +80,7 @@ interface GlobalActions {
   removeTerminal: (id: string) => void
   setCurrentThread: (id: string | null) => void
   upsertThread: (thread: Thread) => void
+  setThreadTurns: (threadId: string, turns: Turn[]) => void
   setApprovalPolicy: (policy: AgentState['approvalPolicy']) => void
   setModel: (model: string) => void
   setModels: (models: ModelEntry[]) => void
@@ -173,6 +174,10 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     removeTerminal: (id) => set((s) => { s.terminals = s.terminals.filter((t) => t.id !== id) }),
     setCurrentThread: (id) => set((s) => { s.agent.currentThreadId = id }),
     upsertThread: (thread) => set((s) => { s.agent.threads[thread.id] = thread }),
+    setThreadTurns: (threadId, turns) => set((s) => {
+      const thread = s.agent.threads[threadId]
+      if (thread) thread.turns = turns
+    }),
     setApprovalPolicy: (policy) => set((s) => { s.agent.approvalPolicy = policy }),
     setModel: (model) => set((s) => { s.agent.model = model }),
     setModels: (models) => set((s) => { s.agent.models = models }),
@@ -183,7 +188,11 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     loadThreads: (threads) => set((s) => {
       const incomingIds = new Set(threads.map((t) => t.id))
       const next: Record<string, Thread> = {}
-      for (const t of threads) next[t.id] = t
+      for (const t of threads) {
+        const existing = s.agent.threads[t.id]
+        // Preserve in-memory turns (streaming or already loaded history)
+        next[t.id] = existing ? { ...t, turns: existing.turns } : t
+      }
       for (const [id, thread] of Object.entries(s.agent.threads)) {
         if (!incomingIds.has(id) && thread.turns.some((t) => t.status === 'running')) {
           next[id] = thread

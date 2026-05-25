@@ -1,17 +1,14 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
-import type { Thread } from '../../shared/types'
 
 interface StoreData {
-  threads: Record<string, Thread>
   approvalPolicy: 'suggest' | 'auto-edit' | 'full-auto'
   workspace: { rootPath: string; name: string }
   sessionIds: Record<string, string>
 }
 
 const DEFAULTS: StoreData = {
-  threads: {},
   approvalPolicy: 'suggest',
   workspace: { rootPath: '', name: '' },
   sessionIds: {},
@@ -56,20 +53,6 @@ function save(): void {
 }
 
 export const storeService = {
-  getThread(id: string): Thread | undefined {
-    return load().threads[id]
-  },
-  getAllThreads(): Thread[] {
-    return Object.values(load().threads).sort((a, b) => b.updatedAt - a.updatedAt)
-  },
-  upsertThread(thread: Thread): void {
-    load().threads[thread.id] = thread
-    save()
-  },
-  deleteThread(id: string): void {
-    delete load().threads[id]
-    save()
-  },
   getApprovalPolicy(): 'suggest' | 'auto-edit' | 'full-auto' {
     return load().approvalPolicy
   },
@@ -89,6 +72,13 @@ export const storeService = {
   },
   setSessionId(threadId: string, sessionId: string): void {
     load().sessionIds[threadId] = sessionId
+    save()
+  },
+  getAllSessionIds(): Record<string, string> {
+    return { ...load().sessionIds }
+  },
+  removeSessionId(threadId: string): void {
+    delete load().sessionIds[threadId]
     save()
   },
 }

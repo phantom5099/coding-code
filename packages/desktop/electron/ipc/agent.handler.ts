@@ -1,7 +1,8 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { runAgent, abortAgent, approveToolCall, rejectToolCall } from '../core/agent-loop'
 import { storeService } from '../core/store.service'
-import { listModels, switchModel, getOrCreateClient } from '../core/backend'
+import { listModels, switchModel, getOrCreateClient, deleteClient } from '../core/backend'
+import { readUIHistory, deleteSession, listSessions } from '@codingcode/core'
 
 export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle('agent:sendMessage', (_e, threadId: string, turnId: string, message: string, cwd?: string) => {
@@ -28,12 +29,38 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
     return rejectToolCall(threadId, callId)
   })
 
-  ipcMain.handle('agent:getThreads', () => {
-    return storeService.getAllThreads()
+  ipcMain.handle('agent:getThreads', async () => {
+    const sessionIds = storeService.getAllSessionIds()
+    const entries = Object.entries(sessionIds)
+    if (entries.length === 0) return []
+    const sessions = listSessions()
+    const sessionToThread = new Map(entries.map(([tid, sid]) => [sid, tid]))
+    return sessions
+      .filter((s) => sessionToThread.has(s.sessionId))
+      .map((s) => ({
+        id: sessionToThread.get(s.sessionId)!,
+        projectId: '',
+        title: s.title,
+        cwd: s.cwd,
+        turns: [],
+        createdAt: new Date(s.createdAt).getTime(),
+        updatedAt: new Date(s.updatedAt).getTime(),
+      }))
   })
 
-  ipcMain.handle('agent:deleteThread', (_e, threadId: string) => {
-    storeService.deleteThread(threadId)
+  ipcMain.handle('agent:deleteThread', async (_e, threadId: string) => {
+    const sessionId = storeService.getSessionId(threadId)
+    if (sessionId) {
+      deleteSession(sessionId)
+      storeService.removeSessionId(threadId)
+    }
+    deleteClient(threadId)
+  })
+
+  ipcMain.handle('agent:loadHistory', async (_e, threadId: string) => {
+    const sessionId = storeService.getSessionId(threadId)
+    if (!sessionId) return []
+    return readUIHistory(sessionId)
   })
 
   ipcMain.handle('agent:getModels', async () => {

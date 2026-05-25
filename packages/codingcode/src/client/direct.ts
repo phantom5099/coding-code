@@ -129,10 +129,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
             pending = gen.next();
           } else {
             yield winner.value;
-            const resumed = await pending;
-            if (resumed.done) break;
-            yield resumed.value;
-            pending = gen.next();
+            // Re-enter loop with fresh notify; same `pending` continues racing
           }
         }
       } finally {

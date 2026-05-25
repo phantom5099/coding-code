@@ -13,12 +13,14 @@ export function useAgent() {
   const completeTurn = useGlobalStore((s) => s.completeTurn)
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread)
   const loadThreads = useGlobalStore((s) => s.loadThreads)
+  const setThreadTurns = useGlobalStore((s) => s.setThreadTurns)
   const setModel = useGlobalStore((s) => s.setModel)
   const setModels = useGlobalStore((s) => s.setModels)
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)
   const setWorkspace = useGlobalStore((s) => s.setWorkspace)
   const setContextUsage = useGlobalStore((s) => s.setContextUsage)
   const workspace = useGlobalStore((s) => s.workspace)
+  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
 
   // Load persisted threads, settings, and models on mount
   useEffect(() => {
@@ -34,6 +36,18 @@ export function useAgent() {
       setModels(models as ModelEntry[])
     })
   }, [loadThreads, setModel, setModels, setApprovalPolicy, setWorkspace])
+
+  // Load history from disk when switching to a thread that has no turns in memory
+  useEffect(() => {
+    if (!currentThreadId) return
+    const thread = useGlobalStore.getState().agent.threads[currentThreadId]
+    if (!thread || thread.turns.length > 0) return
+    window.electronAPI?.loadHistory?.(currentThreadId).then((turns) => {
+      if (turns && turns.length > 0) {
+        setThreadTurns(currentThreadId, turns as Turn[])
+      }
+    })
+  }, [currentThreadId, setThreadTurns])
 
   // Subscribe to agent events
   useEffect(() => {

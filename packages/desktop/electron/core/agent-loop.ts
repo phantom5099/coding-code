@@ -23,24 +23,7 @@ export async function runAgent(opts: {
 
   abortAndClear(threadId)
 
-  let thread = storeService.getThread(threadId)
-  if (!thread) {
-    thread = {
-      id: threadId,
-      projectId: '',
-      title: userMessage.slice(0, 60),
-      cwd,
-      turns: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-  }
-
   const turn: Turn = { id: turnId, items: [], status: 'running' }
-  thread.turns.push(turn)
-
-  const userItem: Item = { id: randomId(), type: 'message', role: 'user', content: userMessage }
-  turn.items.push(userItem)
 
   let client
   try {
@@ -52,10 +35,8 @@ export async function runAgent(opts: {
   } catch (err) {
     const errItem: Item = { id: randomId(), type: 'error', message: String(err) }
     turn.items.push(errItem)
-    turn.status = 'error'
     send(win, 'agent:chunk', { threadId, turnId, chunk: errItem })
     send(win, 'agent:done', { threadId, turnId, error: String(err) })
-    storeService.upsertThread(thread)
     return
   }
 
@@ -104,10 +85,8 @@ export async function runAgent(opts: {
     send(win, 'agent:chunk', { threadId, turnId, chunk: errItem })
   } finally {
     abortAndClear(threadId)
-    thread.updatedAt = Date.now()
     const sessionId = client.getSessionId()
     if (sessionId) storeService.setSessionId(threadId, sessionId)
-    storeService.upsertThread(thread)
     send(win, 'agent:done', { threadId, turnId })
   }
 }
@@ -178,10 +157,10 @@ export function abortAgent(threadId: string): void {
 
 export async function approveToolCall(threadId: string, callId: string): Promise<void> {
   const client = await getOrCreateClient(threadId)
-  await client.sendApprovalResponse(callId, 'y')
+  await client.sendApprovalResponse(callId, 'allow')
 }
 
 export async function rejectToolCall(threadId: string, callId: string): Promise<void> {
   const client = await getOrCreateClient(threadId)
-  await client.sendApprovalResponse(callId, 'n')
+  await client.sendApprovalResponse(callId, 'deny')
 }

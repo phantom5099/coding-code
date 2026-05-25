@@ -1,5 +1,5 @@
 export { AgentService } from './agent/agent.js';
-export { SessionService, findSessionIndex } from './session/store.js';
+export { SessionService, findSessionIndex, readUIHistory, deleteSession, listSessions } from './session/store.js';
 export type { SessionStoreState } from './session/store.js';
 export { normalizePath, projectSlugFromPath } from './core/path.js';
 export {
@@ -40,6 +40,7 @@ export { ToolSearchService } from './tools/tool-search-service.js';
 export type { Todo, TodoStatus } from './agent-state/todo.js';
 export { DEFERRED_TOOLS_GUIDELINES, buildSystemPrompt } from './prompts/index.js';
 export type { SystemPromptVariant, SystemPromptOptions } from './prompts/index.js';
+export { bootstrapApplication } from './orchestration/bootstrap.js';
 export { SubagentRegistry, EXPLORE_PROFILE, GENERAL_PROFILE, getSubagentEnabledState, setSubagentEnabledState } from './subagent/registry.js';
 export type { SubagentProfile } from './subagent/registry.js';
 export { loadAgentProfiles } from './subagent/loader.js';

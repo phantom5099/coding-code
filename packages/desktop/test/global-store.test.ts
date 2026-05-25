@@ -141,24 +141,19 @@ describe('global store - loadThreads', () => {
     expect(thread.turns[0].status).toBe('running')
   })
 
-  it('replaces completed thread with backend version after agent:done', () => {
+  it('preserves in-memory turns when backend returns thread with empty turns', () => {
     const turn = makeTurn([{ id: 'u1', type: 'message', role: 'user', content: 'hello' }])
     useGlobalStore.getState().startTurn(threadId, turn)
     useGlobalStore.getState().completeTurn(threadId, turnId, 'completed')
 
-    const backendThread = makeThread([{
-      id: turnId,
-      status: 'completed',
-      items: [
-        { id: 'u1', type: 'message', role: 'user', content: 'hello' },
-        { id: 'a1', type: 'message', role: 'assistant', content: 'hi there', partial: false },
-      ],
-    }])
+    // Backend now returns threads with empty turns (history lives in codingcode session files)
+    const backendThread = makeThread([])
     useGlobalStore.getState().loadThreads([backendThread])
 
     const thread = useGlobalStore.getState().agent.threads[threadId]
-    expect(thread.turns[0].items).toHaveLength(2)
-    expect((thread.turns[0].items[1] as any).content).toBe('hi there')
+    // In-memory turns are preserved
+    expect(thread.turns[0].items).toHaveLength(1)
+    expect((thread.turns[0].items[0] as any).content).toBe('hello')
   })
 
   it('does not preserve completed thread absent from backend list', () => {

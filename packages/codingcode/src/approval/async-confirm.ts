@@ -13,6 +13,13 @@ export function registerEmitter(sessionId: string, fn: (id: string, tool: string
   emitters.set(sessionId, fn);
 }
 
+export function delegateEmitter(childSessionId: string, parentSessionId: string): void {
+  const parentFn = emitters.get(parentSessionId);
+  if (parentFn) {
+    emitters.set(childSessionId, parentFn);
+  }
+}
+
 export function unregisterEmitter(sessionId: string): void {
   emitters.delete(sessionId);
 }
@@ -31,10 +38,10 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
           return yield* Deferred.await(d);
         }),
 
-      resolveConfirm: (id: string, sessionId: string, result: ConfirmResult): Effect.Effect<boolean> =>
+      resolveConfirm: (id: string, _sessionId: string, result: ConfirmResult): Effect.Effect<boolean> =>
         Effect.sync(() => {
           const entry = pending.get(id);
-          if (!entry || entry.sessionId !== sessionId) return false;
+          if (!entry) return false;
           pending.delete(id);
           Deferred.unsafeDone(entry.deferred, Effect.succeed(result));
           return true;
