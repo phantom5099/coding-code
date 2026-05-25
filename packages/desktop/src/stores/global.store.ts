@@ -181,8 +181,15 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     setCursor: (line, col) => set((s) => { s.editor.cursorLine = line; s.editor.cursorCol = col }),
 
     loadThreads: (threads) => set((s) => {
-      s.agent.threads = {}
-      for (const t of threads) s.agent.threads[t.id] = t
+      const incomingIds = new Set(threads.map((t) => t.id))
+      const next: Record<string, Thread> = {}
+      for (const t of threads) next[t.id] = t
+      for (const [id, thread] of Object.entries(s.agent.threads)) {
+        if (!incomingIds.has(id) && thread.turns.some((t) => t.status === 'running')) {
+          next[id] = thread
+        }
+      }
+      s.agent.threads = next
     }),
 
     startTurn: (threadId, turn, meta) => set((s) => {
@@ -211,7 +218,9 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       if (!turn) return
 
       if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial) {
-        // Streaming delta: accumulate in streamingContent
+        if (!(chunk.id in s.agent.streamingContent)) {
+          turn.items.push({ id: chunk.id, type: 'message', role: 'assistant', content: '', partial: true })
+        }
         const current = s.agent.streamingContent[chunk.id] ?? ''
         s.agent.streamingContent[chunk.id] = current + chunk.content
         return

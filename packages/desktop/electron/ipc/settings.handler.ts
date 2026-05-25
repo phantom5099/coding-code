@@ -40,4 +40,19 @@ export function registerSettingsHandlers(): void {
     const client = await ensureClient()
     await client.toggleSkill(name, !disabled)
   })
+
+  ipcMain.handle('settings:getAgents', async () => {
+    const client = await ensureClient()
+    return client.listAgents()
+  })
+
+  ipcMain.handle('settings:getSubagentEnabled', async () => {
+    const client = await ensureClient()
+    return client.getSubagentEnabled()
+  })
+
+  ipcMain.handle('settings:setSubagentEnabled', async (_e, enabled: boolean) => {
+    const client = await ensureClient()
+    await client.setSubagentEnabled(enabled)
+  })
 }

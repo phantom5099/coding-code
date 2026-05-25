@@ -9,7 +9,8 @@ import { AppLayer } from '../layer.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
-import { SubagentRegistry } from '../subagent/registry.js';
+import { getSubagentEnabledState, setSubagentEnabledState, EXPLORE_PROFILE, GENERAL_PROFILE } from '../subagent/registry.js';
+import { loadAgentProfiles } from '../subagent/loader.js';
 import { McpService } from '../mcp/index.js';
 import type { McpStatus } from '../mcp/types.js';
 import { SkillService } from '../skills/index.js';
@@ -48,6 +49,7 @@ export interface AgentClient {
   enableMcp(name: string): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(name: string, enabled: boolean): Promise<void>;
+  listAgents(): Promise<Array<{ name: string; description: string; tools?: string[]; readonly?: boolean; maxSteps?: number; model?: string }>>;
 }
 
 export async function* agentEventToStreamChunk(
@@ -284,21 +286,11 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async getSubagentEnabled() {
-      return runWithLayer(
-        Effect.gen(function* () {
-          const registry = yield* SubagentRegistry;
-          return registry.isEnabled();
-        }),
-      );
+      return getSubagentEnabledState();
     },
 
     async setSubagentEnabled(enabled: boolean) {
-      await runWithLayer(
-        Effect.gen(function* () {
-          const registry = yield* SubagentRegistry;
-          registry.setEnabled(enabled);
-        }),
-      );
+      setSubagentEnabledState(enabled);
     },
 
     async getMcpStatus() {
@@ -344,6 +336,12 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
           return yield* (enabled ? skill.enableSkill(name) : skill.disableSkill(name));
         }),
       );
+    },
+
+    async listAgents() {
+      const cwd = getWorkspaceCwd();
+      const custom = loadAgentProfiles(cwd);
+      return [EXPLORE_PROFILE, GENERAL_PROFILE, ...custom];
     },
   };
 }

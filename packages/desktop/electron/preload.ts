@@ -39,7 +39,7 @@ const api = {
   gitBranches: (): Promise<string[]> => ipcRenderer.invoke('git:branches'),
   gitSwitchBranch: (branch: string): Promise<void> => ipcRenderer.invoke('git:switchBranch', branch),
 
-  // Settings (MCP / Skills)
+  // Settings (MCP / Skills / Agents)
   getMcp: (): Promise<{name: string; transport: 'stdio'|'http'; disabled: boolean; toolCount: number}[]> =>
     ipcRenderer.invoke('settings:getMcp'),
   setMcpDisabled: (name: string, disabled: boolean): Promise<void> =>
@@ -48,6 +48,12 @@ const api = {
     ipcRenderer.invoke('settings:getSkills'),
   setSkillDisabled: (name: string, disabled: boolean): Promise<void> =>
     ipcRenderer.invoke('settings:setSkillDisabled', name, disabled),
+  getAgents: (): Promise<{name: string; description: string; tools?: string[]; readonly?: boolean; maxSteps?: number; model?: string}[]> =>
+    ipcRenderer.invoke('settings:getAgents'),
+  getSubagentEnabled: (): Promise<boolean> =>
+    ipcRenderer.invoke('settings:getSubagentEnabled'),
+  setSubagentEnabled: (enabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('settings:setSubagentEnabled', enabled),
 
   // Events: main → renderer
   onFsChange: (cb: (payload: { path: string; type: 'add' | 'change' | 'unlink' }) => void) => {

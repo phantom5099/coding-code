@@ -10,6 +10,7 @@ export {
   resolveWorkspaceCwd,
   getWorkspaceSlug,
   resolveInWorkspace,
+  getConfig,
 } from './core/workspace.js';
 export { ContextService } from './context/context.js';
 export { HookService } from './hooks/registry.js';
@@ -39,4 +40,9 @@ export { ToolSearchService } from './tools/tool-search-service.js';
 export type { Todo, TodoStatus } from './agent-state/todo.js';
 export { DEFERRED_TOOLS_GUIDELINES, buildSystemPrompt } from './prompts/index.js';
 export type { SystemPromptVariant, SystemPromptOptions } from './prompts/index.js';
+export { SubagentRegistry, EXPLORE_PROFILE, GENERAL_PROFILE, getSubagentEnabledState, setSubagentEnabledState } from './subagent/registry.js';
+export type { SubagentProfile } from './subagent/registry.js';
+export { loadAgentProfiles } from './subagent/loader.js';
 export { getLLMClient } from './llm/factory.js';
+export { loadConfig, ensureUserConfig } from '@codingcode/infra';
+export type { AppConfig } from '@codingcode/infra';

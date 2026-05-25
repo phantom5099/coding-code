@@ -45,5 +45,5 @@ memory:
   maxBytes: 16384
   promptMaxBytes: 8192
 activeModel:
-  model: kimi-k2.5
-  apiKeyEnv: KIMI_API_KEY
+  model: deepseek-v4-flash
+  apiKeyEnv: SANSE_API_KEY

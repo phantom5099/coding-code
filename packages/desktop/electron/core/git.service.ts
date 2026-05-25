@@ -1,6 +1,6 @@
 import simpleGit from 'simple-git'
 import type { BrowserWindow } from 'electron'
-import type { GitStatus } from '@shared/types'
+import type { GitStatus } from '../../shared/types'
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
 let currentCwd = ''

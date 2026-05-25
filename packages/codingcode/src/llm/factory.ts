@@ -1,12 +1,12 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { AgentError } from '../core/error';
-import { getInstallRoot } from '../core/workspace.js';
+import { getInstallRoot, getConfig } from '../core/workspace.js';
 import { Result } from '../core/result';
 import type { LLMClient } from './client';
 import { OpenAIProvider } from './providers/openai';
 import { DeepSeekProvider } from './providers/deepseek';
-import { loadConfig, updateActiveModel } from '@codingcode/infra';
+import { updateActiveModel } from '@codingcode/infra';
 
 export interface ModelDescriptor {
   id: string;
@@ -113,7 +113,7 @@ export function findModel(target: string): SelectableModel | null {
 export function getActiveEntry(): Result<SelectableModel, AgentError> {
   if (currentEntry) return Result.ok(currentEntry);
 
-  const cfg = loadConfig().activeModel;
+  const cfg = getConfig().activeModel;
   if (!cfg) {
     return Result.err(new AgentError('CONFIG_INVALID', 'No active model configured. Set activeModel in config.yaml with model and apiKeyEnv fields'));
   }
@@ -138,7 +138,7 @@ export function switchModel(id: string): Result<SelectableModel, AgentError> {
   if (!found) return Result.err(new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /model to list.`));
   currentEntry = found;
   currentClient = null;
-  updateActiveModel(found.model, found.api_key_env, undefined, getInstallRoot());
+  updateActiveModel(found.model, found.api_key_env);
   return Result.ok(found);
 }
 

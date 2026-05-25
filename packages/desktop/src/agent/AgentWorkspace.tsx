@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useGlobalStore } from '../stores/global.store'
 import { useAgent } from '../hooks/useAgent'
 import MessageStream from './MessageStream'
@@ -35,6 +36,8 @@ function ModelSelector() {
   const models = useGlobalStore((s) => s.agent.models)
   const setModel = useGlobalStore((s) => s.setModel)
   const [open, setOpen] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const groups = models.reduce<Record<string, typeof models>>((acc, m) => {
     if (!acc[m.provider]) acc[m.provider] = []
@@ -45,17 +48,25 @@ function ModelSelector() {
   const currentModel = models.find((m) => m.id === model)
   const displayName = currentModel?.name ?? (model ? model.split('-').slice(-2).join(' ') : '')
 
+  useLayoutEffect(() => {
+    if (open && dropdownRef.current && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      dropdownRef.current.style.bottom = `${window.innerHeight - rect.top + 8}px`
+      dropdownRef.current.style.right = `${window.innerWidth - rect.right}px`
+    }
+  }, [open])
+
   return (
-    <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)}
+    <div>
+      <button ref={buttonRef} type="button" onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors">
         <span className="max-w-[160px] truncate">{displayName || '选择模型'}</span>
         <span className="text-[#3c3c3c] text-[10px]">▾</span>
       </button>
-      {open && (
+      {open && createPortal(
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-full right-0 mb-2 bg-[#1e1e1e] border border-[#333] rounded-xl shadow-2xl min-w-[260px] z-50 py-1.5 max-h-[400px] overflow-y-auto">
+          <div ref={dropdownRef} className="fixed bg-[#1e1e1e] border border-[#333] rounded-xl shadow-2xl min-w-[260px] z-50 py-1.5 max-h-[400px] overflow-y-auto">
             {Object.entries(groups).map(([provider, providerModels]) => (
               <div key={provider}>
                 <div className="px-3 py-1.5 text-[11px] font-semibold text-[#444] uppercase tracking-wider">{provider}</div>
@@ -71,7 +82,8 @@ function ModelSelector() {
             ))}
             {models.length === 0 && <div className="px-3 py-3 text-[14px] text-[#444]">无可用模型</div>}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   )

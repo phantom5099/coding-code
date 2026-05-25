@@ -3,14 +3,15 @@ import { useGlobalStore } from '../src/stores/global.store'
 import type { Item, Turn } from '../shared/types'
 
 beforeEach(() => {
-  // Reset store to initial state
   useGlobalStore.setState({
     agent: {
       currentThreadId: null,
       threads: {},
       approvalPolicy: 'suggest',
       model: '',
+      models: [],
       isStreaming: false,
+      contextUsage: null,
       streamingContent: {},
     },
   })
@@ -35,7 +36,7 @@ describe('global store - agent streaming actions', () => {
     expect(useGlobalStore.getState().agent.isStreaming).toBe(true)
   })
 
-  it('applyChunk accumulates partial text into streamingContent', () => {
+  it('applyChunk adds streaming assistant item to turn.items and accumulates content', () => {
     const turn = makeTurn([])
     useGlobalStore.getState().startTurn(threadId, turn)
 
@@ -47,9 +48,14 @@ describe('global store - agent streaming actions', () => {
     const streaming = useGlobalStore.getState().agent.streamingContent['msg-1']
     expect(streaming).toBe('Hello world')
 
-    // Streaming items are not yet in turn.items
+    // Streaming item is added to turn.items as a partial placeholder (added on first chunk)
     const items = useGlobalStore.getState().agent.threads[threadId].turns[0].items
-    expect(items.find((i) => i.id === 'msg-1')).toBeUndefined()
+    const placeholder = items.find((i) => i.id === 'msg-1')
+    expect(placeholder).toBeDefined()
+    expect((placeholder as any).partial).toBe(true)
+    expect((placeholder as any).content).toBe('')
+    // Not duplicated on subsequent chunks
+    expect(items.filter((i) => i.id === 'msg-1')).toHaveLength(1)
   })
 
   it('applyChunk commits partial=false message to turn.items', () => {
@@ -108,5 +114,60 @@ describe('global store - agent streaming actions', () => {
     const updatedTurn = useGlobalStore.getState().agent.threads[threadId].turns[0]
     expect(updatedTurn.status).toBe('completed')
     expect(useGlobalStore.getState().agent.isStreaming).toBe(false)
+  })
+})
+
+describe('global store - loadThreads', () => {
+  const threadId = 'thread-1'
+  const turnId = 'turn-1'
+
+  function makeTurn(items: Item[] = []): Turn {
+    return { id: turnId, items, status: 'running' }
+  }
+
+  function makeThread(turns: Turn[]): import('../shared/types').Thread {
+    return { id: threadId, projectId: '', title: 'test', cwd: '/foo', turns, createdAt: 1000, updatedAt: 2000 }
+  }
+
+  it('preserves in-flight thread with running turn not yet persisted by backend', () => {
+    const turn = makeTurn([{ id: 'u1', type: 'message', role: 'user', content: 'hello' }])
+    useGlobalStore.getState().startTurn(threadId, turn)
+
+    // Backend returns empty list (new thread not persisted yet)
+    useGlobalStore.getState().loadThreads([])
+
+    const thread = useGlobalStore.getState().agent.threads[threadId]
+    expect(thread).toBeDefined()
+    expect(thread.turns[0].status).toBe('running')
+  })
+
+  it('replaces completed thread with backend version after agent:done', () => {
+    const turn = makeTurn([{ id: 'u1', type: 'message', role: 'user', content: 'hello' }])
+    useGlobalStore.getState().startTurn(threadId, turn)
+    useGlobalStore.getState().completeTurn(threadId, turnId, 'completed')
+
+    const backendThread = makeThread([{
+      id: turnId,
+      status: 'completed',
+      items: [
+        { id: 'u1', type: 'message', role: 'user', content: 'hello' },
+        { id: 'a1', type: 'message', role: 'assistant', content: 'hi there', partial: false },
+      ],
+    }])
+    useGlobalStore.getState().loadThreads([backendThread])
+
+    const thread = useGlobalStore.getState().agent.threads[threadId]
+    expect(thread.turns[0].items).toHaveLength(2)
+    expect((thread.turns[0].items[1] as any).content).toBe('hi there')
+  })
+
+  it('does not preserve completed thread absent from backend list', () => {
+    const turn = makeTurn([])
+    useGlobalStore.getState().startTurn(threadId, turn)
+    useGlobalStore.getState().completeTurn(threadId, turnId, 'completed')
+
+    useGlobalStore.getState().loadThreads([])
+
+    expect(useGlobalStore.getState().agent.threads[threadId]).toBeUndefined()
   })
 })

@@ -82,8 +82,16 @@ export default function AgentSidebar() {
 
   return (
     <div className="flex flex-col shrink-0 bg-[#161616] border-r border-[#222] w-64">
+      {/* 顶部栏：收起按钮 */}
+      <div className="flex items-center justify-end px-2 pt-2">
+        <button type="button" onClick={toggleSidebar} title="收起侧边栏"
+          className="w-7 h-7 flex items-center justify-center text-[#555] hover:text-[#ccc] hover:bg-[#252525] rounded transition-colors text-base">
+          ‹
+        </button>
+      </div>
+
       {/* 新对话 */}
-      <div className="px-4 pt-5 pb-2">
+      <div className="px-4 pt-2 pb-2">
         <button type="button" onClick={() => setCurrentThread(null)}
           className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-[14px] text-[#bbb] hover:text-white hover:bg-[#252525] transition-colors border border-[#2a2a2a] hover:border-[#3a3a3a]">
           <span className="text-base leading-none">+</span>

@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { homedir } from 'os';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export interface ContextThresholdsConfig {
@@ -67,12 +68,6 @@ export interface AppConfig {
   };
   maxSteps: number;
   maxStopContinuations: number;
-  models: Record<string, {
-    provider: string;
-    model: string;
-    apiKey?: string;
-    baseURL?: string;
-  }>;
   activeModel?: ActiveModelConfig;
   context: ContextConfig;
   memory: MemoryConfig;
@@ -120,13 +115,12 @@ export const DEFAULT_MEMORY: MemoryConfig = {
   disabledTypes: [],
 };
 
-const DEFAULT_CONFIG: AppConfig = {
+export const DEFAULT_CONFIG: AppConfig = {
   server: {
     port: 8080,
   },
   maxSteps: 50,
   maxStopContinuations: 2,
-  models: {},
   context: DEFAULT_CONTEXT,
   memory: DEFAULT_MEMORY,
 };
@@ -150,61 +144,39 @@ function isObject(val: unknown): val is Record<string, unknown> {
   return typeof val === 'object' && val !== null && !Array.isArray(val);
 }
 
-export function updateActiveModel(model: string, apiKeyEnv: string, configPath?: string, installRoot?: string): void {
-  const root = installRoot ?? process.cwd();
-  const paths = configPath
-    ? [configPath]
-    : [resolve(root, 'config/config.yaml'), resolve(root, 'config/config.yml')];
-
-  let targetPath = paths[0]!;
-  let existing: Record<string, unknown> = {};
-
-  for (const p of paths) {
-    if (existsSync(p)) {
-      existing = parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>;
-      targetPath = p;
-      break;
-    }
-  }
-
+export function updateActiveModel(model: string, apiKeyEnv: string, configPath?: string): void {
+  const p = configPath ?? getUserConfigPath();
+  const existing: Record<string, unknown> = existsSync(p)
+    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
+    : {};
   existing.activeModel = { model, apiKeyEnv };
-  writeFileSync(targetPath, stringifyYaml(existing), 'utf8');
+  writeFileSync(p, stringifyYaml(existing), 'utf8');
 }
 
-export function updateMemoryEnabled(enabled: boolean, configPath?: string, installRoot?: string): void {
-  const root = installRoot ?? process.cwd();
-  const paths = configPath
-    ? [configPath]
-    : [resolve(root, 'config/config.yaml'), resolve(root, 'config/config.yml')];
-
-  let targetPath = paths[0]!;
-  let existing: Record<string, unknown> = {};
-
-  for (const p of paths) {
-    if (existsSync(p)) {
-      existing = parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>;
-      targetPath = p;
-      break;
-    }
-  }
-
+export function updateMemoryEnabled(enabled: boolean, configPath?: string): void {
+  const p = configPath ?? getUserConfigPath();
+  const existing: Record<string, unknown> = existsSync(p)
+    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
+    : {};
   const memory = (existing.memory as Record<string, unknown>) ?? {};
   existing.memory = { ...memory, enabled };
-  writeFileSync(targetPath, stringifyYaml(existing), 'utf8');
+  writeFileSync(p, stringifyYaml(existing), 'utf8');
 }
 
-export function loadConfig(configPath?: string, installRoot?: string): AppConfig {
-  const root = installRoot ?? process.cwd();
-  const paths = configPath
-    ? [configPath]
-    : [resolve(root, 'config/config.yaml'), resolve(root, 'config/config.yml')];
+export function loadConfig(configPath?: string): AppConfig {
+  const p = configPath ?? getUserConfigPath();
+  if (!existsSync(p)) return DEFAULT_CONFIG;
+  const parsed = parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>;
+  return deepMerge(DEFAULT_CONFIG as any, parsed) as AppConfig;
+}
 
-  for (const p of paths) {
-    if (existsSync(p)) {
-      const raw = readFileSync(p, 'utf8');
-      const parsed = parseYaml(raw) as Record<string, unknown>;
-      return deepMerge(DEFAULT_CONFIG as any, parsed) as AppConfig;
-    }
-  }
-  return DEFAULT_CONFIG;
+export function getUserConfigPath(): string {
+  return resolve(homedir(), '.codingcode', 'config.yaml');
+}
+
+export function ensureUserConfig(): void {
+  const p = getUserConfigPath();
+  if (existsSync(p)) return;
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, stringifyYaml(DEFAULT_CONFIG), 'utf8');
 }

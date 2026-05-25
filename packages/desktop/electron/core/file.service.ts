@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, readdirSync, statSync, watch } from 'fs'
 import { join, resolve, relative } from 'path'
-import type { FileNode } from '@shared/types'
+import type { FileNode } from '../../shared/types'
 
 const IGNORED = new Set(['.git', 'node_modules', '.next', 'dist', 'out', '__pycache__', '.venv'])
 

@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { Item, Turn } from '@shared/types'
+import type { Item, Turn } from '../../shared/types'
 import type { StreamChunk } from '@codingcode/core'
 import { getOrCreateClient, setActiveGen, abortAndClear, deleteClient } from './backend'
 import { storeService } from './store.service'
@@ -41,7 +41,6 @@ export async function runAgent(opts: {
 
   const userItem: Item = { id: randomId(), type: 'message', role: 'user', content: userMessage }
   turn.items.push(userItem)
-  send(win, 'agent:chunk', { threadId, turnId, chunk: userItem })
 
   let client
   try {

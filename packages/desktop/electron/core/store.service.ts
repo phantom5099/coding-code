@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
-import type { Thread } from '@shared/types'
+import type { Thread } from '../../shared/types'
 
 interface StoreData {
   threads: Record<string, Thread>

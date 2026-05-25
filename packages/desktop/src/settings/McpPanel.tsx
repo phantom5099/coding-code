@@ -36,9 +36,6 @@ export default function McpPanel() {
 
   return (
     <div className="px-6 py-5">
-      <p className="text-[13px] text-[#444] mb-5">
-        来自 <span className="font-mono text-[#555]">.codingcode/mcp.yaml</span>
-      </p>
 
       {servers.length === 0 ? (
         <div className="text-[14px] text-[#444] py-8 text-center leading-loose">
