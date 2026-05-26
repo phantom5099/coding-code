@@ -1,3 +1,9 @@
+export function getToggleThumbClassName(checked: boolean): string {
+  return `absolute left-0.5 top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+    checked ? 'translate-x-4' : 'translate-x-0'
+  }`
+}
+
 export default function Toggle({ checked, onChange, disabledLabel, enabledLabel }: {
   checked: boolean
   onChange: (v: boolean) => void
@@ -13,9 +19,7 @@ export default function Toggle({ checked, onChange, disabledLabel, enabledLabel 
         checked ? 'bg-[#569cd6]' : 'bg-[#3a3a3a]'
       }`}
     >
-      <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
-        checked ? 'translate-x-4' : 'translate-x-0.5'
-      }`} />
+      <span className={getToggleThumbClassName(checked)} />
     </button>
   )
 }
