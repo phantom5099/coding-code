@@ -12,9 +12,10 @@ import { getWorkspaceCwd } from '../core/workspace.js';
 import { getSubagentEnabledState, setSubagentEnabledState, EXPLORE_PROFILE, GENERAL_PROFILE } from '../subagent/registry.js';
 import { loadAgentProfiles } from '../subagent/loader.js';
 import { McpService } from '../mcp/index.js';
-import type { McpStatus } from '../mcp/types.js';
+import type { McpServerConfig, McpStatus } from '../mcp/types.js';
 import { SkillService } from '../skills/index.js';
 import { getMemoryEnabled, setMemoryEnabled } from '../memory/index.js';
+import type { UserHookConfig } from '../hooks/config.js';
 
 export type StreamChunk = string
   | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
@@ -45,11 +46,23 @@ export interface AgentClient {
   getSubagentEnabled(): Promise<boolean>;
   setSubagentEnabled(enabled: boolean): Promise<void>;
   getMcpStatus(): Promise<McpStatus[]>;
+  createMcpServer(server: McpServerConfig): Promise<void>;
+  updateMcpServer(name: string, server: McpServerConfig): Promise<void>;
+  deleteMcpServer(name: string): Promise<void>;
   disableMcp(name: string): Promise<void>;
   enableMcp(name: string): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(name: string, enabled: boolean): Promise<void>;
-  listAgents(): Promise<Array<{ name: string; description: string; tools?: string[]; readonly?: boolean; maxSteps?: number; model?: string }>>;
+  listAgents(): Promise<Array<{ name: string; description: string; tools?: string[]; readonly?: boolean; maxSteps?: number; model?: string; disabled?: boolean }>>;
+  createAgent(profile: SubagentProfile): Promise<void>;
+  updateAgent(name: string, profile: SubagentProfile): Promise<void>;
+  deleteAgent(name: string): Promise<void>;
+  setAgentDisabled(name: string, disabled: boolean): Promise<void>;
+  listHooks(): Promise<UserHookConfig[]>;
+  setHookDisabled(name: string, disabled: boolean): Promise<void>;
+  createHook(hook: UserHookConfig): Promise<void>;
+  updateHook(name: string, hook: UserHookConfig): Promise<void>;
+  deleteHook(name: string): Promise<void>;
 }
 
 export async function* agentEventToStreamChunk(
@@ -317,6 +330,37 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       );
     },
 
+    async createMcpServer(server: McpServerConfig): Promise<void> {
+      const cwd = getWorkspaceCwd();
+      const { loadMcpConfig, writeMcpConfig } = await import('../mcp/config.js');
+      const servers = loadMcpConfig(cwd);
+      if (servers.some(s => s.name === server.name)) {
+        throw new Error(`MCP server '${server.name}' already exists`);
+      }
+      servers.push(server);
+      writeMcpConfig(cwd, servers);
+    },
+
+    async updateMcpServer(name: string, server: McpServerConfig): Promise<void> {
+      const cwd = getWorkspaceCwd();
+      const { loadMcpConfig, writeMcpConfig } = await import('../mcp/config.js');
+      const servers = loadMcpConfig(cwd);
+      const idx = servers.findIndex(s => s.name === name);
+      if (idx === -1) throw new Error(`MCP server '${name}' not found`);
+      if (server.name !== name && servers.some(s => s.name === server.name)) {
+        throw new Error(`MCP server '${server.name}' already exists`);
+      }
+      servers[idx] = server;
+      writeMcpConfig(cwd, servers);
+    },
+
+    async deleteMcpServer(name: string): Promise<void> {
+      const cwd = getWorkspaceCwd();
+      const { loadMcpConfig, writeMcpConfig } = await import('../mcp/config.js');
+      const servers = loadMcpConfig(cwd).filter(s => s.name !== name);
+      writeMcpConfig(cwd, servers);
+    },
+
     async listSkills() {
       return runWithLayer(
         Effect.gen(function* () {
@@ -338,7 +382,99 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     async listAgents() {
       const cwd = getWorkspaceCwd();
       const custom = loadAgentProfiles(cwd);
-      return [EXPLORE_PROFILE, GENERAL_PROFILE, ...custom];
+      const { isAgentDisabledState } = await import('../subagent/registry.js');
+      return [EXPLORE_PROFILE, GENERAL_PROFILE, ...custom].map(a => ({
+        name: a.name, description: a.description, tools: a.tools,
+        readonly: a.readonly, maxSteps: a.maxSteps, model: a.model,
+        disabled: isAgentDisabledState(a.name),
+      }));
+    },
+
+    async createAgent(profile: SubagentProfile): Promise<void> {
+      const cwd = getWorkspaceCwd();
+      const { writeAgentProfile, loadAgentProfiles } = await import('../subagent/loader.js');
+      const existing = loadAgentProfiles(cwd);
+      if (existing.some(a => a.name === profile.name)) {
+        throw new Error(`Agent '${profile.name}' already exists`);
+      }
+      writeAgentProfile(cwd, profile);
+    },
+
+    async updateAgent(name: string, profile: SubagentProfile): Promise<void> {
+      const cwd = getWorkspaceCwd();
+      const { updateAgentProfile, loadAgentProfiles } = await import('../subagent/loader.js');
+      const existing = loadAgentProfiles(cwd);
+      if (!existing.some(a => a.name === name)) {
+        throw new Error(`Agent '${name}' not found`);
+      }
+      if (profile.name !== name && existing.some(a => a.name === profile.name)) {
+        throw new Error(`Agent '${profile.name}' already exists`);
+      }
+      updateAgentProfile(cwd, name, profile);
+    },
+
+    async deleteAgent(name: string): Promise<void> {
+      const cwd = getWorkspaceCwd();
+      const { deleteAgentProfile } = await import('../subagent/loader.js');
+      deleteAgentProfile(cwd, name);
+    },
+
+    async setAgentDisabled(name: string, disabled: boolean): Promise<void> {
+      const { setAgentDisabledState } = await import('../subagent/registry.js');
+      setAgentDisabledState(name, disabled);
+    },
+
+    async listHooks(): Promise<UserHookConfig[]> {
+      const cwd = getWorkspaceCwd();
+      const { loadHookConfigs } = await import('../hooks/config.js');
+      return loadHookConfigs(cwd);
+    },
+
+    async createHook(hook: UserHookConfig): Promise<void> {
+      const cwd = getWorkspaceCwd();
+      const { loadHookConfigs, writeHookConfigs } = await import('../hooks/config.js');
+      const hooks = loadHookConfigs(cwd);
+      if (hooks.some(h => h.name === hook.name)) {
+        throw new Error(`Hook '${hook.name}' already exists`);
+      }
+      hooks.push(hook);
+      writeHookConfigs(cwd, hooks);
+    },
+
+    async updateHook(name: string, hook: UserHookConfig): Promise<void> {
+      const cwd = getWorkspaceCwd();
+      const { loadHookConfigs, writeHookConfigs } = await import('../hooks/config.js');
+      const hooks = loadHookConfigs(cwd);
+      const idx = hooks.findIndex(h => h.name === name);
+      if (idx === -1) throw new Error(`Hook '${name}' not found`);
+      if (hook.name !== name && hooks.some(h => h.name === hook.name)) {
+        throw new Error(`Hook '${hook.name}' already exists`);
+      }
+      hooks[idx] = hook;
+      writeHookConfigs(cwd, hooks);
+    },
+
+    async deleteHook(name: string): Promise<void> {
+      const cwd = getWorkspaceCwd();
+      const { loadHookConfigs, writeHookConfigs } = await import('../hooks/config.js');
+      const hooks = loadHookConfigs(cwd).filter(h => h.name !== name);
+      writeHookConfigs(cwd, hooks);
+    },
+
+    async setHookDisabled(name: string, disabled: boolean): Promise<void> {
+      // 运行时立即生效
+      const { setHookRuntimeEnabled } = await import('../hooks/executor.js');
+      setHookRuntimeEnabled(name, !disabled);
+
+      // 持久化到 YAML
+      const cwd = getWorkspaceCwd();
+      const { loadHookConfigs, writeHookConfigs } = await import('../hooks/config.js');
+      const hooks = loadHookConfigs(cwd);
+      const hook = hooks.find(h => h.name === name);
+      if (hook) {
+        hook.enabled = !disabled;
+        writeHookConfigs(cwd, hooks);
+      }
     },
   };
 }

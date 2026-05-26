@@ -1,3 +1,18 @@
+import { useState, useEffect } from 'react'
+import Toggle from './Toggle'
+
+interface HookEntry {
+  name: string
+  description?: string
+  point: string
+  type: 'observer' | 'decision'
+  command: string
+  args?: string[]
+  env?: Record<string, string>
+  priority?: number
+  enabled: boolean
+}
+
 interface HookGroup {
   label: string
   points: { name: string; description: string; type: 'observer' | 'decision' }[]
@@ -49,12 +64,240 @@ const HOOK_GROUPS: HookGroup[] = [
   },
 ]
 
+const ALL_POINTS = HOOK_GROUPS.flatMap(g => g.points)
+
+interface HookForm {
+  name: string
+  description: string
+  point: string
+  type: 'observer' | 'decision'
+  command: string
+  args: string
+  env: string
+  priority: string
+  enabled: boolean
+}
+
+const EMPTY_FORM: HookForm = {
+  name: '', description: '', point: ALL_POINTS[0]?.name ?? '', type: 'observer',
+  command: '', args: '', env: '', priority: '0', enabled: true,
+}
+
 export default function HooksPanel() {
+  const [hooks, setHooks] = useState<HookEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isCreating, setIsCreating] = useState(false)
+  const [editingName, setEditingName] = useState<string | null>(null)
+  const [deletingName, setDeletingName] = useState<string | null>(null)
+  const [form, setForm] = useState<HookForm>(EMPTY_FORM)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await window.electronAPI?.getHooks?.()
+      setHooks(data ?? [])
+    } catch {
+      setHooks([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const startCreate = () => {
+    setForm(EMPTY_FORM)
+    setIsCreating(true)
+    setEditingName(null)
+    setDeletingName(null)
+  }
+
+  const startEdit = (h: HookEntry) => {
+    setForm({
+      name: h.name,
+      description: h.description ?? '',
+      point: h.point,
+      type: h.type,
+      command: h.command,
+      args: (h.args ?? []).join(', '),
+      env: h.env ? Object.entries(h.env).map(([k, v]) => `${k}=${v}`).join('\n') : '',
+      priority: (h.priority ?? 0).toString(),
+      enabled: h.enabled,
+    })
+    setEditingName(h.name)
+    setIsCreating(false)
+    setDeletingName(null)
+  }
+
+  const cancelForm = () => {
+    setIsCreating(false)
+    setEditingName(null)
+  }
+
+  const saveForm = async () => {
+    const hook: Record<string, unknown> = {
+      name: form.name,
+      point: form.point,
+      type: form.type,
+      command: form.command,
+      enabled: form.enabled,
+    }
+    if (form.description.trim()) hook.description = form.description
+    if (form.args.trim()) hook.args = form.args.split(',').map(s => s.trim()).filter(Boolean)
+    if (form.env.trim()) {
+      hook.env = Object.fromEntries(
+        form.env.split('\n').map(l => l.split('=')).filter(a => a[0]),
+      )
+    }
+    if (form.priority.trim()) hook.priority = Number(form.priority)
+
+    try {
+      if (isCreating) {
+        await window.electronAPI?.createHook?.(hook)
+      } else if (editingName) {
+        await window.electronAPI?.updateHook?.(editingName, hook)
+      }
+      cancelForm()
+      await load()
+    } catch (e: any) {
+      alert(e.message ?? '操作失败')
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!deletingName) return
+    try {
+      await window.electronAPI?.deleteHook?.(deletingName)
+      setDeletingName(null)
+      await load()
+    } catch (e: any) {
+      alert(e.message ?? '删除失败')
+    }
+  }
+
+  const inputCls = 'w-full bg-[#252525] border border-[#3a3a3a] text-[#ddd] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#569cd6]'
+  const labelCls = 'text-[12px] text-[#555] mb-1'
+  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[#1a3a5c] text-[#569cd6] hover:bg-[#1a4a6c]'
+  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[#3a1a1a] text-[#d16969] hover:bg-[#4a1a1a]'
+  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[#2a2a2a] text-[#888] hover:bg-[#3a3a3a]'
+
+  if (loading) {
+    return <div className="px-6 py-8 text-[14px] text-[#444]">加载中…</div>
+  }
+
   return (
     <div className="px-6 py-5">
-      <p className="text-[13px] text-[#444] mb-5">
-        钩子通过代码注册到 <span className="font-mono text-[#555]">HookService</span>，以下为所有可用的挂载点。
-      </p>
+      {/* User-defined hooks */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="text-[11px] font-medium text-[#444] uppercase tracking-wider">
+          用户自定义钩子
+        </div>
+        <button onClick={startCreate} className={btnPrimary}>
+          + 添加钩子
+        </button>
+      </div>
+
+      {isCreating && (
+        <FormCard
+          form={form} setForm={setForm}
+          points={ALL_POINTS}
+          onSave={saveForm} onCancel={cancelForm}
+          inputCls={inputCls} labelCls={labelCls}
+          btnPrimary={btnPrimary} btnCancel={btnCancel}
+        />
+      )}
+
+      {hooks.length === 0 && !isCreating ? (
+        <div className="text-[14px] text-[#444] py-6 text-center leading-loose">
+          未找到用户自定义钩子<br />
+          <span className="text-[13px] text-[#333]">点击上方按钮添加</span>
+        </div>
+      ) : (
+        <div className="space-y-2 mb-8">
+          {hooks.map((h) => {
+            if (editingName === h.name) {
+              return (
+                <FormCard
+                  key={h.name}
+                  form={form} setForm={setForm}
+                  points={ALL_POINTS}
+                  onSave={saveForm} onCancel={cancelForm}
+                  inputCls={inputCls} labelCls={labelCls}
+                  btnPrimary={btnPrimary} btnCancel={btnCancel}
+                />
+              )
+            }
+            if (deletingName === h.name) {
+              return (
+                <div key={h.name}
+                  className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#3a1a1a]">
+                  <span className="text-[14px] text-[#d16969]">删除钩子 {h.name}？</span>
+                  <div className="flex gap-2">
+                    <button onClick={confirmDelete} className={btnDanger}>确认</button>
+                    <button onClick={() => setDeletingName(null)} className={btnCancel}>取消</button>
+                  </div>
+                </div>
+              )
+            }
+            return (
+              <div key={h.name}
+                className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] group">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[14px] text-[#ddd]">{h.name}</span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded font-mono ${
+                      h.type === 'decision'
+                        ? 'bg-[#2a1a10] text-[#ce9178]'
+                        : 'bg-[#1a2a1a] text-[#6a9955]'
+                    }`}>{h.type}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[#1a1a3a] text-[#569cd6]">
+                      {h.point}
+                    </span>
+                    {!h.enabled && (
+                      <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[#2a2a2a] text-[#555]">
+                        已禁用
+                      </span>
+                    )}
+                  </div>
+                  {h.description && (
+                    <div className="text-[12px] text-[#555] mt-1">{h.description}</div>
+                  )}
+                  <div className="text-[12px] text-[#444] mt-1 font-mono">{h.command}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    title="编辑"
+                    onClick={() => startEdit(h)}
+                    className="text-[#444] hover:text-[#888] transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                    </svg>
+                  </button>
+                  <button
+                    title="删除"
+                    onClick={() => setDeletingName(h.name)}
+                    className="text-[#444] hover:text-[#d16969] transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
+                  <Toggle checked={h.enabled} onChange={(v) => {
+                    window.electronAPI?.setHookDisabled?.(h.name, !v)
+                    setHooks(prev => prev.map(hh => hh.name === h.name ? { ...hh, enabled: v } : hh))
+                  }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Built-in hook points */}
+      <div className="text-[11px] font-medium text-[#444] uppercase tracking-wider mb-3 px-1">
+        可用挂载点 (18 个内置)
+      </div>
 
       <div className="space-y-6">
         {HOOK_GROUPS.map((group) => (
@@ -82,6 +325,99 @@ export default function HooksPanel() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+
+}
+
+
+function FormCard({ form, setForm, points, onSave, onCancel, inputCls, labelCls, btnPrimary, btnCancel }: {
+  form: HookForm
+  setForm: (f: HookForm) => void
+  points: { name: string }[]
+  onSave: () => void
+  onCancel: () => void
+  inputCls: string
+  labelCls: string
+  btnPrimary: string
+  btnCancel: string
+}) {
+  return (
+    <div className="px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#569cd6]/30 space-y-3 mb-2">
+      <div>
+        <div className={labelCls}>名称</div>
+        <input className={inputCls} value={form.name} title="名称"
+          onChange={e => setForm({ ...form, name: e.target.value })} />
+      </div>
+      <div>
+        <div className={labelCls}>描述</div>
+        <input className={inputCls} value={form.description} title="描述"
+          onChange={e => setForm({ ...form, description: e.target.value })} />
+      </div>
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <div className={labelCls}>挂载点</div>
+          <select className={inputCls} value={form.point} title="挂载点"
+            onChange={e => setForm({ ...form, point: e.target.value })}>
+            {points.map(p => (
+              <option key={p.name} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className={labelCls}>类型</div>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => setForm({ ...form, type: 'observer' })}
+              className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
+                form.type === 'observer' ? 'bg-[#1a3a5c] text-[#569cd6]' : 'bg-[#2a2a2a] text-[#888]'
+              }`}>
+              observer
+            </button>
+            <button
+              onClick={() => setForm({ ...form, type: 'decision' })}
+              className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
+                form.type === 'decision' ? 'bg-[#1a3a5c] text-[#569cd6]' : 'bg-[#2a2a2a] text-[#888]'
+              }`}>
+              decision
+            </button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div className={labelCls}>命令</div>
+        <input className={inputCls} value={form.command} title="命令"
+          onChange={e => setForm({ ...form, command: e.target.value })} />
+      </div>
+      <div>
+        <div className={labelCls}>参数 (逗号分隔，可选)</div>
+        <input className={inputCls} value={form.args} title="参数"
+          onChange={e => setForm({ ...form, args: e.target.value })} />
+      </div>
+      <div>
+        <div className={labelCls}>环境变量 (每行 KEY=value，可选)</div>
+        <textarea className={`${inputCls} h-16`} value={form.env} title="环境变量"
+          onChange={e => setForm({ ...form, env: e.target.value })} />
+      </div>
+      <div className="flex gap-4 items-end">
+        <div className="w-24">
+          <div className={labelCls}>优先级</div>
+          <input type="number" className={inputCls} value={form.priority} title="优先级"
+            onChange={e => setForm({ ...form, priority: e.target.value })} />
+        </div>
+        <div className="pb-1">
+          <label className="flex items-center gap-2 text-[13px] text-[#888] cursor-pointer">
+            <input type="checkbox" checked={form.enabled}
+              onChange={e => setForm({ ...form, enabled: e.target.checked })}
+              className="accent-[#569cd6]" />
+            启用
+          </label>
+        </div>
+      </div>
+      <div className="flex gap-2 pt-1">
+        <button onClick={onSave} className={btnPrimary}>保存</button>
+        <button onClick={onCancel} className={btnCancel}>取消</button>
       </div>
     </div>
   )

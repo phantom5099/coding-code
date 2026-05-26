@@ -143,4 +143,18 @@ describe('SubagentsPanel - state logic', () => {
     expect(agent.tools?.length).toBe(2)
     expect(agent.tools).toContain('read_file')
   })
+
+  it('reflects agent disabled=true from API', () => {
+    const agents: AgentEntry[] = [
+      { name: 'test', description: 'Test', disabled: true },
+    ]
+    expect(agents[0].disabled).toBe(true)
+  })
+
+  it('reflects agent disabled=false from API', () => {
+    const agents: AgentEntry[] = [
+      { name: 'test', description: 'Test', disabled: false },
+    ]
+    expect(agents[0].disabled).toBe(false)
+  })
 })

@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
+import { join, basename } from 'path';
 import type { SubagentProfile } from './registry.js';
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
@@ -95,4 +95,61 @@ export function loadAgentProfiles(projectCwd: string): SubagentProfile[] {
   }
 
   return profiles;
+}
+
+function serializeAgentProfile(profile: SubagentProfile): string {
+  const fm: string[] = ['---'];
+  fm.push(`name: ${profile.name}`);
+  fm.push(`description: ${profile.description}`);
+  if (profile.tools && profile.tools.length > 0) {
+    fm.push(`tools: ${JSON.stringify(profile.tools)}`);
+  }
+  if (profile.readonly) fm.push(`readonly: true`);
+  if (profile.maxSteps !== undefined) fm.push(`maxSteps: ${profile.maxSteps}`);
+  if (profile.model) fm.push(`model: ${profile.model}`);
+  fm.push('---');
+  fm.push('');
+  fm.push(profile.systemPrompt || 'You are a specialized agent.');
+  return fm.join('\n');
+}
+
+function agentNameToFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') + '.md';
+}
+
+function findAgentFile(projectCwd: string, name: string): string | null {
+  const agentsDir = join(projectCwd, '.codingcode', 'agents');
+  if (!existsSync(agentsDir)) return null;
+  const files = readdirSync(agentsDir).filter(f => f.endsWith('.md'));
+  for (const file of files) {
+    const filePath = join(agentsDir, file);
+    const content = readFileSync(filePath, 'utf-8');
+    const { frontmatter } = parseFrontmatter(content);
+    if (frontmatter.name === name) return filePath;
+  }
+  return null;
+}
+
+export function writeAgentProfile(projectCwd: string, profile: SubagentProfile): void {
+  const agentsDir = join(projectCwd, '.codingcode', 'agents');
+  if (!existsSync(agentsDir)) mkdirSync(agentsDir, { recursive: true });
+  const existing = findAgentFile(projectCwd, profile.name);
+  const filePath = existing ?? join(agentsDir, agentNameToFilename(profile.name));
+  writeFileSync(filePath, serializeAgentProfile(profile), 'utf-8');
+}
+
+export function updateAgentProfile(projectCwd: string, oldName: string, profile: SubagentProfile): void {
+  if (oldName !== profile.name) {
+    const oldFile = findAgentFile(projectCwd, oldName);
+    if (oldFile) unlinkSync(oldFile);
+  }
+  writeAgentProfile(projectCwd, profile);
+}
+
+export function deleteAgentProfile(projectCwd: string, name: string): void {
+  const filePath = findAgentFile(projectCwd, name);
+  if (filePath) unlinkSync(filePath);
 }

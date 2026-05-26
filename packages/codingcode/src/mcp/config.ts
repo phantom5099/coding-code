@@ -1,6 +1,6 @@
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { McpServerConfig } from './types';
 
 function resolveEnvVars(value: unknown): unknown {
@@ -29,4 +29,15 @@ export function loadMcpConfig(projectRoot: string): McpServerConfig[] {
     }
   }
   return [];
+}
+
+export function writeMcpConfig(projectRoot: string, servers: McpServerConfig[]): void {
+  const dir = join(projectRoot, '.codingcode');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const p = join(dir, 'mcp.yaml');
+  const existing: Record<string, unknown> = existsSync(p)
+    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
+    : {};
+  existing.servers = servers;
+  writeFileSync(p, stringifyYaml(existing), 'utf8');
 }

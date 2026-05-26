@@ -1,7 +1,7 @@
 import { expect, it, describe, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { loadAgentProfiles } from '../../src/subagent/loader';
+import { loadAgentProfiles, writeAgentProfile, updateAgentProfile, deleteAgentProfile } from '../../src/subagent/loader';
 
 describe('loadAgentProfiles', () => {
   const testDir = join(process.cwd(), '.test-agents');
@@ -186,5 +186,109 @@ System prompt.`;
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
     expect(results[0].model).toBeUndefined();
+  });
+});
+
+describe('writeAgentProfile', () => {
+  const testDir = join(process.cwd(), '.test-agents-write');
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('should write and read back a profile', () => {
+    writeAgentProfile(testDir, {
+      name: 'test-agent',
+      description: 'Agent for testing',
+      systemPrompt: 'You are a test agent.',
+    });
+    const results = loadAgentProfiles(testDir);
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe('test-agent');
+    expect(results[0].description).toBe('Agent for testing');
+    expect(results[0].systemPrompt).toBe('You are a test agent.');
+  });
+
+  it('should write profile with all optional fields', () => {
+    writeAgentProfile(testDir, {
+      name: 'full-agent',
+      description: 'Full agent',
+      systemPrompt: 'You are full.',
+      tools: ['read_file', 'glob'],
+      readonly: true,
+      maxSteps: 50,
+      model: 'sonnet',
+    });
+    const results = loadAgentProfiles(testDir);
+    expect(results).toHaveLength(1);
+    expect(results[0].tools).toEqual(['read_file', 'glob']);
+    expect(results[0].readonly).toBe(true);
+    expect(results[0].maxSteps).toBe(50);
+    expect(results[0].model).toBe('sonnet');
+  });
+
+  it('should overwrite existing profile with same name', () => {
+    writeAgentProfile(testDir, {
+      name: 'dup-agent',
+      description: 'Original',
+      systemPrompt: 'Original.',
+    });
+    writeAgentProfile(testDir, {
+      name: 'dup-agent',
+      description: 'Updated',
+      systemPrompt: 'Updated.',
+    });
+    const results = loadAgentProfiles(testDir);
+    expect(results).toHaveLength(1);
+    expect(results[0].description).toBe('Updated');
+  });
+});
+
+describe('updateAgentProfile', () => {
+  const testDir = join(process.cwd(), '.test-agents-update');
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('should rename a profile', () => {
+    writeAgentProfile(testDir, {
+      name: 'old-name',
+      description: 'Test',
+      systemPrompt: 'Test.',
+    });
+    updateAgentProfile(testDir, 'old-name', {
+      name: 'new-name',
+      description: 'Test',
+      systemPrompt: 'Test.',
+    });
+    const results = loadAgentProfiles(testDir);
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe('new-name');
+  });
+});
+
+describe('deleteAgentProfile', () => {
+  const testDir = join(process.cwd(), '.test-agents-delete');
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('should delete a profile by name', () => {
+    writeAgentProfile(testDir, {
+      name: 'to-delete',
+      description: 'Will be deleted',
+      systemPrompt: 'Bye.',
+    });
+    writeAgentProfile(testDir, {
+      name: 'keep',
+      description: 'Stays',
+      systemPrompt: 'Hi.',
+    });
+    deleteAgentProfile(testDir, 'to-delete');
+    const results = loadAgentProfiles(testDir);
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe('keep');
   });
 });

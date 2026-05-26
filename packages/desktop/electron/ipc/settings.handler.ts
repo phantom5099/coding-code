@@ -26,6 +26,21 @@ export function registerSettingsHandlers(): void {
     }
   })
 
+  ipcMain.handle('settings:createMcp', async (_e, server: any) => {
+    const client = await ensureClient()
+    await client.createMcpServer(server)
+  })
+
+  ipcMain.handle('settings:updateMcp', async (_e, name: string, server: any) => {
+    const client = await ensureClient()
+    await client.updateMcpServer(name, server)
+  })
+
+  ipcMain.handle('settings:deleteMcp', async (_e, name: string) => {
+    const client = await ensureClient()
+    await client.deleteMcpServer(name)
+  })
+
   ipcMain.handle('settings:getSkills', async () => {
     const client = await ensureClient()
     const skills = await client.listSkills()
@@ -54,5 +69,50 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle('settings:setSubagentEnabled', async (_e, enabled: boolean) => {
     const client = await ensureClient()
     await client.setSubagentEnabled(enabled)
+  })
+
+  ipcMain.handle('settings:createAgent', async (_e, profile: any) => {
+    const client = await ensureClient()
+    await client.createAgent(profile)
+  })
+
+  ipcMain.handle('settings:updateAgent', async (_e, name: string, profile: any) => {
+    const client = await ensureClient()
+    await client.updateAgent(name, profile)
+  })
+
+  ipcMain.handle('settings:deleteAgent', async (_e, name: string) => {
+    const client = await ensureClient()
+    await client.deleteAgent(name)
+  })
+
+  ipcMain.handle('settings:setAgentDisabled', async (_e, name: string, disabled: boolean) => {
+    const client = await ensureClient()
+    await client.setAgentDisabled(name, disabled)
+  })
+
+  ipcMain.handle('settings:getHooks', async () => {
+    const client = await ensureClient()
+    return client.listHooks()
+  })
+
+  ipcMain.handle('settings:createHook', async (_e, hook: any) => {
+    const client = await ensureClient()
+    await client.createHook(hook)
+  })
+
+  ipcMain.handle('settings:updateHook', async (_e, name: string, hook: any) => {
+    const client = await ensureClient()
+    await client.updateHook(name, hook)
+  })
+
+  ipcMain.handle('settings:deleteHook', async (_e, name: string) => {
+    const client = await ensureClient()
+    await client.deleteHook(name)
+  })
+
+  ipcMain.handle('settings:setHookDisabled', async (_e, name: string, disabled: boolean) => {
+    const client = await ensureClient()
+    await client.setHookDisabled(name, disabled)
   })
 }

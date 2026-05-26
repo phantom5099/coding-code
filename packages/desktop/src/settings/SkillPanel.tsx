@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Toggle from './Toggle'
 
 interface SkillEntry {
   name: string
@@ -58,22 +59,5 @@ export default function SkillPanel() {
         </div>
       )}
     </div>
-  )
-}
-
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      title={checked ? '已启用' : '已禁用'}
-      onClick={() => onChange(!checked)}
-      className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${
-        checked ? 'bg-[#569cd6]' : 'bg-[#3a3a3a]'
-      }`}
-    >
-      <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
-        checked ? 'translate-x-4' : 'translate-x-0.5'
-      }`} />
-    </button>
   )
 }
