@@ -51,7 +51,7 @@ export default function AgentSidebar() {
   }
 
   return (
-    <div className="flex flex-col shrink-0 bg-[#161616] border-r border-[#222] w-64">
+    <div className="flex flex-col shrink-0 bg-[#161616] border-r border-[#222] w-64 select-none">
       {/* 顶部栏：项目名 + 收起按钮 */}
       <div className="flex items-center justify-between px-2 pt-2">
         <span className="text-[13px] font-semibold text-[#888] truncate ml-2">{projectName || '项目'}</span>

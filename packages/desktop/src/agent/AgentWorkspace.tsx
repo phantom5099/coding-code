@@ -176,7 +176,7 @@ export default function AgentWorkspace() {
   if (!currentThreadId) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-[#111] overflow-hidden px-6">
-        <h2 className="text-[22px] font-medium text-[#ccc] tracking-tight select-none">
+        <h2 className="text-[22px] font-medium text-[#ccc] tracking-tight">
           在 <span className="text-white font-semibold">{workspace.name || workspace.rootPath.split(/[\\/]/).pop() || '当前目录'}</span> 中构建什么？
         </h2>
         <InputBox centered threadId={activeThreadId} />

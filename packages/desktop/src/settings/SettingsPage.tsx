@@ -72,7 +72,7 @@ export default function SettingsPage() {
       {/* Body: sidebar + content */}
       <div className="flex flex-1 min-h-0">
         {/* Left sidebar */}
-        <nav className="w-[160px] shrink-0 border-r border-[#222] py-3 flex flex-col gap-0.5 overflow-y-auto">
+        <nav className="w-[160px] shrink-0 border-r border-[#222] py-3 flex flex-col gap-0.5 overflow-y-auto select-none">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
@@ -93,7 +93,7 @@ export default function SettingsPage() {
         </nav>
 
         {/* Content area */}
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        <div className="flex-1 min-w-0 overflow-y-auto select-text">
           {section === 'mcp' && <McpPanel />}
           {section === 'skills' && <SkillPanel />}
           {section === 'hooks' && <HooksPanel />}

@@ -19,7 +19,7 @@ export default function App() {
   }, [setMode])
 
   return (
-    <div className="h-screen flex flex-col bg-[#1e1e1e] text-[#cccccc] overflow-hidden select-none">
+    <div className="h-screen flex flex-col bg-[#1e1e1e] text-[#cccccc] overflow-hidden">
       <TitleBar />
       {/* Both layouts stay mounted; visibility toggled via display to preserve Monaco + PTY state */}
       <div className={`${mode === 'agent' ? 'flex' : 'hidden'} flex-1 flex-col overflow-hidden`}>

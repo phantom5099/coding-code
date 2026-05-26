@@ -102,7 +102,7 @@ export default function ProjectStrip() {
   }
 
   return (
-    <div className="flex flex-col items-center w-12 shrink-0 bg-[#111] border-r border-[#222] pt-3 pb-2 gap-4">
+    <div className="flex flex-col items-center w-12 shrink-0 bg-[#111] border-r border-[#222] pt-3 pb-2 gap-4 select-none">
       {projects.map((p) => {
         const isActive = p.id === currentProjectId
         const colorClass = colorForId(p.id)

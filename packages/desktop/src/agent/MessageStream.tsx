@@ -36,7 +36,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
 
   if (!thread || allItems.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[#444] text-[15px] select-none">
+      <div className="flex-1 flex items-center justify-center text-[#444] text-[15px]">
         发送消息开始对话
       </div>
     )
@@ -65,7 +65,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     return (
       <Virtuoso
         ref={virtuosoRef}
-        className="flex-1"
+        className="flex-1 select-text"
         totalCount={totalCount}
         itemContent={renderItem}
         followOutput="smooth"
@@ -75,7 +75,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto select-text">
       <div className="pt-8 pb-4 max-w-[820px] mx-auto">
         {allItems.map(({ item }) => {
           const streaming = item.type === 'message' && item.partial ? streamingContent[item.id] : undefined
