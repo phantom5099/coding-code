@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
-import { sharedTodoStore } from '../../src/agent-state/todo.js';
+import { sharedTodoStore } from '../../src/self/todo.js';
 
 const mockToolRegistry = {
   describeAll: () => [],
@@ -78,7 +78,7 @@ describe('TodoUpdate event', () => {
     const mockExecutor = {
       execute: () => Effect.succeed('done'),
       executeBatch: () => Effect.succeed([
-        { type: 'ok' as const, id: 'tc1', name: 'todo_write', output: 'pending=1 completed=1 cancelled=0' },
+        { type: 'ok' as const, id: 'tc1', name: 'todo_write', output: 'pending=1 completed=1 in_progress=0' },
       ]),
     };
 

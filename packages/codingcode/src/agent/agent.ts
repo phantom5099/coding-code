@@ -8,12 +8,12 @@ import { ToolExecutorService } from '../tools/executor.js';
 import { ContextService } from '../context/context.js';
 import { SessionService, type SessionStoreState } from '../session/store.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
-import { buildSystemPrompt, type SystemPromptVariant } from '../prompts/index.js';
+import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
-import { sharedTodoStore } from '../agent-state/todo.js';
+import { sharedTodoStore } from '../self/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
 import { loadMemoryForPrompt, flushSessionToMemory } from '../memory/index.js';
@@ -29,7 +29,7 @@ export type AgentEvent =
   | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
   | { readonly _tag: 'Done'; readonly content: string }
-  | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'completed' | 'cancelled' }> };
+  | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'in_progress' | 'completed' }> };
 
 export interface RunStreamOptions {
   state: SessionStoreState;

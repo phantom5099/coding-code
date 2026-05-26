@@ -9,7 +9,6 @@ import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
 import { Result } from '../../src/core/result.js';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { TodoService } from '../../src/agent-state/todo.js';
 import { ToolSearchService } from '../../src/tools/tool-search-service.js';
 
 const mockState = {
@@ -101,9 +100,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.o
   getCheckpoints: () => [],
 }));
 
-const MockTodoLayer = Layer.succeed(TodoService, TodoService.of({
-  _tag: 'TodoService' as const, read: () => [], write: () => {}, reset: () => {},
-}));
 const MockToolSearchLayer = Layer.succeed(ToolSearchService, ToolSearchService.of({
   _tag: 'ToolSearchService' as const, isLoaded: () => false, listLoaded: () => [],
   listUnloadedDeferred: () => [], search: () => [], reset: () => {},
@@ -117,7 +113,6 @@ const AllDeps = Layer.mergeAll(
   MockCheckpointLayer,
   MockSkillLayer,
   HookLayer,
-  MockTodoLayer,
   MockToolSearchLayer,
 );
 

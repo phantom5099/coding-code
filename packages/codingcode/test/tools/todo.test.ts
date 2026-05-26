@@ -1,21 +1,21 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { z } from 'zod';
-import { sharedTodoStore } from '../../src/agent-state/todo.js';
-import { todoWriteTool } from '../../src/tools/domains/agent-state/todo-write.js';
-import { todoReadTool } from '../../src/tools/domains/agent-state/todo-read.js';
+import { sharedTodoStore } from '../../src/self/todo.js';
+import { todoWriteTool } from '../../src/tools/domains/self/todo-write.js';
+import { todoReadTool } from '../../src/tools/domains/self/todo-read.js';
 
 beforeEach(() => { sharedTodoStore.reset(); });
 
 describe('todo_write tool', () => {
-  it('returns pending/completed/cancelled counts', async () => {
+  it('returns pending/in_progress/completed counts', async () => {
     const result = await todoWriteTool.execute({
       plan: [
         { step: 'first', status: 'pending' },
-        { step: 'second', status: 'completed' },
-        { step: 'third', status: 'cancelled' },
+        { step: 'second', status: 'in_progress' },
+        { step: 'third', status: 'completed' },
       ],
     }, { agentId: 'test-agent' });
-    expect(result).toBe('pending=1 completed=1 cancelled=1');
+    expect(result).toBe('pending=1 in_progress=1 completed=1');
   });
 
   it('rejects plan exceeding TODO_MAX_ITEMS (20)', async () => {
@@ -44,6 +44,14 @@ describe('todo_write tool', () => {
     ).rejects.toThrow();
   });
 
+  it('does not accept cancelled status', async () => {
+    await expect(
+      todoWriteTool.parameters.parseAsync({
+        plan: [{ step: 'test', status: 'cancelled' }],
+      }),
+    ).rejects.toThrow();
+  });
+
   it('throws if agentId is missing', async () => {
     await expect(
       todoWriteTool.execute({ plan: [{ step: 'x', status: 'pending' }] }, {}),
@@ -52,40 +60,22 @@ describe('todo_write tool', () => {
 });
 
 describe('todo_read tool', () => {
-  it('returns pending items first, completed items last', async () => {
+  it('returns in_progress items first, then pending, completed last', async () => {
     sharedTodoStore.write('test-reader', [
       { step: 'Z completed', status: 'completed' },
       { step: 'A pending', status: 'pending' },
-      { step: 'B pending', status: 'pending' },
+      { step: 'B in progress', status: 'in_progress' },
     ]);
     const result = await todoReadTool.execute({}, { agentId: 'test-reader' });
     const lines = result.split('\n');
-    expect(lines[0]).toBe('- A pending');
-    expect(lines[1]).toBe('- B pending');
+    expect(lines[0]).toBe('> B in progress');
+    expect(lines[1]).toBe('- A pending');
     expect(lines[2]).toBe('+ Z completed');
-  });
-
-  it('does not return cancelled items', async () => {
-    sharedTodoStore.write('test-cancel', [
-      { step: 'alive', status: 'pending' },
-      { step: 'dead', status: 'cancelled' },
-    ]);
-    const result = await todoReadTool.execute({}, { agentId: 'test-cancel' });
-    expect(result).not.toContain('dead');
-    expect(result).toContain('alive');
   });
 
   it('returns (empty) for empty list', async () => {
     sharedTodoStore.write('test-empty', []);
     const result = await todoReadTool.execute({}, { agentId: 'test-empty' });
-    expect(result).toBe('(empty)');
-  });
-
-  it('returns (empty) when all items are cancelled', async () => {
-    sharedTodoStore.write('test-all-cancel', [
-      { step: 'dead', status: 'cancelled' },
-    ]);
-    const result = await todoReadTool.execute({}, { agentId: 'test-all-cancel' });
     expect(result).toBe('(empty)');
   });
 

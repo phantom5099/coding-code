@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSystemPrompt, DEFERRED_TOOLS_GUIDELINES } from '../../src/prompts/index.js';
+import { buildSystemPrompt, DEFERRED_TOOLS_GUIDELINES } from '../../src/agent/prompt.js';
 
 const baseOpts = { cwd: '/test', platform: 'linux', shell: 'bash' };
 

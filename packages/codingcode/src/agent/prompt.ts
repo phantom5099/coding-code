@@ -56,4 +56,3 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
 
   return prompt;
 }
-
