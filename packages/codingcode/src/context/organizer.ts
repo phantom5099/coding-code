@@ -5,11 +5,12 @@ import { estimateTokens, estimateTokensForContent } from './utils/tokens.js';
 
 export function assemblePayload(
   sessionId: string,
+  encodedProjectPath: string,
   pendingUser: Message | null,
   pinned: Message[],
   config: ContextConfig,
 ): Message[] {
-  const enriched = buildMessagesForQuery(sessionId, config);
+  const enriched = buildMessagesForQuery(sessionId, config, encodedProjectPath);
   const base = enriched.map((e) => e.message);
 
   // Strip trailing incomplete assistant messages (API rejects them)

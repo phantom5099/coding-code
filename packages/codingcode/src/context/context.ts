@@ -34,10 +34,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
        * The optional `pendingUser` lets the caller append the about-to-be-sent
        * user message; if omitted, only the persisted history is returned.
        */
-      build: (sessionId: string, pendingUser?: Message, pinned: Message[] = [], config?: ContextConfig): Effect.Effect<Message[]> =>
+      build: (sessionId: string, encodedProjectPath: string, pendingUser?: Message, pinned: Message[] = [], config?: ContextConfig): Effect.Effect<Message[]> =>
         Effect.sync(() => {
           const cfg = config ?? getContextConfig();
-          return assemblePayload(sessionId, pendingUser ?? null, pinned, cfg);
+          return assemblePayload(sessionId, encodedProjectPath, pendingUser ?? null, pinned, cfg);
         }),
 
       compress: (sessionId: string, llm: LLMClient | null = null, config?: ContextConfig): Effect.Effect<CompressResult> =>

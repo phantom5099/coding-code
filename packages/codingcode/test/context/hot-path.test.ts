@@ -8,20 +8,20 @@ import { ContextService } from '../../src/context/context.js';
 import { appendProjection } from '../../src/session/projection-store.js';
 import type { SessionIndex } from '../../src/session/types.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 const ContextLayer = ContextService.Default;
 
 function buildFixture(opts: { numTurns: number; toolSize?: number }) {
   const sessionId = randomUUID();
   const slug = randomUUID();
-  const dir = join(SESSIONS_DIR, slug);
+  const dir = join(PROJECT_BASE, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
 
   const lines: any[] = [
-    { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
   ];
 
   const toolContent = 'Y'.repeat(opts.toolSize ?? 200);
@@ -33,7 +33,7 @@ function buildFixture(opts: { numTurns: number; toolSize?: number }) {
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
   const idx: SessionIndex = {
-    sessionId, projectSlug: slug, cwd: '/tmp/test', model: 'test',
+    sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: opts.numTurns * 3, title: 'fix', currentTurnId: opts.numTurns,
     tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0,
@@ -41,7 +41,7 @@ function buildFixture(opts: { numTurns: number; toolSize?: number }) {
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
-  return { sessionId, dir, indexPath };
+  return { sessionId, slug, dir, indexPath };
 }
 
 function cleanup(dir: string) {
@@ -54,7 +54,7 @@ describe('ContextService.build hot path', () => {
     try {
       const program = Effect.gen(function* () {
         const ctx = yield* ContextService;
-        return yield* ctx.build(fx.sessionId);
+        return yield* ctx.build(fx.sessionId, fx.slug);
       });
       const messages = await Effect.runPromise(program.pipe(Effect.provide(ContextLayer)));
       // build() must read from JSONL
@@ -80,7 +80,7 @@ describe('ContextService.build hot path', () => {
 
       const program = Effect.gen(function* () {
         const ctx = yield* ContextService;
-        return yield* ctx.build(fx.sessionId);
+        return yield* ctx.build(fx.sessionId, fx.slug);
       });
       const messages = await Effect.runPromise(program.pipe(Effect.provide(ContextLayer)));
       const toolMsgs = messages.filter((m) => m.role === 'tool');

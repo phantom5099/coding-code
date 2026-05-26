@@ -5,8 +5,10 @@ import { tmpdir, homedir } from 'os';
 import { randomUUID, createHash } from 'crypto';
 import { Effect, Layer } from 'effect';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { projectSlugFromPath } from '../../src/core/path.js';
+import { encodeProjectPath } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/registry.js';
+
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('CheckpointService', () => {
   let projectPath: string;
@@ -22,14 +24,14 @@ describe('CheckpointService', () => {
 
   afterEach(() => {
     try { rmSync(projectPath, { recursive: true, force: true }); } catch { /* ignore */ }
-    const hash = projectSlugFromPath(projectPath);
-    const shadowsDir = join(homedir(), '.codingcode', 'checkpoints');
-    try { rmSync(join(shadowsDir, `${hash}.git`), { recursive: true, force: true }); } catch { /* ignore */ }
-    try { rmSync(join(shadowsDir, `${hash}.lock`), { force: true }); } catch { /* ignore */ }
+    const encoded = encodeProjectPath(projectPath);
+    const checkpointDir = join(PROJECT_BASE, encoded, 'checkpoint');
+    try { rmSync(join(checkpointDir, 'repo.git'), { recursive: true, force: true }); } catch { /* ignore */ }
+    try { rmSync(join(checkpointDir, 'repo.lock'), { force: true }); } catch { /* ignore */ }
     // Clean forward files for known test session IDs
     for (const sid of ['s1', 's2', 's3', 's4']) {
       const shortHash = createHash('sha256').update(sid).digest('hex').slice(0, 8);
-      try { rmSync(join(shadowsDir, `forward-${shortHash}.json`), { force: true }); } catch { /* ignore */ }
+      try { rmSync(join(checkpointDir, `forward-${shortHash}.json`), { force: true }); } catch { /* ignore */ }
     }
   });
 

@@ -45,7 +45,7 @@ const mockCheckpoint = {
 const mockState = {
   sessionId: 'test-sid',
   cwd: '/tmp',
-  projectSlug: 'test',
+  projectPath: 'test',
   transcriptPath: '/tmp/test.jsonl',
   indexPath: '/tmp/test.index.json',
   messageCount: 0,
@@ -74,7 +74,7 @@ function makeDeps(overrides?: Record<string, any>) {
   };
 }
 
-describe('runReActLoop â€” concurrent tool execution', () => {
+describe('runReActLoop â€?concurrent tool execution', () => {
   it('should execute multiple tool calls concurrently', async () => {
     const executionOrder: string[] = [];
     const resolveBarrier = new Promise<void>((r) => setTimeout(r, 100));

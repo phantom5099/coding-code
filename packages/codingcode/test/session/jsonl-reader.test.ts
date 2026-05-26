@@ -5,7 +5,7 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { loadRawEvents, loadAllRawEvents, eventToEnriched } from '../../src/session/jsonl-reader.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('jsonl-reader', () => {
   let sessionId: string;
@@ -14,7 +14,7 @@ describe('jsonl-reader', () => {
   beforeEach(() => {
     sessionId = randomUUID();
     slug = randomUUID();
-    const sessionDir = join(SESSIONS_DIR, slug);
+    const sessionDir = join(PROJECT_BASE, slug, 'sessions');
     mkdirSync(sessionDir, { recursive: true });
     const transcriptPath = join(sessionDir, `${sessionId}.jsonl`);
     const indexPath = join(sessionDir, `${sessionId}.index.json`);
@@ -30,7 +30,7 @@ describe('jsonl-reader', () => {
   });
 
   afterEach(() => {
-    const dir = join(SESSIONS_DIR, slug);
+    const dir = join(PROJECT_BASE, slug, 'sessions');
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
@@ -49,7 +49,7 @@ describe('jsonl-reader', () => {
   });
 
   it('loadRawEvents skips covered events when lastUncoveredByteOffset is set', () => {
-    const sessionDir = join(SESSIONS_DIR, slug);
+    const sessionDir = join(PROJECT_BASE, slug, 'sessions');
     const indexPath = join(sessionDir, `${sessionId}.index.json`);
     const offset = Buffer.byteLength(JSON.stringify({ type: 'session_meta', sessionId, slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' }) + '\n');
     writeFileSync(indexPath, JSON.stringify({ sessionId, tokenCountEstimate: 5, projectedRanges: [[1, 1]], lastUncoveredByteOffset: offset, projectionCount: 1, lastCompressionFailures: 0 }, null, 2), 'utf8');

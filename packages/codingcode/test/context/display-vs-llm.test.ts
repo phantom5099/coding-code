@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { loadAllRawEvents } from '../../src/session/jsonl-reader.js';
 import { loadProjectionStore, appendProjection } from '../../src/session/projection-store.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('TUI display vs LLM view', () => {
   const projectSlug = randomUUID();
@@ -14,13 +14,13 @@ describe('TUI display vs LLM view', () => {
 
   beforeEach(() => {
     sessionId = randomUUID();
-    const sessionDir = join(SESSIONS_DIR, projectSlug);
+    const sessionDir = join(PROJECT_BASE, projectSlug, 'sessions');
     mkdirSync(sessionDir, { recursive: true });
 
     // Write jsonl with 3 turns
     const transcriptPath = join(sessionDir, `${sessionId}.jsonl`);
     const lines = [
-      { type: 'session_meta', sessionId, projectSlug, cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId, projectPath: projectSlug, cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'make a website', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'sure', toolCalls: [], model: 'test', timestamp: new Date().toISOString() },
       { type: 'user', turnId: 2, uuid: 'u2', content: 'add login', timestamp: new Date().toISOString() },
@@ -34,7 +34,7 @@ describe('TUI display vs LLM view', () => {
   });
 
   afterEach(() => {
-    const dir = join(SESSIONS_DIR, projectSlug);
+    const dir = join(PROJECT_BASE, projectSlug, 'sessions');
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 

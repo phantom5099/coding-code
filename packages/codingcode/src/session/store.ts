@@ -5,21 +5,26 @@ import { homedir } from 'os';
 import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
-import { normalizePath, projectSlugFromPath } from '../core/path.js';
+import { normalizePath, encodeProjectPath } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SessionIndex } from './types.js';
 import { estimateTokensForContent } from '../context/utils/tokens.js';
 
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
-const SESSIONS_DIR = join(CODINGCODE_DIR, 'sessions');
+const PROJECT_BASE = join(CODINGCODE_DIR, 'project');
+
+function projectSessionsDir(encoded: string): string {
+  return join(PROJECT_BASE, encoded, 'sessions');
+}
 
 export function resolveSessionDir(sessionId: string): string | null {
-  if (!existsSync(SESSIONS_DIR)) return null;
-  for (const slug of readdirSync(SESSIONS_DIR)) {
-    const projectDir = join(SESSIONS_DIR, slug);
-    try { if (!statSync(projectDir).isDirectory()) continue; } catch { continue; }
-    if (existsSync(join(projectDir, `${sessionId}.jsonl`))) return projectDir;
-    for (const entry of readdirSync(projectDir)) {
-      const entryPath = join(projectDir, entry);
+  if (!existsSync(PROJECT_BASE)) return null;
+  for (const encoded of readdirSync(PROJECT_BASE)) {
+    const sessionsDir = join(PROJECT_BASE, encoded, 'sessions');
+    if (!existsSync(sessionsDir)) continue;
+    try { if (!statSync(sessionsDir).isDirectory()) continue; } catch { continue; }
+    if (existsSync(join(sessionsDir, `${sessionId}.jsonl`))) return sessionsDir;
+    for (const entry of readdirSync(sessionsDir)) {
+      const entryPath = join(sessionsDir, entry);
       try { if (!statSync(entryPath).isDirectory()) continue; } catch { continue; }
       const subagentDir = join(entryPath, 'subagents');
       if (existsSync(join(subagentDir, `${sessionId}.jsonl`))) return subagentDir;
@@ -30,9 +35,8 @@ export function resolveSessionDir(sessionId: string): string | null {
 
 function ensureDirs(transcriptPath: string): void {
   if (!existsSync(CODINGCODE_DIR)) mkdirSync(CODINGCODE_DIR, { recursive: true });
-  if (!existsSync(SESSIONS_DIR)) mkdirSync(SESSIONS_DIR, { recursive: true });
-  const projectDir = dirname(transcriptPath);
-  if (!existsSync(projectDir)) mkdirSync(projectDir, { recursive: true });
+  const dir = dirname(transcriptPath);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
 function quickReadMeta(path: string): SessionMetaEvent | null {
@@ -67,7 +71,7 @@ export function findSessionIndex(sessionId: string): SessionIndex | null {
   const firstUser = findFirstUserContent(h);
   return {
     sessionId: meta.sessionId,
-    projectSlug: meta.projectSlug,
+    projectPath: meta.projectPath,
     cwd: meta.cwd,
     model: meta.model,
     createdAt: meta.createdAt,
@@ -86,7 +90,7 @@ export function findSessionIndex(sessionId: string): SessionIndex | null {
 function assertResumeWorkspace(cwd: string, sessionId: string): void {
   const index = findSessionIndex(sessionId);
   if (!index) throw AgentError.sessionNotFound(sessionId);
-  if (projectSlugFromPath(cwd) !== index.projectSlug) {
+  if (encodeProjectPath(cwd) !== index.projectPath) {
     throw AgentError.sessionWorkspaceMismatch(sessionId, index.cwd);
   }
 }
@@ -94,7 +98,7 @@ function assertResumeWorkspace(cwd: string, sessionId: string): void {
 export interface SessionStoreState {
   sessionId: string;
   cwd: string;
-  projectSlug: string;
+  projectPath: string;
   transcriptPath: string;
   indexPath: string;
   messageCount: number;
@@ -140,7 +144,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
           const meta: SessionMetaEvent = {
             type: 'session_meta', sessionId: state.sessionId,
-            projectSlug: state.projectSlug, cwd: state.cwd,
+            projectPath: state.projectPath, cwd: state.cwd,
             model, createdAt: new Date().toISOString(), version,
             ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
             ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
@@ -184,7 +188,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         Effect.sync(() => readMessages(state.transcriptPath)),
 
       listSessions: (cwd?: string): Effect.Effect<SessionIndex[]> =>
-        Effect.sync(() => listSessions(cwd ? projectSlugFromPath(cwd) : undefined)),
+        Effect.sync(() => listSessions(cwd ? encodeProjectPath(cwd) : undefined)),
 
       findSessionIndex: (sessionId: string): Effect.Effect<SessionIndex | null> =>
         Effect.sync(() => findSessionIndex(sessionId)),
@@ -204,10 +208,11 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 function initState(cwd: string, sessionId?: string, parentSessionId?: string): SessionStoreState {
   const id = sessionId ?? randomUUID();
   const normalizedCwd = normalizePath(cwd);
-  const projectSlug = projectSlugFromPath(normalizedCwd);
+  const projectPath = encodeProjectPath(normalizedCwd);
+  const sessionsDir = projectSessionsDir(projectPath);
   const transcriptPath = parentSessionId
-    ? join(SESSIONS_DIR, projectSlug, parentSessionId, 'subagents', `${id}.jsonl`)
-    : join(SESSIONS_DIR, projectSlug, `${id}.jsonl`);
+    ? join(sessionsDir, parentSessionId, 'subagents', `${id}.jsonl`)
+    : join(sessionsDir, `${id}.jsonl`);
   const indexPath = transcriptPath.replace('.jsonl', '.index.json');
   let currentTurnId = 0;
   let tokenCountEstimate = 0;
@@ -219,7 +224,7 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
     }
   } catch { /* ignore corrupt index */ }
   return {
-    sessionId: id, cwd: normalizedCwd, projectSlug, transcriptPath,
+    sessionId: id, cwd: normalizedCwd, projectPath, transcriptPath,
     indexPath,
     messageCount: 0, sessionMeta: null, title: id.slice(0, 8), currentTurnId,
     tokenCountEstimate,
@@ -272,14 +277,14 @@ function readMessages(path: string): Message[] {
   return messages;
 }
 
-export function listSessions(projectSlug?: string): SessionIndex[] {
+export function listSessions(projectPath?: string): SessionIndex[] {
   const results: SessionIndex[] = [];
-  const projects = projectSlug ? [projectSlug] : existsSync(SESSIONS_DIR) ? readdirSync(SESSIONS_DIR) : [];
-  for (const slug of projects) {
-    const dir = join(SESSIONS_DIR, slug);
-    if (!existsSync(dir)) continue;
-    for (const file of readdirSync(dir).filter((f) => f.endsWith('.jsonl'))) {
-      const jsonlPath = join(dir, file);
+  const encodedDirs = projectPath ? [projectPath] : existsSync(PROJECT_BASE) ? readdirSync(PROJECT_BASE) : [];
+  for (const encoded of encodedDirs) {
+    const sessionsDir = join(PROJECT_BASE, encoded, 'sessions');
+    if (!existsSync(sessionsDir)) continue;
+    for (const file of readdirSync(sessionsDir).filter((f) => f.endsWith('.jsonl'))) {
+      const jsonlPath = join(sessionsDir, file);
       const idxPath = jsonlPath.replace('.jsonl', '.index.json');
       let index: SessionIndex | null = null;
       if (existsSync(idxPath)) {
@@ -292,7 +297,7 @@ export function listSessions(projectSlug?: string): SessionIndex[] {
         if (meta?.cwd && meta?.sessionId) {
           const h = readHistory(jsonlPath);
           const firstUser = findFirstUserContent(h);
-          results.push({ sessionId: meta.sessionId, projectSlug: meta.projectSlug, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8), currentTurnId: 0, tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0, projectionCount: 0, lastCompressionFailures: 0 });
+          results.push({ sessionId: meta.sessionId, projectPath: meta.projectPath, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8), currentTurnId: 0, tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0, projectionCount: 0, lastCompressionFailures: 0 });
         }
       }
     }
@@ -317,7 +322,7 @@ function updateIndex(state: SessionStoreState, tokenDelta: number = 0): void {
   // Fields that may have been mutated by appendProjection on disk: read fresh.
   const current = readCurrentIndex(state.indexPath);
   const index: SessionIndex = {
-    sessionId: state.sessionId, projectSlug: state.projectSlug, cwd: state.cwd,
+    sessionId: state.sessionId, projectPath: state.projectPath, cwd: state.cwd,
     model: state.sessionMeta.model,
     createdAt: state.sessionMeta.createdAt,
     updatedAt: new Date().toISOString(),

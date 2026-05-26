@@ -1,6 +1,4 @@
-import { createHash } from 'crypto';
-
-/** Normalize a path to always produce the same slug for the same directory:
+/** Normalize a path to always produce the same encoded form for the same directory:
  *  - Convert POSIX /c/... → c:/... (Git Bash paths on Windows)
  *  - Convert backslashes to forward slashes
  *  - Lowercase drive letter
@@ -12,7 +10,12 @@ export function normalizePath(p: string): string {
   return s;
 }
 
-export function projectSlugFromPath(p: string): string {
+/** Encode a project path as a human-readable, filesystem-safe directory name.
+ *  Colons, slashes, and spaces are collapsed into single dashes. */
+export function encodeProjectPath(p: string): string {
   const normalized = normalizePath(p);
-  return createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+  return normalized
+    .replace(/[:/\\ ]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
 }

@@ -11,7 +11,7 @@ import { TodoService } from '../src/agent-state/todo.js';
 import { ToolSearchService } from '../src/tools/tool-search-service.js';
 
 const mockState = {
-  sessionId: 'test-session', cwd: '/tmp/test', projectSlug: 'test',
+  sessionId: 'test-session', cwd: '/tmp/test', projectPath: 'test',
   transcriptPath: '/tmp/test.jsonl', indexPath: '/tmp/test.index.json',
   messageCount: 0, currentTurnId: 0, sessionMeta: null, title: 'test-sess',
   tokenCountEstimate: 0,

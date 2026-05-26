@@ -8,16 +8,16 @@ import { loadProjectionStore } from '../../../src/session/projection-store.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { SessionIndex } from '../../../src/session/types.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 function makeFixture(sessionId: string, slug: string, toolOutput: string) {
-  const dir = join(SESSIONS_DIR, slug);
+  const dir = join(PROJECT_BASE, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
 
   const lines: any[] = [
-    { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
     { type: 'user', turnId: 1, uuid: 'u1', content: 'q1', timestamp: new Date().toISOString() },
     { type: 'assistant', turnId: 1, uuid: 'a1', content: 'r1', toolCalls: [{ id: 'tc1', name: 'Read', arguments: '{}' }], model: 'test', timestamp: new Date().toISOString() },
     { type: 'tool_result', turnId: 1, uuid: 't1', parentUuid: 'a1', toolName: 'Read', toolCallId: 'tc1', output: toolOutput, timestamp: new Date().toISOString(), tokenCount: 2000 },
@@ -26,7 +26,7 @@ function makeFixture(sessionId: string, slug: string, toolOutput: string) {
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
   const idx: SessionIndex = {
-    sessionId, projectSlug: slug, cwd: '/tmp/test', model: 'test',
+    sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: 3, title: 'fixture', currentTurnId: 1,
     tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0,
@@ -55,7 +55,7 @@ function l1bCfg(): ContextConfig {
     truncateKeepHeadLines: 2,
     truncateKeepTailLines: 2,
     persistPreviewChars: 2000,
-    persistableTools: [], // Read is NOT persistable â†’ goes to truncation
+    persistableTools: [], // Read is NOT persistable â†?goes to truncation
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
     snipMaxMessages: 999,

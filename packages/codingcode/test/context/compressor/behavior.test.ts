@@ -10,7 +10,7 @@ import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex } from '../../../src/session/types.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 interface FixtureOptions {
   numTurns: number;
@@ -22,13 +22,13 @@ interface FixtureOptions {
 function makeFixture(opts: FixtureOptions) {
   const sessionId = randomUUID();
   const slug = randomUUID();
-  const dir = join(SESSIONS_DIR, slug);
+  const dir = join(PROJECT_BASE, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
 
   const lines: any[] = [
-    { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
   ];
 
   const toolContent = 'X'.repeat(opts.toolContentSize ?? 8000);
@@ -41,7 +41,7 @@ function makeFixture(opts: FixtureOptions) {
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
   const idx: SessionIndex = {
-    sessionId, projectSlug: slug, cwd: '/tmp/test', model: 'test',
+    sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: opts.numTurns * 3, title: 'fixture', currentTurnId: opts.currentTurnId ?? opts.numTurns,
     tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0,
@@ -101,7 +101,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 3, toolContentSize: 4000 });
       try {
         const cfg = tinyConfig({ prefixTurnsProtected: 2, pruneProtectedTokens: 0 });
-        // currentTurnId=3, prefixTurnsProtected=2 â†’ cutoff = 3-2-1 = 0, so no tool is prunable
+        // currentTurnId=3, prefixTurnsProtected=2 â†?cutoff = 3-2-1 = 0, so no tool is prunable
         await run(fx.sessionId, 10000, null, cfg);
         const store = loadProjectionStore(fx.sessionId);
         expect(store.projections.filter((p) => p.type === 'message' && p.method === 'prune')).toHaveLength(0);
@@ -111,7 +111,7 @@ describe('compressor behavior', () => {
     it('respects pruneProtectedTokens window (recent tools by token budget)', async () => {
       const fx = makeFixture({ numTurns: 5, toolContentSize: 4000 });
       try {
-        // Each tool ~1143 tokens. pruneProtectedTokens=3000 â†’ protect 3 most recent.
+        // Each tool ~1143 tokens. pruneProtectedTokens=3000 â†?protect 3 most recent.
         const cfg = tinyConfig({ prefixTurnsProtected: 0, pruneProtectedTokens: 3000 });
         await run(fx.sessionId, 100000, null, cfg);
         const store = loadProjectionStore(fx.sessionId);
@@ -234,7 +234,7 @@ describe('compressor behavior', () => {
         // Use a tight check: the count of 'X' runs should be lower than if all 5 turns were sent raw.
         const xCount = (capturedUserContent.match(/X/g) || []).length;
         // Only turns 2,3 in range (1..endTurn=3, so 1,2,3); turn 1 was replaced. Turn 1's 4000 X's saved.
-        // So xCount â‰ˆ 2 * 4000 = 8000, not 3 * 4000 = 12000.
+        // So xCount â‰?2 * 4000 = 8000, not 3 * 4000 = 12000.
         expect(xCount).toBeLessThan(3 * 4000);
         expect(xCount).toBeGreaterThan(1 * 4000);
       } finally { cleanup(fx.dir); }

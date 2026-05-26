@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 import { AgentError } from './error.js';
-import { projectSlugFromPath } from './path.js';
+import { encodeProjectPath } from './path.js';
 import { type AppConfig, DEFAULT_CONFIG } from '@codingcode/infra';
 
 let installRoot = process.cwd();
@@ -68,8 +68,8 @@ export function resolveWorkspaceCwd(override?: string): string {
   return workspaceCwd;
 }
 
-export function getWorkspaceSlug(): string {
-  return projectSlugFromPath(workspaceCwd);
+export function getWorkspacePath(): string {
+  return encodeProjectPath(workspaceCwd);
 }
 
 /** Resolve a path relative to the configured workspace (absolute paths unchanged). */

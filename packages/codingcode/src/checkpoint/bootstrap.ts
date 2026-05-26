@@ -4,22 +4,22 @@ import { existsSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
 import type { HookService } from '../hooks/registry.js';
-import { projectSlugFromPath } from '../core/path.js';
+import { encodeProjectPath } from '../core/path.js';
 import { Ledger } from './ledger.js';
 
-/** Cache ledger instances by shadow git directory path. */
+/** Cache ledger instances by checkpoint directory path. */
 const ledgerCache = new Map<string, Ledger>();
 
 /** Carry file hash from tool.execute.before to tool.execute.after (separate payload objects). */
 const pendingHash = new Map<string, string>();
 
 function getLedger(projectPath: string): Ledger {
-  const hash = projectSlugFromPath(projectPath);
-  const shadowDir = join(homedir(), '.codingcode', 'checkpoints', `${hash}.git`);
-  let ledger = ledgerCache.get(shadowDir);
+  const encoded = encodeProjectPath(projectPath);
+  const checkpointDir = join(homedir(), '.codingcode', 'project', encoded, 'checkpoint');
+  let ledger = ledgerCache.get(checkpointDir);
   if (!ledger) {
-    ledger = new Ledger(shadowDir);
-    ledgerCache.set(shadowDir, ledger);
+    ledger = new Ledger(checkpointDir);
+    ledgerCache.set(checkpointDir, ledger);
   }
   return ledger;
 }

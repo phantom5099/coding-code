@@ -8,16 +8,16 @@ import { loadProjectionStore } from '../../../src/session/projection-store.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { SessionIndex } from '../../../src/session/types.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 function makeFixture(sessionId: string, slug: string, numTurns: number, toolOutput?: string) {
-  const dir = join(SESSIONS_DIR, slug);
+  const dir = join(PROJECT_BASE, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
 
   const lines: any[] = [
-    { type: 'session_meta', sessionId, projectSlug: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
   ];
 
   for (let turn = 1; turn <= numTurns; turn++) {
@@ -29,7 +29,7 @@ function makeFixture(sessionId: string, slug: string, numTurns: number, toolOutp
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
   const idx: SessionIndex = {
-    sessionId, projectSlug: slug, cwd: '/tmp/test', model: 'test',
+    sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: numTurns * 3, title: 'fixture', currentTurnId: numTurns,
     tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0,
@@ -86,7 +86,7 @@ describe('L3 Microcompact', () => {
   it('does nothing when under microKeepRecentTools threshold', () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
-    const fx = makeFixture(sessionId, slug, 1); // 1 tool result â‰¤ 1
+    const fx = makeFixture(sessionId, slug, 1); // 1 tool result â‰?1
     try {
       run(sessionId, 1000, null, microCfg());
       const store = loadProjectionStore(sessionId);
@@ -94,7 +94,7 @@ describe('L3 Microcompact', () => {
     } finally { rmSync(fx.dir, { recursive: true, force: true }); }
   });
 
-  it('skips short tool results (â‰¤120 chars)', () => {
+  it('skips short tool results (â‰?20 chars)', () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 3, 'short'); // all < 120 chars

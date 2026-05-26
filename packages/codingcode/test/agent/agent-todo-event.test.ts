@@ -46,7 +46,7 @@ const mockCheckpoint = {
 const mockState = {
   sessionId: 'test-todo-sid',
   cwd: '/tmp',
-  projectSlug: 'test',
+  projectPath: 'test',
   transcriptPath: '/tmp/test.jsonl',
   indexPath: '/tmp/test.index.json',
   messageCount: 0,

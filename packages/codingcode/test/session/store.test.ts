@@ -5,16 +5,16 @@ import { tmpdir, homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Cause, Effect, Exit } from 'effect';
 import { SessionService, findSessionIndex, resolveSessionDir } from '../../src/session/store.js';
-import { projectSlugFromPath, normalizePath } from '../../src/core/path.js';
+import { encodeProjectPath, normalizePath } from '../../src/core/path.js';
 import { AgentError } from '../../src/core/error.js';
 
-const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('SessionService resume workspace', () => {
   let projectA: string;
   let projectB: string;
   let sessionId: string;
-  let slugA: string;
+  let encodedA: string;
 
   beforeEach(() => {
     sessionId = randomUUID();
@@ -22,16 +22,17 @@ describe('SessionService resume workspace', () => {
     projectB = join(tmpdir(), `sess-b-${randomUUID().slice(0, 8)}`);
     mkdirSync(projectA, { recursive: true });
     mkdirSync(projectB, { recursive: true });
-    slugA = projectSlugFromPath(projectA);
+    encodedA = encodeProjectPath(projectA);
 
-    const transcriptPath = join(SESSIONS_DIR, slugA, `${sessionId}.jsonl`);
+    const sessionsDir = join(PROJECT_BASE, encodedA, 'sessions');
+    const transcriptPath = join(sessionsDir, `${sessionId}.jsonl`);
     const indexPath = transcriptPath.replace('.jsonl', '.index.json');
-    mkdirSync(join(SESSIONS_DIR, slugA), { recursive: true });
+    mkdirSync(sessionsDir, { recursive: true });
 
     const meta = {
       type: 'session_meta',
       sessionId,
-      projectSlug: slugA,
+      projectPath: encodedA,
       cwd: normalizePath(projectA),
       model: 'test',
       createdAt: new Date().toISOString(),
@@ -42,7 +43,7 @@ describe('SessionService resume workspace', () => {
       indexPath,
       JSON.stringify({
         sessionId,
-        projectSlug: slugA,
+        projectPath: encodedA,
         cwd: normalizePath(projectA),
         model: 'test',
         createdAt: meta.createdAt,
@@ -63,18 +64,17 @@ describe('SessionService resume workspace', () => {
   afterEach(() => {
     try { rmSync(projectA, { recursive: true, force: true }); } catch { /* ignore */ }
     try { rmSync(projectB, { recursive: true, force: true }); } catch { /* ignore */ }
-    const transcriptPath = join(SESSIONS_DIR, slugA, `${sessionId}.jsonl`);
-    const indexPath = transcriptPath.replace('.jsonl', '.index.json');
-    try { rmSync(transcriptPath, { force: true }); } catch { /* ignore */ }
-    try { rmSync(indexPath, { force: true }); } catch { /* ignore */ }
-    const wrongSlug = projectSlugFromPath(projectB);
-    try { rmSync(join(SESSIONS_DIR, wrongSlug, `${sessionId}.jsonl`), { force: true }); } catch { /* ignore */ }
+    const sessionsDir = join(PROJECT_BASE, encodedA, 'sessions');
+    try { rmSync(join(sessionsDir, `${sessionId}.jsonl`), { force: true }); } catch { /* ignore */ }
+    try { rmSync(join(sessionsDir, `${sessionId}.index.json`), { force: true }); } catch { /* ignore */ }
+    const wrongEncoded = encodeProjectPath(projectB);
+    try { rmSync(join(PROJECT_BASE, wrongEncoded, 'sessions', `${sessionId}.jsonl`), { force: true }); } catch { /* ignore */ }
   });
 
-  it('findSessionIndex locates session across project slugs', () => {
+  it('findSessionIndex locates session across project dirs', () => {
     const index = findSessionIndex(sessionId);
     expect(index).not.toBeNull();
-    expect(index!.projectSlug).toBe(slugA);
+    expect(index!.projectPath).toBe(encodedA);
     expect(index!.cwd).toBe(normalizePath(projectA));
   });
 
@@ -138,21 +138,21 @@ describe('SessionService subagent transcript', () => {
   let projectDir: string;
   let parentSessionId: string;
   let childUuid: string;
-  let slug: string;
+  let encoded: string;
 
   beforeEach(() => {
     projectDir = join(tmpdir(), `sub-proj-${randomUUID().slice(0, 8)}`);
     mkdirSync(projectDir, { recursive: true });
     parentSessionId = randomUUID();
     childUuid = randomUUID();
-    slug = projectSlugFromPath(projectDir);
+    encoded = encodeProjectPath(projectDir);
   });
 
   afterEach(() => {
     try { rmSync(projectDir, { recursive: true, force: true }); } catch { /* ignore */ }
     try {
       rmSync(
-        join(homedir(), '.codingcode', 'sessions', slug, parentSessionId),
+        join(PROJECT_BASE, encoded, 'sessions', parentSessionId),
         { recursive: true, force: true },
       );
     } catch { /* ignore */ }
@@ -171,7 +171,7 @@ describe('SessionService subagent transcript', () => {
 
     expect(state.sessionId).toBe(childUuid);
     const expectedPath = join(
-      homedir(), '.codingcode', 'sessions', slug, parentSessionId, 'subagents', `${childUuid}.jsonl`,
+      PROJECT_BASE, encoded, 'sessions', parentSessionId, 'subagents', `${childUuid}.jsonl`,
     );
     expect(existsSync(expectedPath)).toBe(true);
   });
@@ -192,12 +192,11 @@ describe('SessionService subagent transcript', () => {
 
   it('listSessions does not return subagent transcripts', async () => {
     const parentId = randomUUID();
-    const parentPath = join(
-      homedir(), '.codingcode', 'sessions', slug, `${parentId}.jsonl`,
-    );
-    mkdirSync(join(homedir(), '.codingcode', 'sessions', slug), { recursive: true });
+    const sessionsDir = join(PROJECT_BASE, encoded, 'sessions');
+    const parentPath = join(sessionsDir, `${parentId}.jsonl`);
+    mkdirSync(sessionsDir, { recursive: true });
     writeFileSync(parentPath, JSON.stringify({
-      type: 'session_meta', sessionId: parentId, projectSlug: slug,
+      type: 'session_meta', sessionId: parentId, projectPath: encoded,
       cwd: normalizePath(projectDir), model: 'test', createdAt: new Date().toISOString(), version: '0.1.0',
     }) + '\n', 'utf8');
 

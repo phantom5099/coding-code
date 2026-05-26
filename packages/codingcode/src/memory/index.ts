@@ -119,12 +119,11 @@ export async function flushSessionToMemory(
     try {
       const { readFileSync } = await import('node:fs');
       const { join } = await import('node:path');
-      const { homedir } = await import('node:os');
-      const { projectSlugFromPath } = await import('../core/path.js');
+      const { resolveSessionDir } = await import('../session/store.js');
 
-      const SESSIONS_DIR = join(homedir(), '.codingcode', 'sessions');
-      const slug = projectSlugFromPath(sessionIndex.cwd);
-      const jsonlPath = join(SESSIONS_DIR, slug, `${sessionId}.jsonl`);
+      const sessionDir = resolveSessionDir(sessionId);
+      if (!sessionDir) return { written: false, bytes: 0 };
+      const jsonlPath = join(sessionDir, `${sessionId}.jsonl`);
 
       const content = readFileSync(jsonlPath, 'utf-8');
       events = content
