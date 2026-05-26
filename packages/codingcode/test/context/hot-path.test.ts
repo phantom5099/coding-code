@@ -41,7 +41,7 @@ function buildFixture(opts: { numTurns: number; toolSize?: number }) {
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
-  return { sessionId, dir, indexPath };
+  return { sessionId, slug, dir, indexPath };
 }
 
 function cleanup(dir: string) {
@@ -54,7 +54,7 @@ describe('ContextService.build hot path', () => {
     try {
       const program = Effect.gen(function* () {
         const ctx = yield* ContextService;
-        return yield* ctx.build(fx.sessionId);
+        return yield* ctx.build(fx.sessionId, fx.slug);
       });
       const messages = await Effect.runPromise(program.pipe(Effect.provide(ContextLayer)));
       // build() must read from JSONL
@@ -80,7 +80,7 @@ describe('ContextService.build hot path', () => {
 
       const program = Effect.gen(function* () {
         const ctx = yield* ContextService;
-        return yield* ctx.build(fx.sessionId);
+        return yield* ctx.build(fx.sessionId, fx.slug);
       });
       const messages = await Effect.runPromise(program.pipe(Effect.provide(ContextLayer)));
       const toolMsgs = messages.filter((m) => m.role === 'tool');

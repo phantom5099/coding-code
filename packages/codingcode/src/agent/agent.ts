@@ -128,7 +128,7 @@ export async function* runReActLoop(
   const maxStopContinuations = opts.maxStopContinuations ?? deps.maxStopContinuations;
 
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
-    const messages = Effect.runSync(ctx.build(state.sessionId));
+    const messages = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
     let lastResult: Result<string, AgentError> | null = null;
     let overflow = false;
 
