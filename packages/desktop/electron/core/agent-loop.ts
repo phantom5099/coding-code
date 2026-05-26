@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { Item, Turn } from '../../shared/types'
 import type { StreamChunk } from '@codingcode/core'
-import { getOrCreateClient, setActiveGen, abortAndClear, deleteClient } from './backend'
+import { getOrCreateClient, setActiveGen, abortAndClear, deleteClient, updateWorkspace } from './backend'
 import { storeService } from './store.service'
 
 function send(win: BrowserWindow, channel: string, payload: unknown): void {
@@ -22,6 +22,7 @@ export async function runAgent(opts: {
   const { threadId, turnId, userMessage, cwd, win } = opts
 
   abortAndClear(threadId)
+  await updateWorkspace(cwd)
 
   const turn: Turn = { id: turnId, items: [], status: 'running' }
 

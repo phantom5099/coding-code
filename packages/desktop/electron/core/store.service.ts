@@ -1,17 +1,22 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
+import type { Project } from '../../shared/types'
 
 interface StoreData {
   approvalPolicy: 'suggest' | 'auto-edit' | 'full-auto'
   workspace: { rootPath: string; name: string }
   sessionIds: Record<string, string>
+  projects: Project[]
+  currentProjectId: string
 }
 
 const DEFAULTS: StoreData = {
   approvalPolicy: 'suggest',
   workspace: { rootPath: '', name: '' },
   sessionIds: {},
+  projects: [],
+  currentProjectId: '',
 }
 
 let _storePath: string | null = null
@@ -35,6 +40,8 @@ function load(): StoreData {
         ...DEFAULTS,
         ...parsed,
         sessionIds: parsed.sessionIds ?? {},
+        projects: parsed.projects ?? [],
+        currentProjectId: parsed.currentProjectId ?? '',
       }
     } else {
       _data = { ...DEFAULTS }
@@ -79,6 +86,28 @@ export const storeService = {
   },
   removeSessionId(threadId: string): void {
     delete load().sessionIds[threadId]
+    save()
+  },
+  getProjects(): Project[] {
+    return load().projects ?? []
+  },
+  addProject(project: Project): void {
+    const data = load()
+    if (!data.projects.find((p) => p.id === project.id)) {
+      data.projects.push(project)
+      save()
+    }
+  },
+  removeProject(projectId: string): void {
+    const data = load()
+    data.projects = data.projects.filter((p) => p.id !== projectId)
+    save()
+  },
+  getCurrentProjectId(): string {
+    return load().currentProjectId ?? ''
+  },
+  setCurrentProjectId(id: string): void {
+    load().currentProjectId = id
     save()
   },
 }

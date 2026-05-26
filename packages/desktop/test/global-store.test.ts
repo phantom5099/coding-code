@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useGlobalStore } from '../src/stores/global.store'
-import type { Item, Turn } from '../shared/types'
+import type { Item, Turn, Project } from '../shared/types'
+
+function freshProject(id: string, rootPath: string): Project {
+  const name = rootPath.replace(/\\/g, '/').split('/').pop() || rootPath
+  return { id, name, rootPath }
+}
 
 beforeEach(() => {
   useGlobalStore.setState({
@@ -12,6 +17,12 @@ beforeEach(() => {
       models: [],
       contextUsage: null,
       streamingContent: {},
+    },
+    workspace: {
+      rootPath: '',
+      name: '',
+      projects: [],
+      currentProjectId: '',
     },
   })
 })
@@ -270,5 +281,69 @@ describe('global store - per-thread isStreaming derivation', () => {
 
     useGlobalStore.getState().completeTurn(threadId, 'turn-1', 'completed')
     expect(isStreaming()).toBe(false)
+  })
+})
+
+describe('global store - project management', () => {
+  it('addProject adds to list', () => {
+    const p = freshProject('p1', '/home/user/project-a')
+    useGlobalStore.getState().addProject(p)
+    expect(useGlobalStore.getState().workspace.projects).toHaveLength(1)
+    expect(useGlobalStore.getState().workspace.projects[0].id).toBe('p1')
+  })
+
+  it('addProject does not duplicate by id', () => {
+    const p = freshProject('p1', '/home/user/project-a')
+    useGlobalStore.getState().addProject(p)
+    useGlobalStore.getState().addProject(p)
+    expect(useGlobalStore.getState().workspace.projects).toHaveLength(1)
+  })
+
+  it('removeProject removes from list', () => {
+    useGlobalStore.getState().addProject(freshProject('p1', '/a'))
+    useGlobalStore.getState().addProject(freshProject('p2', '/b'))
+    useGlobalStore.getState().removeProject('p1')
+    expect(useGlobalStore.getState().workspace.projects).toHaveLength(1)
+    expect(useGlobalStore.getState().workspace.projects[0].id).toBe('p2')
+  })
+
+  it('switchProject updates currentProjectId, rootPath, and name', () => {
+    useGlobalStore.getState().addProject(freshProject('p1', 'C:\\Users\\test\\alpha'))
+    useGlobalStore.getState().addProject(freshProject('p2', 'D:\\beta'))
+
+    useGlobalStore.getState().switchProject('p2')
+    expect(useGlobalStore.getState().workspace.currentProjectId).toBe('p2')
+    expect(useGlobalStore.getState().workspace.rootPath).toBe('d:/beta')
+    expect(useGlobalStore.getState().workspace.name).toBe('beta')
+  })
+
+  it('switchProject normalizes Windows path', () => {
+    useGlobalStore.getState().addProject(freshProject('p1', 'C:\\MyProject'))
+    useGlobalStore.getState().switchProject('p1')
+    expect(useGlobalStore.getState().workspace.rootPath).toBe('c:/MyProject')
+  })
+
+  it('switchProject is no-op for unknown id', () => {
+    useGlobalStore.getState().addProject(freshProject('p1', 'C:\\ProjectA'))
+    useGlobalStore.getState().switchProject('p1')
+    useGlobalStore.getState().switchProject('nonexistent')
+    expect(useGlobalStore.getState().workspace.currentProjectId).toBe('p1')
+    expect(useGlobalStore.getState().workspace.rootPath).toBe('c:/ProjectA')
+    expect(useGlobalStore.getState().workspace.name).toBe('ProjectA')
+  })
+
+  it('setProjects replaces entire list', () => {
+    useGlobalStore.getState().setProjects([freshProject('p1', '/a'), freshProject('p2', '/b')])
+    expect(useGlobalStore.getState().workspace.projects).toHaveLength(2)
+    useGlobalStore.getState().setProjects([freshProject('p3', '/c')])
+    expect(useGlobalStore.getState().workspace.projects).toHaveLength(1)
+    expect(useGlobalStore.getState().workspace.projects[0].id).toBe('p3')
+  })
+
+  it('setCurrentProject updates only currentProjectId, not rootPath', () => {
+    useGlobalStore.getState().setWorkspace('/some/path', 'some')
+    useGlobalStore.getState().setCurrentProject('xyz')
+    expect(useGlobalStore.getState().workspace.currentProjectId).toBe('xyz')
+    expect(useGlobalStore.getState().workspace.rootPath).toBe('/some/path')
   })
 })

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Item } from '../shared/types'
+import type { Item, Project } from '../shared/types'
 
 const api = {
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
@@ -31,9 +31,16 @@ const api = {
   getModels: (): Promise<unknown[]> => ipcRenderer.invoke('agent:getModels'),
   setModel: (modelId: string): Promise<void> => ipcRenderer.invoke('agent:setModel', modelId),
   setApprovalPolicy: (policy: string): Promise<void> => ipcRenderer.invoke('agent:setApprovalPolicy', policy),
-  getSettings: (): Promise<{ activeModel: string; approvalPolicy: string; workspace: { rootPath: string; name: string } }> =>
+  getSettings: (): Promise<{ activeModel: string; approvalPolicy: string; workspace: { rootPath: string; name: string }; currentProjectId: string }> =>
     ipcRenderer.invoke('agent:getSettings'),
   compressContext: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:compressContext', threadId),
+
+  // Projects
+  getProjects: (): Promise<Project[]> => ipcRenderer.invoke('project:getAll'),
+  openFolderDialog: (): Promise<string | null> => ipcRenderer.invoke('project:openFolderDialog'),
+  addProject: (rootPath: string): Promise<Project> => ipcRenderer.invoke('project:add', rootPath),
+  removeProject: (projectId: string): Promise<void> => ipcRenderer.invoke('project:remove', projectId),
+  setCurrentProjectId: (projectId: string): Promise<void> => ipcRenderer.invoke('project:setCurrentId', projectId),
 
   // Git
   gitStatus: (): Promise<unknown> => ipcRenderer.invoke('git:status'),

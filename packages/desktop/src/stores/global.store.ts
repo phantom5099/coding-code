@@ -73,6 +73,9 @@ interface GlobalActions {
   setWorkspace: (rootPath: string, name: string) => void
   setProjects: (projects: Project[]) => void
   setCurrentProject: (id: string) => void
+  addProject: (project: Project) => void
+  removeProject: (id: string) => void
+  switchProject: (id: string) => void
   setFileTree: (tree: FileNode[]) => void
   setActiveFile: (path: string | null) => void
   openFile: (path: string) => void
@@ -152,6 +155,21 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     setWorkspace: (rootPath, name) => set((s) => { s.workspace.rootPath = normalizeCwd(rootPath); s.workspace.name = name }),
     setProjects: (projects) => set((s) => { s.workspace.projects = projects }),
     setCurrentProject: (id) => set((s) => { s.workspace.currentProjectId = id }),
+    addProject: (project) => set((s) => {
+      if (!s.workspace.projects.find((p) => p.id === project.id)) {
+        s.workspace.projects.push(project)
+      }
+    }),
+    removeProject: (id) => set((s) => {
+      s.workspace.projects = s.workspace.projects.filter((p) => p.id !== id)
+    }),
+    switchProject: (id) => set((s) => {
+      const project = s.workspace.projects.find((p) => p.id === id)
+      if (!project) return
+      s.workspace.currentProjectId = id
+      s.workspace.rootPath = normalizeCwd(project.rootPath)
+      s.workspace.name = project.name
+    }),
     setFileTree: (tree) => set((s) => { s.files.tree = tree }),
     setActiveFile: (path) => set((s) => { s.files.activeFilePath = path }),
     openFile: (path) => set((s) => {
