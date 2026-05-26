@@ -14,13 +14,31 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
     const tools = yield* ToolService;
     const clients = new Map<string, McpClient>();
     const _disabled = new Set<string>();
+    const registeredTools = new Map<string, string[]>();
 
     return {
-      connectAll: (projectRoot: string): Effect.Effect<number> =>
+      syncConnections: (projectRoot: string): Effect.Effect<void> =>
         Effect.gen(function* () {
           const configs = loadMcpConfig(projectRoot);
-          let count = 0;
+          const configNames = new Set(configs.map(c => c.name));
+
+          // Disconnect and unregister removed servers
+          for (const [name] of clients) {
+            if (!configNames.has(name)) {
+              for (const toolName of registeredTools.get(name) ?? []) {
+                yield* tools.unregister(toolName);
+              }
+              registeredTools.delete(name);
+              yield* Effect.tryPromise(() => clients.get(name)!.disconnect()).pipe(
+                Effect.catchAll(() => Effect.succeed(undefined)),
+              );
+              clients.delete(name);
+            }
+          }
+
+          // Connect new servers
           for (const cfg of configs) {
+            if (clients.has(cfg.name)) continue;
             const result = yield* Effect.tryPromise(async () => {
               const client = new McpClient(cfg);
               await client.connect();
@@ -34,12 +52,13 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
             );
             if (!result) continue;
             clients.set(cfg.name, result.client);
+            const names: string[] = [];
             for (const mt of result.mcpTools) {
               yield* tools.register(mcpToolToDefinition(cfg.name, mt, result.client, _disabled));
-              count++;
+              names.push(mt.name);
             }
+            registeredTools.set(cfg.name, names);
           }
-          return count;
         }),
 
       disconnectAll: (): Effect.Effect<void> =>
@@ -50,6 +69,7 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
             );
           }
           clients.clear();
+          registeredTools.clear();
         }),
 
       disable: (name: string): Effect.Effect<void> =>

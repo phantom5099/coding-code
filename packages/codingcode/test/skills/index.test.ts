@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { SkillService } from '../../src/skills/index.js';
 import { AppLayer } from '../../src/layer.js';
 
@@ -10,8 +9,7 @@ function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
 }
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const TEST_ROOT = join(__dirname, '..', '..', '..');
+const TEST_ROOT = process.cwd();
 const TEST_CODINGCODE_DIR = join(TEST_ROOT, '.codingcode');
 
 describe('SkillService', () => {
@@ -39,10 +37,9 @@ Test the skill system.
     if (existsSync(TEST_CODINGCODE_DIR)) rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
   });
 
-  it('should load skills from .codingcode/skills/', async () => {
+  it('should load skills from .codingcode/skills/ on demand', async () => {
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       const all = yield* skill.getAll();
       return all;
     });
@@ -56,10 +53,31 @@ Test the skill system.
     expect(basic!.metadata.version).toBe('1.0.0');
   });
 
+  it('should pick up newly added skill files without reload', async () => {
+    const program = Effect.gen(function* () {
+      const skill = yield* SkillService;
+      const before = yield* skill.getAll();
+
+      const dir = join(TEST_CODINGCODE_DIR, 'skills', 'dynamic-skill');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'SKILL.md'), `---
+name: dynamic-skill
+description: "Added at runtime"
+---
+Dynamic skill body.
+`);
+
+      const after = yield* skill.getAll();
+      return { before: before.length, after: after.length };
+    });
+
+    const { before, after } = await runWithLayer(program);
+    expect(after).toBe(before + 1);
+  });
+
   it('should parse @skill-name prefix and return matching skill', async () => {
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       return yield* skill.select('@test-basic do something');
     });
 
@@ -69,7 +87,6 @@ Test the skill system.
   });
 
   it('should support kebab-case skill names in @ prefix', async () => {
-    // Create kebab-case skill
     const dir = join(TEST_CODINGCODE_DIR, 'skills', 'my-kebab-skill');
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -83,7 +100,6 @@ Testing kebab-case name parsing.
 `);
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       return yield* skill.select('@my-kebab-skill run tests');
     });
 
@@ -92,10 +108,9 @@ Testing kebab-case name parsing.
     expect(matched!.name).toBe('my-kebab-skill');
   });
 
-  it('should return undefined when @ prefix doesn\'t match any skill', async () => {
+  it('should return undefined when @ prefix does not match any skill', async () => {
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       return yield* skill.select('@nonexistent do something');
     });
 
@@ -106,7 +121,6 @@ Testing kebab-case name parsing.
   it('should return undefined when no @ prefix in query', async () => {
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       return yield* skill.select('just a normal message');
     });
 
@@ -117,7 +131,6 @@ Testing kebab-case name parsing.
   it('should find skill by name', async () => {
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       return yield* skill.findByName('test-basic');
     });
 
@@ -129,7 +142,6 @@ Testing kebab-case name parsing.
   it('should extract skill and return clean query', async () => {
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       return yield* skill.extractSkill('@test-basic   do the refactoring work');
     });
 
@@ -139,23 +151,9 @@ Testing kebab-case name parsing.
     expect(cleanQuery).toBe('do the refactoring work');
   });
 
-  it('should only load project-level skills when no built-in definitions exist', async () => {
-    const program = Effect.gen(function* () {
-      const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
-      const all = yield* skill.getAll();
-      // Project-level skills are loaded, built-in directory is removed
-      return all.filter((s) => s.name === 'test-basic').length;
-    });
-
-    const count = await runWithLayer(program);
-    expect(count).toBe(1);
-  });
-
   it('disableSkill should hide skill from findByName and select', async () => {
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       yield* skill.disableSkill('test-basic');
       const byName = yield* skill.findByName('test-basic');
       const selected = yield* skill.select('@test-basic do something');
@@ -170,7 +168,6 @@ Testing kebab-case name parsing.
   it('enableSkill should restore skill visibility after disable', async () => {
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       yield* skill.disableSkill('test-basic');
       yield* skill.enableSkill('test-basic');
       const found = yield* skill.findByName('test-basic');
@@ -185,7 +182,6 @@ Testing kebab-case name parsing.
   it('listWithStatus should reflect enabled/disabled state', async () => {
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
-      yield* skill.loadAll(TEST_ROOT);
       const before = yield* skill.listWithStatus();
       yield* skill.disableSkill('test-basic');
       const after = yield* skill.listWithStatus();

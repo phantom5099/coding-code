@@ -1,4 +1,6 @@
 import { Effect } from 'effect';
+import { loadHookConfigs } from './config';
+import { executeHookCommand, executeDecisionHookCommand, isHookRuntimeEnabled } from './executor';
 
 export type HookPoint =
   | 'tool.execute.before' | 'tool.execute.after' | 'tool.execute.error'
@@ -120,6 +122,38 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
             }
           }
           return null;
+        }),
+
+      /** Reload user-defined hooks from hooks.yaml, replacing previously loaded user hooks. */
+      reloadUserHooks: (cwd: string): Effect.Effect<void> =>
+        Effect.sync(() => {
+          for (const [point, entries] of observers) {
+            const filtered = entries.filter(e => e.source !== 'user');
+            if (filtered.length === 0) observers.delete(point);
+            else observers.set(point, filtered);
+          }
+          for (const hc of loadHookConfigs(cwd)) {
+            if (!hc.enabled) continue;
+            const hookName = hc.name;
+            const entry: HandlerEntry = {
+              id: `${hc.type === 'observer' ? 'obs' : 'dec'}-${++entryCounter}`,
+              handler: hc.type === 'observer'
+                ? (payload: Record<string, unknown>) => {
+                    if (!isHookRuntimeEnabled(hookName)) return;
+                    return executeHookCommand(hc, payload);
+                  }
+                : (payload: Record<string, unknown>) => {
+                    if (!isHookRuntimeEnabled(hookName)) return null;
+                    return executeDecisionHookCommand(hc, payload);
+                  },
+              priority: hc.priority ?? 0,
+              source: 'user',
+              type: hc.type,
+            };
+            const set = observers.get(hc.point) ?? [];
+            set.push(entry);
+            observers.set(hc.point, set);
+          }
         }),
     };
   }),

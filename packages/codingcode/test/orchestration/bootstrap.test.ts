@@ -16,15 +16,15 @@ const sandboxLayer = Layer.succeed(SandboxService, {
 } as any);
 
 const mcpLayer = Layer.succeed(McpService, {
-  connectAll: (_: string) => Effect.void,
-  disconnect: () => Effect.void,
-  status: () => [],
+  syncConnections: (_: string) => Effect.void,
+  disconnectAll: () => Effect.void,
+  status: () => Effect.succeed([]),
 } as any);
 
 const skillLayer = Layer.succeed(SkillService, {
-  loadAll: (_: string) => Effect.void,
   extractSkill: (input: string) => Effect.succeed([undefined, input] as const),
-  list: () => [],
+  getAll: () => Effect.succeed([]),
+  listWithStatus: () => Effect.succeed([]),
 } as any);
 
 const sessionLayer = Layer.succeed(SessionService, {} as any);
@@ -37,7 +37,7 @@ const approvalLayer = Layer.succeed(ApprovalService, {
 const hooksLayer = Layer.succeed(HookService, {
   emit: (_: any, _2: any) => Effect.void,
   emitDecision: (_: any, _2: any) => Effect.succeed({ decision: 'allow' } as any),
-  on: () => () => {},
+  reloadUserHooks: (_: string) => Effect.void,
 } as any);
 
 const toolLayer = ToolService.Default;
@@ -81,7 +81,7 @@ describe('bootstrapApplication', () => {
     }
   });
 
-  it('registers EXPLORE and GENERAL built-in profiles', async () => {
+  it('registers EXPLORE built-in profile', async () => {
     const program = Effect.gen(function* () {
       yield* bootstrapApplication('/fake/cwd');
       const registry = yield* SubagentRegistry;
@@ -91,46 +91,6 @@ describe('bootstrapApplication', () => {
     const profiles = await run(program);
 
     expect(profiles).toContain('explore');
-    expect(profiles).toContain('general');
-  });
-
-  it('calls mcp.connectAll with the given cwd', async () => {
-    let capturedCwd: string | undefined;
-    const trackingMcpLayer = Layer.succeed(McpService, {
-      connectAll: (cwd: string) => Effect.sync(() => { capturedCwd = cwd; }),
-      disconnect: () => Effect.void,
-      status: () => [],
-    } as any);
-
-    const layer = Layer.mergeAll(
-      toolLayer, toolSearchLayer, registryLayer,
-      sandboxLayer, trackingMcpLayer, skillLayer,
-      sessionLayer, approvalLayer, hooksLayer,
-    );
-
-    const program = bootstrapApplication('/project/root');
-    await Effect.runPromise(program.pipe(Effect.provide(layer) as any));
-
-    expect(capturedCwd).toBe('/project/root');
-  });
-
-  it('calls skill.loadAll with the given cwd', async () => {
-    let capturedCwd: string | undefined;
-    const trackingSkillLayer = Layer.succeed(SkillService, {
-      loadAll: (cwd: string) => Effect.sync(() => { capturedCwd = cwd; }),
-      extractSkill: (input: string) => Effect.succeed([undefined, input] as const),
-      list: () => [],
-    } as any);
-
-    const layer = Layer.mergeAll(
-      toolLayer, toolSearchLayer, registryLayer,
-      sandboxLayer, mcpLayer, trackingSkillLayer,
-      sessionLayer, approvalLayer, hooksLayer,
-    );
-
-    const program = bootstrapApplication('/project/root');
-    await Effect.runPromise(program.pipe(Effect.provide(layer) as any));
-
-    expect(capturedCwd).toBe('/project/root');
+    expect(profiles).not.toContain('general');
   });
 });

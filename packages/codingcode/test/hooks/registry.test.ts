@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { join, resolve } from 'path';
 import { HookService } from '../../src/hooks/registry.js';
 import { AppLayer } from '../../src/layer.js';
 
@@ -80,5 +82,61 @@ describe('HookService', () => {
 
     await runWithLayer(program);
     expect(results).toEqual(['done']);
+  });
+});
+
+describe('HookService.reloadUserHooks', () => {
+  const testDir = resolve(process.cwd(), '.test-hooks-reload');
+
+  beforeEach(() => {
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
+    mkdirSync(join(testDir, '.codingcode'), { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
+  });
+
+  function writeHooksYaml(hookName: string, point: string, enabled: boolean) {
+    const content = `hooks:\n  - name: ${hookName}\n    point: ${point}\n    type: observer\n    command: echo\n    args: []\n    enabled: ${enabled}\n`;
+    writeFileSync(join(testDir, '.codingcode', 'hooks.yaml'), content);
+  }
+
+  it('clears old user hooks and loads new ones from disk', async () => {
+    const called: string[] = [];
+
+    writeHooksYaml('hook-a', 'tool.execute.before', true);
+
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      yield* hooks.register('tool.execute.before', () => { called.push('system'); });
+      yield* hooks.reloadUserHooks(testDir);
+
+      writeHooksYaml('hook-b', 'tool.execute.before', true);
+      yield* hooks.reloadUserHooks(testDir);
+    });
+
+    await runWithLayer(program);
+    expect(called).toHaveLength(0);
+  });
+
+  it('disabled hooks in yaml are not registered', async () => {
+    writeHooksYaml('disabled-hook', 'tool.execute.before', false);
+
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      yield* hooks.reloadUserHooks(testDir);
+    });
+
+    await runWithLayer(program);
+  });
+
+  it('reloadUserHooks with empty cwd clears all user hooks', async () => {
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      yield* hooks.reloadUserHooks(join(process.cwd(), 'nonexistent-dir-xyzzy'));
+    });
+
+    await runWithLayer(program);
   });
 });

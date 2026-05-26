@@ -21,7 +21,6 @@ export interface Skill {
 }
 
 export interface SkillServiceApi {
-  readonly loadAll: (projectRoot: string) => import('effect').Effect.Effect<void>;
   readonly getAll: import('effect').Effect.Effect<readonly Skill[]>;
   readonly findByName: (name: string) => import('effect').Effect.Effect<Skill | undefined>;
   readonly select: (query: string) => import('effect').Effect.Effect<Skill | undefined>;

@@ -1,60 +1,56 @@
 import { Effect } from 'effect';
 import { discoverSkillDirs } from './config';
 import { loadSkill } from './loader';
-import type { Skill, SkillServiceApi } from './types';
+import { getWorkspaceCwd } from '../core/workspace';
+import type { Skill } from './types';
 
 export type { Skill } from './types';
 
 export class SkillService extends Effect.Service<SkillService>()('Skill', {
   effect: Effect.gen(function* () {
-    const skills = new Map<string, Skill>();
     const _disabled = new Set<string>();
 
-    return {
-      loadAll: (projectRoot: string): Effect.Effect<void> =>
-        Effect.sync(() => {
-          const dirs = discoverSkillDirs(projectRoot);
-          for (const { dirPath } of dirs) {
-            const skill = loadSkill(dirPath);
-            if (skill) {
-              skills.set(skill.name, skill);
-            }
-          }
-        }),
+    function readAll(): Skill[] {
+      const dirs = discoverSkillDirs(getWorkspaceCwd());
+      const skills: Skill[] = [];
+      for (const { dirPath } of dirs) {
+        const skill = loadSkill(dirPath);
+        if (skill) skills.push(skill);
+      }
+      return skills;
+    }
 
+    return {
       getAll: (): Effect.Effect<readonly Skill[]> =>
-        Effect.sync(() => Array.from(skills.values())),
+        Effect.sync(() => readAll().filter(s => !_disabled.has(s.name))),
 
       findByName: (name: string): Effect.Effect<Skill | undefined> =>
         Effect.sync(() => {
           if (_disabled.has(name)) return undefined;
-          return skills.get(name);
+          return readAll().find(s => s.name === name);
         }),
 
-      /** Parse @skill-name from query, return matching Skill */
       select: (query: string): Effect.Effect<Skill | undefined> =>
         Effect.sync(() => {
           const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
           if (!match) return undefined;
           const name = match[1];
           if (_disabled.has(name)) return undefined;
-          return skills.get(name);
+          return readAll().find(s => s.name === name);
         }),
 
-      /** Reserved: implicit activation via custom matcher (e.g. LLM-based) */
       selectImplicit: (
         query: string,
         matcher: (all: readonly Skill[], q: string) => Effect.Effect<string | undefined>,
       ): Effect.Effect<Skill | undefined> =>
         Effect.gen(function* () {
-          const all = Array.from(skills.values()).filter(s => !_disabled.has(s.name));
+          const all = readAll().filter(s => !_disabled.has(s.name));
           const name = yield* matcher(all, query);
           if (!name) return undefined;
           if (_disabled.has(name)) return undefined;
-          return skills.get(name);
+          return all.find(s => s.name === name);
         }),
 
-      /** Strip @skill-name prefix from query, returning [skill, actualQuery] */
       extractSkill: (query: string): Effect.Effect<[Skill | undefined, string]> =>
         Effect.gen(function* () {
           const skill = yield* Effect.sync(() => {
@@ -62,7 +58,7 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
             if (!match) return undefined;
             const name = match[1];
             if (_disabled.has(name)) return undefined;
-            return skills.get(name);
+            return readAll().find(s => s.name === name);
           });
           const actualQuery = query.replace(/^@[a-zA-Z0-9-]+\s*/, '');
           return [skill, actualQuery];
@@ -76,7 +72,7 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
 
       listWithStatus: (): Effect.Effect<readonly { name: string; description: string; enabled: boolean }[]> =>
         Effect.sync(() =>
-          Array.from(skills.values()).map(s => ({
+          readAll().map(s => ({
             name: s.name,
             description: s.description,
             enabled: !_disabled.has(s.name),

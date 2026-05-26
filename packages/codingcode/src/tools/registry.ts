@@ -40,6 +40,9 @@ export class ToolService extends Effect.Service<ToolService>()('ToolService', {
         Array.from(tools.values()).filter(t => t.deferred !== true),
 
       getDef: (name: string): ToolDefinition | undefined => tools.get(name),
+
+      unregister: (name: string): Effect.Effect<void> =>
+        Effect.sync(() => { tools.delete(name); }),
     };
   }),
 }) {}
