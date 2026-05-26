@@ -115,13 +115,15 @@ function handleStructuredChunk(
     case 'tool_result': {
       // Update matching tool_call status to done
       const tcIdx = turn.items.findLastIndex((i: Item) => i.type === 'tool_call' && i.name === chunk.name)
+      let matchedCallId: string = chunk.id
       if (tcIdx >= 0) {
         const existing = turn.items[tcIdx] as Item & { type: 'tool_call' }
+        matchedCallId = existing.id
         const updated: Item = { ...existing, status: 'approved' }
         turn.items[tcIdx] = updated
         send(win, 'agent:chunk', { threadId, turnId, chunk: updated })
       }
-      const item: Item = { id: randomId(), type: 'tool_result', callId: chunk.id, output: chunk.output, exitCode: chunk.ok ? 0 : 1 }
+      const item: Item = { id: randomId(), type: 'tool_result', callId: matchedCallId, name: chunk.name, output: chunk.output, exitCode: chunk.ok ? 0 : 1 }
       turn.items.push(item)
       send(win, 'agent:chunk', { threadId, turnId, chunk: item })
       break

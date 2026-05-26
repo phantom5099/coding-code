@@ -110,6 +110,7 @@ export default function ProjectStrip() {
 
   const handleSelectProject = (id: string) => {
     switchProject(id)
+    window.electronAPI?.setCurrentProjectId?.(id)
   }
 
   const handleAddProject = async () => {

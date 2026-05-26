@@ -3,12 +3,21 @@ import type { Item } from '@shared/types'
 import CodeBlock from './CodeBlock'
 import ToolCallCard from './ToolCallCard'
 
+const TOOL_ICONS: Record<string, string> = {
+  shell: '⚡',
+  file_read: '📄',
+  apply_patch: '✏️',
+  list_dir: '📁',
+  search: '🔍',
+}
+
 interface MessageItemProps {
   item: Item
   streamingContent?: string
   threadId: string
   onApprove: (threadId: string, callId: string) => void
   onReject: (threadId: string, callId: string) => void
+  callIdToToolName?: Record<string, string>
 }
 
 function parseMarkdown(text: string): React.ReactNode {
@@ -33,8 +42,9 @@ function parseMarkdown(text: string): React.ReactNode {
   return <>{blocks}</>
 }
 
-export default function MessageItem({ item, streamingContent, threadId, onApprove, onReject }: MessageItemProps) {
+export default function MessageItem({ item, streamingContent, threadId, onApprove, onReject, callIdToToolName }: MessageItemProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false)
+  const [resultOpen, setResultOpen] = useState(false)
 
   if (item.type === 'message') {
     const content = (item.partial && streamingContent) ? streamingContent : item.content
@@ -93,12 +103,27 @@ export default function MessageItem({ item, streamingContent, threadId, onApprov
 
   if (item.type === 'tool_result') {
     const isError = item.exitCode !== undefined && item.exitCode !== 0
+    const toolName = item.name ?? callIdToToolName?.[item.callId]
+    const icon = toolName ? (TOOL_ICONS[toolName] ?? '🔧') : null
     return (
       <div className="mb-3">
-        <div className={`text-[13px] mb-1.5 ${isError ? 'text-[#f44747]' : 'text-[#4ec9b0]'}`}>
-          {isError ? `✗ 退出码 ${item.exitCode}` : '✓ 执行结果'}
-        </div>
-        <CodeBlock code={item.output.slice(0, 4000)} />
+        <button
+          type="button"
+          onClick={() => setResultOpen((v) => !v)}
+          className="flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity"
+        >
+          <span className={`transition-transform text-[10px] text-[#555] ${resultOpen ? 'rotate-90' : ''}`}>▶</span>
+          {icon && <span>{icon}</span>}
+          {toolName && <span className="font-mono text-[#dcdcaa]">{toolName}</span>}
+          <span className={isError ? 'text-[#f44747]' : 'text-[#4ec9b0]'}>
+            {isError ? `✗ 退出码 ${item.exitCode}` : '✓ 执行结果'}
+          </span>
+        </button>
+        {resultOpen && (
+          <div className="mt-1.5">
+            <CodeBlock code={item.output.slice(0, 4000)} />
+          </div>
+        )}
       </div>
     )
   }

@@ -94,6 +94,7 @@ interface GlobalActions {
   setContextUsage: (usage: { used: number; contextWindow: number } | null) => void
   setCursor: (line: number, col: number) => void
   loadThreads: (threads: Thread[]) => void
+  updateToolCallStatus: (threadId: string, callId: string, status: 'pending' | 'approved' | 'rejected' | 'running') => void
   // Fine-grained agent streaming actions
   startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void
@@ -222,6 +223,19 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         }
       }
       s.agent.threads = next
+    }),
+
+    updateToolCallStatus: (threadId, callId, status) => set((s) => {
+      const thread = s.agent.threads[threadId]
+      if (!thread) return
+      for (const turn of thread.turns) {
+        const idx = turn.items.findIndex((i) => i.id === callId && i.type === 'tool_call')
+        if (idx >= 0) {
+          const existing = turn.items[idx] as Item & { type: 'tool_call' }
+          turn.items[idx] = { ...existing, status }
+          break
+        }
+      }
     }),
 
     startTurn: (threadId, turn, meta) => set((s) => {

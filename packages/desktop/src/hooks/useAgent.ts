@@ -26,6 +26,7 @@ export function useAgent() {
   const setProjects = useGlobalStore((s) => s.setProjects)
   const switchProject = useGlobalStore((s) => s.switchProject)
   const addProject = useGlobalStore((s) => s.addProject)
+  const updateToolCallStatus = useGlobalStore((s) => s.updateToolCallStatus)
   const workspace = useGlobalStore((s) => s.workspace)
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
 
@@ -116,12 +117,14 @@ export function useAgent() {
   }, [])
 
   const approveTool = useCallback((threadId: string, callId: string) => {
+    updateToolCallStatus(threadId, callId, 'running')
     window.electronAPI?.approveTool?.(threadId, callId)
-  }, [])
+  }, [updateToolCallStatus])
 
   const rejectTool = useCallback((threadId: string, callId: string) => {
+    updateToolCallStatus(threadId, callId, 'rejected')
     window.electronAPI?.rejectTool?.(threadId, callId)
-  }, [])
+  }, [updateToolCallStatus])
 
   const deleteThread = useCallback(
     async (threadId: string) => {

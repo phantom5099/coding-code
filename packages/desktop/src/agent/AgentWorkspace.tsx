@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useGlobalStore } from '../stores/global.store'
-import { useAgent } from '../hooks/useAgent'
 import MessageStream from './MessageStream'
 
 // ─── ContextIndicator ──────────────────────────────────────────────────────
@@ -91,7 +90,12 @@ function ModelSelector() {
 
 // ─── InputBox ──────────────────────────────────────────────────────────────
 
-function InputBox({ centered, threadId }: { centered?: boolean; threadId: string }) {
+function InputBox({ centered, threadId, sendMessage, abort }: {
+  centered?: boolean
+  threadId: string
+  sendMessage: (threadId: string, content: string, cwd?: string) => Promise<void>
+  abort: (threadId: string) => void
+}) {
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isStreaming = useGlobalStore((s) => {
@@ -101,7 +105,6 @@ function InputBox({ centered, threadId }: { centered?: boolean; threadId: string
   const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy)
   const workspace = useGlobalStore((s) => s.workspace)
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)
-  const { sendMessage, abort } = useAgent()
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim()
@@ -168,7 +171,12 @@ function InputBox({ centered, threadId }: { centered?: boolean; threadId: string
 
 // ─── AgentWorkspace ────────────────────────────────────────────────────────
 
-export default function AgentWorkspace() {
+interface AgentWorkspaceProps {
+  sendMessage: (threadId: string, content: string, cwd?: string) => Promise<void>
+  abort: (threadId: string) => void
+}
+
+export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspaceProps) {
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
   const workspace = useGlobalStore((s) => s.workspace)
   const activeThreadId = currentThreadId ?? crypto.randomUUID()
@@ -179,7 +187,7 @@ export default function AgentWorkspace() {
         <h2 className="text-[22px] font-medium text-[#ccc] tracking-tight">
           在 <span className="text-white font-semibold">{workspace.name || workspace.rootPath.split(/[\\/]/).pop() || '当前目录'}</span> 中构建什么？
         </h2>
-        <InputBox centered threadId={activeThreadId} />
+        <InputBox centered threadId={activeThreadId} sendMessage={sendMessage} abort={abort} />
       </div>
     )
   }
@@ -188,7 +196,7 @@ export default function AgentWorkspace() {
     <div className="flex-1 flex flex-col overflow-hidden bg-[#111]">
       <MessageStream threadId={currentThreadId} />
       <div className="shrink-0">
-        <InputBox threadId={currentThreadId} />
+        <InputBox threadId={currentThreadId} sendMessage={sendMessage} abort={abort} />
       </div>
     </div>
   )
