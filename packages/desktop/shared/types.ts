@@ -7,6 +7,18 @@ export type Item =
   | { id: string; type: 'tool_result'; callId: string; name?: string; output: string; exitCode?: number }
   | { id: string; type: 'error'; message: string }
 
+export type TodoStatus = 'pending' | 'in_progress' | 'completed'
+
+export interface TodoItem {
+  step: string
+  status: TodoStatus
+}
+
+export interface TodoUpdateChunk {
+  type: 'todo_update'
+  items: TodoItem[]
+}
+
 export interface Turn {
   id: string
   items: Item[]

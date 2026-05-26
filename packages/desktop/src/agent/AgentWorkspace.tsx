@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useGlobalStore } from '../stores/global.store'
 import MessageStream from './MessageStream'
+import TodoPanel from './TodoPanel'
 
 // ─── ContextIndicator ──────────────────────────────────────────────────────
 
@@ -195,6 +196,7 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#111]">
       <MessageStream threadId={currentThreadId} />
+      <TodoPanel threadId={currentThreadId} />
       <div className="shrink-0">
         <InputBox threadId={currentThreadId} sendMessage={sendMessage} abort={abort} />
       </div>

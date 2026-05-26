@@ -15,6 +15,7 @@ export function useAgent() {
   const startTurn = useGlobalStore((s) => s.startTurn)
   const applyChunk = useGlobalStore((s) => s.applyChunk)
   const completeTurn = useGlobalStore((s) => s.completeTurn)
+  const applyTodoUpdate = useGlobalStore((s) => s.applyTodoUpdate)
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread)
   const loadThreads = useGlobalStore((s) => s.loadThreads)
   const setThreadTurns = useGlobalStore((s) => s.setThreadTurns)
@@ -80,7 +81,12 @@ export function useAgent() {
   // Subscribe to agent events
   useEffect(() => {
     const offChunk = window.electronAPI?.onAgentChunk?.((payload) => {
-      applyChunk(payload.threadId, payload.turnId, payload.chunk)
+      const chunk = payload.chunk
+      if (chunk.type === 'todo_update') {
+        applyTodoUpdate(payload.threadId, chunk.items)
+        return
+      }
+      applyChunk(payload.threadId, payload.turnId, chunk)
     })
     const offDone = window.electronAPI?.onAgentDone?.((payload) => {
       completeTurn(payload.threadId, payload.turnId, payload.error ? 'error' : 'completed')

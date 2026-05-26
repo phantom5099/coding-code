@@ -145,7 +145,7 @@ function handleStructuredChunk(
       break
     }
     case 'todo_update':
-      // not rendered in desktop for now
+      send(win, 'agent:chunk', { threadId, turnId, chunk })
       break
     case 'done':
       // signals natural completion, handled in loop exit

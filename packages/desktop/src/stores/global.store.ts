@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import type { FileNode, GitStatus, Item, OpenFile, Project, TerminalSession, Thread, Turn } from '@shared/types'
+import type { FileNode, GitStatus, Item, OpenFile, Project, TerminalSession, Thread, Turn, TodoItem } from '@shared/types'
 
 function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`)
@@ -36,6 +36,12 @@ interface FilesState {
   openFiles: OpenFile[]
 }
 
+interface TodoPanelState {
+  items: TodoItem[]
+  hasSeenNonEmptyTodo: boolean
+  collapsed: boolean
+}
+
 interface AgentState {
   currentThreadId: string | null
   threads: Record<string, Thread>
@@ -45,6 +51,7 @@ interface AgentState {
   contextUsage: { used: number; contextWindow: number } | null
   // itemId → accumulated streaming text (partial assistant messages)
   streamingContent: Record<string, string>
+  todoByThreadId: Record<string, TodoPanelState>
 }
 
 interface EditorState {
@@ -99,6 +106,9 @@ interface GlobalActions {
   startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void
   completeTurn: (threadId: string, turnId: string, status: 'completed' | 'error') => void
+  // Todo panel (in-memory only, per thread)
+  applyTodoUpdate: (threadId: string, items: TodoItem[]) => void
+  toggleTodoCollapsed: (threadId: string) => void
 }
 
 const initialGit: GitStatus = {
@@ -140,6 +150,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       models: [],
       contextUsage: null,
       streamingContent: {},
+      todoByThreadId: {},
     },
     editor: {
       cursorLine: 1,
@@ -317,6 +328,33 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           delete s.agent.streamingContent[item.id]
         }
       }
+    }),
+
+    applyTodoUpdate: (threadId, items) => set((s) => {
+      const previous = s.agent.todoByThreadId[threadId]
+      if (items.length > 0) {
+        s.agent.todoByThreadId[threadId] = {
+          items,
+          hasSeenNonEmptyTodo: true,
+          collapsed: previous?.collapsed ?? false,
+        }
+        return
+      }
+      if (previous?.hasSeenNonEmptyTodo) {
+        s.agent.todoByThreadId[threadId] = { ...previous, items: previous.items, hasSeenNonEmptyTodo: true }
+        return
+      }
+      s.agent.todoByThreadId[threadId] = {
+        items: [],
+        hasSeenNonEmptyTodo: false,
+        collapsed: previous?.collapsed ?? false,
+      }
+    }),
+
+    toggleTodoCollapsed: (threadId) => set((s) => {
+      const previous = s.agent.todoByThreadId[threadId]
+      if (!previous) return
+      previous.collapsed = !previous.collapsed
     }),
   }))
 )

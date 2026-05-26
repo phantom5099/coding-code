@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Item, Project } from '../shared/types'
+import type { Item, Project, TodoUpdateChunk } from '../shared/types'
 
 const api = {
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
@@ -111,7 +111,7 @@ const api = {
     ipcRenderer.on('pty:data', (_e, payload) => cb(payload))
     return () => ipcRenderer.removeAllListeners('pty:data')
   },
-  onAgentChunk: (cb: (payload: { threadId: string; turnId: string; chunk: Item }) => void) => {
+  onAgentChunk: (cb: (payload: { threadId: string; turnId: string; chunk: Item | TodoUpdateChunk }) => void) => {
     ipcRenderer.on('agent:chunk', (_e, payload) => cb(payload))
     return () => ipcRenderer.removeAllListeners('agent:chunk')
   },

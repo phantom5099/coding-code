@@ -90,6 +90,9 @@ export const READONLY_TOOL_NAMES: string[] = [
   'search_files',
   'fetch_url',
   'web_search',
+  'tool_search',
+  'todo_read',
+  'todo_write',
 ];
 
 export const DESTRUCTIVE_TOOL_NAMES: string[] = [
