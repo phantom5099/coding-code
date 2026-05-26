@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type { FileNode, GitStatus, Item, OpenFile, Project, TerminalSession, Thread, Turn } from '@shared/types'
 
+function normalizeCwd(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`)
+}
+
 export interface ModelEntry {
   id: string
   name: string
@@ -69,6 +73,9 @@ interface GlobalActions {
   setWorkspace: (rootPath: string, name: string) => void
   setProjects: (projects: Project[]) => void
   setCurrentProject: (id: string) => void
+  addProject: (project: Project) => void
+  removeProject: (id: string) => void
+  switchProject: (id: string) => void
   setFileTree: (tree: FileNode[]) => void
   setActiveFile: (path: string | null) => void
   openFile: (path: string) => void
@@ -80,12 +87,14 @@ interface GlobalActions {
   setCurrentThread: (id: string | null) => void
   upsertThread: (thread: Thread) => void
   setThreadTurns: (threadId: string, turns: Turn[]) => void
+  setThreadCwd: (threadId: string, cwd: string) => void
   setApprovalPolicy: (policy: AgentState['approvalPolicy']) => void
   setModel: (model: string) => void
   setModels: (models: ModelEntry[]) => void
   setContextUsage: (usage: { used: number; contextWindow: number } | null) => void
   setCursor: (line: number, col: number) => void
   loadThreads: (threads: Thread[]) => void
+  updateToolCallStatus: (threadId: string, callId: string, status: 'pending' | 'approved' | 'rejected' | 'running') => void
   // Fine-grained agent streaming actions
   startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void
@@ -144,9 +153,24 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     setRightPanelWidth: (w) => set((s) => { s.ui.rightPanelWidth = w }),
     setBottomPanelHeight: (h) => set((s) => { s.ui.bottomPanelHeight = h }),
     setIdeSidebarView: (view) => set((s) => { s.ui.ideSidebarView = view }),
-    setWorkspace: (rootPath, name) => set((s) => { s.workspace.rootPath = rootPath; s.workspace.name = name }),
+    setWorkspace: (rootPath, name) => set((s) => { s.workspace.rootPath = normalizeCwd(rootPath); s.workspace.name = name }),
     setProjects: (projects) => set((s) => { s.workspace.projects = projects }),
     setCurrentProject: (id) => set((s) => { s.workspace.currentProjectId = id }),
+    addProject: (project) => set((s) => {
+      if (!s.workspace.projects.find((p) => p.id === project.id)) {
+        s.workspace.projects.push(project)
+      }
+    }),
+    removeProject: (id) => set((s) => {
+      s.workspace.projects = s.workspace.projects.filter((p) => p.id !== id)
+    }),
+    switchProject: (id) => set((s) => {
+      const project = s.workspace.projects.find((p) => p.id === id)
+      if (!project) return
+      s.workspace.currentProjectId = id
+      s.workspace.rootPath = normalizeCwd(project.rootPath)
+      s.workspace.name = project.name
+    }),
     setFileTree: (tree) => set((s) => { s.files.tree = tree }),
     setActiveFile: (path) => set((s) => { s.files.activeFilePath = path }),
     openFile: (path) => set((s) => {
@@ -175,6 +199,10 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       const thread = s.agent.threads[threadId]
       if (thread) thread.turns = turns
     }),
+    setThreadCwd: (threadId, cwd) => set((s) => {
+      const thread = s.agent.threads[threadId]
+      if (thread) thread.cwd = cwd
+    }),
     setApprovalPolicy: (policy) => set((s) => { s.agent.approvalPolicy = policy }),
     setModel: (model) => set((s) => { s.agent.model = model }),
     setModels: (models) => set((s) => { s.agent.models = models }),
@@ -197,6 +225,19 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       s.agent.threads = next
     }),
 
+    updateToolCallStatus: (threadId, callId, status) => set((s) => {
+      const thread = s.agent.threads[threadId]
+      if (!thread) return
+      for (const turn of thread.turns) {
+        const idx = turn.items.findIndex((i) => i.id === callId && i.type === 'tool_call')
+        if (idx >= 0) {
+          const existing = turn.items[idx] as Item & { type: 'tool_call' }
+          turn.items[idx] = { ...existing, status }
+          break
+        }
+      }
+    }),
+
     startTurn: (threadId, turn, meta) => set((s) => {
       const thread = s.agent.threads[threadId]
       if (!thread) {
@@ -204,7 +245,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           id: threadId,
           projectId: '',
           title: meta?.title ?? 'New Conversation',
-          cwd: meta?.cwd ?? '',
+          cwd: meta?.cwd ? normalizeCwd(meta.cwd) : '',
           turns: [turn],
           createdAt: Date.now(),
           updatedAt: Date.now(),

@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { Item, Turn } from '../../shared/types'
 import type { StreamChunk } from '@codingcode/core'
-import { getOrCreateClient, setActiveGen, abortAndClear, deleteClient } from './backend'
+import { getOrCreateClient, setActiveGen, abortAndClear, deleteClient, updateWorkspace } from './backend'
 import { storeService } from './store.service'
 
 function send(win: BrowserWindow, channel: string, payload: unknown): void {
@@ -22,6 +22,7 @@ export async function runAgent(opts: {
   const { threadId, turnId, userMessage, cwd, win } = opts
 
   abortAndClear(threadId)
+  await updateWorkspace(cwd)
 
   const turn: Turn = { id: turnId, items: [], status: 'running' }
 
@@ -114,13 +115,15 @@ function handleStructuredChunk(
     case 'tool_result': {
       // Update matching tool_call status to done
       const tcIdx = turn.items.findLastIndex((i: Item) => i.type === 'tool_call' && i.name === chunk.name)
+      let matchedCallId: string = chunk.id
       if (tcIdx >= 0) {
         const existing = turn.items[tcIdx] as Item & { type: 'tool_call' }
+        matchedCallId = existing.id
         const updated: Item = { ...existing, status: 'approved' }
         turn.items[tcIdx] = updated
         send(win, 'agent:chunk', { threadId, turnId, chunk: updated })
       }
-      const item: Item = { id: randomId(), type: 'tool_result', callId: chunk.id, output: chunk.output, exitCode: chunk.ok ? 0 : 1 }
+      const item: Item = { id: randomId(), type: 'tool_result', callId: matchedCallId, name: chunk.name, output: chunk.output, exitCode: chunk.ok ? 0 : 1 }
       turn.items.push(item)
       send(win, 'agent:chunk', { threadId, turnId, chunk: item })
       break

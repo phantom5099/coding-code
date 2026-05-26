@@ -10,7 +10,7 @@ export default function TitleBar() {
 
   return (
     <div
-      className="shrink-0 flex items-center px-3 bg-[#1a1a1a]"
+      className="shrink-0 flex items-center px-3 bg-[#1a1a1a] select-none"
       style={{
         height: 'env(titlebar-area-height, 36px)',
         WebkitAppRegion: 'drag',

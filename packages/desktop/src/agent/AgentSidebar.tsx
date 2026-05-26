@@ -1,6 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useGlobalStore } from '../stores/global.store'
 import type { Thread } from '@shared/types'
+
+function normalizeCwd(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`)
+}
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts
@@ -12,30 +16,14 @@ function relativeTime(ts: number): string {
   return `${Math.floor(days / 7)}周`
 }
 
-interface ProjectGroup {
-  name: string
-  cwd: string
-  threads: Thread[]
-}
-
-function groupByProject(threads: Thread[], workspaceName: string, workspaceCwd: string): ProjectGroup[] {
-  const map = new Map<string, Thread[]>()
-  for (const t of threads) {
-    const key = t.cwd || workspaceCwd || ''
-    if (!map.has(key)) map.set(key, [])
-    map.get(key)!.push(t)
-  }
-  const groups: ProjectGroup[] = []
-  for (const [cwd, cwdThreads] of map) {
-    const name = cwd === workspaceCwd
-      ? workspaceName || cwd.split(/[\\/]/).pop() || cwd
-      : cwd.split(/[\\/]/).pop() || cwd
-    groups.push({ name, cwd, threads: cwdThreads.sort((a, b) => b.updatedAt - a.updatedAt) })
-  }
-  if (workspaceCwd && !map.has(workspaceCwd)) {
-    groups.unshift({ name: workspaceName || workspaceCwd.split(/[\\/]/).pop() || '当前项目', cwd: workspaceCwd, threads: [] })
-  }
-  return groups.sort((a) => (a.cwd === workspaceCwd ? -1 : 1))
+function getProjectThreads(threads: Record<string, Thread>, rootPath: string): Thread[] {
+  const normalizedRoot = normalizeCwd(rootPath)
+  return Object.values(threads)
+    .filter((t) => {
+      const tcwd = normalizeCwd(t.cwd)
+      return tcwd.startsWith(normalizedRoot)
+    })
+    .sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
 export default function AgentSidebar() {
@@ -46,28 +34,24 @@ export default function AgentSidebar() {
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread)
   const toggleSidebar = useGlobalStore((s) => s.toggleSidebar)
 
-  const allThreads = Object.values(threads).sort((a: Thread, b: Thread) => b.updatedAt - a.updatedAt)
-  const groups = groupByProject(allThreads, workspace.name, workspace.rootPath)
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set())
+  const projectThreads = getProjectThreads(threads, workspace.rootPath)
+  const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null)
 
-  // Auto-expand workspace project when rootPath loads
-  useEffect(() => {
-    if (workspace.rootPath) {
-      setExpandedProjects((prev) => {
-        if (prev.has(workspace.rootPath)) return prev
-        const next = new Set(prev)
-        next.add(workspace.rootPath)
-        return next
-      })
+  const handleDelete = async (threadId: string) => {
+    await window.electronAPI?.deleteThread?.(threadId)
+    const updated = await window.electronAPI?.getThreads?.()
+    if (updated) {
+      const store = useGlobalStore.getState()
+      store.loadThreads(updated as Parameters<typeof store.loadThreads>[0])
     }
-  }, [workspace.rootPath])
+    if (threadId === currentThreadId) {
+      setCurrentThread(null)
+    }
+  }
 
-  const toggleProject = (cwd: string) =>
-    setExpandedProjects((prev) => {
-      const next = new Set(prev)
-      next.has(cwd) ? next.delete(cwd) : next.add(cwd)
-      return next
-    })
+  // Find current project name
+  const currentProject = workspace.projects.find((p) => p.id === workspace.currentProjectId)
+  const projectName = currentProject?.name || workspace.name
 
   if (sidebarCollapsed) {
     return (
@@ -81,9 +65,10 @@ export default function AgentSidebar() {
   }
 
   return (
-    <div className="flex flex-col shrink-0 bg-[#161616] border-r border-[#222] w-64">
-      {/* 顶部栏：收起按钮 */}
-      <div className="flex items-center justify-end px-2 pt-2">
+    <div className="flex flex-col shrink-0 bg-[#161616] border-r border-[#222] w-64 select-none">
+      {/* 顶部栏：项目名 + 收起按钮 */}
+      <div className="flex items-center justify-between px-2 pt-2">
+        <span className="text-[13px] font-semibold text-[#888] truncate ml-2">{projectName || '项目'}</span>
         <button type="button" onClick={toggleSidebar} title="收起侧边栏"
           className="w-7 h-7 flex items-center justify-center text-[#555] hover:text-[#ccc] hover:bg-[#252525] rounded transition-colors text-base">
           ‹
@@ -107,23 +92,45 @@ export default function AgentSidebar() {
 
       <div className="mx-3 border-t border-[#222]" />
 
-      {/* 项目列表 */}
+      {/* 会话列表 */}
       <div className="flex-1 overflow-y-auto py-3 min-h-0">
         <div className="px-3 pb-1.5">
-          <span className="text-[11px] font-semibold text-[#444] uppercase tracking-wider">项目</span>
+          <span className="text-[11px] font-semibold text-[#444] uppercase tracking-wider">会话</span>
         </div>
-        {groups.map((group) => (
-          <ProjectSection
-            key={group.cwd}
-            group={group}
-            expanded={expandedProjects.has(group.cwd)}
-            onToggle={() => toggleProject(group.cwd)}
-            currentThreadId={currentThreadId}
-            onSelectThread={setCurrentThread}
-          />
+        {projectThreads.slice(0, 15).map((t) => (
+          <button type="button" key={t.id} onClick={() => setCurrentThread(t.id)}
+            onMouseEnter={() => setHoveredThreadId(t.id)}
+            onMouseLeave={() => setHoveredThreadId(null)}
+            className={`w-full text-left px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors ${
+              currentThreadId === t.id
+                ? 'bg-[#0d2d4a] text-[#cde]'
+                : 'text-[#888] hover:bg-[#1c1c1c] hover:text-[#bbb]'
+            }`}>
+            <span className="flex-1 text-[14px] truncate">{t.title || '未命名对话'}</span>
+            {hoveredThreadId === t.id ? (
+              <button type="button" onClick={(e) => { e.stopPropagation(); handleDelete(t.id) }}
+                className="shrink-0 p-0.5 text-[#555] hover:text-red-400 transition-colors"
+                title="删除对话">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
+            ) : (
+              <span className="text-[12px] text-[#3a3a3a] shrink-0">{relativeTime(t.updatedAt)}</span>
+            )}
+          </button>
         ))}
-        {groups.length === 0 && (
-          <div className="px-3 py-4 text-[13px] text-[#3a3a3a]">暂无项目</div>
+        {projectThreads.length > 15 && (
+          <button type="button" className="w-full text-left px-4 py-1.5 text-[12px] text-[#3a3a3a] hover:text-[#555] transition-colors">
+            +{projectThreads.length - 15} 条更多
+          </button>
+        )}
+        {projectThreads.length === 0 && (
+          <div className="px-3 py-4 text-[13px] text-[#3a3a3a]">暂无对话</div>
         )}
       </div>
 
@@ -149,50 +156,5 @@ function NavItem({ icon, label, shortcut }: { icon: string; label: string; short
       <span className="flex-1 text-left">{label}</span>
       {shortcut && <span className="text-[11px] text-[#333]">{shortcut}</span>}
     </button>
-  )
-}
-
-function ProjectSection({ group, expanded, onToggle, currentThreadId, onSelectThread }: {
-  group: ProjectGroup
-  expanded: boolean
-  onToggle: () => void
-  currentThreadId: string | null
-  onSelectThread: (id: string | null) => void
-}) {
-  return (
-    <div>
-      <button type="button" onClick={onToggle}
-        className="w-full flex items-center gap-2 px-4 py-2 text-[14px] text-[#777] hover:text-[#ccc] hover:bg-[#1c1c1c] transition-colors">
-        <span className={`text-[9px] transition-transform shrink-0 ${expanded ? 'rotate-90' : ''}`}>▶</span>
-        <span className="shrink-0">📁</span>
-        <span className="flex-1 text-left truncate font-medium">{group.name}</span>
-        {group.threads.length > 0 && (
-          <span className="text-[12px] text-[#3a3a3a] shrink-0">{group.threads.length}</span>
-        )}
-      </button>
-      {expanded && (
-        <div className="ml-7 mr-2 mb-1">
-          {group.threads.slice(0, 10).map((t) => (
-            <button type="button" key={t.id} onClick={() => onSelectThread(t.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                currentThreadId === t.id
-                  ? 'bg-[#0d2d4a] text-[#cde]'
-                  : 'text-[#666] hover:bg-[#1c1c1c] hover:text-[#bbb]'
-              }`}>
-              <span className="flex-1 text-[14px] truncate">{t.title || '未命名对话'}</span>
-              <span className="text-[12px] text-[#3a3a3a] shrink-0">{relativeTime(t.updatedAt)}</span>
-            </button>
-          ))}
-          {group.threads.length > 10 && (
-            <button type="button" className="w-full text-left px-3 py-1.5 text-[12px] text-[#3a3a3a] hover:text-[#555] transition-colors">
-              +{group.threads.length - 10} 条更多
-            </button>
-          )}
-          {group.threads.length === 0 && (
-            <div className="px-3 py-2 text-[13px] text-[#333]">暂无对话</div>
-          )}
-        </div>
-      )}
-    </div>
   )
 }

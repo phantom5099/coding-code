@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Item } from '../shared/types'
+import type { Item, Project } from '../shared/types'
 
 const api = {
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
@@ -20,7 +20,7 @@ const api = {
   ptyKill: (id: string): Promise<void> => ipcRenderer.invoke('pty:kill', id),
 
   // Agent
-  sendMessage: (threadId: string, turnId: string, message: string, cwd?: string, attachments?: string[]): Promise<void> =>
+  sendMessage: (threadId: string, turnId: string, message: string, cwd?: string, attachments?: string[]): Promise<string> =>
     ipcRenderer.invoke('agent:sendMessage', threadId, turnId, message, cwd, attachments),
   abortAgent: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:abort', threadId),
   approveTool: (threadId: string, callId: string): Promise<void> => ipcRenderer.invoke('agent:approveTool', threadId, callId),
@@ -28,12 +28,20 @@ const api = {
   getThreads: (): Promise<unknown[]> => ipcRenderer.invoke('agent:getThreads'),
   deleteThread: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:deleteThread', threadId),
   loadHistory: (threadId: string): Promise<unknown[]> => ipcRenderer.invoke('agent:loadHistory', threadId),
-  getModels: (): Promise<unknown[]> => ipcRenderer.invoke('agent:getModels'),
+  getModels: (): Promise<{id: string; name: string; provider: string; context_window: number}[]> =>
+    ipcRenderer.invoke('agent:getModels'),
   setModel: (modelId: string): Promise<void> => ipcRenderer.invoke('agent:setModel', modelId),
   setApprovalPolicy: (policy: string): Promise<void> => ipcRenderer.invoke('agent:setApprovalPolicy', policy),
-  getSettings: (): Promise<{ activeModel: string; approvalPolicy: string; workspace: { rootPath: string; name: string } }> =>
+  getSettings: (): Promise<{ activeModel: string; approvalPolicy: string; workspace: { rootPath: string; name: string }; currentProjectId: string }> =>
     ipcRenderer.invoke('agent:getSettings'),
   compressContext: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:compressContext', threadId),
+
+  // Projects
+  getProjects: (): Promise<Project[]> => ipcRenderer.invoke('project:getAll'),
+  openFolderDialog: (): Promise<string | null> => ipcRenderer.invoke('project:openFolderDialog'),
+  addProject: (rootPath: string): Promise<Project> => ipcRenderer.invoke('project:add', rootPath),
+  removeProject: (projectId: string): Promise<void> => ipcRenderer.invoke('project:remove', projectId),
+  setCurrentProjectId: (projectId: string): Promise<void> => ipcRenderer.invoke('project:setCurrentId', projectId),
 
   // Git
   gitStatus: (): Promise<unknown> => ipcRenderer.invoke('git:status'),
@@ -45,16 +53,40 @@ const api = {
     ipcRenderer.invoke('settings:getMcp'),
   setMcpDisabled: (name: string, disabled: boolean): Promise<void> =>
     ipcRenderer.invoke('settings:setMcpDisabled', name, disabled),
+  createMcp: (server: object): Promise<void> =>
+    ipcRenderer.invoke('settings:createMcp', server),
+  updateMcp: (name: string, server: object): Promise<void> =>
+    ipcRenderer.invoke('settings:updateMcp', name, server),
+  deleteMcp: (name: string): Promise<void> =>
+    ipcRenderer.invoke('settings:deleteMcp', name),
   getSkills: (): Promise<{name: string; description: string; disabled: boolean}[]> =>
     ipcRenderer.invoke('settings:getSkills'),
   setSkillDisabled: (name: string, disabled: boolean): Promise<void> =>
     ipcRenderer.invoke('settings:setSkillDisabled', name, disabled),
-  getAgents: (): Promise<{name: string; description: string; tools?: string[]; readonly?: boolean; maxSteps?: number; model?: string}[]> =>
+  getAgents: (): Promise<{name: string; description: string; tools?: string[]; readonly?: boolean; maxSteps?: number; model?: string; disabled?: boolean}[]> =>
     ipcRenderer.invoke('settings:getAgents'),
   getSubagentEnabled: (): Promise<boolean> =>
     ipcRenderer.invoke('settings:getSubagentEnabled'),
   setSubagentEnabled: (enabled: boolean): Promise<void> =>
     ipcRenderer.invoke('settings:setSubagentEnabled', enabled),
+  createAgent: (profile: object): Promise<void> =>
+    ipcRenderer.invoke('settings:createAgent', profile),
+  updateAgent: (name: string, profile: object): Promise<void> =>
+    ipcRenderer.invoke('settings:updateAgent', name, profile),
+  deleteAgent: (name: string): Promise<void> =>
+    ipcRenderer.invoke('settings:deleteAgent', name),
+  setAgentDisabled: (name: string, disabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('settings:setAgentDisabled', name, disabled),
+  getHooks: (): Promise<{name: string; description?: string; point: string; type: 'observer' | 'decision'; command: string; args?: string[]; env?: Record<string, string>; priority?: number; enabled: boolean}[]> =>
+    ipcRenderer.invoke('settings:getHooks'),
+  createHook: (hook: object): Promise<void> =>
+    ipcRenderer.invoke('settings:createHook', hook),
+  updateHook: (name: string, hook: object): Promise<void> =>
+    ipcRenderer.invoke('settings:updateHook', name, hook),
+  deleteHook: (name: string): Promise<void> =>
+    ipcRenderer.invoke('settings:deleteHook', name),
+  setHookDisabled: (name: string, disabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('settings:setHookDisabled', name, disabled),
 
   // Events: main → renderer
   onFsChange: (cb: (payload: { path: string; type: 'add' | 'change' | 'unlink' }) => void) => {

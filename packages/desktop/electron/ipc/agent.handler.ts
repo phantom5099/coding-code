@@ -1,13 +1,15 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, dialog } from 'electron'
+import { randomUUID } from 'crypto'
 import { runAgent, abortAgent, approveToolCall, rejectToolCall } from '../core/agent-loop'
 import { storeService } from '../core/store.service'
 import { listModels, switchModel, getOrCreateClient, deleteClient } from '../core/backend'
 import { readUIHistory, deleteSession, listSessions } from '@codingcode/core'
+import type { Project } from '../../shared/types'
 
 export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle('agent:sendMessage', (_e, threadId: string, turnId: string, message: string, cwd?: string) => {
     const win = getMainWindow()
-    if (!win) return
+    if (!win) return ''
     const workspace = storeService.getWorkspace()
     const runCwd = cwd || workspace.rootPath || process.cwd()
     runAgent({ threadId, turnId, userMessage: message, cwd: runCwd, win }).catch((err) => {
@@ -15,6 +17,7 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
         win.webContents.send('agent:done', { threadId, turnId, error: String(err) })
       }
     })
+    return runCwd
   })
 
   ipcMain.handle('agent:abort', (_e, threadId: string) => {
@@ -88,11 +91,37 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
       activeModel: activeId ?? '',
       approvalPolicy: storeService.getApprovalPolicy(),
       workspace,
+      currentProjectId: storeService.getCurrentProjectId(),
     }
   })
 
   ipcMain.handle('agent:compressContext', async (_e, threadId: string) => {
     const client = await getOrCreateClient(threadId)
     await client.compact()
+  })
+
+  ipcMain.handle('project:getAll', () => {
+    return storeService.getProjects()
+  })
+
+  ipcMain.handle('project:openFolderDialog', async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'], title: '选择项目文件夹' })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('project:add', (_e, rootPath: string) => {
+    const name = rootPath.replace(/\\/g, '/').split('/').pop() || rootPath
+    const project: Project = { id: randomUUID(), name, rootPath }
+    storeService.addProject(project)
+    return project
+  })
+
+  ipcMain.handle('project:remove', (_e, projectId: string) => {
+    storeService.removeProject(projectId)
+  })
+
+  ipcMain.handle('project:setCurrentId', (_e, projectId: string) => {
+    storeService.setCurrentProjectId(projectId)
   })
 }

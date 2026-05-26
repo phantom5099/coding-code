@@ -402,7 +402,7 @@ function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string; items
         }
         break;
       case 'tool_result':
-        turn.items.push({ id: event.uuid, type: 'tool_result', callId: event.toolCallId, output: event.output });
+        turn.items.push({ id: event.uuid, type: 'tool_result', callId: event.toolCallId, name: event.toolName, output: event.output });
         break;
     }
   }

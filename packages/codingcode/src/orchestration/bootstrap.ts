@@ -21,6 +21,8 @@ import { todoReadTool } from '../tools/domains/self/todo-read.js';
 import { createToolSearchTool } from '../tools/domains/self/tool-search.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { loadAgentProfiles } from '../subagent/loader.js';
+import { loadHookConfigs } from '../hooks/config.js';
+import { executeHookCommand, executeDecisionHookCommand, isHookRuntimeEnabled } from '../hooks/executor.js';
 
 export const bootstrapApplication = (cwd: string) =>
   Effect.gen(function* () {
@@ -63,4 +65,21 @@ export const bootstrapApplication = (cwd: string) =>
 
     yield* mcp.connectAll(cwd);
     yield* skill.loadAll(cwd);
+
+    // Load user-defined hooks from .codingcode/hooks.yaml
+    for (const hc of loadHookConfigs(cwd)) {
+      if (!hc.enabled) continue;
+      const hookName = hc.name;
+      if (hc.type === 'observer') {
+        yield* hooks.register(hc.point, (payload: Record<string, unknown>) => {
+          if (!isHookRuntimeEnabled(hookName)) return;
+          return executeHookCommand(hc, payload);
+        });
+      } else {
+        yield* hooks.registerDecision(hc.point, (payload: Record<string, unknown>) => {
+          if (!isHookRuntimeEnabled(hookName)) return null;
+          return executeDecisionHookCommand(hc, payload);
+        }, { priority: hc.priority ?? 0, source: 'user' });
+      }
+    }
   });

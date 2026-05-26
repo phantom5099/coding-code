@@ -123,6 +123,18 @@ export class OpenAIProvider implements LLMClient {
   }
 
   completeStream(req: LLMRequest, signal?: AbortSignal): import('../client').StreamResult {
+    if (this.entry.provider === 'sansen' && req.tools && req.tools.length > 0) {
+      const response = this.complete(req, signal);
+      const stream = async function* () {
+        const result = await response;
+        if (result.ok && result.value.content) {
+          yield result.value.content;
+        }
+      }();
+
+      return { stream, response };
+    }
+
     const result = streamText({
       model: this.model,
       system: req.system,
