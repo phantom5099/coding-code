@@ -137,4 +137,25 @@ describe('ToolService', () => {
     });
     await runWithLayer(program);
   });
+
+  it('unregister removes the tool', async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* ToolService;
+      yield* svc.register(makeTool('to_remove'));
+      expect(svc.getDef('to_remove')).toBeDefined();
+      yield* svc.unregister('to_remove');
+      expect(svc.getDef('to_remove')).toBeUndefined();
+      const result = svc.get('to_remove');
+      expect(result.ok).toBe(false);
+    });
+    await runWithLayer(program);
+  });
+
+  it('unregister on unknown tool is a no-op', async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* ToolService;
+      yield* svc.unregister('does_not_exist');
+    });
+    await runWithLayer(program);
+  });
 });

@@ -1,6 +1,6 @@
 import { expect, it, describe } from 'vitest';
 import { Effect } from 'effect';
-import { SubagentRegistry, EXPLORE_PROFILE, GENERAL_PROFILE } from '../../src/subagent/registry';
+import { SubagentRegistry, EXPLORE_PROFILE } from '../../src/subagent/registry';
 import { SubagentRegistryLayer } from '../../src/layer';
 
 describe('SubagentRegistry', () => {
@@ -67,10 +67,6 @@ describe('SubagentRegistry', () => {
     expect(EXPLORE_PROFILE.readonly).toBe(true);
     expect(EXPLORE_PROFILE.maxSteps).toBe(30);
     expect(EXPLORE_PROFILE.tools).toContain('read_file');
-
-    expect(GENERAL_PROFILE.name).toBe('general');
-    expect(GENERAL_PROFILE.readonly).toBe(true);
-    expect(GENERAL_PROFILE.maxSteps).toBe(40);
   });
 
   it('should support profile with custom tools and maxSteps', async () => {

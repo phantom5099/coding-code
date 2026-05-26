@@ -1,9 +1,7 @@
 import { Effect } from 'effect';
 import { ToolService } from '../tools/registry.js';
 import { SandboxService } from '../sandbox/index.js';
-import { McpService } from '../mcp/index.js';
-import { SkillService } from '../skills/index.js';
-import { SubagentRegistry, EXPLORE_PROFILE, GENERAL_PROFILE } from '../subagent/registry.js';
+import { SubagentRegistry, EXPLORE_PROFILE } from '../subagent/registry.js';
 import { SessionService } from '../session/store.js';
 import { ApprovalService } from '../approval/index.js';
 import { HookService } from '../hooks/registry.js';
@@ -21,15 +19,11 @@ import { todoReadTool } from '../tools/domains/self/todo-read.js';
 import { createToolSearchTool } from '../tools/domains/self/tool-search.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { loadAgentProfiles } from '../subagent/loader.js';
-import { loadHookConfigs } from '../hooks/config.js';
-import { executeHookCommand, executeDecisionHookCommand, isHookRuntimeEnabled } from '../hooks/executor.js';
 
 export const bootstrapApplication = (cwd: string) =>
   Effect.gen(function* () {
     const tools = yield* ToolService;
     const sandbox = yield* SandboxService;
-    const mcp = yield* McpService;
-    const skill = yield* SkillService;
     const subagentRegistry = yield* SubagentRegistry;
     const session = yield* SessionService;
     const approval = yield* ApprovalService;
@@ -54,7 +48,6 @@ export const bootstrapApplication = (cwd: string) =>
     yield* tools.register(createToolSearchTool(toolSearchSvc));
 
     subagentRegistry.register(EXPLORE_PROFILE);
-    subagentRegistry.register(GENERAL_PROFILE);
     for (const profile of loadAgentProfiles(cwd)) {
       subagentRegistry.register(profile);
     }
@@ -62,24 +55,4 @@ export const bootstrapApplication = (cwd: string) =>
     yield* tools.register(
       createDispatchAgentTool({ session, approval, hooks, registry: subagentRegistry }),
     );
-
-    yield* mcp.connectAll(cwd);
-    yield* skill.loadAll(cwd);
-
-    // Load user-defined hooks from .codingcode/hooks.yaml
-    for (const hc of loadHookConfigs(cwd)) {
-      if (!hc.enabled) continue;
-      const hookName = hc.name;
-      if (hc.type === 'observer') {
-        yield* hooks.register(hc.point, (payload: Record<string, unknown>) => {
-          if (!isHookRuntimeEnabled(hookName)) return;
-          return executeHookCommand(hc, payload);
-        });
-      } else {
-        yield* hooks.registerDecision(hc.point, (payload: Record<string, unknown>) => {
-          if (!isHookRuntimeEnabled(hookName)) return null;
-          return executeDecisionHookCommand(hc, payload);
-        }, { priority: hc.priority ?? 0, source: 'user' });
-      }
-    }
   });

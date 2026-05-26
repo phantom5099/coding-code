@@ -67,10 +67,3 @@ export const EXPLORE_PROFILE: SubagentProfile = {
   maxSteps: 30,
 };
 
-export const GENERAL_PROFILE: SubagentProfile = {
-  name: 'general',
-  description: 'General purpose agent with read-only access to all tools. Useful for analysis, exploration, and non-destructive operations.',
-  systemPrompt: 'You are a general purpose agent with read-only access to all available tools. You can analyze code, read files, search for patterns, and provide insights, but cannot modify files.',
-  readonly: true,
-  maxSteps: 40,
-};

@@ -9,7 +9,7 @@ import { AppLayer } from '../layer.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
-import { getSubagentEnabledState, setSubagentEnabledState, EXPLORE_PROFILE, GENERAL_PROFILE } from '../subagent/registry.js';
+import { getSubagentEnabledState, setSubagentEnabledState, EXPLORE_PROFILE } from '../subagent/registry.js';
 import { loadAgentProfiles } from '../subagent/loader.js';
 import { McpService } from '../mcp/index.js';
 import type { McpServerConfig, McpStatus } from '../mcp/types.js';
@@ -383,7 +383,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       const cwd = getWorkspaceCwd();
       const custom = loadAgentProfiles(cwd);
       const { isAgentDisabledState } = await import('../subagent/registry.js');
-      return [EXPLORE_PROFILE, GENERAL_PROFILE, ...custom].map(a => ({
+      return [EXPLORE_PROFILE, ...custom].map(a => ({
         name: a.name, description: a.description, tools: a.tools,
         readonly: a.readonly, maxSteps: a.maxSteps, model: a.model,
         disabled: isAgentDisabledState(a.name),
