@@ -1,6 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Toggle from './Toggle'
 import type { ModelEntry } from '../stores/global.store'
+
+const AVAILABLE_TOOLS = [
+  'read_file', 'write_file', 'edit_file', 'execute_command',
+  'search_code', 'search_files', 'fetch_url', 'web_search',
+  'todo_read', 'todo_write', 'tool_search', 'dispatch_agent',
+]
 
 interface AgentEntry {
   name: string
@@ -17,7 +23,7 @@ interface AgentForm {
   name: string
   description: string
   systemPrompt: string
-  tools: string
+  tools: string[]
   readonly: boolean
   maxSteps: string
   model: string
@@ -25,7 +31,7 @@ interface AgentForm {
 
 const EMPTY_FORM: AgentForm = {
   name: '', description: '', systemPrompt: '',
-  tools: '', readonly: false, maxSteps: '', model: '',
+  tools: [], readonly: false, maxSteps: '', model: '',
 }
 
 const BUILT_IN = new Set(['explore', 'general'])
@@ -82,7 +88,7 @@ export default function SubagentsPanel() {
       name: a.name,
       description: a.description,
       systemPrompt: a.systemPrompt ?? '',
-      tools: (a.tools ?? []).join(', '),
+      tools: a.tools ?? [],
       readonly: a.readonly ?? false,
       maxSteps: a.maxSteps?.toString() ?? '',
       model: a.model ?? '',
@@ -103,8 +109,8 @@ export default function SubagentsPanel() {
       description: form.description,
       systemPrompt: form.systemPrompt,
     }
-    if (form.tools.trim()) {
-      profile.tools = form.tools.split(',').map(s => s.trim()).filter(Boolean)
+    if (form.tools.length > 0) {
+      profile.tools = form.tools
     }
     if (form.readonly) profile.readonly = true
     if (form.maxSteps.trim()) profile.maxSteps = Number(form.maxSteps)
@@ -279,6 +285,62 @@ export default function SubagentsPanel() {
   )
 }
 
+function ToolMultiSelect({ selected, onChange, inputCls }: {
+  selected: string[]
+  onChange: (tools: string[]) => void
+  inputCls: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const toggle = (tool: string) => {
+    if (selected.includes(tool)) onChange(selected.filter(t => t !== tool))
+    else onChange([...selected, tool])
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={`${inputCls} flex items-center justify-between text-left`}
+      >
+        <span className={selected.length === 0 ? 'text-[#555]' : ''}>
+          {selected.length === 0 ? '未指定（全部工具）' : selected.join(', ')}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          className={`shrink-0 ml-2 transition-transform ${open ? 'rotate-180' : ''}`}>
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded border border-[#3a3a3a] bg-[#1e1e1e] py-1 shadow-lg">
+          {AVAILABLE_TOOLS.map(tool => (
+            <label key={tool}
+              className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-[#2a2a2a] text-[13px] text-[#ccc]">
+              <input
+                type="checkbox"
+                checked={selected.includes(tool)}
+                onChange={() => toggle(tool)}
+                className="accent-[#569cd6]"
+              />
+              <span className="font-mono">{tool}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FormCard({ form, setForm, models, onSave, onCancel, inputCls, labelCls, btnPrimary, btnCancel }: {
   form: AgentForm
   setForm: (f: AgentForm) => void
@@ -313,9 +375,12 @@ function FormCard({ form, setForm, models, onSave, onCancel, inputCls, labelCls,
           onChange={e => setForm({ ...form, systemPrompt: e.target.value })} />
       </div>
       <div>
-        <div className={labelCls}>工具列表 (逗号分隔，可选)</div>
-        <input className={inputCls} value={form.tools} title="工具列表"
-          onChange={e => setForm({ ...form, tools: e.target.value })} />
+        <div className={labelCls}>工具列表 (可选)</div>
+        <ToolMultiSelect
+          selected={form.tools}
+          onChange={tools => setForm({ ...form, tools })}
+          inputCls={inputCls}
+        />
       </div>
       <div className="flex gap-4 items-end">
         <div className="flex-1">

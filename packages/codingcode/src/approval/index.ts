@@ -6,6 +6,17 @@ import { DEFAULT_DENY_RULES, READONLY_TOOL_NAMES, DESTRUCTIVE_TOOL_NAMES } from 
 import { runPipeline, type PipelineHooks } from './pipeline';
 import { ApprovalWaitService, hasEmitter } from './async-confirm';
 
+// Module-level singleton so all callers (HTTP routes, direct client, service) share the same state.
+let _globalPermissionMode: PermissionMode = 'default';
+
+export function getGlobalPermissionMode(): PermissionMode {
+  return _globalPermissionMode;
+}
+
+export function setGlobalPermissionMode(mode: PermissionMode): void {
+  _globalPermissionMode = mode;
+}
+
 export class ApprovalService extends Effect.Service<ApprovalService>()('Approval', {
   effect: Effect.gen(function* () {
     const hooks = yield* HookService;
@@ -13,7 +24,6 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
     const ruleEngine: RuleEngine = createRuleEngine(DEFAULT_DENY_RULES);
     const readonlyTools = new Set(READONLY_TOOL_NAMES);
     const destructiveTools = new Set(DESTRUCTIVE_TOOL_NAMES);
-    let permissionMode: PermissionMode = 'default';
 
     function buildPipelineHooks(): PipelineHooks {
       return {
@@ -46,7 +56,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               ruleEngine,
               readonlyTools,
               destructiveTools,
-              permissionMode,
+              permissionMode: _globalPermissionMode,
               hooks: buildPipelineHooks(),
               interactive: process.stdin.isTTY ?? false,
               asyncConfirm: hasEmitter(request.sessionId),
@@ -65,9 +75,9 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
         Effect.sync(() => ruleEngine.removeRule(id)),
 
       setPermissionMode: (mode: PermissionMode): Effect.Effect<void> =>
-        Effect.sync(() => { permissionMode = mode; }),
+        Effect.sync(() => { setGlobalPermissionMode(mode); }),
 
-      getPermissionMode: (): PermissionMode => permissionMode,
+      getPermissionMode: (): PermissionMode => getGlobalPermissionMode(),
 
       fork: (opts?: {
         extraDenyRules?: PermissionRule[];
@@ -92,7 +102,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               childEngine.addRule(rule);
             }
           }
-          let childPermissionMode: PermissionMode = permissionMode;
+          let childPermissionMode: PermissionMode = _globalPermissionMode;
           const childReadonlyTools = new Set(readonlyTools);
           const childDestructiveTools = new Set(destructiveTools);
           return {

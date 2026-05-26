@@ -55,4 +55,5 @@ export type PanelState =
   | { type: 'checkpoint-action'; cp: CheckpointInfo; hasForward: boolean }
   | { type: 'help' }
   | { type: 'mcp'; servers: McpServerStatus[] }
-  | { type: 'skill'; skills: SkillStatus[] };
+  | { type: 'skill'; skills: SkillStatus[] }
+  | { type: 'permission'; currentMode: string };

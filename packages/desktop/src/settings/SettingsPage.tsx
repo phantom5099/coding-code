@@ -4,8 +4,9 @@ import McpPanel from './McpPanel'
 import SkillPanel from './SkillPanel'
 import HooksPanel from './HooksPanel'
 import SubagentsPanel from './SubagentsPanel'
+import MemoryPanel from './MemoryPanel'
 
-type Section = 'mcp' | 'skills' | 'hooks' | 'agents'
+type Section = 'mcp' | 'skills' | 'hooks' | 'agents' | 'memory'
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   {
@@ -49,6 +50,16 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
         <path d="M3 13.5C3 11 5.2 9.5 8 9.5C10.8 9.5 13 11 13 13.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
         <circle cx="3.5" cy="5" r="1.5" stroke="currentColor" strokeWidth="1.1"/>
         <circle cx="12.5" cy="5" r="1.5" stroke="currentColor" strokeWidth="1.1"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'memory',
+    label: '记忆模式',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+        <path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -98,6 +109,7 @@ export default function SettingsPage() {
           {section === 'skills' && <SkillPanel />}
           {section === 'hooks' && <HooksPanel />}
           {section === 'agents' && <SubagentsPanel />}
+          {section === 'memory' && <MemoryPanel />}
         </div>
       </div>
     </div>

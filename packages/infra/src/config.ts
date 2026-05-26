@@ -163,6 +163,26 @@ export function updateMemoryEnabled(enabled: boolean, configPath?: string): void
   writeFileSync(p, stringifyYaml(existing), 'utf8');
 }
 
+export function updateMemoryDisabledTypes(disabledTypes: string[], configPath?: string): void {
+  const p = configPath ?? getUserConfigPath();
+  const existing: Record<string, unknown> = existsSync(p)
+    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
+    : {};
+  const memory = (existing.memory as Record<string, unknown>) ?? {};
+  existing.memory = { ...memory, disabledTypes };
+  writeFileSync(p, stringifyYaml(existing), 'utf8');
+}
+
+export function updateMemoryExtraTypes(extraTypes: MemoryTypeConfig[], configPath?: string): void {
+  const p = configPath ?? getUserConfigPath();
+  const existing: Record<string, unknown> = existsSync(p)
+    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
+    : {};
+  const memory = (existing.memory as Record<string, unknown>) ?? {};
+  existing.memory = { ...memory, extraTypes };
+  writeFileSync(p, stringifyYaml(existing), 'utf8');
+}
+
 export function loadConfig(configPath?: string): AppConfig {
   const p = configPath ?? getUserConfigPath();
   if (!existsSync(p)) return DEFAULT_CONFIG;

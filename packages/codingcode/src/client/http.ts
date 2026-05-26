@@ -1,5 +1,6 @@
 import type { AgentClient, StreamChunk } from './direct.js';
 import type { McpStatus } from '../mcp/types.js';
+import type { PermissionMode } from '../approval/types.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 
 export type { AgentClient, StreamChunk };
@@ -91,6 +92,12 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       });
     },
 
+    async getMemoryConfig() { throw new Error('not supported over HTTP'); },
+    async setTypeDisabled(_name: string, _disabled: boolean): Promise<void> { throw new Error('not supported over HTTP'); },
+    async addExtraType(_type: { name: string; description: string }): Promise<void> { throw new Error('not supported over HTTP'); },
+    async updateExtraType(_name: string, _type: { name: string; description: string }): Promise<void> { throw new Error('not supported over HTTP'); },
+    async deleteExtraType(_name: string): Promise<void> { throw new Error('not supported over HTTP'); },
+
     async getSubagentEnabled() {
       const res = await fetch(`${serverUrl}/api/agent/subagent`);
       const data = await res.json() as { enabled: boolean };
@@ -128,6 +135,34 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     async toggleSkill(name: string, enabled: boolean) {
       await fetch(`${serverUrl}/api/agent/skills`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, enabled }),
+      });
+    },
+
+    async createMcpServer(_server: any): Promise<void> { throw new Error('not supported over HTTP'); },
+    async updateMcpServer(_name: string, _server: any): Promise<void> { throw new Error('not supported over HTTP'); },
+    async deleteMcpServer(_name: string): Promise<void> { throw new Error('not supported over HTTP'); },
+
+    async listAgents() { throw new Error('not supported over HTTP'); },
+    async createAgent(_profile: any): Promise<void> { throw new Error('not supported over HTTP'); },
+    async updateAgent(_name: string, _profile: any): Promise<void> { throw new Error('not supported over HTTP'); },
+    async deleteAgent(_name: string): Promise<void> { throw new Error('not supported over HTTP'); },
+    async setAgentDisabled(_name: string, _disabled: boolean): Promise<void> { throw new Error('not supported over HTTP'); },
+
+    async listHooks() { throw new Error('not supported over HTTP'); },
+    async setHookDisabled(_name: string, _disabled: boolean): Promise<void> { throw new Error('not supported over HTTP'); },
+    async createHook(_hook: any): Promise<void> { throw new Error('not supported over HTTP'); },
+    async updateHook(_name: string, _hook: any): Promise<void> { throw new Error('not supported over HTTP'); },
+    async deleteHook(_name: string): Promise<void> { throw new Error('not supported over HTTP'); },
+
+    async getPermissionMode(): Promise<PermissionMode> {
+      const res = await fetch(`${serverUrl}/api/agent/permission-mode`);
+      const data = await res.json() as { mode: PermissionMode };
+      return data.mode;
+    },
+
+    async setPermissionMode(mode: PermissionMode): Promise<void> {
+      await fetch(`${serverUrl}/api/agent/permission-mode`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }),
       });
     },
   };

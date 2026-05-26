@@ -67,6 +67,10 @@ describe('SubagentRegistry', () => {
     expect(EXPLORE_PROFILE.readonly).toBe(true);
     expect(EXPLORE_PROFILE.maxSteps).toBe(30);
     expect(EXPLORE_PROFILE.tools).toContain('read_file');
+    expect(EXPLORE_PROFILE.tools).toContain('search_files');
+    expect(EXPLORE_PROFILE.tools).toContain('fetch_url');
+    expect(EXPLORE_PROFILE.tools).not.toContain('glob');
+    expect(EXPLORE_PROFILE.tools).not.toContain('web_fetch');
   });
 
   it('should support profile with custom tools and maxSteps', async () => {

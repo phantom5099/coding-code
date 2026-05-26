@@ -11,6 +11,14 @@ import { LoadingIndicator } from './LoadingIndicator.js';
 import { InlinePanel } from './InlinePanel.js';
 import { buildWelcomeContent } from './WelcomePanel.js';
 import { COMMAND_REGISTRY, parseCommand, type CommandDef, type CommandName } from '../commands/registry.js';
+
+const PERMISSION_MODE_LABELS: Record<string, string> = {
+  default:      '默认 (逐次确认)',
+  acceptEdits:  '接受编辑 (自动允许文件操作)',
+  dontAsk:      '自动审查 (全部允许)',
+  plan:         '计划模式 (只读)',
+  bypass:       '绕过审批',
+};
 interface AppProps {
   client: AgentClient;
 }
@@ -37,6 +45,7 @@ export function App({ client }: AppProps) {
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
   const [staticKey, setStaticKey] = useState(0);
+  const [permissionMode, setPermissionMode] = useState<string>('default');
 
   useEffect(() => {
     setStaticMessages([{
@@ -44,6 +53,7 @@ export function App({ client }: AppProps) {
       content: buildWelcomeContent(),
     }]);
     setActiveMessages([]);
+    client.getPermissionMode().then(setPermissionMode).catch(() => {});
   }, []); // only on mount
 
   useEffect(() => {
@@ -217,6 +227,19 @@ export function App({ client }: AppProps) {
         setStaticMessages(prev => [...prev, {
           id: generateId(), timestamp: Date.now(), role: 'system' as const,
           content: `[Skill Error] ${e.message || e}`,
+        }]);
+      }
+      return;
+    }
+    if (parsed.name === 'approve') {
+      try {
+        const mode = await client.getPermissionMode();
+        setPermissionMode(mode);
+        setPanel({ type: 'permission', currentMode: mode });
+      } catch (e: any) {
+        setStaticMessages(prev => [...prev, {
+          id: generateId(), timestamp: Date.now(), role: 'system' as const,
+          content: `[Approve Error] ${e.message || e}`,
         }]);
       }
       return;
@@ -440,6 +463,29 @@ export function App({ client }: AppProps) {
           width={Math.min(70, width - 4)}
         />
       )}
+      {panel.type === 'permission' && (
+        <InlinePanel
+          title={COMMAND_REGISTRY.approve.title}
+          items={[
+            { label: `${panel.currentMode === 'default'     ? '●' : '○'} 默认 — 逐次确认`, value: 'default' },
+            { label: `${panel.currentMode === 'acceptEdits' ? '●' : '○'} 接受编辑 — 自动允许文件操作`, value: 'acceptEdits' },
+            { label: `${panel.currentMode === 'dontAsk'     ? '●' : '○'} 自动审查 — 全部允许`, value: 'dontAsk' },
+            { label: `${panel.currentMode === 'plan'        ? '●' : '○'} 计划模式 — 仅只读`, value: 'plan' },
+            { label: `${panel.currentMode === 'bypass'      ? '●' : '○'} 绕过审批`, value: 'bypass' },
+          ]}
+          activeValue={panel.currentMode}
+          onSelect={async (value) => {
+            if (!value) return;
+            try {
+              await client.setPermissionMode(value as any);
+              setPermissionMode(value);
+            } catch { /* ignore */ }
+            setPanel({ type: 'none' });
+          }}
+          onCancel={() => setPanel({ type: 'none' })}
+          width={Math.min(60, width - 4)}
+        />
+      )}
       {panel.type === 'help' && (
         <Box flexDirection="column" borderStyle="single" borderColor="green" width={helpW} paddingX={1}>
           <Box>
@@ -468,6 +514,9 @@ export function App({ client }: AppProps) {
         </Box>
       )}
 
+      <Box paddingLeft={2} marginBottom={0}>
+        <Text color="gray">○ {PERMISSION_MODE_LABELS[permissionMode] ?? permissionMode}</Text>
+      </Box>
       <InputBox onSubmit={handleSend} disabled={isRunning || panel.type !== 'none'} width={width} />
     </Box>
   );

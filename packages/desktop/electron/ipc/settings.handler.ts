@@ -115,4 +115,34 @@ export function registerSettingsHandlers(): void {
     const client = await ensureClient()
     await client.setHookDisabled(name, disabled)
   })
+
+  ipcMain.handle('settings:getMemoryConfig', async () => {
+    const client = await ensureClient()
+    return client.getMemoryConfig()
+  })
+
+  ipcMain.handle('settings:setMemoryEnabled', async (_e, enabled: boolean) => {
+    const client = await ensureClient()
+    await client.setMemoryEnabled(enabled)
+  })
+
+  ipcMain.handle('settings:setTypeDisabled', async (_e, name: string, disabled: boolean) => {
+    const client = await ensureClient()
+    await client.setTypeDisabled(name, disabled)
+  })
+
+  ipcMain.handle('settings:addExtraType', async (_e, type: { name: string; description: string }) => {
+    const client = await ensureClient()
+    await client.addExtraType(type)
+  })
+
+  ipcMain.handle('settings:updateExtraType', async (_e, name: string, type: { name: string; description: string }) => {
+    const client = await ensureClient()
+    await client.updateExtraType(name, type)
+  })
+
+  ipcMain.handle('settings:deleteExtraType', async (_e, name: string) => {
+    const client = await ensureClient()
+    await client.deleteExtraType(name)
+  })
 }

@@ -10,12 +10,15 @@ import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 import { getSubagentEnabledState, setSubagentEnabledState, EXPLORE_PROFILE } from '../subagent/registry.js';
+import type { SubagentProfile } from '../subagent/registry.js';
 import { loadAgentProfiles } from '../subagent/loader.js';
 import { McpService } from '../mcp/index.js';
 import type { McpServerConfig, McpStatus } from '../mcp/types.js';
 import { SkillService } from '../skills/index.js';
 import { getMemoryEnabled, setMemoryEnabled } from '../memory/index.js';
 import type { UserHookConfig } from '../hooks/config.js';
+import { getGlobalPermissionMode, setGlobalPermissionMode } from '../approval/index.js';
+import type { PermissionMode } from '../approval/types.js';
 
 export type StreamChunk = string
   | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
@@ -43,6 +46,11 @@ export interface AgentClient {
   compact(): Promise<void>;
   getMemoryEnabled(): Promise<boolean>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
+  getMemoryConfig(): Promise<{ enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> }>;
+  setTypeDisabled(name: string, disabled: boolean): Promise<void>;
+  addExtraType(type: { name: string; description: string }): Promise<void>;
+  updateExtraType(name: string, type: { name: string; description: string }): Promise<void>;
+  deleteExtraType(name: string): Promise<void>;
   getSubagentEnabled(): Promise<boolean>;
   setSubagentEnabled(enabled: boolean): Promise<void>;
   getMcpStatus(): Promise<McpStatus[]>;
@@ -63,6 +71,8 @@ export interface AgentClient {
   createHook(hook: UserHookConfig): Promise<void>;
   updateHook(name: string, hook: UserHookConfig): Promise<void>;
   deleteHook(name: string): Promise<void>;
+  getPermissionMode(): Promise<PermissionMode>;
+  setPermissionMode(mode: PermissionMode): Promise<void>;
 }
 
 export async function* agentEventToStreamChunk(
@@ -295,6 +305,32 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       setMemoryEnabled(enabled);
     },
 
+    async getMemoryConfig() {
+      const { getAllTypesWithStatus, getMemoryConfig } = await import('../memory/config.js');
+      const cfg = getMemoryConfig();
+      return { enabled: cfg.enabled, types: getAllTypesWithStatus() };
+    },
+
+    async setTypeDisabled(name: string, disabled: boolean) {
+      const { setMemoryTypeDisabled } = await import('../memory/config.js');
+      setMemoryTypeDisabled(name, disabled);
+    },
+
+    async addExtraType(type: { name: string; description: string }) {
+      const { addMemoryExtraType } = await import('../memory/config.js');
+      addMemoryExtraType({ name: type.name, description: type.description, enabled: true });
+    },
+
+    async updateExtraType(name: string, type: { name: string; description: string }) {
+      const { updateMemoryExtraType } = await import('../memory/config.js');
+      updateMemoryExtraType(name, { name: type.name, description: type.description, enabled: true });
+    },
+
+    async deleteExtraType(name: string) {
+      const { deleteMemoryExtraType } = await import('../memory/config.js');
+      deleteMemoryExtraType(name);
+    },
+
     async getSubagentEnabled() {
       return getSubagentEnabledState();
     },
@@ -475,6 +511,14 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         hook.enabled = !disabled;
         writeHookConfigs(cwd, hooks);
       }
+    },
+
+    async getPermissionMode(): Promise<PermissionMode> {
+      return getGlobalPermissionMode();
+    },
+
+    async setPermissionMode(mode: PermissionMode): Promise<void> {
+      setGlobalPermissionMode(mode);
     },
   };
 }

@@ -6,6 +6,13 @@ import { listModels, switchModel, getOrCreateClient, deleteClient } from '../cor
 import { readUIHistory, deleteSession, listSessions } from '@codingcode/core'
 import type { Project } from '../../shared/types'
 
+// Maps desktop approvalPolicy to core PermissionMode
+const POLICY_TO_CORE_MODE: Record<string, 'default' | 'acceptEdits' | 'dontAsk'> = {
+  suggest: 'default',
+  'auto-edit': 'acceptEdits',
+  'full-auto': 'dontAsk',
+}
+
 export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle('agent:sendMessage', (_e, threadId: string, turnId: string, message: string, cwd?: string) => {
     const win = getMainWindow()
@@ -80,16 +87,22 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
     await switchModel(modelId)
   })
 
-  ipcMain.handle('agent:setApprovalPolicy', (_e, policy: 'suggest' | 'auto-edit' | 'full-auto') => {
+  ipcMain.handle('agent:setApprovalPolicy', async (_e, policy: 'suggest' | 'auto-edit' | 'full-auto') => {
     storeService.setApprovalPolicy(policy)
+    const { setGlobalPermissionMode } = await import('@codingcode/core')
+    setGlobalPermissionMode(POLICY_TO_CORE_MODE[policy] ?? 'default')
   })
 
   ipcMain.handle('agent:getSettings', async () => {
     const workspace = storeService.getWorkspace()
     const { activeId } = await listModels()
+    const policy = storeService.getApprovalPolicy()
+    // Sync persisted policy to core on every settings load (covers app restarts)
+    const { setGlobalPermissionMode } = await import('@codingcode/core')
+    setGlobalPermissionMode(POLICY_TO_CORE_MODE[policy] ?? 'default')
     return {
       activeModel: activeId ?? '',
-      approvalPolicy: storeService.getApprovalPolicy(),
+      approvalPolicy: policy,
       workspace,
       currentProjectId: storeService.getCurrentProjectId(),
     }

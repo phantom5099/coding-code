@@ -88,6 +88,20 @@ const api = {
   setHookDisabled: (name: string, disabled: boolean): Promise<void> =>
     ipcRenderer.invoke('settings:setHookDisabled', name, disabled),
 
+  // Settings (Memory)
+  getMemoryConfig: (): Promise<{ enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> }> =>
+    ipcRenderer.invoke('settings:getMemoryConfig'),
+  setMemoryEnabled: (enabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('settings:setMemoryEnabled', enabled),
+  setTypeDisabled: (name: string, disabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('settings:setTypeDisabled', name, disabled),
+  addExtraType: (type: { name: string; description: string }): Promise<void> =>
+    ipcRenderer.invoke('settings:addExtraType', type),
+  updateExtraType: (name: string, type: { name: string; description: string }): Promise<void> =>
+    ipcRenderer.invoke('settings:updateExtraType', name, type),
+  deleteExtraType: (name: string): Promise<void> =>
+    ipcRenderer.invoke('settings:deleteExtraType', name),
+
   // Events: main → renderer
   onFsChange: (cb: (payload: { path: string; type: 'add' | 'change' | 'unlink' }) => void) => {
     ipcRenderer.on('fs:change', (_e, payload) => cb(payload))

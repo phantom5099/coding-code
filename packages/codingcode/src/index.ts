@@ -27,6 +27,8 @@ export { Result } from './core/result.js';
 export { sendMessage } from './orchestration/index.js';
 export { AppLayer, AgentLayer, SessionLayer, ContextLayer, ToolLayer, HookLayer, McpLayer, SkillLayer, ApprovalLayer, CheckpointLayer } from './layer.js';
 export { ApprovalWaitService } from './approval/async-confirm.js';
+export { getGlobalPermissionMode, setGlobalPermissionMode } from './approval/index.js';
+export type { PermissionMode } from './approval/types.js';
 export { createServer } from './server/index.js';
 export { createDirectClient, agentEventToStreamChunk } from './client/direct.js';
 export type { AgentClient, StreamChunk } from './client/direct.js';

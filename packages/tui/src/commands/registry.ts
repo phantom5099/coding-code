@@ -18,6 +18,7 @@ export const COMMAND_REGISTRY = {
   subagent: { name: 'subagent', description: '查看/切换 Subagent', usage: '/subagent [on|off]', title: 'Subagent', quick: true },
   mcp:      { name: 'mcp',      description: '管理 MCP 服务器', usage: '/mcp',    title: 'MCP 服务器' },
   skill:    { name: 'skill',    description: '管理 Skill',    usage: '/skill',    title: 'Skill' },
+  approve:  { name: 'approve',  description: '切换工具审批模式', usage: '/approve', title: '审批模式' },
 } as const;
 
 export type CommandName = keyof typeof COMMAND_REGISTRY;

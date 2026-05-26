@@ -62,7 +62,7 @@ export const EXPLORE_PROFILE: SubagentProfile = {
   name: 'explore',
   description: 'Read-only code exploration: searching files, reading symbols, understanding structure. No writes.',
   systemPrompt: 'You are a read-only code exploration agent. Your role is to help explore and understand codebases through reading files, searching for symbols, and analyzing code structure. You can only read; you cannot write or modify files.',
-  tools: ['read_file', 'glob', 'search_code', 'web_fetch', 'tool_search'],
+  tools: ['read_file', 'search_files', 'search_code', 'fetch_url', 'tool_search'],
   readonly: true,
   maxSteps: 30,
 };
