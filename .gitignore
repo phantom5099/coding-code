@@ -8,3 +8,4 @@ packages/desktop/out/
 .claude/
 .codingcode/
 docs/
+typecheck-output.txt
