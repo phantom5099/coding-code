@@ -32,10 +32,12 @@ interface SessionListPopupProps {
   threads: Thread[]
   currentThreadId: string | null
   onSelectThread: (id: string) => void
+  onDeleteThread: (threadId: string) => void
 }
 
-function SessionListPopup({ project, threads, currentThreadId, onSelectThread }: SessionListPopupProps) {
+function SessionListPopup({ project, threads, currentThreadId, onSelectThread, onDeleteThread }: SessionListPopupProps) {
   const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
   return (
     <div className="absolute left-full top-0 ml-1 w-60 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg shadow-2xl z-50">
       <div className="px-3 py-2 border-b border-[#2a2a2a]">
@@ -44,13 +46,29 @@ function SessionListPopup({ project, threads, currentThreadId, onSelectThread }:
       <div className="max-h-80 overflow-y-auto py-1">
         {sorted.slice(0, 12).map((t) => (
           <button type="button" key={t.id} onClick={() => onSelectThread(t.id)}
+            onMouseEnter={() => setHoveredId(t.id)}
+            onMouseLeave={() => setHoveredId(null)}
             className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
               currentThreadId === t.id
                 ? 'bg-[#0d2d4a] text-[#cde]'
                 : 'text-[#888] hover:bg-[#252525] hover:text-[#ccc]'
             }`}>
             <span className="flex-1 text-[13px] truncate">{t.title || '未命名对话'}</span>
-            <span className="text-[11px] text-[#444] shrink-0">{relativeTime(t.updatedAt)}</span>
+            {hoveredId === t.id ? (
+              <button type="button" onClick={(e) => { e.stopPropagation(); onDeleteThread(t.id) }}
+                className="shrink-0 p-0.5 text-[#555] hover:text-red-400 transition-colors"
+                title="删除对话">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
+            ) : (
+              <span className="text-[11px] text-[#444] shrink-0">{relativeTime(t.updatedAt)}</span>
+            )}
           </button>
         ))}
         {sorted.length === 0 && (
@@ -77,6 +95,18 @@ export default function ProjectStrip() {
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread)
 
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+
+  const handleDelete = async (threadId: string) => {
+    await window.electronAPI?.deleteThread?.(threadId)
+    const updated = await window.electronAPI?.getThreads?.()
+    if (updated) {
+      const store = useGlobalStore.getState()
+      store.loadThreads(updated as Parameters<typeof store.loadThreads>[0])
+    }
+    if (threadId === currentThreadId) {
+      setCurrentThread(null)
+    }
+  }
 
   const handleSelectProject = (id: string) => {
     switchProject(id)
@@ -131,6 +161,7 @@ export default function ProjectStrip() {
                   setCurrentThread(tid)
                   setHoveredId(null)
                 }}
+                onDeleteThread={handleDelete}
               />
             )}
           </div>
