@@ -7,7 +7,6 @@ import { ToolExecutorService } from '../../src/tools/executor.js';
 import { sendMessage } from '../../src/orchestration/index.js';
 import { Result } from '../../src/core/result.js';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { TodoService } from '../../src/agent-state/todo.js';
 import { ToolSearchService } from '../../src/tools/tool-search-service.js';
 
 const mockState = {
@@ -84,9 +83,6 @@ describe('ContextService', () => {
 
     const { ToolLayer, HookLayer } = await import('../../src/layer.js');
 
-    const MockTodoLayer = Layer.succeed(TodoService, TodoService.of({
-      _tag: 'TodoService' as const, read: () => [], write: () => {}, reset: () => {},
-    }));
     const MockToolSearchLayer = Layer.succeed(ToolSearchService, ToolSearchService.of({
       _tag: 'ToolSearchService' as const, isLoaded: () => false, listLoaded: () => [],
       listUnloadedDeferred: () => [], search: () => [], reset: () => {},
@@ -100,7 +96,6 @@ describe('ContextService', () => {
       MockCheckpointLayer,
       MockSkillLayer,
       HookLayer,
-      MockTodoLayer,
       MockToolSearchLayer,
     );
 

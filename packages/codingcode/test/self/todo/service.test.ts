@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { sharedTodoStore, countByStatus } from '../../../src/agent-state/todo.js';
-import type { Todo } from '../../../src/agent-state/todo.js';
+import { sharedTodoStore, countByStatus } from '../../../src/self/todo.js';
+import type { Todo } from '../../../src/self/todo.js';
 
 describe('TodoService (module-level store)', () => {
   beforeEach(() => { sharedTodoStore.reset(); });
 
-  it('write then read returns full list including cancelled', () => {
+  it('write then read returns full list', () => {
     const plan: Todo[] = [
       { step: 'step 1', status: 'pending' },
-      { step: 'step 2', status: 'completed' },
-      { step: 'step 3', status: 'cancelled' },
+      { step: 'step 2', status: 'in_progress' },
+      { step: 'step 3', status: 'completed' },
     ];
     sharedTodoStore.write('agent-a', plan);
     const got = sharedTodoStore.read('agent-a');
@@ -42,8 +42,8 @@ describe('TodoService (module-level store)', () => {
       { step: 'a', status: 'pending' },
       { step: 'b', status: 'completed' },
       { step: 'c', status: 'pending' },
-      { step: 'd', status: 'cancelled' },
+      { step: 'd', status: 'in_progress' },
     ];
-    expect(countByStatus(plan)).toEqual({ pending: 2, completed: 1, cancelled: 1 });
+    expect(countByStatus(plan)).toEqual({ pending: 2, completed: 1, in_progress: 1 });
   });
 });

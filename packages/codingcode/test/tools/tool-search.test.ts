@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createToolSearchTool } from '../../src/tools/domains/agent-state/tool-search.js';
+import { createToolSearchTool } from '../../src/tools/domains/self/tool-search.js';
 
 describe('createToolSearchTool', () => {
   it('returns loaded tool list when matches found', async () => {

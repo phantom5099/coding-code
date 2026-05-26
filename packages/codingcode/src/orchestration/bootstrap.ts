@@ -16,9 +16,9 @@ import { searchTool } from '../tools/domains/fs/grep.js';
 import { globTool } from '../tools/domains/fs/glob.js';
 import { webFetchTool } from '../tools/domains/web/fetch.js';
 import { webSearchTool } from '../tools/domains/web/search.js';
-import { todoWriteTool } from '../tools/domains/agent-state/todo-write.js';
-import { todoReadTool } from '../tools/domains/agent-state/todo-read.js';
-import { createToolSearchTool } from '../tools/domains/agent-state/tool-search.js';
+import { todoWriteTool } from '../tools/domains/self/todo-write.js';
+import { todoReadTool } from '../tools/domains/self/todo-read.js';
+import { createToolSearchTool } from '../tools/domains/self/tool-search.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { loadAgentProfiles } from '../subagent/loader.js';
 

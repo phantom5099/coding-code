@@ -31,14 +31,14 @@ describe('formatEventForTransport with TodoUpdate', () => {
     expect(result).toBe(JSON.stringify({ type: 'todo_update', items: [] }));
   });
 
-  it('should handle cancelled status', () => {
+  it('should handle in_progress status', () => {
     const result = formatEventForTransport({
       _tag: 'TodoUpdate',
-      items: [{ step: 'deploy', status: 'cancelled' }],
+      items: [{ step: 'deploy', status: 'in_progress' }],
     } as any);
 
     expect(result).toBe(
-      JSON.stringify({ type: 'todo_update', items: [{ step: 'deploy', status: 'cancelled' }] }),
+      JSON.stringify({ type: 'todo_update', items: [{ step: 'deploy', status: 'in_progress' }] }),
     );
   });
 
