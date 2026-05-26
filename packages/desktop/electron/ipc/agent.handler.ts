@@ -7,7 +7,7 @@ import { readUIHistory, deleteSession, listSessions } from '@codingcode/core'
 export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle('agent:sendMessage', (_e, threadId: string, turnId: string, message: string, cwd?: string) => {
     const win = getMainWindow()
-    if (!win) return
+    if (!win) return ''
     const workspace = storeService.getWorkspace()
     const runCwd = cwd || workspace.rootPath || process.cwd()
     runAgent({ threadId, turnId, userMessage: message, cwd: runCwd, win }).catch((err) => {
@@ -15,6 +15,7 @@ export function registerAgentHandlers(getMainWindow: () => BrowserWindow | null)
         win.webContents.send('agent:done', { threadId, turnId, error: String(err) })
       }
     })
+    return runCwd
   })
 
   ipcMain.handle('agent:abort', (_e, threadId: string) => {

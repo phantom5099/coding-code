@@ -3,6 +3,10 @@ import { useGlobalStore } from '../stores/global.store'
 import type { ModelEntry } from '../stores/global.store'
 import type { Item, Turn } from '@shared/types'
 
+function normalizeCwd(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`)
+}
+
 function randomId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 11)
 }
@@ -14,6 +18,7 @@ export function useAgent() {
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread)
   const loadThreads = useGlobalStore((s) => s.loadThreads)
   const setThreadTurns = useGlobalStore((s) => s.setThreadTurns)
+  const setThreadCwd = useGlobalStore((s) => s.setThreadCwd)
   const setModel = useGlobalStore((s) => s.setModel)
   const setModels = useGlobalStore((s) => s.setModels)
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)
@@ -75,9 +80,13 @@ export function useAgent() {
       startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) })
       setCurrentThread(threadId)
       setContextUsage(null)
-      await window.electronAPI?.sendMessage?.(threadId, turnId, content, effectiveCwd)
+      const runCwd = await window.electronAPI?.sendMessage?.(threadId, turnId, content, effectiveCwd)
+      const normalizedRunCwd = runCwd ? normalizeCwd(runCwd) : undefined
+      if (normalizedRunCwd && normalizedRunCwd !== effectiveCwd) {
+        setThreadCwd(threadId, normalizedRunCwd)
+      }
     },
-    [startTurn, setCurrentThread, setContextUsage, workspace.rootPath]
+    [startTurn, setCurrentThread, setContextUsage, setThreadCwd, workspace.rootPath]
   )
 
   const abort = useCallback((threadId: string) => {

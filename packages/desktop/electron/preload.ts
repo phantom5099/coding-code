@@ -20,7 +20,7 @@ const api = {
   ptyKill: (id: string): Promise<void> => ipcRenderer.invoke('pty:kill', id),
 
   // Agent
-  sendMessage: (threadId: string, turnId: string, message: string, cwd?: string, attachments?: string[]): Promise<void> =>
+  sendMessage: (threadId: string, turnId: string, message: string, cwd?: string, attachments?: string[]): Promise<string> =>
     ipcRenderer.invoke('agent:sendMessage', threadId, turnId, message, cwd, attachments),
   abortAgent: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:abort', threadId),
   approveTool: (threadId: string, callId: string): Promise<void> => ipcRenderer.invoke('agent:approveTool', threadId, callId),

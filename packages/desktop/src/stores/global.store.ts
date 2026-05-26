@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type { FileNode, GitStatus, Item, OpenFile, Project, TerminalSession, Thread, Turn } from '@shared/types'
 
+function normalizeCwd(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`)
+}
+
 export interface ModelEntry {
   id: string
   name: string
@@ -80,6 +84,7 @@ interface GlobalActions {
   setCurrentThread: (id: string | null) => void
   upsertThread: (thread: Thread) => void
   setThreadTurns: (threadId: string, turns: Turn[]) => void
+  setThreadCwd: (threadId: string, cwd: string) => void
   setApprovalPolicy: (policy: AgentState['approvalPolicy']) => void
   setModel: (model: string) => void
   setModels: (models: ModelEntry[]) => void
@@ -144,7 +149,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     setRightPanelWidth: (w) => set((s) => { s.ui.rightPanelWidth = w }),
     setBottomPanelHeight: (h) => set((s) => { s.ui.bottomPanelHeight = h }),
     setIdeSidebarView: (view) => set((s) => { s.ui.ideSidebarView = view }),
-    setWorkspace: (rootPath, name) => set((s) => { s.workspace.rootPath = rootPath; s.workspace.name = name }),
+    setWorkspace: (rootPath, name) => set((s) => { s.workspace.rootPath = normalizeCwd(rootPath); s.workspace.name = name }),
     setProjects: (projects) => set((s) => { s.workspace.projects = projects }),
     setCurrentProject: (id) => set((s) => { s.workspace.currentProjectId = id }),
     setFileTree: (tree) => set((s) => { s.files.tree = tree }),
@@ -175,6 +180,10 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       const thread = s.agent.threads[threadId]
       if (thread) thread.turns = turns
     }),
+    setThreadCwd: (threadId, cwd) => set((s) => {
+      const thread = s.agent.threads[threadId]
+      if (thread) thread.cwd = cwd
+    }),
     setApprovalPolicy: (policy) => set((s) => { s.agent.approvalPolicy = policy }),
     setModel: (model) => set((s) => { s.agent.model = model }),
     setModels: (models) => set((s) => { s.agent.models = models }),
@@ -204,7 +213,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           id: threadId,
           projectId: '',
           title: meta?.title ?? 'New Conversation',
-          cwd: meta?.cwd ?? '',
+          cwd: meta?.cwd ? normalizeCwd(meta.cwd) : '',
           turns: [turn],
           createdAt: Date.now(),
           updatedAt: Date.now(),

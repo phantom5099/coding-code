@@ -166,6 +166,74 @@ describe('global store - loadThreads', () => {
   })
 })
 
+describe('global store - path normalization', () => {
+  it('setWorkspace normalizes Windows backslash path', () => {
+    useGlobalStore.getState().setWorkspace('C:\\Users\\10116\\Desktop', 'Desktop')
+    expect(useGlobalStore.getState().workspace.rootPath).toBe('c:/Users/10116/Desktop')
+    expect(useGlobalStore.getState().workspace.name).toBe('Desktop')
+  })
+
+  it('setWorkspace normalizes uppercase drive letter', () => {
+    useGlobalStore.getState().setWorkspace('D:/Projects/foo', 'foo')
+    expect(useGlobalStore.getState().workspace.rootPath).toBe('d:/Projects/foo')
+  })
+
+  it('setWorkspace leaves already-normalized path unchanged', () => {
+    useGlobalStore.getState().setWorkspace('c:/users/foo', 'foo')
+    expect(useGlobalStore.getState().workspace.rootPath).toBe('c:/users/foo')
+  })
+
+  it('startTurn normalizes cwd so it matches backend format', () => {
+    const threadId = 'thread-norm'
+    useGlobalStore.getState().startTurn(
+      threadId,
+      { id: 'turn-1', items: [], status: 'running' },
+      { cwd: 'C:\\Users\\10116\\Desktop', title: 'test' },
+    )
+    expect(useGlobalStore.getState().agent.threads[threadId].cwd).toBe('c:/Users/10116/Desktop')
+  })
+
+  it('normalized workspace cwd and normalized thread cwd are equal → single group', () => {
+    useGlobalStore.getState().setWorkspace('C:\\Users\\10116\\Desktop', 'Desktop')
+    useGlobalStore.getState().startTurn(
+      'thread-group',
+      { id: 'turn-1', items: [], status: 'running' },
+      { cwd: 'C:\\Users\\10116\\Desktop' },
+    )
+    const { rootPath } = useGlobalStore.getState().workspace
+    const { cwd } = useGlobalStore.getState().agent.threads['thread-group']
+    expect(cwd).toBe(rootPath)
+  })
+})
+
+describe('global store - setThreadCwd', () => {
+  it('updates cwd of an existing thread', () => {
+    const threadId = 'thread-cwd'
+    useGlobalStore.getState().startTurn(threadId, { id: 'turn-1', items: [], status: 'running' }, { cwd: '' })
+
+    expect(useGlobalStore.getState().agent.threads[threadId].cwd).toBe('')
+
+    useGlobalStore.getState().setThreadCwd(threadId, '/actual/path')
+
+    expect(useGlobalStore.getState().agent.threads[threadId].cwd).toBe('/actual/path')
+  })
+
+  it('does nothing when thread does not exist', () => {
+    expect(() => useGlobalStore.getState().setThreadCwd('nonexistent', '/path')).not.toThrow()
+  })
+
+  it('cwd updated by setThreadCwd survives a loadThreads call that preserves running threads', () => {
+    const threadId = 'thread-cwd2'
+    useGlobalStore.getState().startTurn(threadId, { id: 'turn-1', items: [], status: 'running' }, { cwd: '' })
+    useGlobalStore.getState().setThreadCwd(threadId, '/actual/path')
+
+    // Backend hasn't persisted the running thread yet — returns empty list
+    useGlobalStore.getState().loadThreads([])
+
+    expect(useGlobalStore.getState().agent.threads[threadId].cwd).toBe('/actual/path')
+  })
+})
+
 describe('global store - per-thread isStreaming derivation', () => {
   it('thread A running does not affect thread B isStreaming', () => {
     const threadA = 'thread-a'
