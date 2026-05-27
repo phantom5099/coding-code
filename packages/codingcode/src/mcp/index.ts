@@ -1,20 +1,92 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { loadMcpConfig } from './config';
-import { McpClient, McpError } from './client';
-import type { McpStatus } from './types';
-import type { ToolDefinition, ToolExecCtx } from '../tools/types';
-import { ToolService } from '../tools/registry';
+import { loadMcpConfig } from './config.js';
+import { McpClient, McpError } from './client.js';
+import type { McpServerConfig, McpStatus } from './types.js';
+import type { ToolDefinition, ToolExecCtx } from '../tools/types.js';
+import { ToolService } from '../tools/registry.js';
 
 export { McpError, McpClient };
 export type { McpStatus };
 
+interface ServerEntry {
+  client: McpClient;
+  config: McpServerConfig;
+  toolNames: string[];
+  refCount: number;
+}
+
 export class McpService extends Effect.Service<McpService>()('Mcp', {
   effect: Effect.gen(function* () {
     const tools = yield* ToolService;
-    const clients = new Map<string, McpClient>();
+    const clients = new Map<string, ServerEntry>();
     const _disabled = new Set<string>();
-    const registeredTools = new Map<string, string[]>();
+
+    function namespacedName(serverName: string, toolName: string): string {
+      return `${serverName}:${toolName}`;
+    }
+
+    function doConnect(cfg: McpServerConfig, bumpRef: boolean): Effect.Effect<string[]> {
+      return Effect.gen(function* () {
+        const existing = clients.get(cfg.name);
+        if (existing) {
+          if (bumpRef) existing.refCount++;
+          return existing.toolNames;
+        }
+
+        const result = yield* Effect.tryPromise(async () => {
+          const client = new McpClient(cfg);
+          await client.connect();
+          const mcpTools = await client.listTools();
+          return { client, mcpTools };
+        }).pipe(
+          Effect.catchAll((err) => {
+            console.error(`[MCP] Failed to connect to '${cfg.name}': ${String(err)}`);
+            return Effect.succeed(undefined);
+          }),
+        );
+
+        if (!result) return [];
+
+        const registeredNames: string[] = [];
+        for (const mt of result.mcpTools) {
+          const nsName = namespacedName(cfg.name, mt.name);
+          yield* tools.register(mcpToolToDefinition(cfg.name, mt, result.client, _disabled));
+          registeredNames.push(nsName);
+        }
+
+        clients.set(cfg.name, {
+          client: result.client,
+          config: cfg,
+          toolNames: registeredNames,
+          refCount: bumpRef ? 1 : 0,
+        });
+
+        return registeredNames;
+      });
+    }
+
+    function doDisconnect(name: string, force: boolean): Effect.Effect<void> {
+      return Effect.gen(function* () {
+        const entry = clients.get(name);
+        if (!entry) return;
+
+        if (!force) {
+          entry.refCount--;
+          if (entry.refCount > 0) return;
+        }
+
+        for (const toolName of entry.toolNames) {
+          yield* tools.unregister(toolName);
+        }
+
+        yield* Effect.tryPromise(() => entry.client.disconnect()).pipe(
+          Effect.catchAll(() => Effect.succeed(undefined)),
+        );
+
+        clients.delete(name);
+      });
+    }
 
     return {
       syncConnections: (projectRoot: string): Effect.Effect<void> =>
@@ -22,54 +94,54 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
           const configs = loadMcpConfig(projectRoot);
           const configNames = new Set(configs.map(c => c.name));
 
-          // Disconnect and unregister removed servers
-          for (const [name] of clients) {
+          // Force disconnect removed servers
+          for (const [name, entry] of clients) {
             if (!configNames.has(name)) {
-              for (const toolName of registeredTools.get(name) ?? []) {
-                yield* tools.unregister(toolName);
-              }
-              registeredTools.delete(name);
-              yield* Effect.tryPromise(() => clients.get(name)!.disconnect()).pipe(
-                Effect.catchAll(() => Effect.succeed(undefined)),
-              );
-              clients.delete(name);
+              yield* doDisconnect(name, true);
             }
           }
 
-          // Connect new servers
+          // Connect new servers (no refCount bump for existing)
           for (const cfg of configs) {
-            if (clients.has(cfg.name)) continue;
-            const result = yield* Effect.tryPromise(async () => {
-              const client = new McpClient(cfg);
-              await client.connect();
-              const mcpTools = await client.listTools();
-              return { client, mcpTools };
-            }).pipe(
-              Effect.catchAll((err) => {
-                console.error(`[MCP] Failed to connect to '${cfg.name}': ${String(err)}`);
-                return Effect.succeed(undefined);
-              }),
-            );
-            if (!result) continue;
-            clients.set(cfg.name, result.client);
-            const names: string[] = [];
-            for (const mt of result.mcpTools) {
-              yield* tools.register(mcpToolToDefinition(cfg.name, mt, result.client, _disabled));
-              names.push(mt.name);
-            }
-            registeredTools.set(cfg.name, names);
+            yield* doConnect(cfg, false);
           }
         }),
 
+      connectServers: (names: string[], projectRoot: string): Effect.Effect<void> =>
+        Effect.gen(function* () {
+          const configs = loadMcpConfig(projectRoot);
+          const configMap = new Map(configs.map(c => [c.name, c]));
+
+          for (const name of names) {
+            const cfg = configMap.get(name);
+            if (!cfg) {
+              console.warn(`[MCP] Server '${name}' not found in mcp.yaml, skipping`);
+              continue;
+            }
+            yield* doConnect(cfg, true);
+          }
+        }),
+
+      disconnectServers: (names: string[]): Effect.Effect<void> =>
+        Effect.gen(function* () {
+          for (const name of names) {
+            yield* doDisconnect(name, false);
+          }
+        }),
+
+      getServerToolNames: (name: string): string[] => {
+        const entry = clients.get(name);
+        return entry ? [...entry.toolNames] : [];
+      },
+
       disconnectAll: (): Effect.Effect<void> =>
         Effect.gen(function* () {
-          for (const [, client] of clients) {
-            yield* Effect.tryPromise(() => client.disconnect()).pipe(
+          for (const [, entry] of clients) {
+            yield* Effect.tryPromise(() => entry.client.disconnect()).pipe(
               Effect.catchAll(() => Effect.succeed(undefined)),
             );
           }
           clients.clear();
-          registeredTools.clear();
         }),
 
       disable: (name: string): Effect.Effect<void> =>
@@ -80,12 +152,12 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
 
       status: (): Effect.Effect<McpStatus[]> =>
         Effect.sync(() =>
-          Array.from(clients.entries()).map(([name, client]) => ({
+          Array.from(clients.entries()).map(([name, entry]) => ({
             name,
-            connected: client.connected,
+            connected: entry.client.connected,
             disabled: _disabled.has(name),
-            toolCount: client.tools.length,
-            transport: client.transportType,
+            toolCount: entry.client.tools.length,
+            transport: entry.client.transportType,
             reconnectAttempts: 0,
           })),
         ),
@@ -100,7 +172,7 @@ function mcpToolToDefinition(
   disabled: Set<string>,
 ): ToolDefinition {
   return {
-    name: mcpTool.name,
+    name: `${serverName}:${mcpTool.name}`,
     description: `[MCP:${serverName}] ${mcpTool.description || mcpTool.name}`,
     parameters: z.object({}).passthrough(),
     jsonSchema: mcpTool.inputSchema,

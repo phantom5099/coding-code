@@ -67,6 +67,35 @@ System prompt.`;
     expect(results[0].tools).toEqual(['read_file', 'write_file', 'bash']);
   });
 
+  it('should parse mcpServers array', () => {
+    const profile = `---
+name: mcp-agent
+description: Agent with MCP servers
+mcpServers: [postgres, redis]
+---
+System prompt.`;
+
+    writeFileSync(join(testDir, '.codingcode', 'agents', 'mcp.md'), profile);
+
+    const results = loadAgentProfiles(testDir);
+    expect(results).toHaveLength(1);
+    expect(results[0].mcpServers).toEqual(['postgres', 'redis']);
+  });
+
+  it('should leave mcpServers undefined when not specified', () => {
+    const profile = `---
+name: no-mcp-agent
+description: Agent without MCP
+---
+System prompt.`;
+
+    writeFileSync(join(testDir, '.codingcode', 'agents', 'no-mcp.md'), profile);
+
+    const results = loadAgentProfiles(testDir);
+    expect(results).toHaveLength(1);
+    expect(results[0].mcpServers).toBeUndefined();
+  });
+
   it('should skip files without name or description', () => {
     const profile = `---
 description: Missing name
@@ -215,6 +244,7 @@ describe('writeAgentProfile', () => {
       description: 'Full agent',
       systemPrompt: 'You are full.',
       tools: ['read_file', 'glob'],
+      mcpServers: ['postgres', 'redis'],
       readonly: true,
       maxSteps: 50,
       model: 'sonnet',
@@ -222,6 +252,7 @@ describe('writeAgentProfile', () => {
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
     expect(results[0].tools).toEqual(['read_file', 'glob']);
+    expect(results[0].mcpServers).toEqual(['postgres', 'redis']);
     expect(results[0].readonly).toBe(true);
     expect(results[0].maxSteps).toBe(50);
     expect(results[0].model).toBe('sonnet');

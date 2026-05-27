@@ -17,6 +17,9 @@ const sandboxLayer = Layer.succeed(SandboxService, {
 
 const mcpLayer = Layer.succeed(McpService, {
   syncConnections: (_: string) => Effect.void,
+  connectServers: (_names: string[], _root: string) => Effect.void,
+  disconnectServers: (_names: string[]) => Effect.void,
+  getServerToolNames: (_name: string) => [],
   disconnectAll: () => Effect.void,
   status: () => Effect.succeed([]),
 } as any);

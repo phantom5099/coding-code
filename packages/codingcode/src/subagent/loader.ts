@@ -80,6 +80,7 @@ export function loadAgentProfiles(projectCwd: string): SubagentProfile[] {
           description,
           systemPrompt: body || 'You are a specialized agent.',
           tools: Array.isArray(frontmatter.tools) ? frontmatter.tools.map(String) : undefined,
+          mcpServers: Array.isArray(frontmatter.mcpServers) ? frontmatter.mcpServers.map(String) : undefined,
           readonly: Boolean(frontmatter.readonly),
           maxSteps: typeof frontmatter.maxSteps === 'number' ? frontmatter.maxSteps : undefined,
           model: typeof frontmatter.model === 'string' ? frontmatter.model : undefined,
@@ -103,6 +104,9 @@ function serializeAgentProfile(profile: SubagentProfile): string {
   fm.push(`description: ${profile.description}`);
   if (profile.tools && profile.tools.length > 0) {
     fm.push(`tools: ${JSON.stringify(profile.tools)}`);
+  }
+  if (profile.mcpServers && profile.mcpServers.length > 0) {
+    fm.push(`mcpServers: ${JSON.stringify(profile.mcpServers)}`);
   }
   if (profile.readonly) fm.push(`readonly: true`);
   if (profile.maxSteps !== undefined) fm.push(`maxSteps: ${profile.maxSteps}`);

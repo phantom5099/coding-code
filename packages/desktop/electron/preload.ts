@@ -63,7 +63,7 @@ const api = {
     ipcRenderer.invoke('settings:getSkills'),
   setSkillDisabled: (name: string, disabled: boolean): Promise<void> =>
     ipcRenderer.invoke('settings:setSkillDisabled', name, disabled),
-  getAgents: (): Promise<{name: string; description: string; tools?: string[]; readonly?: boolean; maxSteps?: number; model?: string; disabled?: boolean}[]> =>
+  getAgents: (): Promise<{name: string; description: string; tools?: string[]; mcpServers?: string[]; readonly?: boolean; maxSteps?: number; model?: string; disabled?: boolean}[]> =>
     ipcRenderer.invoke('settings:getAgents'),
   getSubagentEnabled: (): Promise<boolean> =>
     ipcRenderer.invoke('settings:getSubagentEnabled'),

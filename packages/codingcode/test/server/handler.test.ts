@@ -7,6 +7,7 @@ import { SessionService } from '../../src/session/store.js';
 import { ContextService } from '../../src/context/context.js';
 import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
+import { McpService } from '../../src/mcp/index.js';
 import { Result } from '../../src/core/result.js';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
 import { ToolSearchService } from '../../src/tools/tool-search-service.js';
@@ -105,6 +106,15 @@ const MockToolSearchLayer = Layer.succeed(ToolSearchService, ToolSearchService.o
   listUnloadedDeferred: () => [], search: () => [], reset: () => {},
 }));
 
+const MockMcpLayer = Layer.succeed(McpService, {
+  syncConnections: () => Effect.void,
+  connectServers: () => Effect.void,
+  disconnectServers: () => Effect.void,
+  getServerToolNames: () => [],
+  disconnectAll: () => Effect.void,
+  status: () => Effect.succeed([]),
+} as any);
+
 const AllDeps = Layer.mergeAll(
   MockToolExecutorLayer,
   ToolLayer,
@@ -114,6 +124,7 @@ const AllDeps = Layer.mergeAll(
   MockSkillLayer,
   HookLayer,
   MockToolSearchLayer,
+  MockMcpLayer,
 );
 
 const TestLayer = Layer.mergeAll(
