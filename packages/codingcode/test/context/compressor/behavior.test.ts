@@ -9,7 +9,7 @@ import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
 
 interface FixtureOptions {
   numTurns: number;
@@ -50,7 +50,8 @@ function makeFixture(opts: FixtureOptions) {
   return { sessionId, slug, dir, transcriptPath, indexPath };
 }
 
-function cleanup(dir: string) {
+function cleanup(slug: string) {
+  const dir = join(PROJECT_BASE, slug);
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
 }
 
@@ -66,7 +67,7 @@ function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
   return {
     defaultMaxTokens: 1000,
     reservedTokens: 0,
-    thresholds: { budgetReduction: 0.1, prune: 0.2, compaction: 0.5 },
+    thresholds: { prune: 0.2, compaction: 0.5 },
     pruneProtectedTokens: 100,
     pruneMinRelease: 1,
     toolsExemptFromPrune: [],
@@ -76,16 +77,13 @@ function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
     compactionModel: '',
     archiveTtlDays: 30,
     checkpointKeep: 50,
-    thresholdTokens: 2000,
-    truncateKeepHeadLines: 5,
-    truncateKeepTailLines: 15,
-    persistPreviewChars: 2000,
-    persistableTools: ['execute_command', 'fetch_url'],
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
     snipMaxMessages: 100,
     snipKeepHead: 3,
     microKeepRecentTools: 5,
+    persistPreviewChars: 2000,
+    thresholdTokens: 2000,
     ...overrides,
   };
 }
@@ -107,33 +105,33 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 3, toolContentSize: 4000 });
       try {
         const cfg = tinyConfig({ prefixTurnsProtected: 2, pruneProtectedTokens: 0 });
-        await run(fx.sessionId, 10000, null, cfg);
+        await run(fx.sessionId, PROJECT_BASE, fx.slug, 10000, null, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.filter((s) => s.method === 'prune')).toHaveLength(0);
-      } finally { cleanup(fx.dir); }
+      } finally { cleanup(fx.slug); }
     });
 
     it('respects pruneProtectedTokens window (recent tools by token budget)', async () => {
       const fx = makeFixture({ numTurns: 5, toolContentSize: 4000 });
       try {
         const cfg = tinyConfig({ prefixTurnsProtected: 0, pruneProtectedTokens: 3000 });
-        await run(fx.sessionId, 100000, null, cfg);
+        await run(fx.sessionId, PROJECT_BASE, fx.slug, 100000, null, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         const pruneSummaries = summaries.filter((s) => s.method === 'prune');
         // Only old tools (turn 1, 2) should be pruned; recent tools (3, 4, 5) protected by token budget.
         // Each prune summary replaces one tool_result uuid
         expect(pruneSummaries.length).toBeGreaterThanOrEqual(0);
-      } finally { cleanup(fx.dir); }
+      } finally { cleanup(fx.slug); }
     });
 
     it('skips whitelisted tools', async () => {
       const fx = makeFixture({ numTurns: 5, toolContentSize: 4000, toolName: 'Read' });
       try {
         const cfg = tinyConfig({ prefixTurnsProtected: 0, pruneProtectedTokens: 0, toolsExemptFromPrune: ['Read'] });
-        await run(fx.sessionId, 100000, null, cfg);
+        await run(fx.sessionId, PROJECT_BASE, fx.slug, 100000, null, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.filter((s) => s.method === 'prune')).toHaveLength(0);
-      } finally { cleanup(fx.dir); }
+      } finally { cleanup(fx.slug); }
     });
   });
 
@@ -149,12 +147,12 @@ describe('compressor behavior', () => {
           keepRecentTurns: 2,
         });
         const llm = makeMockLLM('## Compacted History\n\n### Goal\nx\n\n### Instructions\ny\n\n### Discoveries\nz\n\n### Accomplished\nw\n\n### Relevant Files\nv');
-        const result = await run(fx.sessionId, 100000, llm, cfg);
+        const result = await run(fx.sessionId, PROJECT_BASE, fx.slug, 100000, llm, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         const compactionSummaries = summaries.filter((s) => s.method === 'auto-compact');
         expect(compactionSummaries.length).toBe(1);
         expect(result.didCompress).toBe(true);
-      } finally { cleanup(fx.dir); }
+      } finally { cleanup(fx.slug); }
     });
   });
 
@@ -165,13 +163,13 @@ describe('compressor behavior', () => {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
         const summary = '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
-        await compactWithLLM(fx.sessionId, cfg, llm);
+        await compactWithLLM(fx.sessionId, PROJECT_BASE, fx.slug, cfg, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
         const compactionSummaries = summaries.filter((s) => s.method === 'auto-compact');
         expect(compactionSummaries.length).toBe(1);
         expect(compactionSummaries[0]!.summaryText).toContain('### Goal');
         expect(compactionSummaries[0]!.replaces.length).toBeGreaterThan(0);
-      } finally { cleanup(fx.dir); }
+      } finally { cleanup(fx.slug); }
     });
 
     it('skips L5 when not enough turns to satisfy minTurnsBetweenCompactions', async () => {
@@ -179,22 +177,22 @@ describe('compressor behavior', () => {
       try {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 5, keepRecentTurns: 1 });
         const llm = makeMockLLM('summary');
-        const result = await compactWithLLM(fx.sessionId, cfg, llm);
+        const result = await compactWithLLM(fx.sessionId, PROJECT_BASE, fx.slug, cfg, llm);
         expect(result.didCompress).toBe(false);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
-      } finally { cleanup(fx.dir); }
+      } finally { cleanup(fx.slug); }
     });
 
     it('returns no-op when no LLM available', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
-        const result = await compactWithLLM(fx.sessionId, cfg, null);
+        const result = await compactWithLLM(fx.sessionId, PROJECT_BASE, fx.slug, cfg, null);
         expect(result.didCompress).toBe(false);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
-      } finally { cleanup(fx.dir); }
+      } finally { cleanup(fx.slug); }
     });
   });
 
@@ -204,13 +202,39 @@ describe('compressor behavior', () => {
       try {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
         const llm = makeMockLLM('## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne');
-        await compactWithLLM(fx.sessionId, cfg, llm);
+        await compactWithLLM(fx.sessionId, PROJECT_BASE, fx.slug, cfg, llm);
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
         expect(summaries[0]!.method).toBe('auto-compact');
         expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
-      } finally { cleanup(fx.dir); }
+      } finally { cleanup(fx.slug); }
+    });
+  });
+
+  describe('L1 persist (applyToolResultBudget)', () => {
+    it('persists large tool results to disk', async () => {
+      const fx = makeFixture({ numTurns: 1, toolContentSize: 5000, toolName: 'bash' });
+      try {
+        const cfg = tinyConfig({ thresholdTokens: 100, persistPreviewChars: 100 });
+        const result = await run(fx.sessionId, PROJECT_BASE, fx.slug, 1000, null, cfg);
+        const summaries = readSummaryEvents(fx.transcriptPath);
+        const persistSummaries = summaries.filter((s) => s.method === 'collapse-llm');
+        expect(persistSummaries.length).toBe(1);
+        expect(persistSummaries[0]!.summaryText).toContain('persisted at:');
+        expect(result.released).toBeGreaterThan(0);
+      } finally { cleanup(fx.slug); }
+    });
+
+    it('does not persist small tool results', async () => {
+      const fx = makeFixture({ numTurns: 1, toolContentSize: 10, toolName: 'bash' });
+      try {
+        const cfg = tinyConfig({ thresholdTokens: 100 });
+        await run(fx.sessionId, PROJECT_BASE, fx.slug, 1000, null, cfg);
+        const summaries = readSummaryEvents(fx.transcriptPath);
+        const persistSummaries = summaries.filter((s) => s.method === 'collapse-llm');
+        expect(persistSummaries).toHaveLength(0);
+      } finally { cleanup(fx.slug); }
     });
   });
 });

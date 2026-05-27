@@ -4,7 +4,6 @@ import { homedir } from 'os';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export interface ContextThresholdsConfig {
-  budgetReduction: number;
   prune: number;
   compaction: number;
 }
@@ -26,15 +25,12 @@ export interface ContextConfig {
   archiveTtlDays: number;
   checkpointKeep: number;
   thresholdTokens: number;
-  truncateKeepHeadLines: number;
-  truncateKeepTailLines: number;
-  persistPreviewChars: number;
-  persistableTools: string[];
   reactiveCompactMaxRetries: number;
   reactiveCompactKeepTurns: number;
   snipMaxMessages: number;
   snipKeepHead: number;
   microKeepRecentTools: number;
+  persistPreviewChars: number;
 }
 
 export interface MemoryTypeConfig {
@@ -76,7 +72,7 @@ export interface AppConfig {
 const DEFAULT_CONTEXT: ContextConfig = {
   defaultMaxTokens: 200000,
   reservedTokens: 20000,
-  thresholds: { budgetReduction: 0.6, prune: 0.7, compaction: 0.9 },
+  thresholds: { prune: 0.7, compaction: 0.9 },
   pruneProtectedTokens: 40000,
   pruneMinRelease: 20000,
   toolsExemptFromPrune: ['Read', 'todo_write', 'todo_read', 'tool_search'],
@@ -86,16 +82,13 @@ const DEFAULT_CONTEXT: ContextConfig = {
   compactionModel: '',
   archiveTtlDays: 30,
   checkpointKeep: 50,
-  thresholdTokens: 2000,
-  truncateKeepHeadLines: 5,
-  truncateKeepTailLines: 15,
-  persistPreviewChars: 2000,
-  persistableTools: ['execute_command', 'fetch_url'],
   reactiveCompactMaxRetries: 1,
   reactiveCompactKeepTurns: 3,
   snipMaxMessages: 100,
   snipKeepHead: 3,
   microKeepRecentTools: 5,
+  persistPreviewChars: 2000,
+  thresholdTokens: 2000,
 };
 
 export const DEFAULT_MEMORY_TYPES: MemoryTypeConfig[] = [

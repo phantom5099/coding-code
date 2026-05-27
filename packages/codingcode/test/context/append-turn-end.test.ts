@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { estimateTokensForContent } from '../../src/context/utils/tokens.js';
 import { getContextConfig } from '../../src/context/config.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
 
 describe('appendTurnEnd', () => {
   const projectSlug = randomUUID();
@@ -20,7 +20,7 @@ describe('appendTurnEnd', () => {
   });
 
   afterEach(() => {
-    const dir = join(PROJECT_BASE, projectSlug, 'sessions');
+    const dir = join(PROJECT_BASE, projectSlug);
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
@@ -52,7 +52,6 @@ describe('appendTurnEnd', () => {
 
   it('compression thresholds have sensible defaults', () => {
     const config = getContextConfig();
-    expect(config.thresholds.budgetReduction).toBeGreaterThan(0);
     expect(config.thresholds.prune).toBeGreaterThan(0);
     expect(config.thresholds.compaction).toBeGreaterThan(0);
   });

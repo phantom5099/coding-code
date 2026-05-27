@@ -1,10 +1,14 @@
 import { Effect } from 'effect';
+import { join } from 'path';
+import { homedir } from 'os';
 import type { Message } from '../core/types.js';
 import { getContextConfig, type ContextConfig } from './config.js';
 import { run, compactWithLLM, type CompressResult } from './compressor/index.js';
 import { assemblePayload } from './organizer.js';
 import { findSessionIndex } from '../session/store.js';
 import type { LLMClient } from '../llm/client.js';
+
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 export class ContextService extends Effect.Service<ContextService>()('Context', {
   effect: Effect.gen(function* () {
@@ -16,13 +20,13 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
        * count tokens. The Compressor itself does the precise accounting when
        * it actually needs to act.
        */
-      appendTurnEnd: (sessionId: string, llm: LLMClient | null = null, config?: ContextConfig): Effect.Effect<CompressResult> =>
+      appendTurnEnd: (sessionId: string, encodedProjectPath: string, llm: LLMClient | null = null, config?: ContextConfig): Effect.Effect<CompressResult> =>
         Effect.promise(async () => {
           const cfg = config ?? getContextConfig();
           const idx = findSessionIndex(sessionId);
           const usage = idx?.tokenCountEstimate ?? 0;
-          if (usage > cfg.defaultMaxTokens * cfg.thresholds.budgetReduction) {
-            return await run(sessionId, usage, llm, cfg);
+          if (usage > cfg.defaultMaxTokens * cfg.thresholds.prune) {
+            return await run(sessionId, PROJECT_BASE, encodedProjectPath, usage, llm, cfg);
           }
           return { didCompress: false, released: 0 };
         }),
@@ -40,10 +44,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
           return assemblePayload(sessionId, encodedProjectPath, pendingUser ?? null, pinned, cfg);
         }),
 
-      compress: (sessionId: string, llm: LLMClient | null = null, config?: ContextConfig): Effect.Effect<CompressResult> =>
+      compress: (sessionId: string, encodedProjectPath: string, llm: LLMClient | null = null, config?: ContextConfig): Effect.Effect<CompressResult> =>
         Effect.promise(async () => {
           const cfg = config ?? getContextConfig();
-          return await compactWithLLM(sessionId, cfg, llm);
+          return await compactWithLLM(sessionId, PROJECT_BASE, encodedProjectPath, cfg, llm);
         }),
     };
   }),

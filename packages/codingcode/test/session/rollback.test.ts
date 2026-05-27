@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { buildMessages } from '../../src/session/store.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
 
 function makeFixture(sessionId: string, slug: string) {
   const dir = join(PROJECT_BASE, slug, 'sessions');
@@ -59,7 +59,7 @@ describe('rollback and undo', () => {
       const messages = buildMessages(fx.transcriptPath);
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toEqual(['hello']);
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
   it('undoLastHide restores the view after rollback', () => {
@@ -83,7 +83,7 @@ describe('rollback and undo', () => {
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       // All messages should be restored
       expect(userContents).toEqual(['hello', 'do stuff', 'done']);
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
   it('view is byte-level consistent after rollback + undo', () => {
@@ -105,6 +105,6 @@ describe('rollback and undo', () => {
 
       const after = buildMessages(fx.transcriptPath);
       expect(after).toEqual(before);
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 });

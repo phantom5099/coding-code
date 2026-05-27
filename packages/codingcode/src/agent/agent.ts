@@ -175,7 +175,7 @@ export async function* runReActLoop(
       if (!llmResult.ok) {
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
           const aggressiveConfig = { ...config, keepRecentTurns: config.reactiveCompactKeepTurns };
-          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, null, aggressiveConfig));
+          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, null, aggressiveConfig));
           yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released };
           overflow = true;
           break;
@@ -274,7 +274,7 @@ export async function* runReActLoop(
 
     // Turn completed — snapshot and compact
     checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
-    await Effect.runPromise(ctx.appendTurnEnd(state.sessionId, llm as any));
+    await Effect.runPromise(ctx.appendTurnEnd(state.sessionId, state.projectPath, llm as any));
 
     // Fire-and-forget memory flush
     flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));

@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { buildMessages } from '../../src/session/store.js';
 import type { SessionIndex } from '../../src/session/types.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
 
 function makeFixture(sessionId: string, slug: string) {
   const dir = join(PROJECT_BASE, slug, 'sessions');
@@ -55,7 +55,7 @@ describe('hideMessage and unhide', () => {
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toEqual(['hello', 'correct message']);
       expect(userContents).not.toContain('oops wrong message');
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
   it('unhide restores the hidden message', () => {
@@ -77,7 +77,7 @@ describe('hideMessage and unhide', () => {
       const messages = buildMessages(fx.transcriptPath);
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toEqual(['hello', 'oops wrong message', 'correct message']);
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
   it('hiding an assistant message also removes it', () => {
@@ -94,6 +94,6 @@ describe('hideMessage and unhide', () => {
       const assistantContents = messages.filter((m) => m.role === 'assistant').map((m) => m.content);
       expect(assistantContents).toEqual(['hi', 'got it']);
       expect(assistantContents).not.toContain('ok');
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 });

@@ -7,7 +7,7 @@ import { run } from '../../../src/context/compressor/index.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
 
 function makeFixture(sessionId: string, slug: string, numTurns: number) {
   const dir = join(PROJECT_BASE, slug, 'sessions');
@@ -50,7 +50,7 @@ function snipCfg(): ContextConfig {
   return {
     defaultMaxTokens: 10000,
     reservedTokens: 0,
-    thresholds: { budgetReduction: 0.1, prune: 0.99, compaction: 0.99 },
+    thresholds: { prune: 0.99, compaction: 0.99 },
     pruneProtectedTokens: 0,
     pruneMinRelease: 1,
     toolsExemptFromPrune: [],
@@ -60,16 +60,13 @@ function snipCfg(): ContextConfig {
     compactionModel: '',
     archiveTtlDays: 30,
     checkpointKeep: 50,
-    thresholdTokens: 999_999,
-    truncateKeepHeadLines: 5,
-    truncateKeepTailLines: 15,
-    persistPreviewChars: 2000,
-    persistableTools: [],
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
     snipMaxMessages: 4,
     snipKeepHead: 1,
     microKeepRecentTools: 999,
+    persistPreviewChars: 2000,
+    thresholdTokens: 999_999,
   };
 }
 
@@ -79,12 +76,12 @@ describe('L2 Snip', () => {
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 3); // 9 messages > 4
     try {
-      await run(sessionId, 1000, null, snipCfg());
+      await run(sessionId, PROJECT_BASE, slug, 1000, null, snipCfg());
       const summaries = readSummaryEvents(fx.transcriptPath);
       const snipSummaries = summaries.filter((s) => s.method === 'context-collapse');
       expect(snipSummaries).toHaveLength(1);
       expect(snipSummaries[0]!.replaces.length).toBeGreaterThan(0);
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
   it('does nothing when under snipMaxMessages', async () => {
@@ -93,9 +90,9 @@ describe('L2 Snip', () => {
     const fx = makeFixture(sessionId, slug, 1); // 3 messages < 4
     try {
       const cfg = { ...snipCfg(), snipMaxMessages: 999 };
-      await run(sessionId, 1000, null, cfg);
+      await run(sessionId, PROJECT_BASE, slug, 1000, null, cfg);
       const summaries = readSummaryEvents(fx.transcriptPath);
       expect(summaries).toHaveLength(0);
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 });

@@ -16,10 +16,11 @@ function projectSessionsDir(encoded: string): string {
   return join(PROJECT_BASE, encoded, 'sessions');
 }
 
-export function resolveSessionDir(sessionId: string): string | null {
-  if (!existsSync(PROJECT_BASE)) return null;
-  for (const encoded of readdirSync(PROJECT_BASE)) {
-    const sessionsDir = join(PROJECT_BASE, encoded, 'sessions');
+export function resolveSessionDir(sessionId: string, projectBase?: string): string | null {
+  const base = projectBase ?? PROJECT_BASE;
+  if (!existsSync(base)) return null;
+  for (const encoded of readdirSync(base)) {
+    const sessionsDir = join(base, encoded, 'sessions');
     if (!existsSync(sessionsDir)) continue;
     try { if (!statSync(sessionsDir).isDirectory()) continue; } catch { continue; }
     if (existsSync(join(sessionsDir, `${sessionId}.jsonl`))) return sessionsDir;
@@ -53,8 +54,8 @@ function quickReadMeta(path: string): SessionMetaEvent | null {
   }
 }
 
-export function findSessionIndex(sessionId: string): SessionIndex | null {
-  const dir = resolveSessionDir(sessionId);
+export function findSessionIndex(sessionId: string, projectBase?: string): SessionIndex | null {
+  const dir = resolveSessionDir(sessionId, projectBase);
   if (!dir) return null;
   const idxPath = join(dir, `${sessionId}.index.json`);
   if (existsSync(idxPath)) {

@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { forkSession, buildMessages } from '../../src/session/store.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
 
 function makeFixture(sessionId: string, slug: string) {
   const dir = join(PROJECT_BASE, slug, 'sessions');
@@ -62,7 +62,7 @@ describe('forkSession', () => {
       expect((newEvents[1] as any).content).toBe('first');
       expect((newEvents[2] as any).content).toBe('reply1');
       expect((newEvents[3] as any).content).toBe('second');
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
   it('forked session has new UUIDs', () => {
@@ -82,7 +82,7 @@ describe('forkSession', () => {
       for (const u of newUuids) {
         expect(originalUuids.has(u)).toBe(false);
       }
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
   it('deleting events in forked session does not affect source', () => {
@@ -110,7 +110,7 @@ describe('forkSession', () => {
       const forkMessages = buildMessages(newJsonlPath);
       const forkUserContents = forkMessages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(forkUserContents).toEqual(['second']);
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
   it('fork creates index.json with correct metadata', () => {
@@ -126,6 +126,6 @@ describe('forkSession', () => {
       expect(idx.sessionId).toBe(newSessionId);
       expect(idx.title).toBe('fixture');
       expect(idx.permissionMode).toBe('default');
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 });

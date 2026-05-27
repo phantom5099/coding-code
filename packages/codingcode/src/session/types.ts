@@ -46,7 +46,7 @@ export interface SummaryEvent {
   uuid: string;
   replaces: string[];
   summaryText: string;
-  method: 'prune' | 'collapse-rule' | 'collapse-llm' | 'auto-compact' | 'context-collapse';
+  method: 'prune' | 'collapse-llm' | 'auto-compact' | 'context-collapse';
   timestamp: string;
 }
 
