@@ -1,7 +1,8 @@
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
-import { buildMessagesForQuery } from './projection/build.js';
+import { resolveSessionDir, buildMessages } from '../session/store.js';
 import { estimateTokens, estimateTokensForContent } from './utils/tokens.js';
+import { join } from 'path';
 
 export function assemblePayload(
   sessionId: string,
@@ -10,8 +11,10 @@ export function assemblePayload(
   pinned: Message[],
   config: ContextConfig,
 ): Message[] {
-  const enriched = buildMessagesForQuery(sessionId, config, encodedProjectPath);
-  const base = enriched.map((e) => e.message);
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) throw new Error(`Session ${sessionId} not found`);
+  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+  const base = buildMessages(jsonlPath);
 
   // Strip trailing incomplete assistant messages (API rejects them)
   const cleaned = stripOrphanToolCalls(base);

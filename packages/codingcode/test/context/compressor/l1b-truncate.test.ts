@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { run } from '../../../src/context/compressor/index.js';
-import { loadProjectionStore } from '../../../src/session/projection-store.js';
 import type { ContextConfig } from '../../../src/context/config.js';
-import type { SessionIndex } from '../../../src/session/types.js';
+import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
@@ -29,12 +28,19 @@ function makeFixture(sessionId: string, slug: string, toolOutput: string) {
     sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: 3, title: 'fixture', currentTurnId: 1,
-    tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0,
-    projectionCount: 0, lastCompressionFailures: 0,
+    tokenCountEstimate: 0, permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
   return { dir, transcriptPath, indexPath };
+}
+
+function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
+  const content = readFileSync(jsonlPath, 'utf8');
+  return content.split('\n')
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as SessionEvent)
+    .filter((ev): ev is SummaryEvent => ev.type === 'summary');
 }
 
 function l1bCfg(): ContextConfig {
@@ -55,7 +61,7 @@ function l1bCfg(): ContextConfig {
     truncateKeepHeadLines: 2,
     truncateKeepTailLines: 2,
     persistPreviewChars: 2000,
-    persistableTools: [], // Read is NOT persistable â†?goes to truncation
+    persistableTools: [], // Read is NOT persistable -> goes to truncation
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
     snipMaxMessages: 999,
@@ -65,34 +71,32 @@ function l1bCfg(): ContextConfig {
 }
 
 describe('L1b truncation', () => {
-  it('creates collapse-rule projection for large non-persistable tool results', () => {
+  it('creates collapse-rule summary for large non-persistable tool results', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     // 100 lines of content: truncation saves tokens vs the full output + recovery hint overhead
     const longContent = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`).join('\n');
     const fx = makeFixture(sessionId, slug, longContent);
     try {
-      run(sessionId, 1000, null, l1bCfg());
-      const store = loadProjectionStore(sessionId);
-      const msgs = store.projections.filter((p) => p.type === 'message');
-      expect(msgs.length).toBe(1);
-      expect((msgs[0] as any).method).toBe('collapse-rule');
-      const replacement = (msgs[0] as any).replacement.content;
-      expect(replacement).toContain('omitted');
-      expect(replacement).toContain('line 1');
-      expect(replacement).toContain('line 99');
+      await run(sessionId, 1000, null, l1bCfg());
+      const summaries = readSummaryEvents(fx.transcriptPath);
+      const collapseSummaries = summaries.filter((s) => s.method === 'collapse-rule');
+      expect(collapseSummaries.length).toBe(1);
+      expect(collapseSummaries[0]!.summaryText).toContain('omitted');
+      expect(collapseSummaries[0]!.summaryText).toContain('line 1');
+      expect(collapseSummaries[0]!.summaryText).toContain('line 99');
     } finally { rmSync(fx.dir, { recursive: true, force: true }); }
   });
 
-  it('does nothing when tool is under threshold', () => {
+  it('does nothing when tool is under threshold', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 'short');
     try {
       const cfg = { ...l1bCfg(), thresholdTokens: 9999 };
-      run(sessionId, 1000, null, cfg);
-      const store = loadProjectionStore(sessionId);
-      expect(store.projections.filter((p) => p.type === 'message')).toHaveLength(0);
+      await run(sessionId, 1000, null, cfg);
+      const summaries = readSummaryEvents(fx.transcriptPath);
+      expect(summaries).toHaveLength(0);
     } finally { rmSync(fx.dir, { recursive: true, force: true }); }
   });
 });

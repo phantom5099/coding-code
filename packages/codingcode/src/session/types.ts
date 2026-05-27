@@ -41,11 +41,58 @@ export interface ToolResultEvent {
   tokenCount: number;
 }
 
+export interface SummaryEvent {
+  type: 'summary';
+  uuid: string;
+  replaces: string[];
+  summaryText: string;
+  method: 'prune' | 'collapse-rule' | 'collapse-llm' | 'auto-compact' | 'context-collapse';
+  timestamp: string;
+}
+
+export interface HideMessageEvent {
+  type: 'hide';
+  uuid: string;
+  kind: 'message';
+  targetUuid: string;
+  reason: string;
+  timestamp: string;
+}
+
+export interface HideRollbackEvent {
+  type: 'hide';
+  uuid: string;
+  kind: 'rollback';
+  throughTurnId: number;
+  reason: string;
+  timestamp: string;
+}
+
+export type HideEvent = HideMessageEvent | HideRollbackEvent;
+
+export interface UnhideEvent {
+  type: 'unhide';
+  uuid: string;
+  targetHideUuid: string;
+  timestamp: string;
+}
+
+export interface TitleEvent {
+  type: 'title';
+  uuid: string;
+  text: string;
+  timestamp: string;
+}
+
 export type SessionEvent =
   | SessionMetaEvent
   | UserEvent
   | AssistantEvent
-  | ToolResultEvent;
+  | ToolResultEvent
+  | SummaryEvent
+  | HideEvent
+  | UnhideEvent
+  | TitleEvent;
 
 export interface SessionIndex {
   sessionId: string;
@@ -58,9 +105,5 @@ export interface SessionIndex {
   title: string;
   currentTurnId: number;
   tokenCountEstimate: number;
-  projectedRanges: Array<[number, number]>;
-  lastUncoveredByteOffset: number;
-  lastProjectionAt?: string;
-  projectionCount: number;
-  lastCompressionFailures: number;
+  permissionMode: string;
 }

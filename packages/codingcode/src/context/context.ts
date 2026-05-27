@@ -12,7 +12,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       /**
        * Called at the end of each agent turn. Uses the cheap O(1) gate from
        * `index.tokenCountEstimate` (maintained incrementally by recordX +
-       * appendProjection) instead of rebuilding the full LLM view just to
+       * summary events) instead of rebuilding the full LLM view just to
        * count tokens. The Compressor itself does the precise accounting when
        * it actually needs to act.
        */
@@ -28,8 +28,8 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         }),
 
       /**
-       * Build the message array to send to the LLM next. Uses the projection
-       * pipeline (raw JSONL → applyProjections → L1 → L3 → fitToBudget).
+       * Build the message array to send to the LLM next. Uses the event
+       * pipeline (raw JSONL → summary/hide filter → fitToBudget).
        *
        * The optional `pendingUser` lets the caller append the about-to-be-sent
        * user message; if omitted, only the persisted history is returned.

@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { run } from '../../../src/context/compressor/index.js';
-import { loadProjectionStore } from '../../../src/session/projection-store.js';
 import type { ContextConfig } from '../../../src/context/config.js';
-import type { SessionIndex } from '../../../src/session/types.js';
+import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
@@ -32,12 +31,19 @@ function makeFixture(sessionId: string, slug: string, numTurns: number) {
     sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: numTurns * 3, title: 'fixture', currentTurnId: numTurns,
-    tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0,
-    projectionCount: 0, lastCompressionFailures: 0,
+    tokenCountEstimate: 0, permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
   return { dir, transcriptPath, indexPath };
+}
+
+function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
+  const content = readFileSync(jsonlPath, 'utf8');
+  return content.split('\n')
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as SessionEvent)
+    .filter((ev): ev is SummaryEvent => ev.type === 'summary');
 }
 
 function snipCfg(): ContextConfig {
@@ -68,27 +74,28 @@ function snipCfg(): ContextConfig {
 }
 
 describe('L2 Snip', () => {
-  it('creates RangeProjection when message count exceeds snipMaxMessages', () => {
+  it('creates summary event when message count exceeds snipMaxMessages', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 3); // 9 messages > 4
     try {
-      run(sessionId, 1000, null, snipCfg());
-      const store = loadProjectionStore(sessionId);
-      const ranges = store.projections.filter((p) => p.type === 'range');
-      expect(ranges).toHaveLength(1);
+      await run(sessionId, 1000, null, snipCfg());
+      const summaries = readSummaryEvents(fx.transcriptPath);
+      const snipSummaries = summaries.filter((s) => s.method === 'context-collapse');
+      expect(snipSummaries).toHaveLength(1);
+      expect(snipSummaries[0]!.replaces.length).toBeGreaterThan(0);
     } finally { rmSync(fx.dir, { recursive: true, force: true }); }
   });
 
-  it('does nothing when under snipMaxMessages', () => {
+  it('does nothing when under snipMaxMessages', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
-    const fx = makeFixture(sessionId, slug, 1); // 3 messages â‰?4
+    const fx = makeFixture(sessionId, slug, 1); // 3 messages < 4
     try {
       const cfg = { ...snipCfg(), snipMaxMessages: 999 };
-      run(sessionId, 1000, null, cfg);
-      const store = loadProjectionStore(sessionId);
-      expect(store.projections.filter((p) => p.type === 'range')).toHaveLength(0);
+      await run(sessionId, 1000, null, cfg);
+      const summaries = readSummaryEvents(fx.transcriptPath);
+      expect(summaries).toHaveLength(0);
     } finally { rmSync(fx.dir, { recursive: true, force: true }); }
   });
 });
