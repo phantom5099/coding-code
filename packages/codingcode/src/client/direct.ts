@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { AgentEvent } from '../agent/agent.js';
-import { sendMessage } from '../orchestration/index.js';
+import { sendMessage } from '../agent/agent.js';
 import { SessionService } from '../session/store.js';
 import { ContextService } from '../context/context.js';
 import { ApprovalWaitService } from '../approval/async-confirm.js';

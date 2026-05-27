@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { sendMessage } from '../src/orchestration/index.js';
+import { sendMessage } from '../src/agent/agent.js';
 import { SessionService } from '../src/session/store.js';
 import { ContextService } from '../src/context/context.js';
 import { SkillService } from '../src/skills/index.js';
 import { ToolExecutorService } from '../src/tools/executor.js';
 import { CheckpointService } from '../src/checkpoint/checkpoint-service.js';
 import { Result } from '../src/core/result.js';
-import { TodoService } from '../src/self/todo.js';
+import { McpService } from '../src/mcp/index.js';
 import { ToolSearchService } from '../src/tools/tool-search-service.js';
 
 const mockState = {
@@ -73,12 +73,10 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.o
 const { AgentService } = await import('../src/agent/agent.js');
 const { ToolLayer, HookLayer } = await import('../src/layer.js');
 
-const MockTodoLayer = Layer.succeed(TodoService, TodoService.of({
-  _tag: 'TodoService' as const,
-  read: () => [],
-  write: () => {},
-  reset: () => {},
-}));
+const MockMcpLayer = Layer.succeed(McpService, {
+  syncConnections: (_: string) => Effect.void,
+  status: () => Effect.succeed([]),
+} as any);
 
 const MockToolSearchLayer = Layer.succeed(ToolSearchService, ToolSearchService.of({
   _tag: 'ToolSearchService' as const,
@@ -97,7 +95,7 @@ const AllDeps = Layer.mergeAll(
   MockCheckpointLayer,
   MockSkillLayer,
   HookLayer,
-  MockTodoLayer,
+  MockMcpLayer,
   MockToolSearchLayer,
 );
 

@@ -29,6 +29,10 @@ export const bashTool: ToolDefinition = {
       let stdout = '';
       let stderr = '';
 
+      // Kill process when abort signal fires (e.g. user clicks stop)
+      const onAbort = () => { proc.kill(); };
+      ctx?.signal?.addEventListener('abort', onAbort, { once: true });
+
       proc.stdout?.on('data', (data: Buffer) => {
         stdout += data.toString();
         if (stdout.length > 100_000) {
@@ -51,6 +55,7 @@ export const bashTool: ToolDefinition = {
 
       proc.on('close', (code) => {
         clearTimeout(timer);
+        ctx?.signal?.removeEventListener('abort', onAbort);
         resolve(
           [
             `Exit code: ${code ?? 'null'}`,
@@ -64,6 +69,7 @@ export const bashTool: ToolDefinition = {
 
       proc.on('error', (err) => {
         clearTimeout(timer);
+        ctx?.signal?.removeEventListener('abort', onAbort);
         resolve(`Command failed to start: ${err.message}`);
       });
     });

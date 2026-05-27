@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { sseHandler } from '../handler.js';
-import { sendMessage } from '../../orchestration/index.js';
+import { sendMessage } from '../../agent/agent.js';
 import { getWorkspaceCwd } from '../../core/workspace.js';
 import { AppLayer } from '../../layer.js';
 import { toSSEString } from '../adapter.js';

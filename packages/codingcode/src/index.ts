@@ -24,7 +24,7 @@ export type { Skill } from './skills/index.js';
 export type { AgentEvent } from './agent/agent.js';
 export { AgentError } from './core/error.js';
 export { Result } from './core/result.js';
-export { sendMessage } from './orchestration/index.js';
+export { sendMessage } from './agent/agent.js';
 export { AppLayer, AgentLayer, SessionLayer, ContextLayer, ToolLayer, HookLayer, McpLayer, SkillLayer, ApprovalLayer, CheckpointLayer } from './layer.js';
 export { ApprovalWaitService } from './approval/async-confirm.js';
 export { getGlobalPermissionMode, setGlobalPermissionMode } from './approval/index.js';
