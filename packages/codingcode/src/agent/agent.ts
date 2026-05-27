@@ -196,16 +196,12 @@ export async function* runReActLoop(
       messages.push(assistantMsg);
       yield { _tag: 'Assistant', content: resp.content, toolCalls };
 
-      // Persist assistant event
-      const recordResult = Effect.runSync(session.recordAssistant(state, resp.content, toolCalls as any, model));
-      const assistantUuid = (recordResult as any).uuid;
-
       if (!toolCalls || toolCalls.length === 0) {
-        // LLM done - check stop hook before returning
-        const stopHookPayload = {
-          sessionId, content: resp.content, turnId: state.currentTurnId
-        };
-        const stopDecision: any = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', stopHookPayload));
+        // LLM done — record assistant, then check stop hook
+        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls as any, model));
+        const stopDecision: any = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
+          sessionId, content: resp.content, turnId: state.currentTurnId,
+        }));
 
         if (stopDecision && stopDecision.decision === 'continue') {
           // Continue for another iteration
@@ -219,7 +215,7 @@ export async function* runReActLoop(
           }
           stopContinuations++;
           const injection = stopDecision.injection ?? '(continue)';
-          Effect.runSync(session.recordUser(state, injection));
+          await Effect.runPromise(session.recordUser(state, injection));
           messages.push({ role: 'user', content: injection });
           // Continue to next iteration of for loop
           continue;
@@ -234,14 +230,22 @@ export async function* runReActLoop(
         break;
       }
 
-      // Execute tool calls with approvalOverride and agentRunner
+      // Execute tool calls — record assistant, execute batch, record results in one pipeline
       const allResults = await Effect.runPromise(
-        executor.executeBatch(toolCalls, state.sessionId, {
-          turnId: state.currentTurnId,
-          projectPath,
-          signal: opts.abortSignal,
-          approval: opts.approvalOverride,
-          agentRunner: { agentService: deps.agentService, llm },
+        Effect.gen(function* () {
+          const record = yield* session.recordAssistant(state, resp.content, toolCalls as any, model);
+          const results = yield* executor.executeBatch(toolCalls, state.sessionId, {
+            turnId: state.currentTurnId,
+            projectPath,
+            signal: opts.abortSignal,
+            approval: opts.approvalOverride,
+            agentRunner: { agentService: deps.agentService, llm },
+          });
+          for (const r of results) {
+            const resultOut = r.type === 'denied' ? '' : r.output;
+            yield* session.recordToolResult(state, record.uuid, r.name, r.id, resultOut);
+          }
+          return results;
         }),
       );
 
@@ -253,7 +257,6 @@ export async function* runReActLoop(
         } else {
           yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: r.type === 'ok' };
         }
-        Effect.runSync(session.recordToolResult(state, assistantUuid, r.name, r.id, resultOut));
         if (!messages.find(m => (m as any).tool_call_id === r.id)) {
           const content = r.type === 'denied'
             ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Effect } from 'effect';
 export type { ToolDescription } from '../core/types';
 
 export interface ToolExecCtx {
@@ -11,7 +12,7 @@ export interface ToolExecCtx {
     llm: any; // LLMStreamAdapter — use any to avoid circular imports
   };
   sandbox?: {
-    wrapCommand: (command: string) => Promise<string>;
+    wrapCommand: (command: string) => Effect.Effect<string>;
   };
 }
 

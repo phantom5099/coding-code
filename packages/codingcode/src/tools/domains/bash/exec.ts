@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { spawn } from 'child_process';
+import { Effect } from 'effect';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
 import { getWorkspaceCwd } from '../../../core/workspace.js';
 
@@ -15,7 +16,7 @@ export const bashTool: ToolDefinition = {
     const { command, cwd, timeout_ms } = args as any;
     const workDir = cwd || getWorkspaceCwd();
     const finalCommand = ctx?.sandbox
-      ? await ctx.sandbox.wrapCommand(command)
+      ? await Effect.runPromise(ctx.sandbox.wrapCommand(command))
       : command;
     return new Promise<string>((resolve) => {
       const proc = spawn(finalCommand, {
