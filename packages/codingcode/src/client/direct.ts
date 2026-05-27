@@ -61,7 +61,7 @@ export interface AgentClient {
   enableMcp(name: string): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(name: string, enabled: boolean): Promise<void>;
-  listAgents(): Promise<Array<{ name: string; description: string; tools?: string[]; readonly?: boolean; maxSteps?: number; model?: string; disabled?: boolean }>>;
+  listAgents(): Promise<Array<{ name: string; description: string; tools?: string[]; mcpServers?: string[]; readonly?: boolean; maxSteps?: number; model?: string; disabled?: boolean }>>;
   createAgent(profile: SubagentProfile): Promise<void>;
   updateAgent(name: string, profile: SubagentProfile): Promise<void>;
   deleteAgent(name: string): Promise<void>;
@@ -421,6 +421,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       const { isAgentDisabledState } = await import('../subagent/registry.js');
       return [EXPLORE_PROFILE, ...custom].map(a => ({
         name: a.name, description: a.description, tools: a.tools,
+        mcpServers: a.mcpServers,
         readonly: a.readonly, maxSteps: a.maxSteps, model: a.model,
         disabled: isAgentDisabledState(a.name),
       }));

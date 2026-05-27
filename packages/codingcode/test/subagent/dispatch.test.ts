@@ -5,6 +5,12 @@ import { SubagentRegistry, EXPLORE_PROFILE, setSubagentEnabledState } from '../.
 import { SubagentRegistryLayer } from '../../src/layer';
 import { registerEmitter, unregisterEmitter, hasEmitter } from '../../src/approval/async-confirm';
 
+const mockMcp = {
+  connectServers: () => Effect.void,
+  disconnectServers: () => Effect.void,
+  getServerToolNames: () => [] as string[],
+};
+
 const mockModelEntry = {
   id: 'fast-model@API_KEY_B',
   provider: 'provider-b',
@@ -47,6 +53,7 @@ describe('dispatch_agent tool', () => {
       session: {} as any,
       approval: {} as any,
       hooks: {} as any,
+      mcp: mockMcp,
       registry,
     };
 
@@ -64,6 +71,7 @@ describe('dispatch_agent tool', () => {
       session: {} as any,
       approval: {} as any,
       hooks: {} as any,
+      mcp: mockMcp,
       registry,
     };
 
@@ -80,6 +88,7 @@ describe('dispatch_agent tool', () => {
       session: {} as any,
       approval: {} as any,
       hooks: {} as any,
+      mcp: mockMcp,
       registry,
     };
 
@@ -104,6 +113,7 @@ describe('dispatch_agent tool', () => {
       session: {} as any,
       approval: {} as any,
       hooks: {} as any,
+      mcp: mockMcp,
       registry,
     };
 
@@ -147,6 +157,7 @@ describe('dispatch_agent tool', () => {
         emit: emitFn,
         emitDecision: emitDecisionFn,
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -192,6 +203,7 @@ describe('dispatch_agent tool', () => {
           reason: 'Not allowed',
         })) as any,
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -240,6 +252,7 @@ describe('dispatch_agent tool', () => {
         emit: emitFn,
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -310,6 +323,7 @@ describe('dispatch_agent tool', () => {
         emit: () => Effect.succeed(undefined),
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -368,6 +382,7 @@ describe('dispatch_agent tool', () => {
         emit: () => Effect.succeed(undefined),
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -421,6 +436,7 @@ describe('dispatch_agent tool', () => {
         emit: emitFn,
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -479,6 +495,7 @@ describe('dispatch_agent tool', () => {
         emit: () => Effect.succeed(undefined),
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -530,6 +547,7 @@ describe('dispatch_agent tool', () => {
         emit: () => Effect.succeed(undefined),
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -561,6 +579,7 @@ describe('dispatch_agent tool', () => {
         emit: () => Effect.succeed(undefined),
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -590,6 +609,7 @@ describe('dispatch_agent tool', () => {
         emit: (() => Effect.succeed(undefined)) as any,
         emitDecision: (() => Effect.succeed(null)) as any,
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -639,6 +659,7 @@ describe('dispatch_agent tool', () => {
         emit: () => Effect.succeed(undefined),
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -696,6 +717,7 @@ describe('dispatch_agent tool', () => {
         emit: () => Effect.succeed(undefined),
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -748,6 +770,7 @@ describe('dispatch_agent tool', () => {
         emit: () => Effect.succeed(undefined),
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 
@@ -803,6 +826,7 @@ describe('dispatch_agent tool', () => {
         emit: () => Effect.succeed(undefined),
         emitDecision: () => Effect.succeed(null),
       },
+      mcp: mockMcp,
       registry,
     };
 

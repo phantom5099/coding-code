@@ -6,6 +6,7 @@ import { SessionService } from '../session/store.js';
 import { ApprovalService } from '../approval/index.js';
 import { HookService } from '../hooks/registry.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
+import { McpService } from '../mcp/index.js';
 import { readFileTool } from '../tools/domains/fs/read.js';
 import { writeFileTool } from '../tools/domains/fs/write.js';
 import { editFileTool } from '../tools/domains/fs/edit.js';
@@ -29,6 +30,7 @@ export const bootstrapApplication = (cwd: string) =>
     const approval = yield* ApprovalService;
     const hooks = yield* HookService;
     const toolSearchSvc = yield* ToolSearchService;
+    const mcp = yield* McpService;
 
     yield* sandbox.initialize({
       denyReadPaths: ['/etc/shadow', '/etc/passwd'],
@@ -53,6 +55,6 @@ export const bootstrapApplication = (cwd: string) =>
     }
 
     yield* tools.register(
-      createDispatchAgentTool({ session, approval, hooks, registry: subagentRegistry }),
+      createDispatchAgentTool({ session, approval, hooks, registry: subagentRegistry, mcp }),
     );
   });

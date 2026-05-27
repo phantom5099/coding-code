@@ -5,6 +5,7 @@ export interface SubagentProfile {
   description: string;
   systemPrompt: string;
   tools?: string[];
+  mcpServers?: string[];
   readonly?: boolean;
   maxSteps?: number;
   model?: string;

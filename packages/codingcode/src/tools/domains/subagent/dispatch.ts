@@ -6,6 +6,7 @@ import type { SubagentRegistry } from '../../../subagent/registry.js';
 import type { SessionService } from '../../../session/store.js';
 import type { ApprovalService } from '../../../approval/index.js';
 import type { HookService } from '../../../hooks/registry.js';
+import type { McpService } from '../../../mcp/index.js';
 import { findModel, createClient } from '../../../llm/factory.js';
 import { delegateEmitter, unregisterEmitter } from '../../../approval/async-confirm.js';
 
@@ -14,6 +15,7 @@ interface DispatchAgentDeps {
   approval: ApprovalService;
   hooks: HookService;
   registry: SubagentRegistry;
+  mcp: McpService;
 }
 
 export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition {
@@ -101,8 +103,26 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         delegateEmitter(childUuid, parentSessionId);
       }
 
-      // Build coreAllowlist if profile specifies tools
-      const coreAllowlist = profile.tools ? new Set(profile.tools.filter(t => t !== 'dispatch_agent')) : undefined;
+      // Connect MCP servers for this profile (refCount++)
+      const mcpServers = profile.mcpServers;
+      if (mcpServers?.length) {
+        const projectRoot = ctx?.projectPath ?? process.cwd();
+        await Effect.runPromise(deps.mcp.connectServers(mcpServers, projectRoot));
+      }
+
+      // Build coreAllowlist: profile tools + MCP server tools
+      let coreAllowlist: Set<string> | undefined = profile.tools
+        ? new Set(profile.tools.filter((t: string) => t !== 'dispatch_agent'))
+        : undefined;
+
+      if (mcpServers?.length) {
+        if (!coreAllowlist) coreAllowlist = new Set();
+        for (const serverName of mcpServers) {
+          for (const toolName of deps.mcp.getServerToolNames(serverName)) {
+            coreAllowlist.add(toolName);
+          }
+        }
+      }
 
       // Run subagent in isolated context
       const stream = agentService.runStream({
@@ -138,6 +158,10 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         }
       } finally {
         unregisterEmitter(childUuid);
+        // Disconnect MCP servers (refCount--)
+        if (mcpServers?.length) {
+          await Effect.runPromise(deps.mcp.disconnectServers(mcpServers));
+        }
       }
 
       // Emit completion hook

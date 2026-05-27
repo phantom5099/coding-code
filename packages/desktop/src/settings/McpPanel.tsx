@@ -108,6 +108,14 @@ export default function McpPanel() {
       if (isCreating) {
         await window.electronAPI?.createMcp?.(server)
       } else if (editingName) {
+        if (editingName !== form.name) {
+          const agents = await window.electronAPI?.getAgents?.() ?? []
+          const dependent = agents.filter((a: { mcpServers?: string[] }) => a.mcpServers?.includes(editingName))
+          if (dependent.length > 0) {
+            const names = dependent.map((a: { name: string }) => a.name).join(', ')
+            if (!confirm(`以下智能体引用了此 MCP 服务器：${names}\n重命名后需要手动更新它们的配置。是否继续？`)) return
+          }
+        }
         await window.electronAPI?.updateMcp?.(editingName, server)
       }
       cancelForm()
@@ -120,6 +128,12 @@ export default function McpPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return
     try {
+      const agents = await window.electronAPI?.getAgents?.() ?? []
+      const dependent = agents.filter((a: { mcpServers?: string[] }) => a.mcpServers?.includes(deletingName))
+      if (dependent.length > 0) {
+        const names = dependent.map((a: { name: string }) => a.name).join(', ')
+        if (!confirm(`以下智能体引用了此 MCP 服务器：${names}\n删除后需要手动更新它们的配置。是否继续？`)) return
+      }
       await window.electronAPI?.deleteMcp?.(deletingName)
       setDeletingName(null)
       await load()

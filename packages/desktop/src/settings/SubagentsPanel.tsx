@@ -13,6 +13,7 @@ interface AgentEntry {
   description: string
   systemPrompt?: string
   tools?: string[]
+  mcpServers?: string[]
   readonly?: boolean
   maxSteps?: number
   model?: string
@@ -24,6 +25,7 @@ interface AgentForm {
   description: string
   systemPrompt: string
   tools: string[]
+  mcpServers: string[]
   readonly: boolean
   maxSteps: string
   model: string
@@ -31,7 +33,7 @@ interface AgentForm {
 
 const EMPTY_FORM: AgentForm = {
   name: '', description: '', systemPrompt: '',
-  tools: [], readonly: false, maxSteps: '', model: '',
+  tools: [], mcpServers: [], readonly: false, maxSteps: '', model: '',
 }
 
 const BUILT_IN = new Set(['explore', 'general'])
@@ -41,6 +43,7 @@ export default function SubagentsPanel() {
   const [enabled, setEnabled] = useState(true)
   const [loading, setLoading] = useState(true)
   const [models, setModels] = useState<ModelEntry[]>([])
+  const [mcpList, setMcpList] = useState<string[]>([])
   const [isCreating, setIsCreating] = useState(false)
   const [editingName, setEditingName] = useState<string | null>(null)
   const [deletingName, setDeletingName] = useState<string | null>(null)
@@ -49,14 +52,16 @@ export default function SubagentsPanel() {
   const load = async () => {
     setLoading(true)
     try {
-      const [agentData, enabledState, modelData] = await Promise.all([
+      const [agentData, enabledState, modelData, mcpData] = await Promise.all([
         window.electronAPI?.getAgents?.() ?? Promise.resolve([]),
         window.electronAPI?.getSubagentEnabled?.() ?? Promise.resolve(true),
         window.electronAPI?.getModels?.() ?? Promise.resolve([]),
+        window.electronAPI?.getMcp?.() ?? Promise.resolve([]),
       ])
       setAgents(agentData ?? [])
       setEnabled(enabledState ?? true)
       setModels(modelData ?? [])
+      setMcpList((mcpData ?? []).map((s: { name: string }) => s.name))
     } catch {
       setAgents([])
     } finally {
@@ -89,6 +94,7 @@ export default function SubagentsPanel() {
       description: a.description,
       systemPrompt: a.systemPrompt ?? '',
       tools: a.tools ?? [],
+      mcpServers: a.mcpServers ?? [],
       readonly: a.readonly ?? false,
       maxSteps: a.maxSteps?.toString() ?? '',
       model: a.model ?? '',
@@ -109,9 +115,8 @@ export default function SubagentsPanel() {
       description: form.description,
       systemPrompt: form.systemPrompt,
     }
-    if (form.tools.length > 0) {
-      profile.tools = form.tools
-    }
+    if (form.tools.length > 0) profile.tools = form.tools
+    if (form.mcpServers.length > 0) profile.mcpServers = form.mcpServers
     if (form.readonly) profile.readonly = true
     if (form.maxSteps.trim()) profile.maxSteps = Number(form.maxSteps)
     if (form.model.trim()) profile.model = form.model
@@ -173,7 +178,7 @@ export default function SubagentsPanel() {
       {isCreating && (
         <FormCard
           form={form} setForm={setForm}
-          models={models}
+          models={models} mcpList={mcpList}
           onSave={saveForm} onCancel={cancelForm}
           inputCls={inputCls} labelCls={labelCls}
           btnPrimary={btnPrimary} btnCancel={btnCancel}
@@ -193,7 +198,7 @@ export default function SubagentsPanel() {
                 <FormCard
                   key={a.name}
                   form={form} setForm={setForm}
-                  models={models}
+                  models={models} mcpList={mcpList}
                   onSave={saveForm} onCancel={cancelForm}
                   inputCls={inputCls} labelCls={labelCls}
                   btnPrimary={btnPrimary} btnCancel={btnCancel}
@@ -242,6 +247,15 @@ export default function SubagentsPanel() {
                         {a.tools.map((t) => (
                           <span key={t} className="text-[11px] px-1.5 py-0.5 rounded bg-[#222] text-[#666] font-mono">
                             {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {a.mcpServers && a.mcpServers.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {a.mcpServers.map((s) => (
+                          <span key={s} className="text-[11px] px-1.5 py-0.5 rounded bg-[#1a2a1a] text-[#4ec9b0] font-mono">
+                            {s}
                           </span>
                         ))}
                       </div>
@@ -341,10 +355,72 @@ function ToolMultiSelect({ selected, onChange, inputCls }: {
   )
 }
 
-function FormCard({ form, setForm, models, onSave, onCancel, inputCls, labelCls, btnPrimary, btnCancel }: {
+function McpMultiSelect({ selected, onChange, availableMcpServers, inputCls }: {
+  selected: string[]
+  onChange: (servers: string[]) => void
+  availableMcpServers: string[]
+  inputCls: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const toggle = (server: string) => {
+    if (selected.includes(server)) onChange(selected.filter(s => s !== server))
+    else onChange([...selected, server])
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={`${inputCls} flex items-center justify-between text-left`}
+      >
+        <span className={selected.length === 0 ? 'text-[#555]' : ''}>
+          {selected.length === 0 ? '未指定（不限制 MCP）' : selected.join(', ')}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          className={`shrink-0 ml-2 transition-transform ${open ? 'rotate-180' : ''}`}>
+          <path d="m6 9 6 6 6-6"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded border border-[#3a3a3a] bg-[#1e1e1e] py-1 shadow-lg">
+          {availableMcpServers.length === 0 ? (
+            <div className="px-3 py-2 text-[12px] text-[#555]">无已配置的 MCP 服务器</div>
+          ) : (
+            availableMcpServers.map(server => (
+              <label key={server}
+                className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-[#2a2a2a] text-[13px] text-[#ccc]">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(server)}
+                  onChange={() => toggle(server)}
+                  className="accent-[#4ec9b0]"
+                />
+                <span className="font-mono">{server}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FormCard({ form, setForm, models, mcpList, onSave, onCancel, inputCls, labelCls, btnPrimary, btnCancel }: {
   form: AgentForm
   setForm: (f: AgentForm) => void
   models: ModelEntry[]
+  mcpList: string[]
   onSave: () => void
   onCancel: () => void
   inputCls: string
@@ -379,6 +455,15 @@ function FormCard({ form, setForm, models, onSave, onCancel, inputCls, labelCls,
         <ToolMultiSelect
           selected={form.tools}
           onChange={tools => setForm({ ...form, tools })}
+          inputCls={inputCls}
+        />
+      </div>
+      <div>
+        <div className={labelCls}>MCP 服务器 (可选)</div>
+        <McpMultiSelect
+          selected={form.mcpServers}
+          onChange={mcpServers => setForm({ ...form, mcpServers })}
+          availableMcpServers={mcpList}
           inputCls={inputCls}
         />
       </div>
