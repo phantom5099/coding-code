@@ -3,6 +3,7 @@ import { readHistory, buildMessagesFromEvents, findSessionIndex } from '../../se
 import { resolveSessionDir } from '../../session/store.js';
 import { estimateTokensForContent } from '../utils/tokens.js';
 import { resolveCompactionLLM } from './llm-resolver.js';
+import { COMPACTION_SYSTEM_PROMPT } from './prompt.js';
 import type { ContextConfig } from '../config.js';
 import type { Message } from '../../core/types.js';
 import type { SessionEvent, SummaryEvent } from '../../session/types.js';
@@ -398,42 +399,7 @@ async function callLLMForCompaction(
     .map((m) => `[${m.role}${m.tool_name ? ':' + m.tool_name : ''}]\n${m.content}`)
     .join('\n\n');
 
-  const system = `You analyze and then summarize an agent conversation transcript.
-
-Output exactly two top-level blocks:
-
-<analysis>
-Free-form notes about the conversation. Identify the user's goal, what was done, what was learned, what remains. This block is for your reasoning — be thorough.
-</analysis>
-
-<summary>
-## 1. Primary Request and Intent
-The user's overall objective and concrete asks.
-
-## 2. Key Technical Concepts
-Frameworks, patterns, domain concepts that appeared.
-
-## 3. Files and Code Sections
-Files touched or referenced; for each, the relevant function/section.
-
-## 4. Errors and Fixes
-Concrete errors encountered and how they were resolved (or not).
-
-## 5. Problem Solving
-Non-trivial reasoning chains and the approaches that succeeded.
-
-## 6. All User Messages
-Verbatim or near-verbatim list of every user message in chronological order.
-
-## 7. Pending Tasks
-Work the user explicitly asked for that is not yet done.
-
-## 8. Current Work
-What was happening at the moment of compaction.
-
-## 9. Optional Next Step
-A recommended next action consistent with the user's intent.
-</summary>`;
+  const system = COMPACTION_SYSTEM_PROMPT;
 
   const userMsg: Message = {
     role: 'user',
