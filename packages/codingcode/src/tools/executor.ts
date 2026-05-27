@@ -90,8 +90,10 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
 
         const parsedArgs = yield* Effect.sync(() => tool.parameters.parse(finalArgs));
         const start = Date.now();
-        const result = yield* Effect.tryPromise({
-          try: () => tool.execute(parsedArgs, {
+
+        // Race tool execution against abort signal for immediate cancellation
+        const execWithAbort = (): Promise<string> => {
+          const execPromise = tool.execute(parsedArgs, {
             signal: opts?.signal,
             sessionId: opts?.sessionId,
             turnId: opts?.turnId,
@@ -100,11 +102,23 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
             sandbox: {
               wrapCommand: (cmd: string) => sandbox.wrapCommand(cmd),
             },
-          }),
-          catch: (e) =>
-            e instanceof AgentError
-              ? e
-              : AgentError.toolExecutionFailed(name, e),
+          });
+          if (!opts?.signal) return execPromise;
+          if (opts.signal.aborted) return Promise.reject(Object.assign(new Error('Tool execution aborted'), { name: 'AbortError' }));
+          return Promise.race([
+            execPromise,
+            new Promise<string>((_, reject) => {
+              opts.signal!.addEventListener('abort', () => reject(Object.assign(new Error('Tool execution aborted'), { name: 'AbortError' })), { once: true });
+            }),
+          ]);
+        };
+
+        const result = yield* Effect.tryPromise({
+          try: () => execWithAbort(),
+          catch: (e) => {
+            if ((e as Error)?.name === 'AbortError') return new AgentError('TOOL_NOT_ALLOWED', (e as Error).message);
+            return e instanceof AgentError ? e : AgentError.toolExecutionFailed(name, e);
+          },
         });
 
         yield* hooks.emit('tool.execute.after', {
