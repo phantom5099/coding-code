@@ -3,7 +3,6 @@ export type { ToolDescription } from '../core/types';
 
 export interface ToolExecCtx {
   signal?: AbortSignal;
-  agentId?: string;
   sessionId?: string;
   turnId?: number;
   projectPath?: string;

@@ -65,7 +65,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         (deps.hooks as any).emitDecision('agent.subagent.spawn.before', {
           profile: agentName,
           prompt,
-          parentAgentId: ctx?.agentId,
+          parentSessionId: ctx?.sessionId,
         }),
       );
 
@@ -75,7 +75,6 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
 
       // Create subagent transcript nested under parent session
       const childUuid = randomUUID();
-      const childAgentId = `${profile.name}:${childUuid}`;
 
       const createEffect = (deps.session as any).create(
         ctx?.projectPath ?? process.cwd(),
@@ -84,7 +83,6 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         childUuid,
         {
           parentSessionId: ctx?.sessionId,
-          parentAgentId: ctx?.agentId,
           agentName: agentName,
         },
       );
@@ -128,11 +126,10 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       const stream = agentService.runStream({
         state: childState,
         llm,
-        agentId: childAgentId,
         systemOverride: profile.systemPrompt,
         coreAllowlist,
         abortSignal: ctx?.signal,
-        parentAgentId: ctx?.agentId,
+        parentSessionId: ctx?.sessionId,
         agentName: agentName,
         maxStepsOverride: profile.maxSteps,
         approvalOverride: childApproval,

@@ -16,7 +16,7 @@ describe('TodoService (module-level store)', () => {
     expect(got).toEqual(plan);
   });
 
-  it('different agentIds do not interfere', () => {
+  it('different sessionIds do not interfere', () => {
     sharedTodoStore.write('agent-a', [{ step: 'a1', status: 'pending' }]);
     sharedTodoStore.write('agent-b', [{ step: 'b1', status: 'completed' }]);
     expect(sharedTodoStore.read('agent-a')).toHaveLength(1);
@@ -33,7 +33,7 @@ describe('TodoService (module-level store)', () => {
     expect(got[0]!.step).toBe('second');
   });
 
-  it('read returns empty array for unknown agentId', () => {
+  it('read returns empty array for unknown sessionId', () => {
     expect(sharedTodoStore.read('unknown')).toEqual([]);
   });
 

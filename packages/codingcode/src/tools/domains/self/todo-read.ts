@@ -10,9 +10,9 @@ export const todoReadTool: ToolDefinition = {
   deferred: true,
   parameters: z.object({}),
   execute: async (_args, ctx) => {
-    const agentId = ctx?.agentId;
-    if (!agentId) throw new AgentError('TOOL_EXECUTION_FAILED', 'todo_read requires agentId');
-    const plan = sharedTodoStore.read(agentId);
+    const sessionId = ctx?.sessionId;
+    if (!sessionId) throw new AgentError('TOOL_EXECUTION_FAILED', 'todo_read requires sessionId');
+    const plan = sharedTodoStore.read(sessionId);
     if (plan.length === 0) return '(empty)';
     const inProgress = plan.filter(t => t.status === 'in_progress').map(t => `> ${t.step}`);
     const pending = plan.filter(t => t.status === 'pending').map(t => `- ${t.step}`);

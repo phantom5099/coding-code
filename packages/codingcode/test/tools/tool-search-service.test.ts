@@ -74,7 +74,7 @@ describe('ToolSearchService', () => {
     await run(program);
   });
 
-  it('different agentIds have independent loaded state', async () => {
+  it('different sessionIds have independent loaded state', async () => {
     const program = Effect.gen(function* () {
       const tools = yield* ToolService;
       yield* tools.register(makeDeferred('tool_x'));
