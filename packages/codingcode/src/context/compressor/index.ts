@@ -19,7 +19,6 @@ export interface CompressResult {
 
 interface CompressContext {
   sessionId: string;
-  projectBase: string;
   encodedProjectPath: string;
   config: ContextConfig;
   llm: LLMClient | null;
@@ -34,15 +33,14 @@ interface CompressContext {
  */
 export async function run(
   sessionId: string,
-  projectBase: string,
   encodedProjectPath: string,
   usage: number,
   llm: LLMClient | null,
   config: ContextConfig,
 ): Promise<CompressResult> {
-  const idx = findSessionIndex(sessionId, projectBase);
+  const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
-  const ctx = buildContext(sessionId, projectBase, encodedProjectPath, config, llm, currentTurnId);
+  const ctx = buildContext(sessionId, encodedProjectPath, config, llm, currentTurnId);
   const budget = config.defaultMaxTokens;
 
   let remaining = usage;
@@ -71,14 +69,13 @@ export async function run(
 
 export async function compactWithLLM(
   sessionId: string,
-  projectBase: string,
   encodedProjectPath: string,
   config: ContextConfig,
   llm: LLMClient | null,
 ): Promise<CompressResult> {
-  const idx = findSessionIndex(sessionId, projectBase);
+  const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
-  const ctx = buildContext(sessionId, projectBase, encodedProjectPath, config, llm, currentTurnId);
+  const ctx = buildContext(sessionId, encodedProjectPath, config, llm, currentTurnId);
   const released = await tryL5Compaction(ctx);
   return { didCompress: released > 0, released };
 }
@@ -87,13 +84,12 @@ export async function compactWithLLM(
 
 function buildContext(
   sessionId: string,
-  projectBase: string,
   encodedProjectPath: string,
   config: ContextConfig,
   llm: LLMClient | null,
   currentTurnId: number,
 ): CompressContext {
-  const dir = resolveSessionDir(sessionId, projectBase);
+  const dir = resolveSessionDir(sessionId);
   if (!dir) throw new Error(`Session ${sessionId} not found`);
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
   const events = readHistory(jsonlPath);
@@ -103,7 +99,6 @@ function buildContext(
 
   return {
     sessionId,
-    projectBase,
     encodedProjectPath,
     config,
     llm,
@@ -160,8 +155,8 @@ function buildFilteredView(events: SessionEvent[]): { hidden: Set<string>; visib
   return { hidden, visible: messages };
 }
 
-function appendSummaryToSession(sessionId: string, projectBase: string, event: SummaryEvent): void {
-  const dir = resolveSessionDir(sessionId, projectBase);
+function appendSummaryToSession(sessionId: string, event: SummaryEvent): void {
+  const dir = resolveSessionDir(sessionId);
   if (!dir) throw new Error(`Session ${sessionId} not found`);
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
   appendFileSync(jsonlPath, JSON.stringify(event) + '\n', 'utf8');
@@ -170,7 +165,7 @@ function appendSummaryToSession(sessionId: string, projectBase: string, event: S
 // ---------- L1 Persist ----------
 
 function applyToolResultBudget(ctx: CompressContext): number {
-  const { sessionId, projectBase, encodedProjectPath, config, events, hiddenUuids } = ctx;
+  const { sessionId, encodedProjectPath, config, events, hiddenUuids } = ctx;
   let released = 0;
 
   for (const ev of events) {
@@ -178,7 +173,7 @@ function applyToolResultBudget(ctx: CompressContext): number {
     if (hiddenUuids.has(ev.uuid)) continue;
     if (ev.tokenCount <= config.thresholdTokens) continue;
 
-    const { path } = persistToolResult(projectBase, encodedProjectPath, sessionId, ev.toolCallId, ev.output);
+    const { path } = persistToolResult(encodedProjectPath, sessionId, ev.toolCallId, ev.output);
     const preview = ev.output.slice(0, config.persistPreviewChars);
     const replacement = `${preview}\n\n[…full output persisted at: ${path}. Use Read tool to access if needed.]`;
 
@@ -190,7 +185,7 @@ function applyToolResultBudget(ctx: CompressContext): number {
       method: 'collapse-llm',
       timestamp: new Date().toISOString(),
     };
-    appendSummaryToSession(sessionId, projectBase,summaryEvent);
+    appendSummaryToSession(sessionId,summaryEvent);
     hiddenUuids.add(ev.uuid);
     released += ev.tokenCount - estimateTokensForContent(replacement);
   }
@@ -201,7 +196,7 @@ function applyToolResultBudget(ctx: CompressContext): number {
 // ---------- L2 Prune ----------
 
 function tryPruneTools(ctx: CompressContext): number {
-  const { sessionId, projectBase, config, currentTurnId, events, hiddenUuids } = ctx;
+  const { sessionId, config, currentTurnId, events, hiddenUuids } = ctx;
   const candidates = collectPrunableTools(events, hiddenUuids, config, currentTurnId);
   if (candidates.length === 0) return 0;
 
@@ -219,7 +214,7 @@ function tryPruneTools(ctx: CompressContext): number {
       method: 'prune',
       timestamp: new Date().toISOString(),
     };
-    appendSummaryToSession(sessionId, projectBase,event);
+    appendSummaryToSession(sessionId,event);
     hiddenUuids.add(tool.uuid);
     released += tokenCount - estimateTokensForContent(replacement);
   }
@@ -229,7 +224,7 @@ function tryPruneTools(ctx: CompressContext): number {
 // ---------- L2 Snip ----------
 
 function trySnip(ctx: CompressContext): number {
-  const { sessionId, projectBase, config, events, hiddenUuids } = ctx;
+  const { sessionId, config, events, hiddenUuids } = ctx;
 
   // Build visible non-meta events for snip count
   const visibleEvents = events.filter((ev) => {
@@ -271,7 +266,7 @@ function trySnip(ctx: CompressContext): number {
     method: 'context-collapse',
     timestamp: new Date().toISOString(),
   };
-  appendSummaryToSession(sessionId, projectBase,event);
+  appendSummaryToSession(sessionId,event);
   for (const u of snippedUuids) hiddenUuids.add(u);
   return Math.max(0, snippedTokens - estimateTokensForContent(summaryText));
 }
@@ -279,7 +274,7 @@ function trySnip(ctx: CompressContext): number {
 // ---------- L3 Microcompact ----------
 
 function tryMicrocompact(ctx: CompressContext): number {
-  const { sessionId, projectBase, config, events, hiddenUuids } = ctx;
+  const { sessionId, config, events, hiddenUuids } = ctx;
   const toolResults = events.filter((ev) => ev.type === 'tool_result' && !hiddenUuids.has(ev.uuid)) as Extract<SessionEvent, { type: 'tool_result' }>[];
   if (toolResults.length <= config.microKeepRecentTools) return 0;
 
@@ -299,7 +294,7 @@ function tryMicrocompact(ctx: CompressContext): number {
       method: 'prune',
       timestamp: new Date().toISOString(),
     };
-    appendSummaryToSession(sessionId, projectBase,event);
+    appendSummaryToSession(sessionId,event);
     hiddenUuids.add(tool.uuid);
     released += originalTokens - estimateTokensForContent(replacement);
   }
@@ -309,7 +304,7 @@ function tryMicrocompact(ctx: CompressContext): number {
 // ---------- L5 Compaction ----------
 
 async function tryL5Compaction(ctx: CompressContext): Promise<number> {
-  const { sessionId, projectBase, config, currentTurnId, events, hiddenUuids } = ctx;
+  const { sessionId, config, currentTurnId, events, hiddenUuids } = ctx;
 
   const startTurn = 1;
   const endTurn = currentTurnId - config.keepRecentTurns;
@@ -365,7 +360,7 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
     method: 'auto-compact',
     timestamp: new Date().toISOString(),
   };
-  appendSummaryToSession(sessionId, projectBase,event);
+  appendSummaryToSession(sessionId,event);
   for (const u of replacedUuids) hiddenUuids.add(u);
 
   const replacedTokens = transcript.reduce((sum, m) => sum + estimateTokensForContent(m.content), 0);

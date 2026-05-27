@@ -1,5 +1,8 @@
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
+
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 export interface PersistResult {
   path: string;
@@ -7,13 +10,12 @@ export interface PersistResult {
 }
 
 export function persistToolResult(
-  projectBase: string,
   encodedProjectPath: string,
   sessionId: string,
   toolCallId: string,
   content: string,
 ): PersistResult {
-  const dir = join(projectBase, encodedProjectPath, 'tool-results', sessionId);
+  const dir = join(PROJECT_BASE, encodedProjectPath, 'tool-results', sessionId);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const file = join(dir, `${toolCallId}.txt`);
   if (!existsSync(file)) {

@@ -9,7 +9,7 @@ import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 interface FixtureOptions {
   numTurns: number;
@@ -105,7 +105,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 3, toolContentSize: 4000 });
       try {
         const cfg = tinyConfig({ prefixTurnsProtected: 2, pruneProtectedTokens: 0 });
-        await run(fx.sessionId, PROJECT_BASE, fx.slug, 10000, null, cfg);
+        await run(fx.sessionId, fx.slug, 10000, null, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.filter((s) => s.method === 'prune')).toHaveLength(0);
       } finally { cleanup(fx.slug); }
@@ -115,7 +115,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 5, toolContentSize: 4000 });
       try {
         const cfg = tinyConfig({ prefixTurnsProtected: 0, pruneProtectedTokens: 3000 });
-        await run(fx.sessionId, PROJECT_BASE, fx.slug, 100000, null, cfg);
+        await run(fx.sessionId, fx.slug, 100000, null, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         const pruneSummaries = summaries.filter((s) => s.method === 'prune');
         // Only old tools (turn 1, 2) should be pruned; recent tools (3, 4, 5) protected by token budget.
@@ -128,7 +128,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 5, toolContentSize: 4000, toolName: 'Read' });
       try {
         const cfg = tinyConfig({ prefixTurnsProtected: 0, pruneProtectedTokens: 0, toolsExemptFromPrune: ['Read'] });
-        await run(fx.sessionId, PROJECT_BASE, fx.slug, 100000, null, cfg);
+        await run(fx.sessionId, fx.slug, 100000, null, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.filter((s) => s.method === 'prune')).toHaveLength(0);
       } finally { cleanup(fx.slug); }
@@ -147,7 +147,7 @@ describe('compressor behavior', () => {
           keepRecentTurns: 2,
         });
         const llm = makeMockLLM('## Compacted History\n\n### Goal\nx\n\n### Instructions\ny\n\n### Discoveries\nz\n\n### Accomplished\nw\n\n### Relevant Files\nv');
-        const result = await run(fx.sessionId, PROJECT_BASE, fx.slug, 100000, llm, cfg);
+        const result = await run(fx.sessionId, fx.slug, 100000, llm, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         const compactionSummaries = summaries.filter((s) => s.method === 'auto-compact');
         expect(compactionSummaries.length).toBe(1);
@@ -163,7 +163,7 @@ describe('compressor behavior', () => {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
         const summary = '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
-        await compactWithLLM(fx.sessionId, PROJECT_BASE, fx.slug, cfg, llm);
+        await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
         const compactionSummaries = summaries.filter((s) => s.method === 'auto-compact');
         expect(compactionSummaries.length).toBe(1);
@@ -177,7 +177,7 @@ describe('compressor behavior', () => {
       try {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 5, keepRecentTurns: 1 });
         const llm = makeMockLLM('summary');
-        const result = await compactWithLLM(fx.sessionId, PROJECT_BASE, fx.slug, cfg, llm);
+        const result = await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
         expect(result.didCompress).toBe(false);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
@@ -188,7 +188,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
-        const result = await compactWithLLM(fx.sessionId, PROJECT_BASE, fx.slug, cfg, null);
+        const result = await compactWithLLM(fx.sessionId, fx.slug, cfg, null);
         expect(result.didCompress).toBe(false);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
@@ -202,7 +202,7 @@ describe('compressor behavior', () => {
       try {
         const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
         const llm = makeMockLLM('## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne');
-        await compactWithLLM(fx.sessionId, PROJECT_BASE, fx.slug, cfg, llm);
+        await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
@@ -217,7 +217,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 1, toolContentSize: 5000, toolName: 'bash' });
       try {
         const cfg = tinyConfig({ thresholdTokens: 100, persistPreviewChars: 100 });
-        const result = await run(fx.sessionId, PROJECT_BASE, fx.slug, 1000, null, cfg);
+        const result = await run(fx.sessionId, fx.slug, 1000, null, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         const persistSummaries = summaries.filter((s) => s.method === 'collapse-llm');
         expect(persistSummaries.length).toBe(1);
@@ -230,7 +230,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 1, toolContentSize: 10, toolName: 'bash' });
       try {
         const cfg = tinyConfig({ thresholdTokens: 100 });
-        await run(fx.sessionId, PROJECT_BASE, fx.slug, 1000, null, cfg);
+        await run(fx.sessionId, fx.slug, 1000, null, cfg);
         const summaries = readSummaryEvents(fx.transcriptPath);
         const persistSummaries = summaries.filter((s) => s.method === 'collapse-llm');
         expect(persistSummaries).toHaveLength(0);

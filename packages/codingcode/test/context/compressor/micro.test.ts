@@ -7,7 +7,7 @@ import { run } from '../../../src/context/compressor/index.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 function makeFixture(sessionId: string, slug: string, numTurns: number, toolOutput?: string) {
   const dir = join(PROJECT_BASE, slug, 'sessions');
@@ -76,7 +76,7 @@ describe('L3 Microcompact', () => {
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 3); // 3 tool results, keep 1
     try {
-      await run(sessionId, PROJECT_BASE, slug, 1000, null, microCfg());
+      await run(sessionId, slug, 1000, null, microCfg());
       const summaries = readSummaryEvents(fx.transcriptPath);
       const pruneSummaries = summaries.filter((s) => s.method === 'prune');
       expect(pruneSummaries.length).toBe(2); // 2 old tool results compacted
@@ -91,7 +91,7 @@ describe('L3 Microcompact', () => {
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 1); // 1 tool result <= 1
     try {
-      await run(sessionId, PROJECT_BASE, slug, 1000, null, microCfg());
+      await run(sessionId, slug, 1000, null, microCfg());
       const summaries = readSummaryEvents(fx.transcriptPath);
       expect(summaries).toHaveLength(0);
     } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
@@ -102,7 +102,7 @@ describe('L3 Microcompact', () => {
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 3, 'short'); // all < 120 chars
     try {
-      await run(sessionId, PROJECT_BASE, slug, 1000, null, microCfg());
+      await run(sessionId, slug, 1000, null, microCfg());
       const summaries = readSummaryEvents(fx.transcriptPath);
       expect(summaries).toHaveLength(0);
     } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }

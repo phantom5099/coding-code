@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { estimateTokensForContent } from '../../src/context/utils/tokens.js';
 import { getContextConfig } from '../../src/context/config.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 describe('appendTurnEnd', () => {
   const projectSlug = randomUUID();

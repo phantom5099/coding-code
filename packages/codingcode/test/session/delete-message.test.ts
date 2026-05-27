@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { buildMessages } from '../../src/session/store.js';
 import type { SessionIndex } from '../../src/session/types.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 function makeFixture(sessionId: string, slug: string) {
   const dir = join(PROJECT_BASE, slug, 'sessions');

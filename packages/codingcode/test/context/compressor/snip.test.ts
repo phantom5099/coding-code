@@ -7,7 +7,7 @@ import { run } from '../../../src/context/compressor/index.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'test-project');
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 function makeFixture(sessionId: string, slug: string, numTurns: number) {
   const dir = join(PROJECT_BASE, slug, 'sessions');
@@ -76,7 +76,7 @@ describe('L2 Snip', () => {
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 3); // 9 messages > 4
     try {
-      await run(sessionId, PROJECT_BASE, slug, 1000, null, snipCfg());
+      await run(sessionId, slug, 1000, null, snipCfg());
       const summaries = readSummaryEvents(fx.transcriptPath);
       const snipSummaries = summaries.filter((s) => s.method === 'context-collapse');
       expect(snipSummaries).toHaveLength(1);
@@ -90,7 +90,7 @@ describe('L2 Snip', () => {
     const fx = makeFixture(sessionId, slug, 1); // 3 messages < 4
     try {
       const cfg = { ...snipCfg(), snipMaxMessages: 999 };
-      await run(sessionId, PROJECT_BASE, slug, 1000, null, cfg);
+      await run(sessionId, slug, 1000, null, cfg);
       const summaries = readSummaryEvents(fx.transcriptPath);
       expect(summaries).toHaveLength(0);
     } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
