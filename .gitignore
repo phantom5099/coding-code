@@ -9,3 +9,13 @@ packages/desktop/out/
 .codingcode/
 docs/
 typecheck-output.txt
+neoneo-v2
+cb_test.json
+err_test.json
+lose_match.json
+ndk2.json
+.gitignore
+ndk3.json
+replay_full.json
+test/tank-v2.test.ts
+.gitignore
