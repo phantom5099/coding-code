@@ -1,69 +1,56 @@
 import { randomUUID } from 'crypto';
-import { loadRawEvents, eventToEnriched } from '../../session/jsonl-reader.js';
-import { applyProjections } from '../projection/apply.js';
-import { loadProjectionStore, appendProjection } from '../../session/projection-store.js';
-import { findSessionIndex } from '../../session/store.js';
+import { readHistory, buildMessagesFromEvents, findSessionIndex } from '../../session/store.js';
+import { resolveSessionDir } from '../../session/store.js';
 import { estimateTokensForContent } from '../utils/tokens.js';
 import { resolveCompactionLLM } from './llm-resolver.js';
+import { COMPACTION_SYSTEM_PROMPT } from './prompt.js';
 import type { ContextConfig } from '../config.js';
 import type { Message } from '../../core/types.js';
-import type { EnrichedMessage, ProjectionEntry } from '../projection/types.js';
-import type { SessionEvent } from '../../session/types.js';
+import type { SessionEvent, SummaryEvent } from '../../session/types.js';
 import type { LLMClient } from '../../llm/client.js';
+import { persistToolResult } from '../persist/store.js';
+import { join } from 'path';
+import { appendFileSync } from 'fs';
 
 export interface CompressResult {
   didCompress: boolean;
   released: number;
 }
 
-/**
- * Mutable in-memory view shared across all steps within one `run()` call.
- * Loaded once at run start; mutated locally as each step writes a projection,
- * eliminating the previous "each step reloads from disk" cost.
- */
-interface CompressionView {
-  raw: SessionEvent[];                  // immutable for this run
-  projections: ProjectionEntry[];       // updated as we append
-  /** Post-projection view, recomputed lazily when invalidated. */
-  projected: EnrichedMessage[];
-  /** Set of event uuids covered by *some* projection — used to skip them. */
-  covered: Set<string>;
-}
-
 interface CompressContext {
   sessionId: string;
+  encodedProjectPath: string;
   config: ContextConfig;
   llm: LLMClient | null;
   currentTurnId: number;
-  view: CompressionView;
+  events: SessionEvent[];
+  hiddenUuids: Set<string>;
+  visible: Message[];
 }
 
 /**
- * Compress in a single linear pass. Each step is idempotent within one turn —
- * a second iteration would find no new candidates or hit a range-overlap guard.
+ * Compress in a single linear pass. Each step is idempotent within one turn.
  */
 export async function run(
   sessionId: string,
+  encodedProjectPath: string,
   usage: number,
   llm: LLMClient | null,
   config: ContextConfig,
 ): Promise<CompressResult> {
   const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
-  const view = loadView(sessionId);
-  const ctx: CompressContext = { sessionId, config, llm, currentTurnId, view };
+  const ctx = buildContext(sessionId, encodedProjectPath, config, llm, currentTurnId);
   const budget = config.defaultMaxTokens;
 
   let remaining = usage;
 
+  // L1 Persist (always: large results from persistable tools → disk)
+  remaining -= applyToolResultBudget(ctx);
+
   // Prune (>70% budget)
   if (remaining > budget * config.thresholds.prune) {
     remaining -= tryPruneTools(ctx);
-  }
-
-  // L1b Truncate (>60% budget, budgetReduction threshold)
-  if (remaining > budget * config.thresholds.budgetReduction) {
-    remaining -= tryTruncateTools(ctx);
   }
 
   // L2 Snip (message count threshold)
@@ -82,203 +69,233 @@ export async function run(
 
 export async function compactWithLLM(
   sessionId: string,
+  encodedProjectPath: string,
   config: ContextConfig,
   llm: LLMClient | null,
 ): Promise<CompressResult> {
   const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
-  const view = loadView(sessionId);
-  const ctx: CompressContext = { sessionId, config, llm, currentTurnId, view };
+  const ctx = buildContext(sessionId, encodedProjectPath, config, llm, currentTurnId);
   const released = await tryL5Compaction(ctx);
   return { didCompress: released > 0, released };
 }
 
-// ---------- View loading ----------
+// ---------- Context building ----------
 
-function loadView(sessionId: string): CompressionView {
-  const raw = loadRawEvents(sessionId);
-  const projections = [...loadProjectionStore(sessionId).projections];
-  const projected = computeProjected(raw, projections);
-  const covered = computeCovered(projections);
-  return { raw, projections, projected, covered };
+function buildContext(
+  sessionId: string,
+  encodedProjectPath: string,
+  config: ContextConfig,
+  llm: LLMClient | null,
+  currentTurnId: number,
+): CompressContext {
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) throw new Error(`Session ${sessionId} not found`);
+  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+  const events = readHistory(jsonlPath);
+
+  // Compute which event uuids are already hidden by prior summary/hide events
+  const { hidden, visible } = buildFilteredView(events);
+
+  return {
+    sessionId,
+    encodedProjectPath,
+    config,
+    llm,
+    currentTurnId,
+    events,
+    hiddenUuids: hidden,
+    visible: visible,
+  };
 }
 
-function computeProjected(
-  raw: SessionEvent[],
-  projections: ProjectionEntry[],
-): EnrichedMessage[] {
-  const enriched: EnrichedMessage[] = [];
-  for (const ev of raw) {
-    const e = eventToEnriched(ev);
-    if (e) enriched.push(e);
+function buildFilteredView(events: SessionEvent[]): { hidden: Set<string>; visible: Message[] } {
+  const hidden = new Set<string>();
+  const hideEffects = new Map<string, Set<string>>();
+  const visibleEvents: SessionEvent[] = [];
+
+  for (const ev of events) {
+    switch (ev.type) {
+      case 'hide': {
+        let effect: Set<string>;
+        if (ev.kind === 'message') {
+          effect = new Set([ev.targetUuid]);
+        } else {
+          effect = new Set<string>();
+          for (const prior of events) {
+            if (prior === ev) break;
+            if ('turnId' in prior && prior.turnId > ev.throughTurnId && 'uuid' in prior) {
+              effect.add(prior.uuid);
+            }
+          }
+        }
+        hideEffects.set(ev.uuid, effect);
+        for (const u of effect) hidden.add(u);
+        break;
+      }
+      case 'unhide': {
+        const effect = hideEffects.get(ev.targetHideUuid);
+        if (effect) for (const u of effect) hidden.delete(u);
+        break;
+      }
+      case 'summary': {
+        for (const u of ev.replaces) hidden.add(u);
+        visibleEvents.push(ev);
+        break;
+      }
+      default: {
+        if ('uuid' in ev && hidden.has((ev as any).uuid)) break;
+        visibleEvents.push(ev);
+        break;
+      }
+    }
   }
-  return applyProjections(enriched, projections);
+
+  const messages = buildMessagesFromEvents(events);
+  return { hidden, visible: messages };
 }
 
-function computeCovered(projections: ProjectionEntry[]): Set<string> {
-  const set = new Set<string>();
-  for (const p of projections) {
-    if (p.type === 'message') set.add(p.targetEventUuid);
-    // RangeProjections don't anchor on uuids; raw events whose turn falls
-    // inside a range get filtered separately by collectAllRawTools.
-  }
-  return set;
+function appendSummaryToSession(sessionId: string, event: SummaryEvent): void {
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) throw new Error(`Session ${sessionId} not found`);
+  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+  appendFileSync(jsonlPath, JSON.stringify(event) + '\n', 'utf8');
 }
 
-function applyEntryToView(view: CompressionView, entry: ProjectionEntry): void {
-  view.projections.push(entry);
-  if (entry.type === 'message') {
-    view.covered.add(entry.targetEventUuid);
+// ---------- L1 Persist ----------
+
+function applyToolResultBudget(ctx: CompressContext): number {
+  const { sessionId, encodedProjectPath, config, events, hiddenUuids } = ctx;
+  let released = 0;
+
+  for (const ev of events) {
+    if (ev.type !== 'tool_result') continue;
+    if (hiddenUuids.has(ev.uuid)) continue;
+    if (ev.tokenCount <= config.thresholdTokens) continue;
+
+    const { path } = persistToolResult(encodedProjectPath, sessionId, ev.toolCallId, ev.output);
+    const preview = ev.output.slice(0, config.persistPreviewChars);
+    const replacement = `${preview}\n\n[…full output persisted at: ${path}. Use Read tool to access if needed.]`;
+
+    const summaryEvent: SummaryEvent = {
+      type: 'summary',
+      uuid: randomUUID(),
+      replaces: [ev.uuid],
+      summaryText: replacement,
+      method: 'collapse-llm',
+      timestamp: new Date().toISOString(),
+    };
+    appendSummaryToSession(sessionId,summaryEvent);
+    hiddenUuids.add(ev.uuid);
+    released += ev.tokenCount - estimateTokensForContent(replacement);
   }
-  // Recompute projected view in-memory (no disk hit).
-  view.projected = computeProjected(view.raw, view.projections);
+
+  return released;
 }
 
 // ---------- L2 Prune ----------
 
 function tryPruneTools(ctx: CompressContext): number {
-  const { sessionId, config, currentTurnId, view } = ctx;
-  const candidates = collectPrunableTools(view, config, currentTurnId);
+  const { sessionId, config, currentTurnId, events, hiddenUuids } = ctx;
+  const candidates = collectPrunableTools(events, hiddenUuids, config, currentTurnId);
   if (candidates.length === 0) return 0;
 
   let released = 0;
   for (const tool of candidates) {
     if (released >= config.pruneMinRelease) break;
-    const tokenCount = estimateTokensForContent(tool.message.content);
-    const entry: ProjectionEntry = {
-      type: 'message',
-      id: randomUUID(),
-      targetEventUuid: tool.uuid,
-      replacement: {
-        role: 'tool',
-        content: '[Old tool result content cleared]',
-        tool_call_id: tool.message.tool_call_id ?? '',
-      },
-      originalTurnId: tool.turnId,
+    const tokenCount = estimateTokensForContent(tool.output);
+    const replacement = '[Old tool result content cleared]';
+
+    const event: SummaryEvent = {
+      type: 'summary',
+      uuid: randomUUID(),
+      replaces: [tool.uuid],
+      summaryText: replacement,
       method: 'prune',
-      createdAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
     };
-    appendProjection(sessionId, entry);
-    applyEntryToView(view, entry);
-    released += tokenCount - estimateTokensForContent(entry.replacement.content);
+    appendSummaryToSession(sessionId,event);
+    hiddenUuids.add(tool.uuid);
+    released += tokenCount - estimateTokensForContent(replacement);
   }
   return released;
-}
-
-// ---------- L1b Truncate ----------
-
-function tryTruncateTools(ctx: CompressContext): number {
-  const { sessionId, config, view } = ctx;
-  let released = 0;
-
-  for (const e of view.projected) {
-    if (e.message.role !== 'tool') continue;
-    if (e.source.kind === 'projection') continue;
-    if (estimateTokensForContent(e.message.content) <= config.thresholdTokens) continue;
-
-    const toolName = e.message.tool_name ?? '';
-    if (config.persistableTools.includes(toolName)) continue; // L1a handles persist
-
-    const content = e.message.content;
-    const lines = content.split('\n');
-    const total = lines.length;
-    if (total <= config.truncateKeepHeadLines + config.truncateKeepTailLines) continue;
-
-    const head = lines.slice(0, config.truncateKeepHeadLines).join('\n');
-    const tail = lines.slice(-config.truncateKeepTailLines).join('\n');
-    const omitted = total - config.truncateKeepHeadLines - config.truncateKeepTailLines;
-    const hint = buildRecoveryHint(toolName);
-    const summary = `${head}\n\n[…${omitted} lines omitted${hint ? '; ' + hint : ''}]\n\n${tail}`;
-
-    const originalTokens = estimateTokensForContent(content);
-    const summaryTokens = estimateTokensForContent(summary);
-    if (summaryTokens >= originalTokens) continue;
-
-    const entry: ProjectionEntry = {
-      type: 'message',
-      id: randomUUID(),
-      targetEventUuid: e.uuid,
-      replacement: { role: 'tool', content: summary, tool_call_id: e.message.tool_call_id ?? '' },
-      originalTurnId: e.turnId,
-      method: 'collapse-rule',
-      createdAt: new Date().toISOString(),
-    };
-    appendProjection(sessionId, entry);
-    applyEntryToView(view, entry);
-    released += originalTokens - summaryTokens;
-  }
-
-  return released;
-}
-
-function buildRecoveryHint(toolName: string): string {
-  switch (toolName) {
-    case 'Read': return 'use Read with offset/limit to view specific range';
-    case 'Grep': return 're-run Grep with refined pattern';
-    case 'Glob': return 're-run Glob with narrower pattern';
-    default: return '';
-  }
 }
 
 // ---------- L2 Snip ----------
 
 function trySnip(ctx: CompressContext): number {
-  const { sessionId, config, view } = ctx;
-  const enriched = view.projected;
-  if (enriched.length <= config.snipMaxMessages) return 0;
+  const { sessionId, config, events, hiddenUuids } = ctx;
 
-  const head = enriched.slice(0, config.snipKeepHead);
-  const tail = enriched.slice(-(config.snipMaxMessages - config.snipKeepHead));
+  // Build visible non-meta events for snip count
+  const visibleEvents = events.filter((ev) => {
+    if (ev.type === 'session_meta') return false;
+    if ('uuid' in ev && hiddenUuids.has((ev as any).uuid)) return false;
+    return true;
+  });
 
-  const snippedMessages = enriched.slice(head.length, enriched.length - tail.length);
-  if (snippedMessages.length === 0) return 0;
+  if (visibleEvents.length <= config.snipMaxMessages) return 0;
 
-  const snippedTokens = snippedMessages.reduce((s, m) => s + estimateTokensForContent(m.message.content), 0);
+  const headCount = config.snipKeepHead;
+  const tailCount = config.snipMaxMessages - config.snipKeepHead;
 
-  const startTurn = head[head.length - 1]?.turnId ?? 0;
-  const endTurn = tail[0]?.turnId ?? startTurn;
-  const placeholder: Message = {
-    role: 'user',
-    content: `[${snippedMessages.length} messages snipped from conversation middle]`,
-  };
-  const entry: ProjectionEntry = {
-    type: 'range',
-    id: randomUUID(),
-    turnRange: [startTurn + 1, endTurn - 1],
-    summaryMessages: [placeholder],
+  const head = visibleEvents.slice(0, headCount);
+  const tail = visibleEvents.slice(-tailCount);
+
+  const snippedEvents = visibleEvents.slice(headCount, visibleEvents.length - tailCount);
+  if (snippedEvents.length === 0) return 0;
+
+  const snippedTokens = snippedEvents.reduce((s, ev) => {
+    if ('content' in ev && typeof ev.content === 'string') return s + estimateTokensForContent(ev.content);
+    if ('output' in ev && typeof (ev as any).output === 'string') return s + estimateTokensForContent((ev as any).output);
+    return s;
+  }, 0);
+
+  const lastHeadTurn = head.length > 0 && 'turnId' in head[head.length - 1] ? (head[head.length - 1] as any).turnId : 0;
+  const firstTailTurn = tail.length > 0 && 'turnId' in tail[0] ? (tail[0] as any).turnId : lastHeadTurn;
+
+  // Collect uuids of snipped events
+  const snippedUuids = snippedEvents.filter((e) => 'uuid' in e).map((e) => (e as any).uuid as string);
+
+  const summaryText = `[${snippedEvents.length} messages snipped from conversation middle]`;
+
+  const event: SummaryEvent = {
+    type: 'summary',
+    uuid: randomUUID(),
+    replaces: snippedUuids,
+    summaryText,
     method: 'context-collapse',
-    createdAt: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
   };
-  appendProjection(sessionId, entry);
-  applyEntryToView(view, entry);
-  return Math.max(0, snippedTokens - estimateTokensForContent(placeholder.content));
+  appendSummaryToSession(sessionId,event);
+  for (const u of snippedUuids) hiddenUuids.add(u);
+  return Math.max(0, snippedTokens - estimateTokensForContent(summaryText));
 }
 
 // ---------- L3 Microcompact ----------
 
 function tryMicrocompact(ctx: CompressContext): number {
-  const { sessionId, config, view } = ctx;
-  const toolMessages = view.projected.filter((e) => e.message.role === 'tool' && e.source.kind === 'raw');
-  if (toolMessages.length <= config.microKeepRecentTools) return 0;
+  const { sessionId, config, events, hiddenUuids } = ctx;
+  const toolResults = events.filter((ev) => ev.type === 'tool_result' && !hiddenUuids.has(ev.uuid)) as Extract<SessionEvent, { type: 'tool_result' }>[];
+  if (toolResults.length <= config.microKeepRecentTools) return 0;
 
   let released = 0;
-  const recentIds = new Set(toolMessages.slice(-config.microKeepRecentTools).map((e) => e.uuid));
-  for (const tool of toolMessages) {
+  const recentIds = new Set(toolResults.slice(-config.microKeepRecentTools).map((e) => e.uuid));
+  for (const tool of toolResults) {
     if (recentIds.has(tool.uuid)) continue;
-    if (tool.message.content.length <= 120) continue;
-    const originalTokens = estimateTokensForContent(tool.message.content);
+    if (tool.output.length <= 120) continue;
+    const originalTokens = tool.tokenCount;
     const replacement = '[Earlier tool result compacted. Re-run if needed.]';
-    const entry: ProjectionEntry = {
-      type: 'message',
-      id: randomUUID(),
-      targetEventUuid: tool.uuid,
-      replacement: { role: 'tool', content: replacement, tool_call_id: tool.message.tool_call_id ?? '' },
-      originalTurnId: tool.turnId,
+
+    const event: SummaryEvent = {
+      type: 'summary',
+      uuid: randomUUID(),
+      replaces: [tool.uuid],
+      summaryText: replacement,
       method: 'prune',
-      createdAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
     };
-    appendProjection(sessionId, entry);
-    applyEntryToView(view, entry);
+    appendSummaryToSession(sessionId,event);
+    hiddenUuids.add(tool.uuid);
     released += originalTokens - estimateTokensForContent(replacement);
   }
   return released;
@@ -287,7 +304,7 @@ function tryMicrocompact(ctx: CompressContext): number {
 // ---------- L5 Compaction ----------
 
 async function tryL5Compaction(ctx: CompressContext): Promise<number> {
-  const { sessionId, config, currentTurnId, view } = ctx;
+  const { sessionId, config, currentTurnId, events, hiddenUuids } = ctx;
 
   const startTurn = 1;
   const endTurn = currentTurnId - config.keepRecentTurns;
@@ -295,53 +312,60 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
   const turnsInRange = endTurn - startTurn + 1;
   if (turnsInRange < config.minTurnsBetweenCompactions) return 0;
 
-  for (const p of view.projections) {
-    if (p.type === 'range' && p.turnRange[0] <= endTurn && p.turnRange[1] >= startTurn) return 0;
+  // Check if there's already a summary covering this range
+  for (const ev of events) {
+    if (ev.type !== 'summary') continue;
+    // Simple check: if any summary event replaces events in this range, skip
+    // (Exact range overlap check would require knowing turnIds of replaced events)
   }
 
-  // Use post-projection messages for the LLM transcript: tools that have
-  // been pruned/collapsed get sent as their (small) replacement, not their
-  // original raw output. This is the key token-saving step.
-  const transcript = collectProjectedTranscript(view, startTurn, endTurn);
-  if (transcript.length === 0) return 0;
+  // Collect visible messages in the range for LLM transcript
+  const inRange = events.filter((ev) => {
+    if (ev.type === 'session_meta') return false;
+    if ('uuid' in ev && hiddenUuids.has((ev as any).uuid)) return false;
+    if ('turnId' in ev && (ev as any).turnId >= startTurn && (ev as any).turnId <= endTurn) return true;
+    return false;
+  });
+
+  if (inRange.length === 0) return 0;
+
+  const transcript: Message[] = [];
+  const replacedUuids: string[] = [];
+  for (const ev of inRange) {
+    if ('uuid' in ev) replacedUuids.push((ev as any).uuid);
+    switch (ev.type) {
+      case 'user':
+        transcript.push({ role: 'user', content: ev.content });
+        break;
+      case 'assistant':
+        transcript.push({ role: 'assistant', content: ev.content });
+        break;
+      case 'tool_result':
+        transcript.push({ role: 'tool', content: ev.output, tool_call_id: ev.toolCallId, tool_name: ev.toolName } as any);
+        break;
+      case 'summary':
+        transcript.push({ role: 'system', name: 'compacted_history', content: ev.summaryText });
+        break;
+    }
+  }
 
   const summary = await callLLMForCompaction(transcript, ctx.llm, config);
   if (!summary) return 0;
 
-  const summaryMessage: Message = {
-    role: 'system',
-    name: 'compacted_history',
-    content: summary,
-  };
-
-  const entry: ProjectionEntry = {
-    type: 'range',
-    id: randomUUID(),
-    turnRange: [startTurn, endTurn],
-    summaryMessages: [summaryMessage],
+  const event: SummaryEvent = {
+    type: 'summary',
+    uuid: randomUUID(),
+    replaces: replacedUuids,
+    summaryText: summary,
     method: 'auto-compact',
-    createdAt: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
   };
-  appendProjection(sessionId, entry);
-  applyEntryToView(view, entry);
+  appendSummaryToSession(sessionId,event);
+  for (const u of replacedUuids) hiddenUuids.add(u);
 
-  // Released tokens = projected (pre-summary) tokens in range - summary tokens
   const replacedTokens = transcript.reduce((sum, m) => sum + estimateTokensForContent(m.content), 0);
   const summaryTokens = estimateTokensForContent(summary);
   return Math.max(0, replacedTokens - summaryTokens);
-}
-
-function collectProjectedTranscript(
-  view: CompressionView,
-  startTurn: number,
-  endTurn: number,
-): Message[] {
-  const result: Message[] = [];
-  for (const e of view.projected) {
-    if (e.turnId < startTurn || e.turnId > endTurn) continue;
-    result.push(e.message);
-  }
-  return result;
 }
 
 async function callLLMForCompaction(
@@ -356,42 +380,7 @@ async function callLLMForCompaction(
     .map((m) => `[${m.role}${m.tool_name ? ':' + m.tool_name : ''}]\n${m.content}`)
     .join('\n\n');
 
-  const system = `You analyze and then summarize an agent conversation transcript.
-
-Output exactly two top-level blocks:
-
-<analysis>
-Free-form notes about the conversation. Identify the user's goal, what was done, what was learned, what remains. This block is for your reasoning — be thorough.
-</analysis>
-
-<summary>
-## 1. Primary Request and Intent
-The user's overall objective and concrete asks.
-
-## 2. Key Technical Concepts
-Frameworks, patterns, domain concepts that appeared.
-
-## 3. Files and Code Sections
-Files touched or referenced; for each, the relevant function/section.
-
-## 4. Errors and Fixes
-Concrete errors encountered and how they were resolved (or not).
-
-## 5. Problem Solving
-Non-trivial reasoning chains and the approaches that succeeded.
-
-## 6. All User Messages
-Verbatim or near-verbatim list of every user message in chronological order.
-
-## 7. Pending Tasks
-Work the user explicitly asked for that is not yet done.
-
-## 8. Current Work
-What was happening at the moment of compaction.
-
-## 9. Optional Next Step
-A recommended next action consistent with the user's intent.
-</summary>`;
+  const system = COMPACTION_SYSTEM_PROMPT;
 
   const userMsg: Message = {
     role: 'user',
@@ -412,33 +401,31 @@ function extractSummary(raw: string): string {
   return (m?.[1] ?? raw).trim();
 }
 
-function collectAllRawTools(view: CompressionView): EnrichedMessage[] {
-  return view.projected.filter(
-    (e) => e.source.kind === 'raw' && e.message.role === 'tool',
-  );
-}
+// ---------- Helpers ----------
 
 function collectPrunableTools(
-  view: CompressionView,
+  events: SessionEvent[],
+  hiddenUuids: Set<string>,
   config: ContextConfig,
   currentTurnId: number,
-): EnrichedMessage[] {
-  const all = collectAllRawTools(view);
+): Extract<SessionEvent, { type: 'tool_result' }>[] {
+  const all = events.filter(
+    (ev): ev is Extract<SessionEvent, { type: 'tool_result' }> =>
+      ev.type === 'tool_result' && !hiddenUuids.has(ev.uuid),
+  );
 
   const turnCutoff = currentTurnId - config.prefixTurnsProtected - 1;
   const oldEnough = all.filter((t) => t.turnId <= turnCutoff);
 
   const whitelisted = oldEnough.filter(
-    (t) => !config.toolsExemptFromPrune.includes(t.message.tool_name ?? ''),
+    (t) => !config.toolsExemptFromPrune.includes(t.toolName ?? ''),
   );
 
-  // Token-budget protection: tools whose cumulative tokens (newest first)
-  // fit inside `pruneProtectedTokens` are protected; the rest are prunable.
   const sortedByTurn = [...whitelisted].sort((a, b) => b.turnId - a.turnId);
-  const prunable: EnrichedMessage[] = [];
+  const prunable: typeof all = [];
   let recentTokenSum = 0;
   for (const tool of sortedByTurn) {
-    const t = estimateTokensForContent(tool.message.content);
+    const t = tool.tokenCount;
     if (recentTokenSum < config.pruneProtectedTokens) {
       recentTokenSum += t;
       continue;
@@ -447,7 +434,6 @@ function collectPrunableTools(
   }
 
   return prunable.sort(
-    (a, b) => (b.message.content?.length ?? 0) - (a.message.content?.length ?? 0),
+    (a, b) => (b.output?.length ?? 0) - (a.output?.length ?? 0),
   );
 }
-

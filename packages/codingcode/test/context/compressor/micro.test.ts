@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { run } from '../../../src/context/compressor/index.js';
-import { loadProjectionStore } from '../../../src/session/projection-store.js';
 import type { ContextConfig } from '../../../src/context/config.js';
-import type { SessionIndex } from '../../../src/session/types.js';
+import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
@@ -32,19 +31,26 @@ function makeFixture(sessionId: string, slug: string, numTurns: number, toolOutp
     sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: numTurns * 3, title: 'fixture', currentTurnId: numTurns,
-    tokenCountEstimate: 0, projectedRanges: [], lastUncoveredByteOffset: 0,
-    projectionCount: 0, lastCompressionFailures: 0,
+    tokenCountEstimate: 0, permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
   return { dir, transcriptPath, indexPath };
 }
 
+function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
+  const content = readFileSync(jsonlPath, 'utf8');
+  return content.split('\n')
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as SessionEvent)
+    .filter((ev): ev is SummaryEvent => ev.type === 'summary');
+}
+
 function microCfg(): ContextConfig {
   return {
     defaultMaxTokens: 10000,
     reservedTokens: 0,
-    thresholds: { budgetReduction: 0.1, prune: 0.99, compaction: 0.99 },
+    thresholds: { prune: 0.99, compaction: 0.99 },
     pruneProtectedTokens: 0,
     pruneMinRelease: 1,
     toolsExemptFromPrune: [],
@@ -54,54 +60,51 @@ function microCfg(): ContextConfig {
     compactionModel: '',
     archiveTtlDays: 30,
     checkpointKeep: 50,
-    thresholdTokens: 999_999,
-    truncateKeepHeadLines: 5,
-    truncateKeepTailLines: 15,
-    persistPreviewChars: 2000,
-    persistableTools: [],
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
     snipMaxMessages: 999,
     snipKeepHead: 3,
     microKeepRecentTools: 1,
+    persistPreviewChars: 2000,
+    thresholdTokens: 999_999,
   };
 }
 
 describe('L3 Microcompact', () => {
-  it('creates MessageProjections for old tool results exceeding keep count', () => {
+  it('creates summary events for old tool results exceeding keep count', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 3); // 3 tool results, keep 1
     try {
-      run(sessionId, 1000, null, microCfg());
-      const store = loadProjectionStore(sessionId);
-      const msgs = store.projections.filter((p) => p.type === 'message');
-      expect(msgs.length).toBe(2); // 2 old tool results compacted
-      for (const m of msgs) {
-        expect((m as any).originalTurnId).toBeLessThan(3);
+      await run(sessionId, slug, 1000, null, microCfg());
+      const summaries = readSummaryEvents(fx.transcriptPath);
+      const pruneSummaries = summaries.filter((s) => s.method === 'prune');
+      expect(pruneSummaries.length).toBe(2); // 2 old tool results compacted
+      for (const s of pruneSummaries) {
+        expect(s.replaces).toHaveLength(1);
       }
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
-  it('does nothing when under microKeepRecentTools threshold', () => {
+  it('does nothing when under microKeepRecentTools threshold', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
-    const fx = makeFixture(sessionId, slug, 1); // 1 tool result â‰?1
+    const fx = makeFixture(sessionId, slug, 1); // 1 tool result <= 1
     try {
-      run(sessionId, 1000, null, microCfg());
-      const store = loadProjectionStore(sessionId);
-      expect(store.projections.filter((p) => p.type === 'message')).toHaveLength(0);
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+      await run(sessionId, slug, 1000, null, microCfg());
+      const summaries = readSummaryEvents(fx.transcriptPath);
+      expect(summaries).toHaveLength(0);
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 
-  it('skips short tool results (â‰?20 chars)', () => {
+  it('skips short tool results (< 120 chars)', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, 3, 'short'); // all < 120 chars
     try {
-      run(sessionId, 1000, null, microCfg());
-      const store = loadProjectionStore(sessionId);
-      expect(store.projections.filter((p) => p.type === 'message')).toHaveLength(0);
-    } finally { rmSync(fx.dir, { recursive: true, force: true }); }
+      await run(sessionId, slug, 1000, null, microCfg());
+      const summaries = readSummaryEvents(fx.transcriptPath);
+      expect(summaries).toHaveLength(0);
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 });

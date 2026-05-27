@@ -292,7 +292,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       await runWithLayer(
         Effect.gen(function* () {
           const ctx = yield* ContextService;
-          return yield* ctx.compress(currentSessionId, null);
+          return yield* ctx.compress(currentSessionId, getWorkspaceCwd(), null);
         }),
       );
     },

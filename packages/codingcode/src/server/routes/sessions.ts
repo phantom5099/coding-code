@@ -54,7 +54,7 @@ sessionsRouter.post('/:id/compact', async (c) => {
       const svc = yield* SessionService;
       const ctx = yield* ContextService;
       const state = yield* svc.create(resolveWorkspaceCwd(body.cwd), 'unknown', '0.1.0', sessionId);
-      return yield* ctx.compress(state.sessionId, null);
+      return yield* ctx.compress(state.sessionId, state.projectPath, null);
     }),
   );
   return c.json(result);

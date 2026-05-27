@@ -20,7 +20,7 @@ describe('appendTurnEnd', () => {
   });
 
   afterEach(() => {
-    const dir = join(PROJECT_BASE, projectSlug, 'sessions');
+    const dir = join(PROJECT_BASE, projectSlug);
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
@@ -52,7 +52,6 @@ describe('appendTurnEnd', () => {
 
   it('compression thresholds have sensible defaults', () => {
     const config = getContextConfig();
-    expect(config.thresholds.budgetReduction).toBeGreaterThan(0);
     expect(config.thresholds.prune).toBeGreaterThan(0);
     expect(config.thresholds.compaction).toBeGreaterThan(0);
   });
