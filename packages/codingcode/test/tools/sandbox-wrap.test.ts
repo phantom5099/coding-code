@@ -63,7 +63,7 @@ describe('SandboxService integration with ToolExecutor', () => {
       parameters: z.object({}),
       execute: async (_args: unknown, ctx?: ToolExecCtx) => {
         if (ctx?.sandbox) {
-          const wrapped = await ctx.sandbox.wrapCommand('echo test');
+          const wrapped = await Effect.runPromise(ctx.sandbox.wrapCommand('echo test'));
           wrappedResults.push(wrapped);
         }
         return 'done';

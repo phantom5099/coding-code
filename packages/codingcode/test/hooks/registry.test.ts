@@ -83,6 +83,32 @@ describe('HookService', () => {
     await runWithLayer(program);
     expect(results).toEqual(['done']);
   });
+
+  it('should isolate handler exceptions — later handlers still run after one throws', async () => {
+    const called: string[] = [];
+
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      yield* hooks.register('session.save.before', async () => { throw new Error('bad handler'); });
+      yield* hooks.register('session.save.before', () => { called.push('second'); });
+      yield* hooks.emit('session.save.before', {});
+    });
+
+    await runWithLayer(program);
+    expect(called).toEqual(['second']);
+  });
+
+  it('should isolate decision handler exceptions — skips erroring handler and tries next', async () => {
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      yield* hooks.registerDecision('agent.turn.stop', async () => { throw new Error('bad decision'); }, { priority: 0 });
+      yield* hooks.registerDecision('agent.turn.stop', async () => ({ decision: 'continue' as const }), { priority: 1 });
+      return yield* hooks.emitDecision('agent.turn.stop', {});
+    });
+
+    const result = await runWithLayer(program);
+    expect(result?.decision).toBe('continue');
+  });
 });
 
 describe('HookService.reloadUserHooks', () => {

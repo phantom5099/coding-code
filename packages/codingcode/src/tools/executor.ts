@@ -98,7 +98,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
             projectPath: opts?.projectPath,
             agentRunner: opts?.agentRunner,
             sandbox: {
-              wrapCommand: (cmd: string) => Effect.runPromise(sandbox.wrapCommand(cmd)),
+              wrapCommand: (cmd: string) => sandbox.wrapCommand(cmd),
             },
           }),
           catch: (e) =>

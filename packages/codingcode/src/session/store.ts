@@ -121,68 +121,83 @@ function findFirstUserContent(history: SessionEvent[]): string | null {
 export class SessionService extends Effect.Service<SessionService>()('Session', {
   effect: Effect.gen(function* () {
     return {
-      create: (cwd: string, model: string, version: string, sessionId?: string, opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }): Effect.Effect<SessionStoreState> =>
-        Effect.sync(() => {
-          if (sessionId && !opts?.parentSessionId) assertResumeWorkspace(cwd, sessionId);
-          const state = initState(cwd, sessionId, opts?.parentSessionId);
-          ensureDirs(state.transcriptPath);
+      create: (cwd: string, model: string, version: string, sessionId?: string, opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }): Effect.Effect<SessionStoreState, AgentError> =>
+        Effect.try({
+          try: () => {
+            if (sessionId && !opts?.parentSessionId) assertResumeWorkspace(cwd, sessionId);
+            const state = initState(cwd, sessionId, opts?.parentSessionId);
+            ensureDirs(state.transcriptPath);
 
-          if (existsSync(state.transcriptPath)) {
-            const history = readHistory(state.transcriptPath);
-            const meta = history.find((e) => e.type === 'session_meta') as SessionMetaEvent | undefined;
-            if (meta) {
-              state.sessionMeta = meta;
-              state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
+            if (existsSync(state.transcriptPath)) {
+              const history = readHistory(state.transcriptPath);
+              const meta = history.find((e) => e.type === 'session_meta') as SessionMetaEvent | undefined;
+              if (meta) {
+                state.sessionMeta = meta;
+                state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
+              }
+              const firstUser = findFirstUserContent(history);
+              if (firstUser) state.title = makeTitle(firstUser);
+              return state;
             }
-            const firstUser = findFirstUserContent(history);
-            if (firstUser) state.title = makeTitle(firstUser);
+
+            const meta: SessionMetaEvent = {
+              type: 'session_meta', sessionId: state.sessionId,
+              projectPath: state.projectPath, cwd: state.cwd,
+              model, createdAt: new Date().toISOString(), version,
+              ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
+              ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
+              ...(opts?.agentName && { agentName: opts.agentName }),
+            };
+            state.sessionMeta = meta;
+            appendLine(state.transcriptPath, meta);
+            updateIndex(state);
             return state;
-          }
-
-          const meta: SessionMetaEvent = {
-            type: 'session_meta', sessionId: state.sessionId,
-            projectPath: state.projectPath, cwd: state.cwd,
-            model, createdAt: new Date().toISOString(), version,
-            ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
-            ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
-            ...(opts?.agentName && { agentName: opts.agentName }),
-          };
-          state.sessionMeta = meta;
-          appendLine(state.transcriptPath, meta);
-          updateIndex(state);
-          return state;
+          },
+          catch: (e) => e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      recordUser: (state: SessionStoreState, content: string): Effect.Effect<UserEvent> =>
-        Effect.sync(() => {
-          const event: UserEvent = { type: 'user', turnId: state.currentTurnId, uuid: randomUUID(), content, timestamp: new Date().toISOString() };
-          if (state.title === state.sessionId.slice(0, 8)) {
-            state.title = makeTitle(content);
-          }
-          appendEvent(state, event, estimateTokensForContent(content));
-          return event;
+      recordUser: (state: SessionStoreState, content: string): Effect.Effect<UserEvent, AgentError> =>
+        Effect.try({
+          try: () => {
+            const event: UserEvent = { type: 'user', turnId: state.currentTurnId, uuid: randomUUID(), content, timestamp: new Date().toISOString() };
+            if (state.title === state.sessionId.slice(0, 8)) {
+              state.title = makeTitle(content);
+            }
+            appendEvent(state, event, estimateTokensForContent(content));
+            return event;
+          },
+          catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      recordAssistant: (state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], model: string): Effect.Effect<AssistantEvent> =>
-        Effect.sync(() => {
-          const event: AssistantEvent = { type: 'assistant', turnId: state.currentTurnId, uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString() };
-          appendEvent(state, event, estimateTokensForContent(content));
-          return event;
+      recordAssistant: (state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], model: string): Effect.Effect<AssistantEvent, AgentError> =>
+        Effect.try({
+          try: () => {
+            const event: AssistantEvent = { type: 'assistant', turnId: state.currentTurnId, uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString() };
+            appendEvent(state, event, estimateTokensForContent(content));
+            return event;
+          },
+          catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      recordToolResult: (state: SessionStoreState, parentUuid: string, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent> =>
-        Effect.sync(() => {
-          const tokenCount = estimateTokensForContent(output);
-          const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString(), tokenCount };
-          appendEvent(state, event, tokenCount);
-          return event;
+      recordToolResult: (state: SessionStoreState, parentUuid: string, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent, AgentError> =>
+        Effect.try({
+          try: () => {
+            const tokenCount = estimateTokensForContent(output);
+            const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString(), tokenCount };
+            appendEvent(state, event, tokenCount);
+            return event;
+          },
+          catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      appendSummary: (state: SessionStoreState, replaces: string[], summaryText: string, method: SummaryEvent['method']): Effect.Effect<SummaryEvent> =>
-        Effect.sync(() => {
-          const event: SummaryEvent = { type: 'summary', uuid: randomUUID(), replaces, summaryText, method, timestamp: new Date().toISOString() };
-          appendEvent(state, event, estimateTokensForContent(summaryText));
-          return event;
+      appendSummary: (state: SessionStoreState, replaces: string[], summaryText: string, method: SummaryEvent['method']): Effect.Effect<SummaryEvent, AgentError> =>
+        Effect.try({
+          try: () => {
+            const event: SummaryEvent = { type: 'summary', uuid: randomUUID(), replaces, summaryText, method, timestamp: new Date().toISOString() };
+            appendEvent(state, event, estimateTokensForContent(summaryText));
+            return event;
+          },
+          catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
       hideMessage: (state: SessionStoreState, targetUuid: string, reason: string): Effect.Effect<HideEvent> =>

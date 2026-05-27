@@ -104,7 +104,11 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
         Effect.promise(async () => {
           for (const entry of sortedEntries(point)) {
             if (entry.type === 'observer') {
-              await (entry.handler as ObserverHandler)(payload);
+              try {
+                await (entry.handler as ObserverHandler)(payload);
+              } catch (e) {
+                console.error(`hook emit error [${point}]:`, e);
+              }
             }
           }
         }),
@@ -117,8 +121,12 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
         Effect.promise(async () => {
           for (const entry of sortedEntries(point)) {
             if (entry.type === 'decision') {
-              const result = await (entry.handler as DecisionHandler)(payload);
-              if (result != null) return result;
+              try {
+                const result = await (entry.handler as DecisionHandler)(payload);
+                if (result != null) return result;
+              } catch (e) {
+                console.error(`hook emitDecision error [${point}]:`, e);
+              }
             }
           }
           return null;

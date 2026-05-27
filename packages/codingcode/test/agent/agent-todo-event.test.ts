@@ -70,7 +70,7 @@ const mockLlm = {
 
 describe('TodoUpdate event', () => {
   it('should yield TodoUpdate when todo_write tool is called', async () => {
-    sharedTodoStore.write('main:test-todo-sid', [
+    sharedTodoStore.write('test-todo-sid', [
       { step: 'setup', status: 'pending' },
       { step: 'test', status: 'completed' },
     ]);

@@ -14,7 +14,8 @@ export type ErrorCode =
   | 'SESSION_NOT_FOUND'
   | 'SESSION_WORKSPACE_MISMATCH'
   | 'AGENT_ABORTED'
-  | 'STOP_LOOP';
+  | 'STOP_LOOP'
+  | 'SESSION_IO_ERROR';
 
 export class AgentError extends Error {
   constructor(

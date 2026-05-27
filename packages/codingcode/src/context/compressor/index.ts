@@ -25,7 +25,6 @@ interface CompressContext {
   currentTurnId: number;
   events: SessionEvent[];
   hiddenUuids: Set<string>;
-  visible: Message[];
 }
 
 /**
@@ -95,7 +94,7 @@ function buildContext(
   const events = readHistory(jsonlPath);
 
   // Compute which event uuids are already hidden by prior summary/hide events
-  const { hidden, visible } = buildFilteredView(events);
+  const { hidden } = buildFilteredView(events);
 
   return {
     sessionId,
@@ -105,14 +104,12 @@ function buildContext(
     currentTurnId,
     events,
     hiddenUuids: hidden,
-    visible: visible,
   };
 }
 
-function buildFilteredView(events: SessionEvent[]): { hidden: Set<string>; visible: Message[] } {
+function buildFilteredView(events: SessionEvent[]): { hidden: Set<string> } {
   const hidden = new Set<string>();
   const hideEffects = new Map<string, Set<string>>();
-  const visibleEvents: SessionEvent[] = [];
 
   for (const ev of events) {
     switch (ev.type) {
@@ -140,19 +137,12 @@ function buildFilteredView(events: SessionEvent[]): { hidden: Set<string>; visib
       }
       case 'summary': {
         for (const u of ev.replaces) hidden.add(u);
-        visibleEvents.push(ev);
-        break;
-      }
-      default: {
-        if ('uuid' in ev && hidden.has((ev as any).uuid)) break;
-        visibleEvents.push(ev);
         break;
       }
     }
   }
 
-  const messages = buildMessagesFromEvents(events);
-  return { hidden, visible: messages };
+  return { hidden };
 }
 
 function appendSummaryToSession(sessionId: string, event: SummaryEvent): void {
