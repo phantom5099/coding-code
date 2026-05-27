@@ -131,8 +131,8 @@ describe('Memory Extractor', () => {
     });
 
     const callArgs = mockLlm.completeStream.mock.calls[0][0];
-    expect(callArgs.system).toContain('<existing_memory>');
-    expect(callArgs.system).toContain('Old info');
+    expect(callArgs.messages[0].content).toContain('已有记忆');
+    expect(callArgs.messages[0].content).toContain('Old info');
   });
 
   it('includes transcript in system prompt with labels', async () => {
@@ -152,9 +152,9 @@ describe('Memory Extractor', () => {
     });
 
     const callArgs = mockLlm.completeStream.mock.calls[0][0];
-    expect(callArgs.system).toContain('[user]');
-    expect(callArgs.system).toContain('[user+assistant]');
-    expect(callArgs.system).toContain('[user+tool]');
+    expect(callArgs.messages[0].content).toContain('[user]');
+    expect(callArgs.messages[0].content).toContain('[user+assistant]');
+    expect(callArgs.messages[0].content).toContain('[user+tool]');
   });
 
   it('only calls system prompt with specified types', async () => {
@@ -177,5 +177,53 @@ describe('Memory Extractor', () => {
     const callArgs = mockLlm.completeStream.mock.calls[0][0];
     // Should not mention reference guidance
     expect(callArgs.system).not.toContain('reference');
+  });
+
+  it('passes non-empty messages array with role user', async () => {
+    const mockLlm = createMockLlm('<memory></memory>');
+
+    const transcript: StructuredTranscript = {
+      userOnly: 'text',
+      userAndAssistant: 'text',
+      userAndTools: 'text',
+    };
+
+    await extractMemory({
+      currentAuto: '',
+      transcript,
+      types: defaultTypes,
+      llm: mockLlm,
+    });
+
+    const callArgs = mockLlm.completeStream.mock.calls[0][0];
+    expect(callArgs.messages).toHaveLength(1);
+    expect(callArgs.messages[0].role).toBe('user');
+    expect(callArgs.messages[0].content).toBeTruthy();
+  });
+
+  it('separates instruction in system and data in messages', async () => {
+    const mockLlm = createMockLlm('<memory></memory>');
+
+    const transcript: StructuredTranscript = {
+      userOnly: 'I use Python',
+      userAndAssistant: 'I use Python',
+      userAndTools: 'I use Python',
+    };
+
+    await extractMemory({
+      currentAuto: '### user\n- Likes TypeScript',
+      transcript,
+      types: defaultTypes,
+      llm: mockLlm,
+    });
+
+    const callArgs = mockLlm.completeStream.mock.calls[0][0];
+    // system contains instructions, not transcript data
+    expect(callArgs.system).toContain('规则');
+    expect(callArgs.system).toContain('记忆类型');
+    expect(callArgs.system).not.toContain('I use Python');
+    // messages contains transcript data, not instructions
+    expect(callArgs.messages[0].content).toContain('I use Python');
+    expect(callArgs.messages[0].content).toContain('Likes TypeScript');
   });
 });

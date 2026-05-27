@@ -46,24 +46,12 @@ export async function extractMemory(opts: {
     .filter(Boolean)
     .join('\n\n');
 
-  const systemPrompt = `从下面的会话记录中提取值得长期记忆的内容，输出 <memory>...</memory> 块。
-如果本次会话没有值得长期记忆的内容，输出 <memory></memory>。
-
-<existing_memory>
-${currentAuto}
-</existing_memory>
-
-<new_transcript>
-[user] ${transcript.userOnly}
----
-[user+assistant] ${transcript.userAndAssistant}
----
-[user+tool] ${transcript.userAndTools}
-</new_transcript>
+  const systemPrompt = `你是记忆提取器。从对话记录中提取值得长期记忆的内容，输出 <memory>...</memory> 块。
+如果没有值得记忆的内容，输出 <memory></memory>。
 
 规则：
-- 如果新信息与 existing_memory 中的条目矛盾，用新信息替换，不保留旧条目
-- 如果会话内同一事项前后不一致，以最新出现的为准
+- 新信息与已有记忆矛盾时，用新信息替换旧条目
+- 同一会话内前后不一致，以最新出现的为准
 - 只输出有内容的 ### 小节，忽略临时调试、一次性任务、报错堆栈
 
 记忆类型及信息来源：
@@ -72,9 +60,19 @@ ${typeGuidance}
 格式：
 ${formatExamples}`;
 
+  const userMessage = `已有记忆：
+${currentAuto}
+
+会话记录：
+[user] ${transcript.userOnly}
+---
+[user+assistant] ${transcript.userAndAssistant}
+---
+[user+tool] ${transcript.userAndTools}`;
+
   try {
     const result = llm.completeStream({
-      messages: [],
+      messages: [{ role: 'user', content: userMessage }],
       system: systemPrompt,
     });
 
