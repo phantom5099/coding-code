@@ -6,14 +6,14 @@ import type { ToolSearchService } from '../tools/tool-search-service';
 export function buildToolsForAgent(
   registry: ToolService,
   toolSearch: ToolSearchService,
-  agentId: string,
+  sessionId: string,
   coreAllowlist?: ReadonlySet<string>,
 ): ToolDescription[] {
   let core = registry.allCore();
   if (coreAllowlist) {
     core = core.filter(t => coreAllowlist.has(t.name));
   }
-  const loadedDeferred = registry.allDeferred().filter(t => toolSearch.isLoaded(agentId, t.name));
+  const loadedDeferred = registry.allDeferred().filter(t => toolSearch.isLoaded(sessionId, t.name));
   let deferred = loadedDeferred;
   if (coreAllowlist) {
     deferred = deferred.filter(t => coreAllowlist.has(t.name));
@@ -27,9 +27,9 @@ export function buildToolsForAgent(
 
 export function buildDeferredCatalogContent(
   toolSearch: ToolSearchService,
-  agentId: string,
+  sessionId: string,
 ): string | null {
-  const unloaded = toolSearch.listUnloadedDeferred(agentId);
+  const unloaded = toolSearch.listUnloadedDeferred(sessionId);
   if (unloaded.length === 0) return null;
   const lines = unloaded.map(t =>
     `- ${t.name}: ${t.shortDescription ?? t.description.slice(0, 80)}`,

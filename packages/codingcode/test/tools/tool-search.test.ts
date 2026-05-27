@@ -4,14 +4,14 @@ import { createToolSearchTool } from '../../src/tools/domains/self/tool-search.j
 describe('createToolSearchTool', () => {
   it('returns loaded tool list when matches found', async () => {
     const tool = createToolSearchTool({
-      search: (_agentId: string, _query: string) => [
+      search: (_sessionId: string, _query: string) => [
         { name: 'todo_write', shortDescription: 'Write tasks' },
       ],
     });
 
     const result = await tool.execute(
       { query: 'todo' },
-      { agentId: 'test-agent' },
+      { sessionId: 'test-agent' },
     );
     expect(result).toContain('Loaded 1 tool(s)');
     expect(result).toContain('todo_write');
@@ -24,16 +24,16 @@ describe('createToolSearchTool', () => {
 
     const result = await tool.execute(
       { query: 'zzznonexistent' },
-      { agentId: 'test-agent' },
+      { sessionId: 'test-agent' },
     );
     expect(result).toBe('No deferred tools matched "zzznonexistent".');
   });
 
-  it('throws if agentId is missing', async () => {
+  it('throws if sessionId is missing', async () => {
     const tool = createToolSearchTool({ search: () => [] });
     await expect(
       tool.execute({ query: 'anything' }, {}),
-    ).rejects.toThrow('tool_search requires agentId');
+    ).rejects.toThrow('tool_search requires sessionId');
   });
 
   it('each tool instance uses its own svc closure', async () => {
@@ -44,8 +44,8 @@ describe('createToolSearchTool', () => {
       search: () => [{ name: 'tool_b' }],
     });
 
-    const r1 = await tool1.execute({ query: 'x' }, { agentId: 'a' });
-    const r2 = await tool2.execute({ query: 'x' }, { agentId: 'a' });
+    const r1 = await tool1.execute({ query: 'x' }, { sessionId: 'a' });
+    const r2 = await tool2.execute({ query: 'x' }, { sessionId: 'a' });
 
     expect(r1).toContain('tool_a');
     expect(r2).toContain('tool_b');

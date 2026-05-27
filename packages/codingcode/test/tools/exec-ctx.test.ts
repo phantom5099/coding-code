@@ -48,7 +48,6 @@ describe('ToolExecCtx propagation', () => {
         sessionId: 'sess-1',
         turnId: 5,
         projectPath: '/proj',
-        agentId: 'agent-007',
       });
       return result;
     });
@@ -58,15 +57,14 @@ describe('ToolExecCtx propagation', () => {
     expect(captured[0].sessionId).toBe('sess-1');
     expect(captured[0].turnId).toBe(5);
     expect(captured[0].projectPath).toBe('/proj');
-    expect(captured[0].agentId).toBe('agent-007');
   });
 
-  it('should pass undefined agentId when not provided', async () => {
+  it('should pass sessionId when provided without other optional fields', async () => {
     const captured: ToolExecCtx[] = [];
 
     const stubTool: ToolDefinition = {
       name: 'ctx_no_agent',
-      description: 'captures ctx without agentId',
+      description: 'captures ctx',
       parameters: z.object({}),
       execute: async (_args: unknown, ctx?: ToolExecCtx) => {
         captured.push(ctx ?? {});
@@ -88,7 +86,6 @@ describe('ToolExecCtx propagation', () => {
 
     await runWithLayer(program);
     expect(captured).toHaveLength(1);
-    expect(captured[0].agentId).toBeUndefined();
     expect(captured[0].sessionId).toBe('sess-2');
   });
 });

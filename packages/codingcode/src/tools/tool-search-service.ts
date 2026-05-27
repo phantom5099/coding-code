@@ -4,9 +4,9 @@ import type { ToolDefinition } from './types';
 
 const loaded = new Map<string, Set<string>>();
 
-function getSet(agentId: string): Set<string> {
-  let s = loaded.get(agentId);
-  if (!s) { s = new Set(); loaded.set(agentId, s); }
+function getSet(sessionId: string): Set<string> {
+  let s = loaded.get(sessionId);
+  if (!s) { s = new Set(); loaded.set(sessionId, s); }
   return s;
 }
 
@@ -19,17 +19,17 @@ export class ToolSearchService extends Effect.Service<ToolSearchService>()('Tool
   effect: Effect.gen(function* () {
     const tools = yield* ToolService;
     return {
-      isLoaded: (agentId: string, toolName: string): boolean => getSet(agentId).has(toolName),
+      isLoaded: (sessionId: string, toolName: string): boolean => getSet(sessionId).has(toolName),
 
-      listLoaded: (agentId: string): string[] => Array.from(getSet(agentId)),
+      listLoaded: (sessionId: string): string[] => Array.from(getSet(sessionId)),
 
-      listUnloadedDeferred: (agentId: string): ToolDefinition[] => {
-        const set = getSet(agentId);
+      listUnloadedDeferred: (sessionId: string): ToolDefinition[] => {
+        const set = getSet(sessionId);
         return tools.allDeferred().filter(t => !set.has(t.name));
       },
 
-      search: (agentId: string, query: string): ToolSearchHit[] => {
-        const set = getSet(agentId);
+      search: (sessionId: string, query: string): ToolSearchHit[] => {
+        const set = getSet(sessionId);
         const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
         if (tokens.length === 0) return [];
         const hits = tools.allDeferred().filter(t => {

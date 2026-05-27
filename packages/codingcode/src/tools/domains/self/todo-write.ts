@@ -17,10 +17,10 @@ export const todoWriteTool: ToolDefinition = {
   deferred: true,
   parameters: todoSchema,
   execute: async (args, ctx) => {
-    const agentId = ctx?.agentId;
-    if (!agentId) throw new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires agentId');
+    const sessionId = ctx?.sessionId;
+    if (!sessionId) throw new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires sessionId');
     const { plan } = args as { plan: Todo[] };
-    sharedTodoStore.write(agentId, plan);
+    sharedTodoStore.write(sessionId, plan);
     const c = countByStatus(plan);
     return `pending=${c.pending} in_progress=${c.in_progress} completed=${c.completed}`;
   },

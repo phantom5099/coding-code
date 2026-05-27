@@ -175,7 +175,6 @@ describe('dispatch_agent tool', () => {
             },
             llm: {},
           },
-          agentId: 'parent-agent',
           sessionId: 'parent-session',
         },
       );
@@ -271,7 +270,6 @@ describe('dispatch_agent tool', () => {
           agentService,
           llm: {},
         },
-        agentId: 'parent',
         sessionId: 'parent-session',
       },
     );
@@ -333,7 +331,6 @@ describe('dispatch_agent tool', () => {
       { agent: 'custom', prompt: 'test' },
       {
         agentRunner: { agentService, llm: {} },
-        agentId: 'parent',
         sessionId: 'parent-session',
       },
     );
@@ -392,7 +389,6 @@ describe('dispatch_agent tool', () => {
       { agent: 'tool-list', prompt: 'test' },
       {
         agentRunner: { agentService, llm: {} },
-        agentId: 'parent',
         sessionId: 'parent-session',
       },
     );
@@ -447,7 +443,6 @@ describe('dispatch_agent tool', () => {
         { agent: 'explore', prompt: 'test' },
         {
           agentRunner: { agentService, llm: {} },
-          agentId: 'parent',
           sessionId: 'parent-session',
         },
       );
@@ -502,7 +497,7 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'explore', prompt: 'test' },
-      { agentRunner: { agentService, llm: parentLlm }, agentId: 'parent', sessionId: 'parent-session' },
+      { agentRunner: { agentService, llm: parentLlm }, sessionId: 'parent-session' },
     );
 
     expect(runStreamCalls[0].llm).toBe(parentLlm);
@@ -554,7 +549,7 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'model-agent', prompt: 'test' },
-      { agentRunner: { agentService, llm: parentLlm }, agentId: 'parent', sessionId: 'parent-session' },
+      { agentRunner: { agentService, llm: parentLlm }, sessionId: 'parent-session' },
     );
 
     // Should use the resolved subagent LLM, not the parent's
@@ -666,7 +661,7 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'explore', prompt: 'task' },
-      { agentRunner: { agentService, llm: {} }, agentId: 'main:parent', sessionId: 'parent-session-uuid' },
+      { agentRunner: { agentService, llm: {} }, sessionId: 'parent-session-uuid' },
     );
 
     expect(createCalls.length).toBe(1);
@@ -680,7 +675,7 @@ describe('dispatch_agent tool', () => {
     expect(opts?.agentName).toBe('explore');
   });
 
-  it('runStream receives agentId as profile.name:childUuid', async () => {
+  it('runStream receives state with child sessionId', async () => {
     const registry = await makeRegistry();
     registry.setEnabled(true);
     registry.register(EXPLORE_PROFILE);
@@ -724,11 +719,12 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'explore', prompt: 'task' },
-      { agentRunner: { agentService, llm: {} }, agentId: 'main:parent', sessionId: 'p' },
+      { agentRunner: { agentService, llm: {} }, sessionId: 'p' },
     );
 
     const childUuid = createCalls[0][3];
-    expect(runStreamCalls[0].agentId).toBe(`explore:${childUuid}`);
+    expect(runStreamCalls[0].state).toBeDefined();
+    expect(runStreamCalls[0].agentId).toBeUndefined();
   });
 
   it('registers delegated emitter for child session when parentSessionId is provided', async () => {
@@ -777,7 +773,7 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'explore', prompt: 'task' },
-      { agentRunner: { agentService, llm: {} }, agentId: 'parent', sessionId: parentSid },
+      { agentRunner: { agentService, llm: {} }, sessionId: parentSid },
     );
 
     capturedChildUuid = createCalls[0][3];
@@ -834,7 +830,7 @@ describe('dispatch_agent tool', () => {
     try {
       await tool.execute(
         { agent: 'explore', prompt: 'task' },
-        { agentRunner: { agentService, llm: {} }, agentId: 'parent', sessionId: parentSid },
+        { agentRunner: { agentService, llm: {} }, sessionId: parentSid },
       );
     } catch {}
 

@@ -34,7 +34,7 @@ export const sendMessage = (
     const turnTitle = actualInput.trim().slice(0, 5) || '(empty)';
     checkpoint.snapshotBaseline(state.cwd, sid, turnId, turnTitle);
 
-    const stream = agent.runStream({ state, llm, skillInstruction: matchedSkill?.instruction, agentId: `main:${state.sessionId}` });
+    const stream = agent.runStream({ state, llm, skillInstruction: matchedSkill?.instruction });
 
     return { stream, sessionId: sid };
   });

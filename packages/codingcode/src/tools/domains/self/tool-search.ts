@@ -3,7 +3,7 @@ import { AgentError } from '../../../core/error';
 import type { ToolDefinition } from '../../types';
 
 export interface ToolSearchApi {
-  search: (agentId: string, query: string) => Array<{ name: string; shortDescription?: string }>;
+  search: (sessionId: string, query: string) => Array<{ name: string; shortDescription?: string }>;
 }
 
 export function createToolSearchTool(svc: ToolSearchApi): ToolDefinition {
@@ -14,10 +14,10 @@ export function createToolSearchTool(svc: ToolSearchApi): ToolDefinition {
       query: z.string().min(1).describe('Keywords to match against deferred tool names and descriptions.'),
     }),
     execute: async (args, ctx) => {
-      const agentId = ctx?.agentId;
-      if (!agentId) throw new AgentError('TOOL_EXECUTION_FAILED', 'tool_search requires agentId');
+      const sessionId = ctx?.sessionId;
+      if (!sessionId) throw new AgentError('TOOL_EXECUTION_FAILED', 'tool_search requires sessionId');
       const { query } = args as { query: string };
-      const hits = svc.search(agentId, query);
+      const hits = svc.search(sessionId, query);
       if (hits.length === 0) return `No deferred tools matched "${query}".`;
       return [
         `Loaded ${hits.length} tool(s). Their full schemas are now available next turn:`,

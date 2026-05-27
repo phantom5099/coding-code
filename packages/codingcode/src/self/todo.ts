@@ -23,7 +23,7 @@ export function countByStatus(plan: Todo[]): TodoCounts {
 const store = new Map<string, Todo[]>();
 
 export const sharedTodoStore = {
-  read: (agentId: string): Todo[] => store.get(agentId) ?? [],
-  write: (agentId: string, plan: Todo[]): void => { store.set(agentId, plan); },
+  read: (sessionId: string): Todo[] => store.get(sessionId) ?? [],
+  write: (sessionId: string, plan: Todo[]): void => { store.set(sessionId, plan); },
   reset: (): void => store.clear(),
 };
