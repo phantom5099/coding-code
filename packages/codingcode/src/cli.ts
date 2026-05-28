@@ -38,7 +38,7 @@ async function main() {
       return;
     }
 
-    const app = await createServer();
+    const app = yield* Effect.tryPromise(() => createServer());
     serve({ fetch: app.fetch, port });
 
     if (!serveOnly) {

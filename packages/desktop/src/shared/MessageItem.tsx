@@ -13,7 +13,6 @@ const TOOL_ICONS: Record<string, string> = {
 
 interface MessageItemProps {
   item: Item
-  streamingContent?: string
   threadId: string
   onApprove: (threadId: string, callId: string) => void
   onReject: (threadId: string, callId: string) => void
@@ -42,12 +41,12 @@ function parseMarkdown(text: string): React.ReactNode {
   return <>{blocks}</>
 }
 
-export default function MessageItem({ item, streamingContent, threadId, onApprove, onReject, callIdToToolName }: MessageItemProps) {
+export default function MessageItem({ item, threadId, onApprove, onReject, callIdToToolName }: MessageItemProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false)
   const [resultOpen, setResultOpen] = useState(false)
 
   if (item.type === 'message') {
-    const content = (item.partial && streamingContent) ? streamingContent : item.content
+    const content = item.content
     const isUser = item.role === 'user'
 
     if (isUser) {

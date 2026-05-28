@@ -16,7 +16,6 @@ beforeEach(() => {
       model: '',
       models: [],
       contextUsage: null,
-      streamingContent: {},
       todoByThreadId: {},
     },
     workspace: {
@@ -56,16 +55,11 @@ describe('global store - agent streaming actions', () => {
     useGlobalStore.getState().applyChunk(threadId, turnId, delta1)
     useGlobalStore.getState().applyChunk(threadId, turnId, delta2)
 
-    const streaming = useGlobalStore.getState().agent.streamingContent['msg-1']
-    expect(streaming).toBe('Hello world')
-
-    // Streaming item is added to turn.items as a partial placeholder (added on first chunk)
     const items = useGlobalStore.getState().agent.threads[threadId].turns[0].items
-    const placeholder = items.find((i) => i.id === 'msg-1')
-    expect(placeholder).toBeDefined()
-    expect((placeholder as any).partial).toBe(true)
-    expect((placeholder as any).content).toBe('')
-    // Not duplicated on subsequent chunks
+    const message = items.find((i) => i.id === 'msg-1')
+    expect(message).toBeDefined()
+    expect((message as any).partial).toBe(true)
+    expect((message as any).content).toBe('Hello world')
     expect(items.filter((i) => i.id === 'msg-1')).toHaveLength(1)
   })
 
@@ -91,7 +85,6 @@ describe('global store - agent streaming actions', () => {
     expect(committed).toBeDefined()
     expect((committed as any).content).toBe('Hello world')
     expect((committed as any).partial).toBe(false)
-    expect(useGlobalStore.getState().agent.streamingContent['msg-1']).toBeUndefined()
   })
 
   it('applyChunk upserts tool_call by id', () => {
@@ -124,10 +117,11 @@ describe('global store - agent streaming actions', () => {
 
     const updatedTurn = useGlobalStore.getState().agent.threads[threadId].turns[0]
     expect(updatedTurn.status).toBe('completed')
-    expect(updatedTurn.items.every((i) => useGlobalStore.getState().agent.streamingContent[i.id] === undefined)).toBe(true)
+    expect((updatedTurn.items.find((i) => i.id === 'msg-x') as any).content).toBe('hi')
+    expect((updatedTurn.items.find((i) => i.id === 'msg-x') as any).partial).toBe(false)
   })
 
-  it('completeTurn persists streamingContent into assistant item before clearing', () => {
+  it('completeTurn marks streaming assistant item complete without changing content', () => {
     const turn = makeTurn([])
     useGlobalStore.getState().startTurn(threadId, turn)
 
@@ -146,7 +140,6 @@ describe('global store - agent streaming actions', () => {
     expect(assistantItem).toBeDefined()
     expect((assistantItem as any).content).toBe('Hello world')
     expect((assistantItem as any).partial).toBe(false)
-    expect(useGlobalStore.getState().agent.streamingContent['msg-1']).toBeUndefined()
   })
 
   it('completeTurn with partial=false already received does not double-persist', () => {
@@ -168,6 +161,25 @@ describe('global store - agent streaming actions', () => {
     // Content comes from the committed applyChunk (which uses accumulated streaming)
     expect((assistantItem as any).content).toBe('Hello')
     expect((assistantItem as any).partial).toBe(false)
+  })
+
+  it('keeps same assistant message id isolated across threads', () => {
+    const threadA = 'thread-a'
+    const threadB = 'thread-b'
+    useGlobalStore.getState().startTurn(threadA, { id: 'turn-a', items: [], status: 'running' })
+    useGlobalStore.getState().startTurn(threadB, { id: 'turn-b', items: [], status: 'running' })
+
+    useGlobalStore.getState().applyChunk(threadA, 'turn-a', {
+      id: 'assistant-1', type: 'message', role: 'assistant', content: 'A', partial: true,
+    })
+    useGlobalStore.getState().applyChunk(threadB, 'turn-b', {
+      id: 'assistant-1', type: 'message', role: 'assistant', content: 'B', partial: true,
+    })
+
+    const itemA = useGlobalStore.getState().agent.threads[threadA].turns[0].items[0]
+    const itemB = useGlobalStore.getState().agent.threads[threadB].turns[0].items[0]
+    expect((itemA as any).content).toBe('A')
+    expect((itemB as any).content).toBe('B')
   })
 })
 

@@ -77,12 +77,12 @@ export function useAgent() {
       }).catch(() => {})
   }, [currentThreadId, setThreadTurns])
 
-  const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, turnId: string): Item | null => {
+  const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string): Item | null => {
     switch (event.type) {
       case 'text':
-        return { id: String(event.messageId), type: 'message', role: 'assistant', content: event.text, partial: true }
+        return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.text, partial: true }
       case 'message':
-        return { id: String(event.id), type: 'message', role: 'assistant', content: event.content, partial: false }
+        return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.content, partial: false }
       case 'step':
         return null
       case 'tool_start':
@@ -130,6 +130,7 @@ export function useAgent() {
       }
 
       const turnId = randomId()
+      const assistantMessageId = randomId()
       const userItem: Item = { id: randomId(), type: 'message', role: 'user', content }
       const turn: Turn = { id: turnId, items: [userItem], status: 'running' }
 
@@ -148,7 +149,7 @@ export function useAgent() {
             continue
           }
 
-          const item = streamChunkToItem(event, resolvedThreadId, turnId)
+          const item = streamChunkToItem(event, resolvedThreadId, assistantMessageId)
           if (item) {
             applyChunk(resolvedThreadId, turnId, item)
           }

@@ -11,7 +11,6 @@ interface MessageStreamProps {
 
 export default function MessageStream({ threadId }: MessageStreamProps) {
   const thread = useGlobalStore((s) => s.agent.threads[threadId])
-  const streamingContent = useGlobalStore((s) => s.agent.streamingContent)
   const { approveTool, rejectTool } = useAgent()
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -62,13 +61,11 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     const entry = allItems[index]
     if (!entry) return null
     const { item } = entry
-    const streaming = item.type === 'message' && item.partial ? streamingContent[item.id] : undefined
     return (
       <div className="px-6 py-0.5">
         <MessageItem
           key={item.id}
           item={item}
-          streamingContent={streaming}
           threadId={threadId}
           onApprove={approveTool}
           onReject={rejectTool}
@@ -95,12 +92,10 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto select-text">
       <div className="pt-8 pb-4 max-w-[820px] mx-auto">
         {allItems.map(({ item }) => {
-          const streaming = item.type === 'message' && item.partial ? streamingContent[item.id] : undefined
           return (
             <div key={item.id} className="px-6 py-0.5">
               <MessageItem
                 item={item}
-                streamingContent={streaming}
                 threadId={threadId}
                 onApprove={approveTool}
                 onReject={rejectTool}

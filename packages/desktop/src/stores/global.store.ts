@@ -50,7 +50,6 @@ interface AgentState {
   model: string
   models: ModelEntry[]
   contextUsage: { used: number; contextWindow: number } | null
-  streamingContent: Record<string, string>
   todoByThreadId: Record<string, TodoPanelState>
 }
 
@@ -148,7 +147,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         model: '',
         models: [],
         contextUsage: null,
-        streamingContent: {},
         todoByThreadId: {},
       },
       editor: {
@@ -273,22 +271,28 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         if (!turn) return
 
         if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial) {
-          if (!(chunk.id in s.agent.streamingContent)) {
-            turn.items.push({ id: chunk.id, type: 'message', role: 'assistant', content: '', partial: true })
+          const existing = turn.items.find((i) => i.id === chunk.id)
+          if (existing && existing.type === 'message' && existing.role === 'assistant') {
+            existing.content += chunk.content
+            existing.partial = true
+          } else {
+            turn.items.push({ ...chunk, partial: true })
           }
-          const current = s.agent.streamingContent[chunk.id] ?? ''
-          s.agent.streamingContent[chunk.id] = current + chunk.content
           return
         }
 
         if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial === false) {
-          const fullContent = s.agent.streamingContent[chunk.id] ?? chunk.content
-          delete s.agent.streamingContent[chunk.id]
           const existing = turn.items.findIndex((i) => i.id === chunk.id)
           if (existing >= 0) {
-            turn.items[existing] = { ...chunk, content: fullContent }
+            const current = turn.items[existing]
+            if (!current) return
+            if (current.type === 'message' && current.role === 'assistant') {
+              turn.items[existing] = { ...chunk, content: current.content || chunk.content, partial: false }
+            } else {
+              turn.items[existing] = { ...chunk, partial: false }
+            }
           } else {
-            turn.items.push({ ...chunk, content: fullContent })
+            turn.items.push({ ...chunk, partial: false })
           }
           return
         }
@@ -320,13 +324,8 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         thread.updatedAt = Date.now()
         for (const item of turn.items) {
           if (item.type === 'message' && item.role === 'assistant') {
-            const streaming = s.agent.streamingContent[item.id]
-            if (streaming) {
-              item.content = streaming
-              item.partial = false
-            }
+            item.partial = false
           }
-          delete s.agent.streamingContent[item.id]
         }
       }),
 
@@ -402,7 +401,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           ...current.agent,
           ...(persisted as any).agent,
           threads: {},
-          streamingContent: {},
           todoByThreadId: {},
           contextUsage: null,
         },
