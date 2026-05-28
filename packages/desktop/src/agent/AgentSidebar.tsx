@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useGlobalStore } from '../stores/global.store'
+import { API_BASE, api } from '../lib/api'
 import type { Thread } from '@shared/types'
 
 function normalizeCwd(p: string): string {
@@ -38,11 +39,23 @@ export default function AgentSidebar() {
   const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null)
 
   const handleDelete = async (threadId: string) => {
-    await window.electronAPI?.deleteThread?.(threadId)
-    const updated = await window.electronAPI?.getThreads?.()
-    if (updated) {
-      const store = useGlobalStore.getState()
-      store.loadThreads(updated as Parameters<typeof store.loadThreads>[0])
+    await fetch(`${API_BASE}/api/sessions/${threadId}`, { method: 'DELETE' }).catch(() => {})
+    const store = useGlobalStore.getState()
+    const rootPath = store.workspace.rootPath
+    if (rootPath) {
+      try {
+        const sessions = await api<any[]>(`/api/sessions?cwd=${encodeURIComponent(rootPath)}`)
+        const threads = sessions.map((s: any) => ({
+          id: s.sessionId,
+          projectId: '',
+          title: s.title ?? s.sessionId.slice(0, 8),
+          cwd: s.cwd ?? '',
+          turns: [],
+          createdAt: new Date(s.createdAt).getTime(),
+          updatedAt: new Date(s.updatedAt).getTime(),
+        }))
+        store.loadThreads(threads)
+      } catch {}
     }
     if (threadId === currentThreadId) {
       setCurrentThread(null)

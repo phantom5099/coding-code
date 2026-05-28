@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useGlobalStore } from '../stores/global.store'
+import { API_BASE, api } from '../lib/api'
 import type { Project, Thread } from '@shared/types'
 
 function normalizeCwd(p: string): string {
@@ -97,11 +98,23 @@ export default function ProjectStrip() {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   const handleDelete = async (threadId: string) => {
-    await window.electronAPI?.deleteThread?.(threadId)
-    const updated = await window.electronAPI?.getThreads?.()
-    if (updated) {
-      const store = useGlobalStore.getState()
-      store.loadThreads(updated as Parameters<typeof store.loadThreads>[0])
+    await fetch(`${API_BASE}/api/sessions/${threadId}`, { method: 'DELETE' }).catch(() => {})
+    const store = useGlobalStore.getState()
+    const rootPath = store.workspace.rootPath
+    if (rootPath) {
+      try {
+        const sessions = await api<any[]>(`/api/sessions?cwd=${encodeURIComponent(rootPath)}`)
+        const threads = sessions.map((s: any) => ({
+          id: s.sessionId,
+          projectId: '',
+          title: s.title ?? s.sessionId.slice(0, 8),
+          cwd: s.cwd ?? '',
+          turns: [],
+          createdAt: new Date(s.createdAt).getTime(),
+          updatedAt: new Date(s.updatedAt).getTime(),
+        }))
+        store.loadThreads(threads)
+      } catch {}
     }
     if (threadId === currentThreadId) {
       setCurrentThread(null)
@@ -110,18 +123,15 @@ export default function ProjectStrip() {
 
   const handleSelectProject = (id: string) => {
     switchProject(id)
-    window.electronAPI?.setCurrentProjectId?.(id)
   }
 
   const handleAddProject = async () => {
     const folder = await window.electronAPI?.openFolderDialog?.()
     if (!folder) return
-    const project = await window.electronAPI?.addProject?.(folder)
-    if (project) {
-      addProject(project)
-      switchProject(project.id)
-      window.electronAPI?.setCurrentProjectId?.(project.id)
-    }
+    const name = folder.replace(/\\/g, '/').split('/').pop() || folder
+    const project: Project = { id: crypto.randomUUID(), name, rootPath: folder }
+    addProject(project)
+    switchProject(project.id)
   }
 
   const getThreadsForProject = (rootPath: string): Thread[] => {

@@ -25,6 +25,9 @@ export const sendMessage = (
   input: string,
   cwd: string,
   llm: any,
+  options?: {
+    signal?: AbortSignal
+  },
 ) =>
   Effect.gen(function* () {
     const session = yield* SessionService;
@@ -48,7 +51,7 @@ export const sendMessage = (
     const turnTitle = actualInput.trim().slice(0, 5) || '(empty)';
     checkpoint.snapshotBaseline(state.cwd, sid, turnId, turnTitle);
 
-    const stream = agent.runStream({ state, llm, skillInstruction: matchedSkill?.instruction });
+    const stream = agent.runStream({ state, llm, skillInstruction: matchedSkill?.instruction, abortSignal: options?.signal });
 
     return { stream, sessionId: sid };
   });

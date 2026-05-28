@@ -1,17 +1,48 @@
 import type { AgentClient, StreamChunk } from './direct.js';
 import type { McpStatus } from '../mcp/types.js';
 import type { PermissionMode } from '../approval/types.js';
-import { getWorkspaceCwd } from '../core/workspace.js';
 
 export type { AgentClient, StreamChunk };
 
 export async function createHttpClient(serverUrl: string): Promise<AgentClient> {
   let currentSessionId: string | undefined;
 
+  async function apiGet<T>(path: string): Promise<T> {
+    const res = await fetch(`${serverUrl}${path}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
+    return res.json() as Promise<T>;
+  }
+
+  async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+    const res = await fetch(`${serverUrl}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
+    return res.json() as Promise<T>;
+  }
+
+  async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+    const res = await fetch(`${serverUrl}${path}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
+    return res.json() as Promise<T>;
+  }
+
+  async function apiDelete(path: string): Promise<void> {
+    const res = await fetch(`${serverUrl}${path}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
+  }
+
   return {
-    async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
+    async *sendMessage(input: string, cwd?: string): AsyncGenerator<StreamChunk> {
       const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId || '_'}/messages`, {
-        method: 'POST', body: JSON.stringify({ input }),
+        method: 'POST',
+        body: JSON.stringify({ input, cwd: cwd ?? '' }),
         headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -28,16 +59,34 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = JSON.parse(line.slice(6));
-            if (data.type === 'session_id') {
-              currentSessionId = data.sessionId;
-            } else if (data.type === 'text') {
-              yield data.text;
-            } else if (data.type === 'approval_request') {
-              yield { type: 'approval_request', id: data.id, tool: data.tool, args: data.args };
-            } else if (data.type === 'complete') {
-              return;
-            } else if (data.type === 'error') {
-              throw new Error(data.message);
+            switch (data.type) {
+              case 'session_id':
+                currentSessionId = data.sessionId;
+                break;
+              case 'text':
+                yield data.text;
+                break;
+              case 'approval_request':
+                yield { type: 'approval_request', id: data.id, tool: data.tool, args: data.args };
+                break;
+              case 'tool_start':
+                yield { type: 'tool_start', name: data.name, args: data.args };
+                break;
+              case 'tool_result':
+                yield { type: 'tool_result', id: data.id, name: data.name, output: data.output, ok: data.ok };
+                break;
+              case 'tool_denied':
+                yield { type: 'tool_denied', name: data.name, reason: data.reason };
+                break;
+              case 'todo_update':
+                yield { type: 'todo_update', items: data.items };
+                break;
+              case 'error':
+                throw new Error(data.message);
+              case 'done':
+                break;
+              case 'complete':
+                return;
             }
           }
         }
@@ -46,26 +95,28 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
 
     async sendApprovalResponse(id: string, response: string) {
       if (!currentSessionId) return;
-      await fetch(`${serverUrl}/api/sessions/${currentSessionId}/approval/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response }),
-      });
+      await apiPost(`/api/sessions/${currentSessionId}/approval/${id}`, { response });
     },
 
     async resumeSession(sid: string) {
       currentSessionId = sid;
-      const res = await fetch(`${serverUrl}/api/sessions/${sid}/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: getWorkspaceCwd() }) });
-      return res.json();
+      return apiPost(`/api/sessions/${sid}/resume`, { cwd: '' });
     },
-    async listSessions(): Promise<any[]> {
-      const cwd = encodeURIComponent(getWorkspaceCwd());
-      const res = await fetch(`${serverUrl}/api/sessions?cwd=${cwd}`);
-      return res.json() as Promise<any[]>;
+
+    async listSessions() {
+      return apiGet<any[]>('/api/sessions');
     },
-    async listModels() { const res = await fetch(`${serverUrl}/api/models`); return res.json(); },
-    async switchModel(id: string) { await fetch(`${serverUrl}/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: id }) }); },
+
+    async listModels() {
+      return apiGet('/api/models');
+    },
+
+    async switchModel(id: string) {
+      await apiPost('/api/models/switch', { modelId: id });
+    },
+
     getSessionId() { return currentSessionId ?? 'unknown'; },
+
     async classifyLastCompletedChanges() { return null; },
     async revertLastCompleted(_mode: 'agent' | 'all') {},
     async revertCheckpoint(_turnId: number, _mode: 'agent' | 'all') {},
@@ -75,95 +126,126 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
 
     async compact() {
       if (!currentSessionId) return;
-      await fetch(`${serverUrl}/api/sessions/${currentSessionId}/compact`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: getWorkspaceCwd() }),
-      });
+      await apiPost(`/api/sessions/${currentSessionId}/compact`, { cwd: '' });
     },
 
     async getMemoryEnabled() {
-      const res = await fetch(`${serverUrl}/api/agent/memory`);
-      const data = await res.json() as { enabled: boolean };
+      const data = await apiGet<{ enabled: boolean }>('/api/settings/memory/config');
       return data.enabled;
     },
 
     async setMemoryEnabled(enabled: boolean) {
-      await fetch(`${serverUrl}/api/agent/memory`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
-      });
+      await apiPost('/api/settings/memory/enabled', { enabled });
     },
 
-    async getMemoryConfig() { throw new Error('not supported over HTTP'); },
-    async setTypeDisabled(_name: string, _disabled: boolean): Promise<void> { throw new Error('not supported over HTTP'); },
-    async addExtraType(_type: { name: string; description: string }): Promise<void> { throw new Error('not supported over HTTP'); },
-    async updateExtraType(_name: string, _type: { name: string; description: string }): Promise<void> { throw new Error('not supported over HTTP'); },
-    async deleteExtraType(_name: string): Promise<void> { throw new Error('not supported over HTTP'); },
+    async getMemoryConfig() {
+      return apiGet<{ enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> }>('/api/settings/memory/config');
+    },
+
+    async setTypeDisabled(name: string, disabled: boolean) {
+      await apiPost('/api/settings/memory/type-disabled', { name, disabled });
+    },
+
+    async addExtraType(type: { name: string; description: string }) {
+      await apiPost('/api/settings/memory/extra-type', type);
+    },
+
+    async updateExtraType(name: string, type: { name: string; description: string }) {
+      await apiPut(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`, type);
+    },
+
+    async deleteExtraType(name: string) {
+      await apiDelete(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`);
+    },
 
     async getSubagentEnabled() {
-      const res = await fetch(`${serverUrl}/api/agent/subagent`);
-      const data = await res.json() as { enabled: boolean };
+      const data = await apiGet<{ enabled: boolean }>('/api/settings/subagent/enabled');
       return data.enabled;
     },
 
     async setSubagentEnabled(enabled: boolean) {
-      await fetch(`${serverUrl}/api/agent/subagent`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
-      });
+      await apiPost('/api/settings/subagent/enabled', { enabled });
     },
 
     async getMcpStatus(): Promise<McpStatus[]> {
-      const res = await fetch(`${serverUrl}/api/agent/mcp`);
-      return res.json() as Promise<McpStatus[]>;
+      return apiGet<McpStatus[]>('/api/agent/mcp');
     },
 
     async disableMcp(name: string) {
-      await fetch(`${serverUrl}/api/agent/mcp/disable`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
-      });
+      await apiPost('/api/agent/mcp/disable', { name });
     },
 
     async enableMcp(name: string) {
-      await fetch(`${serverUrl}/api/agent/mcp/enable`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
-      });
+      await apiPost('/api/agent/mcp/enable', { name });
     },
 
-    async listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>> {
-      const res = await fetch(`${serverUrl}/api/agent/skills`);
-      return res.json() as Promise<Array<{ name: string; description: string; enabled: boolean }>>;
+    async listSkills() {
+      return apiGet<Array<{ name: string; description: string; enabled: boolean }>>('/api/settings/skills');
     },
 
     async toggleSkill(name: string, enabled: boolean) {
-      await fetch(`${serverUrl}/api/agent/skills`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, enabled }),
-      });
+      await apiPost('/api/settings/skills', { name, enabled });
     },
 
-    async createMcpServer(_server: any): Promise<void> { throw new Error('not supported over HTTP'); },
-    async updateMcpServer(_name: string, _server: any): Promise<void> { throw new Error('not supported over HTTP'); },
-    async deleteMcpServer(_name: string): Promise<void> { throw new Error('not supported over HTTP'); },
+    async createMcpServer(server: any) {
+      await apiPost('/api/settings/mcp', server);
+    },
 
-    async listAgents() { throw new Error('not supported over HTTP'); },
-    async createAgent(_profile: any): Promise<void> { throw new Error('not supported over HTTP'); },
-    async updateAgent(_name: string, _profile: any): Promise<void> { throw new Error('not supported over HTTP'); },
-    async deleteAgent(_name: string): Promise<void> { throw new Error('not supported over HTTP'); },
-    async setAgentDisabled(_name: string, _disabled: boolean): Promise<void> { throw new Error('not supported over HTTP'); },
+    async updateMcpServer(name: string, server: any) {
+      await apiPut(`/api/settings/mcp/${encodeURIComponent(name)}`, server);
+    },
 
-    async listHooks() { throw new Error('not supported over HTTP'); },
-    async setHookDisabled(_name: string, _disabled: boolean): Promise<void> { throw new Error('not supported over HTTP'); },
-    async createHook(_hook: any): Promise<void> { throw new Error('not supported over HTTP'); },
-    async updateHook(_name: string, _hook: any): Promise<void> { throw new Error('not supported over HTTP'); },
-    async deleteHook(_name: string): Promise<void> { throw new Error('not supported over HTTP'); },
+    async deleteMcpServer(name: string) {
+      await apiDelete(`/api/settings/mcp/${encodeURIComponent(name)}`);
+    },
+
+    async listAgents() {
+      return apiGet<Array<any>>('/api/settings/agents');
+    },
+
+    async createAgent(profile: any) {
+      await apiPost('/api/settings/agents', profile);
+    },
+
+    async updateAgent(name: string, profile: any) {
+      await apiPut(`/api/settings/agents/${encodeURIComponent(name)}`, profile);
+    },
+
+    async deleteAgent(name: string) {
+      await apiDelete(`/api/settings/agents/${encodeURIComponent(name)}`);
+    },
+
+    async setAgentDisabled(name: string, disabled: boolean) {
+      await apiPost(`/api/settings/agents/${encodeURIComponent(name)}/disabled`, { disabled });
+    },
+
+    async listHooks() {
+      return apiGet<Array<any>>('/api/settings/hooks');
+    },
+
+    async setHookDisabled(name: string, disabled: boolean) {
+      await apiPost(`/api/settings/hooks/${encodeURIComponent(name)}/disabled`, { disabled });
+    },
+
+    async createHook(hook: any) {
+      await apiPost('/api/settings/hooks', hook);
+    },
+
+    async updateHook(name: string, hook: any) {
+      await apiPut(`/api/settings/hooks/${encodeURIComponent(name)}`, hook);
+    },
+
+    async deleteHook(name: string) {
+      await apiDelete(`/api/settings/hooks/${encodeURIComponent(name)}`);
+    },
 
     async getPermissionMode(): Promise<PermissionMode> {
-      const res = await fetch(`${serverUrl}/api/agent/permission-mode`);
-      const data = await res.json() as { mode: PermissionMode };
+      const data = await apiGet<{ mode: PermissionMode }>('/api/agent/permission-mode');
       return data.mode;
     },
 
     async setPermissionMode(mode: PermissionMode): Promise<void> {
-      await fetch(`${serverUrl}/api/agent/permission-mode`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }),
-      });
+      await apiPost('/api/agent/permission-mode', { mode });
     },
   };
 }

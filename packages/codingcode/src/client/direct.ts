@@ -30,7 +30,7 @@ export type StreamChunk = string
   | { type: 'todo_update'; items: ReadonlyArray<{ step: string; status: string }> };
 
 export interface AgentClient {
-  sendMessage(input: string): AsyncGenerator<StreamChunk>;
+  sendMessage(input: string, cwd?: string): AsyncGenerator<StreamChunk>;
   sendApprovalResponse(id: string, response: string): Promise<void>;
   resumeSession(sid: string): Promise<any>;
   listSessions(): Promise<any[]>;

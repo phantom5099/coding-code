@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Toggle from './Toggle'
+import { API_BASE } from '../lib/api'
+import { useGlobalStore } from '../stores/global.store'
 import type { ModelEntry } from '../stores/global.store'
 
 const AVAILABLE_TOOLS = [
@@ -48,19 +50,26 @@ export default function SubagentsPanel() {
   const [editingName, setEditingName] = useState<string | null>(null)
   const [deletingName, setDeletingName] = useState<string | null>(null)
   const [form, setForm] = useState<AgentForm>(EMPTY_FORM)
+  const rootPath = useGlobalStore((s) => s.workspace.rootPath)
+
+  const cwdParam = rootPath ? `?cwd=${encodeURIComponent(rootPath)}` : ''
 
   const load = async () => {
     setLoading(true)
     try {
-      const [agentData, enabledState, modelData, mcpData] = await Promise.all([
-        window.electronAPI?.getAgents?.() ?? Promise.resolve([]),
-        window.electronAPI?.getSubagentEnabled?.() ?? Promise.resolve(true),
-        window.electronAPI?.getModels?.() ?? Promise.resolve([]),
-        window.electronAPI?.getMcp?.() ?? Promise.resolve([]),
+      const [agentRes, enabledRes, modelRes, mcpRes] = await Promise.all([
+        fetch(`${API_BASE}/api/settings/agents${cwdParam}`),
+        fetch(`${API_BASE}/api/settings/subagent/enabled`),
+        fetch(`${API_BASE}/api/models`),
+        fetch(`${API_BASE}/api/settings/mcp`),
       ])
-      setAgents(agentData ?? [])
-      setEnabled(enabledState ?? true)
-      setModels(modelData ?? [])
+      const agents = await agentRes.json()
+      const enabledData = await enabledRes.json()
+      const modelData = await modelRes.json()
+      const mcpData = await mcpRes.json()
+      setAgents(agents ?? [])
+      setEnabled(enabledData.enabled ?? true)
+      setModels((modelData.models ?? []) as ModelEntry[])
       setMcpList((mcpData ?? []).map((s: { name: string }) => s.name))
     } catch {
       setAgents([])
@@ -69,15 +78,23 @@ export default function SubagentsPanel() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [rootPath])
 
   const toggleEnabled = async (v: boolean) => {
-    await window.electronAPI?.setSubagentEnabled?.(v)
+    await fetch(`${API_BASE}/api/settings/subagent/enabled`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: v }),
+    })
     setEnabled(v)
   }
 
   const toggleAgent = async (name: string, disabled: boolean) => {
-    await window.electronAPI?.setAgentDisabled?.(name, disabled)
+    await fetch(`${API_BASE}/api/settings/agents/${encodeURIComponent(name)}/disabled`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disabled }),
+    })
     setAgents((prev) => prev.map((a) => a.name === name ? { ...a, disabled } : a))
   }
 
@@ -123,9 +140,17 @@ export default function SubagentsPanel() {
 
     try {
       if (isCreating) {
-        await window.electronAPI?.createAgent?.(profile)
+        await fetch(`${API_BASE}/api/settings/agents${cwdParam}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profile),
+        })
       } else if (editingName) {
-        await window.electronAPI?.updateAgent?.(editingName, profile)
+        await fetch(`${API_BASE}/api/settings/agents/${encodeURIComponent(editingName)}${cwdParam}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profile),
+        })
       }
       cancelForm()
       await load()
@@ -137,7 +162,9 @@ export default function SubagentsPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return
     try {
-      await window.electronAPI?.deleteAgent?.(deletingName)
+      await fetch(`${API_BASE}/api/settings/agents/${encodeURIComponent(deletingName)}${cwdParam}`, {
+        method: 'DELETE',
+      })
       setDeletingName(null)
       await load()
     } catch (e: any) {
@@ -157,7 +184,6 @@ export default function SubagentsPanel() {
 
   return (
     <div className="px-6 py-5">
-      {/* Global enable toggle */}
       <div className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] mb-5">
         <div>
           <div className="text-[14px] text-[#ddd]">启用子智能体</div>

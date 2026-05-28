@@ -1,33 +1,49 @@
 import type { AgentEvent } from '../agent/agent.js';
 
-export function formatEventForTransport(event: AgentEvent): string | null {
+export type SseEvent = Record<string, unknown>;
+
+export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
   switch (event._tag) {
-    case 'LlmChunk':
-      return event.text;
-    case 'ToolStart':
-      return `\n[Using: ${event.name}]\n`;
-    case 'ToolDenied':
-      return `\n[Denied: ${event.name}] ${event.reason}\n`;
-    case 'ApprovalRequest':
-      return `\n[Approval: ${event.id}] ${event.tool}\n`;
     case 'Step':
-    case 'Assistant':
+      return { type: 'step', step: event.step };
+    case 'ToolStart':
+      return { type: 'tool_start', name: event.name, args: event.args };
+    case 'ApprovalRequest':
+      return { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
     case 'ToolResult':
+      return { type: 'tool_result', id: event.id, name: event.name, output: event.output, ok: event.ok };
+    case 'ToolDenied':
+      return { type: 'tool_denied', name: event.name, reason: event.reason };
     case 'Error':
+      return { type: 'error', message: event.error.message ?? String(event.error) };
     case 'Done':
-      return null;
+      return { type: 'done' };
     case 'TodoUpdate':
-      return JSON.stringify({ type: 'todo_update', items: event.items });
+      return { type: 'todo_update', items: event.items as unknown as Record<string, unknown>[] };
+    case 'LlmChunk':
+    case 'Assistant':
+    case 'ReactiveCompact':
+      return null;
     default:
       return null;
   }
 }
 
-export async function* toSSEString(
+export async function* toSseEvents(
   source: AsyncGenerator<AgentEvent, any, unknown>,
-): AsyncGenerator<string, void, unknown> {
+): AsyncGenerator<SseEvent, void, unknown> {
+  let currentStep = 0;
   for await (const event of source) {
-    const text = formatEventForTransport(event);
-    if (text !== null) yield text;
+    if (event._tag === 'Step') {
+      currentStep = event.step;
+      yield { type: 'step', step: event.step };
+      continue;
+    }
+    if (event._tag === 'LlmChunk') {
+      yield { type: 'text', text: event.text, messageId: currentStep };
+      continue;
+    }
+    const sse = agentEventToSseEvent(event);
+    if (sse !== null) yield sse;
   }
 }

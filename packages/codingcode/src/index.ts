@@ -34,7 +34,8 @@ export { createDirectClient, agentEventToStreamChunk } from './client/direct.js'
 export type { AgentClient, StreamChunk } from './client/direct.js';
 export { createHttpClient } from './client/http.js';
 export { handler, sseHandler } from './server/handler.js';
-export { formatEventForTransport, toSSEString } from './server/adapter.js';
+export { agentEventToSseEvent, toSseEvents } from './server/adapter.js';
+export type { SseEvent } from './server/adapter.js';
 export { CheckpointService } from './checkpoint/checkpoint-service.js';
 export { ShadowGit, Ledger } from './checkpoint/index.js';
 export { ToolSearchService } from './tools/tool-search-service.js';

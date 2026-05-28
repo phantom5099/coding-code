@@ -1,13 +1,12 @@
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { sessionsRouter } from './routes/sessions.js';
 import { messagesRouter } from './routes/messages.js';
 import { modelsRouter } from './routes/models.js';
 import { approvalRouter } from './routes/approval.js';
 import { agentRouter } from './routes/agent.js';
-
-type ServerDeps = {
-  llm: any;
-};
+import { settingsRouter } from './routes/settings.js';
+import { getLLMClient } from '../llm/factory.js';
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -15,11 +14,20 @@ declare module 'hono' {
   }
 }
 
-export function createServer(deps: ServerDeps): Hono {
+export async function createServer(): Promise<Hono> {
+  const llmResult = await getLLMClient();
+  if (!llmResult.ok) throw new Error(llmResult.error.message);
+
   const app = new Hono();
 
+  app.use('*', cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+  }));
+
   app.use('*', async (c, next) => {
-    c.set('llm', deps.llm);
+    c.set('llm', llmResult.value);
     await next();
   });
 
@@ -30,6 +38,7 @@ export function createServer(deps: ServerDeps): Hono {
   app.route('/api/models', modelsRouter);
   app.route('/api', approvalRouter);
   app.route('/api/agent', agentRouter);
+  app.route('/api/settings', settingsRouter);
 
   return app;
 }

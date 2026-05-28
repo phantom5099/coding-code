@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Toggle from './Toggle'
+import { API_BASE } from '../lib/api'
 
 interface MemoryTypeEntry {
   name: string
@@ -31,8 +32,9 @@ export default function MemoryPanel() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await window.electronAPI?.getMemoryConfig?.() ?? { enabled: false, types: [] }
-      setConfig(data)
+      const res = await fetch(`${API_BASE}/api/settings/memory/config`)
+      const data = await res.json()
+      setConfig(data ?? { enabled: false, types: [] })
     } catch {
       setConfig({ enabled: false, types: [] })
     } finally {
@@ -43,12 +45,20 @@ export default function MemoryPanel() {
   useEffect(() => { load() }, [])
 
   const toggleEnabled = async (v: boolean) => {
-    await window.electronAPI?.setMemoryEnabled?.(v)
+    await fetch(`${API_BASE}/api/settings/memory/enabled`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: v }),
+    })
     setConfig(prev => ({ ...prev, enabled: v }))
   }
 
   const toggleType = async (name: string, disabled: boolean) => {
-    await window.electronAPI?.setTypeDisabled?.(name, disabled)
+    await fetch(`${API_BASE}/api/settings/memory/type-disabled`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, disabled }),
+    })
     setConfig(prev => ({
       ...prev,
       types: prev.types.map(t => t.name === name ? { ...t, disabled } : t),
@@ -77,9 +87,17 @@ export default function MemoryPanel() {
   const saveForm = async () => {
     try {
       if (isCreating) {
-        await window.electronAPI?.addExtraType?.(form)
+        await fetch(`${API_BASE}/api/settings/memory/extra-type`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        })
       } else if (editingName) {
-        await window.electronAPI?.updateExtraType?.(editingName, form)
+        await fetch(`${API_BASE}/api/settings/memory/extra-type/${encodeURIComponent(editingName)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        })
       }
       cancelForm()
       await load()
@@ -91,7 +109,9 @@ export default function MemoryPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return
     try {
-      await window.electronAPI?.deleteExtraType?.(deletingName)
+      await fetch(`${API_BASE}/api/settings/memory/extra-type/${encodeURIComponent(deletingName)}`, {
+        method: 'DELETE',
+      })
       setDeletingName(null)
       await load()
     } catch (e: any) {
@@ -111,7 +131,6 @@ export default function MemoryPanel() {
 
   return (
     <div className="px-6 py-5">
-      {/* Global enable toggle */}
       <div className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] mb-5">
         <div>
           <div className="text-[14px] text-[#ddd]">记忆模式</div>

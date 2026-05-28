@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sseHandler } from '../../src/server/handler.js';
 import { sendMessage } from '../../src/agent/agent.js';
-import { toSSEString } from '../../src/server/adapter.js';
+import { toSseEvents } from '../../src/server/adapter.js';
 import { SessionService } from '../../src/session/store.js';
 import { ContextService } from '../../src/context/context.js';
 import { SkillService } from '../../src/skills/index.js';
@@ -160,16 +160,18 @@ describe('sseHandler + sendMessage integration', () => {
     const program = sendMessage('test-session', 'hi', '/tmp/test', llm) as any;
     const handler = sseHandler(async function* () {
       const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
-      yield* toSSEString(stream);
+      yield* toSseEvents(stream);
     }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
-    expect(events).toHaveLength(4); // 3 text + 1 complete
-    expect(events[0]).toEqual({ type: 'text', text: 'Hello' });
-    expect(events[1]).toEqual({ type: 'text', text: ' ' });
-    expect(events[2]).toEqual({ type: 'text', text: 'world' });
-    expect(events[3]).toEqual({ type: 'complete' });
+    expect(events).toHaveLength(6); // 1 step + 3 text + 1 done + 1 complete
+    expect(events[0]).toEqual({ type: 'step', step: 1 });
+    expect(events[1]).toEqual({ type: 'text', text: 'Hello', messageId: 1 });
+    expect(events[2]).toEqual({ type: 'text', text: ' ', messageId: 1 });
+    expect(events[3]).toEqual({ type: 'text', text: 'world', messageId: 1 });
+    expect(events[4]).toEqual({ type: 'done' });
+    expect(events[5]).toEqual({ type: 'complete' });
   });
 
   it('should send complete event even when LLM returns no text', async () => {
@@ -177,7 +179,7 @@ describe('sseHandler + sendMessage integration', () => {
     const program = sendMessage('test-session', 'hi', '/tmp/test', llm) as any;
     const handler = sseHandler(async function* () {
       const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
-      yield* toSSEString(stream);
+      yield* toSseEvents(stream);
     }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
@@ -203,7 +205,7 @@ describe('sseHandler + sendMessage integration', () => {
     const program = sendMessage('test-session', 'read file', '/tmp/test', llm) as any;
     const handler = sseHandler(async function* () {
       const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
-      yield* toSSEString(stream);
+      yield* toSseEvents(stream);
     }, { sessionId: 'test' });
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);

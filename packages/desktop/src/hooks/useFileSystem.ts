@@ -8,18 +8,20 @@ export function useFileSystem() {
 
   useEffect(() => {
     if (!rootPath) return
-    window.electronAPI?.readDir?.(rootPath).then((tree) => {
+    window.electronAPI?.readDir?.(rootPath, rootPath).then((tree) => {
       setFileTree(tree as FileNode[])
     })
   }, [rootPath, setFileTree])
 
   const readDir = async (dir: string): Promise<FileNode[]> => {
-    const result = await window.electronAPI?.readDir?.(dir)
+    if (!rootPath) return []
+    const result = await window.electronAPI?.readDir?.(rootPath, dir)
     return (result as FileNode[]) ?? []
   }
 
   const searchFiles = async (query: string): Promise<string[]> => {
-    return window.electronAPI?.indexFiles?.(query) ?? []
+    if (!rootPath) return []
+    return window.electronAPI?.indexFiles?.(rootPath, query) ?? []
   }
 
   return { readDir, searchFiles }

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import Toggle from './Toggle'
+import { API_BASE } from '../lib/api'
+import { useGlobalStore } from '../stores/global.store'
 
 interface HookEntry {
   name: string
@@ -90,11 +92,15 @@ export default function HooksPanel() {
   const [editingName, setEditingName] = useState<string | null>(null)
   const [deletingName, setDeletingName] = useState<string | null>(null)
   const [form, setForm] = useState<HookForm>(EMPTY_FORM)
+  const rootPath = useGlobalStore((s) => s.workspace.rootPath)
+
+  const cwdParam = rootPath ? `?cwd=${encodeURIComponent(rootPath)}` : ''
 
   const load = async () => {
     setLoading(true)
     try {
-      const data = await window.electronAPI?.getHooks?.()
+      const res = await fetch(`${API_BASE}/api/settings/hooks${cwdParam}`)
+      const data = await res.json()
       setHooks(data ?? [])
     } catch {
       setHooks([])
@@ -103,7 +109,7 @@ export default function HooksPanel() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [rootPath])
 
   const startCreate = () => {
     setForm(EMPTY_FORM)
@@ -153,9 +159,17 @@ export default function HooksPanel() {
 
     try {
       if (isCreating) {
-        await window.electronAPI?.createHook?.(hook)
+        await fetch(`${API_BASE}/api/settings/hooks${cwdParam}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(hook),
+        })
       } else if (editingName) {
-        await window.electronAPI?.updateHook?.(editingName, hook)
+        await fetch(`${API_BASE}/api/settings/hooks/${encodeURIComponent(editingName)}${cwdParam}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(hook),
+        })
       }
       cancelForm()
       await load()
@@ -167,7 +181,9 @@ export default function HooksPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return
     try {
-      await window.electronAPI?.deleteHook?.(deletingName)
+      await fetch(`${API_BASE}/api/settings/hooks/${encodeURIComponent(deletingName)}${cwdParam}`, {
+        method: 'DELETE',
+      })
       setDeletingName(null)
       await load()
     } catch (e: any) {
@@ -187,7 +203,6 @@ export default function HooksPanel() {
 
   return (
     <div className="px-6 py-5">
-      {/* User-defined hooks */}
       <div className="flex items-center gap-2 mb-3">
         <div className="text-[11px] font-medium text-[#444] uppercase tracking-wider">
           用户自定义钩子
@@ -284,7 +299,11 @@ export default function HooksPanel() {
                     </svg>
                   </button>
                   <Toggle checked={h.enabled} onChange={(v) => {
-                    window.electronAPI?.setHookDisabled?.(h.name, !v)
+                    fetch(`${API_BASE}/api/settings/hooks/${encodeURIComponent(h.name)}/disabled${cwdParam}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ disabled: !v }),
+                    }).catch(() => {})
                     setHooks(prev => prev.map(hh => hh.name === h.name ? { ...hh, enabled: v } : hh))
                   }} />
                 </div>
@@ -294,7 +313,6 @@ export default function HooksPanel() {
         </div>
       )}
 
-      {/* Built-in hook points */}
       <div className="text-[11px] font-medium text-[#444] uppercase tracking-wider mb-3 px-1">
         可用挂载点 (18 个内置)
       </div>
@@ -330,7 +348,6 @@ export default function HooksPanel() {
   )
 
 }
-
 
 function FormCard({ form, setForm, points, onSave, onCancel, inputCls, labelCls, btnPrimary, btnCancel }: {
   form: HookForm

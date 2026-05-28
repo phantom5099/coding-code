@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import type { FileNode, GitStatus, Item, OpenFile, Project, TerminalSession, Thread, Turn, TodoItem } from '@shared/types'
 
@@ -49,7 +50,6 @@ interface AgentState {
   model: string
   models: ModelEntry[]
   contextUsage: { used: number; contextWindow: number } | null
-  // itemId → accumulated streaming text (partial assistant messages)
   streamingContent: Record<string, string>
   todoByThreadId: Record<string, TodoPanelState>
 }
@@ -102,11 +102,9 @@ interface GlobalActions {
   setCursor: (line: number, col: number) => void
   loadThreads: (threads: Thread[]) => void
   updateToolCallStatus: (threadId: string, callId: string, status: 'pending' | 'approved' | 'rejected' | 'running') => void
-  // Fine-grained agent streaming actions
   startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void
   completeTurn: (threadId: string, turnId: string, status: 'completed' | 'error') => void
-  // Todo panel (in-memory only, per thread)
   applyTodoUpdate: (threadId: string, items: TodoItem[]) => void
   toggleTodoCollapsed: (threadId: string) => void
 }
@@ -119,242 +117,292 @@ const initialGit: GitStatus = {
 }
 
 export const useGlobalStore = create<GlobalState & GlobalActions>()(
-  immer((set) => ({
-    ui: {
-      mode: 'agent',
-      view: 'agent',
-      sidebarCollapsed: false,
-      sidebarWidth: 220,
-      rightPanelWidth: 320,
-      bottomPanelHeight: 200,
-      ideSidebarView: 'explorer',
-    },
-    workspace: {
-      rootPath: '',
-      name: '',
-      projects: [],
-      currentProjectId: '',
-    },
-    files: {
-      tree: [],
-      activeFilePath: null,
-      openFiles: [],
-    },
-    git: initialGit,
-    terminals: [],
-    agent: {
-      currentThreadId: null,
-      threads: {},
-      approvalPolicy: 'suggest',
-      model: '',
-      models: [],
-      contextUsage: null,
-      streamingContent: {},
-      todoByThreadId: {},
-    },
-    editor: {
-      cursorLine: 1,
-      cursorCol: 1,
-    },
+  persist(
+    immer((set) => ({
+      ui: {
+        mode: 'agent',
+        view: 'agent',
+        sidebarCollapsed: false,
+        sidebarWidth: 220,
+        rightPanelWidth: 320,
+        bottomPanelHeight: 200,
+        ideSidebarView: 'explorer',
+      },
+      workspace: {
+        rootPath: '',
+        name: '',
+        projects: [],
+        currentProjectId: '',
+      },
+      files: {
+        tree: [],
+        activeFilePath: null,
+        openFiles: [],
+      },
+      git: initialGit,
+      terminals: [],
+      agent: {
+        currentThreadId: null,
+        threads: {},
+        approvalPolicy: 'suggest',
+        model: '',
+        models: [],
+        contextUsage: null,
+        streamingContent: {},
+        todoByThreadId: {},
+      },
+      editor: {
+        cursorLine: 1,
+        cursorCol: 1,
+      },
 
-    setMode: (mode) => set((s) => { s.ui.mode = mode }),
-    setView: (view) => set((s) => { s.ui.view = view }),
-    toggleSidebar: () => set((s) => { s.ui.sidebarCollapsed = !s.ui.sidebarCollapsed }),
-    setSidebarWidth: (w) => set((s) => { s.ui.sidebarWidth = w }),
-    setRightPanelWidth: (w) => set((s) => { s.ui.rightPanelWidth = w }),
-    setBottomPanelHeight: (h) => set((s) => { s.ui.bottomPanelHeight = h }),
-    setIdeSidebarView: (view) => set((s) => { s.ui.ideSidebarView = view }),
-    setWorkspace: (rootPath, name) => set((s) => { s.workspace.rootPath = normalizeCwd(rootPath); s.workspace.name = name }),
-    setProjects: (projects) => set((s) => { s.workspace.projects = projects }),
-    setCurrentProject: (id) => set((s) => { s.workspace.currentProjectId = id }),
-    addProject: (project) => set((s) => {
-      if (!s.workspace.projects.find((p) => p.id === project.id)) {
-        s.workspace.projects.push(project)
-      }
-    }),
-    removeProject: (id) => set((s) => {
-      s.workspace.projects = s.workspace.projects.filter((p) => p.id !== id)
-    }),
-    switchProject: (id) => set((s) => {
-      const project = s.workspace.projects.find((p) => p.id === id)
-      if (!project) return
-      s.workspace.currentProjectId = id
-      s.workspace.rootPath = normalizeCwd(project.rootPath)
-      s.workspace.name = project.name
-    }),
-    setFileTree: (tree) => set((s) => { s.files.tree = tree }),
-    setActiveFile: (path) => set((s) => { s.files.activeFilePath = path }),
-    openFile: (path) => set((s) => {
-      if (!s.files.openFiles.find((f) => f.path === path)) {
-        s.files.openFiles.push({ path, isDirty: false })
-      }
-      s.files.activeFilePath = path
-    }),
-    closeFile: (path) => set((s) => {
-      s.files.openFiles = s.files.openFiles.filter((f) => f.path !== path)
-      if (s.files.activeFilePath === path) {
-        const last = s.files.openFiles[s.files.openFiles.length - 1]
-        s.files.activeFilePath = last ? last.path : null
-      }
-    }),
-    setFileDirty: (path, isDirty) => set((s) => {
-      const f = s.files.openFiles.find((f) => f.path === path)
-      if (f) f.isDirty = isDirty
-    }),
-    setGit: (status) => set((s) => { s.git = status }),
-    addTerminal: (session) => set((s) => { s.terminals.push(session) }),
-    removeTerminal: (id) => set((s) => { s.terminals = s.terminals.filter((t) => t.id !== id) }),
-    setCurrentThread: (id) => set((s) => { s.agent.currentThreadId = id }),
-    upsertThread: (thread) => set((s) => { s.agent.threads[thread.id] = thread }),
-    setThreadTurns: (threadId, turns) => set((s) => {
-      const thread = s.agent.threads[threadId]
-      if (thread) thread.turns = turns
-    }),
-    setThreadCwd: (threadId, cwd) => set((s) => {
-      const thread = s.agent.threads[threadId]
-      if (thread) thread.cwd = cwd
-    }),
-    setApprovalPolicy: (policy) => set((s) => { s.agent.approvalPolicy = policy }),
-    setModel: (model) => set((s) => { s.agent.model = model }),
-    setModels: (models) => set((s) => { s.agent.models = models }),
-    setContextUsage: (usage) => set((s) => { s.agent.contextUsage = usage }),
-    setCursor: (line, col) => set((s) => { s.editor.cursorLine = line; s.editor.cursorCol = col }),
-
-    loadThreads: (threads) => set((s) => {
-      const incomingIds = new Set(threads.map((t) => t.id))
-      const next: Record<string, Thread> = {}
-      for (const t of threads) {
-        const existing = s.agent.threads[t.id]
-        // Preserve in-memory turns (streaming or already loaded history)
-        next[t.id] = existing ? { ...t, turns: existing.turns } : t
-      }
-      for (const [id, thread] of Object.entries(s.agent.threads)) {
-        if (!incomingIds.has(id) && thread.turns.some((t) => t.status === 'running')) {
-          next[id] = thread
+      setMode: (mode) => set((s) => { s.ui.mode = mode }),
+      setView: (view) => set((s) => { s.ui.view = view }),
+      toggleSidebar: () => set((s) => { s.ui.sidebarCollapsed = !s.ui.sidebarCollapsed }),
+      setSidebarWidth: (w) => set((s) => { s.ui.sidebarWidth = w }),
+      setRightPanelWidth: (w) => set((s) => { s.ui.rightPanelWidth = w }),
+      setBottomPanelHeight: (h) => set((s) => { s.ui.bottomPanelHeight = h }),
+      setIdeSidebarView: (view) => set((s) => { s.ui.ideSidebarView = view }),
+      setWorkspace: (rootPath, name) => set((s) => { s.workspace.rootPath = normalizeCwd(rootPath); s.workspace.name = name }),
+      setProjects: (projects) => set((s) => { s.workspace.projects = projects }),
+      setCurrentProject: (id) => set((s) => { s.workspace.currentProjectId = id }),
+      addProject: (project) => set((s) => {
+        if (!s.workspace.projects.find((p) => p.id === project.id)) {
+          s.workspace.projects.push(project)
         }
-      }
-      s.agent.threads = next
-    }),
-
-    updateToolCallStatus: (threadId, callId, status) => set((s) => {
-      const thread = s.agent.threads[threadId]
-      if (!thread) return
-      for (const turn of thread.turns) {
-        const idx = turn.items.findIndex((i) => i.id === callId && i.type === 'tool_call')
-        if (idx >= 0) {
-          const existing = turn.items[idx] as Item & { type: 'tool_call' }
-          turn.items[idx] = { ...existing, status }
-          break
+      }),
+      removeProject: (id) => set((s) => {
+        s.workspace.projects = s.workspace.projects.filter((p) => p.id !== id)
+      }),
+      switchProject: (id) => set((s) => {
+        const project = s.workspace.projects.find((p) => p.id === id)
+        if (!project) return
+        s.workspace.currentProjectId = id
+        s.workspace.rootPath = normalizeCwd(project.rootPath)
+        s.workspace.name = project.name
+        s.agent.currentThreadId = null
+      }),
+      setFileTree: (tree) => set((s) => { s.files.tree = tree }),
+      setActiveFile: (path) => set((s) => { s.files.activeFilePath = path }),
+      openFile: (path) => set((s) => {
+        if (!s.files.openFiles.find((f) => f.path === path)) {
+          s.files.openFiles.push({ path, isDirty: false })
         }
-      }
-    }),
-
-    startTurn: (threadId, turn, meta) => set((s) => {
-      const thread = s.agent.threads[threadId]
-      if (!thread) {
-        s.agent.threads[threadId] = {
-          id: threadId,
-          projectId: '',
-          title: meta?.title ?? 'New Conversation',
-          cwd: meta?.cwd ? normalizeCwd(meta.cwd) : '',
-          turns: [turn],
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
+        s.files.activeFilePath = path
+      }),
+      closeFile: (path) => set((s) => {
+        s.files.openFiles = s.files.openFiles.filter((f) => f.path !== path)
+        if (s.files.activeFilePath === path) {
+          const last = s.files.openFiles[s.files.openFiles.length - 1]
+          s.files.activeFilePath = last ? last.path : null
         }
-      } else {
-        thread.turns.push(turn)
-        thread.updatedAt = Date.now()
-      }
-    }),
+      }),
+      setFileDirty: (path, isDirty) => set((s) => {
+        const f = s.files.openFiles.find((f) => f.path === path)
+        if (f) f.isDirty = isDirty
+      }),
+      setGit: (status) => set((s) => { s.git = status }),
+      addTerminal: (session) => set((s) => { s.terminals.push(session) }),
+      removeTerminal: (id) => set((s) => { s.terminals = s.terminals.filter((t) => t.id !== id) }),
+      setCurrentThread: (id) => set((s) => { s.agent.currentThreadId = id }),
+      upsertThread: (thread) => set((s) => { s.agent.threads[thread.id] = thread }),
+      setThreadTurns: (threadId, turns) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (thread) thread.turns = turns
+      }),
+      setThreadCwd: (threadId, cwd) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (thread) thread.cwd = cwd
+      }),
+      setApprovalPolicy: (policy) => set((s) => { s.agent.approvalPolicy = policy }),
+      setModel: (model) => set((s) => { s.agent.model = model }),
+      setModels: (models) => set((s) => { s.agent.models = models }),
+      setContextUsage: (usage) => set((s) => { s.agent.contextUsage = usage }),
+      setCursor: (line, col) => set((s) => { s.editor.cursorLine = line; s.editor.cursorCol = col }),
 
-    applyChunk: (threadId, turnId, chunk) => set((s) => {
-      const thread = s.agent.threads[threadId]
-      if (!thread) return
-      const turn = thread.turns.find((t) => t.id === turnId)
-      if (!turn) return
-
-      if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial) {
-        if (!(chunk.id in s.agent.streamingContent)) {
-          turn.items.push({ id: chunk.id, type: 'message', role: 'assistant', content: '', partial: true })
+      loadThreads: (threads) => set((s) => {
+        const incomingIds = new Set(threads.map((t) => t.id))
+        const next: Record<string, Thread> = {}
+        for (const t of threads) {
+          const existing = s.agent.threads[t.id]
+          next[t.id] = existing ? { ...t, turns: existing.turns } : t
         }
-        const current = s.agent.streamingContent[chunk.id] ?? ''
-        s.agent.streamingContent[chunk.id] = current + chunk.content
-        return
-      }
+        for (const [id, thread] of Object.entries(s.agent.threads)) {
+          if (!incomingIds.has(id) && thread.turns.some((t) => t.status === 'running')) {
+            next[id] = thread
+          }
+        }
+        s.agent.threads = next
+      }),
 
-      if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial === false) {
-        // Commit: replace accumulated streaming text with final item
-        const fullContent = s.agent.streamingContent[chunk.id] ?? chunk.content
-        delete s.agent.streamingContent[chunk.id]
-        const existing = turn.items.findIndex((i) => i.id === chunk.id)
-        if (existing >= 0) {
-          turn.items[existing] = { ...chunk, content: fullContent }
+      updateToolCallStatus: (threadId, callId, status) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (!thread) return
+        for (const turn of thread.turns) {
+          const idx = turn.items.findIndex((i) => i.id === callId && i.type === 'tool_call')
+          if (idx >= 0) {
+            const existing = turn.items[idx] as Item & { type: 'tool_call' }
+            turn.items[idx] = { ...existing, status }
+            break
+          }
+        }
+      }),
+
+      startTurn: (threadId, turn, meta) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (!thread) {
+          s.agent.threads[threadId] = {
+            id: threadId,
+            projectId: '',
+            title: meta?.title ?? 'New Conversation',
+            cwd: meta?.cwd ? normalizeCwd(meta.cwd) : '',
+            turns: [turn],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          }
         } else {
-          turn.items.push({ ...chunk, content: fullContent })
+          thread.turns.push(turn)
+          thread.updatedAt = Date.now()
         }
-        return
-      }
+      }),
 
-      if (chunk.type === 'tool_call') {
+      applyChunk: (threadId, turnId, chunk) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (!thread) return
+        const turn = thread.turns.find((t) => t.id === turnId)
+        if (!turn) return
+
+        if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial) {
+          if (!(chunk.id in s.agent.streamingContent)) {
+            turn.items.push({ id: chunk.id, type: 'message', role: 'assistant', content: '', partial: true })
+          }
+          const current = s.agent.streamingContent[chunk.id] ?? ''
+          s.agent.streamingContent[chunk.id] = current + chunk.content
+          return
+        }
+
+        if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial === false) {
+          const fullContent = s.agent.streamingContent[chunk.id] ?? chunk.content
+          delete s.agent.streamingContent[chunk.id]
+          const existing = turn.items.findIndex((i) => i.id === chunk.id)
+          if (existing >= 0) {
+            turn.items[existing] = { ...chunk, content: fullContent }
+          } else {
+            turn.items.push({ ...chunk, content: fullContent })
+          }
+          return
+        }
+
+        if (chunk.type === 'tool_call') {
+          const existing = turn.items.findIndex((i) => i.id === chunk.id)
+          if (existing >= 0) {
+            turn.items[existing] = chunk
+          } else {
+            turn.items.push(chunk)
+          }
+          return
+        }
+
         const existing = turn.items.findIndex((i) => i.id === chunk.id)
         if (existing >= 0) {
           turn.items[existing] = chunk
         } else {
           turn.items.push(chunk)
         }
-        return
-      }
+      }),
 
-      // All other items: append or replace by id
-      const existing = turn.items.findIndex((i) => i.id === chunk.id)
-      if (existing >= 0) {
-        turn.items[existing] = chunk
-      } else {
-        turn.items.push(chunk)
-      }
-    }),
-
-    completeTurn: (threadId, turnId, status) => set((s) => {
-      const thread = s.agent.threads[threadId]
-      if (!thread) return
-      const turn = thread.turns.find((t) => t.id === turnId)
-      if (turn) {
-        turn.status = status
-        thread.updatedAt = Date.now()
-      }
-      // Clear any remaining streaming content for items in this turn
-      if (turn) {
-        for (const item of turn.items) {
-          delete s.agent.streamingContent[item.id]
+      completeTurn: (threadId, turnId, status) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (!thread) return
+        const turn = thread.turns.find((t) => t.id === turnId)
+        if (turn) {
+          turn.status = status
+          thread.updatedAt = Date.now()
         }
-      }
-    }),
+        if (turn) {
+          for (const item of turn.items) {
+            delete s.agent.streamingContent[item.id]
+          }
+        }
+      }),
 
-    applyTodoUpdate: (threadId, items) => set((s) => {
-      const previous = s.agent.todoByThreadId[threadId]
-      if (items.length > 0) {
+      applyTodoUpdate: (threadId, items) => set((s) => {
+        const previous = s.agent.todoByThreadId[threadId]
+        if (items.length > 0) {
+          s.agent.todoByThreadId[threadId] = {
+            items,
+            hasSeenNonEmptyTodo: true,
+            collapsed: previous?.collapsed ?? false,
+          }
+          return
+        }
+        if (previous?.hasSeenNonEmptyTodo) {
+          s.agent.todoByThreadId[threadId] = { ...previous, items: previous.items, hasSeenNonEmptyTodo: true }
+          return
+        }
         s.agent.todoByThreadId[threadId] = {
-          items,
-          hasSeenNonEmptyTodo: true,
+          items: [],
+          hasSeenNonEmptyTodo: false,
           collapsed: previous?.collapsed ?? false,
         }
-        return
-      }
-      if (previous?.hasSeenNonEmptyTodo) {
-        s.agent.todoByThreadId[threadId] = { ...previous, items: previous.items, hasSeenNonEmptyTodo: true }
-        return
-      }
-      s.agent.todoByThreadId[threadId] = {
-        items: [],
-        hasSeenNonEmptyTodo: false,
-        collapsed: previous?.collapsed ?? false,
-      }
-    }),
+      }),
 
-    toggleTodoCollapsed: (threadId) => set((s) => {
-      const previous = s.agent.todoByThreadId[threadId]
-      if (!previous) return
-      previous.collapsed = !previous.collapsed
-    }),
-  }))
+      toggleTodoCollapsed: (threadId) => set((s) => {
+        const previous = s.agent.todoByThreadId[threadId]
+        if (!previous) return
+        previous.collapsed = !previous.collapsed
+      }),
+    })),
+    {
+      name: 'codingcode-desktop-store',
+      partialize: (state) => ({
+        ui: {
+          mode: state.ui.mode,
+          view: state.ui.view,
+          sidebarCollapsed: state.ui.sidebarCollapsed,
+          sidebarWidth: state.ui.sidebarWidth,
+          rightPanelWidth: state.ui.rightPanelWidth,
+          bottomPanelHeight: state.ui.bottomPanelHeight,
+          ideSidebarView: state.ui.ideSidebarView,
+        },
+        workspace: {
+          rootPath: state.workspace.rootPath,
+          name: state.workspace.name,
+          projects: state.workspace.projects,
+          currentProjectId: state.workspace.currentProjectId,
+        },
+        files: {
+          openFiles: state.files.openFiles,
+        },
+        agent: {
+          approvalPolicy: state.agent.approvalPolicy,
+          model: state.agent.model,
+        },
+        editor: {
+          cursorLine: state.editor.cursorLine,
+          cursorCol: state.editor.cursorCol,
+        },
+      }),
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as any),
+        git: initialGit,
+        terminals: [],
+        files: {
+          ...current.files,
+          ...(persisted as any).files,
+          tree: [],
+          activeFilePath: null,
+        },
+        agent: {
+          ...current.agent,
+          ...(persisted as any).agent,
+          threads: {},
+          streamingContent: {},
+          todoByThreadId: {},
+          contextUsage: null,
+        },
+      }),
+    },
+  ),
 )

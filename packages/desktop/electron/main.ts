@@ -1,17 +1,15 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
 import { join } from 'path'
 import { createMenu } from './menu'
-import { registerAgentHandlers } from './ipc/agent.handler'
 import { registerFsHandlers } from './ipc/fs.handler'
 import { registerGitHandlers } from './ipc/git.handler'
-import { registerSettingsHandlers } from './ipc/settings.handler'
 import { startPolling } from './core/git.service'
-import { storeService } from './core/store.service'
 import { initBackend } from './core/backend'
+import { startHttpServer } from './core/http-server'
 
 let mainWindow: BrowserWindow | null = null
 
-function createWindow(): BrowserWindow {
+function createWindow(apiPort: number): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -35,9 +33,11 @@ function createWindow(): BrowserWindow {
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
-    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?apiPort=${apiPort}`)
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: { apiPort: String(apiPort) },
+    })
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -49,25 +49,30 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
-  const workspace = storeService.getWorkspace()
-  await initBackend(workspace.rootPath || process.cwd())
+  await initBackend()
 
-  mainWindow = createWindow()
+  const apiPort = await startHttpServer()
+
+  mainWindow = createWindow(apiPort)
 
   createMenu(mainWindow)
 
   ipcMain.handle('ping', () => 'pong')
 
-  registerAgentHandlers(() => mainWindow)
+  ipcMain.handle('project:openFolderDialog', async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return result.canceled ? null : result.filePaths[0] ?? null
+  })
+
   registerFsHandlers()
   registerGitHandlers()
-  registerSettingsHandlers()
 
-  startPolling(mainWindow, () => storeService.getWorkspace().rootPath || process.cwd())
+  // Git polling uses the current project cwd from platform utility
+  startPolling(mainWindow, () => process.cwd())
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createWindow()
+      mainWindow = createWindow(apiPort)
     }
   })
 })
