@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useGlobalStore, type ModelEntry } from '../stores/global.store'
 import { streamAgentMessage, type StreamEvent } from '../lib/agent-stream'
-import { api, API_BASE } from '../lib/api'
+import { listModels, listSessions, getSessionHistory, createSession as createServerSession, deleteSession, sendApprovalResponse } from '../lib/core-api'
 import type { Item, Turn, Project } from '@shared/types'
 
 function normalizeCwd(p: string): string {
@@ -39,7 +39,7 @@ export function useAgent() {
   // Load sessions, models, and projects on mount
   useEffect(() => {
     // Load models from HTTP
-    api<{ models: ModelEntry[]; activeId: string | null }>('/api/models').then((data) => {
+    listModels().then((data) => {
       if (data.models) setModels(data.models)
       if (data.activeId) setModel(data.activeId)
     }).catch(() => {})
@@ -47,7 +47,7 @@ export function useAgent() {
     // Load sessions for current project from HTTP
     const currentCwd = workspace.rootPath
     if (currentCwd) {
-      api<any[]>(`/api/sessions?cwd=${encodeURIComponent(currentCwd)}`).then((sessions) => {
+      listSessions(currentCwd).then((sessions) => {
         const threads = sessions.map((s: any) => ({
           id: s.sessionId,
           projectId: '',
@@ -69,12 +69,11 @@ export function useAgent() {
     if (!currentThreadId) return
     const thread = useGlobalStore.getState().agent.threads[currentThreadId]
     if (!thread || thread.turns.length > 0) return
-    api<Array<{ id: string; items: Item[]; status: string }>>(`/api/sessions/${currentThreadId}/history`)
-      .then((turns) => {
-        if (turns && turns.length > 0) {
-          setThreadTurns(currentThreadId, turns as any)
-        }
-      }).catch(() => {})
+    getSessionHistory(currentThreadId).then((turns) => {
+      if (turns && turns.length > 0) {
+        setThreadTurns(currentThreadId, turns as any)
+      }
+    }).catch(() => {})
   }, [currentThreadId, setThreadTurns])
 
   const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string): Item | null => {
@@ -117,11 +116,7 @@ export function useAgent() {
 
       if (isNewThread) {
         try {
-          const data = await api<{ sessionId: string }>('/api/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cwd: effectiveCwd }),
-          })
+          const data = await createServerSession(effectiveCwd)
           resolvedThreadId = data.sessionId
         } catch (e) {
           console.error('Failed to create session:', e)
@@ -175,28 +170,20 @@ export function useAgent() {
 
   const approveTool = useCallback(async (threadId: string, callId: string) => {
     updateToolCallStatus(threadId, callId, 'running')
-    await fetch(`${API_BASE}/api/sessions/${threadId}/approval/${callId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ response: 'allow' }),
-    }).catch(() => {})
+    await sendApprovalResponse(threadId, callId, 'allow').catch(() => {})
   }, [updateToolCallStatus])
 
   const rejectTool = useCallback(async (threadId: string, callId: string) => {
     updateToolCallStatus(threadId, callId, 'rejected')
-    await fetch(`${API_BASE}/api/sessions/${threadId}/approval/${callId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ response: 'deny' }),
-    }).catch(() => {})
+    await sendApprovalResponse(threadId, callId, 'deny').catch(() => {})
   }, [updateToolCallStatus])
 
   const deleteThread = useCallback(
     async (threadId: string) => {
-      await fetch(`${API_BASE}/api/sessions/${threadId}`, { method: 'DELETE' }).catch(() => {})
+      await deleteSession(threadId).catch(() => {})
       const currentCwd = useGlobalStore.getState().workspace.rootPath
       if (currentCwd) {
-        const sessions = await api<any[]>(`/api/sessions?cwd=${encodeURIComponent(currentCwd)}`).catch(() => [])
+        const sessions = await listSessions(currentCwd).catch(() => [])
         if (sessions) {
           const threads = sessions.map((s: any) => ({
             id: s.sessionId,
@@ -219,11 +206,7 @@ export function useAgent() {
       : approvalPolicy === 'auto-edit' ? 'acceptEdits'
       : 'dontAsk'
 
-    const data = await api<{ sessionId: string }>('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd, initialPermissionMode: initialMode }),
-    })
+    const data = await createServerSession(cwd, initialMode)
     return data.sessionId
   }, [approvalPolicy])
 

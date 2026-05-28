@@ -3,17 +3,15 @@ import { Effect } from 'effect';
 import { AppLayer } from '../../layer.js';
 import { McpService } from '../../mcp/index.js';
 import { SkillService } from '../../skills/index.js';
-import { SubagentRegistry, EXPLORE_PROFILE, isAgentDisabledState, setAgentDisabledState } from '../../subagent/registry.js';
-import { loadAgentProfiles, writeAgentProfile, updateAgentProfile, deleteAgentProfile } from '../../subagent/loader.js';
+import { SubagentRegistry } from '../../subagent/registry.js';
 import { getMemoryEnabled, setMemoryEnabled } from '../../memory/index.js';
 import { getMemoryConfig, getAllTypesWithStatus, setMemoryTypeDisabled, addMemoryExtraType, updateMemoryExtraType, deleteMemoryExtraType } from '../../memory/config.js';
-import { loadHookConfigs, writeHookConfigs } from '../../hooks/config.js';
-import { loadMcpConfig, writeMcpConfig } from '../../mcp/config.js';
-import { setHookRuntimeEnabled } from '../../hooks/executor.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
-import type { UserHookConfig } from '../../hooks/config.js';
 import type { McpServerConfig } from '../../mcp/types.js';
 import type { SubagentProfile } from '../../subagent/registry.js';
+import type { UserHookConfig } from '../../hooks/config.js';
+import * as settingsService from '../../settings/service.js';
+import { AlreadyExistsError, NotFoundError } from '../../settings/service.js';
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
@@ -61,96 +59,85 @@ settingsRouter.delete('/memory/extra-type/:name', async (c) => {
 // ---- Agents ----
 settingsRouter.get('/agents', (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const custom = loadAgentProfiles(cwd);
-  const all = [EXPLORE_PROFILE, ...custom].map(a => ({
-    name: a.name, description: a.description, tools: a.tools,
-    mcpServers: a.mcpServers, readonly: a.readonly, maxSteps: a.maxSteps,
-    model: a.model, disabled: isAgentDisabledState(a.name),
-  }));
-  return c.json(all);
+  return c.json(settingsService.listAgents(cwd));
 });
 
 settingsRouter.post('/agents', async (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   const body = await c.req.json() as SubagentProfile;
-  const existing = loadAgentProfiles(cwd);
-  if (existing.some(a => a.name === body.name)) {
-    return c.json({ error: `Agent '${body.name}' already exists` }, 409);
+  try {
+    settingsService.createAgent(cwd, body);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
+    throw e;
   }
-  writeAgentProfile(cwd, body);
-  return c.json({ ok: true });
 });
 
 settingsRouter.put('/agents/:name', async (c) => {
   const name = c.req.param('name');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   const body = await c.req.json() as SubagentProfile;
-  const existing = loadAgentProfiles(cwd);
-  if (!existing.some(a => a.name === name)) {
-    return c.json({ error: `Agent '${name}' not found` }, 404);
+  try {
+    settingsService.updateAgent(cwd, name, body);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (e instanceof NotFoundError) return c.json({ error: e.message }, 404);
+    if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
+    throw e;
   }
-  if (body.name !== name && existing.some(a => a.name === body.name)) {
-    return c.json({ error: `Agent '${body.name}' already exists` }, 409);
-  }
-  updateAgentProfile(cwd, name, body);
-  return c.json({ ok: true });
 });
 
 settingsRouter.delete('/agents/:name', async (c) => {
   const name = c.req.param('name');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  deleteAgentProfile(cwd, name);
+  settingsService.deleteAgent(cwd, name);
   return c.json({ ok: true });
 });
 
 settingsRouter.post('/agents/:name/disabled', async (c) => {
   const name = c.req.param('name');
   const body = await c.req.json() as { disabled: boolean };
-  setAgentDisabledState(name, body.disabled);
+  settingsService.setAgentDisabled(name, body.disabled);
   return c.json({ ok: true });
 });
 
 // ---- Hooks ----
 settingsRouter.get('/hooks', (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const hooks = loadHookConfigs(cwd);
-  return c.json(hooks);
+  return c.json(settingsService.listHooks(cwd));
 });
 
 settingsRouter.post('/hooks', async (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   const body = await c.req.json() as UserHookConfig;
-  const hooks = loadHookConfigs(cwd);
-  if (hooks.some(h => h.name === body.name)) {
-    return c.json({ error: `Hook '${body.name}' already exists` }, 409);
+  try {
+    settingsService.createHook(cwd, body);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
+    throw e;
   }
-  hooks.push(body);
-  writeHookConfigs(cwd, hooks);
-  return c.json({ ok: true });
 });
 
 settingsRouter.put('/hooks/:name', async (c) => {
   const name = c.req.param('name');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   const body = await c.req.json() as UserHookConfig;
-  const hooks = loadHookConfigs(cwd);
-  const idx = hooks.findIndex(h => h.name === name);
-  if (idx === -1) {
-    return c.json({ error: `Hook '${name}' not found` }, 404);
+  try {
+    settingsService.updateHook(cwd, name, body);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (e instanceof NotFoundError) return c.json({ error: e.message }, 404);
+    if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
+    throw e;
   }
-  if (body.name !== name && hooks.some(h => h.name === body.name)) {
-    return c.json({ error: `Hook '${body.name}' already exists` }, 409);
-  }
-  hooks[idx] = body;
-  writeHookConfigs(cwd, hooks);
-  return c.json({ ok: true });
 });
 
 settingsRouter.delete('/hooks/:name', async (c) => {
   const name = c.req.param('name');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const hooks = loadHookConfigs(cwd).filter(h => h.name !== name);
-  writeHookConfigs(cwd, hooks);
+  settingsService.deleteHook(cwd, name);
   return c.json({ ok: true });
 });
 
@@ -158,13 +145,7 @@ settingsRouter.post('/hooks/:name/disabled', async (c) => {
   const name = c.req.param('name');
   const body = await c.req.json() as { disabled: boolean };
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  setHookRuntimeEnabled(name, !body.disabled);
-  const hooks = loadHookConfigs(cwd);
-  const hook = hooks.find(h => h.name === name);
-  if (hook) {
-    hook.enabled = !body.disabled;
-    writeHookConfigs(cwd, hooks);
-  }
+  settingsService.setHookDisabled(cwd, name, body.disabled);
   return c.json({ ok: true });
 });
 
@@ -182,37 +163,33 @@ settingsRouter.get('/mcp', async (c) => {
 settingsRouter.post('/mcp', async (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   const body = await c.req.json() as McpServerConfig;
-  const servers = loadMcpConfig(cwd);
-  if (servers.some(s => s.name === body.name)) {
-    return c.json({ error: `MCP server '${body.name}' already exists` }, 409);
+  try {
+    settingsService.createMcpServer(cwd, body);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
+    throw e;
   }
-  servers.push(body);
-  writeMcpConfig(cwd, servers);
-  return c.json({ ok: true });
 });
 
 settingsRouter.put('/mcp/:name', async (c) => {
   const name = c.req.param('name');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   const body = await c.req.json() as McpServerConfig;
-  const servers = loadMcpConfig(cwd);
-  const idx = servers.findIndex(s => s.name === name);
-  if (idx === -1) {
-    return c.json({ error: `MCP server '${name}' not found` }, 404);
+  try {
+    settingsService.updateMcpServer(cwd, name, body);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (e instanceof NotFoundError) return c.json({ error: e.message }, 404);
+    if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
+    throw e;
   }
-  if (body.name !== name && servers.some(s => s.name === body.name)) {
-    return c.json({ error: `MCP server '${body.name}' already exists` }, 409);
-  }
-  servers[idx] = body;
-  writeMcpConfig(cwd, servers);
-  return c.json({ ok: true });
 });
 
 settingsRouter.delete('/mcp/:name', async (c) => {
   const name = c.req.param('name');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const servers = loadMcpConfig(cwd).filter(s => s.name !== name);
-  writeMcpConfig(cwd, servers);
+  settingsService.deleteMcpServer(cwd, name);
   return c.json({ ok: true });
 });
 
@@ -228,7 +205,7 @@ settingsRouter.post('/mcp/:name/disabled', async (c) => {
   return c.json({ ok: true });
 });
 
-// ---- Skills (also available at /api/agent/skills, kept for backward compat with existing clients) ----
+// ---- Skills ----
 settingsRouter.get('/skills', async (c) => {
   const skills = await runWithLayer(
     Effect.gen(function* () {

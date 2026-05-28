@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import Toggle from './Toggle'
-import { API_BASE } from '../lib/api'
+import {
+  getMemoryConfig, setMemoryEnabled, setMemoryTypeDisabled,
+  createMemoryExtraType, updateMemoryExtraType, deleteMemoryExtraType,
+} from '../lib/core-api'
 
 interface MemoryTypeEntry {
   name: string
@@ -32,8 +35,7 @@ export default function MemoryPanel() {
   const load = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/settings/memory/config`)
-      const data = await res.json()
+      const data = await getMemoryConfig()
       setConfig(data ?? { enabled: false, types: [] })
     } catch {
       setConfig({ enabled: false, types: [] })
@@ -45,20 +47,12 @@ export default function MemoryPanel() {
   useEffect(() => { load() }, [])
 
   const toggleEnabled = async (v: boolean) => {
-    await fetch(`${API_BASE}/api/settings/memory/enabled`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: v }),
-    })
+    await setMemoryEnabled(v)
     setConfig(prev => ({ ...prev, enabled: v }))
   }
 
   const toggleType = async (name: string, disabled: boolean) => {
-    await fetch(`${API_BASE}/api/settings/memory/type-disabled`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, disabled }),
-    })
+    await setMemoryTypeDisabled(name, disabled)
     setConfig(prev => ({
       ...prev,
       types: prev.types.map(t => t.name === name ? { ...t, disabled } : t),
@@ -87,17 +81,9 @@ export default function MemoryPanel() {
   const saveForm = async () => {
     try {
       if (isCreating) {
-        await fetch(`${API_BASE}/api/settings/memory/extra-type`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
-        })
+        await createMemoryExtraType(form)
       } else if (editingName) {
-        await fetch(`${API_BASE}/api/settings/memory/extra-type/${encodeURIComponent(editingName)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
-        })
+        await updateMemoryExtraType(editingName, form)
       }
       cancelForm()
       await load()
@@ -109,9 +95,7 @@ export default function MemoryPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return
     try {
-      await fetch(`${API_BASE}/api/settings/memory/extra-type/${encodeURIComponent(deletingName)}`, {
-        method: 'DELETE',
-      })
+      await deleteMemoryExtraType(deletingName)
       setDeletingName(null)
       await load()
     } catch (e: any) {

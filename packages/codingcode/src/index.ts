@@ -30,6 +30,7 @@ export { ApprovalWaitService } from './approval/async-confirm.js';
 export { getGlobalPermissionMode, setGlobalPermissionMode } from './approval/index.js';
 export type { PermissionMode } from './approval/types.js';
 export { createServer } from './server/index.js';
+export { findAvailablePort } from './server/port-discovery.js';
 export { createDirectClient, agentEventToStreamChunk } from './client/direct.js';
 export type { AgentClient, StreamChunk } from './client/direct.js';
 export { createHttpClient } from './client/http.js';

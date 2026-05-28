@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import Toggle from './Toggle'
-import { API_BASE } from '../lib/api'
 import { useGlobalStore } from '../stores/global.store'
+import {
+  listAgents, getSubagentEnabled, setSubagentEnabled,
+  setAgentDisabled, createAgent, updateAgent, deleteAgent,
+  listMcpServers,
+} from '../lib/core-api'
 import type { ModelEntry } from '../stores/global.store'
 
 const AVAILABLE_TOOLS = [
@@ -52,22 +56,16 @@ export default function SubagentsPanel() {
   const [form, setForm] = useState<AgentForm>(EMPTY_FORM)
   const rootPath = useGlobalStore((s) => s.workspace.rootPath)
 
-  const cwdParam = rootPath ? `?cwd=${encodeURIComponent(rootPath)}` : ''
-
   const load = async () => {
     setLoading(true)
     try {
-      const [agentRes, enabledRes, modelRes, mcpRes] = await Promise.all([
-        fetch(`${API_BASE}/api/settings/agents${cwdParam}`),
-        fetch(`${API_BASE}/api/settings/subagent/enabled`),
-        fetch(`${API_BASE}/api/models`),
-        fetch(`${API_BASE}/api/settings/mcp`),
+      const [agentsData, enabledData, modelData, mcpData] = await Promise.all([
+        listAgents(rootPath ?? undefined),
+        getSubagentEnabled(),
+        import('../lib/core-api').then(m => m.listModels()),
+        listMcpServers(),
       ])
-      const agents = await agentRes.json()
-      const enabledData = await enabledRes.json()
-      const modelData = await modelRes.json()
-      const mcpData = await mcpRes.json()
-      setAgents(agents ?? [])
+      setAgents(agentsData ?? [])
       setEnabled(enabledData.enabled ?? true)
       setModels((modelData.models ?? []) as ModelEntry[])
       setMcpList((mcpData ?? []).map((s: { name: string }) => s.name))
@@ -81,20 +79,12 @@ export default function SubagentsPanel() {
   useEffect(() => { load() }, [rootPath])
 
   const toggleEnabled = async (v: boolean) => {
-    await fetch(`${API_BASE}/api/settings/subagent/enabled`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: v }),
-    })
+    await setSubagentEnabled(v)
     setEnabled(v)
   }
 
   const toggleAgent = async (name: string, disabled: boolean) => {
-    await fetch(`${API_BASE}/api/settings/agents/${encodeURIComponent(name)}/disabled`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ disabled }),
-    })
+    await setAgentDisabled(name, disabled)
     setAgents((prev) => prev.map((a) => a.name === name ? { ...a, disabled } : a))
   }
 
@@ -140,17 +130,9 @@ export default function SubagentsPanel() {
 
     try {
       if (isCreating) {
-        await fetch(`${API_BASE}/api/settings/agents${cwdParam}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(profile),
-        })
+        await createAgent(rootPath ?? undefined, profile)
       } else if (editingName) {
-        await fetch(`${API_BASE}/api/settings/agents/${encodeURIComponent(editingName)}${cwdParam}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(profile),
-        })
+        await updateAgent(rootPath ?? undefined, editingName, profile)
       }
       cancelForm()
       await load()
@@ -162,9 +144,7 @@ export default function SubagentsPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return
     try {
-      await fetch(`${API_BASE}/api/settings/agents/${encodeURIComponent(deletingName)}${cwdParam}`, {
-        method: 'DELETE',
-      })
+      await deleteAgent(rootPath ?? undefined, deletingName)
       setDeletingName(null)
       await load()
     } catch (e: any) {

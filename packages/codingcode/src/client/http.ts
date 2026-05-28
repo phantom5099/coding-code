@@ -1,6 +1,7 @@
 import type { AgentClient, StreamChunk } from './direct.js';
 import type { McpStatus } from '../mcp/types.js';
 import type { PermissionMode } from '../approval/types.js';
+import { parseSseStream } from './sse.js';
 
 export type { AgentClient, StreamChunk };
 
@@ -46,49 +47,36 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
         headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No body');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
-            switch (data.type) {
-              case 'session_id':
-                currentSessionId = data.sessionId;
-                break;
-              case 'text':
-                yield data.text;
-                break;
-              case 'approval_request':
-                yield { type: 'approval_request', id: data.id, tool: data.tool, args: data.args };
-                break;
-              case 'tool_start':
-                yield { type: 'tool_start', name: data.name, args: data.args };
-                break;
-              case 'tool_result':
-                yield { type: 'tool_result', id: data.id, name: data.name, output: data.output, ok: data.ok };
-                break;
-              case 'tool_denied':
-                yield { type: 'tool_denied', name: data.name, reason: data.reason };
-                break;
-              case 'todo_update':
-                yield { type: 'todo_update', items: data.items };
-                break;
-              case 'error':
-                throw new Error(data.message);
-              case 'done':
-                break;
-              case 'complete':
-                return;
-            }
-          }
+
+      for await (const data of parseSseStream(response)) {
+        switch (data.type) {
+          case 'session_id':
+            currentSessionId = data.sessionId as string;
+            break;
+          case 'text':
+            yield data.text as string;
+            break;
+          case 'approval_request':
+            yield { type: 'approval_request', id: data.id as string, tool: data.tool as string, args: data.args as Record<string, unknown> };
+            break;
+          case 'tool_start':
+            yield { type: 'tool_start', name: data.name as string, args: data.args as Record<string, unknown> };
+            break;
+          case 'tool_result':
+            yield { type: 'tool_result', id: data.id as string, name: data.name as string, output: data.output as string, ok: data.ok as boolean };
+            break;
+          case 'tool_denied':
+            yield { type: 'tool_denied', name: data.name as string, reason: data.reason as string };
+            break;
+          case 'todo_update':
+            yield { type: 'todo_update', items: data.items as any };
+            break;
+          case 'error':
+            throw new Error(data.message as string);
+          case 'done':
+            break;
+          case 'complete':
+            return;
         }
       }
     },
@@ -168,15 +156,15 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     },
 
     async getMcpStatus(): Promise<McpStatus[]> {
-      return apiGet<McpStatus[]>('/api/agent/mcp');
+      return apiGet<McpStatus[]>('/api/settings/mcp');
     },
 
     async disableMcp(name: string) {
-      await apiPost('/api/agent/mcp/disable', { name });
+      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled`, { disabled: true });
     },
 
     async enableMcp(name: string) {
-      await apiPost('/api/agent/mcp/enable', { name });
+      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled`, { disabled: false });
     },
 
     async listSkills() {

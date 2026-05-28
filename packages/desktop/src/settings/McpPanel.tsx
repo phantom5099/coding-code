@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
 import Toggle from './Toggle'
-import { API_BASE } from '../lib/api'
 import { useGlobalStore } from '../stores/global.store'
+import {
+  listMcpServers, setMcpDisabled, createMcpServer,
+  updateMcpServer, deleteMcpServer, listAgents,
+} from '../lib/core-api'
 
 interface McpEntry {
   name: string
@@ -39,8 +42,7 @@ export default function McpPanel() {
   const load = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/settings/mcp`)
-      const data = await res.json()
+      const data = await listMcpServers()
       setServers(data ?? [])
     } catch {
       setServers([])
@@ -52,11 +54,7 @@ export default function McpPanel() {
   useEffect(() => { load() }, [])
 
   const toggle = async (name: string, disabled: boolean) => {
-    await fetch(`${API_BASE}/api/settings/mcp/${encodeURIComponent(name)}/disabled`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ disabled }),
-    })
+    await setMcpDisabled(name, disabled)
     setServers((prev) => prev.map((s) => s.name === name ? { ...s, disabled } : s))
   }
 
@@ -112,30 +110,19 @@ export default function McpPanel() {
       )
     }
 
-    const cwdParam = rootPath ? `?cwd=${encodeURIComponent(rootPath)}` : ''
-
     try {
       if (isCreating) {
-        await fetch(`${API_BASE}/api/settings/mcp${cwdParam}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(server),
-        })
+        await createMcpServer(rootPath ?? undefined, server)
       } else if (editingName) {
         if (editingName !== form.name) {
-          const agentsRes = await fetch(`${API_BASE}/api/settings/agents${cwdParam}`)
-          const agents = await agentsRes.json()
+          const agents = await listAgents(rootPath ?? undefined)
           const dependent = agents.filter((a: { mcpServers?: string[] }) => a.mcpServers?.includes(editingName))
           if (dependent.length > 0) {
             const names = dependent.map((a: { name: string }) => a.name).join(', ')
             if (!confirm(`以下智能体引用了此 MCP 服务器：${names}\n重命名后需要手动更新它们的配置。是否继续？`)) return
           }
         }
-        await fetch(`${API_BASE}/api/settings/mcp/${encodeURIComponent(editingName)}${cwdParam}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(server),
-        })
+        await updateMcpServer(rootPath ?? undefined, editingName, server)
       }
       cancelForm()
       await load()
@@ -146,18 +133,14 @@ export default function McpPanel() {
 
   const confirmDelete = async () => {
     if (!deletingName) return
-    const cwdParam = rootPath ? `?cwd=${encodeURIComponent(rootPath)}` : ''
     try {
-      const agentsRes = await fetch(`${API_BASE}/api/settings/agents${cwdParam}`)
-      const agents = await agentsRes.json()
+      const agents = await listAgents(rootPath ?? undefined)
       const dependent = agents.filter((a: { mcpServers?: string[] }) => a.mcpServers?.includes(deletingName))
       if (dependent.length > 0) {
         const names = dependent.map((a: { name: string }) => a.name).join(', ')
         if (!confirm(`以下智能体引用了此 MCP 服务器：${names}\n删除后需要手动更新它们的配置。是否继续？`)) return
       }
-      await fetch(`${API_BASE}/api/settings/mcp/${encodeURIComponent(deletingName)}${cwdParam}`, {
-        method: 'DELETE',
-      })
+      await deleteMcpServer(rootPath ?? undefined, deletingName)
       setDeletingName(null)
       await load()
     } catch (e: any) {

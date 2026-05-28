@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import Toggle from './Toggle'
-import { API_BASE } from '../lib/api'
 import { useGlobalStore } from '../stores/global.store'
+import {
+  listHooks, createHook, updateHook, deleteHook, setHookDisabled,
+} from '../lib/core-api'
 
 interface HookEntry {
   name: string
@@ -94,13 +96,10 @@ export default function HooksPanel() {
   const [form, setForm] = useState<HookForm>(EMPTY_FORM)
   const rootPath = useGlobalStore((s) => s.workspace.rootPath)
 
-  const cwdParam = rootPath ? `?cwd=${encodeURIComponent(rootPath)}` : ''
-
   const load = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/settings/hooks${cwdParam}`)
-      const data = await res.json()
+      const data = await listHooks(rootPath ?? undefined)
       setHooks(data ?? [])
     } catch {
       setHooks([])
@@ -159,17 +158,9 @@ export default function HooksPanel() {
 
     try {
       if (isCreating) {
-        await fetch(`${API_BASE}/api/settings/hooks${cwdParam}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(hook),
-        })
+        await createHook(rootPath ?? undefined, hook)
       } else if (editingName) {
-        await fetch(`${API_BASE}/api/settings/hooks/${encodeURIComponent(editingName)}${cwdParam}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(hook),
-        })
+        await updateHook(rootPath ?? undefined, editingName, hook)
       }
       cancelForm()
       await load()
@@ -181,9 +172,7 @@ export default function HooksPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return
     try {
-      await fetch(`${API_BASE}/api/settings/hooks/${encodeURIComponent(deletingName)}${cwdParam}`, {
-        method: 'DELETE',
-      })
+      await deleteHook(rootPath ?? undefined, deletingName)
       setDeletingName(null)
       await load()
     } catch (e: any) {
@@ -299,11 +288,7 @@ export default function HooksPanel() {
                     </svg>
                   </button>
                   <Toggle checked={h.enabled} onChange={(v) => {
-                    fetch(`${API_BASE}/api/settings/hooks/${encodeURIComponent(h.name)}/disabled${cwdParam}`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ disabled: !v }),
-                    }).catch(() => {})
+                    setHookDisabled(rootPath ?? undefined, h.name, !v).catch(() => {})
                     setHooks(prev => prev.map(hh => hh.name === h.name ? { ...hh, enabled: v } : hh))
                   }} />
                 </div>
