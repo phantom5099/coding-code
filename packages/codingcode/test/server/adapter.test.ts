@@ -91,6 +91,36 @@ describe('toSseEvents', () => {
     ]);
   });
 
+  it('Assistant yields final message event with partial=false after chunk text', async () => {
+    async function* source(): AsyncGenerator<AgentEvent, void, unknown> {
+      yield { _tag: 'Step', step: 1, max: 10 };
+      yield { _tag: 'LlmChunk', text: 'Hello' };
+      yield { _tag: 'LlmChunk', text: ' world' };
+      yield { _tag: 'Assistant', content: 'Hello world' };
+      yield { _tag: 'Done', content: 'Hello world' };
+    }
+    const result: any[] = [];
+    for await (const s of toSseEvents(source())) result.push(s);
+    expect(result).toEqual([
+      { type: 'step', step: 1 },
+      { type: 'text', text: 'Hello', messageId: 1 },
+      { type: 'text', text: ' world', messageId: 1 },
+      { type: 'message', id: 1, content: 'Hello world', partial: false },
+      { type: 'done' },
+    ]);
+  });
+
+  it('Assistant with toolCalls yields message event with content only', async () => {
+    async function* source(): AsyncGenerator<AgentEvent, void, unknown> {
+      yield { _tag: 'Step', step: 2, max: 10 };
+      yield { _tag: 'LlmChunk', text: 'calling tool' };
+      yield { _tag: 'Assistant', content: 'calling tool', toolCalls: [{ name: 'list_dir', args: {} }] };
+    }
+    const result: any[] = [];
+    for await (const s of toSseEvents(source())) result.push(s);
+    expect(result).toContainEqual({ type: 'message', id: 2, content: 'calling tool', partial: false });
+  });
+
   it('text before first Step uses messageId 0', async () => {
     async function* source(): AsyncGenerator<AgentEvent, void, unknown> {
       yield { _tag: 'LlmChunk', text: 'early' };

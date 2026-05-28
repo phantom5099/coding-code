@@ -81,6 +81,8 @@ export function useAgent() {
     switch (event.type) {
       case 'text':
         return { id: String(event.messageId), type: 'message', role: 'assistant', content: event.text, partial: true }
+      case 'message':
+        return { id: String(event.id), type: 'message', role: 'assistant', content: event.content, partial: false }
       case 'step':
         return null
       case 'tool_start':

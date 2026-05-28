@@ -315,14 +315,18 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         const thread = s.agent.threads[threadId]
         if (!thread) return
         const turn = thread.turns.find((t) => t.id === turnId)
-        if (turn) {
-          turn.status = status
-          thread.updatedAt = Date.now()
-        }
-        if (turn) {
-          for (const item of turn.items) {
-            delete s.agent.streamingContent[item.id]
+        if (!turn) return
+        turn.status = status
+        thread.updatedAt = Date.now()
+        for (const item of turn.items) {
+          if (item.type === 'message' && item.role === 'assistant') {
+            const streaming = s.agent.streamingContent[item.id]
+            if (streaming) {
+              item.content = streaming
+              item.partial = false
+            }
           }
+          delete s.agent.streamingContent[item.id]
         }
       }),
 

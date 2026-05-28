@@ -126,6 +126,49 @@ describe('global store - agent streaming actions', () => {
     expect(updatedTurn.status).toBe('completed')
     expect(updatedTurn.items.every((i) => useGlobalStore.getState().agent.streamingContent[i.id] === undefined)).toBe(true)
   })
+
+  it('completeTurn persists streamingContent into assistant item before clearing', () => {
+    const turn = makeTurn([])
+    useGlobalStore.getState().startTurn(threadId, turn)
+
+    // Simulate streaming without a final partial=false event (safety net)
+    useGlobalStore.getState().applyChunk(threadId, turnId, {
+      id: 'msg-1', type: 'message', role: 'assistant', content: 'Hello', partial: true,
+    })
+    useGlobalStore.getState().applyChunk(threadId, turnId, {
+      id: 'msg-1', type: 'message', role: 'assistant', content: ' world', partial: true,
+    })
+
+    useGlobalStore.getState().completeTurn(threadId, turnId, 'completed')
+
+    const items = useGlobalStore.getState().agent.threads[threadId].turns[0].items
+    const assistantItem = items.find((i) => i.id === 'msg-1')
+    expect(assistantItem).toBeDefined()
+    expect((assistantItem as any).content).toBe('Hello world')
+    expect((assistantItem as any).partial).toBe(false)
+    expect(useGlobalStore.getState().agent.streamingContent['msg-1']).toBeUndefined()
+  })
+
+  it('completeTurn with partial=false already received does not double-persist', () => {
+    const turn = makeTurn([])
+    useGlobalStore.getState().startTurn(threadId, turn)
+
+    // Final message already committed via applyChunk partial=false
+    useGlobalStore.getState().applyChunk(threadId, turnId, {
+      id: 'msg-1', type: 'message', role: 'assistant', content: 'Hello', partial: true,
+    })
+    useGlobalStore.getState().applyChunk(threadId, turnId, {
+      id: 'msg-1', type: 'message', role: 'assistant', content: '', partial: false,
+    })
+
+    useGlobalStore.getState().completeTurn(threadId, turnId, 'completed')
+
+    const items = useGlobalStore.getState().agent.threads[threadId].turns[0].items
+    const assistantItem = items.find((i) => i.id === 'msg-1')
+    // Content comes from the committed applyChunk (which uses accumulated streaming)
+    expect((assistantItem as any).content).toBe('Hello')
+    expect((assistantItem as any).partial).toBe(false)
+  })
 })
 
 describe('global store - loadThreads', () => {

@@ -43,6 +43,10 @@ export async function* toSseEvents(
       yield { type: 'text', text: event.text, messageId: currentStep };
       continue;
     }
+    if (event._tag === 'Assistant') {
+      yield { type: 'message', id: currentStep, content: event.content, partial: false };
+      continue;
+    }
     const sse = agentEventToSseEvent(event);
     if (sse !== null) yield sse;
   }

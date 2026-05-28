@@ -165,13 +165,14 @@ describe('sseHandler + sendMessage integration', () => {
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
-    expect(events).toHaveLength(6); // 1 step + 3 text + 1 done + 1 complete
+    expect(events).toHaveLength(7); // 1 step + 3 text + 1 message + 1 done + 1 complete
     expect(events[0]).toEqual({ type: 'step', step: 1 });
     expect(events[1]).toEqual({ type: 'text', text: 'Hello', messageId: 1 });
     expect(events[2]).toEqual({ type: 'text', text: ' ', messageId: 1 });
     expect(events[3]).toEqual({ type: 'text', text: 'world', messageId: 1 });
-    expect(events[4]).toEqual({ type: 'done' });
-    expect(events[5]).toEqual({ type: 'complete' });
+    expect(events[4]).toEqual({ type: 'message', id: 1, content: 'Hello world', partial: false });
+    expect(events[5]).toEqual({ type: 'done' });
+    expect(events[6]).toEqual({ type: 'complete' });
   });
 
   it('should send complete event even when LLM returns no text', async () => {

@@ -9,6 +9,7 @@ export type StreamEvent =
   | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean }
   | { type: 'tool_denied'; name: string; reason: string }
   | { type: 'todo_update'; items: Array<{ step: string; status: 'pending' | 'in_progress' | 'completed' }> }
+  | { type: 'message'; id: number; content: string; partial: false }
   | { type: 'error'; message: string }
   | { type: 'done' }
   | { type: 'complete' }
@@ -82,6 +83,9 @@ export async function* streamAgentMessage(
             break
           case 'todo_update':
             yield { type: 'todo_update', items: data.items as Array<{ step: string; status: 'pending' | 'in_progress' | 'completed' }> }
+            break
+          case 'message':
+            yield { type: 'message', id: data.id as number, content: data.content as string, partial: false }
             break
           case 'error':
             yield { type: 'error', message: data.message as string }
