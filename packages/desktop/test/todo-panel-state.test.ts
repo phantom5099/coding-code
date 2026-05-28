@@ -11,7 +11,6 @@ beforeEach(() => {
       model: '',
       models: [],
       contextUsage: null,
-      streamingContent: {},
       todoByThreadId: {},
     },
     workspace: {

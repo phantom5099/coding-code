@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react'
 import Toggle from './Toggle'
+import { useGlobalStore } from '../stores/global.store'
+import {
+  listMcpServers, setMcpDisabled, createMcpServer,
+  updateMcpServer, deleteMcpServer, listAgents,
+} from '../lib/core-api'
 
 interface McpEntry {
   name: string
@@ -32,11 +37,12 @@ export default function McpPanel() {
   const [editingName, setEditingName] = useState<string | null>(null)
   const [deletingName, setDeletingName] = useState<string | null>(null)
   const [form, setForm] = useState<McpForm>(EMPTY_FORM)
+  const rootPath = useGlobalStore((s) => s.workspace.rootPath)
 
   const load = async () => {
     setLoading(true)
     try {
-      const data = await window.electronAPI?.getMcp?.()
+      const data = await listMcpServers()
       setServers(data ?? [])
     } catch {
       setServers([])
@@ -48,7 +54,7 @@ export default function McpPanel() {
   useEffect(() => { load() }, [])
 
   const toggle = async (name: string, disabled: boolean) => {
-    await window.electronAPI?.setMcpDisabled?.(name, disabled)
+    await setMcpDisabled(name, disabled)
     setServers((prev) => prev.map((s) => s.name === name ? { ...s, disabled } : s))
   }
 
@@ -106,17 +112,17 @@ export default function McpPanel() {
 
     try {
       if (isCreating) {
-        await window.electronAPI?.createMcp?.(server)
+        await createMcpServer(rootPath ?? undefined, server)
       } else if (editingName) {
         if (editingName !== form.name) {
-          const agents = await window.electronAPI?.getAgents?.() ?? []
+          const agents = await listAgents(rootPath ?? undefined)
           const dependent = agents.filter((a: { mcpServers?: string[] }) => a.mcpServers?.includes(editingName))
           if (dependent.length > 0) {
             const names = dependent.map((a: { name: string }) => a.name).join(', ')
             if (!confirm(`以下智能体引用了此 MCP 服务器：${names}\n重命名后需要手动更新它们的配置。是否继续？`)) return
           }
         }
-        await window.electronAPI?.updateMcp?.(editingName, server)
+        await updateMcpServer(rootPath ?? undefined, editingName, server)
       }
       cancelForm()
       await load()
@@ -128,13 +134,13 @@ export default function McpPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return
     try {
-      const agents = await window.electronAPI?.getAgents?.() ?? []
+      const agents = await listAgents(rootPath ?? undefined)
       const dependent = agents.filter((a: { mcpServers?: string[] }) => a.mcpServers?.includes(deletingName))
       if (dependent.length > 0) {
         const names = dependent.map((a: { name: string }) => a.name).join(', ')
         if (!confirm(`以下智能体引用了此 MCP 服务器：${names}\n删除后需要手动更新它们的配置。是否继续？`)) return
       }
-      await window.electronAPI?.deleteMcp?.(deletingName)
+      await deleteMcpServer(rootPath ?? undefined, deletingName)
       setDeletingName(null)
       await load()
     } catch (e: any) {

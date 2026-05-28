@@ -5,7 +5,7 @@ import { SessionService } from '../../src/session/store.js';
 import { SkillService } from '../../src/skills/index.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
 import { McpService } from '../../src/mcp/index.js';
-import { sendMessage } from '../../src/orchestration/index.js';
+import { sendMessage } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
 import { ToolSearchService } from '../../src/tools/tool-search-service.js';

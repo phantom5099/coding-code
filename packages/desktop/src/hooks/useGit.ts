@@ -5,10 +5,11 @@ import type { GitStatus } from '@shared/types'
 export function useGit() {
   const setGit = useGlobalStore((s) => s.setGit)
   const git = useGlobalStore((s) => s.git)
+  const rootPath = useGlobalStore((s) => s.workspace.rootPath)
 
   useEffect(() => {
-    // Load initial status
-    window.electronAPI?.gitStatus?.().then((status) => {
+    if (!rootPath) return
+    window.electronAPI?.gitStatus?.(rootPath).then((status) => {
       if (status) setGit(status as GitStatus)
     })
 
@@ -17,15 +18,19 @@ export function useGit() {
     })
 
     return () => { off?.() }
-  }, [setGit])
+  }, [setGit, rootPath])
 
   const switchBranch = async (branch: string) => {
-    await window.electronAPI?.gitSwitchBranch?.(branch)
-    const status = await window.electronAPI?.gitStatus?.()
+    if (!rootPath) return
+    await window.electronAPI?.gitSwitchBranch?.(rootPath, branch)
+    const status = await window.electronAPI?.gitStatus?.(rootPath)
     if (status) setGit(status as GitStatus)
   }
 
-  const getBranches = () => window.electronAPI?.gitBranches?.() ?? Promise.resolve([])
+  const getBranches = () => {
+    if (!rootPath) return Promise.resolve([])
+    return window.electronAPI?.gitBranches?.(rootPath) ?? Promise.resolve([])
+  }
 
   return { git, switchBranch, getBranches }
 }

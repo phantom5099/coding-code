@@ -16,7 +16,45 @@ import { ToolSearchService } from '../tools/tool-search-service.js';
 import { sharedTodoStore } from '../self/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
+import { SkillService } from '../skills/index.js';
+import { McpService } from '../mcp/index.js';
 import { loadMemoryForPrompt, flushSessionToMemory } from '../memory/index.js';
+
+export const sendMessage = (
+  sessionId: string | undefined,
+  input: string,
+  cwd: string,
+  llm: any,
+  options?: {
+    signal?: AbortSignal
+  },
+) =>
+  Effect.gen(function* () {
+    const session = yield* SessionService;
+    const agent = yield* AgentService;
+    const skill = yield* SkillService;
+    const hooks = yield* HookService;
+    const mcp = yield* McpService;
+    const checkpoint = yield* CheckpointService;
+
+    yield* hooks.reloadUserHooks(cwd);
+    yield* mcp.syncConnections(cwd);
+
+    const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
+    const sid = state.sessionId;
+
+    const turnId = session.incrementTurn(state);
+    const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
+
+    yield* session.recordUser(state, actualInput);
+
+    const turnTitle = actualInput.trim().slice(0, 5) || '(empty)';
+    checkpoint.snapshotBaseline(state.cwd, sid, turnId, turnTitle);
+
+    const stream = agent.runStream({ state, llm, skillInstruction: matchedSkill?.instruction, abortSignal: options?.signal });
+
+    return { stream, sessionId: sid };
+  });
 
 export type AgentEvent =
   | { readonly _tag: 'LlmChunk'; readonly text: string }
@@ -52,6 +90,7 @@ export interface LLMStreamAdapter {
     system?: string;
     tools?: ToolDescription[];
     maxSteps?: number;
+    signal?: AbortSignal;
   }): {
     stream: AsyncIterable<string>;
     response: Promise<Result<{ content: string; toolCalls?: ToolCall[] }, AgentError>>;
@@ -164,9 +203,11 @@ export async function* runReActLoop(
 
       const { stream: rawStream, response: respPromise } = llm.completeStream({
         messages: llmMessages, system: systemWithCatalog, tools, maxSteps: 1,
+        signal: opts.abortSignal,
       });
 
       for await (const chunk of rawStream) {
+        if (opts.abortSignal?.aborted) break;
         yield { _tag: 'LlmChunk', text: chunk };
       }
 
@@ -267,6 +308,16 @@ export async function* runReActLoop(
           yield { _tag: 'TodoUpdate', items: sharedTodoStore.read(sessionId) as any };
           todoPrinted = true;
         }
+      }
+
+      // If abort fired during tool execution, terminate immediately
+      if (opts.abortSignal?.aborted) {
+        yield { _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') };
+        await Effect.runPromise(hooks.emit('agent.turn.end', {
+          sessionId, turnId: state.currentTurnId, status: 'aborted'
+        }));
+        flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
+        return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
       }
 
     }

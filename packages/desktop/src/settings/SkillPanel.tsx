@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Toggle from './Toggle'
+import { listSkills, toggleSkill } from '../lib/core-api'
 
 interface SkillEntry {
   name: string
@@ -14,7 +15,7 @@ export default function SkillPanel() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await window.electronAPI?.getSkills?.()
+      const data = await listSkills()
       setSkills(data ?? [])
     } catch {
       setSkills([])
@@ -26,7 +27,7 @@ export default function SkillPanel() {
   useEffect(() => { load() }, [])
 
   const toggle = async (name: string, disabled: boolean) => {
-    await window.electronAPI?.setSkillDisabled?.(name, disabled)
+    await toggleSkill(name, !disabled)
     setSkills((prev) => prev.map((s) => s.name === name ? { ...s, disabled } : s))
   }
 

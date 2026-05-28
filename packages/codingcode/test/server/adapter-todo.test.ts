@@ -1,49 +1,46 @@
 import { describe, it, expect } from 'vitest';
-import { formatEventForTransport } from '../../src/server/adapter.js';
+import { agentEventToSseEvent } from '../../src/server/adapter.js';
 
-describe('formatEventForTransport with TodoUpdate', () => {
-  it('should serialize TodoUpdate as JSON string', () => {
-    const result = formatEventForTransport({
+describe('agentEventToSseEvent with TodoUpdate', () => {
+  it('should serialize TodoUpdate as structured object', () => {
+    const items = [
+      { step: 'install deps', status: 'pending' as const },
+      { step: 'write tests', status: 'completed' as const },
+    ];
+    const result = agentEventToSseEvent({
       _tag: 'TodoUpdate',
-      items: [
-        { step: 'install deps', status: 'pending' },
-        { step: 'write tests', status: 'completed' },
-      ],
-    } as any);
+      items,
+    });
 
-    expect(result).toBe(
-      JSON.stringify({
-        type: 'todo_update',
-        items: [
-          { step: 'install deps', status: 'pending' },
-          { step: 'write tests', status: 'completed' },
-        ],
-      }),
-    );
+    expect(result).toEqual({
+      type: 'todo_update',
+      items,
+    });
   });
 
   it('should handle empty items array', () => {
-    const result = formatEventForTransport({
+    const result = agentEventToSseEvent({
       _tag: 'TodoUpdate',
       items: [],
-    } as any);
+    });
 
-    expect(result).toBe(JSON.stringify({ type: 'todo_update', items: [] }));
+    expect(result).toEqual({ type: 'todo_update', items: [] });
   });
 
   it('should handle in_progress status', () => {
-    const result = formatEventForTransport({
+    const result = agentEventToSseEvent({
       _tag: 'TodoUpdate',
       items: [{ step: 'deploy', status: 'in_progress' }],
-    } as any);
+    });
 
-    expect(result).toBe(
-      JSON.stringify({ type: 'todo_update', items: [{ step: 'deploy', status: 'in_progress' }] }),
-    );
+    expect(result).toEqual({
+      type: 'todo_update',
+      items: [{ step: 'deploy', status: 'in_progress' }],
+    });
   });
 
-  it('should return null for non-TodoUpdate events', () => {
-    expect(formatEventForTransport({ _tag: 'Step', step: 1, max: 5 })).toBeNull();
-    expect(formatEventForTransport({ _tag: 'LlmChunk', text: 'hi' })).toBe('hi');
+  it('should return structured event for Step, null for LlmChunk (handled by toSseEvents)', () => {
+    expect(agentEventToSseEvent({ _tag: 'Step', step: 1, max: 5 })).toEqual({ type: 'step', step: 1 });
+    expect(agentEventToSseEvent({ _tag: 'LlmChunk', text: 'hi' })).toBeNull();
   });
 });

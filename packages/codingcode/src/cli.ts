@@ -24,27 +24,31 @@ async function main() {
   const program = Effect.gen(function* () {
     yield* bootstrapApplication(getWorkspaceCwd());
 
-    const llmResult = yield* Effect.tryPromise(() => getLLMClient());
-    if (!llmResult.ok) {
-      console.error(`Failed to initialize LLM client: ${llmResult.error.message}`);
-      process.exit(1);
-    }
-
     const port = yield* Effect.tryPromise(() => findAvailablePort(basePort));
 
     if (tuiOnly) {
       const tuiPath = '../../tui/src/index.js';
       const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
+      const llmResult = yield* Effect.tryPromise(() => getLLMClient());
+      if (!llmResult.ok) {
+        console.error(`Failed to initialize LLM client: ${llmResult.error.message}`);
+        process.exit(1);
+      }
       runTui({ llm: llmResult.value });
       return;
     }
 
-    const app = createServer({ llm: llmResult.value });
+    const app = yield* Effect.tryPromise(() => createServer());
     serve({ fetch: app.fetch, port });
 
     if (!serveOnly) {
       const tuiPath = '../../tui/src/index.js';
       const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
+      const llmResult = yield* Effect.tryPromise(() => getLLMClient());
+      if (!llmResult.ok) {
+        console.error(`Failed to initialize LLM client: ${llmResult.error.message}`);
+        process.exit(1);
+      }
       runTui({ llm: llmResult.value });
     }
   });

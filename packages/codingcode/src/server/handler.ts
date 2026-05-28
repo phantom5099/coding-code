@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import type { Context } from 'hono';
 import { AppLayer } from '../layer.js';
 import { registerEmitter, unregisterEmitter } from '../approval/async-confirm.js';
+import type { SseEvent } from './adapter.js';
 
 type EffectProgram = Effect.Effect<any, any, any>;
 
@@ -17,14 +18,14 @@ export function handler(
 }
 
 export function sseHandler(
-  createGenerator: () => AsyncGenerator<string, void, unknown>,
-  opts?: { initialEvents?: Array<Record<string, unknown>>; sessionId?: string },
+  createGenerator: () => AsyncGenerator<SseEvent, void, unknown>,
+  opts?: { initialEvents?: SseEvent[]; sessionId?: string },
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
     const sessionId = opts?.sessionId ?? c.req.param('id') ?? 'default';
     const stream = new ReadableStream({
       async start(controller) {
-        const enqueue = (data: Record<string, unknown>) => {
+        const enqueue = (data: SseEvent) => {
           controller.enqueue(
             new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`),
           );
@@ -41,8 +42,8 @@ export function sseHandler(
 
           const generator = createGenerator();
 
-          for await (const chunk of generator) {
-            enqueue({ type: 'text', text: chunk });
+          for await (const event of generator) {
+            enqueue(event);
           }
 
           enqueue({ type: 'complete' });
@@ -63,6 +64,9 @@ export function sseHandler(
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
       },
     });
   };

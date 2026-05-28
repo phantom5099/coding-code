@@ -1,108 +1,46 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Item, Project, TodoUpdateChunk } from '../shared/types'
 
 const api = {
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
   platform: process.platform,
 
-  // File system
-  readFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:readFile', path),
-  writeFile: (path: string, content: string): Promise<void> => ipcRenderer.invoke('fs:writeFile', path, content),
-  readDir: (dir: string): Promise<unknown> => ipcRenderer.invoke('fs:readDir', dir),
-  watchDir: (dir: string): Promise<string> => ipcRenderer.invoke('fs:watch', dir),
-  unwatchDir: (watchId: string): Promise<void> => ipcRenderer.invoke('fs:unwatch', watchId),
-  indexFiles: (query: string): Promise<string[]> => ipcRenderer.invoke('fs:index', query),
+  // File system (explicit rootPath for sandbox enforcement)
+  readFile: (rootPath: string, path: string): Promise<string> =>
+    ipcRenderer.invoke('fs:readFile', rootPath, path),
+  writeFile: (rootPath: string, path: string, content: string): Promise<void> =>
+    ipcRenderer.invoke('fs:writeFile', rootPath, path, content),
+  readDir: (rootPath: string, dir: string): Promise<unknown> =>
+    ipcRenderer.invoke('fs:readDir', rootPath, dir),
+  watchDir: (rootPath: string, dir: string): Promise<string> =>
+    ipcRenderer.invoke('fs:watch', rootPath, dir),
+  unwatchDir: (watchId: string): Promise<void> =>
+    ipcRenderer.invoke('fs:unwatch', watchId),
+  indexFiles: (rootPath: string, query: string): Promise<string[]> =>
+    ipcRenderer.invoke('fs:index', rootPath, query),
 
-  // Terminal (PTY) – reserved for Phase 4
-  ptyCreate: (id: string, cwd: string, shell?: string): Promise<void> => ipcRenderer.invoke('pty:create', id, cwd, shell),
-  ptyWrite: (id: string, data: string): Promise<void> => ipcRenderer.invoke('pty:write', id, data),
-  ptyResize: (id: string, cols: number, rows: number): Promise<void> => ipcRenderer.invoke('pty:resize', id, cols, rows),
-  ptyKill: (id: string): Promise<void> => ipcRenderer.invoke('pty:kill', id),
+  // Terminal (PTY) — explicit cwd
+  ptyCreate: (cwd: string, id: string, shell?: string): Promise<void> =>
+    ipcRenderer.invoke('pty:create', cwd, id, shell),
+  ptyWrite: (id: string, data: string): Promise<void> =>
+    ipcRenderer.invoke('pty:write', id, data),
+  ptyResize: (id: string, cols: number, rows: number): Promise<void> =>
+    ipcRenderer.invoke('pty:resize', id, cols, rows),
+  ptyKill: (id: string): Promise<void> =>
+    ipcRenderer.invoke('pty:kill', id),
 
-  // Agent
-  sendMessage: (threadId: string, turnId: string, message: string, cwd?: string, attachments?: string[]): Promise<string> =>
-    ipcRenderer.invoke('agent:sendMessage', threadId, turnId, message, cwd, attachments),
-  abortAgent: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:abort', threadId),
-  approveTool: (threadId: string, callId: string): Promise<void> => ipcRenderer.invoke('agent:approveTool', threadId, callId),
-  rejectTool: (threadId: string, callId: string): Promise<void> => ipcRenderer.invoke('agent:rejectTool', threadId, callId),
-  getThreads: (): Promise<unknown[]> => ipcRenderer.invoke('agent:getThreads'),
-  deleteThread: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:deleteThread', threadId),
-  loadHistory: (threadId: string): Promise<unknown[]> => ipcRenderer.invoke('agent:loadHistory', threadId),
-  getModels: (): Promise<{id: string; name: string; provider: string; context_window: number}[]> =>
-    ipcRenderer.invoke('agent:getModels'),
-  setModel: (modelId: string): Promise<void> => ipcRenderer.invoke('agent:setModel', modelId),
-  setApprovalPolicy: (policy: string): Promise<void> => ipcRenderer.invoke('agent:setApprovalPolicy', policy),
-  getSettings: (): Promise<{ activeModel: string; approvalPolicy: string; workspace: { rootPath: string; name: string }; currentProjectId: string }> =>
-    ipcRenderer.invoke('agent:getSettings'),
-  compressContext: (threadId: string): Promise<void> => ipcRenderer.invoke('agent:compressContext', threadId),
+  // Folder dialog
+  openFolderDialog: (): Promise<string | null> =>
+    ipcRenderer.invoke('project:openFolderDialog'),
 
-  // Projects
-  getProjects: (): Promise<Project[]> => ipcRenderer.invoke('project:getAll'),
-  openFolderDialog: (): Promise<string | null> => ipcRenderer.invoke('project:openFolderDialog'),
-  addProject: (rootPath: string): Promise<Project> => ipcRenderer.invoke('project:add', rootPath),
-  removeProject: (projectId: string): Promise<void> => ipcRenderer.invoke('project:remove', projectId),
-  setCurrentProjectId: (projectId: string): Promise<void> => ipcRenderer.invoke('project:setCurrentId', projectId),
+  // Git (explicit cwd)
+  gitStatus: (cwd: string): Promise<unknown> =>
+    ipcRenderer.invoke('git:status', cwd),
+  gitBranches: (cwd: string): Promise<string[]> =>
+    ipcRenderer.invoke('git:branches', cwd),
+  gitSwitchBranch: (cwd: string, branch: string): Promise<void> =>
+    ipcRenderer.invoke('git:switchBranch', cwd, branch),
 
-  // Git
-  gitStatus: (): Promise<unknown> => ipcRenderer.invoke('git:status'),
-  gitBranches: (): Promise<string[]> => ipcRenderer.invoke('git:branches'),
-  gitSwitchBranch: (branch: string): Promise<void> => ipcRenderer.invoke('git:switchBranch', branch),
-
-  // Settings (MCP / Skills / Agents)
-  getMcp: (): Promise<{name: string; transport: 'stdio'|'http'; disabled: boolean; toolCount: number}[]> =>
-    ipcRenderer.invoke('settings:getMcp'),
-  setMcpDisabled: (name: string, disabled: boolean): Promise<void> =>
-    ipcRenderer.invoke('settings:setMcpDisabled', name, disabled),
-  createMcp: (server: object): Promise<void> =>
-    ipcRenderer.invoke('settings:createMcp', server),
-  updateMcp: (name: string, server: object): Promise<void> =>
-    ipcRenderer.invoke('settings:updateMcp', name, server),
-  deleteMcp: (name: string): Promise<void> =>
-    ipcRenderer.invoke('settings:deleteMcp', name),
-  getSkills: (): Promise<{name: string; description: string; disabled: boolean}[]> =>
-    ipcRenderer.invoke('settings:getSkills'),
-  setSkillDisabled: (name: string, disabled: boolean): Promise<void> =>
-    ipcRenderer.invoke('settings:setSkillDisabled', name, disabled),
-  getAgents: (): Promise<{name: string; description: string; tools?: string[]; mcpServers?: string[]; readonly?: boolean; maxSteps?: number; model?: string; disabled?: boolean}[]> =>
-    ipcRenderer.invoke('settings:getAgents'),
-  getSubagentEnabled: (): Promise<boolean> =>
-    ipcRenderer.invoke('settings:getSubagentEnabled'),
-  setSubagentEnabled: (enabled: boolean): Promise<void> =>
-    ipcRenderer.invoke('settings:setSubagentEnabled', enabled),
-  createAgent: (profile: object): Promise<void> =>
-    ipcRenderer.invoke('settings:createAgent', profile),
-  updateAgent: (name: string, profile: object): Promise<void> =>
-    ipcRenderer.invoke('settings:updateAgent', name, profile),
-  deleteAgent: (name: string): Promise<void> =>
-    ipcRenderer.invoke('settings:deleteAgent', name),
-  setAgentDisabled: (name: string, disabled: boolean): Promise<void> =>
-    ipcRenderer.invoke('settings:setAgentDisabled', name, disabled),
-  getHooks: (): Promise<{name: string; description?: string; point: string; type: 'observer' | 'decision'; command: string; args?: string[]; env?: Record<string, string>; priority?: number; enabled: boolean}[]> =>
-    ipcRenderer.invoke('settings:getHooks'),
-  createHook: (hook: object): Promise<void> =>
-    ipcRenderer.invoke('settings:createHook', hook),
-  updateHook: (name: string, hook: object): Promise<void> =>
-    ipcRenderer.invoke('settings:updateHook', name, hook),
-  deleteHook: (name: string): Promise<void> =>
-    ipcRenderer.invoke('settings:deleteHook', name),
-  setHookDisabled: (name: string, disabled: boolean): Promise<void> =>
-    ipcRenderer.invoke('settings:setHookDisabled', name, disabled),
-
-  // Settings (Memory)
-  getMemoryConfig: (): Promise<{ enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> }> =>
-    ipcRenderer.invoke('settings:getMemoryConfig'),
-  setMemoryEnabled: (enabled: boolean): Promise<void> =>
-    ipcRenderer.invoke('settings:setMemoryEnabled', enabled),
-  setTypeDisabled: (name: string, disabled: boolean): Promise<void> =>
-    ipcRenderer.invoke('settings:setTypeDisabled', name, disabled),
-  addExtraType: (type: { name: string; description: string }): Promise<void> =>
-    ipcRenderer.invoke('settings:addExtraType', type),
-  updateExtraType: (name: string, type: { name: string; description: string }): Promise<void> =>
-    ipcRenderer.invoke('settings:updateExtraType', name, type),
-  deleteExtraType: (name: string): Promise<void> =>
-    ipcRenderer.invoke('settings:deleteExtraType', name),
-
-  // Events: main → renderer
+  // Events: main -> renderer
   onFsChange: (cb: (payload: { path: string; type: 'add' | 'change' | 'unlink' }) => void) => {
     ipcRenderer.on('fs:change', (_e, payload) => cb(payload))
     return () => ipcRenderer.removeAllListeners('fs:change')
@@ -110,14 +48,6 @@ const api = {
   onPtyData: (cb: (payload: { id: string; data: string }) => void) => {
     ipcRenderer.on('pty:data', (_e, payload) => cb(payload))
     return () => ipcRenderer.removeAllListeners('pty:data')
-  },
-  onAgentChunk: (cb: (payload: { threadId: string; turnId: string; chunk: Item | TodoUpdateChunk }) => void) => {
-    ipcRenderer.on('agent:chunk', (_e, payload) => cb(payload))
-    return () => ipcRenderer.removeAllListeners('agent:chunk')
-  },
-  onAgentDone: (cb: (payload: { threadId: string; turnId: string; error?: string }) => void) => {
-    ipcRenderer.on('agent:done', (_e, payload) => cb(payload))
-    return () => ipcRenderer.removeAllListeners('agent:done')
   },
   onGitStatusUpdate: (cb: (status: unknown) => void) => {
     ipcRenderer.on('git:statusUpdate', (_e, status) => cb(status))
