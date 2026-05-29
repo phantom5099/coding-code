@@ -17,6 +17,7 @@ beforeEach(() => {
       models: [],
       contextUsage: null,
       todoByThreadId: {},
+      pendingInput: null,
     },
     workspace: {
       rootPath: '',
@@ -103,6 +104,38 @@ describe('global store - agent streaming actions', () => {
     expect((toolItem as any).status).toBe('running')
     // Should have only one entry (upserted, not duplicated)
     expect(items.filter((i) => i.id === 'call-1')).toHaveLength(1)
+  })
+
+  it('applyChunk marks matching tool_call as rejected via id upsert', () => {
+    const turn = makeTurn([])
+    useGlobalStore.getState().startTurn(threadId, turn)
+
+    const toolCall: Item = { id: 'tc-rej', type: 'tool_call', name: 'bash', args: {}, status: 'pending' }
+    useGlobalStore.getState().applyChunk(threadId, turnId, toolCall)
+
+    const denied: Item = { id: 'tc-rej', type: 'tool_call', name: 'bash', args: {}, status: 'rejected' }
+    useGlobalStore.getState().applyChunk(threadId, turnId, denied)
+
+    const items = useGlobalStore.getState().agent.threads[threadId].turns[0].items
+    expect(items).toHaveLength(1)
+    expect((items[0] as any).status).toBe('rejected')
+  })
+
+  it('applyChunk marks matching tool_call as approved via callId', () => {
+    const turn = makeTurn([])
+    useGlobalStore.getState().startTurn(threadId, turn)
+
+    const toolCall: Item = { id: 'tc-same', type: 'tool_call', name: 'write_file', args: { path: 'foo.ts' }, status: 'running' }
+    useGlobalStore.getState().applyChunk(threadId, turnId, toolCall)
+
+    const toolResult: Item = { id: 'res-1', type: 'tool_result', callId: 'tc-same', name: 'write_file', output: 'ok', exitCode: 0 }
+    useGlobalStore.getState().applyChunk(threadId, turnId, toolResult)
+
+    const items = useGlobalStore.getState().agent.threads[threadId].turns[0].items
+    const call = items.find((i) => i.id === 'tc-same')
+    expect(call).toBeDefined()
+    expect((call as any).status).toBe('approved')
+    expect(items).toHaveLength(2)
   })
 
   it('completeTurn marks turn completed and clears streaming', () => {

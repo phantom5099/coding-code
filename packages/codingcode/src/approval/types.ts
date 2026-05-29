@@ -4,6 +4,7 @@ export interface ToolCallRequest {
   tool: string;
   input: Record<string, unknown>;
   context?: Record<string, unknown>;
+  callId?: string;
 }
 
 export type ApprovalDecision =

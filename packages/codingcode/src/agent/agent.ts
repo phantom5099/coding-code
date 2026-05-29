@@ -58,10 +58,10 @@ export const sendMessage = (
 export type AgentEvent =
   | { readonly _tag: 'LlmChunk'; readonly text: string }
   | { readonly _tag: 'Assistant'; readonly content: string; readonly toolCalls?: ToolCall[] }
-  | { readonly _tag: 'ToolStart'; readonly name: string; readonly args: Record<string, unknown> }
-  | { readonly _tag: 'ToolDenied'; readonly name: string; readonly reason: string }
+  | { readonly _tag: 'ToolStart'; readonly id: string; readonly name: string; readonly args: Record<string, unknown> }
+  | { readonly _tag: 'ToolDenied'; readonly id: string; readonly name: string; readonly reason: string }
   | { readonly _tag: 'ApprovalRequest'; readonly id: string; readonly tool: string; readonly args: Record<string, unknown> }
-  | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean }
+  | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean; readonly diff?: string; readonly filePath?: string; readonly insertions?: number; readonly deletions?: number }
   | { readonly _tag: 'Step'; readonly step: number; readonly max: number }
   | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
@@ -274,6 +274,13 @@ export async function* runReActLoop(
         break;
       }
 
+      // Emit ToolStart for each tool call so the client can track execution state
+      if (toolCalls) {
+        for (const tc of toolCalls) {
+          yield { _tag: 'ToolStart', id: tc.id, name: tc.name, args: tc.arguments ?? {} };
+        }
+      }
+
       // Execute tool calls — record assistant, execute batch, record results in one pipeline
       const allResults = await Effect.runPromise(
         Effect.gen(function* () {
@@ -297,9 +304,10 @@ export async function* runReActLoop(
       for (const r of allResults) {
         const resultOut = r.type === 'denied' ? '' : r.output;
         if (r.type === 'denied') {
-          yield { _tag: 'ToolDenied', name: r.name, reason: r.reason };
+          yield { _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason };
         } else {
-          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: r.type === 'ok' };
+          const isOk = r.type === 'ok';
+          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk, diff: isOk ? r.diff : undefined, filePath: isOk ? r.filePath : undefined, insertions: isOk ? r.insertions : undefined, deletions: isOk ? r.deletions : undefined };
         }
         if (!messages.find(m => (m as any).tool_call_id === r.id)) {
           const content = r.type === 'denied'

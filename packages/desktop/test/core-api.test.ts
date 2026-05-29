@@ -148,4 +148,16 @@ describe('core-api - path building', () => {
       body: JSON.stringify({ enabled: true }),
     }))
   })
+
+  it('getCheckpointDiff uses turnId in path when provided', async () => {
+    const coreApi = await getCoreApi()
+    await coreApi.getCheckpointDiff('session-123', 'C:/x', 3)
+    expect(api).toHaveBeenCalledWith('/api/sessions/session-123/checkpoints/3/diff?cwd=C%3A%2Fx')
+  })
+
+  it('getCheckpointDiff uses latest in path when turnId omitted', async () => {
+    const coreApi = await getCoreApi()
+    await coreApi.getCheckpointDiff('session-123', 'C:/x')
+    expect(api).toHaveBeenCalledWith('/api/sessions/session-123/checkpoints/latest/diff?cwd=C%3A%2Fx')
+  })
 })

@@ -47,6 +47,8 @@ export interface PipelineOptions {
   onNever?: (rule: PermissionRule) => void;
   /** Session ID for session-scoped approval routing. */
   sessionId: string;
+  /** Optional LLM ToolCall ID to use as approval request ID. */
+  callId?: string;
 }
 
 const LAYER_NAMES = [
@@ -138,7 +140,7 @@ export function runPipeline(
       layers.push(LAYER_NAMES[4]);
       const confirmResult = yield* (
         opts.asyncConfirm && opts.asyncConfirmService
-          ? userConfirmAsync(request.tool, request.input, opts.asyncConfirmService, opts.sessionId)
+          ? userConfirmAsync(request.tool, request.input, opts.asyncConfirmService, opts.sessionId, opts.callId)
           : userConfirm(request.tool, request.input, opts.interactive ? 'interactive' : 'default-deny')
       );
 

@@ -6,9 +6,9 @@ export type StreamEvent =
   | { type: 'step'; step: number }
   | { type: 'text'; text: string; messageId: number }
   | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
-  | { type: 'tool_start'; name: string; args: Record<string, unknown> }
-  | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean }
-  | { type: 'tool_denied'; name: string; reason: string }
+  | { type: 'tool_start'; id: string; name: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean; diff?: string; filePath?: string; insertions?: number; deletions?: number }
+  | { type: 'tool_denied'; id: string; name: string; reason: string }
   | { type: 'todo_update'; items: Array<{ step: string; status: 'pending' | 'in_progress' | 'completed' }> }
   | { type: 'message'; id: number; content: string; partial: false }
   | { type: 'error'; message: string }
@@ -62,13 +62,13 @@ export async function* streamAgentMessage(
           yield { type: 'approval_request', id: data.id as string, tool: data.tool as string, args: data.args as Record<string, unknown> }
           break
         case 'tool_start':
-          yield { type: 'tool_start', name: data.name as string, args: data.args as Record<string, unknown> }
+          yield { type: 'tool_start', id: data.id as string, name: data.name as string, args: data.args as Record<string, unknown> }
           break
         case 'tool_result':
-          yield { type: 'tool_result', id: data.id as string, name: data.name as string, output: data.output as string, ok: data.ok as boolean }
+          yield { type: 'tool_result', id: data.id as string, name: data.name as string, output: data.output as string, ok: data.ok as boolean, diff: data.diff as string | undefined, filePath: data.filePath as string | undefined, insertions: data.insertions as number | undefined, deletions: data.deletions as number | undefined }
           break
         case 'tool_denied':
-          yield { type: 'tool_denied', name: data.name as string, reason: data.reason as string }
+          yield { type: 'tool_denied', id: data.id as string, name: data.name as string, reason: data.reason as string }
           break
         case 'todo_update':
           yield { type: 'todo_update', items: data.items as Array<{ step: string; status: 'pending' | 'in_progress' | 'completed' }> }

@@ -2,6 +2,7 @@ import { useState, useRef, useLayoutEffect } from 'react'
 import type { Item } from '@shared/types'
 import CodeBlock from './CodeBlock'
 import ToolCallCard from './ToolCallCard'
+import DiffBlock from './DiffBlock'
 
 const TOOL_ICONS: Record<string, string> = {
   shell: '⚡',
@@ -164,7 +165,19 @@ export default function MessageItem({ item, threadId, onApprove, onReject, callI
   if (item.type === 'tool_result') {
     const isError = item.exitCode !== undefined && item.exitCode !== 0
     const toolName = item.name ?? callIdToToolName?.[item.callId]
-    const icon = toolName ? (TOOL_ICONS[toolName] ?? '🔧') : null
+    const isFileTool = toolName === 'write_file' || toolName === 'edit_file'
+    
+    let label: string
+    if (isError) {
+      label = `✗ 退出码 ${item.exitCode}`
+    } else if (isFileTool && item.filePath) {
+      label = item.insertions && !item.deletions
+        ? `成功创建 ${item.filePath}`
+        : `成功编辑 ${item.filePath}`
+    } else {
+      label = '✓ 执行结果'
+    }
+
     return (
       <div className="mb-3">
         <button
@@ -173,17 +186,22 @@ export default function MessageItem({ item, threadId, onApprove, onReject, callI
           className="flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity"
         >
           <span className={`transition-transform text-[10px] text-[#555] ${resultOpen ? 'rotate-90' : ''}`}>▶</span>
-          {icon && <span>{icon}</span>}
+          <span>{isError ? '❌' : '✅'}</span>
           {toolName && <span className="font-mono text-[#dcdcaa]">{toolName}</span>}
-          <span className={isError ? 'text-[#f44747]' : 'text-[#4ec9b0]'}>
-            {isError ? `✗ 退出码 ${item.exitCode}` : '✓ 执行结果'}
-          </span>
+          <span className={isError ? 'text-[#f44747]' : 'text-[#4ec9b0]'}>{label}</span>
+          {isFileTool && item.diff && (
+            <span className="text-[#555] text-xs">+{item.insertions} -{item.deletions}</span>
+          )}
         </button>
-        {resultOpen && (
+        {resultOpen && isFileTool && item.diff ? (
+          <div className="mt-1.5">
+            <DiffBlock diff={item.diff} />
+          </div>
+        ) : resultOpen ? (
           <div className="mt-1.5">
             <CodeBlock code={item.output.slice(0, 4000)} />
           </div>
-        )}
+        ) : null}
       </div>
     )
   }

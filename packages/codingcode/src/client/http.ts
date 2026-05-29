@@ -60,13 +60,13 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
             yield { type: 'approval_request', id: data.id as string, tool: data.tool as string, args: data.args as Record<string, unknown> };
             break;
           case 'tool_start':
-            yield { type: 'tool_start', name: data.name as string, args: data.args as Record<string, unknown> };
+            yield { type: 'tool_start', id: data.id as string, name: data.name as string, args: data.args as Record<string, unknown> };
             break;
           case 'tool_result':
             yield { type: 'tool_result', id: data.id as string, name: data.name as string, output: data.output as string, ok: data.ok as boolean };
             break;
           case 'tool_denied':
-            yield { type: 'tool_denied', name: data.name as string, reason: data.reason as string };
+            yield { type: 'tool_denied', id: data.id as string, name: data.name as string, reason: data.reason as string };
             break;
           case 'todo_update':
             yield { type: 'todo_update', items: data.items as any };

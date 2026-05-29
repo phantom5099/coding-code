@@ -270,8 +270,9 @@ export interface SessionRollbackState {
   code: { canUndoLast: boolean; lastEntry: CodeRestoreEntry | null; revertedFiles: string[]; lastEntryId: string | null }
 }
 
-export function getCheckpointDiff(sessionId: string, cwd: string): Promise<CheckpointDiff> {
-  return api(`/api/sessions/${sessionId}/checkpoints/latest/diff?cwd=${encodeURIComponent(cwd)}`)
+export function getCheckpointDiff(sessionId: string, cwd: string, turnId?: number): Promise<CheckpointDiff> {
+  const segment = turnId != null ? String(turnId) : 'latest'
+  return api(`/api/sessions/${sessionId}/checkpoints/${segment}/diff?cwd=${encodeURIComponent(cwd)}`)
 }
 
 export function revertCheckpointFile(sessionId: string, cwd: string, file: string): Promise<{ ok: boolean; result: CodeRollbackResult }> {

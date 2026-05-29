@@ -25,6 +25,10 @@ interface ToolResultItem {
   callId: string
   output: string
   exitCode: number
+  filePath?: string
+  diff?: string
+  insertions?: number
+  deletions?: number
 }
 
 interface ErrorItem {
@@ -45,7 +49,7 @@ function processChunk(
 ): Item | null {
   switch (chunk.type) {
     case 'tool_start': {
-      const item: ToolCallItem = { id: randomId(), type: 'tool_call', name: chunk.name, args: chunk.args, status: 'running' }
+      const item: ToolCallItem = { id: chunk.id ?? randomId(), type: 'tool_call', name: chunk.name, args: chunk.args, status: 'running' }
       items.push(item)
       return item
     }
@@ -60,12 +64,24 @@ function processChunk(
         const updated: ToolCallItem = { ...(items[tcIdx] as ToolCallItem), status: 'approved' }
         items[tcIdx] = updated
       }
-      const resultItem: ToolResultItem = { id: randomId(), type: 'tool_result', callId: chunk.id, output: chunk.output, exitCode: chunk.ok ? 0 : 1 }
+      const resultItem: ToolResultItem = { 
+        id: randomId(), 
+        type: 'tool_result', 
+        callId: chunk.id, 
+        output: chunk.output, 
+        exitCode: chunk.ok ? 0 : 1,
+        filePath: chunk.filePath,
+        diff: chunk.diff,
+        insertions: chunk.insertions,
+        deletions: chunk.deletions
+      }
       items.push(resultItem)
       return resultItem
     }
     case 'tool_denied': {
-      const tcIdx = items.findLastIndex((i) => i.type === 'tool_call' && (i as ToolCallItem).name === chunk.name)
+      const tcIdx = chunk.id
+        ? items.findLastIndex((i) => i.type === 'tool_call' && i.id === chunk.id)
+        : items.findLastIndex((i) => i.type === 'tool_call' && (i as ToolCallItem).name === chunk.name)
       if (tcIdx >= 0) {
         const updated: ToolCallItem = { ...(items[tcIdx] as ToolCallItem), status: 'rejected' }
         items[tcIdx] = updated
@@ -120,10 +136,10 @@ describe('stream chunk processing', () => {
     expect((result as ToolResultItem).exitCode).toBe(1)
   })
 
-  it('tool_denied marks matching call as rejected', () => {
+  it('tool_denied marks matching call as rejected via id', () => {
     const items: Item[] = []
     processChunk({ type: 'approval_request', id: 'apr-2', tool: 'edit_file', args: {} }, items)
-    processChunk({ type: 'tool_denied', name: 'edit_file', reason: 'User denied' }, items)
+    processChunk({ type: 'tool_denied', id: 'apr-2', name: 'edit_file', reason: 'User denied' }, items)
 
     const call = items.find((i) => i.type === 'tool_call') as ToolCallItem
     expect(call.status).toBe('rejected')
@@ -154,5 +170,28 @@ describe('stream chunk processing', () => {
     expect(items).toHaveLength(2)
     expect((items[0] as ToolCallItem).status).toBe('approved')
     expect((items[1] as ToolResultItem).output).toBe('hi')
+  })
+
+  it('tool_result with diff fields passes them through', () => {
+    const items: Item[] = []
+    processChunk({ type: 'approval_request', id: 'apr-diff', tool: 'write_file', args: {} }, items)
+    const result = processChunk({ 
+      type: 'tool_result', 
+      id: 'res-diff', 
+      name: 'write_file', 
+      output: 'File created', 
+      ok: true,
+      filePath: 'test.ts',
+      diff: '+new line',
+      insertions: 1,
+      deletions: 0
+    }, items)
+
+    expect(result?.type).toBe('tool_result')
+    const resultItem = result as ToolResultItem
+    expect(resultItem.filePath).toBe('test.ts')
+    expect(resultItem.diff).toBe('+new line')
+    expect(resultItem.insertions).toBe(1)
+    expect(resultItem.deletions).toBe(0)
   })
 })

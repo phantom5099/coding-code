@@ -4,7 +4,7 @@ export type Item =
   | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
   | { id: string; type: 'reasoning'; content: string; isVisible: boolean }
   | { id: string; type: 'tool_call'; name: string; args: object; status: 'pending' | 'approved' | 'rejected' | 'running' }
-  | { id: string; type: 'tool_result'; callId: string; name?: string; output: string; exitCode?: number }
+  | { id: string; type: 'tool_result'; callId: string; name?: string; output: string; exitCode?: number; filePath?: string; diff?: string; insertions?: number; deletions?: number }
   | { id: string; type: 'error'; message: string }
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed'

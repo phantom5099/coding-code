@@ -47,11 +47,12 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
         tool: string;
         input: Record<string, unknown>;
         context?: Record<string, unknown>;
+        callId?: string;
         sessionId: string;
       }): Effect.Effect<ApprovalDecision> =>
         Effect.gen(function* () {
           return yield* runPipeline(
-            { tool: request.tool, input: request.input, context: request.context },
+            { tool: request.tool, input: request.input, context: request.context, callId: request.callId },
             {
               ruleEngine,
               readonlyTools,
@@ -64,6 +65,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               onAlways: (rule) => ruleEngine.addRule(rule),
               onNever: (rule) => ruleEngine.addRule(rule),
               sessionId: request.sessionId,
+              callId: request.callId,
             },
           );
         }),
@@ -106,10 +108,10 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
           const childReadonlyTools = new Set(readonlyTools);
           const childDestructiveTools = new Set(destructiveTools);
           return {
-            evaluate: (request: { tool: string; input: Record<string, unknown>; context?: Record<string, unknown>; sessionId: string }) =>
+            evaluate: (request: { tool: string; input: Record<string, unknown>; context?: Record<string, unknown>; callId?: string; sessionId: string }) =>
               Effect.gen(function* () {
                 return yield* runPipeline(
-                  { tool: request.tool, input: request.input, context: request.context },
+                  { tool: request.tool, input: request.input, context: request.context, callId: request.callId },
                   {
                     ruleEngine: childEngine,
                     readonlyTools: childReadonlyTools,
@@ -122,6 +124,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
                     onAlways: (rule) => childEngine.addRule(rule),
                     onNever: (rule) => childEngine.addRule(rule),
                     sessionId: request.sessionId,
+                    callId: request.callId,
                   },
                 );
               }),
@@ -152,10 +155,10 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               const nestedReadonlyTools = new Set(childReadonlyTools);
               const nestedDestructiveTools = new Set(childDestructiveTools);
               return Effect.succeed({
-                evaluate: (request: { tool: string; input: Record<string, unknown>; context?: Record<string, unknown>; sessionId: string }) =>
+                evaluate: (request: { tool: string; input: Record<string, unknown>; context?: Record<string, unknown>; callId?: string; sessionId: string }) =>
                   Effect.gen(function* () {
                     return yield* runPipeline(
-                      { tool: request.tool, input: request.input, context: request.context },
+                      { tool: request.tool, input: request.input, context: request.context, callId: request.callId },
                       {
                         ruleEngine: nestedEngine,
                         readonlyTools: nestedReadonlyTools,
@@ -168,6 +171,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
                         onAlways: (rule: PermissionRule) => nestedEngine.addRule(rule),
                         onNever: (rule: PermissionRule) => nestedEngine.addRule(rule),
                         sessionId: request.sessionId,
+                        callId: request.callId,
                       },
                     );
                   }),
