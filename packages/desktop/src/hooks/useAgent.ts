@@ -1,7 +1,8 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useGlobalStore, type ModelEntry } from '../stores/global.store'
 import { streamAgentMessage, type StreamEvent } from '../lib/agent-stream'
-import { listModels, listSessions, getSessionHistory, createSession as createServerSession, deleteSession, sendApprovalResponse } from '../lib/core-api'
+import { listModels, listSessions, getSessionHistory, createSession as createServerSession, deleteSession, sendApprovalResponse, getCheckpointDiff, revertCheckpointFile, revertCheckpointFiles, revertCheckpointAgentFiles, revertCheckpointAllFiles, previewRollbackDiff, rollbackCodeToTurn, rollbackContext, rollbackBothToTurn, undoLastCodeRollback, getRollbackState, forkSession } from '../lib/core-api'
+import type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff, SessionRollbackState } from '../lib/core-api'
 import type { Item, Turn, Project } from '@shared/types'
 
 function normalizeCwd(p: string): string {
@@ -33,6 +34,18 @@ export function useAgent() {
   const workspace = useGlobalStore((s) => s.workspace)
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
   const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy)
+  // Rollback store
+  const rollbackStateByThreadId = useGlobalStore((s) => s.rollback.rollbackStateByThreadId)
+  const revertedFilesByTurnId = useGlobalStore((s) => s.rollback.revertedFilesByTurnId)
+  const setRollbackState = useGlobalStore((s) => s.setRollbackState)
+  const setCheckpointDiff = useGlobalStore((s) => s.setCheckpointDiff)
+  const setRollbackPreview = useGlobalStore((s) => s.setRollbackPreview)
+  const clearRollbackPreview = useGlobalStore((s) => s.clearRollbackPreview)
+  const markFileReverted = useGlobalStore((s) => s.markFileReverted)
+  const markFileRestored = useGlobalStore((s) => s.markFileRestored)
+  const markScopeReverted = useGlobalStore((s) => s.markScopeReverted)
+  const markScopeRestored = useGlobalStore((s) => s.markScopeRestored)
+  const initRevertedFilesFromState = useGlobalStore((s) => s.initRevertedFilesFromState)
 
   const abortControllers = useRef<Map<string, AbortController>>(new Map())
 
@@ -210,5 +223,111 @@ export function useAgent() {
     return data.sessionId
   }, [approvalPolicy])
 
-  return { sendMessage, abort, approveTool, rejectTool, deleteThread, createSession }
+  // Rollback methods
+  const loadCheckpointDiff = useCallback(async (threadId: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const diff = await getCheckpointDiff(threadId, cwd)
+    setCheckpointDiff(threadId, String(diff.turnId), diff)
+    return diff
+  }, [workspace.rootPath, setCheckpointDiff])
+
+  const revertFile = useCallback(async (threadId: string, file: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await revertCheckpointFile(threadId, cwd, file)
+    if (result.reverted) {
+      markFileReverted(threadId, String(result.throughTurnId), file)
+    }
+    return result
+  }, [workspace.rootPath, markFileReverted])
+
+  const revertFiles = useCallback(async (threadId: string, files: string[]) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await revertCheckpointFiles(threadId, cwd, files)
+    if (result.reverted) {
+      for (const f of result.selectedFiles) {
+        markFileReverted(threadId, String(result.throughTurnId), f)
+      }
+    }
+    return result
+  }, [workspace.rootPath, markFileReverted])
+
+  const revertAgentFiles = useCallback(async (threadId: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await revertCheckpointAgentFiles(threadId, cwd)
+    if (result.reverted) {
+      markScopeReverted(threadId, String(result.throughTurnId), 'agent')
+    }
+    return result
+  }, [workspace.rootPath, markScopeReverted])
+
+  const revertAllFiles = useCallback(async (threadId: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await revertCheckpointAllFiles(threadId, cwd)
+    if (result.reverted) {
+      markScopeReverted(threadId, String(result.throughTurnId), 'all')
+    }
+    return result
+  }, [workspace.rootPath, markScopeReverted])
+
+  const previewRollback = useCallback(async (threadId: string, throughTurnId: number) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const preview = await previewRollbackDiff(threadId, cwd, throughTurnId)
+    setRollbackPreview(threadId, preview)
+    return preview
+  }, [workspace.rootPath, setRollbackPreview])
+
+  const rollbackCode = useCallback(async (threadId: string, throughTurnId: number) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await rollbackCodeToTurn(threadId, cwd, throughTurnId)
+    return result
+  }, [workspace.rootPath])
+
+  const rollbackCtx = useCallback(async (threadId: string, throughTurnId: number) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const res = await rollbackContext(threadId, cwd, throughTurnId)
+    setThreadTurns(threadId, res.turns as Turn[])
+    return res
+  }, [workspace.rootPath, setThreadTurns])
+
+  const rollbackBoth = useCallback(async (threadId: string, throughTurnId: number) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const res = await rollbackBothToTurn(threadId, cwd, throughTurnId)
+    setThreadTurns(threadId, res.turns as Turn[])
+    return res
+  }, [workspace.rootPath, setThreadTurns])
+
+  const undoCodeRollback = useCallback(async (threadId: string, force?: boolean, files?: string[]) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await undoLastCodeRollback(threadId, cwd, force, files)
+    if (result.restored) {
+      for (const f of result.restoredFiles) {
+        markFileRestored(threadId, '', f)
+      }
+    }
+    return result
+  }, [workspace.rootPath, markFileRestored])
+
+  const forkThread = useCallback(async (threadId: string, atUuid?: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const res = await forkSession(threadId, cwd, atUuid)
+    return res.sessionId
+  }, [workspace.rootPath])
+
+  const initRollbackState = useCallback(async (threadId: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    try {
+      const state = await getRollbackState(threadId, cwd)
+      setRollbackState(threadId, state)
+      initRevertedFilesFromState(threadId)
+    } catch { /* ignore */ }
+  }, [workspace.rootPath, setRollbackState, initRevertedFilesFromState])
+
+  return {
+    sendMessage, abort, approveTool, rejectTool, deleteThread, createSession,
+    // Rollback
+    loadCheckpointDiff, revertFile, revertFiles, revertAgentFiles, revertAllFiles,
+    previewRollback, rollbackCode, rollbackCtx, rollbackBoth,
+    undoCodeRollback, forkThread, initRollbackState,
+    rollbackStateByThreadId, revertedFilesByTurnId,
+  }
 }

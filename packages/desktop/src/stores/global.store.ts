@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import type { FileNode, GitStatus, Item, OpenFile, Project, TerminalSession, Thread, Turn, TodoItem } from '@shared/types'
+import type { SessionRollbackState, CheckpointDiff, RollbackPreviewDiff } from '../lib/core-api'
 
 function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`)
@@ -58,6 +59,13 @@ interface EditorState {
   cursorCol: number
 }
 
+interface RollbackState {
+  rollbackStateByThreadId: Record<string, SessionRollbackState>
+  checkpointDiffByTurnId: Record<string, CheckpointDiff>
+  rollbackPreviewByThreadId: Record<string, RollbackPreviewDiff>
+  revertedFilesByTurnId: Record<string, string[]>
+}
+
 interface GlobalState {
   ui: UIState
   workspace: WorkspaceState
@@ -66,6 +74,7 @@ interface GlobalState {
   terminals: TerminalSession[]
   agent: AgentState
   editor: EditorState
+  rollback: RollbackState
 }
 
 interface GlobalActions {
@@ -106,6 +115,16 @@ interface GlobalActions {
   completeTurn: (threadId: string, turnId: string, status: 'completed' | 'error') => void
   applyTodoUpdate: (threadId: string, items: TodoItem[]) => void
   toggleTodoCollapsed: (threadId: string) => void
+  // Rollback state
+  setRollbackState: (threadId: string, state: SessionRollbackState) => void
+  setCheckpointDiff: (threadId: string, turnId: string, diff: CheckpointDiff) => void
+  setRollbackPreview: (threadId: string, preview: RollbackPreviewDiff) => void
+  clearRollbackPreview: (threadId: string) => void
+  markFileReverted: (threadId: string, turnId: string, file: string) => void
+  markFileRestored: (threadId: string, turnId: string, file: string) => void
+  markScopeReverted: (threadId: string, turnId: string, scope: 'agent' | 'all') => void
+  markScopeRestored: (threadId: string, turnId: string, scope: 'agent' | 'all') => void
+  initRevertedFilesFromState: (threadId: string) => void
 }
 
 const initialGit: GitStatus = {
@@ -152,6 +171,12 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       editor: {
         cursorLine: 1,
         cursorCol: 1,
+      },
+      rollback: {
+        rollbackStateByThreadId: {},
+        checkpointDiffByTurnId: {},
+        rollbackPreviewByThreadId: {},
+        revertedFilesByTurnId: {},
       },
 
       setMode: (mode) => set((s) => { s.ui.mode = mode }),
@@ -354,6 +379,53 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         const previous = s.agent.todoByThreadId[threadId]
         if (!previous) return
         previous.collapsed = !previous.collapsed
+      }),
+
+      // Rollback actions
+      setRollbackState: (threadId, state) => set((s) => {
+        s.rollback.rollbackStateByThreadId[threadId] = state as any
+      }),
+      setCheckpointDiff: (threadId, turnId, diff) => set((s) => {
+        s.rollback.checkpointDiffByTurnId[`${threadId}:${turnId}`] = diff as any
+      }),
+      setRollbackPreview: (threadId, preview) => set((s) => {
+        s.rollback.rollbackPreviewByThreadId[threadId] = preview as any
+      }),
+      clearRollbackPreview: (threadId) => set((s) => {
+        delete s.rollback.rollbackPreviewByThreadId[threadId]
+      }),
+      markFileReverted: (threadId, turnId, file) => set((s) => {
+        const key = `${threadId}:${turnId}`
+        if (!s.rollback.revertedFilesByTurnId[key]) {
+          s.rollback.revertedFilesByTurnId[key] = []
+        }
+        if (!s.rollback.revertedFilesByTurnId[key].includes(file)) {
+          s.rollback.revertedFilesByTurnId[key].push(file)
+        }
+      }),
+      markFileRestored: (threadId, turnId, file) => set((s) => {
+        const key = `${threadId}:${turnId}`
+        const arr = s.rollback.revertedFilesByTurnId[key]
+        if (arr) {
+          s.rollback.revertedFilesByTurnId[key] = arr.filter((f) => f !== file)
+        }
+      }),
+      markScopeReverted: (threadId, turnId, _scope) => set((s) => {
+        const key = `${threadId}:${turnId}`
+        s.rollback.revertedFilesByTurnId[key] = ['__scope_reverted__']
+      }),
+      markScopeRestored: (threadId, turnId, _scope) => set((s) => {
+        const key = `${threadId}:${turnId}`
+        delete s.rollback.revertedFilesByTurnId[key]
+      }),
+      initRevertedFilesFromState: (threadId) => set((s) => {
+        const state = s.rollback.rollbackStateByThreadId[threadId]
+        if (!state) return
+        // Initialize from server state — use a sentinel key for now
+        const revertedFiles = state.code.revertedFiles ?? []
+        if (revertedFiles.length > 0) {
+          s.rollback.revertedFilesByTurnId[threadId] = revertedFiles
+        }
       }),
     })),
     {
