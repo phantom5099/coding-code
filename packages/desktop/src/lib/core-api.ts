@@ -226,7 +226,7 @@ export function setHookDisabled(cwd: string | undefined, name: string, disabled:
 
 export interface CheckpointDiff {
   turnId: number
-  files: Array<{ path: string; source: 'agent' | 'unknown'; status: string; diff: string }>
+  files: Array<{ path: string; source: 'agent' | 'unknown'; status: string; diff: string; insertions: number; deletions: number }>
 }
 
 export interface CodeRollbackResult {

@@ -64,3 +64,22 @@ describe('CodeRestoreEntry types', () => {
     expect(typeof hashWorkspaceFile).toBe('function');
   });
 });
+
+describe('CheckpointDiff type with insertions/deletions', () => {
+  it('CheckpointDiff type includes insertions and deletions fields', async () => {
+    // Verify the type structure by creating a mock object
+    const diff: import('../../src/checkpoint/checkpoint-service.js').CheckpointDiff = {
+      turnId: 1,
+      files: [{
+        path: 'test.ts',
+        source: 'agent',
+        status: 'M',
+        diff: '--- a/test.ts\n+++ b/test.ts\n@@ -1 +1 @@\n-old\n+new',
+        insertions: 1,
+        deletions: 1,
+      }],
+    };
+    expect(diff.files[0].insertions).toBe(1);
+    expect(diff.files[0].deletions).toBe(1);
+  });
+});

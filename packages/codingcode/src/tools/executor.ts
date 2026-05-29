@@ -79,13 +79,15 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           finalArgs = hookDecision.modifiedInput;
         }
 
-        // 3. Notification hook (观察型)
+        // 3. Notification hook (观察型) — include a unique execution ID for pairing before/after
+        const execId = `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         yield* hooks.emit('tool.execute.before', {
           toolName: name,
           args: finalArgs,
           sessionId: opts?.sessionId,
           turnId: opts?.turnId,
           projectPath: opts?.projectPath,
+          execId,
         });
 
         const parsedArgs = yield* Effect.sync(() => tool.parameters.parse(finalArgs));
@@ -129,6 +131,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           sessionId: opts?.sessionId,
           turnId: opts?.turnId,
           projectPath: opts?.projectPath,
+          execId,
         });
 
         return result;

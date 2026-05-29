@@ -24,6 +24,8 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
 
   const checkpointDiffByTurnId = useGlobalStore((s) => s.rollback.checkpointDiffByTurnId)
   const turnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping)
+  const markScopeRestored = useGlobalStore((s) => s.markScopeRestored)
+  const markFileRestored = useGlobalStore((s) => s.markFileRestored)
 
   // Rollback modal state (only thing left in local state)
   const [showRollbackPanel, setShowRollbackPanel] = useState<{ turnId: string; preview: any } | null>(null)
@@ -61,6 +63,18 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     if (!el) return
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [totalCount, isLargeList])
+
+  // Auto-load diff when a turn completes or errors
+  const turnStatusKey = turns.map((t) => `${t.id}:${t.status}`).join(',')
+  useEffect(() => {
+    for (const turn of turns) {
+      if (turn.status !== 'completed' && turn.status !== 'error') continue
+      const ckKey = getCheckpointKey(turn.id)
+      if (!ckKey || !checkpointDiffByTurnId[ckKey]) {
+        handleLoadDiff(turn.id)
+      }
+    }
+  }, [turnStatusKey])
 
   // ---- Helpers for per-turn diff data ----
 
@@ -102,91 +116,140 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const handleRevertFile = useCallback(async (uiTurnId: string, file: string, isReverted: boolean) => {
     if (isReverted) {
       await undoCodeRollback(threadId, uiTurnId, false, [file])
+      markFileRestored(threadId, uiTurnId, file)
     } else {
       await revertFile(threadId, file)
     }
-  }, [threadId, revertFile, undoCodeRollback])
+  }, [threadId, revertFile, undoCodeRollback, markFileRestored])
 
   const handleRevertScope = useCallback(async (uiTurnId: string, scope: 'agent' | 'all', isReverted: boolean) => {
     if (isReverted) {
       await undoCodeRollback(threadId, uiTurnId, false)
+      markScopeRestored(threadId, uiTurnId, scope)
     } else if (scope === 'agent') {
       await revertAgentFiles(threadId)
     } else {
       await revertAllFiles(threadId)
     }
-  }, [threadId, revertAgentFiles, revertAllFiles, undoCodeRollback])
+  }, [threadId, revertAgentFiles, revertAllFiles, undoCodeRollback, markScopeRestored])
 
-  // ---- Sub-component: TurnDiffPanel (inline, per turn) ----
+  // ---- Sub-component: TurnDiffPanel (Codex style, inline, per turn) ----
 
-  function TurnDiffPanel({ uiTurnId }: { uiTurnId: string }) {
+  function TurnDiffPanel({ uiTurnId, isInterrupted }: { uiTurnId: string; isInterrupted?: boolean }) {
     const ckKey = getCheckpointKey(uiTurnId)
     const diff = ckKey ? checkpointDiffByTurnId[ckKey] : null
     const revertedFiles = getRevertedFiles(uiTurnId)
     const isScopeReverted = revertedFiles.includes('__scope_reverted__')
+    const [expandedFile, setExpandedFile] = useState<string | null>(null)
 
     if (!diff || !diff.files || diff.files.length === 0) {
-      return (
-        <div className="mt-2 px-2">
-          <button
-            onClick={() => handleLoadDiff(uiTurnId)}
-            className="text-[11px] px-2 py-0.5 rounded bg-[#333] text-[#888] hover:bg-[#444]"
-          >
-            查看变更
-          </button>
-        </div>
-      )
+      return null
     }
 
-    const agentCount = diff.files.filter((f: any) => f.source === 'agent').length
-    const unknownCount = diff.files.filter((f: any) => f.source === 'unknown').length
+    const totalInsertions = diff.files.reduce((sum: number, f: any) => sum + (f.insertions ?? 0), 0)
+    const totalDeletions = diff.files.reduce((sum: number, f: any) => sum + (f.deletions ?? 0), 0)
 
     return (
-      <div className="mt-2 px-2 py-2 border-t border-[#2a2a2a]">
-        <div className="text-[12px] text-[#888] mb-2">
-          Agent 修改：{agentCount} 个文件，来源不明：{unknownCount} 个文件
-        </div>
-        <div className="space-y-1 max-h-[180px] overflow-y-auto mb-2">
-          {diff.files.map((f: any) => (
-            <div key={f.path} className="flex items-center justify-between text-[12px] py-1 px-2 rounded bg-[#1a1a1a]">
-              <span className="text-[#ccc] truncate flex-1">
-                {f.path.replace(/\\/g, '/').split('/').pop() || f.path}
-                <span className="text-[#666] ml-1">({f.source === 'agent' ? 'Agent' : '未知'})</span>
-              </span>
-              <button
-                onClick={() => handleRevertFile(uiTurnId, f.path, revertedFiles.includes(f.path))}
-                className={`text-[11px] px-2 py-0.5 rounded ml-2 ${
-                  revertedFiles.includes(f.path)
-                    ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
-                    : 'bg-[#444] text-[#aaa] hover:bg-[#555]'
-                }`}
-              >
-                {revertedFiles.includes(f.path) ? '撤销回退此文件' : '回退此文件'}
-              </button>
+      <div className="mt-2 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded bg-[#2a2a2a] flex items-center justify-center">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 1v14M1 8h14" stroke="#888" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
             </div>
-          ))}
+            <div>
+              <span className="text-[13px] text-[#ccc]">
+                已编辑 {diff.files.length} 个文件
+              </span>
+              {isInterrupted && (
+                <span className="ml-2 text-[11px] text-[#c88]">（对话中断）</span>
+              )}
+              <div className="flex items-center gap-2 mt-0.5">
+                {totalInsertions > 0 && <span className="text-[12px] text-[#4a4]">+{totalInsertions}</span>}
+                {totalDeletions > 0 && <span className="text-[12px] text-[#c44]">-{totalDeletions}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleRevertScope(uiTurnId, 'all', isScopeReverted)}
+              className={`text-[12px] px-3 py-1 rounded ${
+                isScopeReverted
+                  ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
+                  : 'bg-[#333] text-[#aaa] hover:bg-[#444] border border-[#444]'
+              }`}
+            >
+              {isScopeReverted ? '撤销回退本轮全部修改' : '回退本轮全部修改'}
+            </button>
+            <button
+              onClick={() => handleRevertScope(uiTurnId, 'agent', isScopeReverted)}
+              className={`text-[12px] px-3 py-1 rounded ${
+                isScopeReverted
+                  ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
+                  : 'bg-[#333] text-[#aaa] hover:bg-[#444] border border-[#444]'
+              }`}
+            >
+              {isScopeReverted ? '撤销回退 Agent 修改' : '只回退 Agent 修改'}
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => handleRevertScope(uiTurnId, 'agent', isScopeReverted)}
-            className={`text-[12px] px-3 py-1 rounded ${
-              isScopeReverted
-                ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
-                : 'bg-[#555] text-[#ccc] hover:bg-[#666]'
-            }`}
-          >
-            {isScopeReverted ? '撤销回退 Agent 修改' : '只回退 Agent 修改'}
-          </button>
-          <button
-            onClick={() => handleRevertScope(uiTurnId, 'all', isScopeReverted)}
-            className={`text-[12px] px-3 py-1 rounded ${
-              isScopeReverted
-                ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
-                : 'bg-[#c44] text-white hover:bg-[#d55]'
-            }`}
-          >
-            {isScopeReverted ? '撤销回退本轮全部修改' : '回退本轮全部修改'}
-          </button>
+
+        {/* File list */}
+        <div className="border-t border-[#2a2a2a]">
+          {diff.files.map((f: any) => {
+            const isExpanded = expandedFile === f.path
+            const isReverted = isScopeReverted || revertedFiles.includes(f.path)
+            return (
+              <div key={f.path}>
+                <div
+                  className="flex items-center justify-between px-4 py-2 hover:bg-[#222] cursor-pointer"
+                  onClick={() => setExpandedFile(isExpanded ? null : f.path)}
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-[12px] text-[#ccc] truncate">{f.path.replace(/\\/g, '/')}</span>
+                    <span className="text-[10px] text-[#666] shrink-0">
+                      {f.source === 'agent' ? 'Agent' : '未知'}
+                    </span>
+                    {isReverted && <span className="text-[10px] text-[#c88] shrink-0">已回退</span>}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-3">
+                    <div className="flex items-center gap-1.5 text-[12px]">
+                      {f.insertions > 0 && <span className="text-[#4a4]">+{f.insertions}</span>}
+                      {f.deletions > 0 && <span className="text-[#c44]">-{f.deletions}</span>}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRevertFile(uiTurnId, f.path, isReverted)
+                      }}
+                      className={`text-[11px] px-2 py-0.5 rounded ${
+                        isReverted
+                          ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
+                          : 'bg-[#333] text-[#888] hover:bg-[#444]'
+                      }`}
+                    >
+                      {isReverted ? '撤销' : '回退'}
+                    </button>
+                    <svg
+                      width="12" height="12" viewBox="0 0 12 12" fill="none"
+                      className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                    >
+                      <path d="M3 4.5L6 7.5L9 4.5" stroke="#666" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                </div>
+                {isExpanded && (
+                  <div className="px-4 pb-2">
+                    <pre className="text-[11px] bg-[#111] p-3 rounded text-[#aaa] max-h-[200px] overflow-auto whitespace-pre-wrap">
+                      {f.diff || '无差异'}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
     )
@@ -213,7 +276,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   let idx = 0
   for (const turn of turns) {
     idx += turn.items.length - 1
-    if (turn.status === 'completed') {
+    if (turn.status === 'completed' || turn.status === 'error') {
       turnEndIndices.add(idx)
       const turnNum = parseInt(turn.id, 10)
       const hasNumericId = !isNaN(turnNum)
@@ -241,6 +304,8 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     const isLastInTurn = turnEndIndices.has(index)
     const cbs = turnRollbackCallbacks.get(entry.turnId)
     const isUserMsg = entry.item.type === 'message' && entry.item.role === 'user'
+    const turn = turns.find((t) => t.id === entry.turnId)
+    const isInterrupted = turn?.status === 'error'
 
     return (
       <div>
@@ -258,7 +323,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
         </div>
         {isLastInTurn && (
           <div className="px-6 pb-2">
-            <TurnDiffPanel uiTurnId={entry.turnId} />
+            <TurnDiffPanel uiTurnId={entry.turnId} isInterrupted={isInterrupted} />
           </div>
         )}
       </div>
@@ -354,5 +419,4 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       {rollbackModal}
     </div>
   )
-}
 }

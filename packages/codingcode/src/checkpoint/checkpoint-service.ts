@@ -16,6 +16,8 @@ export interface CheckpointDiff {
     source: 'agent' | 'unknown';
     status: string;
     diff: string;
+    insertions: number;
+    deletions: number;
   }>;
 }
 
@@ -101,7 +103,7 @@ export function hashWorkspaceFile(projectPath: string, file: string): string | n
 }
 
 function classifySafe(
-  projectPath: string, sessionId: string, turnId: number, sg: ShadowGit,
+  projectPath: string, sessionId: string, turnId: number, sg: ShadowGit, ledgerInstance: Ledger,
 ): { agentModified: string[]; unknownSource: string[] } | null {
   const baseline = sg.findCommitByMessage(commitMsg(sessionId, turnId, 'baseline'));
   const final = sg.findCommitByMessage(commitMsg(sessionId, turnId, 'final'));
@@ -109,13 +111,23 @@ function classifySafe(
 
   const allChanges = sg.diffFiles(baseline, final);
   const allFiles = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase()))];
-  const l = new Ledger(dirname(sg.gitDir));
-  const agentFiles = new Set(l.getAgentFiles(turnId, sessionId).map((p) => normalizePath(p).toLowerCase()));
+  const agentFiles = new Set(ledgerInstance.getAgentFiles(turnId, sessionId).map((p) => normalizePath(p).toLowerCase()));
 
   return {
     agentModified: allFiles.filter((f) => agentFiles.has(f)),
     unknownSource: allFiles.filter((f) => !agentFiles.has(f)),
   };
+}
+
+/** Parse insertions/deletions from a unified diff string. */
+function parseDiffStats(diffText: string): { insertions: number; deletions: number } {
+  let insertions = 0;
+  let deletions = 0;
+  for (const line of diffText.split('\n')) {
+    if (line.startsWith('+') && !line.startsWith('+++')) insertions++;
+    else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+  }
+  return { insertions, deletions };
 }
 
 function getCompletedTurnsFor(sg: ShadowGit, sessionId: string): number[] {
@@ -228,7 +240,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         projectPath: string, sessionId: string, turnId: number,
       ): { agentModified: string[]; unknownSource: string[] } | null => {
         const sg = ensure(projectPath);
-        return classifySafe(projectPath, sessionId, turnId, sg);
+        const l = ledger(sg);
+        return classifySafe(projectPath, sessionId, turnId, sg, l);
       },
 
       getCompletedTurns: (projectPath: string, sessionId: string): number[] => {
@@ -284,11 +297,14 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           const relPath = toGitPath(projectPath, f);
           const diffResult = sg.git('diff', baseline, final, '--', relPath);
           const rawPath = normalizePath(resolve(projectPath, relPath)).toLowerCase();
+          const stats = parseDiffStats(diffResult.stdout);
           return {
             path: f,
             source: (agentFiles.has(f) ? 'agent' : 'unknown') as 'agent' | 'unknown',
             status: allChanges.find((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase() === rawPath)?.status ?? 'M',
             diff: diffResult.stdout,
+            insertions: stats.insertions,
+            deletions: stats.deletions,
           };
         });
 
@@ -317,7 +333,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         projectPath: string, sessionId: string, turnId: number,
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
-        const changes = classifySafe(projectPath, sessionId, turnId, sg);
+        const l = ledger(sg);
+        const changes = classifySafe(projectPath, sessionId, turnId, sg, l);
         if (!changes) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
         if (changes.agentModified.length === 0) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
         return revertFilesImpl(projectPath, sessionId, turnId, changes.agentModified, 'checkpoint-agent', sg);
@@ -327,7 +344,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         projectPath: string, sessionId: string, turnId: number,
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
-        const changes = classifySafe(projectPath, sessionId, turnId, sg);
+        const l = ledger(sg);
+        const changes = classifySafe(projectPath, sessionId, turnId, sg, l);
         if (!changes) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
         const all = [...changes.agentModified, ...changes.unknownSource];
         if (all.length === 0) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };

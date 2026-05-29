@@ -27,13 +27,15 @@ describe('Rollback state in global store', () => {
   });
 
   it('setCheckpointDiff stores diff by thread and turn', () => {
-    const diff = { turnId: 3, files: [{ path: '/test/a.ts', source: 'agent' as const, status: 'M', diff: '---\n+++\n' }] };
+    const diff = { turnId: 3, files: [{ path: '/test/a.ts', source: 'agent' as const, status: 'M', diff: '---\n+++\n', insertions: 2, deletions: 1 }] };
     useGlobalStore.getState().setCheckpointDiff('thread1', '3', diff);
 
     const cached = useGlobalStore.getState().rollback.checkpointDiffByTurnId['thread1:3'];
     expect(cached).toBeDefined();
     expect(cached.turnId).toBe(3);
     expect(cached.files).toHaveLength(1);
+    expect(cached.files[0].insertions).toBe(2);
+    expect(cached.files[0].deletions).toBe(1);
   });
 
   it('setRollbackPreview stores preview', () => {

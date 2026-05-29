@@ -165,4 +165,37 @@ describe('HookService.reloadUserHooks', () => {
 
     await runWithLayer(program);
   });
+
+  it('system hooks survive reloadUserHooks', async () => {
+    const called: string[] = [];
+
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      // Register with source: 'system' — should survive reload
+      yield* hooks.register('tool.execute.before', () => { called.push('system'); }, { source: 'system' });
+      yield* hooks.reloadUserHooks(testDir);
+
+      // Emit should still call the system handler
+      yield* hooks.emit('tool.execute.before', {});
+    });
+
+    await runWithLayer(program);
+    expect(called).toEqual(['system']);
+  });
+
+  it('register with source option defaults to user', async () => {
+    const called: string[] = [];
+
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      // No source option — defaults to 'user', should be cleared
+      yield* hooks.register('tool.execute.before', () => { called.push('default-user'); });
+      yield* hooks.reloadUserHooks(testDir);
+
+      yield* hooks.emit('tool.execute.before', {});
+    });
+
+    await runWithLayer(program);
+    expect(called).toHaveLength(0);
+  });
 });

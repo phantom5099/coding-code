@@ -52,13 +52,14 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
       register: (
         point: HookPoint,
         handler: ObserverHandler,
+        opts?: { source?: 'system' | 'user' },
       ): Effect.Effect<() => void> =>
         Effect.sync(() => {
           const entry: HandlerEntry = {
             id: `obs-${++entryCounter}`,
             handler,
             priority: 0,
-            source: 'user',
+            source: opts?.source ?? 'user',
             type: 'observer',
           };
           const set = observers.get(point) ?? [];
