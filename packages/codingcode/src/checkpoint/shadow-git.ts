@@ -91,6 +91,13 @@ export class ShadowGit {
     return hash || null;
   }
 
+  /** Show file content from a commit. Returns null if file doesn't exist in that commit. */
+  showFile(commit: string, file: string): string | null {
+    const result = this.run('show', `${commit}:${file}`);
+    if (result.status !== 0) return null;
+    return result.stdout;
+  }
+
   /** Public git command wrapper — used by CheckpointService for diagnostics. */
   git(...args: string[]): { stdout: string; stderr: string; status: number | null } {
     return this.run(...args);

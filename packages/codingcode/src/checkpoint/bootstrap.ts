@@ -1,16 +1,20 @@
 import { Effect } from 'effect';
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { homedir } from 'os';
 import type { HookService } from '../hooks/registry.js';
 import { encodeProjectPath } from '../core/path.js';
+import { resolveInWorkspace } from '../core/workspace.js';
 import { Ledger } from './ledger.js';
 
 /** Cache ledger instances by checkpoint directory path. */
 const ledgerCache = new Map<string, Ledger>();
 
-/** Carry file hash from tool.execute.before to tool.execute.after (separate payload objects). */
+/**
+ * Carry file hash from tool.execute.before to tool.execute.after.
+ * Keyed by execId (unique per tool execution) to avoid parallel race conditions.
+ */
 const pendingHash = new Map<string, string>();
 
 function getLedger(projectPath: string): Ledger {
@@ -26,6 +30,7 @@ function getLedger(projectPath: string): Ledger {
 
 /**
  * Register hook observers that record file-modifying tool calls to the Ledger.
+ * Uses source: 'system' so these hooks survive reloadUserHooks() calls.
  * Idempotent — safe to call multiple times with the same HookService.
  */
 export function bootstrapCheckpoint(
@@ -40,9 +45,12 @@ export function bootstrapCheckpoint(
     const rawPath = args?.path as string | undefined;
     if (!rawPath) return;
 
-    const resolvedPath = resolve(rawPath);
-    pendingHash.set(resolvedPath, fileHash(resolvedPath));
-  }));
+    const resolvedPath = resolveInWorkspace(rawPath);
+    const execId = payload.execId as string;
+    if (execId) {
+      pendingHash.set(execId, fileHash(resolvedPath));
+    }
+  }, { source: 'system' }));
 
   // Post-execution: record the full entry
   Effect.runSync(hooks.register('tool.execute.after', async (payload) => {
@@ -59,10 +67,13 @@ export function bootstrapCheckpoint(
     const args = payload.args as Record<string, unknown> | undefined;
     const rawPath = args?.path as string | undefined;
     if (!rawPath) return;
-    const resolvedPath = resolve(rawPath);
+    const resolvedPath = resolveInWorkspace(rawPath);
 
-    const hashBefore = pendingHash.get(resolvedPath) ?? '';
-    pendingHash.delete(resolvedPath);
+    const execId = payload.execId as string;
+    const hashBefore = execId ? (pendingHash.get(execId) ?? '') : '';
+    if (execId) {
+      pendingHash.delete(execId);
+    }
 
     const hashAfter = fileHash(resolvedPath);
 
@@ -75,7 +86,7 @@ export function bootstrapCheckpoint(
       hashAfter,
       timestamp: new Date().toISOString(),
     });
-  }));
+  }, { source: 'system' }));
 }
 
 function fileHash(filePath: string): string {

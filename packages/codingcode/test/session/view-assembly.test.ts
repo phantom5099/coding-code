@@ -64,16 +64,16 @@ describe('buildMessagesFromEvents', () => {
     expect(userContents).toContain('thanks');
   });
 
-  it('hide(kind=rollback) removes all events after the given turn', () => {
+  it('hide(kind=rollback) removes all events from the given turn onwards', () => {
     const events = makeEvents([
       { type: 'hide', uuid: 'h1', kind: 'rollback', throughTurnId: 1, reason: 'rollback', timestamp: new Date().toISOString() } as any,
     ]);
     const messages = buildMessagesFromEvents(events);
-    // Turn 2 and 3 events should be hidden
+    // Turn 1 events should also be hidden (>= semantics)
     const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
-    expect(userContents).toEqual(['hello']);
+    expect(userContents).toEqual([]);
     const assistantContents = messages.filter((m) => m.role === 'assistant').map((m) => m.content);
-    expect(assistantContents).toEqual(['hi there']);
+    expect(assistantContents).toEqual([]);
   });
 
   it('unhide restores previously hidden messages', () => {

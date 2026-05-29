@@ -220,7 +220,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           let lastHideUuid: string | null = null;
           const unhidTargets = new Set<string>();
           for (const ev of history) {
-            if (ev.type === 'hide') lastHideUuid = ev.uuid;
+            // Only undo kind === 'message' hides, not rollback hides
+            if (ev.type === 'hide' && ev.kind === 'message') lastHideUuid = ev.uuid;
             if (ev.type === 'unhide') unhidTargets.add(ev.targetHideUuid);
           }
           if (!lastHideUuid || unhidTargets.has(lastHideUuid)) return null;
@@ -323,11 +324,14 @@ export function buildMessages(path: string): Message[] {
   return buildMessagesFromEvents(events);
 }
 
-export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
+/**
+ * Compute hidden UUID set from hide/unhide/summary events.
+ * Reused by buildMessagesFromEvents and readUIHistory for consistent filtering.
+ */
+export function applyVisibilityEvents(events: SessionEvent[]): Set<string> {
   const hidden = new Set<string>();
   const hideEffects = new Map<string, Set<string>>();
 
-  // Pass 1: compute hidden set from all hide/unhide/summary events
   for (const ev of events) {
     switch (ev.type) {
       case 'hide': {
@@ -335,11 +339,10 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
         if (ev.kind === 'message') {
           effect = new Set([ev.targetUuid]);
         } else {
-          // rollback: hide all events with turnId > throughTurnId that appear before this hide
           effect = new Set<string>();
           for (const prior of events) {
             if (prior === ev) break;
-            if ('turnId' in prior && prior.turnId > ev.throughTurnId && 'uuid' in prior) {
+            if ('turnId' in prior && prior.turnId >= ev.throughTurnId && 'uuid' in prior) {
               effect.add(prior.uuid);
             }
           }
@@ -362,7 +365,13 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
     }
   }
 
-  // Pass 2: collect visible events
+  return hidden;
+}
+
+export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
+  const hidden = applyVisibilityEvents(events);
+
+  // Collect visible events
   const visible: SessionEvent[] = [];
   for (const ev of events) {
     if (ev.type === 'hide' || ev.type === 'unhide') continue;
@@ -508,10 +517,10 @@ export function deleteSession(sessionId: string): void {
 
 export function forkSession(sourceSessionId: string, sourceJsonlPath: string, atUuid: string): string {
   const events = readHistory(sourceJsonlPath);
-  const atIdx = events.findIndex((e) => 'uuid' in e && (e as any).uuid === atUuid);
-  if (atIdx === -1) throw new Error(`Event ${atUuid} not found in session ${sourceSessionId}`);
+  const atIdx = atUuid ? events.findIndex((e) => 'uuid' in e && (e as any).uuid === atUuid) : -1;
 
-  const chain = events.slice(0, atIdx + 1);
+  // If atUuid not found or empty, fork at the end of the session (all events)
+  const chain = atIdx >= 0 ? events.slice(0, atIdx + 1) : events;
   const newSessionId = randomUUID();
 
   // Find the sessions directory from the source path
@@ -639,5 +648,11 @@ export function readUIHistory(sessionId: string): Array<{ id: string; items: obj
   if (!dir) return [];
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
   const events = readHistory(jsonlPath);
-  return sessionEventsToTurns(events);
+  const hidden = applyVisibilityEvents(events);
+  const visibleEvents = events.filter((ev) => {
+    if (ev.type === 'hide' || ev.type === 'unhide') return false;
+    if ('uuid' in ev && hidden.has((ev as any).uuid)) return false;
+    return true;
+  });
+  return sessionEventsToTurns(visibleEvents);
 }

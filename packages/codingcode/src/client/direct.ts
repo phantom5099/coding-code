@@ -7,6 +7,7 @@ import { ApprovalWaitService } from '../approval/async-confirm.js';
 import { parseApprovalResponse } from '../approval/response.js';
 import { AppLayer } from '../layer.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
+import type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff } from '../checkpoint/checkpoint-service.js';
 import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../llm/factory.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 import { getSubagentEnabledState, setSubagentEnabledState } from '../subagent/registry.js';
@@ -37,12 +38,21 @@ export interface AgentClient {
   listModels(): Promise<any>;
   switchModel(id: string): Promise<void>;
   getSessionId(): string;
-  classifyLastCompletedChanges(): Promise<{ agentModified: string[]; unknownSource: string[] } | null>;
-  revertLastCompleted(mode: 'agent' | 'all'): Promise<void>;
-  revertCheckpoint(turnId: number, mode: 'agent' | 'all'): Promise<void>;
-  forwardLastRevert(): Promise<void>;
-  hasForwardStack(): Promise<boolean>;
   getCheckpoints(): Promise<Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }>>;
+  // New rollback methods
+  getCheckpointDiff(turnId?: number): Promise<CheckpointDiff>;
+  revertCheckpointFile(turnId: number, file: string): Promise<CodeRollbackResult>;
+  revertCheckpointFiles(turnId: number, files: string[]): Promise<CodeRollbackResult>;
+  revertCheckpointAgentFiles(turnId: number): Promise<CodeRollbackResult>;
+  revertCheckpointAllFiles(turnId: number): Promise<CodeRollbackResult>;
+  previewRollbackDiff(throughTurnId: number): Promise<RollbackPreviewDiff>;
+  rollbackCodeToTurn(throughTurnId: number): Promise<CodeRollbackResult>;
+  rollbackContext(throughTurnId: number): Promise<{ turns: any[]; rollbackState: any }>;
+  rollbackBothToTurn(throughTurnId: number): Promise<{ turns: any[]; codeResult: CodeRollbackResult; rollbackState: any }>;
+  undoLastCodeRollback(force?: boolean, files?: string[]): Promise<CodeRollbackUndoResult>;
+  getRollbackState(): Promise<any>;
+  forkSession(atUuid?: string): Promise<string>;
+  // Existing non-rollback methods
   compact(): Promise<void>;
   getMemoryEnabled(): Promise<boolean>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
@@ -152,7 +162,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
             pending = gen.next();
           } else {
             yield winner.value;
-            // Re-enter loop with fresh notify; same `pending` continues racing
           }
         }
       } finally {
@@ -205,78 +214,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       activeLlm = clientResult.value;
     },
 
-    async classifyLastCompletedChanges() {
-      if (!currentSessionId) return null;
-      return runWithLayer(
-        Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          const projectPath = getWorkspaceCwd();
-          const turnIds = checkpoint.getCompletedTurns(projectPath, currentSessionId);
-          if (turnIds.length === 0) return null;
-          const lastTurn = turnIds[turnIds.length - 1];
-          if (lastTurn === undefined) return null;
-          return checkpoint.classifyChanges(projectPath, currentSessionId, lastTurn);
-        }),
-      );
-    },
-
-    async revertLastCompleted(mode: 'agent' | 'all') {
-      if (!currentSessionId) return;
-      await runWithLayer(
-        Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          const projectPath = getWorkspaceCwd();
-          const turnIds = checkpoint.getCompletedTurns(projectPath, currentSessionId);
-          if (turnIds.length === 0) return;
-          const lastTurn = turnIds[turnIds.length - 1];
-          if (lastTurn === undefined) return;
-          const changes = checkpoint.classifyChanges(projectPath, currentSessionId, lastTurn);
-          if (!changes) return;
-
-          const files = mode === 'agent' ? changes.agentModified : [...changes.agentModified, ...changes.unknownSource];
-          if (files.length > 0) {
-            checkpoint.revertFiles(projectPath, currentSessionId, lastTurn, files);
-          }
-        }),
-      );
-    },
-
-    async revertCheckpoint(turnId: number, mode: 'agent' | 'all') {
-      if (!currentSessionId) return;
-      await runWithLayer(
-        Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          const projectPath = getWorkspaceCwd();
-          const changes = checkpoint.classifyChanges(projectPath, currentSessionId, turnId);
-          if (!changes) return;
-          const files = mode === 'agent' ? changes.agentModified : [...changes.agentModified, ...changes.unknownSource];
-          if (files.length > 0) {
-            checkpoint.revertFiles(projectPath, currentSessionId, turnId, files);
-          }
-        }),
-      );
-    },
-
-    async forwardLastRevert() {
-      if (!currentSessionId) return;
-      await runWithLayer(
-        Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          checkpoint.forward(getWorkspaceCwd(), currentSessionId);
-        }),
-      );
-    },
-
-    async hasForwardStack() {
-      if (!currentSessionId) return false;
-      return runWithLayer(
-        Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return checkpoint.hasForwardStack(getWorkspaceCwd(), currentSessionId);
-        }),
-      );
-    },
-
     async getCheckpoints() {
       if (!currentSessionId) return [];
       return runWithLayer(
@@ -286,6 +223,147 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         }),
       );
     },
+
+    // ---- New rollback methods ----
+
+    async getCheckpointDiff(turnId?: number) {
+      if (!currentSessionId) return { turnId: 0, files: [] };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.getCheckpointDiff(getWorkspaceCwd(), currentSessionId, turnId);
+        }),
+      );
+    },
+
+    async revertCheckpointFile(turnId: number, file: string) {
+      if (!currentSessionId) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.revertCheckpointFile(getWorkspaceCwd(), currentSessionId, turnId, file);
+        }),
+      );
+    },
+
+    async revertCheckpointFiles(turnId: number, files: string[]) {
+      if (!currentSessionId) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.revertCheckpointFiles(getWorkspaceCwd(), currentSessionId, turnId, files);
+        }),
+      );
+    },
+
+    async revertCheckpointAgentFiles(turnId: number) {
+      if (!currentSessionId) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.revertCheckpointAgentFiles(getWorkspaceCwd(), currentSessionId, turnId);
+        }),
+      );
+    },
+
+    async revertCheckpointAllFiles(turnId: number) {
+      if (!currentSessionId) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.revertCheckpointAllFiles(getWorkspaceCwd(), currentSessionId, turnId);
+        }),
+      );
+    },
+
+    async previewRollbackDiff(throughTurnId: number) {
+      if (!currentSessionId) return { throughTurnId, baseTurnId: null, affectedTurns: [], diff: '' };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.previewRollbackDiff(getWorkspaceCwd(), currentSessionId, throughTurnId);
+        }),
+      );
+    },
+
+    async rollbackCodeToTurn(throughTurnId: number) {
+      if (!currentSessionId) return { reverted: false, throughTurnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.rollbackCodeToTurn(getWorkspaceCwd(), currentSessionId, throughTurnId);
+        }),
+      );
+    },
+
+    async rollbackContext(throughTurnId: number) {
+      if (!currentSessionId) return { turns: [], rollbackState: {} };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', '0.1.0', currentSessionId);
+          yield* svc.rollbackToTurn(state, throughTurnId, 'user rollback to turn');
+          return yield* svc.readHistory(state);
+        }),
+      );
+    },
+
+    async rollbackBothToTurn(throughTurnId: number) {
+      if (!currentSessionId) return { turns: [], codeResult: { reverted: false, throughTurnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }, rollbackState: {} };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          const svc = yield* SessionService;
+          const codeResult = checkpoint.rollbackCodeToTurn(getWorkspaceCwd(), currentSessionId, throughTurnId);
+          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', '0.1.0', currentSessionId);
+          yield* svc.rollbackToTurn(state, throughTurnId, 'user rollback to turn');
+          const turns = yield* svc.readHistory(state);
+          return { turns, codeResult, rollbackState: {} };
+        }),
+      );
+    },
+
+    async undoLastCodeRollback(force?: boolean, files?: string[]) {
+      if (!currentSessionId) return { restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.undoLastCodeRollback(getWorkspaceCwd(), currentSessionId, { force, files });
+        }),
+      );
+    },
+
+    async getRollbackState() {
+      if (!currentSessionId) return { context: { active: false, currentThroughTurnId: null }, code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null } };
+      return runWithLayer(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          const entry = checkpoint.getLatestRestoreEntry(getWorkspaceCwd(), currentSessionId);
+          return {
+            context: { active: false, currentThroughTurnId: null },
+            code: {
+              canUndoLast: entry !== null,
+              lastEntry: entry,
+              revertedFiles: entry?.selectedFiles ?? [],
+              lastEntryId: entry?.id ?? null,
+            },
+          };
+        }),
+      );
+    },
+
+    async forkSession(atUuid?: string) {
+      if (!currentSessionId) return '';
+      return runWithLayer(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', '0.1.0', currentSessionId);
+          return yield* svc.forkSession(state, atUuid ?? '');
+        }),
+      );
+    },
+
+    // ---- Existing non-rollback methods ----
 
     async compact() {
       if (!currentSessionId) return;

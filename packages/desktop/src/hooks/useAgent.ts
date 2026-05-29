@@ -1,7 +1,8 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useGlobalStore, type ModelEntry } from '../stores/global.store'
 import { streamAgentMessage, type StreamEvent } from '../lib/agent-stream'
-import { listModels, listSessions, getSessionHistory, createSession as createServerSession, deleteSession, sendApprovalResponse } from '../lib/core-api'
+import { listModels, listSessions, getSessionHistory, createSession as createServerSession, deleteSession, sendApprovalResponse, getCheckpointDiff, revertCheckpointFile, revertCheckpointFiles, revertCheckpointAgentFiles, revertCheckpointAllFiles, previewRollbackDiff, rollbackCodeToTurn, rollbackContext, rollbackBothToTurn, undoLastCodeRollback, getRollbackState, forkSession } from '../lib/core-api'
+import type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff, SessionRollbackState } from '../lib/core-api'
 import type { Item, Turn, Project } from '@shared/types'
 
 function normalizeCwd(p: string): string {
@@ -15,7 +16,10 @@ function randomId(): string {
 export function useAgent() {
   const startTurn = useGlobalStore((s) => s.startTurn)
   const applyChunk = useGlobalStore((s) => s.applyChunk)
+  const updateTurnId = useGlobalStore((s) => s.updateTurnId)
   const completeTurn = useGlobalStore((s) => s.completeTurn)
+  const setPendingInput = useGlobalStore((s) => s.setPendingInput)
+  const clearRunningTurns = useGlobalStore((s) => s.clearRunningTurns)
   const applyTodoUpdate = useGlobalStore((s) => s.applyTodoUpdate)
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread)
   const loadThreads = useGlobalStore((s) => s.loadThreads)
@@ -33,6 +37,20 @@ export function useAgent() {
   const workspace = useGlobalStore((s) => s.workspace)
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
   const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy)
+  // Rollback store
+  const rollbackStateByThreadId = useGlobalStore((s) => s.rollback.rollbackStateByThreadId)
+  const revertedFilesByTurnId = useGlobalStore((s) => s.rollback.revertedFilesByTurnId)
+  const setRollbackState = useGlobalStore((s) => s.setRollbackState)
+  const setCheckpointDiff = useGlobalStore((s) => s.setCheckpointDiff)
+  const setRollbackPreview = useGlobalStore((s) => s.setRollbackPreview)
+  const clearRollbackPreview = useGlobalStore((s) => s.clearRollbackPreview)
+  const markFileReverted = useGlobalStore((s) => s.markFileReverted)
+  const markFileRestored = useGlobalStore((s) => s.markFileRestored)
+  const markScopeReverted = useGlobalStore((s) => s.markScopeReverted)
+  const markScopeRestored = useGlobalStore((s) => s.markScopeRestored)
+  const setTurnCheckpointMapping = useGlobalStore((s) => s.setTurnCheckpointMapping)
+  const turnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping)
+  const initRevertedFilesFromState = useGlobalStore((s) => s.initRevertedFilesFromState)
 
   const abortControllers = useRef<Map<string, AbortController>>(new Map())
 
@@ -76,13 +94,16 @@ export function useAgent() {
     }).catch(() => {})
   }, [currentThreadId, setThreadTurns])
 
-  const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string): Item | null => {
+  const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string, currentTurnId: string): Item | null => {
     switch (event.type) {
       case 'text':
         return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.text, partial: true }
       case 'message':
         return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.content, partial: false }
       case 'step':
+        return null
+      case 'turn_id':
+        updateTurnId(threadId, currentTurnId, String(event.turnId))
         return null
       case 'tool_start':
         return { id: randomId(), type: 'tool_call', name: event.name, args: event.args, status: 'running' }
@@ -102,7 +123,7 @@ export function useAgent() {
       case 'complete':
         return null
     }
-  }, [applyTodoUpdate])
+  }, [applyTodoUpdate, updateTurnId])
 
   const sendMessage = useCallback(
     async (threadId: string, content: string, cwd?: string) => {
@@ -124,8 +145,8 @@ export function useAgent() {
         }
       }
 
-      const turnId = randomId()
-      const assistantMessageId = randomId()
+      let turnId = randomId()
+      let assistantMessageId = randomId()
       const userItem: Item = { id: randomId(), type: 'message', role: 'user', content }
       const turn: Turn = { id: turnId, items: [userItem], status: 'running' }
 
@@ -144,9 +165,17 @@ export function useAgent() {
             continue
           }
 
-          const item = streamChunkToItem(event, resolvedThreadId, assistantMessageId)
+          const item = streamChunkToItem(event, resolvedThreadId, assistantMessageId, turnId)
           if (item) {
             applyChunk(resolvedThreadId, turnId, item)
+          }
+
+          if (event.type === 'turn_id') {
+            turnId = String(event.turnId)
+          }
+
+          if (event.type === 'tool_start' || event.type === 'approval_request') {
+            assistantMessageId = randomId()
           }
         }
 
@@ -210,5 +239,135 @@ export function useAgent() {
     return data.sessionId
   }, [approvalPolicy])
 
-  return { sendMessage, abort, approveTool, rejectTool, deleteThread, createSession }
+  // Rollback methods
+  // Resolve checkpoint integer turn ID → UI turn ID (UUID or integer string)
+  const resolveUITurnId = useCallback((threadId: string, checkpointId: number): string => {
+    const mapping = useGlobalStore.getState().rollback.turnCheckpointMapping
+    const uiId = mapping[threadId]?.[checkpointId]
+    if (uiId) return uiId
+    return String(checkpointId)
+  }, [])
+
+  const loadCheckpointDiff = useCallback(async (threadId: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const diff = await getCheckpointDiff(threadId, cwd)
+    setCheckpointDiff(threadId, String(diff.turnId), diff)
+    // Map checkpoint turnId to the latest completed UI turn
+    if (diff.turnId > 0) {
+      const thread = useGlobalStore.getState().agent.threads[threadId]
+      if (thread) {
+        const completed = thread.turns.filter((t) => t.status === 'completed')
+        const last = completed[completed.length - 1]
+        if (last && last.id !== String(diff.turnId)) {
+          setTurnCheckpointMapping(threadId, diff.turnId, last.id)
+        }
+      }
+    }
+    return diff
+  }, [workspace.rootPath, setCheckpointDiff, setTurnCheckpointMapping])
+
+  const revertFile = useCallback(async (threadId: string, file: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await revertCheckpointFile(threadId, cwd, file)
+    if (result.reverted) {
+      markFileReverted(threadId, resolveUITurnId(threadId, result.throughTurnId), file)
+    }
+    return result
+  }, [workspace.rootPath, markFileReverted, resolveUITurnId])
+
+  const revertFiles = useCallback(async (threadId: string, files: string[]) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await revertCheckpointFiles(threadId, cwd, files)
+    if (result.reverted) {
+      const uiId = resolveUITurnId(threadId, result.throughTurnId)
+      for (const f of result.selectedFiles) {
+        markFileReverted(threadId, uiId, f)
+      }
+    }
+    return result
+  }, [workspace.rootPath, markFileReverted, resolveUITurnId])
+
+  const revertAgentFiles = useCallback(async (threadId: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await revertCheckpointAgentFiles(threadId, cwd)
+    if (result.reverted) {
+      markScopeReverted(threadId, resolveUITurnId(threadId, result.throughTurnId), 'agent')
+    }
+    return result
+  }, [workspace.rootPath, markScopeReverted, resolveUITurnId])
+
+  const revertAllFiles = useCallback(async (threadId: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await revertCheckpointAllFiles(threadId, cwd)
+    if (result.reverted) {
+      markScopeReverted(threadId, resolveUITurnId(threadId, result.throughTurnId), 'all')
+    }
+    return result
+  }, [workspace.rootPath, markScopeReverted, resolveUITurnId])
+
+  const previewRollback = useCallback(async (threadId: string, throughTurnId: number) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const preview = await previewRollbackDiff(threadId, cwd, throughTurnId)
+    setRollbackPreview(threadId, preview)
+    return preview
+  }, [workspace.rootPath, setRollbackPreview])
+
+  const rollbackCode = useCallback(async (threadId: string, throughTurnId: number) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await rollbackCodeToTurn(threadId, cwd, throughTurnId)
+    return result
+  }, [workspace.rootPath])
+
+  const rollbackCtx = useCallback(async (threadId: string, throughTurnId: number) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const res = await rollbackContext(threadId, cwd, throughTurnId)
+    clearRunningTurns(threadId)
+    setThreadTurns(threadId, res.turns as Turn[])
+    if (res.rolledBackMessage) {
+      setPendingInput(res.rolledBackMessage)
+    }
+    return res
+  }, [workspace.rootPath, setThreadTurns, clearRunningTurns, setPendingInput])
+
+  const rollbackBoth = useCallback(async (threadId: string, throughTurnId: number) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const res = await rollbackBothToTurn(threadId, cwd, throughTurnId)
+    setThreadTurns(threadId, res.turns as Turn[])
+    return res
+  }, [workspace.rootPath, setThreadTurns])
+
+  const undoCodeRollback = useCallback(async (threadId: string, uiTurnId: string, force?: boolean, files?: string[]) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const { result } = await undoLastCodeRollback(threadId, cwd, force, files)
+    if (result.restored) {
+      for (const f of result.restoredFiles) {
+        markFileRestored(threadId, uiTurnId, f)
+      }
+    }
+    return result
+  }, [workspace.rootPath, markFileRestored])
+
+  const forkThread = useCallback(async (threadId: string, atUuid?: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    const res = await forkSession(threadId, cwd, atUuid)
+    return res.sessionId
+  }, [workspace.rootPath])
+
+  const initRollbackState = useCallback(async (threadId: string) => {
+    const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
+    try {
+      const state = await getRollbackState(threadId, cwd)
+      setRollbackState(threadId, state)
+      initRevertedFilesFromState(threadId)
+    } catch { /* ignore */ }
+  }, [workspace.rootPath, setRollbackState, initRevertedFilesFromState])
+
+  return {
+    sendMessage, abort, approveTool, rejectTool, deleteThread, createSession,
+    // Rollback
+    loadCheckpointDiff, revertFile, revertFiles, revertAgentFiles, revertAllFiles,
+    previewRollback, rollbackCode, rollbackCtx, rollbackBoth,
+    undoCodeRollback, forkThread, initRollbackState,
+    rollbackStateByThreadId, revertedFilesByTurnId,
+  }
 }

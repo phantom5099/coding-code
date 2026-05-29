@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import type { FileNode, GitStatus, Item, OpenFile, Project, TerminalSession, Thread, Turn, TodoItem } from '@shared/types'
+import type { SessionRollbackState, CheckpointDiff, RollbackPreviewDiff } from '../lib/core-api'
 
 function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`)
@@ -51,11 +52,20 @@ interface AgentState {
   models: ModelEntry[]
   contextUsage: { used: number; contextWindow: number } | null
   todoByThreadId: Record<string, TodoPanelState>
+  pendingInput: string | null
 }
 
 interface EditorState {
   cursorLine: number
   cursorCol: number
+}
+
+interface RollbackState {
+  rollbackStateByThreadId: Record<string, SessionRollbackState>
+  checkpointDiffByTurnId: Record<string, CheckpointDiff>
+  rollbackPreviewByThreadId: Record<string, RollbackPreviewDiff>
+  revertedFilesByTurnId: Record<string, string[]>
+  turnCheckpointMapping: Record<string, Record<number, string>>
 }
 
 interface GlobalState {
@@ -66,6 +76,7 @@ interface GlobalState {
   terminals: TerminalSession[]
   agent: AgentState
   editor: EditorState
+  rollback: RollbackState
 }
 
 interface GlobalActions {
@@ -103,9 +114,23 @@ interface GlobalActions {
   updateToolCallStatus: (threadId: string, callId: string, status: 'pending' | 'approved' | 'rejected' | 'running') => void
   startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void
+  updateTurnId: (threadId: string, oldTurnId: string, newTurnId: string) => void
   completeTurn: (threadId: string, turnId: string, status: 'completed' | 'error') => void
+  setPendingInput: (input: string | null) => void
+  clearRunningTurns: (threadId: string) => void
   applyTodoUpdate: (threadId: string, items: TodoItem[]) => void
   toggleTodoCollapsed: (threadId: string) => void
+  // Rollback state
+  setRollbackState: (threadId: string, state: SessionRollbackState) => void
+  setCheckpointDiff: (threadId: string, turnId: string, diff: CheckpointDiff) => void
+  setRollbackPreview: (threadId: string, preview: RollbackPreviewDiff) => void
+  clearRollbackPreview: (threadId: string) => void
+  markFileReverted: (threadId: string, turnId: string, file: string) => void
+  markFileRestored: (threadId: string, turnId: string, file: string) => void
+  markScopeReverted: (threadId: string, turnId: string, scope: 'agent' | 'all') => void
+  markScopeRestored: (threadId: string, turnId: string, scope: 'agent' | 'all') => void
+  initRevertedFilesFromState: (threadId: string) => void
+  setTurnCheckpointMapping: (threadId: string, checkpointId: number, uiTurnId: string) => void
 }
 
 const initialGit: GitStatus = {
@@ -148,10 +173,18 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         models: [],
         contextUsage: null,
         todoByThreadId: {},
+        pendingInput: null,
       },
       editor: {
         cursorLine: 1,
         cursorCol: 1,
+      },
+      rollback: {
+        rollbackStateByThreadId: {},
+        checkpointDiffByTurnId: {},
+        rollbackPreviewByThreadId: {},
+        revertedFilesByTurnId: {},
+        turnCheckpointMapping: {},
       },
 
       setMode: (mode) => set((s) => { s.ui.mode = mode }),
@@ -206,7 +239,9 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       upsertThread: (thread) => set((s) => { s.agent.threads[thread.id] = thread }),
       setThreadTurns: (threadId, turns) => set((s) => {
         const thread = s.agent.threads[threadId]
-        if (thread) thread.turns = turns
+        if (thread) {
+          s.agent.threads[threadId] = { ...thread, turns }
+        }
       }),
       setThreadCwd: (threadId, cwd) => set((s) => {
         const thread = s.agent.threads[threadId]
@@ -315,6 +350,14 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         }
       }),
 
+      updateTurnId: (threadId, oldTurnId, newTurnId) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (!thread) return
+        const turn = thread.turns.find((t) => t.id === oldTurnId)
+        if (!turn) return
+        turn.id = newTurnId
+      }),
+
       completeTurn: (threadId, turnId, status) => set((s) => {
         const thread = s.agent.threads[threadId]
         if (!thread) return
@@ -327,6 +370,14 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
             item.partial = false
           }
         }
+      }),
+
+      setPendingInput: (input) => set((s) => { s.agent.pendingInput = input }),
+
+      clearRunningTurns: (threadId) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (!thread) return
+        thread.turns = thread.turns.filter((t) => t.status !== 'running')
       }),
 
       applyTodoUpdate: (threadId, items) => set((s) => {
@@ -354,6 +405,71 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         const previous = s.agent.todoByThreadId[threadId]
         if (!previous) return
         previous.collapsed = !previous.collapsed
+      }),
+
+      // Rollback actions
+      setRollbackState: (threadId, state) => set((s) => {
+        s.rollback.rollbackStateByThreadId[threadId] = state as any
+      }),
+      setCheckpointDiff: (threadId, turnId, diff) => set((s) => {
+        s.rollback.checkpointDiffByTurnId[`${threadId}:${turnId}`] = diff as any
+      }),
+      setRollbackPreview: (threadId, preview) => set((s) => {
+        s.rollback.rollbackPreviewByThreadId[threadId] = preview as any
+      }),
+      clearRollbackPreview: (threadId) => set((s) => {
+        delete s.rollback.rollbackPreviewByThreadId[threadId]
+      }),
+      markFileReverted: (threadId, turnId, file) => set((s) => {
+        const key = `${threadId}:${turnId}`
+        if (!s.rollback.revertedFilesByTurnId[key]) {
+          s.rollback.revertedFilesByTurnId[key] = []
+        }
+        if (!s.rollback.revertedFilesByTurnId[key].includes(file)) {
+          s.rollback.revertedFilesByTurnId[key].push(file)
+        }
+      }),
+      markFileRestored: (threadId, turnId, file) => set((s) => {
+        const key = `${threadId}:${turnId}`
+        const arr = s.rollback.revertedFilesByTurnId[key]
+        if (arr) {
+          s.rollback.revertedFilesByTurnId[key] = arr.filter((f) => f !== file)
+        }
+      }),
+      markScopeReverted: (threadId, turnId, scope) => set((s) => {
+        const key = `${threadId}:${turnId}`
+        const sentinel = scope === 'agent' ? '__scope_agent_reverted__' : '__scope_all_reverted__'
+        if (!s.rollback.revertedFilesByTurnId[key]) {
+          s.rollback.revertedFilesByTurnId[key] = []
+        }
+        if (!s.rollback.revertedFilesByTurnId[key].includes(sentinel)) {
+          s.rollback.revertedFilesByTurnId[key].push(sentinel)
+        }
+      }),
+      markScopeRestored: (threadId, turnId, scope) => set((s) => {
+        const key = `${threadId}:${turnId}`
+        const sentinel = scope === 'agent' ? '__scope_agent_reverted__' : '__scope_all_reverted__'
+        const arr = s.rollback.revertedFilesByTurnId[key]
+        if (arr) {
+          s.rollback.revertedFilesByTurnId[key] = arr.filter((f) => f !== sentinel)
+          if (s.rollback.revertedFilesByTurnId[key].length === 0) {
+            delete s.rollback.revertedFilesByTurnId[key]
+          }
+        }
+      }),
+      initRevertedFilesFromState: (threadId) => set((s) => {
+        const state = s.rollback.rollbackStateByThreadId[threadId]
+        if (!state) return
+        const revertedFiles = state.code.revertedFiles ?? []
+        if (revertedFiles.length > 0) {
+          s.rollback.revertedFilesByTurnId[threadId] = revertedFiles
+        }
+      }),
+      setTurnCheckpointMapping: (threadId, checkpointId, uiTurnId) => set((s) => {
+        if (!s.rollback.turnCheckpointMapping[threadId]) {
+          s.rollback.turnCheckpointMapping[threadId] = {}
+        }
+        s.rollback.turnCheckpointMapping[threadId][checkpointId] = uiTurnId
       }),
     })),
     {

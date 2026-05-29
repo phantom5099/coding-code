@@ -9,7 +9,6 @@ import { ContextService } from '../context/context.js';
 import { SessionService, type SessionStoreState } from '../session/store.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
-import { getWorkspaceCwd } from '../core/workspace.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
@@ -67,7 +66,8 @@ export type AgentEvent =
   | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
   | { readonly _tag: 'Done'; readonly content: string }
-  | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'in_progress' | 'completed' }> };
+  | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'in_progress' | 'completed' }> }
+  | { readonly _tag: 'TurnId'; readonly turnId: number };
 
 export interface RunStreamOptions {
   state: SessionStoreState;
@@ -144,7 +144,7 @@ export async function* runReActLoop(
 
   // Build system prompt
   const basePrompt = opts.systemOverride ?? buildSystemPrompt({
-    cwd: getWorkspaceCwd(),
+    cwd: projectPath,
     platform: process.platform,
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
     variant: systemPromptVariant ?? 'default',
@@ -172,6 +172,9 @@ export async function* runReActLoop(
 
     // Emit turn.start hook
     await Effect.runPromise(hooks.emit('agent.turn.start', { sessionId }));
+
+    // Yield turn ID so the client can sync its turn ID with the server
+    yield { _tag: 'TurnId', turnId: state.currentTurnId };
 
     for (let step = 0; step < maxSteps; step++) {
       yield { _tag: 'Step', step: step + 1, max: maxSteps };

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import type { Item } from '@shared/types'
 import CodeBlock from './CodeBlock'
 import ToolCallCard from './ToolCallCard'
@@ -17,6 +17,8 @@ interface MessageItemProps {
   onApprove: (threadId: string, callId: string) => void
   onReject: (threadId: string, callId: string) => void
   callIdToToolName?: Record<string, string>
+  onRollbackHere?: () => void
+  onForkFromHere?: () => void
 }
 
 function parseMarkdown(text: string): React.ReactNode {
@@ -41,19 +43,78 @@ function parseMarkdown(text: string): React.ReactNode {
   return <>{blocks}</>
 }
 
-export default function MessageItem({ item, threadId, onApprove, onReject, callIdToToolName }: MessageItemProps) {
+export default function MessageItem({ item, threadId, onApprove, onReject, callIdToToolName, onRollbackHere, onForkFromHere }: MessageItemProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false)
   const [resultOpen, setResultOpen] = useState(false)
+  const [rollbackMenuOpen, setRollbackMenuOpen] = useState(false)
+  const rollbackBtnRef = useRef<HTMLButtonElement>(null)
+  const rollbackMenuRef = useRef<HTMLDivElement>(null)
+  const [menuFlip, setMenuFlip] = useState<{ vertical?: boolean; horizontal?: boolean }>({})
+
+  // Dynamically flip menu if it would overflow the viewport
+  useLayoutEffect(() => {
+    if (!rollbackMenuOpen || !rollbackMenuRef.current || !rollbackBtnRef.current) return
+    const menuRect = rollbackMenuRef.current.getBoundingClientRect()
+    const btnRect = rollbackBtnRef.current.getBoundingClientRect()
+    const flip: { vertical?: boolean; horizontal?: boolean } = {}
+    // If menu goes above viewport, flip to below button
+    if (menuRect.top < 0) {
+      flip.vertical = true
+    }
+    // If menu goes beyond right edge, flip to left-align
+    if (menuRect.right > window.innerWidth) {
+      flip.horizontal = true
+    }
+    setMenuFlip(flip)
+  }, [rollbackMenuOpen])
 
   if (item.type === 'message') {
     const content = item.content
     const isUser = item.role === 'user'
+    const hasRollback = !!(onRollbackHere || onForkFromHere)
 
     if (isUser) {
       return (
         <div className="flex justify-end mb-4">
-          <div className="max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[#2a2a2a] text-[#e8e8e8] text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+          <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[#2a2a2a] text-[#e8e8e8] text-[15px] leading-relaxed whitespace-pre-wrap break-words group">
             {content}
+            {hasRollback && (
+              <div className="absolute -right-1 -bottom-1">
+                <button
+                  ref={rollbackBtnRef}
+                  onClick={(e) => { e.stopPropagation(); setRollbackMenuOpen(!rollbackMenuOpen) }}
+                  className="w-5 h-5 rounded-full bg-[#444] text-[#aaa] hover:bg-[#555] hover:text-[#ccc] flex items-center justify-center text-[11px] leading-none transition-opacity"
+                  title="回退到此"
+                >
+                  ↩
+                </button>
+                  {rollbackMenuOpen && (
+                  <div
+                    ref={rollbackMenuRef}
+                    className={`absolute bg-[#1e1e1e] border border-[#444] rounded-md shadow-lg py-1 z-50 min-w-[130px] ${
+                      menuFlip.vertical ? 'top-6' : 'bottom-6'
+                    } ${menuFlip.horizontal ? 'right-0' : 'right-0'}`}
+                  >
+                    {onRollbackHere && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setRollbackMenuOpen(false); onRollbackHere() }}
+                        className="block w-full text-left px-3 py-1.5 text-[12px] text-[#ccc] hover:bg-[#333]"
+                      >
+                        回退到这里
+                      </button>
+                    )}
+                    {onForkFromHere && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setRollbackMenuOpen(false); onForkFromHere() }}
+                        className="block w-full text-left px-3 py-1.5 text-[12px] text-[#ccc] hover:bg-[#333]"
+                      >
+                        Fork from here
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )

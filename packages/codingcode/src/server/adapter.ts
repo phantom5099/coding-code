@@ -6,6 +6,8 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
   switch (event._tag) {
     case 'Step':
       return { type: 'step', step: event.step };
+    case 'TurnId':
+      return { type: 'turn_id', turnId: event.turnId };
     case 'ToolStart':
       return { type: 'tool_start', name: event.name, args: event.args };
     case 'ApprovalRequest':
@@ -37,6 +39,10 @@ export async function* toSseEvents(
     if (event._tag === 'Step') {
       currentStep = event.step;
       yield { type: 'step', step: event.step };
+      continue;
+    }
+    if (event._tag === 'TurnId') {
+      yield { type: 'turn_id', turnId: event.turnId };
       continue;
     }
     if (event._tag === 'LlmChunk') {

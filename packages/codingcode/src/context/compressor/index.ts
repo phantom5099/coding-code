@@ -121,7 +121,7 @@ function buildFilteredView(events: SessionEvent[]): { hidden: Set<string> } {
           effect = new Set<string>();
           for (const prior of events) {
             if (prior === ev) break;
-            if ('turnId' in prior && prior.turnId > ev.throughTurnId && 'uuid' in prior) {
+            if ('turnId' in prior && prior.turnId >= ev.throughTurnId && 'uuid' in prior) {
               effect.add(prior.uuid);
             }
           }
