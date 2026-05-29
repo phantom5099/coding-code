@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useLayoutEffect } from 'react'
+import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useGlobalStore } from '../stores/global.store'
 import { API_BASE } from '../lib/api'
@@ -107,6 +107,18 @@ function InputBox({ centered, threadId, sendMessage, abort }: {
   const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy)
   const workspace = useGlobalStore((s) => s.workspace)
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)
+  const pendingInput = useGlobalStore((s) => s.agent.pendingInput)
+  const setPendingInput = useGlobalStore((s) => s.setPendingInput)
+
+  // Consume pendingInput when it's set
+  useEffect(() => {
+    if (pendingInput !== null) {
+      setText(pendingInput)
+      setPendingInput(null)
+      // Focus textarea after setting text
+      setTimeout(() => textareaRef.current?.focus(), 0)
+    }
+  }, [pendingInput, setPendingInput])
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim()

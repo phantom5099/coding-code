@@ -55,8 +55,8 @@ describe('applyVisibilityEvents', () => {
       const hidden = applyVisibilityEvents(events);
       expect(hidden.has('u2')).toBe(true);
       expect(hidden.has('a2')).toBe(true);
-      expect(hidden.has('u1')).toBe(false);
-      expect(hidden.has('a1')).toBe(false);
+      expect(hidden.has('u1')).toBe(true);
+      expect(hidden.has('a1')).toBe(true);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }
@@ -100,7 +100,7 @@ describe('buildMessages with visibility filtering', () => {
     try {
       const messages = buildMessages(fx.transcriptPath);
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
-      expect(userContents).toEqual(['hello']);
+      expect(userContents).toEqual([]);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }
@@ -242,9 +242,8 @@ describe('readUIHistory with visibility filtering', () => {
       }));
 
       const turns = readUIHistory(sessionId);
-      // Only turn 1 should be visible
-      expect(turns.length).toBe(1);
-      expect(turns[0]!.id).toBe('1');
+      // No turns should be visible (turn 1 rolled back)
+      expect(turns.length).toBe(0);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }

@@ -16,7 +16,10 @@ function randomId(): string {
 export function useAgent() {
   const startTurn = useGlobalStore((s) => s.startTurn)
   const applyChunk = useGlobalStore((s) => s.applyChunk)
+  const updateTurnId = useGlobalStore((s) => s.updateTurnId)
   const completeTurn = useGlobalStore((s) => s.completeTurn)
+  const setPendingInput = useGlobalStore((s) => s.setPendingInput)
+  const clearRunningTurns = useGlobalStore((s) => s.clearRunningTurns)
   const applyTodoUpdate = useGlobalStore((s) => s.applyTodoUpdate)
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread)
   const loadThreads = useGlobalStore((s) => s.loadThreads)
@@ -91,13 +94,16 @@ export function useAgent() {
     }).catch(() => {})
   }, [currentThreadId, setThreadTurns])
 
-  const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string): Item | null => {
+  const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string, currentTurnId: string): Item | null => {
     switch (event.type) {
       case 'text':
         return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.text, partial: true }
       case 'message':
         return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.content, partial: false }
       case 'step':
+        return null
+      case 'turn_id':
+        updateTurnId(threadId, currentTurnId, String(event.turnId))
         return null
       case 'tool_start':
         return { id: randomId(), type: 'tool_call', name: event.name, args: event.args, status: 'running' }
@@ -117,7 +123,7 @@ export function useAgent() {
       case 'complete':
         return null
     }
-  }, [applyTodoUpdate])
+  }, [applyTodoUpdate, updateTurnId])
 
   const sendMessage = useCallback(
     async (threadId: string, content: string, cwd?: string) => {
@@ -139,8 +145,8 @@ export function useAgent() {
         }
       }
 
-      const turnId = randomId()
-      const assistantMessageId = randomId()
+      let turnId = randomId()
+      let assistantMessageId = randomId()
       const userItem: Item = { id: randomId(), type: 'message', role: 'user', content }
       const turn: Turn = { id: turnId, items: [userItem], status: 'running' }
 
@@ -159,9 +165,17 @@ export function useAgent() {
             continue
           }
 
-          const item = streamChunkToItem(event, resolvedThreadId, assistantMessageId)
+          const item = streamChunkToItem(event, resolvedThreadId, assistantMessageId, turnId)
           if (item) {
             applyChunk(resolvedThreadId, turnId, item)
+          }
+
+          if (event.type === 'turn_id') {
+            turnId = String(event.turnId)
+          }
+
+          if (event.type === 'tool_start' || event.type === 'approval_request') {
+            assistantMessageId = randomId()
           }
         }
 
@@ -307,9 +321,13 @@ export function useAgent() {
   const rollbackCtx = useCallback(async (threadId: string, throughTurnId: number) => {
     const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
     const res = await rollbackContext(threadId, cwd, throughTurnId)
+    clearRunningTurns(threadId)
     setThreadTurns(threadId, res.turns as Turn[])
+    if (res.rolledBackMessage) {
+      setPendingInput(res.rolledBackMessage)
+    }
     return res
-  }, [workspace.rootPath, setThreadTurns])
+  }, [workspace.rootPath, setThreadTurns, clearRunningTurns, setPendingInput])
 
   const rollbackBoth = useCallback(async (threadId: string, throughTurnId: number) => {
     const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath

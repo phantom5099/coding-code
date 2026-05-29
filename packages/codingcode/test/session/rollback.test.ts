@@ -58,7 +58,7 @@ describe('rollback and undo', () => {
 
       const messages = buildMessages(fx.transcriptPath);
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
-      expect(userContents).toEqual(['hello']);
+      expect(userContents).toEqual([]);
     } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
   });
 

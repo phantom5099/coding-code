@@ -81,10 +81,27 @@ describe('Rollback state in global store', () => {
   it('markScopeReverted sets sentinel', () => {
     useGlobalStore.getState().markScopeReverted('thread1', '3', 'agent');
     const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
-    expect(reverted).toContain('__scope_reverted__');
+    expect(reverted).toContain('__scope_agent_reverted__');
   });
 
-  it('markScopeRestored removes entry', () => {
+  it('markScopeReverted differentiates agent and all scopes', () => {
+    useGlobalStore.getState().markScopeReverted('thread1', '3', 'agent');
+    useGlobalStore.getState().markScopeReverted('thread1', '3', 'all');
+    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
+    expect(reverted).toContain('__scope_agent_reverted__');
+    expect(reverted).toContain('__scope_all_reverted__');
+  });
+
+  it('markScopeRestored removes correct sentinel', () => {
+    useGlobalStore.getState().markScopeReverted('thread1', '3', 'agent');
+    useGlobalStore.getState().markScopeReverted('thread1', '3', 'all');
+    useGlobalStore.getState().markScopeRestored('thread1', '3', 'agent');
+    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
+    expect(reverted).not.toContain('__scope_agent_reverted__');
+    expect(reverted).toContain('__scope_all_reverted__');
+  });
+
+  it('markScopeRestored removes entry when empty', () => {
     useGlobalStore.getState().markScopeReverted('thread1', '3', 'agent');
     useGlobalStore.getState().markScopeRestored('thread1', '3', 'agent');
     expect(useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3']).toBeUndefined();

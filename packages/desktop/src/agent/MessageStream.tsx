@@ -11,6 +11,7 @@ interface MessageStreamProps {
 
 export default function MessageStream({ threadId }: MessageStreamProps) {
   const thread = useGlobalStore((s) => s.agent.threads[threadId])
+  const setCurrentThread = useGlobalStore((s) => s.setCurrentThread)
   const {
     approveTool, rejectTool,
     loadCheckpointDiff, revertFile, revertAgentFiles, revertAllFiles,
@@ -26,6 +27,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const turnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping)
   const markScopeRestored = useGlobalStore((s) => s.markScopeRestored)
   const markFileRestored = useGlobalStore((s) => s.markFileRestored)
+  const setPendingInput = useGlobalStore((s) => s.setPendingInput)
 
   // Rollback modal state (only thing left in local state)
   const [showRollbackPanel, setShowRollbackPanel] = useState<{ turnId: string; preview: any } | null>(null)
@@ -139,7 +141,8 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     const ckKey = getCheckpointKey(uiTurnId)
     const diff = ckKey ? checkpointDiffByTurnId[ckKey] : null
     const revertedFiles = getRevertedFiles(uiTurnId)
-    const isScopeReverted = revertedFiles.includes('__scope_reverted__')
+    const isAgentReverted = revertedFiles.includes('__scope_agent_reverted__')
+    const isAllReverted = revertedFiles.includes('__scope_all_reverted__')
     const [expandedFile, setExpandedFile] = useState<string | null>(null)
 
     if (!diff || !diff.files || diff.files.length === 0) {
@@ -174,24 +177,24 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => handleRevertScope(uiTurnId, 'all', isScopeReverted)}
+              onClick={() => handleRevertScope(uiTurnId, 'all', isAllReverted)}
               className={`text-[12px] px-3 py-1 rounded ${
-                isScopeReverted
+                isAllReverted
                   ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
                   : 'bg-[#333] text-[#aaa] hover:bg-[#444] border border-[#444]'
               }`}
             >
-              {isScopeReverted ? '撤销回退本轮全部修改' : '回退本轮全部修改'}
+              {isAllReverted ? '撤销回退本轮全部修改' : '回退本轮全部修改'}
             </button>
             <button
-              onClick={() => handleRevertScope(uiTurnId, 'agent', isScopeReverted)}
+              onClick={() => handleRevertScope(uiTurnId, 'agent', isAgentReverted)}
               className={`text-[12px] px-3 py-1 rounded ${
-                isScopeReverted
+                isAgentReverted
                   ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
                   : 'bg-[#333] text-[#aaa] hover:bg-[#444] border border-[#444]'
               }`}
             >
-              {isScopeReverted ? '撤销回退 Agent 修改' : '只回退 Agent 修改'}
+              {isAgentReverted ? '撤销回退 Agent 修改' : '只回退 Agent 修改'}
             </button>
           </div>
         </div>
@@ -200,7 +203,9 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
         <div className="border-t border-[#2a2a2a]">
           {diff.files.map((f: any) => {
             const isExpanded = expandedFile === f.path
-            const isReverted = isScopeReverted || revertedFiles.includes(f.path)
+            const isFileIndividuallyReverted = revertedFiles.includes(f.path)
+            const isFileScopeReverted = isAllReverted || (isAgentReverted && f.source === 'agent')
+            const isReverted = isFileIndividuallyReverted || isFileScopeReverted
             return (
               <div key={f.path}>
                 <div
@@ -270,7 +275,6 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const turnEndIndices = new Set<number>()
   const turnRollbackCallbacks = new Map<string, {
     onRollbackHere?: () => void
-    onRollbackContext?: () => void
     onForkFromHere?: () => void
   }>()
   let idx = 0
@@ -279,17 +283,24 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     if (turn.status === 'completed' || turn.status === 'error') {
       turnEndIndices.add(idx)
       const turnNum = parseInt(turn.id, 10)
-      const hasNumericId = !isNaN(turnNum)
       turnRollbackCallbacks.set(turn.id, {
-        onRollbackHere: hasNumericId ? () => {
+        onRollbackHere: !isNaN(turnNum) ? () => {
           previewRollback(threadId, turnNum).then((preview: any) => {
             setShowRollbackPanel({ turnId: String(turnNum), preview })
           })
         } : undefined,
-        onRollbackContext: hasNumericId ? () => { rollbackCtx(threadId, turnNum) } : undefined,
-        onForkFromHere: () => {
+        onForkFromHere: async () => {
           const lastItem = turn.items[turn.items.length - 1]
-          if (lastItem) forkThread(threadId, lastItem.id)
+          if (lastItem) {
+            // Get the user message from this turn to refill input after fork
+            const userMsg = turn.items.find((i) => i.type === 'message' && (i as any).role === 'user')
+            const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : ''
+            const newSessionId = await forkThread(threadId, lastItem.id)
+            if (newSessionId) {
+              setCurrentThread(newSessionId)
+              if (userContent) setPendingInput(userContent)
+            }
+          }
         },
       })
     }
@@ -317,7 +328,6 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
             onReject={rejectTool}
             callIdToToolName={callIdToToolName}
             onRollbackHere={isUserMsg && cbs ? cbs.onRollbackHere : undefined}
-            onRollbackContext={isUserMsg && cbs ? cbs.onRollbackContext : undefined}
             onForkFromHere={isUserMsg && cbs ? cbs.onForkFromHere : undefined}
           />
         </div>
@@ -354,16 +364,6 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
             className="text-[12px] px-3 py-1.5 rounded bg-[#555] text-[#ccc] hover:bg-[#666]"
           >
             只回退上下文
-          </button>
-          <button
-            onClick={async () => {
-              if (!showRollbackPanel) return
-              await rollbackCode(threadId, parseInt(showRollbackPanel.turnId, 10))
-              setShowRollbackPanel(null)
-            }}
-            className="text-[12px] px-3 py-1.5 rounded bg-[#555] text-[#ccc] hover:bg-[#666]"
-          >
-            只回退代码
           </button>
           <button
             onClick={async () => {

@@ -342,7 +342,7 @@ export function applyVisibilityEvents(events: SessionEvent[]): Set<string> {
           effect = new Set<string>();
           for (const prior of events) {
             if (prior === ev) break;
-            if ('turnId' in prior && prior.turnId > ev.throughTurnId && 'uuid' in prior) {
+            if ('turnId' in prior && prior.turnId >= ev.throughTurnId && 'uuid' in prior) {
               effect.add(prior.uuid);
             }
           }
@@ -517,10 +517,10 @@ export function deleteSession(sessionId: string): void {
 
 export function forkSession(sourceSessionId: string, sourceJsonlPath: string, atUuid: string): string {
   const events = readHistory(sourceJsonlPath);
-  const atIdx = events.findIndex((e) => 'uuid' in e && (e as any).uuid === atUuid);
-  if (atIdx === -1) throw new Error(`Event ${atUuid} not found in session ${sourceSessionId}`);
+  const atIdx = atUuid ? events.findIndex((e) => 'uuid' in e && (e as any).uuid === atUuid) : -1;
 
-  const chain = events.slice(0, atIdx + 1);
+  // If atUuid not found or empty, fork at the end of the session (all events)
+  const chain = atIdx >= 0 ? events.slice(0, atIdx + 1) : events;
   const newSessionId = randomUUID();
 
   // Find the sessions directory from the source path

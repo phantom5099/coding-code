@@ -52,6 +52,7 @@ interface AgentState {
   models: ModelEntry[]
   contextUsage: { used: number; contextWindow: number } | null
   todoByThreadId: Record<string, TodoPanelState>
+  pendingInput: string | null
 }
 
 interface EditorState {
@@ -113,7 +114,10 @@ interface GlobalActions {
   updateToolCallStatus: (threadId: string, callId: string, status: 'pending' | 'approved' | 'rejected' | 'running') => void
   startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void
+  updateTurnId: (threadId: string, oldTurnId: string, newTurnId: string) => void
   completeTurn: (threadId: string, turnId: string, status: 'completed' | 'error') => void
+  setPendingInput: (input: string | null) => void
+  clearRunningTurns: (threadId: string) => void
   applyTodoUpdate: (threadId: string, items: TodoItem[]) => void
   toggleTodoCollapsed: (threadId: string) => void
   // Rollback state
@@ -169,6 +173,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         models: [],
         contextUsage: null,
         todoByThreadId: {},
+        pendingInput: null,
       },
       editor: {
         cursorLine: 1,
@@ -234,7 +239,9 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       upsertThread: (thread) => set((s) => { s.agent.threads[thread.id] = thread }),
       setThreadTurns: (threadId, turns) => set((s) => {
         const thread = s.agent.threads[threadId]
-        if (thread) thread.turns = turns
+        if (thread) {
+          s.agent.threads[threadId] = { ...thread, turns }
+        }
       }),
       setThreadCwd: (threadId, cwd) => set((s) => {
         const thread = s.agent.threads[threadId]
@@ -343,6 +350,14 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         }
       }),
 
+      updateTurnId: (threadId, oldTurnId, newTurnId) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (!thread) return
+        const turn = thread.turns.find((t) => t.id === oldTurnId)
+        if (!turn) return
+        turn.id = newTurnId
+      }),
+
       completeTurn: (threadId, turnId, status) => set((s) => {
         const thread = s.agent.threads[threadId]
         if (!thread) return
@@ -355,6 +370,14 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
             item.partial = false
           }
         }
+      }),
+
+      setPendingInput: (input) => set((s) => { s.agent.pendingInput = input }),
+
+      clearRunningTurns: (threadId) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (!thread) return
+        thread.turns = thread.turns.filter((t) => t.status !== 'running')
       }),
 
       applyTodoUpdate: (threadId, items) => set((s) => {
@@ -413,13 +436,26 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           s.rollback.revertedFilesByTurnId[key] = arr.filter((f) => f !== file)
         }
       }),
-      markScopeReverted: (threadId, turnId, _scope) => set((s) => {
+      markScopeReverted: (threadId, turnId, scope) => set((s) => {
         const key = `${threadId}:${turnId}`
-        s.rollback.revertedFilesByTurnId[key] = ['__scope_reverted__']
+        const sentinel = scope === 'agent' ? '__scope_agent_reverted__' : '__scope_all_reverted__'
+        if (!s.rollback.revertedFilesByTurnId[key]) {
+          s.rollback.revertedFilesByTurnId[key] = []
+        }
+        if (!s.rollback.revertedFilesByTurnId[key].includes(sentinel)) {
+          s.rollback.revertedFilesByTurnId[key].push(sentinel)
+        }
       }),
-      markScopeRestored: (threadId, turnId, _scope) => set((s) => {
+      markScopeRestored: (threadId, turnId, scope) => set((s) => {
         const key = `${threadId}:${turnId}`
-        delete s.rollback.revertedFilesByTurnId[key]
+        const sentinel = scope === 'agent' ? '__scope_agent_reverted__' : '__scope_all_reverted__'
+        const arr = s.rollback.revertedFilesByTurnId[key]
+        if (arr) {
+          s.rollback.revertedFilesByTurnId[key] = arr.filter((f) => f !== sentinel)
+          if (s.rollback.revertedFilesByTurnId[key].length === 0) {
+            delete s.rollback.revertedFilesByTurnId[key]
+          }
+        }
       }),
       initRevertedFilesFromState: (threadId) => set((s) => {
         const state = s.rollback.rollbackStateByThreadId[threadId]

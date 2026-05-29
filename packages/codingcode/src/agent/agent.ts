@@ -66,7 +66,8 @@ export type AgentEvent =
   | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
   | { readonly _tag: 'Done'; readonly content: string }
-  | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'in_progress' | 'completed' }> };
+  | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'in_progress' | 'completed' }> }
+  | { readonly _tag: 'TurnId'; readonly turnId: number };
 
 export interface RunStreamOptions {
   state: SessionStoreState;
@@ -171,6 +172,9 @@ export async function* runReActLoop(
 
     // Emit turn.start hook
     await Effect.runPromise(hooks.emit('agent.turn.start', { sessionId }));
+
+    // Yield turn ID so the client can sync its turn ID with the server
+    yield { _tag: 'TurnId', turnId: state.currentTurnId };
 
     for (let step = 0; step < maxSteps; step++) {
       yield { _tag: 'Step', step: step + 1, max: maxSteps };

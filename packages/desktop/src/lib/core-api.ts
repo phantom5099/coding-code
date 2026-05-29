@@ -318,7 +318,7 @@ export function rollbackCodeToTurn(sessionId: string, cwd: string, throughTurnId
   })
 }
 
-export function rollbackContext(sessionId: string, cwd: string, throughTurnId: number): Promise<{ ok: boolean; turns: any[] }> {
+export function rollbackContext(sessionId: string, cwd: string, throughTurnId: number): Promise<{ ok: boolean; turns: any[]; rolledBackMessage?: string }> {
   return api(`/api/sessions/${sessionId}/rollback-context`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

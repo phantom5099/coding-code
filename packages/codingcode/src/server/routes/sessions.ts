@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { join } from 'path';
 import { AppLayer } from '../../layer.js';
-import { SessionService, resolveSessionDir, getPermissionMode, setPermissionMode, readUIHistory } from '../../session/store.js';
+import { SessionService, resolveSessionDir, getPermissionMode, setPermissionMode, readUIHistory, readHistory } from '../../session/store.js';
 import { ContextService } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
@@ -258,7 +258,20 @@ sessionsRouter.post('/:id/rollback-context', async (c) => {
       const state = yield* svc.create(cwd, 'unknown', '0.1.0', sessionId);
       yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
-      return { ok: true, turns };
+      // Find user message of the rolled-back turn for input refill
+      let rolledBackMessage = '';
+      const dir = resolveSessionDir(sessionId);
+      if (dir) {
+        const jsonlPath = join(dir, `${sessionId}.jsonl`);
+        const rawEvents = readHistory(jsonlPath);
+        for (const ev of rawEvents) {
+          if (ev.type === 'user' && (ev as any).turnId === body.throughTurnId) {
+            rolledBackMessage = (ev as any).content ?? '';
+            break;
+          }
+        }
+      }
+      return { ok: true, turns, rolledBackMessage };
     }),
   );
   return c.json(result);

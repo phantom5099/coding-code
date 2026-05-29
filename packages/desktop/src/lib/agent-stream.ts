@@ -14,6 +14,7 @@ export type StreamEvent =
   | { type: 'error'; message: string }
   | { type: 'done' }
   | { type: 'complete' }
+  | { type: 'turn_id'; turnId: number }
 
 export interface StreamResult {
   sessionId: string
@@ -50,6 +51,9 @@ export async function* streamAgentMessage(
           break
         case 'step':
           yield { type: 'step', step: data.step as number }
+          break
+        case 'turn_id':
+          yield { type: 'turn_id', turnId: data.turnId as number }
           break
         case 'text':
           yield { type: 'text', text: data.text as string, messageId: data.messageId as number }
