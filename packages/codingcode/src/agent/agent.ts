@@ -9,7 +9,6 @@ import { ContextService } from '../context/context.js';
 import { SessionService, type SessionStoreState } from '../session/store.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
-import { getWorkspaceCwd } from '../core/workspace.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
@@ -144,7 +143,7 @@ export async function* runReActLoop(
 
   // Build system prompt
   const basePrompt = opts.systemOverride ?? buildSystemPrompt({
-    cwd: getWorkspaceCwd(),
+    cwd: projectPath,
     platform: process.platform,
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
     variant: systemPromptVariant ?? 'default',

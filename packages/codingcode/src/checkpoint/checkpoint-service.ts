@@ -108,9 +108,9 @@ function classifySafe(
   if (!baseline || !final) return null;
 
   const allChanges = sg.diffFiles(baseline, final);
-  const allFiles = [...new Set(allChanges.map((c) => resolve(projectPath, c.file)))];
+  const allFiles = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase()))];
   const l = new Ledger(dirname(sg.gitDir));
-  const agentFiles = new Set(l.getAgentFiles(turnId, sessionId));
+  const agentFiles = new Set(l.getAgentFiles(turnId, sessionId).map((p) => normalizePath(p).toLowerCase()));
 
   return {
     agentModified: allFiles.filter((f) => agentFiles.has(f)),
@@ -251,8 +251,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           const title = fullMsg.includes(' ') ? fullMsg.split(' ').slice(1).join(' ') : '';
 
           const allChanges = sg.diffFiles(bCommit, fCommit);
-          const allFiles = [...new Set(allChanges.map((c) => resolve(projectPath, c.file)))];
-          const agentFiles = new Set(ledger(sg).getAgentFiles(i, sessionId));
+          const allFiles = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase()))];
+          const agentFiles = new Set(ledger(sg).getAgentFiles(i, sessionId).map((p) => normalizePath(p).toLowerCase()));
 
           result.push({
             turnId: i,
@@ -277,16 +277,17 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!baseline || !final) return { turnId: latestTurnId, files: [] };
 
         const allChanges = sg.diffFiles(baseline, final);
-        const allFiles = [...new Set(allChanges.map((c) => resolve(projectPath, c.file)))];
-        const agentFiles = new Set(ledger(sg).getAgentFiles(latestTurnId, sessionId));
+        const allFiles = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase()))];
+        const agentFiles = new Set(ledger(sg).getAgentFiles(latestTurnId, sessionId).map((p) => normalizePath(p).toLowerCase()));
 
         const files = allFiles.map((f) => {
           const relPath = toGitPath(projectPath, f);
           const diffResult = sg.git('diff', baseline, final, '--', relPath);
+          const rawPath = normalizePath(resolve(projectPath, relPath)).toLowerCase();
           return {
             path: f,
             source: (agentFiles.has(f) ? 'agent' : 'unknown') as 'agent' | 'unknown',
-            status: allChanges.find((c) => resolve(projectPath, c.file) === f)?.status ?? 'M',
+            status: allChanges.find((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase() === rawPath)?.status ?? 'M',
             diff: diffResult.stdout,
           };
         });

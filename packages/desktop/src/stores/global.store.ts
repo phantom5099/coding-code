@@ -64,6 +64,7 @@ interface RollbackState {
   checkpointDiffByTurnId: Record<string, CheckpointDiff>
   rollbackPreviewByThreadId: Record<string, RollbackPreviewDiff>
   revertedFilesByTurnId: Record<string, string[]>
+  turnCheckpointMapping: Record<string, Record<number, string>>
 }
 
 interface GlobalState {
@@ -125,6 +126,7 @@ interface GlobalActions {
   markScopeReverted: (threadId: string, turnId: string, scope: 'agent' | 'all') => void
   markScopeRestored: (threadId: string, turnId: string, scope: 'agent' | 'all') => void
   initRevertedFilesFromState: (threadId: string) => void
+  setTurnCheckpointMapping: (threadId: string, checkpointId: number, uiTurnId: string) => void
 }
 
 const initialGit: GitStatus = {
@@ -177,6 +179,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         checkpointDiffByTurnId: {},
         rollbackPreviewByThreadId: {},
         revertedFilesByTurnId: {},
+        turnCheckpointMapping: {},
       },
 
       setMode: (mode) => set((s) => { s.ui.mode = mode }),
@@ -421,11 +424,16 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       initRevertedFilesFromState: (threadId) => set((s) => {
         const state = s.rollback.rollbackStateByThreadId[threadId]
         if (!state) return
-        // Initialize from server state — use a sentinel key for now
         const revertedFiles = state.code.revertedFiles ?? []
         if (revertedFiles.length > 0) {
           s.rollback.revertedFilesByTurnId[threadId] = revertedFiles
         }
+      }),
+      setTurnCheckpointMapping: (threadId, checkpointId, uiTurnId) => set((s) => {
+        if (!s.rollback.turnCheckpointMapping[threadId]) {
+          s.rollback.turnCheckpointMapping[threadId] = {}
+        }
+        s.rollback.turnCheckpointMapping[threadId][checkpointId] = uiTurnId
       }),
     })),
     {

@@ -17,6 +17,9 @@ interface MessageItemProps {
   onApprove: (threadId: string, callId: string) => void
   onReject: (threadId: string, callId: string) => void
   callIdToToolName?: Record<string, string>
+  onRollbackHere?: () => void
+  onRollbackContext?: () => void
+  onForkFromHere?: () => void
 }
 
 function parseMarkdown(text: string): React.ReactNode {
@@ -41,19 +44,60 @@ function parseMarkdown(text: string): React.ReactNode {
   return <>{blocks}</>
 }
 
-export default function MessageItem({ item, threadId, onApprove, onReject, callIdToToolName }: MessageItemProps) {
+export default function MessageItem({ item, threadId, onApprove, onReject, callIdToToolName, onRollbackHere, onRollbackContext, onForkFromHere }: MessageItemProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false)
   const [resultOpen, setResultOpen] = useState(false)
+  const [rollbackMenuOpen, setRollbackMenuOpen] = useState(false)
 
   if (item.type === 'message') {
     const content = item.content
     const isUser = item.role === 'user'
+    const hasRollback = !!(onRollbackHere || onRollbackContext || onForkFromHere)
 
     if (isUser) {
       return (
         <div className="flex justify-end mb-4">
-          <div className="max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[#2a2a2a] text-[#e8e8e8] text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+          <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[#2a2a2a] text-[#e8e8e8] text-[15px] leading-relaxed whitespace-pre-wrap break-words group">
             {content}
+            {hasRollback && (
+              <div className="absolute -right-1 -bottom-1">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setRollbackMenuOpen(!rollbackMenuOpen) }}
+                  className="w-5 h-5 rounded-full bg-[#444] text-[#aaa] hover:bg-[#555] hover:text-[#ccc] flex items-center justify-center text-[11px] leading-none transition-opacity"
+                  title="回退到此"
+                >
+                  ↩
+                </button>
+                {rollbackMenuOpen && (
+                  <div className="absolute bottom-6 right-0 bg-[#1e1e1e] border border-[#444] rounded-md shadow-lg py-1 z-50 min-w-[130px]">
+                    {onRollbackHere && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setRollbackMenuOpen(false); onRollbackHere() }}
+                        className="block w-full text-left px-3 py-1.5 text-[12px] text-[#ccc] hover:bg-[#333]"
+                      >
+                        回退到这里
+                      </button>
+                    )}
+                    {onRollbackContext && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setRollbackMenuOpen(false); onRollbackContext() }}
+                        className="block w-full text-left px-3 py-1.5 text-[12px] text-[#ccc] hover:bg-[#333]"
+                      >
+                        只回退上下文
+                      </button>
+                    )}
+                    {onForkFromHere && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setRollbackMenuOpen(false); onForkFromHere() }}
+                        className="block w-full text-left px-3 py-1.5 text-[12px] text-[#ccc] hover:bg-[#333]"
+                      >
+                        Fork from here
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )
