@@ -3,9 +3,20 @@ import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import type { FileNode, GitStatus, Item, OpenFile, Project, TerminalSession, Thread, Turn, TodoItem } from '@shared/types'
 import type { SessionRollbackState, CheckpointDiff, RollbackPreviewDiff } from '../lib/core-api'
+import { buildToolDiff } from '../lib/diff-compute'
 
 function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`)
+}
+
+export function enrichTurnDiffs(turn: Turn): void {
+  for (let i = 0; i < turn.items.length; i++) {
+    const item = turn.items[i]!
+    if (item.type !== 'tool_result') continue
+    const callItem = turn.items.find((j) => j.type === 'tool_call' && j.id === (item as any).callId) as any
+    if (!callItem) continue
+    turn.items[i] = buildToolDiff(item as any, callItem) as any
+  }
 }
 
 export interface ModelEntry {
@@ -240,6 +251,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setThreadTurns: (threadId, turns) => set((s) => {
         const thread = s.agent.threads[threadId]
         if (thread) {
+          for (const turn of turns) enrichTurnDiffs(turn)
           s.agent.threads[threadId] = { ...thread, turns }
         }
       }),
@@ -258,6 +270,8 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         const next: Record<string, Thread> = {}
         for (const t of threads) {
           const existing = s.agent.threads[t.id]
+          const targetTurns = existing ? existing.turns : t.turns
+          for (const turn of targetTurns) enrichTurnDiffs(turn)
           next[t.id] = existing ? { ...t, turns: existing.turns } : t
         }
         for (const [id, thread] of Object.entries(s.agent.threads)) {
@@ -343,17 +357,20 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         }
 
         if (chunk.type === 'tool_result') {
+          let targetChunk = chunk
           for (const t of thread.turns) {
             const callIdx = t.items.findIndex(
               (i) => i.type === 'tool_call' && i.id === chunk.callId
             )
             if (callIdx >= 0) {
-              ;(t.items[callIdx] as any).status = 'approved'
-              t.items.splice(callIdx + 1, 0, chunk)
+              const callItem = t.items[callIdx] as any
+              callItem.status = 'approved'
+              targetChunk = buildToolDiff(chunk, callItem) as any
+              t.items.splice(callIdx + 1, 0, targetChunk)
               return
             }
           }
-          turn.items.push(chunk)
+          turn.items.push(targetChunk)
           return
         }
 

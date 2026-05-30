@@ -111,7 +111,7 @@ export function useAgent() {
       case 'approval_request':
         return { id: event.id, type: 'tool_call', name: event.tool, args: event.args, status: 'pending' }
       case 'tool_result':
-        return { id: randomId(), type: 'tool_result', callId: event.id, name: event.name, output: event.output, exitCode: event.ok ? 0 : 1, filePath: event.filePath, diff: event.diff, insertions: event.insertions, deletions: event.deletions }
+        return { id: randomId(), type: 'tool_result', callId: event.id, name: event.name, output: event.output, exitCode: event.ok ? 0 : 1 }
       case 'tool_denied':
         return { id: event.id, type: 'tool_call', name: event.name, args: {}, status: 'rejected' }
       case 'error':

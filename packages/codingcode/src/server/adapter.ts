@@ -13,7 +13,7 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
     case 'ApprovalRequest':
       return { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
     case 'ToolResult':
-      return { type: 'tool_result', id: event.id, name: event.name, output: event.output, ok: event.ok, diff: event.diff, filePath: event.filePath, insertions: event.insertions, deletions: event.deletions };
+      return { type: 'tool_result', id: event.id, name: event.name, output: event.output, ok: event.ok };
     case 'ToolDenied':
       return { type: 'tool_denied', id: event.id, name: event.name, reason: event.reason };
     case 'Error':

@@ -8,7 +8,6 @@ import { ToolExecutorService } from '../tools/executor.js';
 import { ContextService } from '../context/context.js';
 import { SessionService, type SessionStoreState } from '../session/store.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
-import { computeDiff, wrapUnifiedDiff } from '../checkpoint/diff-tracker.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
@@ -65,7 +64,7 @@ export type AgentEvent =
   | { readonly _tag: 'ToolStart'; readonly id: string; readonly name: string; readonly args: Record<string, unknown> }
   | { readonly _tag: 'ToolDenied'; readonly id: string; readonly name: string; readonly reason: string }
   | { readonly _tag: 'ApprovalRequest'; readonly id: string; readonly tool: string; readonly args: Record<string, unknown> }
-  | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean; readonly diff?: string; readonly filePath?: string; readonly insertions?: number; readonly deletions?: number }
+  | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean }
   | { readonly _tag: 'Step'; readonly step: number; readonly max: number }
   | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
@@ -307,42 +306,11 @@ export async function* runReActLoop(
       let todoPrinted = false;
       for (const r of allResults) {
         const resultOut = r.type === 'denied' ? '' : r.output;
-        let diff: string | undefined;
-        let filePath: string | undefined;
-        let insertions: number | undefined;
-        let deletions: number | undefined;
-        if (r.type === 'ok' && (r.name === 'edit_file' || r.name === 'write_file')) {
-          const tc = toolCalls?.find((t) => t.id === r.id);
-          const args = tc?.arguments ?? {};
-          const rawPath = args.path as string | undefined;
-          if (r.name === 'edit_file' && rawPath && typeof args.old_string === 'string' && typeof args.new_string === 'string') {
-            const oldContent = args.old_string as string;
-            const newContent = args.new_string as string;
-            const result = computeDiff(oldContent, newContent);
-            if (result.insertions > 0 || result.deletions > 0) {
-              const wrapped = wrapUnifiedDiff(rawPath, oldContent, result.diff, result.insertions, result.deletions);
-              diff = wrapped.diff;
-              filePath = wrapped.filePath;
-              insertions = wrapped.insertions;
-              deletions = wrapped.deletions;
-            }
-          } else if (r.name === 'write_file' && rawPath && typeof args.content === 'string') {
-            const newContent = args.content as string;
-            const result = computeDiff('', newContent);
-            if (result.insertions > 0 || result.deletions > 0) {
-              const wrapped = wrapUnifiedDiff(rawPath, '', result.diff, result.insertions, result.deletions);
-              diff = wrapped.diff;
-              filePath = wrapped.filePath;
-              insertions = wrapped.insertions;
-              deletions = wrapped.deletions;
-            }
-          }
-        }
         if (r.type === 'denied') {
           yield { _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason };
         } else {
           const isOk = r.type === 'ok';
-          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk, diff, filePath, insertions, deletions };
+          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk };
         }
         if (!messages.find(m => (m as any).tool_call_id === r.id)) {
           const content = r.type === 'denied'

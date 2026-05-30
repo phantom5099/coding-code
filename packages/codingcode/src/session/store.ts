@@ -9,7 +9,6 @@ import { normalizePath, encodeProjectPath } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, HideEvent, UnhideEvent, TitleEvent, SessionIndex } from './types.js';
 import { estimateTokensForContent } from '../context/utils/tokens.js';
 import { createLogger } from '@codingcode/infra';
-import { computeDiff, wrapUnifiedDiff } from '../checkpoint/diff-tracker.js';
 
 const logger = createLogger();
 
@@ -640,33 +639,6 @@ export function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string
         break;
       case 'tool_result': {
         const item: Record<string, unknown> = { id: event.uuid, type: 'tool_result', callId: event.toolCallId, name: event.toolName, output: event.output };
-        if (event.toolName === 'edit_file' || event.toolName === 'write_file') {
-          const callItem = turn.items.find((i: any) => i.type === 'tool_call' && i.id === event.toolCallId);
-          const args = (callItem as any)?.args ?? {};
-          const rawPath = args.path as string | undefined;
-          if (event.toolName === 'edit_file' && rawPath && typeof args.old_string === 'string' && typeof args.new_string === 'string') {
-            const oldContent = args.old_string as string;
-            const newContent = args.new_string as string;
-            const result = computeDiff(oldContent, newContent);
-            if (result.insertions > 0 || result.deletions > 0) {
-              const wrapped = wrapUnifiedDiff(rawPath, oldContent, result.diff, result.insertions, result.deletions);
-              item.diff = wrapped.diff;
-              item.filePath = wrapped.filePath;
-              item.insertions = wrapped.insertions;
-              item.deletions = wrapped.deletions;
-            }
-          } else if (event.toolName === 'write_file' && rawPath && typeof args.content === 'string') {
-            const newContent = args.content as string;
-            const result = computeDiff('', newContent);
-            if (result.insertions > 0 || result.deletions > 0) {
-              const wrapped = wrapUnifiedDiff(rawPath, '', result.diff, result.insertions, result.deletions);
-              item.diff = wrapped.diff;
-              item.filePath = wrapped.filePath;
-              item.insertions = wrapped.insertions;
-              item.deletions = wrapped.deletions;
-            }
-          }
-        }
         turn.items.push(item);
         break;
       }

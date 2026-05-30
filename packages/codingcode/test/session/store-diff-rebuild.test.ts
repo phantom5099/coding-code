@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { sessionEventsToTurns } from '../../src/session/store.js';
 import type { SessionEvent } from '../../src/session/types.js';
 
-describe('sessionEventsToTurns diff rebuild', () => {
-  it('rebuilds diff for edit_file from tool_call args', () => {
+describe('sessionEventsToTurns', () => {
+  it('parses edit_file tool_result without diff (diff is computed on frontend)', () => {
     const events: SessionEvent[] = [
       { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'edit file', timestamp: new Date().toISOString() },
@@ -43,17 +43,13 @@ describe('sessionEventsToTurns diff rebuild', () => {
     const toolResult = turn.items[3] as any;
     expect(toolResult.type).toBe('tool_result');
     expect(toolResult.name).toBe('edit_file');
-    expect(toolResult.diff).toContain('diff --git a/src/utils.ts b/src/utils.ts');
-    expect(toolResult.diff).toContain('--- a/src/utils.ts');
-    expect(toolResult.diff).toContain('+++ b/src/utils.ts');
-    expect(toolResult.diff).toContain('-b');
-    expect(toolResult.diff).toContain('+B');
-    expect(toolResult.insertions).toBe(1);
-    expect(toolResult.deletions).toBe(1);
-    expect(toolResult.filePath).toBe('src/utils.ts');
+    expect(toolResult.diff).toBeUndefined();
+    expect(toolResult.filePath).toBeUndefined();
+    expect(toolResult.insertions).toBeUndefined();
+    expect(toolResult.deletions).toBeUndefined();
   });
 
-  it('rebuilds diff for write_file from tool_call args (treated as new file)', () => {
+  it('parses write_file tool_result without diff', () => {
     const events: SessionEvent[] = [
       { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'write file', timestamp: new Date().toISOString() },
@@ -93,18 +89,11 @@ describe('sessionEventsToTurns diff rebuild', () => {
     const toolResult = turn.items[3] as any;
     expect(toolResult.type).toBe('tool_result');
     expect(toolResult.name).toBe('write_file');
-    expect(toolResult.diff).toContain('diff --git a/README.md b/README.md');
-    expect(toolResult.diff).toContain('new file mode 100644');
-    expect(toolResult.diff).toContain('--- /dev/null');
-    expect(toolResult.diff).toContain('+++ b/README.md');
-    expect(toolResult.diff).toContain('+# Title');
-    expect(toolResult.diff).toContain('+Hello');
-    expect(toolResult.insertions).toBeGreaterThan(0);
-    expect(toolResult.deletions).toBe(0);
-    expect(toolResult.filePath).toBe('README.md');
+    expect(toolResult.diff).toBeUndefined();
+    expect(toolResult.filePath).toBeUndefined();
   });
 
-  it('skips diff for non-file tools', () => {
+  it('parses non-file tool_result without diff', () => {
     const events: SessionEvent[] = [
       { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'run command', timestamp: new Date().toISOString() },
