@@ -144,6 +144,9 @@ export function switchModel(id: string): Result<SelectableModel, AgentError> {
 
 export async function createClient(entry: SelectableModel): Promise<Result<LLMClient, AgentError>> {
   const apiKey = process.env[entry.api_key_env] || process.env.OPENAI_API_KEY || '';
+  if (!apiKey) {
+    return Result.err(new AgentError('CONFIG_MISSING', `API key not found. Set environment variable "${entry.api_key_env}" or "OPENAI_API_KEY".`, undefined, { apiKeyEnv: entry.api_key_env }));
+  }
 
   switch (entry.driver) {
     case 'openai': {

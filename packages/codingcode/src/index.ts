@@ -34,7 +34,7 @@ export { findAvailablePort } from './server/port-discovery.js';
 export { createDirectClient, agentEventToStreamChunk } from './client/direct.js';
 export type { AgentClient, StreamChunk } from './client/direct.js';
 export { createHttpClient } from './client/http.js';
-export { handler, sseHandler } from './server/handler.js';
+export { sseHandler } from './server/handler.js';
 export { agentEventToSseEvent, toSseEvents } from './server/adapter.js';
 export type { SseEvent } from './server/adapter.js';
 export { CheckpointService } from './checkpoint/checkpoint-service.js';

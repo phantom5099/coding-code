@@ -6,20 +6,10 @@ import { modelsRouter } from './routes/models.js';
 import { approvalRouter } from './routes/approval.js';
 import { agentRouter } from './routes/agent.js';
 import { settingsRouter } from './routes/settings.js';
-import { getLLMClient } from '../llm/factory.js';
 import { AgentError } from '../core/error.js';
 import { AlreadyExistsError, NotFoundError } from '../settings/service.js';
 
-declare module 'hono' {
-  interface ContextVariableMap {
-    llm: any;
-  }
-}
-
 export async function createServer(): Promise<Hono> {
-  const llmResult = await getLLMClient();
-  if (!llmResult.ok) throw new Error(llmResult.error.message);
-
   const app = new Hono();
 
   app.onError((err, c) => {
@@ -40,11 +30,6 @@ export async function createServer(): Promise<Hono> {
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
   }));
-
-  app.use('*', async (c, next) => {
-    c.set('llm', llmResult.value);
-    await next();
-  });
 
   app.get('/api/health', (c) => c.json({ status: 'ok' }));
 

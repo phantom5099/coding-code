@@ -86,7 +86,9 @@ describe('getActiveEntry - activeModel priority', () => {
     const { getActiveEntry } = await import('../../src/llm/factory.js');
     const result = getActiveEntry();
     expect(result.ok).toBe(true);
-    expect(result.value?.id).toBe('model-y@API_KEY_A');
+    if (result.ok) {
+      expect(result.value.id).toBe('model-y@API_KEY_A');
+    }
   });
 
   it('returns error when activeModel is not set in config', async () => {
@@ -95,8 +97,10 @@ describe('getActiveEntry - activeModel priority', () => {
     const { getActiveEntry } = await import('../../src/llm/factory.js');
     const result = getActiveEntry();
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe('CONFIG_INVALID');
-    expect(result.error?.message).toContain('activeModel');
+    if (!result.ok) {
+      expect(result.error.code).toBe('CONFIG_INVALID');
+      expect(result.error.message).toContain('activeModel');
+    }
   });
 
   it('returns error when activeModel does not match any catalog entry', async () => {
@@ -106,7 +110,51 @@ describe('getActiveEntry - activeModel priority', () => {
     const { getActiveEntry } = await import('../../src/llm/factory.js');
     const result = getActiveEntry();
     expect(result.ok).toBe(false);
-    expect(result.error?.code).toBe('CONFIG_INVALID');
-    expect(result.error?.message).toContain('nonexistent');
+    if (!result.ok) {
+      expect(result.error.code).toBe('CONFIG_INVALID');
+      expect(result.error.message).toContain('nonexistent');
+    }
+  });
+});
+
+describe('createClient - API key validation', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('returns CONFIG_MISSING when API key env is not set', async () => {
+    mockFs();
+    await initWith({ model: 'model-x', apiKeyEnv: 'API_KEY_A' });
+
+    const { getActiveEntry, createClient } = await import('../../src/llm/factory.js');
+    const entryResult = getActiveEntry();
+    expect(entryResult.ok).toBe(true);
+    if (!entryResult.ok) return;
+
+    delete (process.env as any).API_KEY_A;
+    delete (process.env as any).OPENAI_API_KEY;
+
+    const result = await createClient(entryResult.value);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('CONFIG_MISSING');
+      expect(result.error.message).toContain('API_KEY_A');
+    }
+  });
+
+  it('succeeds when OPENAI_API_KEY fallback is set', async () => {
+    mockFs();
+    await initWith({ model: 'model-x', apiKeyEnv: 'API_KEY_A' });
+
+    const { getActiveEntry, createClient } = await import('../../src/llm/factory.js');
+    const entryResult = getActiveEntry();
+    expect(entryResult.ok).toBe(true);
+    if (!entryResult.ok) return;
+
+    delete (process.env as any).API_KEY_A;
+    (process.env as any).OPENAI_API_KEY = 'sk-test';
+
+    const result = await createClient(entryResult.value);
+    expect(result.ok).toBe(true);
   });
 });

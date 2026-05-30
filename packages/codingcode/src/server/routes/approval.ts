@@ -1,12 +1,8 @@
 import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { ApprovalWaitService } from '../../approval/async-confirm';
-import { AppLayer } from '../../layer';
 import { parseApprovalResponse } from '../../approval/response';
-
-function runWithLayer<T>(eff: Effect.Effect<T, unknown, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
-}
+import { runWithLayer, errorResponse } from '../util.js';
 
 const router = new Hono();
 
@@ -21,8 +17,12 @@ router.post('/sessions/:sessionId/approval/:id', async (c) => {
       return yield* svc.resolveConfirm(id, sessionId, parseApprovalResponse(response));
     }),
   );
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
 
-  return c.json({ ok: result });
+  return c.json({ ok: result.value });
 });
 
 export { router as approvalRouter };

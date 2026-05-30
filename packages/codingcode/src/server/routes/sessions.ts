@@ -1,16 +1,12 @@
 import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { join } from 'path';
-import { AppLayer } from '../../layer.js';
 import { SessionService, resolveSessionDir, getPermissionMode, setPermissionMode, readUIHistory, readHistory } from '../../session/store.js';
 import { ContextService } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
 import { deleteSession } from '../../session/store.js';
-
-function runWithLayer<T>(eff: Effect.Effect<T, unknown, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
-}
+import { runWithLayer, errorResponse } from '../util.js';
 
 export const sessionsRouter = new Hono();
 
@@ -18,25 +14,33 @@ export const sessionsRouter = new Hono();
 
 sessionsRouter.get('/', async (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const sessions = await runWithLayer(
+  const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
       return yield* svc.listSessions(cwd);
     }),
   );
-  return c.json(sessions);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 sessionsRouter.post('/', async (c) => {
   const body = await c.req.json() as { cwd: string; initialPermissionMode?: string };
   const normalizedCwd = resolveWorkspaceCwd(body.cwd);
-  const state = await runWithLayer(
+  const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
       return yield* svc.create(normalizedCwd, 'unknown', '0.1.0');
     }),
   );
-
+  if (!result.ok) {
+    const { status, body: resp } = errorResponse(result.error);
+    return c.json(resp, status as any);
+  }
+  const state = result.value;
   if (body.initialPermissionMode) {
     const dir = resolveSessionDir(state.sessionId);
     if (dir) {
@@ -44,7 +48,6 @@ sessionsRouter.post('/', async (c) => {
       setPermissionMode(state.sessionId, idxPath, body.initialPermissionMode);
     }
   }
-
   return c.json({ sessionId: state.sessionId });
 });
 
@@ -58,7 +61,11 @@ sessionsRouter.post('/:id/resume', async (c) => {
       return yield* svc.readHistory(state);
     }),
   );
-  return c.json(result);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 sessionsRouter.post('/:id/compact', async (c) => {
@@ -72,7 +79,11 @@ sessionsRouter.post('/:id/compact', async (c) => {
       return yield* ctx.compress(state.sessionId, state.projectPath, null);
     }),
   );
-  return c.json(result);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 sessionsRouter.delete('/:id', async (c) => {
@@ -127,7 +138,11 @@ sessionsRouter.get('/:id/rollback-state', async (c) => {
       };
     }),
   );
-  return c.json(result);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 // ---- C3: checkpoint diff (latest or by turn) ----
@@ -141,7 +156,11 @@ sessionsRouter.get('/:id/checkpoints/latest/diff', async (c) => {
       return checkpoint.getCheckpointDiff(cwd, sessionId);
     }),
   );
-  return c.json(result);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 sessionsRouter.get('/:id/checkpoints/:turnId/diff', async (c) => {
@@ -154,7 +173,11 @@ sessionsRouter.get('/:id/checkpoints/:turnId/diff', async (c) => {
       return checkpoint.getCheckpointDiff(cwd, sessionId, isNaN(turnId) ? undefined : turnId);
     }),
   );
-  return c.json(result);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 // ---- C4: revert single file ----
@@ -172,7 +195,11 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-file', async (c) => {
       return checkpoint.revertCheckpointFile(cwd, sessionId, latestTurnId, body.file);
     }),
   );
-  return c.json({ ok: true, result });
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json({ ok: true, result: result.value });
 });
 
 // ---- C5: revert multiple files ----
@@ -190,7 +217,11 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-files', async (c) => {
       return checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, body.files);
     }),
   );
-  return c.json({ ok: true, result });
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json({ ok: true, result: result.value });
 });
 
 // ---- C6: revert agent files ----
@@ -208,7 +239,11 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-agent', async (c) => {
       return checkpoint.revertCheckpointAgentFiles(cwd, sessionId, latestTurnId);
     }),
   );
-  return c.json({ ok: true, result });
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json({ ok: true, result: result.value });
 });
 
 // ---- C7: revert all files ----
@@ -226,7 +261,11 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-all', async (c) => {
       return checkpoint.revertCheckpointAllFiles(cwd, sessionId, latestTurnId);
     }),
   );
-  return c.json({ ok: true, result });
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json({ ok: true, result: result.value });
 });
 
 // ---- C8: rollback preview diff ----
@@ -241,7 +280,11 @@ sessionsRouter.get('/:id/rollback-preview', async (c) => {
       return checkpoint.previewRollbackDiff(cwd, sessionId, throughTurnId);
     }),
   );
-  return c.json(result);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 // ---- C9: rollback code to turn ----
@@ -256,7 +299,11 @@ sessionsRouter.post('/:id/rollback-code-to-turn', async (c) => {
       return checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
     }),
   );
-  return c.json({ ok: true, result });
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json({ ok: true, result: result.value });
 });
 
 // ---- C10: rollback context ----
@@ -287,7 +334,11 @@ sessionsRouter.post('/:id/rollback-context', async (c) => {
       return { ok: true, turns, rolledBackMessage };
     }),
   );
-  return c.json(result);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 // ---- C11: rollback both ----
@@ -307,7 +358,11 @@ sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
       return { ok: true, turns, codeResult };
     }),
   );
-  return c.json(result);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 // ---- C12: undo code rollback ----
@@ -322,7 +377,11 @@ sessionsRouter.post('/:id/undo-code-rollback', async (c) => {
       return checkpoint.undoLastCodeRollback(cwd, sessionId, { force: body.force, files: body.files });
     }),
   );
-  return c.json({ ok: true, result });
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json({ ok: true, result: result.value });
 });
 
 // ---- C13: undo context rollback — intentionally NOT implemented ----
@@ -342,5 +401,9 @@ sessionsRouter.post('/:id/fork', async (c) => {
       return { sessionId: newSessionId, turns };
     }),
   );
-  return c.json(result);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
