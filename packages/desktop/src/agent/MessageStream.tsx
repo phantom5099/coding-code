@@ -32,23 +32,46 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   // Rollback modal state (only thing left in local state)
   const [showRollbackPanel, setShowRollbackPanel] = useState<{ turnId: string; preview: any } | null>(null)
 
-  const allItems: Array<{ item: Item; turnId: string }> = []
+  const renderEntries: Array<{ item: Item; turnId: string; toolResult?: Item & { type: 'tool_result' } }> = []
+  const toolResultByCallId: Record<string, Item & { type: 'tool_result' }> = {}
+
   if (thread) {
+    // Global scan: collect all tool_result by callId
     for (const turn of thread.turns) {
       for (const item of turn.items) {
-        allItems.push({ item, turnId: turn.id })
+        if (item.type === 'tool_result') {
+          toolResultByCallId[item.callId] = item as any
+        }
+      }
+    }
+
+    // Build renderEntries; tool_result is merged into its tool_call, not rendered standalone
+    for (const turn of thread.turns) {
+      for (const item of turn.items) {
+        if (item.type === 'tool_result') {
+          continue
+        }
+        if (item.type === 'tool_call') {
+          renderEntries.push({ item, turnId: turn.id, toolResult: toolResultByCallId[item.id] })
+        } else {
+          renderEntries.push({ item, turnId: turn.id })
+        }
       }
     }
   }
 
   const callIdToToolName: Record<string, string> = {}
-  for (const { item } of allItems) {
-    if (item.type === 'tool_call') {
-      callIdToToolName[item.id] = item.name
+  if (thread) {
+    for (const turn of thread.turns) {
+      for (const item of turn.items) {
+        if (item.type === 'tool_call') {
+          callIdToToolName[item.id] = item.name
+        }
+      }
     }
   }
 
-  const totalCount = allItems.length
+  const totalCount = renderEntries.length
   const isLargeList = totalCount > 100
   const turns = thread?.turns ?? []
 
@@ -278,7 +301,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
 
   // ---- Empty state ----
 
-  if (!thread || allItems.length === 0) {
+  if (!thread || renderEntries.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-[#444] text-[15px]">
         发送消息开始对话
@@ -295,7 +318,8 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   }>()
   let idx = 0
   for (const turn of turns) {
-    idx += turn.items.length - 1
+    const turnEntryCount = renderEntries.filter((e) => e.turnId === turn.id).length
+    idx += turnEntryCount - 1
     if (turn.status === 'completed' || turn.status === 'error') {
       turnEndIndices.add(idx)
       const turnNum = parseInt(turn.id, 10)
@@ -326,7 +350,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   // ---- Render single item (with optional turn-end diff panel) ----
 
   function renderItem(index: number) {
-    const entry = allItems[index]
+    const entry = renderEntries[index]
     if (!entry) return null
     const isLastInTurn = turnEndIndices.has(index)
     const cbs = turnRollbackCallbacks.get(entry.turnId)
@@ -345,6 +369,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
             callIdToToolName={callIdToToolName}
             onRollbackHere={isUserMsg && cbs ? cbs.onRollbackHere : undefined}
             onForkFromHere={isUserMsg && cbs ? cbs.onForkFromHere : undefined}
+            toolResult={entry.toolResult}
           />
         </div>
         {isLastInTurn && (
@@ -426,9 +451,9 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     <div className="flex-1 flex flex-col min-h-0">
       <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto select-text">
         <div className="pt-8 pb-4 max-w-[820px] mx-auto">
-          {allItems.map((_, i) => {
-            const entry = allItems[i]
-            return <div key={entry?.item.id ?? i}>{renderItem(i)}</div>
+          {renderEntries.map((entry, i) => {
+            const key = entry.item.id + (entry.toolResult ? '-' + entry.toolResult.id : '')
+            return <div key={key}>{renderItem(i)}</div>
           })}
         </div>
       </div>

@@ -47,9 +47,9 @@ export function bootstrapCheckpoint(
 
     const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
     const resolvedPath = resolve(base, rawPath);
-    const execId = payload.execId as string;
-    if (execId) {
-      pendingHash.set(execId, fileHash(resolvedPath));
+    const callId = payload.callId as string;
+    if (callId) {
+      pendingHash.set(callId, fileHash(resolvedPath));
     }
   }, { source: 'system' }));
 
@@ -71,10 +71,10 @@ export function bootstrapCheckpoint(
     const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
     const resolvedPath = resolve(base, rawPath);
 
-    const execId = payload.execId as string;
-    const hashBefore = execId ? (pendingHash.get(execId) ?? '') : '';
-    if (execId) {
-      pendingHash.delete(execId);
+    const callId = payload.callId as string;
+    const hashBefore = callId ? (pendingHash.get(callId) ?? '') : '';
+    if (callId) {
+      pendingHash.delete(callId);
     }
 
     const hashAfter = fileHash(resolvedPath);

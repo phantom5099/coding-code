@@ -37,7 +37,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         const decision = yield* decisionApproval.evaluate({
           tool: name,
           input: args as Record<string, unknown>,
-          context: { callId: opts?.callId },
+          callId: opts?.callId,
           sessionId: opts?.sessionId ?? 'default',
         });
 
@@ -81,15 +81,15 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           finalArgs = hookDecision.modifiedInput;
         }
 
-        // 3. Notification hook (观察型) — include a unique execution ID for pairing before/after
-        const execId = `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        // 3. Notification hook — use callId for consistent pairing
+        const callId = opts?.callId;
         yield* hooks.emit('tool.execute.before', {
           toolName: name,
           args: finalArgs,
           sessionId: opts?.sessionId,
           turnId: opts?.turnId,
           projectPath: opts?.projectPath,
-          execId,
+          callId,
         });
 
         const parsedArgs = yield* Effect.sync(() => tool.parameters.parse(finalArgs));
@@ -133,10 +133,10 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           sessionId: opts?.sessionId,
           turnId: opts?.turnId,
           projectPath: opts?.projectPath,
-          execId,
+          callId,
         });
 
-        const diffResult = getPendingDiff(execId);
+        const diffResult = getPendingDiff(callId ?? '');
         return { output: result, ...diffResult };
       }).pipe(
         Effect.tapError((error) =>

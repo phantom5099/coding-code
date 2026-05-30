@@ -4,6 +4,7 @@ import { useGlobalStore } from '../stores/global.store'
 import { API_BASE } from '../lib/api'
 import MessageStream from './MessageStream'
 import TodoPanel from './TodoPanel'
+import ApprovalPanel from './ApprovalPanel'
 
 // ─── ContextIndicator ──────────────────────────────────────────────────────
 
@@ -208,6 +209,7 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#111]">
       <MessageStream key={currentThreadId} threadId={currentThreadId} />
+      <ApprovalPanel threadId={currentThreadId} />
       <TodoPanel threadId={currentThreadId} />
       <div className="shrink-0">
         <InputBox threadId={currentThreadId} sendMessage={sendMessage} abort={abort} />

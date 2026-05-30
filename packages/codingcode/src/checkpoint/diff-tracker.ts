@@ -75,13 +75,13 @@ export function bootstrapDiffTracker(hooks: HookService): void {
 
     const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
     const resolvedPath = resolve(base, rawPath);
-    const execId = payload.execId as string;
-    if (execId) {
+    const callId = payload.callId as string;
+    if (callId) {
       try {
         const oldContent = readFileSync(resolvedPath, 'utf-8');
-        pendingContent.set(execId, oldContent);
+        pendingContent.set(callId, oldContent);
       } catch {
-        pendingContent.set(execId, '');
+        pendingContent.set(callId, '');
       }
     }
   }, { source: 'system' }));
@@ -99,17 +99,17 @@ export function bootstrapDiffTracker(hooks: HookService): void {
     const resolvedPath = resolve(base, rawPath);
     const relPath = relative(base, resolvedPath) || '.';
 
-    const execId = payload.execId as string;
-    const oldContent = execId ? (pendingContent.get(execId) ?? '') : '';
-    if (execId) pendingContent.delete(execId);
+    const callId = payload.callId as string;
+    const oldContent = callId ? (pendingContent.get(callId) ?? '') : '';
+    if (callId) pendingContent.delete(callId);
 
     let newContent = '';
     try { newContent = readFileSync(resolvedPath, 'utf-8'); } catch {}
 
     const result = computeDiff(oldContent, newContent);
 
-    if (execId && (result.insertions > 0 || result.deletions > 0)) {
-      pendingDiff.set(execId, {
+    if (callId && (result.insertions > 0 || result.deletions > 0)) {
+      pendingDiff.set(callId, {
         filePath: relPath,
         diff: result.diff,
         insertions: result.insertions,
@@ -119,8 +119,8 @@ export function bootstrapDiffTracker(hooks: HookService): void {
   }, { source: 'system' }));
 }
 
-export function getPendingDiff(execId: string): DiffResult | undefined {
-  const diff = pendingDiff.get(execId);
-  pendingDiff.delete(execId);
+export function getPendingDiff(callId: string): DiffResult | undefined {
+  const diff = pendingDiff.get(callId);
+  pendingDiff.delete(callId);
   return diff;
 }

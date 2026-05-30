@@ -101,7 +101,7 @@ export function userConfirmAsync(
   callId?: string,
 ): Effect.Effect<ConfirmResult> {
   return Effect.gen(function* () {
-    const id = callId ?? `apr_${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = callId!;
 
     yield* waitSvc.emitApprovalRequest(sessionId, id, tool, args);
 

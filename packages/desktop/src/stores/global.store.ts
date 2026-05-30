@@ -348,8 +348,9 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
               (i) => i.type === 'tool_call' && i.id === chunk.callId
             )
             if (callIdx >= 0) {
-              (t.items[callIdx] as any).status = 'approved'
-              break
+              ;(t.items[callIdx] as any).status = 'approved'
+              t.items.splice(callIdx + 1, 0, chunk)
+              return
             }
           }
           turn.items.push(chunk)

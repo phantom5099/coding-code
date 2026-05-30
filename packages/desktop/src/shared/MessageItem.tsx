@@ -3,6 +3,7 @@ import type { Item } from '@shared/types'
 import CodeBlock from './CodeBlock'
 import ToolCallCard from './ToolCallCard'
 import DiffBlock from './DiffBlock'
+import ToolSummary from './ToolSummary'
 
 const TOOL_ICONS: Record<string, string> = {
   shell: '⚡',
@@ -20,6 +21,7 @@ interface MessageItemProps {
   callIdToToolName?: Record<string, string>
   onRollbackHere?: () => void
   onForkFromHere?: () => void
+  toolResult?: Item & { type: 'tool_result' }
 }
 
 function parseMarkdown(text: string): React.ReactNode {
@@ -44,7 +46,7 @@ function parseMarkdown(text: string): React.ReactNode {
   return <>{blocks}</>
 }
 
-export default function MessageItem({ item, threadId, onApprove, onReject, callIdToToolName, onRollbackHere, onForkFromHere }: MessageItemProps) {
+export default function MessageItem({ item, threadId, onApprove, onReject, callIdToToolName, onRollbackHere, onForkFromHere, toolResult }: MessageItemProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false)
   const [resultOpen, setResultOpen] = useState(false)
   const [rollbackMenuOpen, setRollbackMenuOpen] = useState(false)
@@ -152,58 +154,43 @@ export default function MessageItem({ item, threadId, onApprove, onReject, callI
   }
 
   if (item.type === 'tool_call') {
+    if (item.status === 'pending') {
+      const icon = TOOL_ICONS[item.name] ?? '🔧'
+      const a = item.args as Record<string, unknown>
+      const path = typeof a.path === 'string' ? a.path : typeof a.file_path === 'string' ? a.file_path : ''
+      const cmd = typeof a.command === 'string' ? a.command : ''
+      const label = path || cmd || item.name
+      return (
+        <div className="mb-2 flex items-center gap-1.5 text-[13px] text-[#777]">
+          <span>{icon}</span>
+          <span className="font-mono text-[#dcdcaa]">{label}</span>
+          <span className="text-[#666]">等待审批</span>
+        </div>
+      )
+    }
+
+    if (toolResult) {
+      return <ToolSummary toolCall={item} toolResult={toolResult} />
+    }
+
+    const icon = TOOL_ICONS[item.name] ?? '🔧'
+    const isRejected = item.status === 'rejected'
     return (
-      <ToolCallCard
-        item={item}
-        threadId={threadId}
-        onApprove={onApprove}
-        onReject={onReject}
-      />
+      <div className="mb-2 flex items-center gap-1.5 text-[13px]">
+        <span>{icon}</span>
+        <span className={`font-mono ${isRejected ? 'text-[#666] line-through' : 'text-[#dcdcaa]'}`}>{item.name}</span>
+        {item.status === 'running' && (
+          <span className="text-[#569cd6] flex items-center gap-1">
+            <span className="inline-block animate-spin">⟳</span> 执行中
+          </span>
+        )}
+        {isRejected && <span className="text-[#666]">✗ 已拒绝</span>}
+      </div>
     )
   }
 
   if (item.type === 'tool_result') {
-    const isError = item.exitCode !== undefined && item.exitCode !== 0
-    const toolName = item.name ?? callIdToToolName?.[item.callId]
-    const isFileTool = toolName === 'write_file' || toolName === 'edit_file'
-    
-    let label: string
-    if (isError) {
-      label = `✗ 退出码 ${item.exitCode}`
-    } else if (isFileTool && item.filePath) {
-      label = item.insertions && !item.deletions
-        ? `成功创建 ${item.filePath}`
-        : `成功编辑 ${item.filePath}`
-    } else {
-      label = '✓ 执行结果'
-    }
-
-    return (
-      <div className="mb-3">
-        <button
-          type="button"
-          onClick={() => setResultOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity"
-        >
-          <span className={`transition-transform text-[10px] text-[#555] ${resultOpen ? 'rotate-90' : ''}`}>▶</span>
-          <span>{isError ? '❌' : '✅'}</span>
-          {toolName && <span className="font-mono text-[#dcdcaa]">{toolName}</span>}
-          <span className={isError ? 'text-[#f44747]' : 'text-[#4ec9b0]'}>{label}</span>
-          {isFileTool && item.diff && (
-            <span className="text-[#555] text-xs">+{item.insertions} -{item.deletions}</span>
-          )}
-        </button>
-        {resultOpen && isFileTool && item.diff ? (
-          <div className="mt-1.5">
-            <DiffBlock diff={item.diff} />
-          </div>
-        ) : resultOpen ? (
-          <div className="mt-1.5">
-            <CodeBlock code={item.output.slice(0, 4000)} />
-          </div>
-        ) : null}
-      </div>
-    )
+    return null
   }
 
   if (item.type === 'error') {
