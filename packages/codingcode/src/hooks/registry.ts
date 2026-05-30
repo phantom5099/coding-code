@@ -1,6 +1,9 @@
 import { Effect } from 'effect';
 import { loadHookConfigs } from './config';
 import { executeHookCommand, executeDecisionHookCommand, isHookRuntimeEnabled } from './executor';
+import { createLogger } from '@codingcode/infra';
+
+const logger = createLogger();
 
 export type HookPoint =
   | 'tool.execute.before' | 'tool.execute.after' | 'tool.execute.error'
@@ -108,7 +111,7 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
               try {
                 await (entry.handler as ObserverHandler)(payload);
               } catch (e) {
-                console.error(`hook emit error [${point}]:`, e);
+                logger.error(`hook emit error [${point}]:`, e);
               }
             }
           }
@@ -126,7 +129,7 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
                 const result = await (entry.handler as DecisionHandler)(payload);
                 if (result != null) return result;
               } catch (e) {
-                console.error(`hook emitDecision error [${point}]:`, e);
+                logger.error(`hook emitDecision error [${point}]:`, e);
               }
             }
           }

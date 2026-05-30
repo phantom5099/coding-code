@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useGlobalStore, type ModelEntry } from '../stores/global.store'
 import { streamAgentMessage, type StreamEvent } from '../lib/agent-stream'
+import { ApiError } from '../lib/api'
 import { listModels, listSessions, getSessionHistory, createSession as createServerSession, deleteSession, sendApprovalResponse, getCheckpointDiff, revertCheckpointFile, revertCheckpointFiles, revertCheckpointAgentFiles, revertCheckpointAllFiles, previewRollbackDiff, rollbackCodeToTurn, rollbackContext, rollbackBothToTurn, undoLastCodeRollback, getRollbackState, forkSession } from '../lib/core-api'
 import type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff, SessionRollbackState } from '../lib/core-api'
 import type { Item, Turn, Project } from '@shared/types'
@@ -60,7 +61,7 @@ export function useAgent() {
     listModels().then((data) => {
       if (data.models) setModels(data.models)
       if (data.activeId) setModel(data.activeId)
-    }).catch(() => {})
+    }).catch((e) => { console.error('Failed to load models:', e) })
 
     // Load sessions for current project from HTTP
     const currentCwd = workspace.rootPath
@@ -76,7 +77,7 @@ export function useAgent() {
           updatedAt: new Date(s.updatedAt).getTime(),
         }))
         loadThreads(threads)
-      }).catch(() => {})
+      }).catch((e) => { console.error('Failed to load sessions:', e) })
     }
 
     // Restore persisted projects, approval policy, model - already done by persist middleware
@@ -91,7 +92,7 @@ export function useAgent() {
       if (turns && turns.length > 0) {
         setThreadTurns(currentThreadId, turns as any)
       }
-    }).catch(() => {})
+    }).catch((e) => { console.error('Failed to load history:', e) })
   }, [currentThreadId, setThreadTurns])
 
   const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string, currentTurnId: string): Item | null => {
@@ -181,6 +182,8 @@ export function useAgent() {
 
         completeTurn(resolvedThreadId, turnId, 'completed')
       } catch (err: any) {
+        const msg = err instanceof ApiError ? err.body?.message ?? err.message : String(err)
+        applyChunk(resolvedThreadId, turnId, { id: randomId(), type: 'error', message: msg })
         completeTurn(resolvedThreadId, turnId, 'error')
       } finally {
         abortControllers.current.delete(resolvedThreadId)
@@ -199,17 +202,29 @@ export function useAgent() {
 
   const approveTool = useCallback(async (threadId: string, callId: string) => {
     updateToolCallStatus(threadId, callId, 'running')
-    await sendApprovalResponse(threadId, callId, 'allow').catch(() => {})
+    try {
+      await sendApprovalResponse(threadId, callId, 'allow')
+    } catch (e) {
+      console.error('Failed to approve tool:', e)
+    }
   }, [updateToolCallStatus])
 
   const rejectTool = useCallback(async (threadId: string, callId: string) => {
     updateToolCallStatus(threadId, callId, 'rejected')
-    await sendApprovalResponse(threadId, callId, 'deny').catch(() => {})
+    try {
+      await sendApprovalResponse(threadId, callId, 'deny')
+    } catch (e) {
+      console.error('Failed to reject tool:', e)
+    }
   }, [updateToolCallStatus])
 
   const deleteThread = useCallback(
     async (threadId: string) => {
-      await deleteSession(threadId).catch(() => {})
+      try {
+        await deleteSession(threadId)
+      } catch (e) {
+        console.error('Failed to delete session:', e)
+      }
       const currentCwd = useGlobalStore.getState().workspace.rootPath
       if (currentCwd) {
         const sessions = await listSessions(currentCwd).catch(() => [])
@@ -252,9 +267,7 @@ export function useAgent() {
     const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
     const parsed = turnId != null ? parseInt(turnId, 10) : undefined
     const numericTurnId = parsed != null && !isNaN(parsed) ? parsed : undefined
-    console.log('[loadCheckpointDiff] threadId=', threadId, 'turnId=', turnId, 'numericTurnId=', numericTurnId, 'cwd=', cwd)
     const diff = await getCheckpointDiff(threadId, cwd, numericTurnId)
-    console.log('[loadCheckpointDiff] diff result:', diff)
     setCheckpointDiff(threadId, String(diff.turnId), diff)
     // Map checkpoint turnId to the latest completed UI turn (only when caller didn't specify a turn)
     if (diff.turnId > 0 && numericTurnId == null) {
@@ -263,7 +276,6 @@ export function useAgent() {
         const completed = thread.turns.filter((t) => t.status === 'completed')
         const last = completed[completed.length - 1]
         if (last && last.id !== String(diff.turnId)) {
-          console.log('[loadCheckpointDiff] mapping', diff.turnId, '->', last.id)
           setTurnCheckpointMapping(threadId, diff.turnId, last.id)
         }
       }

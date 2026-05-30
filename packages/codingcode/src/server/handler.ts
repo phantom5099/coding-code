@@ -1,21 +1,6 @@
-import { Effect } from 'effect';
 import type { Context } from 'hono';
-import { AppLayer } from '../layer.js';
 import { registerEmitter, unregisterEmitter } from '../approval/async-confirm.js';
 import type { SseEvent } from './adapter.js';
-
-type EffectProgram = Effect.Effect<any, any, any>;
-
-export function handler(
-  program: EffectProgram,
-): (c: Context) => Promise<Response> {
-  return async (c: Context) => {
-    const result = await Effect.runPromise(
-      program.pipe(Effect.provide(AppLayer) as any),
-    );
-    return c.json(result);
-  };
-}
 
 export function sseHandler(
   createGenerator: () => AsyncGenerator<SseEvent, void, unknown>,

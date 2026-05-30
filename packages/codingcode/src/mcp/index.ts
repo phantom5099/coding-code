@@ -5,6 +5,9 @@ import { McpClient, McpError } from './client.js';
 import type { McpServerConfig, McpStatus } from './types.js';
 import type { ToolDefinition, ToolExecCtx } from '../tools/types.js';
 import { ToolService } from '../tools/registry.js';
+import { createLogger } from '@codingcode/infra';
+
+const logger = createLogger();
 
 export { McpError, McpClient };
 export type { McpStatus };
@@ -41,7 +44,7 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
           return { client, mcpTools };
         }).pipe(
           Effect.catchAll((err) => {
-            console.error(`[MCP] Failed to connect to '${cfg.name}': ${String(err)}`);
+            logger.error(`[MCP] Failed to connect to '${cfg.name}': ${String(err)}`);
             return Effect.succeed(undefined);
           }),
         );
@@ -115,7 +118,7 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
           for (const name of names) {
             const cfg = configMap.get(name);
             if (!cfg) {
-              console.warn(`[MCP] Server '${name}' not found in mcp.yaml, skipping`);
+              logger.warn(`[MCP] Server '${name}' not found in mcp.yaml, skipping`);
               continue;
             }
             yield* doConnect(cfg, true);

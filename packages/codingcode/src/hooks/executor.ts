@@ -25,7 +25,7 @@ export async function executeHookCommand(
     child.on('error', (err) => { clearTimeout(timer); reject(err); });
     child.stdin!.write(JSON.stringify(payload));
     child.stdin!.end();
-  }).catch(() => {});
+  });
 }
 
 export async function executeDecisionHookCommand(

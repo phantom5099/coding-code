@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { Effect } from 'effect';
-import { AppLayer } from '../../layer.js';
 import { McpService } from '../../mcp/index.js';
 import { SkillService } from '../../skills/index.js';
 import { SubagentRegistry } from '../../subagent/registry.js';
@@ -12,10 +11,7 @@ import type { SubagentProfile } from '../../subagent/registry.js';
 import type { UserHookConfig } from '../../hooks/config.js';
 import * as settingsService from '../../settings/service.js';
 import { AlreadyExistsError, NotFoundError } from '../../settings/service.js';
-
-function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
-}
+import { runWithLayer, errorResponse } from '../util.js';
 
 export const settingsRouter = new Hono();
 
@@ -151,13 +147,17 @@ settingsRouter.post('/hooks/:name/disabled', async (c) => {
 
 // ---- MCP ----
 settingsRouter.get('/mcp', async (c) => {
-  const status = await runWithLayer(
+  const result = await runWithLayer(
     Effect.gen(function* () {
       const mcp = yield* McpService;
       return yield* mcp.status();
     }),
   );
-  return c.json(status);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 settingsRouter.post('/mcp', async (c) => {
@@ -196,55 +196,75 @@ settingsRouter.delete('/mcp/:name', async (c) => {
 settingsRouter.post('/mcp/:name/disabled', async (c) => {
   const name = c.req.param('name');
   const body = await c.req.json() as { disabled: boolean };
-  await runWithLayer(
+  const result = await runWithLayer(
     Effect.gen(function* () {
       const mcp = yield* McpService;
       return yield* (body.disabled ? mcp.disable(name) : mcp.enable(name));
     }),
   );
+  if (!result.ok) {
+    const { status, body: resp } = errorResponse(result.error);
+    return c.json(resp, status as any);
+  }
   return c.json({ ok: true });
 });
 
 // ---- Skills ----
 settingsRouter.get('/skills', async (c) => {
-  const skills = await runWithLayer(
+  const result = await runWithLayer(
     Effect.gen(function* () {
       const skill = yield* SkillService;
       return yield* skill.listWithStatus();
     }),
   );
-  return c.json(skills);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json(result.value);
 });
 
 settingsRouter.post('/skills', async (c) => {
   const body = await c.req.json() as { name: string; enabled: boolean };
-  await runWithLayer(
+  const result = await runWithLayer(
     Effect.gen(function* () {
       const skill = yield* SkillService;
       return yield* (body.enabled ? skill.enableSkill(body.name) : skill.disableSkill(body.name));
     }),
   );
+  if (!result.ok) {
+    const { status, body: resp } = errorResponse(result.error);
+    return c.json(resp, status as any);
+  }
   return c.json({ ok: true });
 });
 
 // ---- Subagent enabled ----
 settingsRouter.get('/subagent/enabled', async (c) => {
-  const enabled = await runWithLayer(
+  const result = await runWithLayer(
     Effect.gen(function* () {
       const registry = yield* SubagentRegistry;
       return registry.isEnabled();
     }),
   );
-  return c.json({ enabled });
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  return c.json({ enabled: result.value });
 });
 
 settingsRouter.post('/subagent/enabled', async (c) => {
   const body = await c.req.json() as { enabled: boolean };
-  await runWithLayer(
+  const result = await runWithLayer(
     Effect.gen(function* () {
       const registry = yield* SubagentRegistry;
       registry.setEnabled(body.enabled);
     }),
   );
+  if (!result.ok) {
+    const { status, body: resp } = errorResponse(result.error);
+    return c.json(resp, status as any);
+  }
   return c.json({ ok: true });
 });

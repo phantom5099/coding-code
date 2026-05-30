@@ -98,7 +98,7 @@ export default function ProjectStrip() {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   const handleDelete = async (threadId: string) => {
-    await fetch(`${API_BASE}/api/sessions/${threadId}`, { method: 'DELETE' }).catch(() => {})
+    await api(`/api/sessions/${threadId}`, { method: 'DELETE' }).catch((e) => { console.error('Failed to delete session:', e) })
     const store = useGlobalStore.getState()
     const rootPath = store.workspace.rootPath
     if (rootPath) {

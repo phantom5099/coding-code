@@ -18,6 +18,9 @@ import { HookService } from '../hooks/registry.js';
 import { SkillService } from '../skills/index.js';
 import { McpService } from '../mcp/index.js';
 import { loadMemoryForPrompt, flushSessionToMemory } from '../memory/index.js';
+import { createLogger } from '@codingcode/infra';
+
+const logger = createLogger();
 
 export const sendMessage = (
   sessionId: string | undefined,
@@ -185,7 +188,7 @@ export async function* runReActLoop(
         await Effect.runPromise(hooks.emit('agent.turn.end', {
           sessionId, turnId: state.currentTurnId, status: 'aborted'
         }));
-        flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
+        flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
         return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
       }
 
@@ -254,7 +257,7 @@ export async function* runReActLoop(
             await Effect.runPromise(hooks.emit('agent.turn.end', {
               sessionId, turnId: state.currentTurnId, status: 'error'
             }));
-            flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
+            flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
             return Result.err(new AgentError('STOP_LOOP', 'max stop continuations exceeded'));
           }
           stopContinuations++;
@@ -327,7 +330,7 @@ export async function* runReActLoop(
         await Effect.runPromise(hooks.emit('agent.turn.end', {
           sessionId, turnId: state.currentTurnId, status: 'aborted'
         }));
-        flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
+        flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
         return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
       }
 
@@ -340,7 +343,7 @@ export async function* runReActLoop(
     await Effect.runPromise(ctx.appendTurnEnd(state.sessionId, state.projectPath, llm as any));
 
     // Fire-and-forget memory flush
-    flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
+    flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
 
     if (lastResult) return lastResult;
 
@@ -349,7 +352,7 @@ export async function* runReActLoop(
     await Effect.runPromise(hooks.emit('agent.turn.end', {
       sessionId, turnId: state.currentTurnId, status: 'maxSteps'
     }));
-    flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
+    flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
     return Result.err(AgentError.maxStepsReached(maxSteps));
   }
 
@@ -357,6 +360,6 @@ export async function* runReActLoop(
   await Effect.runPromise(hooks.emit('agent.turn.end', {
     sessionId, turnId: state.currentTurnId, status: 'maxSteps'
   }));
-  flushSessionToMemory(state.sessionId, llm).catch(e => console.error('memory flush failed:', e));
+  flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
   return Result.err(AgentError.maxStepsReached(maxSteps));
 }

@@ -7,6 +7,7 @@ import { loadConfig, ensureUserConfig } from '../../infra/src/config.js';
 import { getWorkspaceCwd, initWorkspace, parseWorkspaceArgs } from './core/workspace.js';
 import { bootstrapApplication } from './orchestration/bootstrap.js';
 import { findAvailablePort } from './server/port-discovery.js';
+import { AgentError } from './core/error.js';
 
 async function main() {
   const installRoot = process.cwd();
@@ -53,10 +54,25 @@ async function main() {
     }
   });
 
-  await Effect.runPromise(program.pipe(Effect.provide(AppLayer)) as Effect.Effect<any, any, never>);
+  const result = await Effect.runPromise(
+    program.pipe(
+      Effect.match({
+        onSuccess: () => ({ type: 'ok' as const }),
+        onFailure: (err: unknown) => ({ type: 'err' as const, err }),
+      }),
+      Effect.provide(AppLayer),
+    ),
+  );
+
+  if (result.type === 'err') {
+    const err = result.err;
+    if (err instanceof AgentError) {
+      console.error(`Error [${err.code}]: ${err.message}`);
+      process.exit(err.code === 'CONFIG_MISSING' ? 78 : 64);
+    }
+    console.error('Internal error:', err);
+    process.exit(1);
+  }
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+main();

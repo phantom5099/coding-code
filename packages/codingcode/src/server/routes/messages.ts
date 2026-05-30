@@ -10,18 +10,22 @@ import { resolveSessionDir } from '../../session/store.js';
 import { getPermissionMode } from '../../session/store.js';
 import { join } from 'path';
 import type { PermissionMode } from '../../approval/types.js';
+import { getLLMClient } from '../../llm/factory.js';
+import { runWithLayer, errorResponse } from '../util.js';
 
 export const messagesRouter = new Hono();
-
-function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
-}
 
 messagesRouter.post('/sessions/:id/messages', async (c) => {
   let sessionId = c.req.param('id');
   const { input, cwd } = await c.req.json<{ input: string; cwd: string }>();
   const normalizedCwd = resolveWorkspaceCwd(cwd);
-  const llm = c.get('llm');
+
+  const llmResult = await getLLMClient();
+  if (!llmResult.ok) {
+    const { status, body } = errorResponse(llmResult.error);
+    return c.json(body, status as any);
+  }
+  const llm = llmResult.value;
 
   // Read session permissionMode if session exists
   let approvalOverride: any = undefined;
@@ -50,7 +54,12 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
     { signal: c.req.raw.signal },
   );
 
-  const { stream, sessionId: actualSid } = await runWithLayer(program);
+  const result = await runWithLayer(program);
+  if (!result.ok) {
+    const { status, body } = errorResponse(result.error);
+    return c.json(body, status as any);
+  }
+  const { stream, sessionId: actualSid } = result.value;
   sessionId = actualSid;
 
   // If newly created session, fork approval with default mode
