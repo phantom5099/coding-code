@@ -4,6 +4,10 @@ import { ApprovalWaitService } from '../../approval/async-confirm';
 import { AppLayer } from '../../layer';
 import { parseApprovalResponse } from '../../approval/response';
 
+function runWithLayer<T>(eff: Effect.Effect<T, unknown, any>): Promise<T> {
+  return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
+}
+
 const router = new Hono();
 
 router.post('/sessions/:sessionId/approval/:id', async (c) => {
@@ -11,11 +15,11 @@ router.post('/sessions/:sessionId/approval/:id', async (c) => {
   const sessionId = c.req.param('sessionId');
   const { response } = await c.req.json<{ response: string }>();
 
-  const result = await Effect.runPromise(
+  const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* ApprovalWaitService;
       return yield* svc.resolveConfirm(id, sessionId, parseApprovalResponse(response));
-    }).pipe(Effect.provide(AppLayer) as any),
+    }),
   );
 
   return c.json({ ok: result });

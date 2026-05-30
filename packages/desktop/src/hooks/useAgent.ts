@@ -2,9 +2,6 @@ import { useEffect, useCallback, useRef } from 'react'
 import { useGlobalStore, type ModelEntry } from '../stores/global.store'
 import { streamAgentMessage, type StreamEvent } from '../lib/agent-stream'
 import { ApiError } from '../lib/api'
-import { createLogger } from '@codingcode/infra'
-
-const logger = createLogger()
 import { listModels, listSessions, getSessionHistory, createSession as createServerSession, deleteSession, sendApprovalResponse, getCheckpointDiff, revertCheckpointFile, revertCheckpointFiles, revertCheckpointAgentFiles, revertCheckpointAllFiles, previewRollbackDiff, rollbackCodeToTurn, rollbackContext, rollbackBothToTurn, undoLastCodeRollback, getRollbackState, forkSession } from '../lib/core-api'
 import type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff, SessionRollbackState } from '../lib/core-api'
 import type { Item, Turn, Project } from '@shared/types'
@@ -64,7 +61,7 @@ export function useAgent() {
     listModels().then((data) => {
       if (data.models) setModels(data.models)
       if (data.activeId) setModel(data.activeId)
-    }).catch((e) => { logger.error('Failed to load models:', e) })
+    }).catch((e) => { console.error('Failed to load models:', e) })
 
     // Load sessions for current project from HTTP
     const currentCwd = workspace.rootPath
@@ -80,7 +77,7 @@ export function useAgent() {
           updatedAt: new Date(s.updatedAt).getTime(),
         }))
         loadThreads(threads)
-      }).catch((e) => { logger.error('Failed to load sessions:', e) })
+      }).catch((e) => { console.error('Failed to load sessions:', e) })
     }
 
     // Restore persisted projects, approval policy, model - already done by persist middleware
@@ -95,7 +92,7 @@ export function useAgent() {
       if (turns && turns.length > 0) {
         setThreadTurns(currentThreadId, turns as any)
       }
-    }).catch((e) => { logger.error('Failed to load history:', e) })
+    }).catch((e) => { console.error('Failed to load history:', e) })
   }, [currentThreadId, setThreadTurns])
 
   const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string, currentTurnId: string): Item | null => {
@@ -144,7 +141,7 @@ export function useAgent() {
           const data = await createServerSession(effectiveCwd)
           resolvedThreadId = data.sessionId
         } catch (e) {
-          logger.error('Failed to create session:', e)
+          console.error('Failed to create session:', e)
           return
         }
       }
@@ -205,17 +202,29 @@ export function useAgent() {
 
   const approveTool = useCallback(async (threadId: string, callId: string) => {
     updateToolCallStatus(threadId, callId, 'running')
-    await sendApprovalResponse(threadId, callId, 'allow').catch(() => {})
+    try {
+      await sendApprovalResponse(threadId, callId, 'allow')
+    } catch (e) {
+      console.error('Failed to approve tool:', e)
+    }
   }, [updateToolCallStatus])
 
   const rejectTool = useCallback(async (threadId: string, callId: string) => {
     updateToolCallStatus(threadId, callId, 'rejected')
-    await sendApprovalResponse(threadId, callId, 'deny').catch(() => {})
+    try {
+      await sendApprovalResponse(threadId, callId, 'deny')
+    } catch (e) {
+      console.error('Failed to reject tool:', e)
+    }
   }, [updateToolCallStatus])
 
   const deleteThread = useCallback(
     async (threadId: string) => {
-      await deleteSession(threadId).catch(() => {})
+      try {
+        await deleteSession(threadId)
+      } catch (e) {
+        console.error('Failed to delete session:', e)
+      }
       const currentCwd = useGlobalStore.getState().workspace.rootPath
       if (currentCwd) {
         const sessions = await listSessions(currentCwd).catch(() => [])

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useGlobalStore } from '../stores/global.store'
-import { API_BASE } from '../lib/api'
+import { API_BASE, api } from '../lib/api'
 import MessageStream from './MessageStream'
 import TodoPanel from './TodoPanel'
 import ApprovalPanel from './ApprovalPanel'
@@ -18,7 +18,7 @@ function ContextIndicator({ threadId }: { threadId: string }) {
   const circ = 2 * Math.PI * r
   return (
     <button type="button"
-      onClick={async () => { await fetch(`${API_BASE}/api/sessions/${threadId}/compact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: '' }) }).catch(() => {}); setContextUsage(null) }}
+      onClick={async () => { await api(`/api/sessions/${threadId}/compact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: '' }) }).catch((e) => { console.error('Failed to compact session:', e) }); setContextUsage(null) }}
       title={`上下文: ${Math.round(pct * 100)}% (${contextUsage.used.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens)\n点击压缩`}
       className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition-opacity">
       <svg width="18" height="18" viewBox="0 0 18 18">
@@ -73,7 +73,7 @@ function ModelSelector() {
               <div key={provider}>
                 <div className="px-3 py-1.5 text-[11px] font-semibold text-[#444] uppercase tracking-wider">{provider}</div>
                 {providerModels.map((m) => (
-                  <button type="button" key={m.id} onClick={async () => { setModel(m.id); setOpen(false); await fetch(`${API_BASE}/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: m.id }) }).catch(() => {}) }}
+                  <button type="button" key={m.id} onClick={async () => { setModel(m.id); setOpen(false); await api(`/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: m.id }) }).catch((e) => { console.error('Failed to switch model:', e) }) }}
                     className={`w-full text-left px-3 py-2 text-[14px] hover:bg-[#094771] transition-colors flex items-center gap-2 ${m.id === model ? 'text-[#4ec9b0]' : 'text-[#ccc]'}`}>
                     <span className="w-4 shrink-0 text-center text-[12px]">{m.id === model ? '✓' : ''}</span>
                     <span className="flex-1">{m.name}</span>

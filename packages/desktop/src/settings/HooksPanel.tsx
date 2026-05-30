@@ -288,7 +288,7 @@ export default function HooksPanel() {
                     </svg>
                   </button>
                   <Toggle checked={h.enabled} onChange={(v) => {
-                    setHookDisabled(rootPath ?? undefined, h.name, !v).catch(() => {})
+                    setHookDisabled(rootPath ?? undefined, h.name, !v).catch((e) => { console.error('Failed to set hook disabled:', e) })
                     setHooks(prev => prev.map(hh => hh.name === h.name ? { ...hh, enabled: v } : hh))
                   }} />
                 </div>

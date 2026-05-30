@@ -4,7 +4,7 @@ import { AppLayer } from '../layer.js';
 import { registerEmitter, unregisterEmitter } from '../approval/async-confirm.js';
 import type { SseEvent } from './adapter.js';
 
-type EffectProgram = Effect.Effect<any, any, any>;
+type EffectProgram = Effect.Effect<unknown, unknown, any>;
 
 export function handler(
   program: EffectProgram,
