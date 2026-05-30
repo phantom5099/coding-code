@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { useGlobalStore } from '../stores/global.store'
 import MessageItem from '../shared/MessageItem'
+import UnifiedDiffView from '../shared/UnifiedDiffView'
 import type { Item } from '@shared/types'
 import { useAgent } from '../hooks/useAgent'
 
@@ -276,9 +277,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                 </div>
                 {isExpanded && (
                   <div className="px-4 pb-2">
-                    <pre className="text-[11px] bg-[#111] p-3 rounded text-[#aaa] max-h-[200px] overflow-auto whitespace-pre-wrap">
-                      {f.diff || '无差异'}
-                    </pre>
+                    <UnifiedDiffView diff={f.diff} />
                   </div>
                 )}
               </div>

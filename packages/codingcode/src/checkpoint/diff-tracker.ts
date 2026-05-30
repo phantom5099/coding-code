@@ -1,9 +1,3 @@
-import { readFileSync } from 'fs';
-import { relative, resolve } from 'path';
-import { Effect } from 'effect';
-import type { HookService } from '../hooks/registry.js';
-import { getWorkspaceCwd } from '../core/workspace.js';
-
 export interface DiffResult {
   filePath: string;
   diff: string;
@@ -11,20 +5,29 @@ export interface DiffResult {
   deletions: number;
 }
 
-const pendingContent = new Map<string, string>();
-const pendingDiff = new Map<string, DiffResult>();
+export function computeDiff(oldContent: string, newContent: string): { diff: string; insertions: number; deletions: number } {
+  // New file shortcut: no LCS needed, everything is an insertion
+  if (oldContent === '') {
+    const newLines = newContent.split('\n');
+    const diffLines: string[] = [];
+    let insertions = 0;
+    for (const line of newLines) {
+      diffLines.push(`+${line}`);
+      insertions++;
+    }
+    return { diff: diffLines.join('\n'), insertions, deletions: 0 };
+  }
 
-function computeDiff(oldContent: string, newContent: string): { diff: string; insertions: number; deletions: number } {
   const oldLines = oldContent.split('\n');
   const newLines = newContent.split('\n');
-  
+
   // Simple LCS-based diff
   const m = oldLines.length;
   const n = newLines.length;
-  
+
   // Build LCS table
   const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-  
+
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       if (oldLines[i - 1] === newLines[j - 1]) {
@@ -34,12 +37,12 @@ function computeDiff(oldContent: string, newContent: string): { diff: string; in
       }
     }
   }
-  
+
   // Backtrack to find diff
   const diffLines: string[] = [];
   let i = m, j = n;
   let insertions = 0, deletions = 0;
-  
+
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
       diffLines.unshift(` ${oldLines[i - 1]}`);
@@ -55,7 +58,7 @@ function computeDiff(oldContent: string, newContent: string): { diff: string; in
       i--;
     }
   }
-  
+
   return {
     diff: diffLines.join('\n'),
     insertions,
@@ -63,64 +66,30 @@ function computeDiff(oldContent: string, newContent: string): { diff: string; in
   };
 }
 
-export function bootstrapDiffTracker(hooks: HookService): void {
-  // before: record old file content
-  Effect.runSync(hooks.register('tool.execute.before', async (payload) => {
-    const toolName = payload.toolName as string;
-    if (toolName !== 'edit_file' && toolName !== 'write_file') return;
-
-    const args = payload.args as Record<string, unknown> | undefined;
-    const rawPath = args?.path as string | undefined;
-    if (!rawPath) return;
-
-    const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
-    const resolvedPath = resolve(base, rawPath);
-    const callId = payload.callId as string;
-    if (callId) {
-      try {
-        const oldContent = readFileSync(resolvedPath, 'utf-8');
-        pendingContent.set(callId, oldContent);
-      } catch {
-        pendingContent.set(callId, '');
-      }
-    }
-  }, { source: 'system' }));
-
-  // after: compute diff
-  Effect.runSync(hooks.register('tool.execute.after', async (payload) => {
-    const toolName = payload.toolName as string;
-    if (toolName !== 'edit_file' && toolName !== 'write_file') return;
-
-    const args = payload.args as Record<string, unknown> | undefined;
-    const rawPath = args?.path as string | undefined;
-    if (!rawPath) return;
-
-    const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
-    const resolvedPath = resolve(base, rawPath);
-    const relPath = relative(base, resolvedPath) || '.';
-
-    const callId = payload.callId as string;
-    const oldContent = callId ? (pendingContent.get(callId) ?? '') : '';
-    if (callId) pendingContent.delete(callId);
-
-    let newContent = '';
-    try { newContent = readFileSync(resolvedPath, 'utf-8'); } catch {}
-
-    const result = computeDiff(oldContent, newContent);
-
-    if (callId && (result.insertions > 0 || result.deletions > 0)) {
-      pendingDiff.set(callId, {
-        filePath: relPath,
-        diff: result.diff,
-        insertions: result.insertions,
-        deletions: result.deletions,
-      });
-    }
-  }, { source: 'system' }));
-}
-
-export function getPendingDiff(callId: string): DiffResult | undefined {
-  const diff = pendingDiff.get(callId);
-  pendingDiff.delete(callId);
-  return diff;
+export function wrapUnifiedDiff(
+  relPath: string,
+  oldContent: string,
+  diffBody: string,
+  insertions: number,
+  deletions: number,
+): DiffResult {
+  if (insertions === 0 && deletions === 0) {
+    return { filePath: relPath, diff: '', insertions: 0, deletions: 0 };
+  }
+  const isNewFile = oldContent === '';
+  const oldLines = oldContent.split('\n');
+  const newLines = diffBody.split('\n').filter((l) => l.startsWith('+') || l.startsWith(' ')).map((l) => l.slice(1));
+  const headerLines = [
+    `diff --git a/${relPath} b/${relPath}`,
+    ...(isNewFile ? ['new file mode 100644'] : []),
+    isNewFile ? '--- /dev/null' : `--- a/${relPath}`,
+    `+++ b/${relPath}`,
+    `@@ -${isNewFile ? 0 : 1},${isNewFile ? 0 : oldLines.length} +1,${newLines.length} @@`,
+  ];
+  return {
+    filePath: relPath,
+    diff: headerLines.join('\n') + '\n' + diffBody,
+    insertions,
+    deletions,
+  };
 }

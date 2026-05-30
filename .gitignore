@@ -19,3 +19,10 @@ ndk3.json
 replay_full.json
 test/tank-v2.test.ts
 .gitignore
+
+# TypeScript build cache
+*.tsbuildinfo
+# electron-vite config cache
+packages/desktop/electron.vite.config.*.mjs
+# Vite cache
+.vite/

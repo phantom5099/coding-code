@@ -8,6 +8,7 @@ import { ToolExecutorService } from '../tools/executor.js';
 import { ContextService } from '../context/context.js';
 import { SessionService, type SessionStoreState } from '../session/store.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
+import { computeDiff, wrapUnifiedDiff } from '../checkpoint/diff-tracker.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
@@ -245,7 +246,7 @@ export async function* runReActLoop(
 
       if (!toolCalls || toolCalls.length === 0) {
         // LLM done — record assistant, then check stop hook
-        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls as any, model));
+        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls || [], model));
         const stopDecision: any = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
           sessionId, content: resp.content, turnId: state.currentTurnId,
         }));
@@ -287,7 +288,7 @@ export async function* runReActLoop(
       // Execute tool calls — record assistant, execute batch, record results in one pipeline
       const allResults = await Effect.runPromise(
         Effect.gen(function* () {
-          const record = yield* session.recordAssistant(state, resp.content, toolCalls as any, model);
+          const record = yield* session.recordAssistant(state, resp.content, toolCalls!, model);
           const results = yield* executor.executeBatch(toolCalls, state.sessionId, {
             turnId: state.currentTurnId,
             projectPath,
@@ -306,11 +307,42 @@ export async function* runReActLoop(
       let todoPrinted = false;
       for (const r of allResults) {
         const resultOut = r.type === 'denied' ? '' : r.output;
+        let diff: string | undefined;
+        let filePath: string | undefined;
+        let insertions: number | undefined;
+        let deletions: number | undefined;
+        if (r.type === 'ok' && (r.name === 'edit_file' || r.name === 'write_file')) {
+          const tc = toolCalls?.find((t) => t.id === r.id);
+          const args = tc?.arguments ?? {};
+          const rawPath = args.path as string | undefined;
+          if (r.name === 'edit_file' && rawPath && typeof args.old_string === 'string' && typeof args.new_string === 'string') {
+            const oldContent = args.old_string as string;
+            const newContent = args.new_string as string;
+            const result = computeDiff(oldContent, newContent);
+            if (result.insertions > 0 || result.deletions > 0) {
+              const wrapped = wrapUnifiedDiff(rawPath, oldContent, result.diff, result.insertions, result.deletions);
+              diff = wrapped.diff;
+              filePath = wrapped.filePath;
+              insertions = wrapped.insertions;
+              deletions = wrapped.deletions;
+            }
+          } else if (r.name === 'write_file' && rawPath && typeof args.content === 'string') {
+            const newContent = args.content as string;
+            const result = computeDiff('', newContent);
+            if (result.insertions > 0 || result.deletions > 0) {
+              const wrapped = wrapUnifiedDiff(rawPath, '', result.diff, result.insertions, result.deletions);
+              diff = wrapped.diff;
+              filePath = wrapped.filePath;
+              insertions = wrapped.insertions;
+              deletions = wrapped.deletions;
+            }
+          }
+        }
         if (r.type === 'denied') {
           yield { _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason };
         } else {
           const isOk = r.type === 'ok';
-          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk, diff: isOk ? r.diff : undefined, filePath: isOk ? r.filePath : undefined, insertions: isOk ? r.insertions : undefined, deletions: isOk ? r.deletions : undefined };
+          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk, diff, filePath, insertions, deletions };
         }
         if (!messages.find(m => (m as any).tool_call_id === r.id)) {
           const content = r.type === 'denied'
