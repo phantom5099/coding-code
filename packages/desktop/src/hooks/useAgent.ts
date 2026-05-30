@@ -252,7 +252,9 @@ export function useAgent() {
     const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
     const parsed = turnId != null ? parseInt(turnId, 10) : undefined
     const numericTurnId = parsed != null && !isNaN(parsed) ? parsed : undefined
+    console.log('[loadCheckpointDiff] threadId=', threadId, 'turnId=', turnId, 'numericTurnId=', numericTurnId, 'cwd=', cwd)
     const diff = await getCheckpointDiff(threadId, cwd, numericTurnId)
+    console.log('[loadCheckpointDiff] diff result:', diff)
     setCheckpointDiff(threadId, String(diff.turnId), diff)
     // Map checkpoint turnId to the latest completed UI turn (only when caller didn't specify a turn)
     if (diff.turnId > 0 && numericTurnId == null) {
@@ -261,6 +263,7 @@ export function useAgent() {
         const completed = thread.turns.filter((t) => t.status === 'completed')
         const last = completed[completed.length - 1]
         if (last && last.id !== String(diff.turnId)) {
+          console.log('[loadCheckpointDiff] mapping', diff.turnId, '->', last.id)
           setTurnCheckpointMapping(threadId, diff.turnId, last.id)
         }
       }

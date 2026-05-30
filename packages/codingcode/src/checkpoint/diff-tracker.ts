@@ -1,8 +1,8 @@
 import { readFileSync } from 'fs';
-import { relative } from 'path';
+import { relative, resolve } from 'path';
 import { Effect } from 'effect';
 import type { HookService } from '../hooks/registry.js';
-import { resolveInWorkspace, getWorkspaceCwd } from '../core/workspace.js';
+import { getWorkspaceCwd } from '../core/workspace.js';
 
 export interface DiffResult {
   filePath: string;
@@ -73,7 +73,8 @@ export function bootstrapDiffTracker(hooks: HookService): void {
     const rawPath = args?.path as string | undefined;
     if (!rawPath) return;
 
-    const resolvedPath = resolveInWorkspace(rawPath);
+    const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
+    const resolvedPath = resolve(base, rawPath);
     const execId = payload.execId as string;
     if (execId) {
       try {
@@ -94,8 +95,9 @@ export function bootstrapDiffTracker(hooks: HookService): void {
     const rawPath = args?.path as string | undefined;
     if (!rawPath) return;
 
-    const resolvedPath = resolveInWorkspace(rawPath);
-    const relPath = relative(getWorkspaceCwd(), resolvedPath) || '.';
+    const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
+    const resolvedPath = resolve(base, rawPath);
+    const relPath = relative(base, resolvedPath) || '.';
 
     const execId = payload.execId as string;
     const oldContent = execId ? (pendingContent.get(execId) ?? '') : '';

@@ -32,30 +32,37 @@ export class ShadowGit {
   }
 
   init(): void {
-    if (existsSync(join(this.gitDir, 'HEAD'))) return;
-    mkdirSync(this.gitDir, { recursive: true });
-    // init --bare requires the path as a positional argument, not as --git-dir
-    spawnSync('git', ['init', '--bare', this.gitDir], {
-      env: process.env, cwd: this.projectPath, encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const isNew = !existsSync(join(this.gitDir, 'HEAD'));
+    if (isNew) {
+      mkdirSync(this.gitDir, { recursive: true });
+      // init --bare requires the path as a positional argument, not as --git-dir
+      spawnSync('git', ['init', '--bare', this.gitDir], {
+        env: process.env, cwd: this.projectPath, encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const infoDir = join(this.gitDir, 'info');
+      mkdirSync(infoDir, { recursive: true });
+      writeFileSync(join(infoDir, 'exclude'), IGNORE_RULES.join('\n') + '\n', 'utf8');
+    }
+    // Always ensure critical configs (idempotent) so old repos pick up fixes
     this.run('config', 'core.hooksPath', NULL_DEVICE);
     this.run('config', 'core.bare', 'false');
+    this.run('config', 'core.quotepath', 'false');
     this.run('config', 'gc.auto', '0');
     this.run('config', 'user.name', 'agent-checkpoint');
     this.run('config', 'user.email', 'checkpoint@agent.local');
-    const infoDir = join(this.gitDir, 'info');
-    mkdirSync(infoDir, { recursive: true });
-    writeFileSync(join(infoDir, 'exclude'), IGNORE_RULES.join('\n') + '\n', 'utf8');
   }
 
   commit(message: string): string {
     this.init();
     // Add all tracked & untracked files (respecting exclude rules)
     const lsResult = this.run('ls-files', '-m', '-o', '--exclude-standard');
-    const files = lsResult.stdout.trim().split('\n').filter(Boolean);
+    const files = lsResult.stdout.trim().split(/\r?\n/).filter(Boolean);
     if (files.length > 0) {
-      this.run('add', ...files);
+      const addResult = this.run('add', ...files);
+      if (addResult.status !== 0) {
+        throw new Error(`ShadowGit add failed: ${addResult.stderr}`);
+      }
     }
     const result = this.run('commit', '--allow-empty', '-m', message);
     if (result.status !== 0) throw new Error(`ShadowGit commit failed: ${result.stderr}`);

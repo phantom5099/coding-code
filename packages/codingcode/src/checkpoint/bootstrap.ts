@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { homedir } from 'os';
 import type { HookService } from '../hooks/registry.js';
 import { encodeProjectPath } from '../core/path.js';
-import { resolveInWorkspace } from '../core/workspace.js';
+import { getWorkspaceCwd } from '../core/workspace.js';
 import { Ledger } from './ledger.js';
 
 /** Cache ledger instances by checkpoint directory path. */
@@ -45,7 +45,8 @@ export function bootstrapCheckpoint(
     const rawPath = args?.path as string | undefined;
     if (!rawPath) return;
 
-    const resolvedPath = resolveInWorkspace(rawPath);
+    const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
+    const resolvedPath = resolve(base, rawPath);
     const execId = payload.execId as string;
     if (execId) {
       pendingHash.set(execId, fileHash(resolvedPath));
@@ -67,7 +68,8 @@ export function bootstrapCheckpoint(
     const args = payload.args as Record<string, unknown> | undefined;
     const rawPath = args?.path as string | undefined;
     if (!rawPath) return;
-    const resolvedPath = resolveInWorkspace(rawPath);
+    const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
+    const resolvedPath = resolve(base, rawPath);
 
     const execId = payload.execId as string;
     const hashBefore = execId ? (pendingHash.get(execId) ?? '') : '';
