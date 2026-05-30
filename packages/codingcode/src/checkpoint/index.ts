@@ -5,4 +5,3 @@ export { CheckpointService } from './checkpoint-service.js';
 export type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff, CodeRestoreEntry } from './checkpoint-service.js';
 export { toGitPath, hashWorkspaceFile } from './checkpoint-service.js';
 export { bootstrapCheckpoint } from './bootstrap.js';
-export type { DiffResult } from './diff-tracker.js';
