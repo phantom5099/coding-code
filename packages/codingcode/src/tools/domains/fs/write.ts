@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { writeFile, mkdir } from 'fs/promises';
-import { dirname, relative } from 'path';
+import { dirname, relative, resolve } from 'path';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
-import { getWorkspaceCwd, resolveInWorkspace } from '../../../core/workspace.js';
+import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const writeFileTool: ToolDefinition = {
   name: 'write_file',
@@ -11,12 +11,13 @@ export const writeFileTool: ToolDefinition = {
     path: z.string().describe('Path to the file'),
     content: z.string().describe('Content to write'),
   }),
-  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
+  execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { path, content } = args as any;
-    const filePath = resolveInWorkspace(path);
+    const base = ctx?.projectPath ?? getWorkspaceCwd();
+    const filePath = resolve(base, path);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, content);
-    const relPath = relative(getWorkspaceCwd(), filePath) || '.';
+    const relPath = relative(base, filePath) || '.';
     return `File written: ${relPath} (${content.split('\n').length} lines, ${content.length} bytes)`;
   },
 };

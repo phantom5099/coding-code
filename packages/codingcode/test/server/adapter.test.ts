@@ -14,13 +14,13 @@ describe('agentEventToSseEvent', () => {
   });
 
   it('maps ToolStart to structured tool_start event', () => {
-    expect(agentEventToSseEvent({ _tag: 'ToolStart', name: 'readFile', args: {} }))
-      .toEqual({ type: 'tool_start', name: 'readFile', args: {} });
+    expect(agentEventToSseEvent({ _tag: 'ToolStart', id: 'tc-1', name: 'readFile', args: {} }))
+      .toEqual({ type: 'tool_start', id: 'tc-1', name: 'readFile', args: {} });
   });
 
   it('maps ToolDenied to tool_denied event', () => {
-    expect(agentEventToSseEvent({ _tag: 'ToolDenied', name: 'bash', reason: 'not allowed' }))
-      .toEqual({ type: 'tool_denied', name: 'bash', reason: 'not allowed' });
+    expect(agentEventToSseEvent({ _tag: 'ToolDenied', id: 'tc-1', name: 'bash', reason: 'not allowed' }))
+      .toEqual({ type: 'tool_denied', id: 'tc-1', name: 'bash', reason: 'not allowed' });
   });
 
   it('maps ApprovalRequest to approval_request event', () => {
@@ -114,7 +114,7 @@ describe('toSseEvents', () => {
     async function* source(): AsyncGenerator<AgentEvent, void, unknown> {
       yield { _tag: 'Step', step: 2, max: 10 };
       yield { _tag: 'LlmChunk', text: 'calling tool' };
-      yield { _tag: 'Assistant', content: 'calling tool', toolCalls: [{ name: 'list_dir', args: {} }] };
+      yield { _tag: 'Assistant', content: 'calling tool', toolCalls: [{ id: 'tc-1', name: 'list_dir', arguments: {} }] };
     }
     const result: any[] = [];
     for await (const s of toSseEvents(source())) result.push(s);

@@ -4,6 +4,7 @@ import { join, dirname, resolve } from 'path';
 import { ShadowGit, normalizePath } from './shadow-git.js';
 import { Ledger } from './ledger.js';
 import { bootstrapCheckpoint } from './bootstrap.js';
+import { bootstrapDiffTracker } from './diff-tracker.js';
 import { HookService } from '../hooks/registry.js';
 import { createHash } from 'crypto';
 
@@ -196,6 +197,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
   effect: Effect.gen(function* () {
     const hooks = yield* HookService;
     bootstrapCheckpoint(hooks);
+    bootstrapDiffTracker(hooks);
 
     let _sg: ShadowGit | null = null;
     let _ledger: Ledger | null = null;
@@ -222,6 +224,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       // ---- Snapshot methods (unchanged) ----
 
       snapshotBaseline: (projectPath: string, sessionId: string, turnId: number, title?: string): void => {
+        console.log('[snapshotBaseline] projectPath=', projectPath, 'sessionId=', sessionId, 'turnId=', turnId);
         const sg = ensure(projectPath);
         const msg = title ? `${commitMsg(sessionId, turnId, 'baseline')} ${title}` : commitMsg(sessionId, turnId, 'baseline');
         sg.lock();
@@ -230,6 +233,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       },
 
       snapshotFinal: (projectPath: string, sessionId: string, turnId: number): void => {
+        console.log('[snapshotFinal] projectPath=', projectPath, 'sessionId=', sessionId, 'turnId=', turnId);
         const sg = ensure(projectPath);
         sg.lock();
         try { sg.commit(commitMsg(sessionId, turnId, 'final')); }
@@ -280,13 +284,19 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       // ---- B1: getCheckpointDiff ----
 
       getCheckpointDiff: (projectPath: string, sessionId: string, turnId?: number): CheckpointDiff => {
+        console.log('[getCheckpointDiff] projectPath=', projectPath, 'sessionId=', sessionId, 'requestedTurnId=', turnId);
         const sg = ensure(projectPath);
         const completedTurns = getCompletedTurnsFor(sg, sessionId);
+        console.log('[getCheckpointDiff] completedTurns=', completedTurns);
         const latestTurnId = turnId ?? (completedTurns.length > 0 ? completedTurns[completedTurns.length - 1] : 0);
-        if (latestTurnId === 0) return { turnId: 0, files: [] };
+        if (latestTurnId === 0) {
+          console.log('[getCheckpointDiff] no completed turns, returning empty');
+          return { turnId: 0, files: [] };
+        }
 
         const baseline = sg.findCommitByMessage(commitMsg(sessionId, latestTurnId, 'baseline'));
         const final = sg.findCommitByMessage(commitMsg(sessionId, latestTurnId, 'final'));
+        console.log('[getCheckpointDiff] latestTurnId=', latestTurnId, 'baseline=', baseline ? 'found' : 'missing', 'final=', final ? 'found' : 'missing');
         if (!baseline || !final) return { turnId: latestTurnId, files: [] };
 
         const allChanges = sg.diffFiles(baseline, final);
@@ -308,6 +318,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           };
         });
 
+        console.log('[getCheckpointDiff] returning', { turnId: latestTurnId, filesCount: files.length });
         return { turnId: latestTurnId, files };
       },
 

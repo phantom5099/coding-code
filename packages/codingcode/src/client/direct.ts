@@ -23,9 +23,9 @@ import * as settingsService from '../settings/service.js';
 
 export type StreamChunk = string
   | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
-  | { type: 'tool_start'; name: string; args: Record<string, unknown> }
+  | { type: 'tool_start'; id: string; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean }
-  | { type: 'tool_denied'; name: string; reason: string }
+  | { type: 'tool_denied'; id: string; name: string; reason: string }
   | { type: 'error'; message: string }
   | { type: 'done' }
   | { type: 'todo_update'; items: ReadonlyArray<{ step: string; status: string }> };
@@ -94,13 +94,13 @@ export async function* agentEventToStreamChunk(
         yield event.text;
         break;
       case 'ToolStart':
-        yield { type: 'tool_start', name: event.name, args: event.args };
+        yield { type: 'tool_start', id: event.id, name: event.name, args: event.args };
         break;
       case 'ToolResult':
         yield { type: 'tool_result', id: event.id, name: event.name, output: event.output, ok: event.ok };
         break;
       case 'ToolDenied':
-        yield { type: 'tool_denied', name: event.name, reason: event.reason };
+        yield { type: 'tool_denied', id: event.id, name: event.name, reason: event.reason };
         break;
       case 'ApprovalRequest':
         yield { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };

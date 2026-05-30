@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { globby } from 'globby';
 import { readFile } from 'fs/promises';
-import { relative } from 'path';
+import { relative, resolve } from 'path';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
 import { getWorkspaceCwd } from '../../../core/workspace.js';
 
@@ -13,10 +13,11 @@ export const searchTool: ToolDefinition = {
     glob: z.string().default('**/*').describe("File glob pattern to filter which files to search (e.g. 'src/**/*.ts')"),
     max_results: z.number().int().min(1).max(100).default(30).describe('Maximum number of matches to return'),
   }),
-  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
+  execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { pattern, glob, max_results } = args as any;
+    const base = ctx?.projectPath ?? getWorkspaceCwd();
     const files = await globby(glob, {
-      cwd: getWorkspaceCwd(),
+      cwd: base,
       gitignore: true,
       ignore: ['node_modules/**', 'dist/**', '.git/**', '*.lockb', '*.lock', '*.min.js'],
       absolute: true,
@@ -34,7 +35,7 @@ export const searchTool: ToolDefinition = {
         for (let i = 0; i < lines.length && results.length < max_results; i++) {
           const line = lines[i];
           if (line && regex.test(line)) {
-            const relPath = relative(getWorkspaceCwd(), file);
+            const relPath = relative(base, file);
             results.push(`${relPath}:${i + 1}: ${line.trim().slice(0, 120)}`);
           }
         }

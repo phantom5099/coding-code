@@ -6,9 +6,10 @@ import { ApprovalService } from '../approval/index';
 import { SandboxService } from '../sandbox/index';
 import type { ToolDefinition } from './types';
 import type { ToolCall } from '../core/types';
+import { getPendingDiff } from '../checkpoint/diff-tracker';
 
 export type ToolResultUnion =
-  | { type: 'ok'; id: string; name: string; output: string }
+  | { type: 'ok'; id: string; name: string; output: string; diff?: string; filePath?: string; insertions?: number; deletions?: number }
   | { type: 'denied'; id: string; name: string; reason: string }
   | { type: 'error'; id: string; name: string; output: string };
 
@@ -23,8 +24,8 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
     function execute(
       name: string,
       args: unknown,
-      opts?: { signal?: AbortSignal; sessionId?: string; turnId?: number; projectPath?: string; approval?: any; agentRunner?: any },
-    ): Effect.Effect<string, AgentError> {
+      opts?: { signal?: AbortSignal; sessionId?: string; turnId?: number; projectPath?: string; approval?: any; agentRunner?: any; callId?: string },
+    ): Effect.Effect<{ output: string; diff?: string; filePath?: string; insertions?: number; deletions?: number }, AgentError> {
       return Effect.gen(function* () {
         // All services captured from outer closure — no yield* needed for them
         const toolResult = registry.get(name);
@@ -36,6 +37,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         const decision = yield* decisionApproval.evaluate({
           tool: name,
           input: args as Record<string, unknown>,
+          callId: opts?.callId,
           sessionId: opts?.sessionId ?? 'default',
         });
 
@@ -79,15 +81,15 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           finalArgs = hookDecision.modifiedInput;
         }
 
-        // 3. Notification hook (观察型) — include a unique execution ID for pairing before/after
-        const execId = `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        // 3. Notification hook — use callId for consistent pairing
+        const callId = opts?.callId;
         yield* hooks.emit('tool.execute.before', {
           toolName: name,
           args: finalArgs,
           sessionId: opts?.sessionId,
           turnId: opts?.turnId,
           projectPath: opts?.projectPath,
-          execId,
+          callId,
         });
 
         const parsedArgs = yield* Effect.sync(() => tool.parameters.parse(finalArgs));
@@ -131,10 +133,11 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           sessionId: opts?.sessionId,
           turnId: opts?.turnId,
           projectPath: opts?.projectPath,
-          execId,
+          callId,
         });
 
-        return result;
+        const diffResult = getPendingDiff(callId ?? '');
+        return { output: result, ...diffResult };
       }).pipe(
         Effect.tapError((error) =>
           hooks.emit('tool.execute.error', {
@@ -147,10 +150,10 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
     }
 
     function execSingle(tc: ToolCall, sessionId?: string, opts?: { turnId?: number; projectPath?: string; signal?: AbortSignal; approval?: any; agentRunner?: any }): Effect.Effect<ToolResultUnion> {
-      return execute(tc.name, tc.arguments ?? {}, { sessionId, ...opts }).pipe(
+      return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
         Effect.matchEffect({
-          onSuccess: (output): Effect.Effect<ToolResultUnion> =>
-            Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
+          onSuccess: (result): Effect.Effect<ToolResultUnion> =>
+            Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output: result.output, diff: result.diff, filePath: result.filePath, insertions: result.insertions, deletions: result.deletions }),
           onFailure: (err): Effect.Effect<ToolResultUnion> => {
             if (err instanceof AgentError && err.code === 'TOOL_NOT_ALLOWED') {
               return Effect.succeed({ type: 'denied' as const, id: tc.id, name: tc.name, reason: err.message });

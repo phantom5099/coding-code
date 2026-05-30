@@ -342,6 +342,21 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           return
         }
 
+        if (chunk.type === 'tool_result') {
+          for (const t of thread.turns) {
+            const callIdx = t.items.findIndex(
+              (i) => i.type === 'tool_call' && i.id === chunk.callId
+            )
+            if (callIdx >= 0) {
+              ;(t.items[callIdx] as any).status = 'approved'
+              t.items.splice(callIdx + 1, 0, chunk)
+              return
+            }
+          }
+          turn.items.push(chunk)
+          return
+        }
+
         const existing = turn.items.findIndex((i) => i.id === chunk.id)
         if (existing >= 0) {
           turn.items[existing] = chunk

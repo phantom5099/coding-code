@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { readFile, writeFile } from 'fs/promises';
+import { resolve } from 'path';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
-import { resolveInWorkspace } from '../../../core/workspace.js';
+import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const editFileTool: ToolDefinition = {
   name: 'edit_file',
@@ -12,9 +13,9 @@ export const editFileTool: ToolDefinition = {
     old_string: z.string().min(1).describe('Exact text to replace — must match exactly one location in the file'),
     new_string: z.string().describe('Text to replace it with'),
   }),
-  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
+  execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { path, old_string, new_string } = args as { path: string; old_string: string; new_string: string };
-    const filePath = resolveInWorkspace(path);
+    const filePath = resolve(ctx?.projectPath ?? getWorkspaceCwd(), path);
     const content = await readFile(filePath, 'utf-8');
 
     let idx = 0;

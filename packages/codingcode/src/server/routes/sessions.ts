@@ -130,7 +130,7 @@ sessionsRouter.get('/:id/rollback-state', async (c) => {
   return c.json(result);
 });
 
-// ---- C3: checkpoint latest diff ----
+// ---- C3: checkpoint diff (latest or by turn) ----
 
 sessionsRouter.get('/:id/checkpoints/latest/diff', async (c) => {
   const sessionId = c.req.param('id');
@@ -139,6 +139,19 @@ sessionsRouter.get('/:id/checkpoints/latest/diff', async (c) => {
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
       return checkpoint.getCheckpointDiff(cwd, sessionId);
+    }),
+  );
+  return c.json(result);
+});
+
+sessionsRouter.get('/:id/checkpoints/:turnId/diff', async (c) => {
+  const sessionId = c.req.param('id');
+  const turnId = parseInt(c.req.param('turnId'), 10);
+  const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
+  const result = await runWithLayer(
+    Effect.gen(function* () {
+      const checkpoint = yield* CheckpointService;
+      return checkpoint.getCheckpointDiff(cwd, sessionId, isNaN(turnId) ? undefined : turnId);
     }),
   );
   return c.json(result);

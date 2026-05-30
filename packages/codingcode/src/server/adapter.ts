@@ -9,13 +9,13 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
     case 'TurnId':
       return { type: 'turn_id', turnId: event.turnId };
     case 'ToolStart':
-      return { type: 'tool_start', name: event.name, args: event.args };
+      return { type: 'tool_start', id: event.id, name: event.name, args: event.args };
     case 'ApprovalRequest':
       return { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
     case 'ToolResult':
-      return { type: 'tool_result', id: event.id, name: event.name, output: event.output, ok: event.ok };
+      return { type: 'tool_result', id: event.id, name: event.name, output: event.output, ok: event.ok, diff: event.diff, filePath: event.filePath, insertions: event.insertions, deletions: event.deletions };
     case 'ToolDenied':
-      return { type: 'tool_denied', name: event.name, reason: event.reason };
+      return { type: 'tool_denied', id: event.id, name: event.name, reason: event.reason };
     case 'Error':
       return { type: 'error', message: event.error.message ?? String(event.error) };
     case 'Done':

@@ -31,8 +31,8 @@ describe('SSE event parser', () => {
   })
 
   it('parses tool_start event', () => {
-    const events = parseSSELines('data: {"type":"tool_start","name":"readFile","args":{"path":"/tmp/x"}}\n\n')
-    expect(events[0]).toEqual({ type: 'tool_start', name: 'readFile', args: { path: '/tmp/x' } })
+    const events = parseSSELines('data: {"type":"tool_start","id":"tc-1","name":"readFile","args":{"path":"/tmp/x"}}\n\n')
+    expect(events[0]).toEqual({ type: 'tool_start', id: 'tc-1', name: 'readFile', args: { path: '/tmp/x' } })
   })
 
   it('parses tool_result event', () => {
@@ -41,8 +41,8 @@ describe('SSE event parser', () => {
   })
 
   it('parses tool_denied event', () => {
-    const events = parseSSELines('data: {"type":"tool_denied","name":"bash","reason":"blocked"}\n\n')
-    expect(events[0]).toEqual({ type: 'tool_denied', name: 'bash', reason: 'blocked' })
+    const events = parseSSELines('data: {"type":"tool_denied","id":"tc-1","name":"bash","reason":"blocked"}\n\n')
+    expect(events[0]).toEqual({ type: 'tool_denied', id: 'tc-1', name: 'bash', reason: 'blocked' })
   })
 
   it('parses approval_request event', () => {

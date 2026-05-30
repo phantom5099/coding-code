@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { globby } from 'globby';
-import { relative } from 'path';
+import { relative, resolve } from 'path';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
-import { getWorkspaceCwd, resolveInWorkspace } from '../../../core/workspace.js';
+import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const globTool: ToolDefinition = {
   name: 'search_files',
@@ -13,9 +13,10 @@ export const globTool: ToolDefinition = {
     path: z.string().default('.').describe('Base directory for the search (default: current working directory)'),
     max_results: z.number().int().min(1).max(500).default(50).describe('Maximum number of file paths to return'),
   }),
-  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
+  execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { pattern, path, max_results } = args as { pattern: string; path: string; max_results: number };
-    const basePath = resolveInWorkspace(path);
+    const base = ctx?.projectPath ?? getWorkspaceCwd();
+    const basePath = resolve(base, path);
 
     const files = await globby(pattern, {
       cwd: basePath,
@@ -26,11 +27,10 @@ export const globTool: ToolDefinition = {
     });
 
     const truncated = files.slice(0, max_results);
-    const ws = getWorkspaceCwd();
-    const lines = truncated.map((f) => relative(ws, f));
+    const lines = truncated.map((f) => relative(base, f));
 
     if (files.length === 0) {
-      return `No files matching "${pattern}" in ${relative(ws, basePath) || '.'}`;
+      return `No files matching "${pattern}" in ${relative(base, basePath) || '.'}`;
     }
 
     let out = `Found ${files.length} file(s) matching "${pattern}"`;
