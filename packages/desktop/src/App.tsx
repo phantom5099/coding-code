@@ -3,6 +3,7 @@ import { useGlobalStore } from './stores/global.store'
 import AgentLayout from './layouts/AgentLayout'
 import IDELayout from './layouts/IDELayout'
 import TitleBar from './TitleBar'
+import ErrorBoundary from './shared/ErrorBoundary'
 
 export default function App() {
   const mode = useGlobalStore((s) => s.ui.mode)
@@ -19,15 +20,17 @@ export default function App() {
   }, [setMode])
 
   return (
-    <div className="h-screen flex flex-col bg-[#1e1e1e] text-[#cccccc] overflow-hidden">
-      <TitleBar />
-      {/* Both layouts stay mounted; visibility toggled via display to preserve Monaco + PTY state */}
-      <div className={`${mode === 'agent' ? 'flex' : 'hidden'} flex-1 flex-col overflow-hidden`}>
-        <AgentLayout />
+    <ErrorBoundary>
+      <div className="h-screen flex flex-col bg-[#1e1e1e] text-[#cccccc] overflow-hidden">
+        <TitleBar />
+        {/* Both layouts stay mounted; visibility toggled via display to preserve Monaco + PTY state */}
+        <div className={`${mode === 'agent' ? 'flex' : 'hidden'} flex-1 flex-col overflow-hidden`}>
+          <AgentLayout />
+        </div>
+        <div className={`${mode === 'ide' ? 'flex' : 'hidden'} flex-1 flex-col overflow-hidden`}>
+          <IDELayout />
+        </div>
       </div>
-      <div className={`${mode === 'ide' ? 'flex' : 'hidden'} flex-1 flex-col overflow-hidden`}>
-        <IDELayout />
-      </div>
-    </div>
+    </ErrorBoundary>
   )
 }

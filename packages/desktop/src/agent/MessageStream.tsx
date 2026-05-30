@@ -92,11 +92,9 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   // Auto-load diff when a turn completes or errors
   const turnStatusKey = turns.map((t) => `${t.id}:${t.status}`).join(',')
   useEffect(() => {
-    console.log('[MessageStream useEffect] turnStatusKey=', turnStatusKey, 'turns=', turns.map((t) => ({ id: t.id, status: t.status })))
     for (const turn of turns) {
       if (turn.status !== 'completed' && turn.status !== 'error') continue
       const ckKey = getCheckpointKey(turn.id)
-      console.log('[MessageStream useEffect] turn.id=', turn.id, 'ckKey=', ckKey, 'hasDiff=', !!checkpointDiffByTurnId[ckKey || ''])
       if (!ckKey || !checkpointDiffByTurnId[ckKey]) {
         handleLoadDiff(turn.id)
       }
@@ -108,14 +106,12 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   function getCheckpointKey(uiTurnId: string): string | null {
     const directKey = `${threadId}:${uiTurnId}`
     if (checkpointDiffByTurnId[directKey]) {
-      console.log('[getCheckpointKey] direct hit:', directKey)
       return directKey
     }
     const mapping = turnCheckpointMapping[threadId]
     if (mapping) {
       for (const [cpId, mappedUiId] of Object.entries(mapping)) {
         if (mappedUiId === uiTurnId) {
-          console.log('[getCheckpointKey] mapping hit:', `${threadId}:${cpId}`)
           return `${threadId}:${cpId}`
         }
       }
@@ -125,11 +121,9 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       if (!key.startsWith(`${threadId}:`)) continue
       const cpIntStr = key.slice(threadId.length + 1)
       if (turnCheckpointMapping[threadId]?.[Number(cpIntStr)] === uiTurnId) {
-        console.log('[getCheckpointKey] partial hit:', key)
         return key
       }
     }
-    console.log('[getCheckpointKey] miss for uiTurnId=', uiTurnId, 'threadId=', threadId, 'checkpointDiffKeys=', Object.keys(checkpointDiffByTurnId))
     return null
   }
 
@@ -140,9 +134,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   // ---- Handlers ----
 
   const handleLoadDiff = useCallback(async (uiTurnId: string) => {
-    console.log('[handleLoadDiff] uiTurnId=', uiTurnId, 'threadId=', threadId)
     const diff = await loadCheckpointDiff(threadId)
-    console.log('[handleLoadDiff] returned diff.turnId=', diff.turnId, 'files.length=', diff.files?.length)
     if (diff.turnId > 0) {
       const state = useGlobalStore.getState()
       const mapping = state.rollback.turnCheckpointMapping[threadId]
@@ -177,14 +169,12 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   function TurnDiffPanel({ uiTurnId, isInterrupted }: { uiTurnId: string; isInterrupted?: boolean }) {
     const ckKey = getCheckpointKey(uiTurnId)
     const diff = ckKey ? checkpointDiffByTurnId[ckKey] : null
-    console.log('[TurnDiffPanel] uiTurnId=', uiTurnId, 'ckKey=', ckKey, 'diff=', diff ? { turnId: diff.turnId, filesCount: diff.files?.length } : null)
     const revertedFiles = getRevertedFiles(uiTurnId)
     const isAgentReverted = revertedFiles.includes('__scope_agent_reverted__')
     const isAllReverted = revertedFiles.includes('__scope_all_reverted__')
     const [expandedFile, setExpandedFile] = useState<string | null>(null)
 
     if (!diff || !diff.files || diff.files.length === 0) {
-      console.log('[TurnDiffPanel] returning null because diff is empty or missing')
       return null
     }
 

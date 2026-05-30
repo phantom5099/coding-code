@@ -7,6 +7,13 @@ import { startPolling } from './core/git.service'
 import { initBackend } from './core/backend'
 import { startHttpServer } from './core/http-server'
 
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception in main process:', err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection in main process:', reason)
+})
+
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(apiPort: number): BrowserWindow {

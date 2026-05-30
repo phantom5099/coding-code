@@ -18,7 +18,8 @@
     "react-resizable-panels": "^2.1.7",
     "react-virtuoso": "^4.12.6",
     "simple-git": "^3.27.0",
-    "zustand": "^5.0.5"
+    "zustand": "^5.0.5",
+    "@codingcode/infra": "*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

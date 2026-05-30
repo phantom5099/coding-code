@@ -13,7 +13,7 @@ import type { UserHookConfig } from '../../hooks/config.js';
 import * as settingsService from '../../settings/service.js';
 import { AlreadyExistsError, NotFoundError } from '../../settings/service.js';
 
-function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
+function runWithLayer<T>(eff: Effect.Effect<T, unknown, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
 }
 

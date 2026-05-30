@@ -48,4 +48,22 @@ export class AgentError extends Error {
       { sessionId, expectedCwd },
     );
   }
+
+  httpStatus(): number {
+    switch (this.code) {
+      case 'CONFIG_MISSING':
+      case 'CONFIG_INVALID':
+        return 400;
+      case 'SESSION_NOT_FOUND':
+        return 404;
+      case 'SESSION_WORKSPACE_MISMATCH':
+        return 409;
+      case 'TOOL_NOT_ALLOWED':
+        return 403;
+      case 'LLM_RATE_LIMITED':
+        return 429;
+      default:
+        return 500;
+    }
+  }
 }

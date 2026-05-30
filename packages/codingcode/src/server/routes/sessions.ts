@@ -8,7 +8,7 @@ import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
 import { deleteSession } from '../../session/store.js';
 
-function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
+function runWithLayer<T>(eff: Effect.Effect<T, unknown, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
 }
 

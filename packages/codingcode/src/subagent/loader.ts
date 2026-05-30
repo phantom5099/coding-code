@@ -1,6 +1,9 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join, basename } from 'path';
 import type { SubagentProfile } from './registry.js';
+import { createLogger } from '@codingcode/infra';
+
+const logger = createLogger();
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const lines = content.split('\n');
@@ -71,7 +74,7 @@ export function loadAgentProfiles(projectCwd: string): SubagentProfile[] {
         const description = frontmatter.description as string | undefined;
 
         if (!name || !description) {
-          console.warn(`Skipping agent file ${file}: missing required name or description`);
+          logger.warn(`Skipping agent file ${file}: missing required name or description`);
           continue;
         }
 
@@ -88,11 +91,11 @@ export function loadAgentProfiles(projectCwd: string): SubagentProfile[] {
 
         profiles.push(profile);
       } catch (err) {
-        console.warn(`Failed to parse agent profile ${file}:`, err);
+        logger.warn(`Failed to parse agent profile ${file}:`, err);
       }
     }
   } catch (err) {
-    console.warn(`Failed to read agents directory:`, err);
+    logger.warn(`Failed to read agents directory:`, err);
   }
 
   return profiles;

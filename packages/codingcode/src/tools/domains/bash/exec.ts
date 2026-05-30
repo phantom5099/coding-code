@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { Effect } from 'effect';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
 import { getWorkspaceCwd } from '../../../core/workspace.js';
+import { AgentError } from '../../../core/error.js';
 
 export const bashTool: ToolDefinition = {
   name: 'execute_command',
@@ -18,7 +19,7 @@ export const bashTool: ToolDefinition = {
     const finalCommand = ctx?.sandbox
       ? await Effect.runPromise(ctx.sandbox.wrapCommand(command))
       : command;
-    return new Promise<string>((resolve) => {
+    return new Promise<string>((resolve, reject) => {
       const proc = spawn(finalCommand, {
         shell: true,
         cwd: workDir,
@@ -70,7 +71,7 @@ export const bashTool: ToolDefinition = {
       proc.on('error', (err) => {
         clearTimeout(timer);
         ctx?.signal?.removeEventListener('abort', onAbort);
-        resolve(`Command failed to start: ${err.message}`);
+        reject(new AgentError('TOOL_EXECUTION_FAILED', `Command failed to start: ${err.message}`, err));
       });
     });
   },

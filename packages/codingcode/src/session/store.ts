@@ -8,6 +8,9 @@ import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, HideEvent, UnhideEvent, TitleEvent, SessionIndex } from './types.js';
 import { estimateTokensForContent } from '../context/utils/tokens.js';
+import { createLogger } from '@codingcode/infra';
+
+const logger = createLogger();
 
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const PROJECT_BASE = join(CODINGCODE_DIR, 'project');
@@ -486,13 +489,13 @@ function enqueueWrite(sessionId: string, path: string, data: unknown): void {
   const prev = writeQueues.get(sessionId) ?? Promise.resolve();
   const task = prev
     .then(() => { writeFileSync(path, JSON.stringify(data, null, 2), 'utf8'); })
-    .catch((err) => { console.error(`write queue error for ${path}:`, err); });
+    .catch((err) => { logger.error(`write queue error for ${path}:`, err); });
   writeQueues.set(sessionId, task);
 }
 
 export function enqueueTask(sessionId: string, fn: () => void): void {
   const prev = writeQueues.get(sessionId) ?? Promise.resolve();
-  const task = prev.then(() => { try { fn(); } catch (err) { console.error(`enqueueTask error for ${sessionId}:`, err); } });
+  const task = prev.then(() => { try { fn(); } catch (err) { logger.error(`enqueueTask error for ${sessionId}:`, err); } });
   writeQueues.set(sessionId, task);
 }
 
@@ -500,7 +503,7 @@ export function truncateJsonl(path: string, byteOffset: number): void {
   try {
     truncateSync(path, byteOffset);
   } catch (err) {
-    console.error(`truncateJsonl error for ${path}:`, err);
+    logger.error(`truncateJsonl error for ${path}:`, err);
   }
 }
 
