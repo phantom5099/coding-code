@@ -6,10 +6,9 @@ import { ApprovalService } from '../approval/index';
 import { SandboxService } from '../sandbox/index';
 import type { ToolDefinition } from './types';
 import type { ToolCall } from '../core/types';
-import { getPendingDiff } from '../checkpoint/diff-tracker';
 
 export type ToolResultUnion =
-  | { type: 'ok'; id: string; name: string; output: string; diff?: string; filePath?: string; insertions?: number; deletions?: number }
+  | { type: 'ok'; id: string; name: string; output: string }
   | { type: 'denied'; id: string; name: string; reason: string }
   | { type: 'error'; id: string; name: string; output: string };
 
@@ -136,8 +135,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           callId,
         });
 
-        const diffResult = getPendingDiff(callId ?? '');
-        return { output: result, ...diffResult };
+        return { output: result };
       }).pipe(
         Effect.tapError((error) =>
           hooks.emit('tool.execute.error', {
@@ -153,7 +151,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
       return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
         Effect.matchEffect({
           onSuccess: (result): Effect.Effect<ToolResultUnion> =>
-            Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output: result.output, diff: result.diff, filePath: result.filePath, insertions: result.insertions, deletions: result.deletions }),
+            Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output: result.output }),
           onFailure: (err): Effect.Effect<ToolResultUnion> => {
             if (err instanceof AgentError && err.code === 'TOOL_NOT_ALLOWED') {
               return Effect.succeed({ type: 'denied' as const, id: tc.id, name: tc.name, reason: err.message });

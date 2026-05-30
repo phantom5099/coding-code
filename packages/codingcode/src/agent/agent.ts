@@ -64,7 +64,7 @@ export type AgentEvent =
   | { readonly _tag: 'ToolStart'; readonly id: string; readonly name: string; readonly args: Record<string, unknown> }
   | { readonly _tag: 'ToolDenied'; readonly id: string; readonly name: string; readonly reason: string }
   | { readonly _tag: 'ApprovalRequest'; readonly id: string; readonly tool: string; readonly args: Record<string, unknown> }
-  | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean; readonly diff?: string; readonly filePath?: string; readonly insertions?: number; readonly deletions?: number }
+  | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean }
   | { readonly _tag: 'Step'; readonly step: number; readonly max: number }
   | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
@@ -245,7 +245,7 @@ export async function* runReActLoop(
 
       if (!toolCalls || toolCalls.length === 0) {
         // LLM done — record assistant, then check stop hook
-        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls as any, model));
+        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls || [], model));
         const stopDecision: any = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
           sessionId, content: resp.content, turnId: state.currentTurnId,
         }));
@@ -287,7 +287,7 @@ export async function* runReActLoop(
       // Execute tool calls — record assistant, execute batch, record results in one pipeline
       const allResults = await Effect.runPromise(
         Effect.gen(function* () {
-          const record = yield* session.recordAssistant(state, resp.content, toolCalls as any, model);
+          const record = yield* session.recordAssistant(state, resp.content, toolCalls!, model);
           const results = yield* executor.executeBatch(toolCalls, state.sessionId, {
             turnId: state.currentTurnId,
             projectPath,
@@ -310,7 +310,7 @@ export async function* runReActLoop(
           yield { _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason };
         } else {
           const isOk = r.type === 'ok';
-          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk, diff: isOk ? r.diff : undefined, filePath: isOk ? r.filePath : undefined, insertions: isOk ? r.insertions : undefined, deletions: isOk ? r.deletions : undefined };
+          yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk };
         }
         if (!messages.find(m => (m as any).tool_call_id === r.id)) {
           const content = r.type === 'denied'

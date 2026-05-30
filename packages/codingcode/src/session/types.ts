@@ -24,7 +24,7 @@ export interface AssistantEvent {
   turnId: number;
   uuid: string;
   content: string;
-  toolCalls: Array<{ id: string; name: string; arguments: string }>;
+  toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
   model: string;
   timestamp: string;
 }

@@ -4,7 +4,6 @@ import { join, dirname, resolve } from 'path';
 import { ShadowGit, normalizePath } from './shadow-git.js';
 import { Ledger } from './ledger.js';
 import { bootstrapCheckpoint } from './bootstrap.js';
-import { bootstrapDiffTracker } from './diff-tracker.js';
 import { HookService } from '../hooks/registry.js';
 import { createHash } from 'crypto';
 
@@ -197,7 +196,6 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
   effect: Effect.gen(function* () {
     const hooks = yield* HookService;
     bootstrapCheckpoint(hooks);
-    bootstrapDiffTracker(hooks);
 
     let _sg: ShadowGit | null = null;
     let _ledger: Ledger | null = null;

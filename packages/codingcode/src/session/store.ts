@@ -614,7 +614,7 @@ export function getPermissionMode(indexPath: string): string {
   }
 }
 
-function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string; items: object[]; status: string }> {
+export function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string; items: object[]; status: string }> {
   const turnsMap = new Map<number, { id: string; items: object[]; status: string }>();
   for (const event of events) {
     if (event.type === 'session_meta') continue;
@@ -633,14 +633,15 @@ function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string; items
           turn.items.push({ id: event.uuid, type: 'message', role: 'assistant', content: event.content });
         }
         for (const tc of event.toolCalls ?? []) {
-          let args: object;
-          try { args = JSON.parse(tc.arguments); } catch { args = {}; }
+          const args = tc.arguments ?? {};
           turn.items.push({ id: tc.id, type: 'tool_call', name: tc.name, args, status: 'approved' });
         }
         break;
-      case 'tool_result':
-        turn.items.push({ id: event.uuid, type: 'tool_result', callId: event.toolCallId, name: event.toolName, output: event.output });
+      case 'tool_result': {
+        const item: Record<string, unknown> = { id: event.uuid, type: 'tool_result', callId: event.toolCallId, name: event.toolName, output: event.output };
+        turn.items.push(item);
         break;
+      }
     }
   }
   return [...turnsMap.values()].sort((a, b) => Number(a.id) - Number(b.id));

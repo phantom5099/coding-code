@@ -7,7 +7,7 @@ export type StreamEvent =
   | { type: 'text'; text: string; messageId: number }
   | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
   | { type: 'tool_start'; id: string; name: string; args: Record<string, unknown> }
-  | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean; diff?: string; filePath?: string; insertions?: number; deletions?: number }
+  | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean }
   | { type: 'tool_denied'; id: string; name: string; reason: string }
   | { type: 'todo_update'; items: Array<{ step: string; status: 'pending' | 'in_progress' | 'completed' }> }
   | { type: 'message'; id: number; content: string; partial: false }
@@ -65,7 +65,7 @@ export async function* streamAgentMessage(
           yield { type: 'tool_start', id: data.id as string, name: data.name as string, args: data.args as Record<string, unknown> }
           break
         case 'tool_result':
-          yield { type: 'tool_result', id: data.id as string, name: data.name as string, output: data.output as string, ok: data.ok as boolean, diff: data.diff as string | undefined, filePath: data.filePath as string | undefined, insertions: data.insertions as number | undefined, deletions: data.deletions as number | undefined }
+          yield { type: 'tool_result', id: data.id as string, name: data.name as string, output: data.output as string, ok: data.ok as boolean }
           break
         case 'tool_denied':
           yield { type: 'tool_denied', id: data.id as string, name: data.name as string, reason: data.reason as string }

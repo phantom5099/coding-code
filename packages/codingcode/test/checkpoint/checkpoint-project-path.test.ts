@@ -4,9 +4,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
-import { initWorkspace, getWorkspaceCwd } from '../../src/core/workspace.js';
+import { initWorkspace } from '../../src/core/workspace.js';
 import { HookService } from '../../src/hooks/registry.js';
-import { bootstrapDiffTracker, getPendingDiff } from '../../src/checkpoint/diff-tracker.js';
 
 const hooksLayer = Layer.succeed(HookService, {
   register: (point, handler, opts) => Effect.sync(() => {
@@ -54,90 +53,6 @@ const testLayer = hooksLayer;
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(testLayer) as any));
 }
-
-describe('checkpoint/diff-tracker projectPath isolation', () => {
-  let globalDir: string;
-  let projectDir: string;
-
-  beforeEach(() => {
-    globalDir = join(tmpdir(), `global-${randomUUID().slice(0, 8)}`);
-    projectDir = join(tmpdir(), `project-${randomUUID().slice(0, 8)}`);
-    mkdirSync(globalDir, { recursive: true });
-    mkdirSync(projectDir, { recursive: true });
-    mkdirSync(join(globalDir, 'config'), { recursive: true });
-    writeFileSync(join(globalDir, 'config', 'models.json'), '{"active":"p","providers":[]}', 'utf8');
-    initWorkspace({ installRoot: globalDir, workspaceCwd: globalDir });
-  });
-
-  afterEach(() => {
-    try { rmSync(globalDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    try { rmSync(projectDir, { recursive: true, force: true }); } catch { /* ignore */ }
-  });
-
-  async function getHooks() {
-    return await run(Effect.gen(function* () {
-      const svc = yield* HookService;
-      return svc;
-    }));
-  }
-
-  it('diff-tracker resolves files using payload.projectPath', async () => {
-    const hooks = await getHooks();
-    bootstrapDiffTracker(hooks);
-
-    // Write file in projectDir, not globalDir
-    writeFileSync(join(projectDir, 'a.txt'), 'old-content', 'utf8');
-
-    const execId = 'exec-test-123';
-    const payload = {
-      toolName: 'edit_file',
-      args: { path: 'a.txt', old_string: 'old-content', new_string: 'new-content' },
-      sessionId: 'sess-1',
-      turnId: 1,
-      projectPath: projectDir,
-      execId,
-    };
-
-    // Before hook: record old content
-    await run(hooks.emit('tool.execute.before', payload));
-
-    // Modify the file (simulating what the tool would do)
-    writeFileSync(join(projectDir, 'a.txt'), 'new-content', 'utf8');
-
-    // After hook: compute diff
-    await run(hooks.emit('tool.execute.after', payload));
-
-    const diff = getPendingDiff(execId);
-    expect(diff).toBeDefined();
-    expect(diff!.filePath).toBe('a.txt');
-    expect(diff!.diff).toContain('+new-content');
-    expect(diff!.diff).toContain('-old-content');
-  });
-
-  it('diff-tracker falls back to workspaceCwd when payload.projectPath is absent', async () => {
-    const hooks = await getHooks();
-    bootstrapDiffTracker(hooks);
-
-    writeFileSync(join(globalDir, 'b.txt'), 'old', 'utf8');
-
-    const execId = 'exec-test-456';
-    const payload = {
-      toolName: 'edit_file',
-      args: { path: 'b.txt', old_string: 'old', new_string: 'new' },
-      sessionId: 'sess-1',
-      turnId: 1,
-      execId,
-    };
-
-    await run(hooks.emit('tool.execute.before', payload));
-    writeFileSync(join(globalDir, 'b.txt'), 'new', 'utf8');
-    await run(hooks.emit('tool.execute.after', payload));
-
-    const diff = getPendingDiff(execId);
-    expect(diff).toBeDefined();
-    expect(diff!.filePath).toBe('b.txt');
-  });
-});
 
 describe('checkpoint/bootstrap projectPath isolation', () => {
   let globalDir: string;
