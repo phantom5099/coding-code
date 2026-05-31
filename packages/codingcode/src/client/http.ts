@@ -47,6 +47,9 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
           case 'todo_update':
             yield { type: 'todo_update', items: data.items as any };
             break;
+          case 'usage':
+            yield { type: 'usage', prompt: data.prompt as number, completion: data.completion as number, total: data.total as number };
+            break;
           case 'error':
             throw new Error(data.message as string);
           case 'done':

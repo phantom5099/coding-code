@@ -64,6 +64,7 @@ interface AgentState {
   contextUsage: { used: number; contextWindow: number } | null
   todoByThreadId: Record<string, TodoPanelState>
   pendingInput: string | null
+  usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>
 }
 
 interface EditorState {
@@ -120,6 +121,7 @@ interface GlobalActions {
   setModel: (model: string) => void
   setModels: (models: ModelEntry[]) => void
   setContextUsage: (usage: { used: number; contextWindow: number } | null) => void
+  setThreadUsage: (threadId: string, usage: { prompt: number; completion: number; total: number }) => void
   setCursor: (line: number, col: number) => void
   loadThreads: (threads: Thread[]) => void
   updateToolCallStatus: (threadId: string, callId: string, status: 'pending' | 'approved' | 'rejected' | 'running') => void
@@ -185,6 +187,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         contextUsage: null,
         todoByThreadId: {},
         pendingInput: null,
+        usageByThreadId: {},
       },
       editor: {
         cursorLine: 1,
@@ -246,7 +249,20 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setGit: (status) => set((s) => { s.git = status }),
       addTerminal: (session) => set((s) => { s.terminals.push(session) }),
       removeTerminal: (id) => set((s) => { s.terminals = s.terminals.filter((t) => t.id !== id) }),
-      setCurrentThread: (id) => set((s) => { s.agent.currentThreadId = id }),
+      setCurrentThread: (id) => set((s) => {
+        s.agent.currentThreadId = id
+        if (id) {
+          const usage = s.agent.usageByThreadId[id]
+          const model = s.agent.models.find((m) => m.id === s.agent.model)
+          if (usage && model) {
+            s.agent.contextUsage = { used: usage.total, contextWindow: model.context_window }
+          } else {
+            s.agent.contextUsage = null
+          }
+        } else {
+          s.agent.contextUsage = null
+        }
+      }),
       upsertThread: (thread) => set((s) => { s.agent.threads[thread.id] = thread }),
       setThreadTurns: (threadId, turns) => set((s) => {
         const thread = s.agent.threads[threadId]
@@ -263,6 +279,15 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setModel: (model) => set((s) => { s.agent.model = model }),
       setModels: (models) => set((s) => { s.agent.models = models }),
       setContextUsage: (usage) => set((s) => { s.agent.contextUsage = usage }),
+      setThreadUsage: (threadId, usage) => set((s) => {
+        s.agent.usageByThreadId[threadId] = usage
+        if (s.agent.currentThreadId === threadId) {
+          const model = s.agent.models.find((m) => m.id === s.agent.model)
+          if (model) {
+            s.agent.contextUsage = { used: usage.total, contextWindow: model.context_window }
+          }
+        }
+      }),
       setCursor: (line, col) => set((s) => { s.editor.cursorLine = line; s.editor.cursorCol = col }),
 
       loadThreads: (threads) => set((s) => {
@@ -551,6 +576,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           threads: {},
           todoByThreadId: {},
           contextUsage: null,
+          usageByThreadId: (persisted as any).agent?.usageByThreadId ?? {},
         },
       }),
     },

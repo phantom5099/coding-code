@@ -26,6 +26,8 @@ function streamChunkToItem(
       return { id: 'rand', type: 'error', message: event.message }
     case 'todo_update':
       return null
+    case 'usage':
+      return null
     case 'done':
     case 'session_id':
       return null
@@ -114,6 +116,14 @@ describe('streamChunkToItem after StreamChunk refactor', () => {
   it('maps done to null', () => {
     const item = streamChunkToItem(
       { type: 'done' },
+      't1', 'a1', 'turn1',
+    )
+    expect(item).toBeNull()
+  })
+
+  it('maps usage to null', () => {
+    const item = streamChunkToItem(
+      { type: 'usage', prompt: 1000, completion: 500, total: 1500 },
       't1', 'a1', 'turn1',
     )
     expect(item).toBeNull()

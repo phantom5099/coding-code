@@ -71,4 +71,22 @@ describe('agentEventToStreamChunk - approval interleaving', () => {
     expect(chunks[1]).toMatchObject({ type: 'approval_request', id: 'apr-2' });
     expect(chunks[2]).toEqual({ type: 'done' });
   });
+
+  it('yields usage chunks', async () => {
+    async function* source() {
+      yield { _tag: 'Step' as const, step: 1, max: 10 };
+      yield { _tag: 'Assistant' as const, content: 'ok' };
+      yield { _tag: 'Usage' as const, prompt: 1000, completion: 500, total: 1500 };
+    }
+
+    const chunks: any[] = [];
+    for await (const chunk of agentEventToStreamChunk(source())) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      { type: 'text', text: 'ok', messageId: 1 },
+      { type: 'usage', prompt: 1000, completion: 500, total: 1500 },
+    ]);
+  });
 });

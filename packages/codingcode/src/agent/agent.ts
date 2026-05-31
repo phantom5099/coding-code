@@ -3,6 +3,7 @@ import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
 import type { ToolDescription } from '../tools/types.js';
+import type { LLMResponse } from '../llm/types.js';
 import { ToolService } from '../tools/registry.js';
 import { ToolExecutorService } from '../tools/executor.js';
 import { ContextService } from '../context/context.js';
@@ -70,7 +71,8 @@ export type AgentEvent =
   | { readonly _tag: 'Error'; readonly error: AgentError }
   | { readonly _tag: 'Done'; readonly content: string }
   | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'in_progress' | 'completed' }> }
-  | { readonly _tag: 'TurnId'; readonly turnId: number };
+  | { readonly _tag: 'TurnId'; readonly turnId: number }
+  | { readonly _tag: 'Usage'; readonly prompt: number; readonly completion: number; readonly total: number };
 
 export interface RunStreamOptions {
   state: SessionStoreState;
@@ -96,7 +98,7 @@ export interface LLMStreamAdapter {
     signal?: AbortSignal;
   }): {
     stream: AsyncIterable<string>;
-    response: Promise<Result<{ content: string; toolCalls?: ToolCall[] }, AgentError>>;
+    response: Promise<Result<LLMResponse, AgentError>>;
   };
 }
 
@@ -242,6 +244,9 @@ export async function* runReActLoop(
       }
       messages.push(assistantMsg);
       yield { _tag: 'Assistant', content: resp.content, toolCalls };
+      if (resp.usage) {
+        yield { _tag: 'Usage', prompt: resp.usage.prompt, completion: resp.usage.completion, total: resp.usage.total };
+      }
 
       if (!toolCalls || toolCalls.length === 0) {
         // LLM done — record assistant, then check stop hook

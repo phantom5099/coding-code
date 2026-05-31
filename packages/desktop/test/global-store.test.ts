@@ -18,6 +18,7 @@ beforeEach(() => {
       contextUsage: null,
       todoByThreadId: {},
       pendingInput: null,
+      usageByThreadId: {},
     },
     workspace: {
       rootPath: '',
@@ -434,5 +435,40 @@ describe('global store - project management', () => {
     useGlobalStore.getState().setCurrentProject('xyz')
     expect(useGlobalStore.getState().workspace.currentProjectId).toBe('xyz')
     expect(useGlobalStore.getState().workspace.rootPath).toBe('/some/path')
+  })
+})
+
+describe('global store - token usage', () => {
+  it('setThreadUsage stores usage by threadId', () => {
+    useGlobalStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 })
+    expect(useGlobalStore.getState().agent.usageByThreadId['t1']).toEqual({ prompt: 1000, completion: 500, total: 1500 })
+  })
+
+  it('setThreadUsage updates contextUsage when thread is active', () => {
+    useGlobalStore.getState().setModels([{ id: 'm1', name: 'Model', provider: 'openai', context_window: 128000 }])
+    useGlobalStore.getState().setModel('m1')
+    useGlobalStore.getState().setCurrentThread('t1')
+    useGlobalStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 })
+    expect(useGlobalStore.getState().agent.contextUsage).toEqual({ used: 1500, contextWindow: 128000 })
+  })
+
+  it('setThreadUsage does not update contextUsage for inactive thread', () => {
+    useGlobalStore.getState().setCurrentThread('t1')
+    useGlobalStore.getState().setThreadUsage('t2', { prompt: 1000, completion: 500, total: 1500 })
+    expect(useGlobalStore.getState().agent.contextUsage).toBeNull()
+  })
+
+  it('setCurrentThread restores contextUsage from usageByThreadId', () => {
+    useGlobalStore.getState().setModels([{ id: 'm1', name: 'Model', provider: 'openai', context_window: 128000 }])
+    useGlobalStore.getState().setModel('m1')
+    useGlobalStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 })
+    useGlobalStore.getState().setCurrentThread('t1')
+    expect(useGlobalStore.getState().agent.contextUsage).toEqual({ used: 1500, contextWindow: 128000 })
+  })
+
+  it('setCurrentThread clears contextUsage when no usage for thread', () => {
+    useGlobalStore.getState().setContextUsage({ used: 100, contextWindow: 128000 })
+    useGlobalStore.getState().setCurrentThread('t1')
+    expect(useGlobalStore.getState().agent.contextUsage).toBeNull()
   })
 })

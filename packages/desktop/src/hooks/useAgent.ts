@@ -31,6 +31,7 @@ export function useAgent() {
   const setModels = useGlobalStore((s) => s.setModels)
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)
   const setContextUsage = useGlobalStore((s) => s.setContextUsage)
+  const setThreadUsage = useGlobalStore((s) => s.setThreadUsage)
   const setProjects = useGlobalStore((s) => s.setProjects)
   const switchProject = useGlobalStore((s) => s.switchProject)
   const addProject = useGlobalStore((s) => s.addProject)
@@ -118,13 +119,16 @@ export function useAgent() {
       case 'todo_update':
         applyTodoUpdate(threadId, event.items as any)
         return null
+      case 'usage':
+        setThreadUsage(threadId, { prompt: event.prompt, completion: event.completion, total: event.total })
+        return null
       case 'done':
       case 'session_id':
         return null
       default:
         return null
     }
-  }, [applyTodoUpdate, updateTurnId])
+  }, [applyTodoUpdate, updateTurnId, setThreadUsage])
 
   const sendMessage = useCallback(
     async (content: string, cwd?: string) => {
@@ -148,7 +152,6 @@ export function useAgent() {
       const turn: Turn = { id: turnId, items: [userItem], status: 'running' }
 
       startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) })
-      setContextUsage(null)
 
       const controller = new AbortController()
       abortControllers.current.set(threadId, controller)
@@ -186,7 +189,7 @@ export function useAgent() {
         abortControllers.current.delete(threadId)
       }
     },
-    [startTurn, setCurrentThread, setContextUsage, streamChunkToItem, applyChunk, completeTurn, workspace.rootPath, approvalPolicy, currentThreadId]
+    [startTurn, setCurrentThread, streamChunkToItem, applyChunk, completeTurn, workspace.rootPath, approvalPolicy, currentThreadId]
   )
 
   const abort = useCallback(() => {
