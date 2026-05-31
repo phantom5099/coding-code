@@ -1,11 +1,11 @@
 import { listModels, createClient } from '../llm/factory.js';
-import type { LLMStreamAdapter } from '../agent/agent.js';
+import type { LLMClient } from '../llm/client.js';
 import type { MemoryConfig } from '@codingcode/infra';
 
 export async function resolveMemoryLLM(
   config: MemoryConfig,
-  fallback: LLMStreamAdapter | null,
-): Promise<LLMStreamAdapter | null> {
+  fallback: LLMClient | null,
+): Promise<LLMClient | null> {
   const target = config.model?.trim();
   if (!target) return fallback;
 

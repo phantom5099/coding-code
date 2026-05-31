@@ -305,6 +305,12 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           }
         }
         s.agent.threads = next
+        // Clean up usage entries for deleted threads
+        for (const id of Object.keys(s.agent.usageByThreadId)) {
+          if (!incomingIds.has(id)) {
+            delete s.agent.usageByThreadId[id]
+          }
+        }
       }),
 
       updateToolCallStatus: (threadId, callId, status) => set((s) => {

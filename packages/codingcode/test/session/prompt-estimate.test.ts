@@ -1,0 +1,247 @@
+import { describe, it, expect } from 'vitest';
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+import { randomUUID } from 'crypto';
+import { Effect } from 'effect';
+import { findLastVisibleAssistantUsage, forkSession, findSessionIndex, SessionService, buildMessages } from '../../src/session/store.js';
+import { estimateTokensForContent, estimateTokens } from '../../src/context/utils/tokens.js';
+import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
+
+const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+
+function makeFixture(sessionId: string, slug: string, usage?: { prompt: number; completion: number; total: number }) {
+  const dir = join(PROJECT_BASE, slug, 'sessions');
+  mkdirSync(dir, { recursive: true });
+  const transcriptPath = join(dir, `${sessionId}.jsonl`);
+  const indexPath = join(dir, `${sessionId}.index.json`);
+
+  const lines: any[] = [
+    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+    { type: 'user', turnId: 1, uuid: 'u1', content: 'hello world', timestamp: new Date().toISOString() },
+    { type: 'assistant', turnId: 1, uuid: 'a1', content: 'hi there', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage },
+    { type: 'user', turnId: 2, uuid: 'u2', content: 'do stuff', timestamp: new Date().toISOString() },
+    { type: 'assistant', turnId: 2, uuid: 'a2', content: 'ok done', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage: usage ? { prompt: usage.prompt + 100, completion: usage.completion + 50, total: usage.total + 150 } : undefined },
+  ];
+
+  writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
+
+  const idx: SessionIndex = {
+    sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    messageCount: 4, title: 'fixture', currentTurnId: 2,
+    usage: usage ?? undefined,
+    promptEstimate: usage ? usage.prompt : estimateTokens(buildMessages(transcriptPath)),
+    permissionMode: 'default',
+  };
+  writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
+
+  return { dir, transcriptPath, indexPath };
+}
+
+describe('promptEstimate', () => {
+  it('findLastVisibleAssistantUsage reads usage from visible assistant event', () => {
+    const sessionId = randomUUID();
+    const slug = randomUUID();
+    const usage = { prompt: 1200, completion: 300, total: 1500 };
+    const lastUsage = { prompt: 1300, completion: 350, total: 1650 };
+    const fx = makeFixture(sessionId, slug, usage);
+    try {
+      const result = findLastVisibleAssistantUsage(fx.transcriptPath);
+      expect(result).toEqual(lastUsage);
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+  });
+
+  it('findLastVisibleAssistantUsage returns undefined when no assistant usage', () => {
+    const sessionId = randomUUID();
+    const slug = randomUUID();
+    const fx = makeFixture(sessionId, slug, undefined);
+    try {
+      const result = findLastVisibleAssistantUsage(fx.transcriptPath);
+      expect(result).toBeUndefined();
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+  });
+
+  it('findLastVisibleAssistantUsage skips hidden assistant events', () => {
+    const sessionId = randomUUID();
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug, 'sessions');
+    mkdirSync(dir, { recursive: true });
+    const transcriptPath = join(dir, `${sessionId}.jsonl`);
+
+    const usage1 = { prompt: 100, completion: 50, total: 150 };
+    const usage2 = { prompt: 200, completion: 100, total: 300 };
+    const lines: any[] = [
+      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'assistant', turnId: 1, uuid: 'a1', content: 'first', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage: usage1 },
+      { type: 'hide', uuid: 'h1', kind: 'message', targetUuid: 'a1', reason: 'test', timestamp: new Date().toISOString() },
+      { type: 'assistant', turnId: 2, uuid: 'a2', content: 'second', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage: usage2 },
+    ];
+    writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
+
+    try {
+      const result = findLastVisibleAssistantUsage(transcriptPath);
+      expect(result).toEqual(usage2);
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+  });
+
+  it('findSessionIndex reads promptEstimate from index.json', () => {
+    const sessionId = randomUUID();
+    const slug = randomUUID();
+    const fx = makeFixture(sessionId, slug, { prompt: 500, completion: 200, total: 700 });
+    try {
+      const idx = findSessionIndex(sessionId);
+      expect(idx).not.toBeNull();
+      expect(idx!.promptEstimate).toBe(500);
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+  });
+
+  it('forkSession restores usage and promptEstimate from last visible assistant', () => {
+    const sessionId = randomUUID();
+    const slug = randomUUID();
+    const usage = { prompt: 800, completion: 400, total: 1200 };
+    const fx = makeFixture(sessionId, slug, usage);
+    try {
+      const newSessionId = forkSession(sessionId, fx.transcriptPath, 'a1');
+      const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
+      const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
+      expect(idx.usage).toEqual(usage);
+      expect(idx.promptEstimate).toBe(usage.prompt);
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+  });
+
+  it('forkSession falls back to estimateTokens when no assistant usage', () => {
+    const sessionId = randomUUID();
+    const slug = randomUUID();
+    const fx = makeFixture(sessionId, slug, undefined);
+    try {
+      const newSessionId = forkSession(sessionId, fx.transcriptPath, 'u2');
+      const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
+      const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
+      expect(idx.promptEstimate).toBeGreaterThan(0);
+    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+  });
+});
+
+describe('token estimation', () => {
+  it('estimateTokensForContent returns > 0 for non-empty strings', () => {
+    expect(estimateTokensForContent('hello world')).toBeGreaterThan(0);
+    expect(estimateTokensForContent('')).toBe(0);
+  });
+});
+
+function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+}
+
+describe('SessionService record methods update promptEstimate', () => {
+  it('recordUser increments promptEstimate', async () => {
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug);
+    mkdirSync(dir, { recursive: true });
+
+    const state = await run(
+      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+    );
+    expect(state.promptEstimate).toBe(0);
+
+    const before = state.promptEstimate;
+    await run(
+      SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))),
+    );
+    expect(state.promptEstimate).toBeGreaterThan(before);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('recordAssistant without usage increments promptEstimate', async () => {
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug);
+    mkdirSync(dir, { recursive: true });
+
+    const state = await run(
+      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+    );
+
+    await run(
+      SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello'))),
+    );
+    const before = state.promptEstimate;
+
+    await run(
+      SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model'))),
+    );
+    expect(state.promptEstimate).toBeGreaterThan(before);
+    expect(state.usage).toBeUndefined();
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('recordAssistant with usage sets promptEstimate to usage.prompt', async () => {
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug);
+    mkdirSync(dir, { recursive: true });
+
+    const state = await run(
+      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+    );
+
+    const usage = { prompt: 999, completion: 111, total: 1110 };
+    await run(
+      SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', usage))),
+    );
+    expect(state.promptEstimate).toBe(999);
+    expect(state.usage).toEqual(usage);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('recordToolResult increments promptEstimate and stores tokenCount', async () => {
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug);
+    mkdirSync(dir, { recursive: true });
+
+    const state = await run(
+      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+    );
+
+    const assistantEvent = await run(
+      SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'use tool', [{ id: 'tc1', name: 'bash', arguments: {} }], 'test-model'))),
+    );
+    const before = state.promptEstimate;
+
+    const toolEvent = await run(
+      SessionService.pipe(Effect.flatMap((s) => s.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', 'tool output here'))),
+    );
+    expect(state.promptEstimate).toBeGreaterThan(before);
+    expect(toolEvent.tokenCount).toBeGreaterThan(0);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('hideMessage resets usage and recalculates promptEstimate', async () => {
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug);
+    mkdirSync(dir, { recursive: true });
+
+    const state = await run(
+      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+    );
+
+    const userEv = await run(
+      SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))),
+    );
+    await run(
+      SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', { prompt: 100, completion: 50, total: 150 }))),
+    );
+    expect(state.usage).toBeDefined();
+
+    await run(
+      SessionService.pipe(Effect.flatMap((s) => s.hideMessage(state, userEv.uuid, 'test'))),
+    );
+    expect(state.usage).toBeUndefined();
+    expect(state.promptEstimate).toBeGreaterThanOrEqual(0);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

@@ -4,6 +4,7 @@ import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
 import type { ToolDescription } from '../tools/types.js';
 import type { LLMResponse } from '../llm/types.js';
+import type { LLMClient } from '../llm/client.js';
 import { ToolService } from '../tools/registry.js';
 import { ToolExecutorService } from '../tools/executor.js';
 import { ContextService } from '../context/context.js';
@@ -12,6 +13,7 @@ import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
+import { estimateTokens } from '../context/utils/tokens.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
 import { sharedTodoStore } from '../self/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
@@ -27,7 +29,7 @@ export const sendMessage = (
   sessionId: string | undefined,
   input: string,
   cwd: string,
-  llm: any,
+  llm: LLMClient,
   options?: {
     signal?: AbortSignal
   },
@@ -76,7 +78,7 @@ export type AgentEvent =
 
 export interface RunStreamOptions {
   state: SessionStoreState;
-  llm: LLMStreamAdapter;
+  llm: LLMClient;
   skillInstruction?: string;
   systemPromptVariant?: SystemPromptVariant;
   systemOverride?: string;
@@ -87,19 +89,6 @@ export interface RunStreamOptions {
   maxStepsOverride?: number;
   maxStopContinuations?: number;
   approvalOverride?: any;
-}
-
-export interface LLMStreamAdapter {
-  completeStream(params: {
-    messages: Message[];
-    system?: string;
-    tools?: ToolDescription[];
-    maxSteps?: number;
-    signal?: AbortSignal;
-  }): {
-    stream: AsyncIterable<string>;
-    response: Promise<Result<LLMResponse, AgentError>>;
-  };
 }
 
 interface RunReActDeps {
@@ -203,14 +192,16 @@ export async function* runReActLoop(
       const stepBeforePayload = { sessionId, step: step + 1 };
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
-      // Pre-send compression check: if previous usage exceeded threshold, compress first
-      if (state.usage && state.usage.total > config.defaultMaxTokens * config.thresholds.prune) {
-        const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, llm as any, config));
+      // Pre-send compression check: if prompt estimate exceeded threshold, compress first
+      if (state.promptEstimate > config.defaultMaxTokens * config.thresholds.prune) {
+        const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, llm, config));
         if (compressResult.didCompress) {
           yield { _tag: 'ReactiveCompact', attempt: 0, released: compressResult.released };
           const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
           messages.length = 0;
           messages.push(...rebuilt);
+          state.usage = undefined;
+          state.promptEstimate = estimateTokens(rebuilt);
         }
       }
 
@@ -222,8 +213,7 @@ export async function* runReActLoop(
 
       const { stream: rawStream, response: respPromise } = llm.completeStream({
         messages: llmMessages, system: systemWithCatalog, tools, maxSteps: 1,
-        signal: opts.abortSignal,
-      });
+      }, opts.abortSignal);
 
       for await (const chunk of rawStream) {
         if (opts.abortSignal?.aborted) break;
@@ -256,13 +246,12 @@ export async function* runReActLoop(
       messages.push(assistantMsg);
       yield { _tag: 'Assistant', content: resp.content, toolCalls };
       if (resp.usage) {
-        state.usage = { prompt: resp.usage.prompt, completion: resp.usage.completion, total: resp.usage.total };
         yield { _tag: 'Usage', prompt: resp.usage.prompt, completion: resp.usage.completion, total: resp.usage.total };
       }
 
       if (!toolCalls || toolCalls.length === 0) {
         // LLM done — record assistant, then check stop hook
-        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls || [], model));
+        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls || [], model, resp.usage));
         const stopDecision: any = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
           sessionId, content: resp.content, turnId: state.currentTurnId,
         }));
@@ -304,7 +293,7 @@ export async function* runReActLoop(
       // Execute tool calls — record assistant, execute batch, record results in one pipeline
       const allResults = await Effect.runPromise(
         Effect.gen(function* () {
-          const record = yield* session.recordAssistant(state, resp.content, toolCalls!, model);
+          const record = yield* session.recordAssistant(state, resp.content, toolCalls!, model, resp.usage);
           const results = yield* executor.executeBatch(toolCalls, state.sessionId, {
             turnId: state.currentTurnId,
             projectPath,
@@ -355,9 +344,8 @@ export async function* runReActLoop(
 
     if (overflow) continue;
 
-    // Turn completed — snapshot and compact
+    // Turn completed — snapshot
     checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
-    await Effect.runPromise(ctx.appendTurnEnd(state.sessionId, state.projectPath, llm as any));
 
     // Fire-and-forget memory flush
     flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));

@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { run, compactWithLLM } from '../../../src/context/compressor/index.js';
+import { compactWithLLM } from '../../../src/context/compressor/index.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
@@ -43,7 +43,7 @@ function makeFixture(opts: FixtureOptions) {
     sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: opts.numTurns * 3, title: 'fixture', currentTurnId: opts.currentTurnId ?? opts.numTurns,
-    usage: undefined, permissionMode: 'default',
+    usage: undefined, promptEstimate: 0, permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
@@ -100,62 +100,6 @@ function makeMockLLM(content: string): LLMClient {
 }
 
 describe('compressor behavior', () => {
-  describe('L2 prune protection', () => {
-    it('does not prune tools in protected recent turns (prefixTurnsProtected)', async () => {
-      const fx = makeFixture({ numTurns: 3, toolContentSize: 4000 });
-      try {
-        const cfg = tinyConfig({ prefixTurnsProtected: 2, pruneProtectedTokens: 0 });
-        await run(fx.sessionId, fx.slug, 10000, null, cfg);
-        const summaries = readSummaryEvents(fx.transcriptPath);
-        expect(summaries.filter((s) => s.method === 'prune')).toHaveLength(0);
-      } finally { cleanup(fx.slug); }
-    });
-
-    it('respects pruneProtectedTokens window (recent tools by token budget)', async () => {
-      const fx = makeFixture({ numTurns: 5, toolContentSize: 4000 });
-      try {
-        const cfg = tinyConfig({ prefixTurnsProtected: 0, pruneProtectedTokens: 3000 });
-        await run(fx.sessionId, fx.slug, 100000, null, cfg);
-        const summaries = readSummaryEvents(fx.transcriptPath);
-        const pruneSummaries = summaries.filter((s) => s.method === 'prune');
-        // Only old tools (turn 1, 2) should be pruned; recent tools (3, 4, 5) protected by token budget.
-        // Each prune summary replaces one tool_result uuid
-        expect(pruneSummaries.length).toBeGreaterThanOrEqual(0);
-      } finally { cleanup(fx.slug); }
-    });
-
-    it('skips whitelisted tools', async () => {
-      const fx = makeFixture({ numTurns: 5, toolContentSize: 4000, toolName: 'Read' });
-      try {
-        const cfg = tinyConfig({ prefixTurnsProtected: 0, pruneProtectedTokens: 0, toolsExemptFromPrune: ['Read'] });
-        await run(fx.sessionId, fx.slug, 100000, null, cfg);
-        const summaries = readSummaryEvents(fx.transcriptPath);
-        expect(summaries.filter((s) => s.method === 'prune')).toHaveLength(0);
-      } finally { cleanup(fx.slug); }
-    });
-  });
-
-  describe('fall-through to L5', () => {
-    it('falls through to L5 when prune has no candidates', async () => {
-      const fx = makeFixture({ numTurns: 6, toolContentSize: 4000, toolName: 'Read' });
-      try {
-        const cfg = tinyConfig({
-          toolsExemptFromPrune: ['Read'],
-          prefixTurnsProtected: 0,
-          pruneProtectedTokens: 0,
-          minTurnsBetweenCompactions: 2,
-          keepRecentTurns: 2,
-        });
-        const llm = makeMockLLM('## Compacted History\n\n### Goal\nx\n\n### Instructions\ny\n\n### Discoveries\nz\n\n### Accomplished\nw\n\n### Relevant Files\nv');
-        const result = await run(fx.sessionId, fx.slug, 100000, llm, cfg);
-        const summaries = readSummaryEvents(fx.transcriptPath);
-        const compactionSummaries = summaries.filter((s) => s.method === 'auto-compact');
-        expect(compactionSummaries.length).toBe(1);
-        expect(result.didCompress).toBe(true);
-      } finally { cleanup(fx.slug); }
-    });
-  });
-
   describe('L5 compaction', () => {
     it('writes summary event with five-section system summary', async () => {
       const fx = makeFixture({ numTurns: 5 });
@@ -212,29 +156,4 @@ describe('compressor behavior', () => {
     });
   });
 
-  describe('L1 persist (applyToolResultBudget)', () => {
-    it('persists large tool results to disk', async () => {
-      const fx = makeFixture({ numTurns: 1, toolContentSize: 5000, toolName: 'bash' });
-      try {
-        const cfg = tinyConfig({ thresholdTokens: 100, persistPreviewChars: 100 });
-        const result = await run(fx.sessionId, fx.slug, 1000, null, cfg);
-        const summaries = readSummaryEvents(fx.transcriptPath);
-        const persistSummaries = summaries.filter((s) => s.method === 'collapse-llm');
-        expect(persistSummaries.length).toBe(1);
-        expect(persistSummaries[0]!.summaryText).toContain('persisted at:');
-        expect(result.released).toBeGreaterThan(0);
-      } finally { cleanup(fx.slug); }
-    });
-
-    it('does not persist small tool results', async () => {
-      const fx = makeFixture({ numTurns: 1, toolContentSize: 10, toolName: 'bash' });
-      try {
-        const cfg = tinyConfig({ thresholdTokens: 100 });
-        await run(fx.sessionId, fx.slug, 1000, null, cfg);
-        const summaries = readSummaryEvents(fx.transcriptPath);
-        const persistSummaries = summaries.filter((s) => s.method === 'collapse-llm');
-        expect(persistSummaries).toHaveLength(0);
-      } finally { cleanup(fx.slug); }
-    });
-  });
 });

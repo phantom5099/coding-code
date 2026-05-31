@@ -27,45 +27,6 @@ interface CompressContext {
   hiddenUuids: Set<string>;
 }
 
-/**
- * Compress in a single linear pass. Each step is idempotent within one turn.
- */
-export async function run(
-  sessionId: string,
-  encodedProjectPath: string,
-  usage: number,
-  llm: LLMClient | null,
-  config: ContextConfig,
-): Promise<CompressResult> {
-  const idx = findSessionIndex(sessionId);
-  const currentTurnId = idx?.currentTurnId ?? 0;
-  const ctx = buildContext(sessionId, encodedProjectPath, config, llm, currentTurnId);
-  const budget = config.defaultMaxTokens;
-
-  let remaining = usage;
-
-  // L1 Persist (always: large results from persistable tools → disk)
-  remaining -= applyToolResultBudget(ctx);
-
-  // Prune (>70% budget)
-  if (remaining > budget * config.thresholds.prune) {
-    remaining -= tryPruneTools(ctx);
-  }
-
-  // L2 Snip (message count threshold)
-  remaining -= trySnip(ctx);
-
-  // L3 Microcompact (tool result count threshold)
-  remaining -= tryMicrocompact(ctx);
-
-  // L5 Compaction (>90% budget)
-  if (remaining > budget * config.thresholds.compaction) {
-    remaining -= await tryL5Compaction(ctx);
-  }
-
-  return { didCompress: remaining < usage, released: usage - remaining };
-}
-
 export async function compactWithLLM(
   sessionId: string,
   encodedProjectPath: string,

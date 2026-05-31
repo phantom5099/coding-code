@@ -7,6 +7,7 @@ import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, HideEvent, UnhideEvent, TitleEvent, SessionIndex, TokenUsage } from './types.js';
+import { estimateTokens, estimateTokensForContent } from '../context/utils/tokens.js';
 import { createLogger } from '@codingcode/infra';
 
 const logger = createLogger();
@@ -105,6 +106,7 @@ export interface SessionStoreState {
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;
+  promptEstimate: number;
 }
 
 function makeTitle(content: string): string {
@@ -166,16 +168,25 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
               state.title = makeTitle(content);
             }
             appendEvent(state, event);
+            state.promptEstimate += estimateTokensForContent(content);
+            updateIndex(state);
             return event;
           },
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      recordAssistant: (state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], model: string): Effect.Effect<AssistantEvent, AgentError> =>
+      recordAssistant: (state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], model: string, usage?: TokenUsage): Effect.Effect<AssistantEvent, AgentError> =>
         Effect.try({
           try: () => {
-            const event: AssistantEvent = { type: 'assistant', turnId: state.currentTurnId, uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString() };
+            const event: AssistantEvent = { type: 'assistant', turnId: state.currentTurnId, uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString(), usage };
             appendEvent(state, event);
+            if (usage) {
+              state.usage = usage;
+              state.promptEstimate = usage.prompt;
+            } else {
+              state.promptEstimate += estimateTokensForContent(content);
+            }
+            updateIndex(state);
             return event;
           },
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
@@ -184,8 +195,10 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       recordToolResult: (state: SessionStoreState, parentUuid: string, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent, AgentError> =>
         Effect.try({
           try: () => {
-            const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString(), tokenCount: 0 };
+            const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString(), tokenCount: estimateTokensForContent(output) };
             appendEvent(state, event);
+            state.promptEstimate += estimateTokensForContent(output);
+            updateIndex(state);
             return event;
           },
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
@@ -196,6 +209,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           try: () => {
             const event: SummaryEvent = { type: 'summary', uuid: randomUUID(), replaces, summaryText, method, timestamp: new Date().toISOString() };
             appendEvent(state, event);
+            state.usage = undefined;
+            state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
+            updateIndex(state);
             return event;
           },
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
@@ -205,6 +221,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         Effect.sync(() => {
           const event: HideEvent = { type: 'hide', uuid: randomUUID(), kind: 'message', targetUuid, reason, timestamp: new Date().toISOString() };
           appendEvent(state, event);
+          state.usage = undefined;
+          state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
+          updateIndex(state);
           return event;
         }),
 
@@ -212,6 +231,15 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         Effect.sync(() => {
           const event: HideEvent = { type: 'hide', uuid: randomUUID(), kind: 'rollback', throughTurnId, reason, timestamp: new Date().toISOString() };
           appendEvent(state, event);
+          const lastUsage = findLastVisibleAssistantUsage(state.transcriptPath);
+          if (lastUsage) {
+            state.usage = lastUsage;
+            state.promptEstimate = lastUsage.prompt;
+          } else {
+            state.usage = undefined;
+            state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
+          }
+          updateIndex(state);
           return event;
         }),
 
@@ -228,6 +256,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           if (!lastHideUuid || unhidTargets.has(lastHideUuid)) return null;
           const event: UnhideEvent = { type: 'unhide', uuid: randomUUID(), targetHideUuid: lastHideUuid, timestamp: new Date().toISOString() };
           appendEvent(state, event);
+          state.usage = undefined;
+          state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
+          updateIndex(state);
           return event;
         }),
 
@@ -291,18 +322,28 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
   const indexPath = transcriptPath.replace('.jsonl', '.index.json');
   let currentTurnId = 0;
   let usage: TokenUsage | undefined = undefined;
+  let promptEstimate = 0;
   try {
     if (existsSync(indexPath)) {
       const idx = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
       currentTurnId = idx.currentTurnId ?? 0;
       usage = idx.usage ?? undefined;
+      promptEstimate = idx.promptEstimate ?? 0;
     }
   } catch { /* ignore corrupt index */ }
+  if (!usage && promptEstimate === 0) {
+    const lastUsage = findLastVisibleAssistantUsage(transcriptPath);
+    if (lastUsage) {
+      usage = lastUsage;
+      promptEstimate = lastUsage.prompt;
+    }
+  }
   return {
     sessionId: id, cwd: normalizedCwd, projectPath, transcriptPath,
     indexPath,
     messageCount: 0, sessionMeta: null, title: id.slice(0, 8), currentTurnId,
     usage,
+    promptEstimate,
   };
 }
 
@@ -367,6 +408,23 @@ export function applyVisibilityEvents(events: SessionEvent[]): Set<string> {
   }
 
   return hidden;
+}
+
+/**
+ * Find the usage of the last visible assistant event in the session history.
+ * Used to restore the precise token anchor after rollback/fork.
+ */
+export function findLastVisibleAssistantUsage(path: string): TokenUsage | undefined {
+  const events = readHistory(path);
+  const hidden = applyVisibilityEvents(events);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.type === 'hide' || ev.type === 'unhide') continue;
+    if (ev.type !== 'assistant') continue;
+    if ('uuid' in ev && hidden.has((ev as any).uuid)) continue;
+    return (ev as AssistantEvent).usage;
+  }
+  return undefined;
 }
 
 export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
@@ -441,7 +499,7 @@ export function listSessions(projectPath?: string): SessionIndex[] {
         if (meta?.cwd && meta?.sessionId) {
           const h = readHistory(jsonlPath);
           const firstUser = findFirstUserContent(h);
-          results.push({ sessionId: meta.sessionId, projectPath: meta.projectPath, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8), currentTurnId: 0, usage: undefined, permissionMode: 'default' });
+          results.push({ sessionId: meta.sessionId, projectPath: meta.projectPath, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8), currentTurnId: 0, usage: undefined, promptEstimate: 0, permissionMode: 'default' });
         }
       }
     }
@@ -470,6 +528,7 @@ function updateIndex(state: SessionStoreState): void {
     messageCount: state.messageCount, title: state.title,
     currentTurnId: state.currentTurnId,
     usage: state.usage,
+    promptEstimate: state.promptEstimate,
     permissionMode: current?.permissionMode ?? 'default',
   };
   enqueueWrite(state.sessionId, state.indexPath, index);
@@ -556,14 +615,25 @@ export function forkSession(sourceSessionId: string, sourceJsonlPath: string, at
   const sourceIdxPath = sourceJsonlPath.replace('.jsonl', '.index.json');
   let title = newSessionId.slice(0, 8);
   let usage: TokenUsage | undefined = undefined;
+  let promptEstimate = 0;
   let permissionMode = 'default';
   if (existsSync(sourceIdxPath)) {
     try {
       const srcIdx = JSON.parse(readFileSync(sourceIdxPath, 'utf8')) as SessionIndex;
       title = srcIdx.title;
       usage = srcIdx.usage ?? undefined;
+      promptEstimate = srcIdx.promptEstimate ?? 0;
       permissionMode = srcIdx.permissionMode ?? 'default';
     } catch { /* corrupt */ }
+  }
+
+  const lastUsage = findLastVisibleAssistantUsage(newJsonlPath);
+  if (lastUsage) {
+    usage = lastUsage;
+    promptEstimate = lastUsage.prompt;
+  } else {
+    usage = undefined;
+    promptEstimate = estimateTokens(buildMessages(newJsonlPath));
   }
 
   const meta = chain[0] as SessionMetaEvent | undefined;
@@ -578,6 +648,7 @@ export function forkSession(sourceSessionId: string, sourceJsonlPath: string, at
     title,
     currentTurnId: turnId,
     usage,
+    promptEstimate,
     permissionMode,
   };
   writeFileSync(newIndexPath, JSON.stringify(newIdx, null, 2), 'utf8');

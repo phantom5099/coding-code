@@ -27,6 +27,7 @@ export interface AssistantEvent {
   toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
   model: string;
   timestamp: string;
+  usage?: TokenUsage;
 }
 
 export interface ToolResultEvent {
@@ -111,5 +112,6 @@ export interface SessionIndex {
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;
+  promptEstimate?: number;
   permissionMode: string;
 }

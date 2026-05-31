@@ -1,4 +1,4 @@
-import type { LLMStreamAdapter } from '../agent/agent.js';
+import type { LLMClient } from '../llm/client.js';
 import { findSessionIndex } from '../session/store.js';
 import type { SessionEvent } from '../session/types.js';
 import { readMemoryFile, resolveProjectMemoryPath, resolveUserMemoryPath, extractAutoBlock, replaceAutoBlock, mergeAutoBlocks, enforceMaxBytes, writeMemoryFileAtomic, stripMarkersForPrompt } from './storage.js';
@@ -90,7 +90,7 @@ function buildStructuredTranscript(events: SessionEvent[]): StructuredTranscript
 
 export async function flushSessionToMemory(
   sessionId: string,
-  llm: LLMStreamAdapter | null,
+  llm: LLMClient | null,
 ): Promise<{ written: boolean; bytes: number }> {
   if (!getMemoryEnabled()) {
     return { written: false, bytes: 0 };

@@ -9,7 +9,7 @@ export interface ToolExecCtx {
   projectPath?: string;
   agentRunner?: {
     agentService: any; // AgentService — use any to avoid circular imports
-    llm: any; // LLMStreamAdapter — use any to avoid circular imports
+    llm: any; // LLMClient — use any to avoid circular imports
   };
   sandbox?: {
     wrapCommand: (command: string) => Effect.Effect<string>;

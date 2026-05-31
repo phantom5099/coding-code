@@ -9,17 +9,6 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
   effect: Effect.gen(function* () {
     return {
       /**
-       * Called at the end of each agent turn. Previously used a rough
-       * estimate to decide whether to compress; now compression
-       * is triggered pre-send in `agent.ts` based on real usage. This hook
-       * is kept for turn-end bookkeeping but no longer drives compression.
-       */
-      appendTurnEnd: (sessionId: string, encodedProjectPath: string, llm: LLMClient | null = null, config?: ContextConfig): Effect.Effect<CompressResult> =>
-        Effect.sync(() => {
-          return { didCompress: false, released: 0 };
-        }),
-
-      /**
        * Build the message array to send to the LLM next. Uses the event
        * pipeline (raw JSONL → summary/hide filter).
        *
