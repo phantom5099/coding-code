@@ -50,6 +50,20 @@ export async function compactWithLLM(
   return { didCompress: released > 0, released, promptEstimate };
 }
 
+export async function compactIfNeeded(
+  sessionId: string,
+  encodedProjectPath: string,
+  promptEstimate: number,
+  config: ContextConfig,
+  llm: LLMClient | null,
+): Promise<CompressResult> {
+  const threshold = config.defaultMaxTokens * config.thresholds.prune;
+  if (promptEstimate <= threshold) {
+    return { didCompress: false, released: 0, promptEstimate };
+  }
+  return await compactWithLLM(sessionId, encodedProjectPath, config, llm);
+}
+
 // ---------- Context building ----------
 
 function buildContext(

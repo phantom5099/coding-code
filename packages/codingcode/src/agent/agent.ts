@@ -192,17 +192,15 @@ export async function* runReActLoop(
       const stepBeforePayload = { sessionId, step: step + 1 };
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
-      // Pre-send compression check: if prompt estimate exceeded threshold, compress first
-      if (state.promptEstimate > config.defaultMaxTokens * config.thresholds.prune) {
-        const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, llm, config));
-        if (compressResult.didCompress) {
-          yield { _tag: 'ReactiveCompact', attempt: 0, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
-          const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
-          messages.length = 0;
-          messages.push(...rebuilt);
-          state.usage = undefined;
-          state.promptEstimate = estimateTokens(rebuilt);
-        }
+      // Pre-send compression check: let context layer decide if compaction is needed
+      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, state.promptEstimate, config));
+      if (compressResult.didCompress) {
+        yield { _tag: 'ReactiveCompact', attempt: 0, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
+        const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
+        messages.length = 0;
+        messages.push(...rebuilt);
+        state.usage = undefined;
+        state.promptEstimate = estimateTokens(rebuilt);
       }
 
       // Build LLM messages: original messages + step.before transients
