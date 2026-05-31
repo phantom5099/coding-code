@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { findLastVisibleAssistantUsage, forkSession, findSessionIndex, SessionService, buildMessages } from '../../src/session/store.js';
 import { estimateTokensForContent, estimateTokens } from '../../src/context/utils/tokens.js';
+import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
@@ -139,109 +140,104 @@ describe('SessionService record methods update promptEstimate', () => {
     const slug = randomUUID();
     const dir = join(PROJECT_BASE, slug);
     mkdirSync(dir, { recursive: true });
+    try {
+      const state = await run(
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+      );
+      expect(state.promptEstimate).toBe(0);
 
-    const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
-    );
-    expect(state.promptEstimate).toBe(0);
-
-    const before = state.promptEstimate;
-    await run(
-      SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))),
-    );
-    expect(state.promptEstimate).toBeGreaterThan(before);
-
-    rmSync(dir, { recursive: true, force: true });
+      const before = state.promptEstimate;
+      await run(
+        SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))),
+      );
+      expect(state.promptEstimate).toBeGreaterThan(before);
+    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
   });
 
   it('recordAssistant without usage increments promptEstimate', async () => {
     const slug = randomUUID();
     const dir = join(PROJECT_BASE, slug);
     mkdirSync(dir, { recursive: true });
+    try {
+      const state = await run(
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+      );
 
-    const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
-    );
+      await run(
+        SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello'))),
+      );
+      const before = state.promptEstimate;
 
-    await run(
-      SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello'))),
-    );
-    const before = state.promptEstimate;
-
-    await run(
-      SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model'))),
-    );
-    expect(state.promptEstimate).toBeGreaterThan(before);
-    expect(state.usage).toBeUndefined();
-
-    rmSync(dir, { recursive: true, force: true });
+      await run(
+        SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model'))),
+      );
+      expect(state.promptEstimate).toBeGreaterThan(before);
+      expect(state.usage).toBeUndefined();
+    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
   });
 
   it('recordAssistant with usage sets promptEstimate to usage.prompt', async () => {
     const slug = randomUUID();
     const dir = join(PROJECT_BASE, slug);
     mkdirSync(dir, { recursive: true });
+    try {
+      const state = await run(
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+      );
 
-    const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
-    );
-
-    const usage = { prompt: 999, completion: 111, total: 1110 };
-    await run(
-      SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', usage))),
-    );
-    expect(state.promptEstimate).toBe(999);
-    expect(state.usage).toEqual(usage);
-
-    rmSync(dir, { recursive: true, force: true });
+      const usage = { prompt: 999, completion: 111, total: 1110 };
+      await run(
+        SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', usage))),
+      );
+      expect(state.promptEstimate).toBe(999);
+      expect(state.usage).toEqual(usage);
+    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
   });
 
   it('recordToolResult increments promptEstimate and stores tokenCount', async () => {
     const slug = randomUUID();
     const dir = join(PROJECT_BASE, slug);
     mkdirSync(dir, { recursive: true });
+    try {
+      const state = await run(
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+      );
 
-    const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
-    );
+      const assistantEvent = await run(
+        SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'use tool', [{ id: 'tc1', name: 'bash', arguments: {} }], 'test-model'))),
+      );
+      const before = state.promptEstimate;
 
-    const assistantEvent = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'use tool', [{ id: 'tc1', name: 'bash', arguments: {} }], 'test-model'))),
-    );
-    const before = state.promptEstimate;
-
-    const toolEvent = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', 'tool output here'))),
-    );
-    expect(state.promptEstimate).toBeGreaterThan(before);
-    expect(toolEvent.tokenCount).toBeGreaterThan(0);
-
-    rmSync(dir, { recursive: true, force: true });
+      const toolEvent = await run(
+        SessionService.pipe(Effect.flatMap((s) => s.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', 'tool output here'))),
+      );
+      expect(state.promptEstimate).toBeGreaterThan(before);
+      expect(toolEvent.tokenCount).toBeGreaterThan(0);
+    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
   });
 
   it('hideMessage resets usage and recalculates promptEstimate', async () => {
     const slug = randomUUID();
     const dir = join(PROJECT_BASE, slug);
     mkdirSync(dir, { recursive: true });
+    try {
+      const state = await run(
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+      );
 
-    const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
-    );
+      const userEv = await run(
+        SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))),
+      );
+      await run(
+        SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', { prompt: 100, completion: 50, total: 150 }))),
+      );
+      expect(state.usage).toBeDefined();
 
-    const userEv = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))),
-    );
-    await run(
-      SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', { prompt: 100, completion: 50, total: 150 }))),
-    );
-    expect(state.usage).toBeDefined();
-
-    await run(
-      SessionService.pipe(Effect.flatMap((s) => s.hideMessage(state, userEv.uuid, 'test'))),
-    );
-    expect(state.usage).toBeUndefined();
-    expect(state.promptEstimate).toBeGreaterThanOrEqual(0);
-
-    rmSync(dir, { recursive: true, force: true });
+      await run(
+        SessionService.pipe(Effect.flatMap((s) => s.hideMessage(state, userEv.uuid, 'test'))),
+      );
+      expect(state.usage).toBeUndefined();
+      expect(state.promptEstimate).toBeGreaterThanOrEqual(0);
+    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
   });
 });
