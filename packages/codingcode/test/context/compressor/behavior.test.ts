@@ -8,6 +8,8 @@ import type { ContextConfig } from '../../../src/context/config.js';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
+import { buildMessages } from '../../../src/session/store.js';
+import { estimateTokens } from '../../../src/context/utils/tokens.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
@@ -152,6 +154,22 @@ describe('compressor behavior', () => {
         expect(summaries).toHaveLength(1);
         expect(summaries[0]!.method).toBe('auto-compact');
         expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
+      } finally { cleanup(fx.slug); }
+    });
+  });
+
+  describe('compactWithLLM result', () => {
+    it('returns promptEstimate after compression', async () => {
+      const fx = makeFixture({ numTurns: 5 });
+      try {
+        const before = estimateTokens(buildMessages(fx.transcriptPath));
+        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
+        const llm = makeMockLLM('## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne');
+        const result = await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        expect(result.didCompress).toBe(true);
+        expect(result.promptEstimate).toBeGreaterThan(0);
+        expect(result.promptEstimate).toBeLessThan(before);
+        expect(result.released).toBeGreaterThan(0);
       } finally { cleanup(fx.slug); }
     });
   });

@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
-import { readHistory, buildMessagesFromEvents, findSessionIndex } from '../../session/store.js';
+import { readHistory, buildMessagesFromEvents, findSessionIndex, buildMessages } from '../../session/store.js';
 import { resolveSessionDir } from '../../session/store.js';
-import { estimateTokensForContent } from '../utils/tokens.js';
+import { estimateTokens, estimateTokensForContent } from '../utils/tokens.js';
 import { resolveCompactionLLM } from './llm-resolver.js';
 import { COMPACTION_SYSTEM_PROMPT } from './prompt.js';
 import type { ContextConfig } from '../config.js';
@@ -15,6 +15,7 @@ import { appendFileSync } from 'fs';
 export interface CompressResult {
   didCompress: boolean;
   released: number;
+  promptEstimate: number;
 }
 
 interface CompressContext {
@@ -37,7 +38,16 @@ export async function compactWithLLM(
   const currentTurnId = idx?.currentTurnId ?? 0;
   const ctx = buildContext(sessionId, encodedProjectPath, config, llm, currentTurnId);
   const released = await tryL5Compaction(ctx);
-  return { didCompress: released > 0, released };
+
+  const dir = resolveSessionDir(sessionId);
+  let promptEstimate = 0;
+  if (dir) {
+    const jsonlPath = join(dir, `${sessionId}.jsonl`);
+    const messages = buildMessages(jsonlPath);
+    promptEstimate = estimateTokens(messages);
+  }
+
+  return { didCompress: released > 0, released, promptEstimate };
 }
 
 // ---------- Context building ----------

@@ -19,6 +19,7 @@ beforeEach(() => {
       todoByThreadId: {},
       pendingInput: null,
       usageByThreadId: {},
+      isCompressing: false,
     },
     workspace: {
       rootPath: '',
@@ -470,5 +471,23 @@ describe('global store - token usage', () => {
     useGlobalStore.getState().setContextUsage({ used: 100, contextWindow: 128000 })
     useGlobalStore.getState().setCurrentThread('t1')
     expect(useGlobalStore.getState().agent.contextUsage).toBeNull()
+  })
+})
+
+describe('global store - compressing state', () => {
+  it('initial isCompressing is false', () => {
+    expect(useGlobalStore.getState().agent.isCompressing).toBe(false)
+  })
+
+  it('startCompressing sets isCompressing to true', () => {
+    useGlobalStore.getState().startCompressing()
+    expect(useGlobalStore.getState().agent.isCompressing).toBe(true)
+  })
+
+  it('stopCompressing sets isCompressing to false', () => {
+    useGlobalStore.getState().startCompressing()
+    expect(useGlobalStore.getState().agent.isCompressing).toBe(true)
+    useGlobalStore.getState().stopCompressing()
+    expect(useGlobalStore.getState().agent.isCompressing).toBe(false)
   })
 })

@@ -56,6 +56,7 @@ describe('OpenAIProvider completeStream', () => {
       })(),
       response: Promise.resolve({
         messages: [{ role: 'assistant', content: 'streamed' }],
+        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
       }),
     });
   });
@@ -92,5 +93,17 @@ describe('OpenAIProvider completeStream', () => {
 
     expect(streamText).toHaveBeenCalledTimes(1);
     expect(generateText).not.toHaveBeenCalled();
+  });
+
+  it('extracts usage from streamText response', async () => {
+    const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
+    const provider = new OpenAIProvider({} as any, entry('openai'));
+
+    const result = provider.completeStream(request(false) as any);
+    const resp = await result.response;
+    expect(resp.ok).toBe(true);
+    if (resp.ok) {
+      expect(resp.value.usage).toEqual({ prompt: 100, completion: 50, total: 150 });
+    }
   });
 });

@@ -69,7 +69,7 @@ export type AgentEvent =
   | { readonly _tag: 'ApprovalRequest'; readonly id: string; readonly tool: string; readonly args: Record<string, unknown> }
   | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean }
   | { readonly _tag: 'Step'; readonly step: number; readonly max: number }
-  | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
+  | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number; readonly promptEstimate: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
   | { readonly _tag: 'Done'; readonly content: string }
   | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'in_progress' | 'completed' }> }
@@ -196,7 +196,7 @@ export async function* runReActLoop(
       if (state.promptEstimate > config.defaultMaxTokens * config.thresholds.prune) {
         const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, llm, config));
         if (compressResult.didCompress) {
-          yield { _tag: 'ReactiveCompact', attempt: 0, released: compressResult.released };
+          yield { _tag: 'ReactiveCompact', attempt: 0, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
           const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
           messages.length = 0;
           messages.push(...rebuilt);
@@ -225,7 +225,7 @@ export async function* runReActLoop(
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
           const aggressiveConfig = { ...config, keepRecentTurns: config.reactiveCompactKeepTurns };
           const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, null, aggressiveConfig));
-          yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released };
+          yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
           overflow = true;
           break;
         }

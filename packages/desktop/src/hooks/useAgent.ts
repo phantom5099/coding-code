@@ -127,13 +127,21 @@ export function useAgent() {
       case 'usage':
         setThreadUsage(threadId, { prompt: event.prompt, completion: event.completion, total: event.total })
         return null
+      case 'reactive_compact':
+        {
+          const contextUsage = useGlobalStore.getState().agent.contextUsage
+          if (contextUsage) {
+            setContextUsage({ used: event.promptEstimate, contextWindow: contextUsage.contextWindow })
+          }
+        }
+        return null
       case 'done':
       case 'session_id':
         return null
       default:
         return null
     }
-  }, [applyTodoUpdate, updateTurnId, setThreadUsage])
+  }, [applyTodoUpdate, updateTurnId, setThreadUsage, setContextUsage])
 
   const sendMessage = useCallback(
     async (content: string, cwd?: string) => {
