@@ -1,225 +1,157 @@
-import { API_BASE, api } from './api'
+import { API_BASE } from './api'
+import { createHttpClients } from '@codingcode/core/client/http'
+
+const clients = createHttpClients(API_BASE)
+
+export const agentClient = clients.agent
 
 // ---- Models ----
 
 export function listModels(): Promise<{ models: Array<{ id: string; name: string; provider: string; context_window: number }>; activeId: string | null }> {
-  return api('/api/models')
+  return clients.models.listModels()
+}
+
+export function switchModel(id: string): Promise<void> {
+  return clients.models.switchModel({ id })
 }
 
 // ---- Sessions ----
 
 export function listSessions(cwd?: string): Promise<any[]> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/sessions${qs}`)
+  return clients.sessions.listSessions({ cwd: cwd ?? '' })
 }
 
 export function createSession(cwd: string, initialPermissionMode?: string): Promise<{ sessionId: string }> {
-  return api('/api/sessions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd, initialPermissionMode }),
-  })
+  return clients.sessions.createSession({ cwd, initialPermissionMode })
 }
 
 export function deleteSession(sessionId: string): Promise<void> {
-  return api(`/api/sessions/${sessionId}`, { method: 'DELETE' })
+  return clients.sessions.deleteSession({ sessionId })
 }
 
 export function getSessionHistory(sessionId: string): Promise<Array<{ id: string; items: any[]; status: string }>> {
-  return api(`/api/sessions/${sessionId}/history`)
+  return clients.sessions.getSessionHistory({ sessionId })
+}
+
+export function resumeSession(sessionId: string, cwd: string): Promise<any> {
+  return clients.sessions.resumeSession({ sessionId, cwd })
 }
 
 export function sendApprovalResponse(sessionId: string, callId: string, response: string): Promise<void> {
-  return fetch(`${API_BASE}/api/sessions/${sessionId}/approval/${callId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ response }),
-  }).then(() => {})
+  return clients.agent.sendApprovalResponse({ sessionId, approvalId: callId, response })
 }
 
 // ---- Settings: Memory ----
 
 export function getMemoryConfig(): Promise<{ enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> }> {
-  return api('/api/settings/memory/config')
+  return clients.settings.getMemoryConfig()
 }
 
 export function setMemoryEnabled(enabled: boolean): Promise<void> {
-  return api('/api/settings/memory/enabled', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled }),
-  })
+  return clients.settings.setMemoryEnabled(enabled)
 }
 
 export function setMemoryTypeDisabled(name: string, disabled: boolean): Promise<void> {
-  return api('/api/settings/memory/type-disabled', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, disabled }),
-  })
+  return clients.settings.setMemoryTypeDisabled(name, disabled)
 }
 
 export function createMemoryExtraType(type: { name: string; description: string }): Promise<void> {
-  return api('/api/settings/memory/extra-type', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(type),
-  })
+  return clients.settings.addMemoryExtraType(type)
 }
 
 export function updateMemoryExtraType(name: string, type: { name: string; description: string }): Promise<void> {
-  return api(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(type),
-  })
+  return clients.settings.updateMemoryExtraType(name, type)
 }
 
 export function deleteMemoryExtraType(name: string): Promise<void> {
-  return api(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`, { method: 'DELETE' })
+  return clients.settings.deleteMemoryExtraType(name)
 }
 
 // ---- Settings: MCP ----
 
 export function listMcpServers(cwd?: string): Promise<any[]> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/mcp${qs}`)
+  return clients.settings.getMcpStatus()
 }
 
 export function setMcpDisabled(name: string, disabled: boolean): Promise<void> {
-  return api(`/api/settings/mcp/${encodeURIComponent(name)}/disabled`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ disabled }),
-  })
+  return clients.settings.setMcpDisabled(name, disabled)
 }
 
 export function createMcpServer(cwd: string | undefined, server: Record<string, unknown>): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/mcp${qs}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(server),
-  })
+  return clients.settings.createMcpServer({ cwd: cwd ?? '', server: server as any })
 }
 
 export function updateMcpServer(cwd: string | undefined, name: string, server: Record<string, unknown>): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/mcp/${encodeURIComponent(name)}${qs}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(server),
-  })
+  return clients.settings.updateMcpServer({ cwd: cwd ?? '', name, server: server as any })
 }
 
 export function deleteMcpServer(cwd: string | undefined, name: string): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/mcp/${encodeURIComponent(name)}${qs}`, { method: 'DELETE' })
+  return clients.settings.deleteMcpServer({ cwd: cwd ?? '', name })
 }
 
 // ---- Settings: Agents ----
 
 export function listAgents(cwd?: string): Promise<any[]> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/agents${qs}`)
+  return clients.settings.listAgents({ cwd: cwd ?? '' })
 }
 
 export function setAgentDisabled(name: string, disabled: boolean): Promise<void> {
-  return api(`/api/settings/agents/${encodeURIComponent(name)}/disabled`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ disabled }),
-  })
+  return clients.settings.setAgentDisabled(name, disabled)
 }
 
 export function createAgent(cwd: string | undefined, profile: Record<string, unknown>): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/agents${qs}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(profile),
-  })
+  return clients.settings.createAgent({ cwd: cwd ?? '', profile: profile as any })
 }
 
 export function updateAgent(cwd: string | undefined, name: string, profile: Record<string, unknown>): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/agents/${encodeURIComponent(name)}${qs}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(profile),
-  })
+  return clients.settings.updateAgent({ cwd: cwd ?? '', name, profile: profile as any })
 }
 
 export function deleteAgent(cwd: string | undefined, name: string): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/agents/${encodeURIComponent(name)}${qs}`, { method: 'DELETE' })
+  return clients.settings.deleteAgent({ cwd: cwd ?? '', name })
 }
 
 // ---- Settings: Subagent enabled ----
 
-export function getSubagentEnabled(): Promise<{ enabled: boolean }> {
-  return api('/api/settings/subagent/enabled')
+export async function getSubagentEnabled(): Promise<{ enabled: boolean }> {
+  const enabled = await clients.settings.getSubagentEnabled()
+  return { enabled }
 }
 
 export function setSubagentEnabled(enabled: boolean): Promise<void> {
-  return api('/api/settings/subagent/enabled', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled }),
-  })
+  return clients.settings.setSubagentEnabled(enabled)
 }
 
 // ---- Settings: Skills ----
 
 export function listSkills(): Promise<Array<{ name: string; description: string; disabled: boolean }>> {
-  return api('/api/settings/skills')
+  return clients.settings.listSkills() as any
 }
 
 export function toggleSkill(name: string, enabled: boolean): Promise<void> {
-  return api('/api/settings/skills', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, enabled }),
-  })
+  return clients.settings.toggleSkill(name, enabled)
 }
 
 // ---- Settings: Hooks ----
 
 export function listHooks(cwd?: string): Promise<any[]> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/hooks${qs}`)
+  return clients.settings.listHooks({ cwd: cwd ?? '' })
 }
 
 export function createHook(cwd: string | undefined, hook: Record<string, unknown>): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/hooks${qs}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(hook),
-  })
+  return clients.settings.createHook({ cwd: cwd ?? '', hook: hook as any })
 }
 
 export function updateHook(cwd: string | undefined, name: string, hook: Record<string, unknown>): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/hooks/${encodeURIComponent(name)}${qs}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(hook),
-  })
+  return clients.settings.updateHook({ cwd: cwd ?? '', name, hook: hook as any })
 }
 
 export function deleteHook(cwd: string | undefined, name: string): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/hooks/${encodeURIComponent(name)}${qs}`, { method: 'DELETE' })
+  return clients.settings.deleteHook({ cwd: cwd ?? '', name })
 }
 
 export function setHookDisabled(cwd: string | undefined, name: string, disabled: boolean): Promise<void> {
-  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-  return api(`/api/settings/hooks/${encodeURIComponent(name)}/disabled${qs}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ disabled }),
-  })
+  return clients.settings.setHookDisabled({ cwd: cwd ?? '', name, disabled })
 }
 
 // ---- Rollback / Checkpoint ----
@@ -271,86 +203,49 @@ export interface SessionRollbackState {
 }
 
 export function getCheckpointDiff(sessionId: string, cwd: string, turnId?: number): Promise<CheckpointDiff> {
-  const segment = turnId != null ? String(turnId) : 'latest'
-  return api(`/api/sessions/${sessionId}/checkpoints/${segment}/diff?cwd=${encodeURIComponent(cwd)}`)
+  return clients.sessions.getCheckpointDiff({ sessionId, cwd, turnId }) as any
 }
 
 export function revertCheckpointFile(sessionId: string, cwd: string, file: string): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return api(`/api/sessions/${sessionId}/checkpoints/latest/revert-file`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd, file }),
-  })
+  return clients.sessions.revertCheckpointFile({ sessionId, cwd, file }) as any
 }
 
 export function revertCheckpointFiles(sessionId: string, cwd: string, files: string[]): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return api(`/api/sessions/${sessionId}/checkpoints/latest/revert-files`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd, files }),
-  })
+  return clients.sessions.revertCheckpointFiles({ sessionId, cwd, files }) as any
 }
 
 export function revertCheckpointAgentFiles(sessionId: string, cwd: string): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return api(`/api/sessions/${sessionId}/checkpoints/latest/revert-agent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd }),
-  })
+  return clients.sessions.revertCheckpointAgentFiles({ sessionId, cwd }) as any
 }
 
 export function revertCheckpointAllFiles(sessionId: string, cwd: string): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return api(`/api/sessions/${sessionId}/checkpoints/latest/revert-all`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd }),
-  })
+  return clients.sessions.revertCheckpointAllFiles({ sessionId, cwd }) as any
 }
 
 export function previewRollbackDiff(sessionId: string, cwd: string, throughTurnId: number): Promise<RollbackPreviewDiff> {
-  return api(`/api/sessions/${sessionId}/rollback-preview?cwd=${encodeURIComponent(cwd)}&throughTurnId=${throughTurnId}`)
+  return clients.sessions.previewRollbackDiff({ sessionId, cwd, throughTurnId }) as any
 }
 
 export function rollbackCodeToTurn(sessionId: string, cwd: string, throughTurnId: number): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return api(`/api/sessions/${sessionId}/rollback-code-to-turn`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd, throughTurnId }),
-  })
+  return clients.sessions.rollbackCodeToTurn({ sessionId, cwd, throughTurnId }) as any
 }
 
 export function rollbackContext(sessionId: string, cwd: string, throughTurnId: number): Promise<{ ok: boolean; turns: any[]; rolledBackMessage?: string }> {
-  return api(`/api/sessions/${sessionId}/rollback-context`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd, throughTurnId }),
-  })
+  return clients.sessions.rollbackContext({ sessionId, cwd, throughTurnId }) as any
 }
 
 export function rollbackBothToTurn(sessionId: string, cwd: string, throughTurnId: number): Promise<{ ok: boolean; turns: any[]; codeResult: CodeRollbackResult }> {
-  return api(`/api/sessions/${sessionId}/rollback-both-to-turn`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd, throughTurnId }),
-  })
+  return clients.sessions.rollbackBothToTurn({ sessionId, cwd, throughTurnId }) as any
 }
 
 export function undoLastCodeRollback(sessionId: string, cwd: string, force?: boolean, files?: string[]): Promise<{ ok: boolean; result: CodeRollbackUndoResult }> {
-  return api(`/api/sessions/${sessionId}/undo-code-rollback`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd, force, files }),
-  })
+  return clients.sessions.undoLastCodeRollback({ sessionId, cwd, force, files }) as any
 }
 
 export function getRollbackState(sessionId: string, cwd: string): Promise<SessionRollbackState> {
-  return api(`/api/sessions/${sessionId}/rollback-state?cwd=${encodeURIComponent(cwd)}`)
+  return clients.sessions.getRollbackState({ sessionId, cwd }) as any
 }
 
 export function forkSession(sessionId: string, cwd: string, atUuid?: string): Promise<{ sessionId: string; turns: any[] }> {
-  return api(`/api/sessions/${sessionId}/fork`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd, atUuid }),
-  })
+  return clients.sessions.forkSession({ sessionId, cwd, atUuid })
 }

@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useGlobalStore, type ModelEntry } from '../stores/global.store'
-import { streamAgentMessage, type StreamEvent } from '../lib/agent-stream'
+import { agentClient } from '../lib/core-api'
+import type { StreamChunk } from '@codingcode/core/client/types'
 import { ApiError } from '../lib/api'
 import { listModels, listSessions, getSessionHistory, createSession as createServerSession, deleteSession, sendApprovalResponse, getCheckpointDiff, revertCheckpointFile, revertCheckpointFiles, revertCheckpointAgentFiles, revertCheckpointAllFiles, previewRollbackDiff, rollbackCodeToTurn, rollbackContext, rollbackBothToTurn, undoLastCodeRollback, getRollbackState, forkSession } from '../lib/core-api'
 import type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff, SessionRollbackState } from '../lib/core-api'
@@ -95,14 +96,12 @@ export function useAgent() {
     }).catch((e) => { console.error('Failed to load history:', e) })
   }, [currentThreadId, setThreadTurns])
 
-  const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string, currentTurnId: string): Item | null => {
+  const streamChunkToItem = useCallback((event: StreamChunk, threadId: string, assistantMessageId: string, currentTurnId: string): Item | null => {
     switch (event.type) {
       case 'text':
         return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.text, partial: true }
       case 'message':
         return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.content, partial: false }
-      case 'step':
-        return null
       case 'turn_id':
         updateTurnId(threadId, currentTurnId, String(event.turnId))
         return null
@@ -117,58 +116,56 @@ export function useAgent() {
       case 'error':
         return { id: randomId(), type: 'error', message: event.message }
       case 'todo_update':
-        applyTodoUpdate(threadId, event.items)
+        applyTodoUpdate(threadId, event.items as any)
         return null
       case 'done':
       case 'session_id':
-      case 'complete':
+        return null
+      default:
         return null
     }
   }, [applyTodoUpdate, updateTurnId])
 
   const sendMessage = useCallback(
-    async (threadId: string, content: string, cwd?: string) => {
+    async (content: string, cwd?: string) => {
       const effectiveCwd = cwd || workspace.rootPath || ''
 
-      // Resolve the server session ID. If this is a new thread (no existing turns),
-      // create a session on the server first so threadId == sessionId.
-      let resolvedThreadId = threadId
-      const existingThread = useGlobalStore.getState().agent.threads[threadId]
-      const isNewThread = !existingThread || existingThread.turns.length === 0
-
-      if (isNewThread) {
-        try {
-          const data = await createServerSession(effectiveCwd)
-          resolvedThreadId = data.sessionId
-        } catch (e) {
-          console.error('Failed to create session:', e)
-          return
-        }
+      let threadId = currentThreadId
+      if (!threadId) {
+        const initialMode = approvalPolicy === 'suggest' ? 'default'
+          : approvalPolicy === 'auto-edit' ? 'acceptEdits'
+          : 'dontAsk'
+        const data = await createServerSession(effectiveCwd, initialMode)
+        threadId = data.sessionId
+        setCurrentThread(threadId)
       }
+
+      if (abortControllers.current.has(threadId)) return
 
       let turnId = randomId()
       let assistantMessageId = randomId()
       const userItem: Item = { id: randomId(), type: 'message', role: 'user', content }
       const turn: Turn = { id: turnId, items: [userItem], status: 'running' }
 
-      startTurn(resolvedThreadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) })
-      setCurrentThread(resolvedThreadId)
+      startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) })
       setContextUsage(null)
 
       const controller = new AbortController()
-      abortControllers.current.set(resolvedThreadId, controller)
+      abortControllers.current.set(threadId, controller)
 
       try {
-        const stream = streamAgentMessage(content, effectiveCwd, resolvedThreadId, controller.signal)
+        const stream = agentClient.sendMessage(content, {
+          sessionId: threadId,
+          cwd: effectiveCwd,
+          signal: controller.signal,
+        })
 
         for await (const event of stream) {
-          if (event.type === 'session_id') {
-            continue
-          }
+          if (event.type === 'session_id') continue
 
-          const item = streamChunkToItem(event, resolvedThreadId, assistantMessageId, turnId)
+          const item = streamChunkToItem(event, threadId, assistantMessageId, turnId)
           if (item) {
-            applyChunk(resolvedThreadId, turnId, item)
+            applyChunk(threadId, turnId, item)
           }
 
           if (event.type === 'turn_id') {
@@ -180,25 +177,27 @@ export function useAgent() {
           }
         }
 
-        completeTurn(resolvedThreadId, turnId, 'completed')
+        completeTurn(threadId, turnId, 'completed')
       } catch (err: any) {
         const msg = err instanceof ApiError ? err.body?.message ?? err.message : String(err)
-        applyChunk(resolvedThreadId, turnId, { id: randomId(), type: 'error', message: msg })
-        completeTurn(resolvedThreadId, turnId, 'error')
+        applyChunk(threadId, turnId, { id: randomId(), type: 'error', message: msg })
+        completeTurn(threadId, turnId, 'error')
       } finally {
-        abortControllers.current.delete(resolvedThreadId)
+        abortControllers.current.delete(threadId)
       }
     },
-    [startTurn, setCurrentThread, setContextUsage, streamChunkToItem, applyChunk, completeTurn, workspace.rootPath]
+    [startTurn, setCurrentThread, setContextUsage, streamChunkToItem, applyChunk, completeTurn, workspace.rootPath, approvalPolicy, currentThreadId]
   )
 
-  const abort = useCallback((threadId: string) => {
+  const abort = useCallback(() => {
+    const threadId = currentThreadId
+    if (!threadId) return
     const controller = abortControllers.current.get(threadId)
     if (controller) {
       controller.abort()
       abortControllers.current.delete(threadId)
     }
-  }, [])
+  }, [currentThreadId])
 
   const approveTool = useCallback(async (threadId: string, callId: string) => {
     updateToolCallStatus(threadId, callId, 'running')
@@ -244,15 +243,6 @@ export function useAgent() {
     },
     [loadThreads]
   )
-
-  const createSession = useCallback(async (cwd: string): Promise<string> => {
-    const initialMode = approvalPolicy === 'suggest' ? 'default'
-      : approvalPolicy === 'auto-edit' ? 'acceptEdits'
-      : 'dontAsk'
-
-    const data = await createServerSession(cwd, initialMode)
-    return data.sessionId
-  }, [approvalPolicy])
 
   // Rollback methods
   // Resolve checkpoint integer turn ID → UI turn ID (UUID or integer string)
@@ -380,7 +370,7 @@ export function useAgent() {
   }, [workspace.rootPath, setRollbackState, initRevertedFilesFromState])
 
   return {
-    sendMessage, abort, approveTool, rejectTool, deleteThread, createSession,
+    sendMessage, abort, approveTool, rejectTool, deleteThread,
     // Rollback
     loadCheckpointDiff, revertFile, revertFiles, revertAgentFiles, revertAllFiles,
     previewRollback, rollbackCode, rollbackCtx, rollbackBoth,

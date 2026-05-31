@@ -237,7 +237,7 @@ describe('global store - loadThreads', () => {
 
     const thread = useGlobalStore.getState().agent.threads[threadId]
     expect(thread).toBeDefined()
-    expect(thread.turns[0].status).toBe('running')
+    expect(thread!.turns[0]!.status).toBe('running')
   })
 
   it('preserves in-memory turns when backend returns thread with empty turns', () => {
@@ -322,7 +322,7 @@ describe('global store - setThreadCwd', () => {
     expect(() => useGlobalStore.getState().setThreadCwd('nonexistent', '/path')).not.toThrow()
   })
 
-  it('cwd updated by setThreadCwd survives a loadThreads call that preserves running threads', () => {
+  it('cwd survives a loadThreads call that preserves running threads', () => {
     const threadId = 'thread-cwd2'
     useGlobalStore.getState().startTurn(threadId, { id: 'turn-1', items: [], status: 'running' }, { cwd: '' })
     useGlobalStore.getState().setThreadCwd(threadId, '/actual/path')
@@ -330,7 +330,7 @@ describe('global store - setThreadCwd', () => {
     // Backend hasn't persisted the running thread yet — returns empty list
     useGlobalStore.getState().loadThreads([])
 
-    expect(useGlobalStore.getState().agent.threads[threadId].cwd).toBe('/actual/path')
+    expect(useGlobalStore.getState().agent.threads[threadId]!.cwd).toBe('/actual/path')
   })
 })
 
