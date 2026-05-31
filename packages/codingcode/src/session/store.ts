@@ -8,6 +8,8 @@ import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, HideEvent, UnhideEvent, TitleEvent, SessionIndex, TokenUsage } from './types.js';
 import { estimateTokens, estimateTokensForContent } from '../context/utils/tokens.js';
+import { getContextConfig } from '../context/config.js';
+import { persistToolResult } from '../context/persist/store.js';
 import { createLogger } from '@codingcode/infra';
 
 const logger = createLogger();
@@ -195,9 +197,23 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       recordToolResult: (state: SessionStoreState, parentUuid: string, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent, AgentError> =>
         Effect.try({
           try: () => {
-            const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString(), tokenCount: estimateTokensForContent(output) };
+            const cfg = getContextConfig();
+            const tokenCount = estimateTokensForContent(output);
+
+            let finalOutput = output;
+            let finalTokenCount = tokenCount;
+
+            if (tokenCount > cfg.thresholdTokens &&
+                toolName !== 'read' && toolName !== 'read_file') {
+              const { path } = persistToolResult(state.projectPath, state.sessionId, toolCallId, output);
+              const preview = output.slice(0, cfg.persistPreviewChars);
+              finalOutput = `${preview}\n\n[…full output persisted at: ${path}. Use Read tool to access if needed.]`;
+              finalTokenCount = estimateTokensForContent(finalOutput);
+            }
+
+            const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output: finalOutput, timestamp: new Date().toISOString(), tokenCount: finalTokenCount };
             appendEvent(state, event);
-            state.promptEstimate += estimateTokensForContent(output);
+            state.promptEstimate += finalTokenCount;
             updateIndex(state);
             return event;
           },

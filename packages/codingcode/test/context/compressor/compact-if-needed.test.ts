@@ -52,8 +52,9 @@ import { compactIfNeeded } from '../../../src/context/compressor/index.js';
 function config(threshold: number, maxTokens = 10000) {
   return {
     defaultMaxTokens: maxTokens,
-    thresholds: { prune: threshold },
+    thresholds: { prune: threshold, compaction: threshold },
     keepRecentTurns: 2,
+    minTurnsBetweenCompactions: 5,
     l5Compaction: { summaryModel: 'test', summaryTemperature: 0 },
   } as any;
 }

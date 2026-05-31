@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { readFileSync } from 'fs';
 import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
@@ -192,10 +193,32 @@ export async function* runReActLoop(
       const stepBeforePayload = { sessionId, step: step + 1 };
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
-      // Pre-send compression check: let context layer decide if compaction is needed
+      // Pre-send preventive maintenance: Prune + Snip (unconditional, zero-cost)
+      const preCompact = await Effect.runPromise(ctx.preSendCompact(state.sessionId, state.projectPath, config));
+      if (preCompact.released > 0) {
+        yield { _tag: 'ReactiveCompact', attempt: 0, released: preCompact.released, promptEstimate: preCompact.promptEstimate };
+        const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
+        messages.length = 0;
+        messages.push(...rebuilt);
+        state.usage = undefined;
+        state.promptEstimate = preCompact.promptEstimate;
+      }
+
+      // Threshold-triggered LLM compaction
       const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, state.promptEstimate, config));
       if (compressResult.didCompress) {
-        yield { _tag: 'ReactiveCompact', attempt: 0, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
+        yield { _tag: 'ReactiveCompact', attempt: 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
+
+        // Inject restored files after compaction
+        if (compressResult.restoredFiles && compressResult.restoredFiles.length > 0) {
+          for (const filePath of compressResult.restoredFiles) {
+            try {
+              const content = readFileSync(filePath, 'utf8');
+              messages.push({ role: 'system', content: `File restored after compaction: ${filePath}\n\n${content.slice(0, 2000)}` });
+            } catch { /* skip non-existent files */ }
+          }
+        }
+
         const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
         messages.length = 0;
         messages.push(...rebuilt);
@@ -222,7 +245,7 @@ export async function* runReActLoop(
       if (!llmResult.ok) {
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
           const aggressiveConfig = { ...config, keepRecentTurns: config.reactiveCompactKeepTurns };
-          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, null, aggressiveConfig));
+          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, null, undefined, aggressiveConfig));
           yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
           overflow = true;
           break;
