@@ -553,6 +553,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         agent: {
           approvalPolicy: state.agent.approvalPolicy,
           model: state.agent.model,
+          usageByThreadId: state.agent.usageByThreadId,
         },
         editor: {
           cursorLine: state.editor.cursorLine,

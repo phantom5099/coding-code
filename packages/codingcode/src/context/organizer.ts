@@ -1,7 +1,6 @@
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
 import { resolveSessionDir, buildMessages } from '../session/store.js';
-import { estimateTokens, estimateTokensForContent } from './utils/tokens.js';
 import { join } from 'path';
 
 export function assemblePayload(
@@ -20,34 +19,7 @@ export function assemblePayload(
   const cleaned = stripOrphanToolCalls(base);
 
   const full = pendingUser ? [...pinned, ...cleaned, pendingUser] : [...pinned, ...cleaned];
-  return fitToBudget(full, config, pinned.length);
-}
-
-export function fitToBudget(
-  messages: Message[],
-  config: ContextConfig,
-  pinnedCount: number = 0,
-): Message[] {
-  const budget = config.defaultMaxTokens - config.reservedTokens;
-  let usage = estimateTokens(messages);
-  if (usage <= budget) return messages;
-
-  const result = [...messages];
-  let i = pinnedCount;
-  while (i < result.length && usage > budget) {
-    // Skip non-user messages that might have been left orphaned
-    if (result[i]?.role !== 'user') { i++; continue; }
-
-    // Find end of this user turn (next user message or array end)
-    let end = i + 1;
-    while (end < result.length && result[end]?.role !== 'user') {
-      end++;
-    }
-
-    const removed = result.splice(i, end - i);
-    usage -= removed.reduce((s, m) => s + estimateTokensForContent(m.content), 0);
-  }
-  return result;
+  return full;
 }
 
 function stripOrphanToolCalls(messages: Message[]): Message[] {

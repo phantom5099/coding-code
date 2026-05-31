@@ -203,6 +203,17 @@ export async function* runReActLoop(
       const stepBeforePayload = { sessionId, step: step + 1 };
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
+      // Pre-send compression check: if previous usage exceeded threshold, compress first
+      if (state.usage && state.usage.total > config.defaultMaxTokens * config.thresholds.prune) {
+        const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, llm as any, config));
+        if (compressResult.didCompress) {
+          yield { _tag: 'ReactiveCompact', attempt: 0, released: compressResult.released };
+          const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
+          messages.length = 0;
+          messages.push(...rebuilt);
+        }
+      }
+
       // Build LLM messages: original messages + step.before transients
       const llmMessages = [...messages];
 
@@ -245,6 +256,7 @@ export async function* runReActLoop(
       messages.push(assistantMsg);
       yield { _tag: 'Assistant', content: resp.content, toolCalls };
       if (resp.usage) {
+        state.usage = { prompt: resp.usage.prompt, completion: resp.usage.completion, total: resp.usage.total };
         yield { _tag: 'Usage', prompt: resp.usage.prompt, completion: resp.usage.completion, total: resp.usage.total };
       }
 

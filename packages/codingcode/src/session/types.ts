@@ -94,6 +94,12 @@ export type SessionEvent =
   | UnhideEvent
   | TitleEvent;
 
+export interface TokenUsage {
+  prompt: number;
+  completion: number;
+  total: number;
+}
+
 export interface SessionIndex {
   sessionId: string;
   projectPath: string;
@@ -104,6 +110,6 @@ export interface SessionIndex {
   messageCount: number;
   title: string;
   currentTurnId: number;
-  tokenCountEstimate: number;
+  usage: TokenUsage | undefined;
   permissionMode: string;
 }

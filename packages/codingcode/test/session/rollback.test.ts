@@ -31,7 +31,7 @@ function makeFixture(sessionId: string, slug: string) {
     sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: 7, title: 'fixture', currentTurnId: 3,
-    tokenCountEstimate: 100, permissionMode: 'default',
+    usage: undefined, permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 

@@ -79,11 +79,16 @@ export function useAgent() {
           updatedAt: new Date(s.updatedAt).getTime(),
         }))
         loadThreads(threads)
+        for (const s of sessions) {
+          if (s.usage) {
+            setThreadUsage(s.sessionId, { prompt: s.usage.prompt, completion: s.usage.completion, total: s.usage.total })
+          }
+        }
       }).catch((e) => { console.error('Failed to load sessions:', e) })
     }
 
     // Restore persisted projects, approval policy, model - already done by persist middleware
-  }, [loadThreads, setModel, setModels, workspace.rootPath])
+  }, [loadThreads, setModel, setModels, setThreadUsage, workspace.rootPath])
 
   // Load history from HTTP when switching to a thread with no turns
   useEffect(() => {
@@ -241,10 +246,15 @@ export function useAgent() {
             updatedAt: new Date(s.updatedAt).getTime(),
           }))
           loadThreads(threads)
+          for (const s of sessions) {
+            if (s.usage) {
+              setThreadUsage(s.sessionId, { prompt: s.usage.prompt, completion: s.usage.completion, total: s.usage.total })
+            }
+          }
         }
       }
     },
-    [loadThreads]
+    [loadThreads, setThreadUsage]
   )
 
   // Rollback methods
