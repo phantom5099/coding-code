@@ -43,8 +43,8 @@ export function useAgentRunner(runner: (input: string) => AsyncGenerator<StreamC
       const stream = runner(input);
 
       for await (const chunk of stream) {
-        if (typeof chunk === 'string') {
-          assistantContent += chunk;
+        if (chunk.type === 'text') {
+          assistantContent += chunk.text;
           setActiveMessages([{
             id: assistantId,
             timestamp: Date.now(),

@@ -2,10 +2,13 @@ import { loadMcpConfig, writeMcpConfig } from '../mcp/config.js';
 import type { McpServerConfig } from '../mcp/types.js';
 import { loadAgentProfiles, writeAgentProfile, updateAgentProfile, deleteAgentProfile } from '../subagent/loader.js';
 import type { SubagentProfile } from '../subagent/registry.js';
-import { EXPLORE_PROFILE, isAgentDisabledState, setAgentDisabledState } from '../subagent/registry.js';
+import { EXPLORE_PROFILE, isAgentDisabledState, setAgentDisabledState, getSubagentEnabledState, setSubagentEnabledState } from '../subagent/registry.js';
 import { loadHookConfigs, writeHookConfigs } from '../hooks/config.js';
 import { setHookRuntimeEnabled } from '../hooks/executor.js';
 import type { UserHookConfig } from '../hooks/config.js';
+import { getMemoryConfig, getAllTypesWithStatus, setMemoryTypeDisabled, addMemoryExtraType as _addMemoryExtraType, updateMemoryExtraType as _updateMemoryExtraType, deleteMemoryExtraType as _deleteMemoryExtraType } from '../memory/config.js';
+import { getMemoryEnabled, setMemoryEnabled } from '../memory/index.js';
+import type { MemoryTypeConfig } from '../memory/config.js';
 
 // ---- MCP ----
 
@@ -122,6 +125,68 @@ export function setHookDisabled(cwd: string, name: string, disabled: boolean): v
     hook.enabled = !disabled;
     writeHookConfigs(cwd, hooks);
   }
+}
+
+// ---- Memory ----
+
+export function getMemoryConfigWithTypes(): { enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> } {
+  const cfg = getMemoryConfig();
+  return { enabled: cfg.enabled, types: getAllTypesWithStatus(cfg) };
+}
+
+export function setMemoryEnabledService(enabled: boolean): void {
+  setMemoryEnabled(enabled);
+}
+
+export function getMemoryEnabledService(): boolean {
+  return getMemoryEnabled();
+}
+
+export function setMemoryTypeDisabledService(name: string, disabled: boolean): void {
+  setMemoryTypeDisabled(name, disabled);
+}
+
+export function addMemoryExtraTypeService(type: { name: string; description: string }): void {
+  try {
+    _addMemoryExtraType({ name: type.name, description: type.description, enabled: true });
+  } catch (e: any) {
+    if (e.message?.includes('already exists')) {
+      throw new AlreadyExistsError(e.message);
+    }
+    throw e;
+  }
+}
+
+export function updateMemoryExtraTypeService(name: string, type: { name: string; description: string }): void {
+  try {
+    _updateMemoryExtraType(name, { name: type.name, description: type.description, enabled: true });
+  } catch (e: any) {
+    if (e.message?.includes('not found')) {
+      throw new NotFoundError(e.message);
+    }
+    throw e;
+  }
+}
+
+export function deleteMemoryExtraTypeService(name: string): void {
+  try {
+    _deleteMemoryExtraType(name);
+  } catch (e: any) {
+    if (e.message?.includes('not found')) {
+      throw new NotFoundError(e.message);
+    }
+    throw e;
+  }
+}
+
+// ---- Subagent ----
+
+export function getSubagentEnabled(): boolean {
+  return getSubagentEnabledState();
+}
+
+export function setSubagentEnabled(enabled: boolean): void {
+  setSubagentEnabledState(enabled);
 }
 
 // ---- Error types ----

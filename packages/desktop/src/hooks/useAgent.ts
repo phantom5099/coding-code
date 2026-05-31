@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useGlobalStore, type ModelEntry } from '../stores/global.store'
-import { streamAgentMessage, type StreamEvent } from '../lib/agent-stream'
+import { agentClient } from '../lib/core-api'
+import type { StreamChunk } from '@codingcode/core/client/types'
 import { ApiError } from '../lib/api'
 import { listModels, listSessions, getSessionHistory, createSession as createServerSession, deleteSession, sendApprovalResponse, getCheckpointDiff, revertCheckpointFile, revertCheckpointFiles, revertCheckpointAgentFiles, revertCheckpointAllFiles, previewRollbackDiff, rollbackCodeToTurn, rollbackContext, rollbackBothToTurn, undoLastCodeRollback, getRollbackState, forkSession } from '../lib/core-api'
 import type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff, SessionRollbackState } from '../lib/core-api'
@@ -26,6 +27,7 @@ export function useAgent() {
   const loadThreads = useGlobalStore((s) => s.loadThreads)
   const setThreadTurns = useGlobalStore((s) => s.setThreadTurns)
   const setThreadCwd = useGlobalStore((s) => s.setThreadCwd)
+  const setThreadBackendSessionId = useGlobalStore((s) => s.setThreadBackendSessionId)
   const setModel = useGlobalStore((s) => s.setModel)
   const setModels = useGlobalStore((s) => s.setModels)
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)
@@ -73,6 +75,7 @@ export function useAgent() {
           title: s.title ?? s.sessionId.slice(0, 8),
           cwd: normalizeCwd(s.cwd ?? ''),
           turns: [],
+          backendSessionId: s.sessionId,
           createdAt: new Date(s.createdAt).getTime(),
           updatedAt: new Date(s.updatedAt).getTime(),
         }))
@@ -95,14 +98,12 @@ export function useAgent() {
     }).catch((e) => { console.error('Failed to load history:', e) })
   }, [currentThreadId, setThreadTurns])
 
-  const streamChunkToItem = useCallback((event: StreamEvent, threadId: string, assistantMessageId: string, currentTurnId: string): Item | null => {
+  const streamChunkToItem = useCallback((event: StreamChunk, threadId: string, assistantMessageId: string, currentTurnId: string): Item | null => {
     switch (event.type) {
       case 'text':
         return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.text, partial: true }
       case 'message':
         return { id: assistantMessageId, type: 'message', role: 'assistant', content: event.content, partial: false }
-      case 'step':
-        return null
       case 'turn_id':
         updateTurnId(threadId, currentTurnId, String(event.turnId))
         return null
@@ -117,11 +118,12 @@ export function useAgent() {
       case 'error':
         return { id: randomId(), type: 'error', message: event.message }
       case 'todo_update':
-        applyTodoUpdate(threadId, event.items)
+        applyTodoUpdate(threadId, event.items as any)
         return null
       case 'done':
       case 'session_id':
-      case 'complete':
+        return null
+      default:
         return null
     }
   }, [applyTodoUpdate, updateTurnId])
@@ -129,46 +131,37 @@ export function useAgent() {
   const sendMessage = useCallback(
     async (threadId: string, content: string, cwd?: string) => {
       const effectiveCwd = cwd || workspace.rootPath || ''
-
-      // Resolve the server session ID. If this is a new thread (no existing turns),
-      // create a session on the server first so threadId == sessionId.
-      let resolvedThreadId = threadId
       const existingThread = useGlobalStore.getState().agent.threads[threadId]
-      const isNewThread = !existingThread || existingThread.turns.length === 0
-
-      if (isNewThread) {
-        try {
-          const data = await createServerSession(effectiveCwd)
-          resolvedThreadId = data.sessionId
-        } catch (e) {
-          console.error('Failed to create session:', e)
-          return
-        }
-      }
+      const backendSessionId = existingThread?.backendSessionId
 
       let turnId = randomId()
       let assistantMessageId = randomId()
       const userItem: Item = { id: randomId(), type: 'message', role: 'user', content }
       const turn: Turn = { id: turnId, items: [userItem], status: 'running' }
 
-      startTurn(resolvedThreadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) })
-      setCurrentThread(resolvedThreadId)
+      startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) })
+      setCurrentThread(threadId)
       setContextUsage(null)
 
       const controller = new AbortController()
-      abortControllers.current.set(resolvedThreadId, controller)
+      abortControllers.current.set(threadId, controller)
 
       try {
-        const stream = streamAgentMessage(content, effectiveCwd, resolvedThreadId, controller.signal)
+        const stream = agentClient.sendMessage(content, {
+          sessionId: backendSessionId,
+          cwd: effectiveCwd,
+          signal: controller.signal,
+        })
 
         for await (const event of stream) {
           if (event.type === 'session_id') {
+            setThreadBackendSessionId(threadId, event.sessionId)
             continue
           }
 
-          const item = streamChunkToItem(event, resolvedThreadId, assistantMessageId, turnId)
+          const item = streamChunkToItem(event, threadId, assistantMessageId, turnId)
           if (item) {
-            applyChunk(resolvedThreadId, turnId, item)
+            applyChunk(threadId, turnId, item)
           }
 
           if (event.type === 'turn_id') {
@@ -180,16 +173,16 @@ export function useAgent() {
           }
         }
 
-        completeTurn(resolvedThreadId, turnId, 'completed')
+        completeTurn(threadId, turnId, 'completed')
       } catch (err: any) {
         const msg = err instanceof ApiError ? err.body?.message ?? err.message : String(err)
-        applyChunk(resolvedThreadId, turnId, { id: randomId(), type: 'error', message: msg })
-        completeTurn(resolvedThreadId, turnId, 'error')
+        applyChunk(threadId, turnId, { id: randomId(), type: 'error', message: msg })
+        completeTurn(threadId, turnId, 'error')
       } finally {
-        abortControllers.current.delete(resolvedThreadId)
+        abortControllers.current.delete(threadId)
       }
     },
-    [startTurn, setCurrentThread, setContextUsage, streamChunkToItem, applyChunk, completeTurn, workspace.rootPath]
+    [startTurn, setCurrentThread, setContextUsage, streamChunkToItem, applyChunk, completeTurn, setThreadBackendSessionId, workspace.rootPath]
   )
 
   const abort = useCallback((threadId: string) => {

@@ -1,43 +1,12 @@
-import type { AgentClient, StreamChunk } from './direct.js';
-import type { McpStatus } from '../mcp/types.js';
-import type { PermissionMode } from '../approval/types.js';
+import type { AgentClient, StreamChunk } from './types.js';
 import { parseSseStream } from './sse.js';
+import { createHttpClients } from './http/index.js';
 
-export type { AgentClient, StreamChunk };
+export type { AgentClient, StreamChunk } from './types.js';
 
 export async function createHttpClient(serverUrl: string): Promise<AgentClient> {
   let currentSessionId: string | undefined;
-
-  async function apiGet<T>(path: string): Promise<T> {
-    const res = await fetch(`${serverUrl}${path}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
-    return res.json() as Promise<T>;
-  }
-
-  async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${serverUrl}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
-    return res.json() as Promise<T>;
-  }
-
-  async function apiPut<T>(path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`${serverUrl}${path}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
-    return res.json() as Promise<T>;
-  }
-
-  async function apiDelete(path: string): Promise<void> {
-    const res = await fetch(`${serverUrl}${path}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
-  }
+  const clients = createHttpClients(serverUrl);
 
   return {
     async *sendMessage(input: string, cwd?: string): AsyncGenerator<StreamChunk> {
@@ -52,9 +21,16 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
         switch (data.type) {
           case 'session_id':
             currentSessionId = data.sessionId as string;
+            yield { type: 'session_id', sessionId: data.sessionId as string };
+            break;
+          case 'turn_id':
+            yield { type: 'turn_id', turnId: data.turnId as number };
             break;
           case 'text':
-            yield data.text as string;
+            yield { type: 'text', text: data.text as string, messageId: data.messageId as number | undefined };
+            break;
+          case 'message':
+            yield { type: 'message', id: data.id as number, content: data.content as string, partial: false };
             break;
           case 'approval_request':
             yield { type: 'approval_request', id: data.id as string, tool: data.tool as string, args: data.args as Record<string, unknown> };
@@ -83,24 +59,24 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
 
     async sendApprovalResponse(id: string, response: string) {
       if (!currentSessionId) return;
-      await apiPost(`/api/sessions/${currentSessionId}/approval/${id}`, { response });
+      await clients.agent.sendApprovalResponse({ sessionId: currentSessionId, approvalId: id, response });
     },
 
     async resumeSession(sid: string) {
       currentSessionId = sid;
-      return apiPost(`/api/sessions/${sid}/resume`, { cwd: '' });
+      return clients.sessions.resumeSession({ sessionId: sid, cwd: '' });
     },
 
     async listSessions() {
-      return apiGet<any[]>('/api/sessions');
+      return clients.sessions.listSessions({ cwd: '' });
     },
 
     async listModels() {
-      return apiGet('/api/models');
+      return clients.models.listModels();
     },
 
     async switchModel(id: string) {
-      await apiPost('/api/models/switch', { modelId: id });
+      await clients.models.switchModel({ id });
     },
 
     getSessionId() { return currentSessionId ?? 'unknown'; },
@@ -111,129 +87,139 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     async forwardLastRevert() {},
     async hasForwardStack() { return false; },
     async getCheckpoints() { return []; },
+    async getCheckpointDiff() { return { turnId: 0, files: [] }; },
+    async revertCheckpointFile() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
+    async revertCheckpointFiles() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
+    async revertCheckpointAgentFiles() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
+    async revertCheckpointAllFiles() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
+    async previewRollbackDiff() { return { throughTurnId: 0, baseTurnId: null, affectedTurns: [], diff: '' }; },
+    async rollbackCodeToTurn() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
+    async rollbackContext() { return { turns: [], rollbackState: {} }; },
+    async rollbackBothToTurn() { return { turns: [], codeResult: { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }, rollbackState: {} }; },
+    async undoLastCodeRollback() { return { restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] }; },
+    async getRollbackState() { return { context: { active: false, currentThroughTurnId: null }, code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null } }; },
+    async forkSession() { return ''; },
 
     async compact() {
       if (!currentSessionId) return;
-      await apiPost(`/api/sessions/${currentSessionId}/compact`, { cwd: '' });
+      await clients.agent.compact({ sessionId: currentSessionId, cwd: '' });
     },
 
     async getMemoryEnabled() {
-      const data = await apiGet<{ enabled: boolean }>('/api/settings/memory/config');
+      const data = await clients.settings.getMemoryConfig();
       return data.enabled;
     },
 
     async setMemoryEnabled(enabled: boolean) {
-      await apiPost('/api/settings/memory/enabled', { enabled });
+      await clients.settings.setMemoryEnabled(enabled);
     },
 
     async getMemoryConfig() {
-      return apiGet<{ enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> }>('/api/settings/memory/config');
+      return clients.settings.getMemoryConfig();
     },
 
     async setTypeDisabled(name: string, disabled: boolean) {
-      await apiPost('/api/settings/memory/type-disabled', { name, disabled });
+      await clients.settings.setMemoryTypeDisabled(name, disabled);
     },
 
     async addExtraType(type: { name: string; description: string }) {
-      await apiPost('/api/settings/memory/extra-type', type);
+      await clients.settings.addMemoryExtraType(type);
     },
 
     async updateExtraType(name: string, type: { name: string; description: string }) {
-      await apiPut(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`, type);
+      await clients.settings.updateMemoryExtraType(name, type);
     },
 
     async deleteExtraType(name: string) {
-      await apiDelete(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`);
+      await clients.settings.deleteMemoryExtraType(name);
     },
 
     async getSubagentEnabled() {
-      const data = await apiGet<{ enabled: boolean }>('/api/settings/subagent/enabled');
-      return data.enabled;
+      return clients.settings.getSubagentEnabled();
     },
 
     async setSubagentEnabled(enabled: boolean) {
-      await apiPost('/api/settings/subagent/enabled', { enabled });
+      await clients.settings.setSubagentEnabled(enabled);
     },
 
-    async getMcpStatus(): Promise<McpStatus[]> {
-      return apiGet<McpStatus[]>('/api/settings/mcp');
+    async getMcpStatus() {
+      return clients.settings.getMcpStatus();
     },
 
     async disableMcp(name: string) {
-      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled`, { disabled: true });
+      await clients.settings.setMcpDisabled(name, true);
     },
 
     async enableMcp(name: string) {
-      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled`, { disabled: false });
+      await clients.settings.setMcpDisabled(name, false);
     },
 
     async listSkills() {
-      return apiGet<Array<{ name: string; description: string; enabled: boolean }>>('/api/settings/skills');
+      return clients.settings.listSkills();
     },
 
     async toggleSkill(name: string, enabled: boolean) {
-      await apiPost('/api/settings/skills', { name, enabled });
+      await clients.settings.toggleSkill(name, enabled);
     },
 
     async createMcpServer(server: any) {
-      await apiPost('/api/settings/mcp', server);
+      await clients.settings.createMcpServer({ cwd: '', server });
     },
 
     async updateMcpServer(name: string, server: any) {
-      await apiPut(`/api/settings/mcp/${encodeURIComponent(name)}`, server);
+      await clients.settings.updateMcpServer({ cwd: '', name, server });
     },
 
     async deleteMcpServer(name: string) {
-      await apiDelete(`/api/settings/mcp/${encodeURIComponent(name)}`);
+      await clients.settings.deleteMcpServer({ cwd: '', name });
     },
 
     async listAgents() {
-      return apiGet<Array<any>>('/api/settings/agents');
+      return clients.settings.listAgents({ cwd: '' });
     },
 
     async createAgent(profile: any) {
-      await apiPost('/api/settings/agents', profile);
+      await clients.settings.createAgent({ cwd: '', profile });
     },
 
     async updateAgent(name: string, profile: any) {
-      await apiPut(`/api/settings/agents/${encodeURIComponent(name)}`, profile);
+      await clients.settings.updateAgent({ cwd: '', name, profile });
     },
 
     async deleteAgent(name: string) {
-      await apiDelete(`/api/settings/agents/${encodeURIComponent(name)}`);
+      await clients.settings.deleteAgent({ cwd: '', name });
     },
 
     async setAgentDisabled(name: string, disabled: boolean) {
-      await apiPost(`/api/settings/agents/${encodeURIComponent(name)}/disabled`, { disabled });
+      await clients.settings.setAgentDisabled(name, disabled);
     },
 
     async listHooks() {
-      return apiGet<Array<any>>('/api/settings/hooks');
+      return clients.settings.listHooks({ cwd: '' });
     },
 
     async setHookDisabled(name: string, disabled: boolean) {
-      await apiPost(`/api/settings/hooks/${encodeURIComponent(name)}/disabled`, { disabled });
+      await clients.settings.setHookDisabled({ cwd: '', name, disabled });
     },
 
     async createHook(hook: any) {
-      await apiPost('/api/settings/hooks', hook);
+      await clients.settings.createHook({ cwd: '', hook });
     },
 
     async updateHook(name: string, hook: any) {
-      await apiPut(`/api/settings/hooks/${encodeURIComponent(name)}`, hook);
+      await clients.settings.updateHook({ cwd: '', name, hook });
     },
 
     async deleteHook(name: string) {
-      await apiDelete(`/api/settings/hooks/${encodeURIComponent(name)}`);
+      await clients.settings.deleteHook({ cwd: '', name });
     },
 
-    async getPermissionMode(): Promise<PermissionMode> {
-      const data = await apiGet<{ mode: PermissionMode }>('/api/agent/permission-mode');
-      return data.mode;
+    async getPermissionMode() {
+      return clients.settings.getGlobalPermissionMode();
     },
 
-    async setPermissionMode(mode: PermissionMode): Promise<void> {
-      await apiPost('/api/agent/permission-mode', { mode });
+    async setPermissionMode(mode: any) {
+      await clients.settings.setGlobalPermissionMode(mode);
     },
   };
 }

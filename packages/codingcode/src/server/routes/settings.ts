@@ -2,9 +2,6 @@ import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { McpService } from '../../mcp/index.js';
 import { SkillService } from '../../skills/index.js';
-import { SubagentRegistry } from '../../subagent/registry.js';
-import { getMemoryEnabled, setMemoryEnabled } from '../../memory/index.js';
-import { getMemoryConfig, getAllTypesWithStatus, setMemoryTypeDisabled, addMemoryExtraType, updateMemoryExtraType, deleteMemoryExtraType } from '../../memory/config.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
 import type { McpServerConfig } from '../../mcp/types.js';
 import type { SubagentProfile } from '../../subagent/registry.js';
@@ -17,39 +14,54 @@ export const settingsRouter = new Hono();
 
 // ---- Memory ----
 settingsRouter.get('/memory/config', (c) => {
-  const cfg = getMemoryConfig();
-  return c.json({ enabled: cfg.enabled, types: getAllTypesWithStatus(cfg) });
+  return c.json(settingsService.getMemoryConfigWithTypes());
 });
 
 settingsRouter.post('/memory/enabled', async (c) => {
   const body = await c.req.json() as { enabled: boolean };
-  setMemoryEnabled(body.enabled);
-  return c.json({ enabled: getMemoryEnabled() });
+  settingsService.setMemoryEnabledService(body.enabled);
+  return c.json({ enabled: settingsService.getMemoryEnabledService() });
 });
 
 settingsRouter.post('/memory/type-disabled', async (c) => {
   const body = await c.req.json() as { name: string; disabled: boolean };
-  setMemoryTypeDisabled(body.name, body.disabled);
+  settingsService.setMemoryTypeDisabledService(body.name, body.disabled);
   return c.json({ ok: true });
 });
 
 settingsRouter.post('/memory/extra-type', async (c) => {
   const body = await c.req.json() as { name: string; description: string };
-  addMemoryExtraType({ name: body.name, description: body.description, enabled: true });
-  return c.json({ ok: true });
+  try {
+    settingsService.addMemoryExtraTypeService(body);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
+    throw e;
+  }
 });
 
 settingsRouter.put('/memory/extra-type/:name', async (c) => {
   const name = c.req.param('name');
   const body = await c.req.json() as { name: string; description: string };
-  updateMemoryExtraType(name, { name: body.name, description: body.description, enabled: true });
-  return c.json({ ok: true });
+  try {
+    settingsService.updateMemoryExtraTypeService(name, body);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (e instanceof NotFoundError) return c.json({ error: e.message }, 404);
+    if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
+    throw e;
+  }
 });
 
 settingsRouter.delete('/memory/extra-type/:name', async (c) => {
   const name = c.req.param('name');
-  deleteMemoryExtraType(name);
-  return c.json({ ok: true });
+  try {
+    settingsService.deleteMemoryExtraTypeService(name);
+    return c.json({ ok: true });
+  } catch (e) {
+    if (e instanceof NotFoundError) return c.json({ error: e.message }, 404);
+    throw e;
+  }
 });
 
 // ---- Agents ----
@@ -240,31 +252,12 @@ settingsRouter.post('/skills', async (c) => {
 });
 
 // ---- Subagent enabled ----
-settingsRouter.get('/subagent/enabled', async (c) => {
-  const result = await runWithLayer(
-    Effect.gen(function* () {
-      const registry = yield* SubagentRegistry;
-      return registry.isEnabled();
-    }),
-  );
-  if (!result.ok) {
-    const { status, body } = errorResponse(result.error);
-    return c.json(body, status as any);
-  }
-  return c.json({ enabled: result.value });
+settingsRouter.get('/subagent/enabled', (c) => {
+  return c.json({ enabled: settingsService.getSubagentEnabled() });
 });
 
 settingsRouter.post('/subagent/enabled', async (c) => {
   const body = await c.req.json() as { enabled: boolean };
-  const result = await runWithLayer(
-    Effect.gen(function* () {
-      const registry = yield* SubagentRegistry;
-      registry.setEnabled(body.enabled);
-    }),
-  );
-  if (!result.ok) {
-    const { status, body: resp } = errorResponse(result.error);
-    return c.json(resp, status as any);
-  }
+  settingsService.setSubagentEnabled(body.enabled);
   return c.json({ ok: true });
 });

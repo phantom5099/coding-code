@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./client/http": "./src/client/http/index.ts",
+    "./client/types": "./src/client/types.ts"
+  },
   "optionalDependencies": {
     "@anthropic-ai/sandbox-runtime": "^1.0.0"
   },

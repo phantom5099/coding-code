@@ -116,6 +116,7 @@ interface GlobalActions {
   upsertThread: (thread: Thread) => void
   setThreadTurns: (threadId: string, turns: Turn[]) => void
   setThreadCwd: (threadId: string, cwd: string) => void
+  setThreadBackendSessionId: (threadId: string, backendSessionId: string) => void
   setApprovalPolicy: (policy: AgentState['approvalPolicy']) => void
   setModel: (model: string) => void
   setModels: (models: ModelEntry[]) => void
@@ -258,6 +259,10 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setThreadCwd: (threadId, cwd) => set((s) => {
         const thread = s.agent.threads[threadId]
         if (thread) thread.cwd = cwd
+      }),
+      setThreadBackendSessionId: (threadId, backendSessionId) => set((s) => {
+        const thread = s.agent.threads[threadId]
+        if (thread) thread.backendSessionId = backendSessionId
       }),
       setApprovalPolicy: (policy) => set((s) => { s.agent.approvalPolicy = policy }),
       setModel: (model) => set((s) => { s.agent.model = model }),

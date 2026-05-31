@@ -31,6 +31,7 @@ export interface Thread {
   title: string
   cwd: string
   turns: Turn[]
+  backendSessionId?: string
   createdAt: number
   updatedAt: number
 }

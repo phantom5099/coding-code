@@ -26,3 +26,12 @@ test/tank-v2.test.ts
 packages/desktop/electron.vite.config.*.mjs
 # Vite cache
 .vite/
+
+# Test output artifacts from shell redirection
+test-output*.txt
+client-tests.txt
+desktop-test.txt
+
+# Compiled JS artifacts leaked into src directories
+packages/infra/src/*.js
+packages/infra/src/*.d.ts
