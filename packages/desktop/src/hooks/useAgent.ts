@@ -27,7 +27,6 @@ export function useAgent() {
   const loadThreads = useGlobalStore((s) => s.loadThreads)
   const setThreadTurns = useGlobalStore((s) => s.setThreadTurns)
   const setThreadCwd = useGlobalStore((s) => s.setThreadCwd)
-  const setThreadBackendSessionId = useGlobalStore((s) => s.setThreadBackendSessionId)
   const setModel = useGlobalStore((s) => s.setModel)
   const setModels = useGlobalStore((s) => s.setModels)
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)
@@ -75,7 +74,6 @@ export function useAgent() {
           title: s.title ?? s.sessionId.slice(0, 8),
           cwd: normalizeCwd(s.cwd ?? ''),
           turns: [],
-          backendSessionId: s.sessionId,
           createdAt: new Date(s.createdAt).getTime(),
           updatedAt: new Date(s.updatedAt).getTime(),
         }))
@@ -129,10 +127,20 @@ export function useAgent() {
   }, [applyTodoUpdate, updateTurnId])
 
   const sendMessage = useCallback(
-    async (threadId: string, content: string, cwd?: string) => {
+    async (content: string, cwd?: string) => {
       const effectiveCwd = cwd || workspace.rootPath || ''
-      const existingThread = useGlobalStore.getState().agent.threads[threadId]
-      const backendSessionId = existingThread?.backendSessionId
+
+      let threadId = currentThreadId
+      if (!threadId) {
+        const initialMode = approvalPolicy === 'suggest' ? 'default'
+          : approvalPolicy === 'auto-edit' ? 'acceptEdits'
+          : 'dontAsk'
+        const data = await createServerSession(effectiveCwd, initialMode)
+        threadId = data.sessionId
+        setCurrentThread(threadId)
+      }
+
+      if (abortControllers.current.has(threadId)) return
 
       let turnId = randomId()
       let assistantMessageId = randomId()
@@ -140,7 +148,6 @@ export function useAgent() {
       const turn: Turn = { id: turnId, items: [userItem], status: 'running' }
 
       startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) })
-      setCurrentThread(threadId)
       setContextUsage(null)
 
       const controller = new AbortController()
@@ -148,16 +155,13 @@ export function useAgent() {
 
       try {
         const stream = agentClient.sendMessage(content, {
-          sessionId: backendSessionId,
+          sessionId: threadId,
           cwd: effectiveCwd,
           signal: controller.signal,
         })
 
         for await (const event of stream) {
-          if (event.type === 'session_id') {
-            setThreadBackendSessionId(threadId, event.sessionId)
-            continue
-          }
+          if (event.type === 'session_id') continue
 
           const item = streamChunkToItem(event, threadId, assistantMessageId, turnId)
           if (item) {
@@ -182,16 +186,18 @@ export function useAgent() {
         abortControllers.current.delete(threadId)
       }
     },
-    [startTurn, setCurrentThread, setContextUsage, streamChunkToItem, applyChunk, completeTurn, setThreadBackendSessionId, workspace.rootPath]
+    [startTurn, setCurrentThread, setContextUsage, streamChunkToItem, applyChunk, completeTurn, workspace.rootPath, approvalPolicy, currentThreadId]
   )
 
-  const abort = useCallback((threadId: string) => {
+  const abort = useCallback(() => {
+    const threadId = currentThreadId
+    if (!threadId) return
     const controller = abortControllers.current.get(threadId)
     if (controller) {
       controller.abort()
       abortControllers.current.delete(threadId)
     }
-  }, [])
+  }, [currentThreadId])
 
   const approveTool = useCallback(async (threadId: string, callId: string) => {
     updateToolCallStatus(threadId, callId, 'running')
@@ -237,15 +243,6 @@ export function useAgent() {
     },
     [loadThreads]
   )
-
-  const createSession = useCallback(async (cwd: string): Promise<string> => {
-    const initialMode = approvalPolicy === 'suggest' ? 'default'
-      : approvalPolicy === 'auto-edit' ? 'acceptEdits'
-      : 'dontAsk'
-
-    const data = await createServerSession(cwd, initialMode)
-    return data.sessionId
-  }, [approvalPolicy])
 
   // Rollback methods
   // Resolve checkpoint integer turn ID → UI turn ID (UUID or integer string)
@@ -373,7 +370,7 @@ export function useAgent() {
   }, [workspace.rootPath, setRollbackState, initRevertedFilesFromState])
 
   return {
-    sendMessage, abort, approveTool, rejectTool, deleteThread, createSession,
+    sendMessage, abort, approveTool, rejectTool, deleteThread,
     // Rollback
     loadCheckpointDiff, revertFile, revertFiles, revertAgentFiles, revertAllFiles,
     previewRollback, rollbackCode, rollbackCtx, rollbackBoth,

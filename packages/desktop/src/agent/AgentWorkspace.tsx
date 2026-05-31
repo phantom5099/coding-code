@@ -93,16 +93,17 @@ function ModelSelector() {
 
 // ─── InputBox ──────────────────────────────────────────────────────────────
 
-function InputBox({ centered, threadId, sendMessage, abort }: {
+function InputBox({ centered, sendMessage, abort }: {
   centered?: boolean
-  threadId: string
-  sendMessage: (threadId: string, content: string, cwd?: string) => Promise<void>
-  abort: (threadId: string) => void
+  sendMessage: (content: string, cwd?: string) => Promise<void>
+  abort: () => void
 }) {
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
   const isStreaming = useGlobalStore((s) => {
-    const turns = s.agent.threads[threadId]?.turns
+    const id = s.agent.currentThreadId
+    const turns = id ? s.agent.threads[id]?.turns : undefined
     return turns ? turns.some((t) => t.status === 'running') : false
   })
   const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy)
@@ -125,8 +126,8 @@ function InputBox({ centered, threadId, sendMessage, abort }: {
     const trimmed = text.trim()
     if (!trimmed || isStreaming) return
     setText('')
-    sendMessage(threadId, trimmed, workspace.rootPath || undefined)
-  }, [text, isStreaming, sendMessage, threadId, workspace.rootPath])
+    sendMessage(trimmed, workspace.rootPath || undefined)
+  }, [text, isStreaming, sendMessage, workspace.rootPath])
 
   const POLICY_LABELS: Record<string, string> = { suggest: '自动审查', 'auto-edit': '自动编辑', 'full-auto': '全自动' }
   const POLICY_NEXT: Record<string, 'auto-edit' | 'full-auto' | 'suggest'> = {
@@ -150,7 +151,7 @@ function InputBox({ centered, threadId, sendMessage, abort }: {
           />
           {/* Send / Stop — vertically centered to the right of textarea */}
           {isStreaming ? (
-            <button type="button" onClick={() => abort(threadId)}
+            <button type="button" onClick={() => abort()}
               className="w-9 h-9 shrink-0 flex items-center justify-center bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#ccc] rounded-full transition-colors text-sm">
               ■
             </button>
@@ -174,7 +175,7 @@ function InputBox({ centered, threadId, sendMessage, abort }: {
             <span className="text-[#3c3c3c] text-[10px]">▾</span>
           </button>
           <div className="ml-auto flex items-center gap-2">
-            <ContextIndicator threadId={threadId} />
+            {currentThreadId && <ContextIndicator threadId={currentThreadId} />}
             <ModelSelector />
           </div>
         </div>
@@ -186,14 +187,13 @@ function InputBox({ centered, threadId, sendMessage, abort }: {
 // ─── AgentWorkspace ────────────────────────────────────────────────────────
 
 interface AgentWorkspaceProps {
-  sendMessage: (threadId: string, content: string, cwd?: string) => Promise<void>
-  abort: (threadId: string) => void
+  sendMessage: (content: string, cwd?: string) => Promise<void>
+  abort: () => void
 }
 
 export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspaceProps) {
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
   const workspace = useGlobalStore((s) => s.workspace)
-  const activeThreadId = currentThreadId ?? crypto.randomUUID()
 
   if (!currentThreadId) {
     return (
@@ -201,7 +201,7 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
         <h2 className="text-[22px] font-medium text-[#ccc] tracking-tight">
           在 <span className="text-white font-semibold">{workspace.name || workspace.rootPath.split(/[\\/]/).pop() || '当前目录'}</span> 中构建什么？
         </h2>
-        <InputBox centered threadId={activeThreadId} sendMessage={sendMessage} abort={abort} />
+        <InputBox centered sendMessage={sendMessage} abort={abort} />
       </div>
     )
   }
@@ -212,7 +212,7 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
       <ApprovalPanel threadId={currentThreadId} />
       <TodoPanel threadId={currentThreadId} />
       <div className="shrink-0">
-        <InputBox threadId={currentThreadId} sendMessage={sendMessage} abort={abort} />
+        <InputBox sendMessage={sendMessage} abort={abort} />
       </div>
     </div>
   )
