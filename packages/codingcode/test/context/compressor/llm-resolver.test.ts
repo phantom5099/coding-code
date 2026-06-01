@@ -11,14 +11,14 @@ const fakeFallback: LLMClient = {
 
 function cfg(compactionModel: string): ContextConfig {
   return {
-    defaultMaxTokens: 1000, reservedTokens: 0,
+    defaultMaxTokens: 1000,
     thresholds: { prune: 0.6, compaction: 0.9 },
     pruneProtectedTokens: 100, pruneMinRelease: 100,
     toolsExemptFromPrune: [],
     prefixTurnsProtected: 1, minTurnsBetweenCompactions: 3, keepRecentTurns: 2,
-    compactionModel, archiveTtlDays: 30, checkpointKeep: 50,
+    compactionModel,
     reactiveCompactMaxRetries: 1, reactiveCompactKeepTurns: 3,
-    snipMaxMessages: 100, snipKeepHead: 3, microKeepRecentTools: 5,
+    snipMaxMessages: 100,
     persistPreviewChars: 2000, thresholdTokens: 2000,
   };
 }

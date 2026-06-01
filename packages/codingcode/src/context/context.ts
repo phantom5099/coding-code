@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type { Message } from '../core/types.js';
 import { getContextConfig, type ContextConfig } from './config.js';
-import { compactWithLLM, compactIfNeeded, preSendCompact, type CompressResult } from './compressor/index.js';
+import { compactWithLLM, compactIfNeeded, type CompressResult } from './compressor/index.js';
 import { assemblePayload } from './organizer.js';
 import type { LLMClient } from '../llm/client.js';
 
@@ -21,11 +21,6 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
           return assemblePayload(sessionId, encodedProjectPath, pendingUser ?? null, pinned, cfg);
         }),
 
-      preSendCompact: (sessionId: string, encodedProjectPath: string, config?: ContextConfig): Effect.Effect<{ released: number; promptEstimate: number }> =>
-        Effect.promise(async () => {
-          const cfg = config ?? getContextConfig();
-          return await preSendCompact(sessionId, encodedProjectPath, cfg);
-        }),
       compress: (sessionId: string, encodedProjectPath: string, llm: LLMClient | null = null, usage?: number, config?: ContextConfig): Effect.Effect<CompressResult> =>
         Effect.promise(async () => {
           const cfg = config ?? getContextConfig();

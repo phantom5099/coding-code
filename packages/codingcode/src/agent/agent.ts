@@ -192,19 +192,8 @@ export async function* runReActLoop(
       const stepBeforePayload = { sessionId, step: step + 1 };
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
-      // Pre-send preventive maintenance: Prune + Snip (unconditional, zero-cost)
-      const preCompact = await Effect.runPromise(ctx.preSendCompact(state.sessionId, state.projectPath, config));
-      if (preCompact.released > 0) {
-        yield { _tag: 'ReactiveCompact', attempt: 0, released: preCompact.released, promptEstimate: preCompact.promptEstimate };
-        const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
-        messages.length = 0;
-        messages.push(...rebuilt);
-        state.usage = undefined;
-        state.promptEstimate = preCompact.promptEstimate;
-      }
-
       // Threshold-triggered LLM compaction
-      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, state.promptEstimate, config));
+      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, estimateTokens(messages), config));
       if (compressResult.didCompress) {
         yield { _tag: 'ReactiveCompact', attempt: 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
 

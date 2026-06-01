@@ -68,7 +68,6 @@ function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
 function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
   return {
     defaultMaxTokens: 1000,
-    reservedTokens: 0,
     thresholds: { prune: 0.2, compaction: 0.5 },
     pruneProtectedTokens: 100,
     pruneMinRelease: 1,
@@ -77,13 +76,9 @@ function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
     minTurnsBetweenCompactions: 3,
     keepRecentTurns: 2,
     compactionModel: '',
-    archiveTtlDays: 30,
-    checkpointKeep: 50,
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
     snipMaxMessages: 100,
-    snipKeepHead: 3,
-    microKeepRecentTools: 5,
     persistPreviewChars: 2000,
     thresholdTokens: 2000,
     ...overrides,

@@ -25,7 +25,6 @@ export interface ContextConfig {
   reactiveCompactMaxRetries: number;
   reactiveCompactKeepTurns: number;
   snipMaxMessages: number;
-  snipKeepHead: number;
   persistPreviewChars: number;
 }
 
@@ -78,7 +77,6 @@ const DEFAULT_CONTEXT: ContextConfig = {
   reactiveCompactMaxRetries: 3,
   reactiveCompactKeepTurns: 3,
   snipMaxMessages: 50,
-  snipKeepHead: 5,
   persistPreviewChars: 2000,
   thresholdTokens: 8000,
 };
