@@ -9,7 +9,6 @@ import { normalizePath, encodeProjectPath } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, HideEvent, UnhideEvent, TitleEvent, SessionIndex, TokenUsage } from './types.js';
 import { estimateTokens, estimateTokensForContent, estimateMessageTokens } from '../context/utils/tokens.js';
 import { getContextConfig } from '../context/config.js';
-import { persistToolResult } from '../context/persist/store.js';
 import { createLogger } from '@codingcode/infra';
 
 const logger = createLogger();
@@ -95,6 +94,26 @@ function assertResumeWorkspace(cwd: string, sessionId: string): void {
   if (encodeProjectPath(cwd) !== index.projectPath) {
     throw AgentError.sessionWorkspaceMismatch(sessionId, index.cwd);
   }
+}
+
+export interface PersistResult {
+  path: string;
+  bytes: number;
+}
+
+function persistToolResult(
+  encodedProjectPath: string,
+  sessionId: string,
+  toolCallId: string,
+  content: string,
+): PersistResult {
+  const dir = join(PROJECT_BASE, encodedProjectPath, 'tool-results', sessionId);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${toolCallId}.txt`);
+  if (!existsSync(file)) {
+    writeFileSync(file, content, 'utf8');
+  }
+  return { path: file.replace(/\\/g, '/'), bytes: Buffer.byteLength(content, 'utf8') };
 }
 
 export interface SessionStoreState {

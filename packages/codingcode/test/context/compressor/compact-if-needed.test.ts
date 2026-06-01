@@ -35,10 +35,6 @@ vi.mock('../../../src/context/compressor/llm-resolver.js', () => ({
   resolveCompactionLLM: vi.fn(() => Promise.resolve(mockLLM)),
 }));
 
-vi.mock('../../../src/context/persist/store.js', () => ({
-  persistToolResult: vi.fn(),
-}));
-
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal();
   return {
