@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { readHistory, findSessionIndex } from '../../session/store.js';
 import { resolveSessionDir } from '../../session/store.js';
-import { estimateTokens, estimateTokensForContent } from '../utils/tokens.js';
+import { estimateTokens, estimateMessageTokens } from '../utils/tokens.js';
 import { resolveCompactionLLM } from './llm-resolver.js';
 import { COMPACTION_SYSTEM_PROMPT } from './prompt.js';
 import type { ContextConfig } from '../config.js';
@@ -193,8 +193,9 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
   appendSummaryToSession(sessionId,event);
   for (const u of replacedUuids) hiddenUuids.add(u);
 
-  const replacedTokens = transcript.reduce((sum, m) => sum + estimateTokensForContent(m.content), 0);
-  const summaryTokens = estimateTokensForContent(summary);
+  const replacedTokens = transcript.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+  const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
+  const summaryTokens = estimateMessageTokens(summaryMsg);
   return Math.max(0, replacedTokens - summaryTokens);
 }
 

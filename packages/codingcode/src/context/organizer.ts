@@ -1,7 +1,7 @@
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
 import { resolveSessionDir, readHistory, applyVisibilityEvents, findSessionIndex, buildMessagesFromEvents } from '../session/store.js';
-import { estimateTokensForContent } from './utils/tokens.js';
+import { estimateMessageTokens } from './utils/tokens.js';
 import { join } from 'path';
 
 export function assemblePayload(
@@ -49,7 +49,6 @@ export function pruneToolResults(
   config: ContextConfig,
 ): any[] {
   const replacement = '[Old tool result content cleared]';
-  const replacementTokens = estimateTokensForContent(replacement);
   const turnCutoff = currentTurnId - config.prefixTurnsProtected - 1;
 
   const candidates = events
@@ -61,10 +60,17 @@ export function pruneToolResults(
     })
     .sort((a, b) => b.turnId - a.turnId || (b.output?.length ?? 0) - (a.output?.length ?? 0));
 
+  const toolResultToMessage = (tool: any): Message => ({
+    role: 'tool',
+    content: tool.output,
+    tool_call_id: tool.toolCallId,
+    tool_name: tool.toolName,
+  } as any);
+
   let recentTokenSum = 0;
   const prunable: any[] = [];
   for (const tool of candidates) {
-    const t = tool.tokenCount ?? estimateTokensForContent(tool.output);
+    const t = estimateMessageTokens(toolResultToMessage(tool));
     if (recentTokenSum < config.pruneProtectedTokens) {
       recentTokenSum += t;
       continue;
@@ -76,8 +82,9 @@ export function pruneToolResults(
   const prunedUuids = new Set<string>();
   for (const tool of prunable) {
     if (released >= config.pruneMinRelease) break;
-    const t = tool.tokenCount ?? estimateTokensForContent(tool.output);
-    released += t - replacementTokens;
+    const originalTokens = estimateMessageTokens(toolResultToMessage(tool));
+    const replacementTokens = estimateMessageTokens(toolResultToMessage({ ...tool, output: replacement }));
+    released += originalTokens - replacementTokens;
     prunedUuids.add(tool.uuid);
   }
 

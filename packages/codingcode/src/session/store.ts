@@ -7,7 +7,7 @@ import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, HideEvent, UnhideEvent, TitleEvent, SessionIndex, TokenUsage } from './types.js';
-import { estimateTokens, estimateTokensForContent } from '../context/utils/tokens.js';
+import { estimateTokens, estimateTokensForContent, estimateMessageTokens } from '../context/utils/tokens.js';
 import { getContextConfig } from '../context/config.js';
 import { persistToolResult } from '../context/persist/store.js';
 import { createLogger } from '@codingcode/infra';
@@ -170,7 +170,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
               state.title = makeTitle(content);
             }
             appendEvent(state, event);
-            state.promptEstimate += estimateTokensForContent(content);
+            state.promptEstimate += estimateMessageTokens({ role: 'user', content });
             updateIndex(state);
             return event;
           },
@@ -186,7 +186,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
               state.usage = usage;
               state.promptEstimate = usage.prompt;
             } else {
-              state.promptEstimate += estimateTokensForContent(content);
+              state.promptEstimate += estimateMessageTokens({ role: 'assistant', content });
             }
             updateIndex(state);
             return event;
@@ -213,7 +213,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
             const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output: finalOutput, timestamp: new Date().toISOString(), tokenCount: finalTokenCount };
             appendEvent(state, event);
-            state.promptEstimate += finalTokenCount;
+            state.promptEstimate += estimateMessageTokens({ role: 'tool', content: finalOutput, tool_call_id: toolCallId, tool_name: toolName });
             updateIndex(state);
             return event;
           },
