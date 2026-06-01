@@ -85,6 +85,16 @@ export interface TitleEvent {
   timestamp: string;
 }
 
+export interface ToolBudgetEvent {
+  type: 'tool_budget';
+  uuid: string;
+  toolCallId: string;
+  path: string;
+  preview: string;
+  bytes: number;
+  timestamp: string;
+}
+
 export type SessionEvent =
   | SessionMetaEvent
   | UserEvent
@@ -93,7 +103,8 @@ export type SessionEvent =
   | SummaryEvent
   | HideEvent
   | UnhideEvent
-  | TitleEvent;
+  | TitleEvent
+  | ToolBudgetEvent;
 
 export interface TokenUsage {
   prompt: number;

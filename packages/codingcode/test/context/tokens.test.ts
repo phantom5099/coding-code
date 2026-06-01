@@ -13,7 +13,8 @@ describe('token estimation', () => {
 
   it('CJK text estimates ~1 token per char', () => {
     expect(estimateTokensForContent('你好世界')).toBe(4);
-    expect(estimateTokensForContent('这是一个测试字符串')).toBe(10);
+    expect(estimateTokensForContent('这是一个测试字符串')).toBe(9);
+    expect(estimateTokensForContent('这是一个测试字符串哈')).toBe(10);
   });
 
   it('mixed CJK and ASCII sums separately', () => {

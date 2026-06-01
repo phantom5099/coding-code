@@ -6,8 +6,16 @@ vi.mock('../../src/context/config.js', () => ({
   getContextConfig: vi.fn(() => ({
     thresholdTokens: 8000,
     persistPreviewChars: 2000,
-    defaultMaxTokens: 200000,
-    thresholds: { prune: 0.7, compaction: 0.9 },
+    compactionThreshold: 0.9,
+    keepRecentTurns: 3,
+    toolsExemptFromMicrocompact: ['Read', 'todo_write', 'todo_read', 'tool_search'],
+    minTurnsBetweenCompactions: 5,
+    compactionModel: '',
+    reactiveCompactMaxRetries: 3,
+    reactiveCompactKeepTurns: 3,
+    snipMaxMessages: 50,
+    toolResultBudgetThreshold: 50000,
+    keepRecentToolResults: 3,
   })),
 }));
 

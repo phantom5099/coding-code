@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { appendFileSync } from 'fs';
 import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
@@ -160,7 +161,12 @@ export async function* runReActLoop(
   const maxStopContinuations = opts.maxStopContinuations ?? deps.maxStopContinuations;
 
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
-    const messages = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
+    const { messages, snipTokensFreed, newBudgets } = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
+    if (newBudgets.length > 0) {
+      for (const ev of newBudgets) {
+        appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');
+      }
+    }
     let lastResult: Result<string, AgentError> | null = null;
     let overflow = false;
 
@@ -193,15 +199,20 @@ export async function* runReActLoop(
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
       // Threshold-triggered LLM compaction
-      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, estimateTokens(messages), config));
+      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, estimateTokens(messages), snipTokensFreed, llm.modelInfo.maxTokens, config));
       if (compressResult.didCompress) {
         yield { _tag: 'ReactiveCompact', attempt: 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
 
         const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
+        if (rebuilt.newBudgets.length > 0) {
+          for (const ev of rebuilt.newBudgets) {
+            appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');
+          }
+        }
         messages.length = 0;
-        messages.push(...rebuilt);
+        messages.push(...rebuilt.messages);
         state.usage = undefined;
-        state.promptEstimate = estimateTokens(rebuilt);
+        state.promptEstimate = estimateTokens(rebuilt.messages);
       }
 
       // Build LLM messages: original messages + step.before transients
@@ -223,7 +234,7 @@ export async function* runReActLoop(
       if (!llmResult.ok) {
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
           const aggressiveConfig = { ...config, keepRecentTurns: config.reactiveCompactKeepTurns };
-          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, null, undefined, aggressiveConfig));
+          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, null, undefined, llm.modelInfo.maxTokens, aggressiveConfig));
           yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
           overflow = true;
           break;

@@ -101,7 +101,7 @@ export interface PersistResult {
   bytes: number;
 }
 
-function persistToolResult(
+export function persistToolResult(
   encodedProjectPath: string,
   sessionId: string,
   toolCallId: string,
@@ -721,7 +721,7 @@ export function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string
   const turnsMap = new Map<number, { id: string; items: object[]; status: string }>();
   for (const event of events) {
     if (event.type === 'session_meta') continue;
-    if (event.type === 'summary' || event.type === 'hide' || event.type === 'unhide' || event.type === 'title') continue;
+    if (event.type === 'summary' || event.type === 'hide' || event.type === 'unhide' || event.type === 'title' || event.type === 'tool_budget') continue;
     let turn = turnsMap.get(event.turnId);
     if (!turn) {
       turn = { id: String(event.turnId), items: [], status: 'completed' };

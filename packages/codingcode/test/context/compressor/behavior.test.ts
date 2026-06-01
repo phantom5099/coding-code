@@ -67,20 +67,18 @@ function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
 
 function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
   return {
-    defaultMaxTokens: 1000,
-    thresholds: { prune: 0.2, compaction: 0.5 },
-    pruneProtectedTokens: 100,
-    pruneMinRelease: 1,
-    toolsExemptFromPrune: [],
-    prefixTurnsProtected: 1,
-    minTurnsBetweenCompactions: 3,
+    compactionThreshold: 0.5,
     keepRecentTurns: 2,
+    toolsExemptFromMicrocompact: [],
+    minTurnsBetweenCompactions: 3,
     compactionModel: '',
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
     snipMaxMessages: 100,
     persistPreviewChars: 2000,
     thresholdTokens: 2000,
+    toolResultBudgetThreshold: 50000,
+    keepRecentToolResults: 3,
     ...overrides,
   };
 }

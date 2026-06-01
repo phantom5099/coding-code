@@ -28,18 +28,48 @@ interface CompressContext {
   hiddenUuids: Set<string>;
 }
 
+const compactFailureTracker = new Map<string, { count: number; lastAttempt: number }>();
+const FAILURE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function getFailures(sessionId: string): number {
+  const entry = compactFailureTracker.get(sessionId);
+  if (!entry) return 0;
+  if (Date.now() - entry.lastAttempt > FAILURE_TTL_MS) {
+    compactFailureTracker.delete(sessionId);
+    return 0;
+  }
+  return entry.count;
+}
+
 export async function compactIfNeeded(
   sessionId: string,
   encodedProjectPath: string,
   promptEstimate: number,
+  snipTokensFreed: number,
+  modelMaxTokens: number,
   config: ContextConfig,
   llm: LLMClient | null,
 ): Promise<CompressResult> {
-  const threshold = config.defaultMaxTokens * config.thresholds.compaction;
-  if (promptEstimate <= threshold) {
+  const failures = getFailures(sessionId);
+  if (failures >= 3) {
     return { didCompress: false, released: 0, promptEstimate };
   }
-  return await compactWithLLM(sessionId, encodedProjectPath, config, llm, promptEstimate);
+
+  const threshold = modelMaxTokens * config.compactionThreshold;
+  const effectiveEstimate = promptEstimate - (snipTokensFreed ?? 0);
+  if (effectiveEstimate <= threshold) {
+    return { didCompress: false, released: 0, promptEstimate };
+  }
+
+  const result = await compactWithLLM(sessionId, encodedProjectPath, config, llm, promptEstimate, modelMaxTokens);
+
+  if (result.didCompress) {
+    compactFailureTracker.set(sessionId, { count: 0, lastAttempt: Date.now() });
+  } else {
+    compactFailureTracker.set(sessionId, { count: failures + 1, lastAttempt: Date.now() });
+  }
+
+  return result;
 }
 
 export async function compactWithLLM(
@@ -48,6 +78,7 @@ export async function compactWithLLM(
   config: ContextConfig,
   llm: LLMClient | null,
   usage?: number,
+  modelMaxTokens?: number,
 ): Promise<CompressResult> {
   const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
@@ -55,12 +86,13 @@ export async function compactWithLLM(
 
   let released = 0;
 
-  if (usage === undefined || usage - released > config.defaultMaxTokens * config.thresholds.compaction) {
+  const threshold = modelMaxTokens ? modelMaxTokens * config.compactionThreshold : Infinity;
+  if (usage === undefined || usage - released > threshold) {
     released += await tryL5Compaction(ctx);
   }
 
-  const payload = assemblePayload(sessionId, encodedProjectPath, null, [], config);
-  const promptEstimate = estimateTokens(payload);
+  const payload = assemblePayload(sessionId, encodedProjectPath, config);
+  const promptEstimate = estimateTokens(payload.messages);
 
   return { didCompress: released > 0, released, promptEstimate };
 }

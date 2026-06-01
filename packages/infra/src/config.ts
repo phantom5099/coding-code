@@ -3,20 +3,11 @@ import { resolve, dirname } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
-export interface ContextThresholdsConfig {
-  prune: number;
-  compaction: number;
-}
-
 export interface ContextConfig {
-  defaultMaxTokens: number;
-  thresholds: ContextThresholdsConfig;
-  pruneProtectedTokens: number;
-  pruneMinRelease: number;
-  toolsExemptFromPrune: string[];
-  prefixTurnsProtected: number;
-  minTurnsBetweenCompactions: number;
+  compactionThreshold: number;
   keepRecentTurns: number;
+  toolsExemptFromMicrocompact: string[];
+  minTurnsBetweenCompactions: number;
   /** Model for context compaction. Empty string falls back to main session LLM.
    *  Use full id format "model@API_KEY_ENV" to avoid ambiguity (e.g. "deepseek-chat@DEEPSEEK_API_KEY").
    *  Can also use bare model id (e.g. "deepseek-chat") or display name, first match wins. */
@@ -26,6 +17,8 @@ export interface ContextConfig {
   reactiveCompactKeepTurns: number;
   snipMaxMessages: number;
   persistPreviewChars: number;
+  toolResultBudgetThreshold: number;
+  keepRecentToolResults: number;
 }
 
 export interface MemoryTypeConfig {
@@ -65,20 +58,18 @@ export interface AppConfig {
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
-  defaultMaxTokens: 200000,
-  thresholds: { prune: 0.7, compaction: 0.9 },
-  pruneProtectedTokens: 40000,
-  pruneMinRelease: 20000,
-  toolsExemptFromPrune: ['Read', 'todo_write', 'todo_read', 'tool_search'],
-  prefixTurnsProtected: 1,
-  minTurnsBetweenCompactions: 5,
+  compactionThreshold: 0.9,
   keepRecentTurns: 3,
+  toolsExemptFromMicrocompact: ['Read', 'todo_write', 'todo_read', 'tool_search'],
+  minTurnsBetweenCompactions: 5,
   compactionModel: '',
   reactiveCompactMaxRetries: 3,
   reactiveCompactKeepTurns: 3,
   snipMaxMessages: 50,
   persistPreviewChars: 2000,
   thresholdTokens: 8000,
+  toolResultBudgetThreshold: 50000,
+  keepRecentToolResults: 3,
 };
 
 export const DEFAULT_MEMORY_TYPES: MemoryTypeConfig[] = [
