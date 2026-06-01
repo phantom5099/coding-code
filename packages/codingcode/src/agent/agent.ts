@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { readFileSync } from 'fs';
 import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
@@ -208,16 +207,6 @@ export async function* runReActLoop(
       const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, state.promptEstimate, config));
       if (compressResult.didCompress) {
         yield { _tag: 'ReactiveCompact', attempt: 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
-
-        // Inject restored files after compaction
-        if (compressResult.restoredFiles && compressResult.restoredFiles.length > 0) {
-          for (const filePath of compressResult.restoredFiles) {
-            try {
-              const content = readFileSync(filePath, 'utf8');
-              messages.push({ role: 'system', content: `File restored after compaction: ${filePath}\n\n${content.slice(0, 2000)}` });
-            } catch { /* skip non-existent files */ }
-          }
-        }
 
         const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
         messages.length = 0;

@@ -85,4 +85,9 @@ describe('compactIfNeeded', () => {
     expect(result.released).toBeGreaterThan(0);
     expect(result.promptEstimate).toBeGreaterThanOrEqual(0);
   });
+
+  it('does not return restoredFiles field (removed)', async () => {
+    const result = await compactIfNeeded('s1', 'proj', 10000, config(0.5), null);
+    expect('restoredFiles' in result).toBe(false);
+  });
 });

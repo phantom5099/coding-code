@@ -10,13 +10,11 @@ import type { SessionEvent, SummaryEvent } from '../../session/types.js';
 import type { LLMClient } from '../../llm/client.js';
 import { join } from 'path';
 import { appendFileSync } from 'fs';
-import { readFileSync } from 'fs';
 
 export interface CompressResult {
   didCompress: boolean;
   released: number;
   promptEstimate: number;
-  restoredFiles?: string[];
 }
 
 interface CompressContext {
@@ -84,8 +82,6 @@ export async function compactWithLLM(
     released += await tryL5Compaction(ctx);
   }
 
-  const restoredFiles = collectRecentEditedFiles(ctx.events, currentTurnId, config.keepRecentTurns);
-
   const dir = resolveSessionDir(sessionId);
   let promptEstimate = 0;
   if (dir) {
@@ -94,7 +90,7 @@ export async function compactWithLLM(
     promptEstimate = estimateTokens(messages);
   }
 
-  return { didCompress: released > 0, released, promptEstimate, restoredFiles };
+  return { didCompress: released > 0, released, promptEstimate };
 }
 
 // ---------- Context building ----------
@@ -383,22 +379,4 @@ function collectPrunableTools(
   return prunable.sort(
     (a, b) => (b.output?.length ?? 0) - (a.output?.length ?? 0),
   );
-}
-
-function collectRecentEditedFiles(
-  events: SessionEvent[],
-  currentTurnId: number,
-  keepRecentTurns: number,
-): string[] {
-  const cutoff = currentTurnId - keepRecentTurns;
-  const files = new Set<string>();
-  for (const ev of events) {
-    if (ev.type !== 'tool_result') continue;
-    if (ev.turnId < cutoff) continue;
-    if (ev.toolName === 'edit_file' || ev.toolName === 'write_file') {
-      const match = ev.output.match(/(?:edited|wrote)\s+file:\s*(.+)/i);
-      if (match) files.add(match[1].trim());
-    }
-  }
-  return Array.from(files);
 }
