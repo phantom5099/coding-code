@@ -35,7 +35,6 @@ const MockContextLayer = Layer.succeed(ContextService, ContextService.of({
   _tag: 'Context' as any,
   build: () => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
   compress: () => Effect.succeed({ didCompress: true, released: 0 }),
-  appendTurnEnd: () => Effect.succeed({ didCompress: false, released: 0 }),
 }));
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.of({

@@ -148,6 +148,14 @@ export class DeepSeekProvider implements LLMClient {
       try {
         const resp = await result.response;
         const parsed = parseResponseMessages(resp.messages as ModelMessage[]);
+        if ((resp as any).usage) {
+          const usage = (resp as any).usage as any;
+          parsed.usage = {
+            prompt: usage.promptTokens ?? 0,
+            completion: usage.completionTokens ?? 0,
+            total: usage.totalTokens ?? 0,
+          };
+        }
         return Result.ok(parsed);
       } catch (e) {
         return Result.err(mapLlmError('deepseek', e));

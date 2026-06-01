@@ -28,6 +28,8 @@ function streamChunkToItem(
       return null
     case 'usage':
       return null
+    case 'reactive_compact':
+      return null
     case 'done':
     case 'session_id':
       return null
@@ -124,6 +126,14 @@ describe('streamChunkToItem after StreamChunk refactor', () => {
   it('maps usage to null', () => {
     const item = streamChunkToItem(
       { type: 'usage', prompt: 1000, completion: 500, total: 1500 },
+      't1', 'a1', 'turn1',
+    )
+    expect(item).toBeNull()
+  })
+
+  it('maps reactive_compact to null', () => {
+    const item = streamChunkToItem(
+      { type: 'reactive_compact', released: 500, promptEstimate: 800 },
       't1', 'a1', 'turn1',
     )
     expect(item).toBeNull()

@@ -32,7 +32,7 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
     sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     messageCount: lines.length, title: 'fixture', currentTurnId: 3,
-    tokenCountEstimate: 100, permissionMode: 'default',
+    usage: undefined, promptEstimate: 0, permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
@@ -238,7 +238,7 @@ describe('readUIHistory with visibility filtering', () => {
       writeFileSync(join(dir, `${sessionId}.index.json`), JSON.stringify({
         sessionId, projectPath: slug, cwd: '/tmp', model: 't',
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-        messageCount: 7, title: 'test', currentTurnId: 2, tokenCountEstimate: 0, permissionMode: 'default',
+        messageCount: 7, title: 'test', currentTurnId: 2, usage: undefined, promptEstimate: 0, permissionMode: 'default',
       }));
 
       const turns = readUIHistory(sessionId);

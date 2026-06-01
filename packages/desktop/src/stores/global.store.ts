@@ -65,6 +65,7 @@ interface AgentState {
   todoByThreadId: Record<string, TodoPanelState>
   pendingInput: string | null
   usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>
+  isCompressing: boolean
 }
 
 interface EditorState {
@@ -144,6 +145,8 @@ interface GlobalActions {
   markScopeRestored: (threadId: string, turnId: string, scope: 'agent' | 'all') => void
   initRevertedFilesFromState: (threadId: string) => void
   setTurnCheckpointMapping: (threadId: string, checkpointId: number, uiTurnId: string) => void
+  startCompressing: () => void
+  stopCompressing: () => void
 }
 
 const initialGit: GitStatus = {
@@ -188,6 +191,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         todoByThreadId: {},
         pendingInput: null,
         usageByThreadId: {},
+        isCompressing: false,
       },
       editor: {
         cursorLine: 1,
@@ -305,6 +309,12 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           }
         }
         s.agent.threads = next
+        // Clean up usage entries for deleted threads
+        for (const id of Object.keys(s.agent.usageByThreadId)) {
+          if (!incomingIds.has(id)) {
+            delete s.agent.usageByThreadId[id]
+          }
+        }
       }),
 
       updateToolCallStatus: (threadId, callId, status) => set((s) => {
@@ -528,6 +538,8 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         }
         s.rollback.turnCheckpointMapping[threadId][checkpointId] = uiTurnId
       }),
+      startCompressing: () => set((s) => { s.agent.isCompressing = true }),
+      stopCompressing: () => set((s) => { s.agent.isCompressing = false }),
     })),
     {
       name: 'codingcode-desktop-store',
@@ -553,6 +565,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         agent: {
           approvalPolicy: state.agent.approvalPolicy,
           model: state.agent.model,
+          usageByThreadId: state.agent.usageByThreadId,
         },
         editor: {
           cursorLine: state.editor.cursorLine,

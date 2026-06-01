@@ -1,4 +1,4 @@
-import type { LLMStreamAdapter } from '../agent/agent.js';
+import type { LLMClient } from '../llm/client.js';
 import type { MemoryTypeConfig } from '@codingcode/infra';
 
 export interface StructuredTranscript {
@@ -11,7 +11,7 @@ export async function extractMemory(opts: {
   currentAuto: string;
   transcript: StructuredTranscript;
   types: MemoryTypeConfig[];
-  llm: LLMStreamAdapter;
+  llm: LLMClient;
 }): Promise<string | null> {
   const { currentAuto, transcript, types, llm } = opts;
 

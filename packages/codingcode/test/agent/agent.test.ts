@@ -52,7 +52,7 @@ const mockState = {
   currentTurnId: 1,
   sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
   title: 'test',
-  tokenCountEstimate: 0,
+  usage: undefined,
 };
 
 function makeDeps(overrides?: Record<string, any>) {

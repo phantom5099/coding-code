@@ -12,7 +12,7 @@ describe('runReActLoop — stop hook', () => {
     currentTurnId: randomUUID(),
     sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
     title: 'test',
-    tokenCountEstimate: 0,
+    usage: undefined,
   };
 
   function baseMockDeps(overrides: Record<string, any> = {}) {

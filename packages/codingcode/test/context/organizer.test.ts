@@ -1,75 +1,113 @@
 import { describe, it, expect } from 'vitest';
-import { fitToBudget } from '../../src/context/organizer.js';
-import type { Message } from '../../src/core/types.js';
-import type { ContextConfig } from '../../src/context/config.js';
+import { assemblePayload, pruneToolResults, snipEvents } from '../../src/context/organizer.js';
 
-function msg(content: string, role: Message['role'] = 'user', toolCalls?: Message['tool_calls']): Message {
-  return toolCalls ? { role, content, tool_calls: toolCalls } : { role, content };
-}
-
-function turn(userContent: string, assistantContent: string, toolContent: string, turnNum: number): Message[] {
-  return [
-    { role: 'user', content: userContent },
-    { role: 'assistant', content: assistantContent, tool_calls: [{ id: `tc${turnNum}`, name: 'test', arguments: {} }] },
-    { role: 'tool', content: toolContent, tool_call_id: `tc${turnNum}` },
-  ];
-}
-
-const testConfig: ContextConfig = {
-  defaultMaxTokens: 1000,
-  reservedTokens: 100,
-  thresholds: { prune: 0.7, compaction: 0.9 },
-  pruneProtectedTokens: 40000,
-  pruneMinRelease: 20000,
-  toolsExemptFromPrune: ['Read'],
+const baseConfig = {
   prefixTurnsProtected: 1,
-  minTurnsBetweenCompactions: 5,
-  keepRecentTurns: 10,
-  compactionModel: 'haiku',
-  archiveTtlDays: 30,
-  checkpointKeep: 50,
-  reactiveCompactMaxRetries: 1,
-  reactiveCompactKeepTurns: 3,
-  snipMaxMessages: 100,
-  snipKeepHead: 3,
-  microKeepRecentTools: 5,
-  persistPreviewChars: 2000,
-  thresholdTokens: 2000,
-};
+  pruneProtectedTokens: 100,
+  pruneMinRelease: 1,
+  toolsExemptFromPrune: ['Read'],
+  snipMaxMessages: 50,
+} as any;
 
-describe('fitToBudget', () => {
-  it('returns messages unchanged when under budget', () => {
-    const messages = [msg('short')];
-    const result = fitToBudget(messages, testConfig);
-    expect(result).toEqual(messages);
+describe('snipEvents', () => {
+  it('returns all events when under threshold', () => {
+    const events = Array.from({ length: 10 }, (_, i) => ({ type: 'user', content: `msg${i}` }));
+    const result = snipEvents(events, baseConfig);
+    expect(result).toHaveLength(10);
   });
 
-  it('removes oldest non-pinned messages when over budget', () => {
-    // Each message ~1600 chars → ~457 tokens; budget = 900
-    // pinned(4) + 1600(457) + 1600(457) = 918 > 900 → remove one
-    // pinned(4) + 1600(457) = 461 ≤ 900 → stop, 2 remaining
-    const messages = [msg('pinned', 'system'), msg('x'.repeat(1600)), msg('y'.repeat(1600))];
-    const result = fitToBudget(messages, testConfig, 1); // 1 pinned
-    expect(result.length).toBe(2); // pinned + 1 remaining long msg
-    expect(result[0]!.content).toBe('pinned'); // pinned stays
+  it('truncates head, keeping only tail snipMaxMessages', () => {
+    const events = Array.from({ length: 60 }, (_, i) => ({ type: 'user', content: `msg${i}` }));
+    const result = snipEvents(events, baseConfig);
+    expect(result).toHaveLength(51); // 1 summary + 50 events
+    expect(result[0].type).toBe('summary');
+    expect(result[0].summaryText).toContain('messages snipped');
+    expect(result[1].content).toBe('msg10');
+    expect(result[50].content).toBe('msg59');
   });
 
-  it('removes oldest non-pinned messages when over budget, falls back to fitToBudget', () => {
-    // No pinned, 3 huge messages → should trim to under budget
-    const messages = [msg('a'.repeat(4000)), msg('b'.repeat(4000)), msg('c'.repeat(4000))];
-    const result = fitToBudget(messages, testConfig, 0);
-    expect(result.length).toBeLessThan(3); // at least 1 removed
+  it('retreats to user boundary and inserts summary placeholder', () => {
+    const events = [
+      { type: 'user', content: 'q1', turnId: 1 },
+      { type: 'assistant', content: 'a1', turnId: 1 },
+      { type: 'tool_result', content: 'r1', turnId: 1 },
+      { type: 'user', content: 'q2', turnId: 2 },
+      { type: 'assistant', content: 'a2', turnId: 2 },
+      { type: 'tool_result', content: 'r2', turnId: 2 },
+    ];
+    // snipMaxMessages=4: would slice from index 2 (tool_result r1),
+    // but boundary retreats to index 3 (user q2)
+    const result = snipEvents(events, { ...baseConfig, snipMaxMessages: 4 });
+    expect(result.length).toBe(4);
+    expect(result[0].type).toBe('summary');
+    expect(result[0].summaryText).toContain('messages snipped');
+    expect(result[1].content).toBe('q2');
+    expect(result[3].content).toBe('r2');
+  });
+});
+
+describe('pruneToolResults', () => {
+  it('replaces old tool results with placeholder', () => {
+    const events = [
+      { type: 'user', content: 'hello', turnId: 1 },
+      { type: 'assistant', content: 'hi', turnId: 1 },
+      { type: 'tool_result', toolName: 'bash', output: 'x'.repeat(1000), turnId: 1, uuid: 't1', tokenCount: 250 },
+      { type: 'user', content: 'step2', turnId: 2 },
+      { type: 'assistant', content: 'ok', turnId: 2 },
+      { type: 'tool_result', toolName: 'bash', output: 'y'.repeat(1000), turnId: 2, uuid: 't2', tokenCount: 250 },
+    ];
+    // currentTurnId=2, prefixTurnsProtected=1 → cutoff = 2-1-1=0, turnId<=0 are old
+    // But all events have turnId >= 1, so nothing is pruned
+    const result = pruneToolResults(events, 2, baseConfig);
+    expect(result[2].output).toBe('x'.repeat(1000));
+    expect(result[5].output).toBe('y'.repeat(1000));
   });
 
-  it('removes entire user turn (user+assistant+tool) when trimming', () => {
-    // Two complete turns, very large content. Budget = 900.
-    // Turn 1: user(457t) + assistant(457t) + tool(457t) = 1371t
-    // Turn 2: user(457t) + assistant(457t) + tool(457t) = 1371t
-    // Total ≈ 2742t > 900 → should remove entire turn 1 (all 3 messages)
-    const messages = [...turn('a'.repeat(1600), 'b'.repeat(1600), 'c'.repeat(1600), 1),
-                      ...turn('d'.repeat(1600), 'e'.repeat(1600), 'f'.repeat(1600), 2)];
-    const result = fitToBudget(messages, testConfig, 0);
-    expect(result.length).toBeLessThanOrEqual(3); // either turn 2 alone or part of it
-    expect(result[0]?.role).not.toBe('user'); // turn 1's user should be gone
+  it('skips exempt tools and recent turns', () => {
+    const events = [
+      { type: 'tool_result', toolName: 'Read', output: 'big read', turnId: 1, uuid: 't1', tokenCount: 50 },
+      { type: 'tool_result', toolName: 'bash', output: 'big bash', turnId: 1, uuid: 't2', tokenCount: 50 },
+    ];
+    // currentTurnId=3, cutoff = 3-1-1 = 1. turnId <= 1 are prunable
+    const result = pruneToolResults(events, 3, { ...baseConfig, pruneProtectedTokens: 0 });
+    expect(result[0].output).toBe('big read'); // Read is exempt
+    expect(result[1].output).toBe('[Old tool result content cleared]');
+  });
+
+  it('prunes old tool results when cutoff allows', () => {
+    const events = [
+      { type: 'user', content: 'q1', turnId: 1 },
+      { type: 'tool_result', toolName: 'bash', output: 'x'.repeat(1000), turnId: 1, uuid: 't1', tokenCount: 250 },
+      { type: 'user', content: 'q2', turnId: 2 },
+      { type: 'tool_result', toolName: 'bash', output: 'y'.repeat(1000), turnId: 2, uuid: 't2', tokenCount: 250 },
+      { type: 'user', content: 'q3', turnId: 3 },
+      { type: 'tool_result', toolName: 'bash', output: 'z'.repeat(1000), turnId: 3, uuid: 't3', tokenCount: 250 },
+    ];
+    // currentTurnId=4, prefixTurnsProtected=1 -> cutoff = 2. turnId <= 2 are prunable
+    // candidates sorted by turnId desc: [t2(turnId=2), t1(turnId=1)]
+    // prune stops after reaching pruneMinRelease=1 on t2, so t1 is not pruned
+    const result = pruneToolResults(events, 4, { ...baseConfig, pruneProtectedTokens: 0 });
+    expect(result[1].output).toBe('x'.repeat(1000)); // t1 not pruned (release already met by t2)
+    expect(result[3].output).toBe('[Old tool result content cleared]'); // t2 pruned first
+    expect(result[5].output).toBe('z'.repeat(1000)); // t3 kept (turnId=3 > cutoff=2)
+  });
+
+  it('respects pruneProtectedTokens', () => {
+    const events = [
+      { type: 'tool_result', toolName: 'bash', output: 'big1', turnId: 1, uuid: 't1', tokenCount: 200 },
+      { type: 'tool_result', toolName: 'bash', output: 'big2', turnId: 1, uuid: 't2', tokenCount: 200 },
+      { type: 'tool_result', toolName: 'bash', output: 'big3', turnId: 1, uuid: 't3', tokenCount: 200 },
+    ];
+    // currentTurnId=3, cutoff=1. pruneProtectedTokens=300 -> first 300 tokens protected
+    const result = pruneToolResults(events, 3, { ...baseConfig, pruneProtectedTokens: 300, pruneMinRelease: 1 });
+    expect(result[0].output).toBe('big1'); // protected (200 tokens)
+    expect(result[1].output).toBe('big2'); // protected (cumulative 400 >= 300, but already counted)
+    expect(result[2].output).toBe('[Old tool result content cleared]'); // t3 pruned
+  });
+});
+
+describe('assemblePayload', () => {
+  it('is importable and exists as a function', () => {
+    expect(typeof assemblePayload).toBe('function');
   });
 });

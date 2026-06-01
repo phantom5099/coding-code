@@ -1,7 +1,7 @@
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
-import { resolveSessionDir, buildMessages } from '../session/store.js';
-import { estimateTokens, estimateTokensForContent } from './utils/tokens.js';
+import { resolveSessionDir, readHistory, applyVisibilityEvents, findSessionIndex, buildMessagesFromEvents } from '../session/store.js';
+import { estimateMessageTokens } from './utils/tokens.js';
 import { join } from 'path';
 
 export function assemblePayload(
@@ -14,54 +14,109 @@ export function assemblePayload(
   const dir = resolveSessionDir(sessionId);
   if (!dir) throw new Error(`Session ${sessionId} not found`);
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
-  const base = buildMessages(jsonlPath);
+  const events = readHistory(jsonlPath);
 
-  // Strip trailing incomplete assistant messages (API rejects them)
-  const cleaned = stripOrphanToolCalls(base);
+  const hidden = applyVisibilityEvents(events);
+  const visible = events.filter((ev) => {
+    if (ev.type === 'hide' || ev.type === 'unhide') return false;
+    if ('uuid' in ev && hidden.has((ev as any).uuid)) return false;
+    return true;
+  });
 
-  const full = pendingUser ? [...pinned, ...cleaned, pendingUser] : [...pinned, ...cleaned];
-  return fitToBudget(full, config, pinned.length);
+  const idx = findSessionIndex(sessionId);
+  const currentTurnId = idx?.currentTurnId ?? 0;
+  const compacted = applyMemoryCompaction(visible, currentTurnId, config);
+
+  const messages = buildMessagesFromEvents(compacted as any);
+
+  const full = pendingUser ? [...pinned, ...messages, pendingUser] : [...pinned, ...messages];
+  return full;
 }
 
-export function fitToBudget(
-  messages: Message[],
+function applyMemoryCompaction(
+  events: any[],
+  currentTurnId: number,
   config: ContextConfig,
-  pinnedCount: number = 0,
-): Message[] {
-  const budget = config.defaultMaxTokens - config.reservedTokens;
-  let usage = estimateTokens(messages);
-  if (usage <= budget) return messages;
+): any[] {
+  let compacted = pruneToolResults(events, currentTurnId, config);
+  compacted = snipEvents(compacted, config);
+  return compacted;
+}
 
-  const result = [...messages];
-  let i = pinnedCount;
-  while (i < result.length && usage > budget) {
-    // Skip non-user messages that might have been left orphaned
-    if (result[i]?.role !== 'user') { i++; continue; }
+export function pruneToolResults(
+  events: any[],
+  currentTurnId: number,
+  config: ContextConfig,
+): any[] {
+  const replacement = '[Old tool result content cleared]';
+  const turnCutoff = currentTurnId - config.prefixTurnsProtected - 1;
 
-    // Find end of this user turn (next user message or array end)
-    let end = i + 1;
-    while (end < result.length && result[end]?.role !== 'user') {
-      end++;
+  const candidates = events
+    .filter((ev) => {
+      if (ev.type !== 'tool_result') return false;
+      if (ev.turnId > turnCutoff) return false;
+      if (config.toolsExemptFromPrune.includes(ev.toolName ?? '')) return false;
+      return true;
+    })
+    .sort((a, b) => b.turnId - a.turnId || (b.output?.length ?? 0) - (a.output?.length ?? 0));
+
+  const toolResultToMessage = (tool: any): Message => ({
+    role: 'tool',
+    content: tool.output,
+    tool_call_id: tool.toolCallId,
+    tool_name: tool.toolName,
+  } as any);
+
+  let recentTokenSum = 0;
+  const prunable: any[] = [];
+  for (const tool of candidates) {
+    const t = estimateMessageTokens(toolResultToMessage(tool));
+    if (recentTokenSum < config.pruneProtectedTokens) {
+      recentTokenSum += t;
+      continue;
     }
-
-    const removed = result.splice(i, end - i);
-    usage -= removed.reduce((s, m) => s + estimateTokensForContent(m.content), 0);
+    prunable.push(tool);
   }
-  return result;
+
+  let released = 0;
+  const prunedUuids = new Set<string>();
+  for (const tool of prunable) {
+    if (released >= config.pruneMinRelease) break;
+    const originalTokens = estimateMessageTokens(toolResultToMessage(tool));
+    const replacementTokens = estimateMessageTokens(toolResultToMessage({ ...tool, output: replacement }));
+    released += originalTokens - replacementTokens;
+    prunedUuids.add(tool.uuid);
+  }
+
+  return events.map((ev) => {
+    if (ev.type === 'tool_result' && prunedUuids.has(ev.uuid)) {
+      return { ...ev, output: replacement };
+    }
+    return ev;
+  });
 }
 
-function stripOrphanToolCalls(messages: Message[]): Message[] {
-  const resolvedIds = new Set<string>();
-  for (const m of messages) {
-    if (m.role === 'tool' && m.tool_call_id) resolvedIds.add(m.tool_call_id);
+export function snipEvents(events: any[], config: ContextConfig): any[] {
+  if (events.length <= config.snipMaxMessages) return events;
+
+  const keepFrom = events.length - config.snipMaxMessages;
+  let boundary = keepFrom;
+  // Advance to the next user boundary so we keep complete turns from the tail
+  while (boundary < events.length && events[boundary]?.type !== 'user') {
+    boundary++;
   }
-  while (messages.length > 0) {
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== 'assistant') break;
-    const tcs = last.tool_calls;
-    if (!tcs || tcs.length === 0) break;
-    if (tcs.every((tc) => resolvedIds.has(tc.id))) break;
-    messages.pop();
-  }
-  return messages;
+  if (boundary >= events.length) return events;
+
+  const snippedCount = boundary;
+  const summary = {
+    type: 'summary',
+    uuid: '',
+    replaces: [],
+    summaryText: `[${snippedCount} messages snipped from conversation middle]`,
+    method: 'context-collapse',
+    timestamp: '',
+  };
+
+  return [summary, ...events.slice(boundary)];
 }
+

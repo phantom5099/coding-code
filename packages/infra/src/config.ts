@@ -10,7 +10,6 @@ export interface ContextThresholdsConfig {
 
 export interface ContextConfig {
   defaultMaxTokens: number;
-  reservedTokens: number;
   thresholds: ContextThresholdsConfig;
   pruneProtectedTokens: number;
   pruneMinRelease: number;
@@ -22,14 +21,10 @@ export interface ContextConfig {
    *  Use full id format "model@API_KEY_ENV" to avoid ambiguity (e.g. "deepseek-chat@DEEPSEEK_API_KEY").
    *  Can also use bare model id (e.g. "deepseek-chat") or display name, first match wins. */
   compactionModel: string;
-  archiveTtlDays: number;
-  checkpointKeep: number;
   thresholdTokens: number;
   reactiveCompactMaxRetries: number;
   reactiveCompactKeepTurns: number;
   snipMaxMessages: number;
-  snipKeepHead: number;
-  microKeepRecentTools: number;
   persistPreviewChars: number;
 }
 
@@ -71,24 +66,19 @@ export interface AppConfig {
 
 const DEFAULT_CONTEXT: ContextConfig = {
   defaultMaxTokens: 200000,
-  reservedTokens: 20000,
   thresholds: { prune: 0.7, compaction: 0.9 },
   pruneProtectedTokens: 40000,
   pruneMinRelease: 20000,
   toolsExemptFromPrune: ['Read', 'todo_write', 'todo_read', 'tool_search'],
   prefixTurnsProtected: 1,
   minTurnsBetweenCompactions: 5,
-  keepRecentTurns: 10,
+  keepRecentTurns: 3,
   compactionModel: '',
-  archiveTtlDays: 30,
-  checkpointKeep: 50,
-  reactiveCompactMaxRetries: 1,
+  reactiveCompactMaxRetries: 3,
   reactiveCompactKeepTurns: 3,
-  snipMaxMessages: 100,
-  snipKeepHead: 3,
-  microKeepRecentTools: 5,
+  snipMaxMessages: 50,
   persistPreviewChars: 2000,
-  thresholdTokens: 2000,
+  thresholdTokens: 8000,
 };
 
 export const DEFAULT_MEMORY_TYPES: MemoryTypeConfig[] = [

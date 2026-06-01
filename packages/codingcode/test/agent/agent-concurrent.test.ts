@@ -52,7 +52,7 @@ const mockState = {
   currentTurnId: 1,
   sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
   title: 'test',
-  tokenCountEstimate: 0,
+  usage: undefined,
 };
 
 function makeDeps(overrides?: Record<string, any>) {
@@ -74,7 +74,7 @@ function makeDeps(overrides?: Record<string, any>) {
   };
 }
 
-describe('runReActLoop â€?concurrent tool execution', () => {
+describe('runReActLoop ï¿½?concurrent tool execution', () => {
   it('should execute multiple tool calls concurrently', async () => {
     const executionOrder: string[] = [];
     const resolveBarrier = new Promise<void>((r) => setTimeout(r, 100));

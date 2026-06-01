@@ -57,6 +57,9 @@ export async function* agentEventToStreamChunk(
       case 'Usage':
         yield { type: 'usage', prompt: event.prompt, completion: event.completion, total: event.total };
         break;
+      case 'ReactiveCompact':
+        yield { type: 'reactive_compact', released: event.released, promptEstimate: event.promptEstimate };
+        break;
     }
   }
 }
