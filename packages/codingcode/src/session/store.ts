@@ -26,11 +26,6 @@ import {
 } from './io.js';
 import { buildMessages, findLastVisibleAssistantUsage } from './messages.js';
 
-export interface PersistResult {
-  path: string;
-  bytes: number;
-}
-
 export interface SessionStoreState {
   sessionId: string;
   cwd: string;

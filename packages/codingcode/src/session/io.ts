@@ -9,8 +9,8 @@ import type { SessionEvent, SessionMetaEvent, SessionIndex, TokenUsage } from '.
 
 const logger = createLogger();
 
-export const CODINGCODE_DIR = join(homedir(), '.codingcode');
-export const PROJECT_BASE = join(CODINGCODE_DIR, 'project');
+const CODINGCODE_DIR = join(homedir(), '.codingcode');
+const PROJECT_BASE = join(CODINGCODE_DIR, 'project');
 
 export function projectSessionsDir(encoded: string): string {
   return join(PROJECT_BASE, encoded, 'sessions');
@@ -41,7 +41,7 @@ export function ensureDirs(transcriptPath: string): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
-export function quickReadMeta(path: string): SessionMetaEvent | null {
+function quickReadMeta(path: string): SessionMetaEvent | null {
   try {
     const fd = openSync(path, 'r');
     const buffer = Buffer.alloc(4096);
@@ -72,7 +72,7 @@ export function countNonMetaEvents(history: SessionEvent[]): number {
   return history.filter((e) => e.type !== 'session_meta').length;
 }
 
-export function buildIndexFromMeta(meta: SessionMetaEvent, history: SessionEvent[]): SessionIndex {
+function buildIndexFromMeta(meta: SessionMetaEvent, history: SessionEvent[]): SessionIndex {
   const firstUser = findFirstUserContent(history);
   return {
     sessionId: meta.sessionId,
@@ -192,12 +192,6 @@ export function enqueueWrite(sessionId: string, path: string, data: unknown): vo
   const task = prev
     .then(() => { writeFileSync(path, JSON.stringify(data, null, 2), 'utf8'); })
     .catch((err) => { logger.error(`write queue error for ${path}:`, err); });
-  writeQueues.set(sessionId, task);
-}
-
-export function enqueueTask(sessionId: string, fn: () => void): void {
-  const prev = writeQueues.get(sessionId) ?? Promise.resolve();
-  const task = prev.then(() => { try { fn(); } catch (err) { logger.error(`enqueueTask error for ${sessionId}:`, err); } });
   writeQueues.set(sessionId, task);
 }
 
