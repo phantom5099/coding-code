@@ -2,14 +2,18 @@ import { describe, it, expect } from 'vitest'
 import { buildToolSummaryTitle } from '../src/shared/ToolSummary'
 import type { Item } from '../shared/types'
 
-function makeToolCall(name: string, status: Item & { type: 'tool_call' }['status'], args?: object): Item & { type: 'tool_call' } {
+type ToolCallItem = Extract<Item, { type: 'tool_call' }>
+
+function makeToolCall(name: string, status: ToolCallItem['status'], args?: object): ToolCallItem {
   return { id: 'tc-' + name, type: 'tool_call', name, args: args ?? {}, status }
 }
 
+type ToolResultItem = Extract<Item, { type: 'tool_result' }>
+
 function makeToolResult(
   name: string,
-  opts?: Partial<Item & { type: 'tool_result' }>,
-): Item & { type: 'tool_result' } {
+  opts?: Partial<ToolResultItem>,
+): ToolResultItem {
   return {
     id: 'tr-' + name,
     type: 'tool_result',
@@ -33,27 +37,20 @@ describe('buildToolSummaryTitle', () => {
     expect(result.isError).toBe(false)
   })
 
-  it('returns "成功创建" for write_file with insertions only', () => {
+  it('returns "写入文件 {path}" for write_file', () => {
     const call = makeToolCall('write_file', 'approved')
     const result = makeToolResult('write_file', { filePath: 'foo.ts', insertions: 5, deletions: 0 })
     const title = buildToolSummaryTitle(call, result)
-    expect(title.title).toBe('成功创建 foo.ts')
+    expect(title.title).toBe('写入文件 foo.ts')
     expect(title.isRejected).toBe(false)
     expect(title.isError).toBe(false)
   })
 
-  it('returns "成功编辑" for edit_file with deletions', () => {
+  it('returns "编辑文件 {path}" for edit_file', () => {
     const call = makeToolCall('edit_file', 'approved')
     const result = makeToolResult('edit_file', { filePath: 'bar.ts', insertions: 3, deletions: 2 })
     const title = buildToolSummaryTitle(call, result)
-    expect(title.title).toBe('成功编辑 bar.ts')
-  })
-
-  it('returns "成功编辑" for apply_patch', () => {
-    const call = makeToolCall('apply_patch', 'approved')
-    const result = makeToolResult('apply_patch', { filePath: 'baz.ts', insertions: 1, deletions: 1 })
-    const title = buildToolSummaryTitle(call, result)
-    expect(title.title).toBe('成功编辑 baz.ts')
+    expect(title.title).toBe('编辑文件 bar.ts')
   })
 
   it('returns command title for shell with command in args', () => {
@@ -92,26 +89,20 @@ describe('buildToolSummaryTitle', () => {
   it('extracts path from args.path for write_file without toolResult', () => {
     const call = makeToolCall('write_file', 'approved', { path: 'src/foo.ts' })
     const title = buildToolSummaryTitle(call)
-    expect(title.title).toBe('成功编辑 src/foo.ts')
+    expect(title.title).toBe('写入文件 src/foo.ts')
   })
 
   it('extracts path from args.file_path for edit_file without toolResult', () => {
     const call = makeToolCall('edit_file', 'approved', { file_path: 'src/bar.ts' })
     const title = buildToolSummaryTitle(call)
-    expect(title.title).toBe('成功编辑 src/bar.ts')
-  })
-
-  it('falls back to tool name when file tool has no path in args or result', () => {
-    const call = makeToolCall('apply_patch', 'approved', {})
-    const title = buildToolSummaryTitle(call)
-    expect(title.title).toBe('apply_patch 结果')
+    expect(title.title).toBe('编辑文件 src/bar.ts')
   })
 
   it('prefers toolResult.filePath over args.path', () => {
     const call = makeToolCall('write_file', 'approved', { path: 'args.ts' })
     const result = makeToolResult('write_file', { filePath: 'result.ts' })
     const title = buildToolSummaryTitle(call, result)
-    expect(title.title).toBe('成功编辑 result.ts')
+    expect(title.title).toBe('写入文件 result.ts')
   })
 
   it('returns "读取文件 {path}" for read_file with path arg', () => {

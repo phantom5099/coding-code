@@ -27,7 +27,7 @@ export function buildToolSummaryTitle(
   toolCall: Item & { type: 'tool_call' },
   toolResult?: Item & { type: 'tool_result' },
 ): { title: string; isError: boolean; isRejected: boolean } {
-  const isFileWrite = toolCall.name === 'write_file' || toolCall.name === 'edit_file' || toolCall.name === 'apply_patch'
+  const isFileWrite = toolCall.name === 'write_file' || toolCall.name === 'edit_file'
   const isReadFile = toolCall.name === 'read_file'
   const isShell = toolCall.name === 'shell' || toolCall.name === 'bash' || toolCall.name === 'execute_command'
   const isSearch = toolCall.name === 'search_files' || toolCall.name === 'grep_search'
@@ -40,11 +40,11 @@ export function buildToolSummaryTitle(
 
   if (isFileWrite) {
     const path = toolResult?.filePath || getFilePathFromArgs(toolCall.args) || ''
-    const created = !!toolResult?.insertions && !toolResult?.deletions
-    return {
-      title: path ? (created ? `成功创建 ${path}` : `成功编辑 ${path}`) : `${toolCall.name} 结果`,
-      isError: false,
-      isRejected: false,
+    if (toolCall.name === 'write_file') {
+      return { title: path ? `写入文件 ${path}` : '写入文件', isError: false, isRejected: false }
+    }
+    if (toolCall.name === 'edit_file') {
+      return { title: path ? `编辑文件 ${path}` : '编辑文件', isError: false, isRejected: false }
     }
   }
 
@@ -93,7 +93,7 @@ export function buildToolSummaryTitle(
 
 export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) {
   const [open, setOpen] = useState(false)
-  const isFileTool = toolCall.name === 'write_file' || toolCall.name === 'edit_file' || toolCall.name === 'apply_patch'
+  const isFileTool = toolCall.name === 'write_file' || toolCall.name === 'edit_file'
   const { title, isError, isRejected } = buildToolSummaryTitle(toolCall, toolResult)
 
   const titleColor = isRejected
