@@ -14,7 +14,8 @@ const mockState = {
   sessionId: 'test-session', cwd: '/tmp/test', projectPath: 'test',
   transcriptPath: '/tmp/test.jsonl', indexPath: '/tmp/test.index.json',
   messageCount: 0, currentTurnId: 0, sessionMeta: null, title: 'test-sess',
-  tokenCountEstimate: 0,
+  usage: undefined,
+  promptEstimate: 0,
 };
 
 const mockLlm = {
@@ -48,7 +49,6 @@ const MockContextLayer = Layer.succeed(ContextService, ContextService.of({
   _tag: 'Context' as any,
   build: () => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
   compress: () => Effect.succeed({ didCompress: true, released: 0 }),
-  appendTurnEnd: () => Effect.succeed({ didCompress: false, released: 0 }),
 }));
 
 const MockSkillLayer = Layer.succeed(SkillService, SkillService.of({

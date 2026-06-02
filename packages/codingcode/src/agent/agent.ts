@@ -1,8 +1,11 @@
 import { Effect } from 'effect';
+import { appendFileSync } from 'fs';
 import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
 import type { ToolDescription } from '../tools/types.js';
+import type { LLMResponse } from '../llm/types.js';
+import type { LLMClient } from '../llm/client.js';
 import { ToolService } from '../tools/registry.js';
 import { ToolExecutorService } from '../tools/executor.js';
 import { ContextService } from '../context/context.js';
@@ -11,6 +14,7 @@ import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
+import { estimateTokens } from '../context/utils/tokens.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
 import { sharedTodoStore } from '../self/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
@@ -26,7 +30,7 @@ export const sendMessage = (
   sessionId: string | undefined,
   input: string,
   cwd: string,
-  llm: any,
+  llm: LLMClient,
   options?: {
     signal?: AbortSignal
   },
@@ -66,15 +70,16 @@ export type AgentEvent =
   | { readonly _tag: 'ApprovalRequest'; readonly id: string; readonly tool: string; readonly args: Record<string, unknown> }
   | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean }
   | { readonly _tag: 'Step'; readonly step: number; readonly max: number }
-  | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number }
+  | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number; readonly promptEstimate: number }
   | { readonly _tag: 'Error'; readonly error: AgentError }
   | { readonly _tag: 'Done'; readonly content: string }
   | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'in_progress' | 'completed' }> }
-  | { readonly _tag: 'TurnId'; readonly turnId: number };
+  | { readonly _tag: 'TurnId'; readonly turnId: number }
+  | { readonly _tag: 'Usage'; readonly prompt: number; readonly completion: number; readonly total: number };
 
 export interface RunStreamOptions {
   state: SessionStoreState;
-  llm: LLMStreamAdapter;
+  llm: LLMClient;
   skillInstruction?: string;
   systemPromptVariant?: SystemPromptVariant;
   systemOverride?: string;
@@ -85,19 +90,6 @@ export interface RunStreamOptions {
   maxStepsOverride?: number;
   maxStopContinuations?: number;
   approvalOverride?: any;
-}
-
-export interface LLMStreamAdapter {
-  completeStream(params: {
-    messages: Message[];
-    system?: string;
-    tools?: ToolDescription[];
-    maxSteps?: number;
-    signal?: AbortSignal;
-  }): {
-    stream: AsyncIterable<string>;
-    response: Promise<Result<{ content: string; toolCalls?: ToolCall[] }, AgentError>>;
-  };
 }
 
 interface RunReActDeps {
@@ -169,7 +161,12 @@ export async function* runReActLoop(
   const maxStopContinuations = opts.maxStopContinuations ?? deps.maxStopContinuations;
 
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
-    const messages = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
+    const { messages, newBudgets } = Effect.runSync(ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens));
+    if (newBudgets.length > 0) {
+      for (const ev of newBudgets) {
+        appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');
+      }
+    }
     let lastResult: Result<string, AgentError> | null = null;
     let overflow = false;
 
@@ -201,6 +198,23 @@ export async function* runReActLoop(
       const stepBeforePayload = { sessionId, step: step + 1 };
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
+      // Threshold-triggered LLM compaction
+      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, estimateTokens(messages), llm.modelInfo.maxTokens, config));
+      if (compressResult.didCompress) {
+        yield { _tag: 'ReactiveCompact', attempt: 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
+
+        const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens));
+        if (rebuilt.newBudgets.length > 0) {
+          for (const ev of rebuilt.newBudgets) {
+            appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');
+          }
+        }
+        messages.length = 0;
+        messages.push(...rebuilt.messages);
+        state.usage = undefined;
+        state.promptEstimate = estimateTokens(rebuilt.messages);
+      }
+
       // Build LLM messages: original messages + step.before transients
       const llmMessages = [...messages];
 
@@ -209,8 +223,7 @@ export async function* runReActLoop(
 
       const { stream: rawStream, response: respPromise } = llm.completeStream({
         messages: llmMessages, system: systemWithCatalog, tools, maxSteps: 1,
-        signal: opts.abortSignal,
-      });
+      }, opts.abortSignal);
 
       for await (const chunk of rawStream) {
         if (opts.abortSignal?.aborted) break;
@@ -221,8 +234,8 @@ export async function* runReActLoop(
       if (!llmResult.ok) {
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
           const aggressiveConfig = { ...config, keepRecentTurns: config.reactiveCompactKeepTurns };
-          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, null, aggressiveConfig));
-          yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released };
+          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, null, undefined, llm.modelInfo.maxTokens, aggressiveConfig));
+          yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
           overflow = true;
           break;
         }
@@ -242,10 +255,13 @@ export async function* runReActLoop(
       }
       messages.push(assistantMsg);
       yield { _tag: 'Assistant', content: resp.content, toolCalls };
+      if (resp.usage) {
+        yield { _tag: 'Usage', prompt: resp.usage.prompt, completion: resp.usage.completion, total: resp.usage.total };
+      }
 
       if (!toolCalls || toolCalls.length === 0) {
         // LLM done — record assistant, then check stop hook
-        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls || [], model));
+        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls || [], model, resp.usage));
         const stopDecision: any = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
           sessionId, content: resp.content, turnId: state.currentTurnId,
         }));
@@ -287,7 +303,7 @@ export async function* runReActLoop(
       // Execute tool calls — record assistant, execute batch, record results in one pipeline
       const allResults = await Effect.runPromise(
         Effect.gen(function* () {
-          const record = yield* session.recordAssistant(state, resp.content, toolCalls!, model);
+          const record = yield* session.recordAssistant(state, resp.content, toolCalls!, model, resp.usage);
           const results = yield* executor.executeBatch(toolCalls, state.sessionId, {
             turnId: state.currentTurnId,
             projectPath,
@@ -338,9 +354,8 @@ export async function* runReActLoop(
 
     if (overflow) continue;
 
-    // Turn completed — snapshot and compact
+    // Turn completed — snapshot
     checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
-    await Effect.runPromise(ctx.appendTurnEnd(state.sessionId, state.projectPath, llm as any));
 
     // Fire-and-forget memory flush
     flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));

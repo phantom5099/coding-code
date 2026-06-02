@@ -6,8 +6,9 @@ import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
-import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, HideEvent, UnhideEvent, TitleEvent, SessionIndex } from './types.js';
-import { estimateTokensForContent } from '../context/utils/tokens.js';
+import type { SessionEvent, SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, HideEvent, UnhideEvent, TitleEvent, SessionIndex, TokenUsage } from './types.js';
+import { estimateTokens, estimateTokensForContent, estimateMessageTokens } from '../context/utils/tokens.js';
+import { getContextConfig } from '../context/config.js';
 import { createLogger } from '@codingcode/infra';
 
 const logger = createLogger();
@@ -82,7 +83,7 @@ export function findSessionIndex(sessionId: string): SessionIndex | null {
     messageCount: h.filter((e) => e.type !== 'session_meta').length,
     title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8),
     currentTurnId: 0,
-    tokenCountEstimate: 0,
+    usage: undefined,
     permissionMode: 'default',
   };
 }
@@ -95,6 +96,26 @@ function assertResumeWorkspace(cwd: string, sessionId: string): void {
   }
 }
 
+export interface PersistResult {
+  path: string;
+  bytes: number;
+}
+
+export function persistToolResult(
+  encodedProjectPath: string,
+  sessionId: string,
+  toolCallId: string,
+  content: string,
+): PersistResult {
+  const dir = join(PROJECT_BASE, encodedProjectPath, 'tool-results', sessionId);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${toolCallId}.txt`);
+  if (!existsSync(file)) {
+    writeFileSync(file, content, 'utf8');
+  }
+  return { path: file.replace(/\\/g, '/'), bytes: Buffer.byteLength(content, 'utf8') };
+}
+
 export interface SessionStoreState {
   sessionId: string;
   cwd: string;
@@ -105,7 +126,8 @@ export interface SessionStoreState {
   sessionMeta: SessionMetaEvent | null;
   title: string;
   currentTurnId: number;
-  tokenCountEstimate: number;
+  usage: TokenUsage | undefined;
+  promptEstimate: number;
 }
 
 function makeTitle(content: string): string {
@@ -166,17 +188,26 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             if (state.title === state.sessionId.slice(0, 8)) {
               state.title = makeTitle(content);
             }
-            appendEvent(state, event, estimateTokensForContent(content));
+            appendEvent(state, event);
+            state.promptEstimate += estimateMessageTokens({ role: 'user', content });
+            updateIndex(state);
             return event;
           },
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      recordAssistant: (state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], model: string): Effect.Effect<AssistantEvent, AgentError> =>
+      recordAssistant: (state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], model: string, usage?: TokenUsage): Effect.Effect<AssistantEvent, AgentError> =>
         Effect.try({
           try: () => {
-            const event: AssistantEvent = { type: 'assistant', turnId: state.currentTurnId, uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString() };
-            appendEvent(state, event, estimateTokensForContent(content));
+            const event: AssistantEvent = { type: 'assistant', turnId: state.currentTurnId, uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString(), usage };
+            appendEvent(state, event);
+            if (usage) {
+              state.usage = usage;
+              state.promptEstimate = usage.prompt;
+            } else {
+              state.promptEstimate += estimateMessageTokens({ role: 'assistant', content });
+            }
+            updateIndex(state);
             return event;
           },
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
@@ -185,9 +216,24 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       recordToolResult: (state: SessionStoreState, parentUuid: string, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent, AgentError> =>
         Effect.try({
           try: () => {
+            const cfg = getContextConfig();
             const tokenCount = estimateTokensForContent(output);
-            const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output, timestamp: new Date().toISOString(), tokenCount };
-            appendEvent(state, event, tokenCount);
+
+            let finalOutput = output;
+            let finalTokenCount = tokenCount;
+
+            if (tokenCount > cfg.thresholdTokens &&
+                toolName !== 'read' && toolName !== 'read_file') {
+              const { path } = persistToolResult(state.projectPath, state.sessionId, toolCallId, output);
+              const preview = output.slice(0, cfg.persistPreviewChars);
+              finalOutput = `${preview}\n\n[…full output persisted at: ${path}. Use Read tool to access if needed.]`;
+              finalTokenCount = estimateTokensForContent(finalOutput);
+            }
+
+            const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output: finalOutput, timestamp: new Date().toISOString(), tokenCount: finalTokenCount };
+            appendEvent(state, event);
+            state.promptEstimate += estimateMessageTokens({ role: 'tool', content: finalOutput, tool_call_id: toolCallId, tool_name: toolName });
+            updateIndex(state);
             return event;
           },
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
@@ -197,7 +243,10 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         Effect.try({
           try: () => {
             const event: SummaryEvent = { type: 'summary', uuid: randomUUID(), replaces, summaryText, method, timestamp: new Date().toISOString() };
-            appendEvent(state, event, estimateTokensForContent(summaryText));
+            appendEvent(state, event);
+            state.usage = undefined;
+            state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
+            updateIndex(state);
             return event;
           },
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
@@ -206,14 +255,21 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       hideMessage: (state: SessionStoreState, targetUuid: string, reason: string): Effect.Effect<HideEvent> =>
         Effect.sync(() => {
           const event: HideEvent = { type: 'hide', uuid: randomUUID(), kind: 'message', targetUuid, reason, timestamp: new Date().toISOString() };
-          appendEvent(state, event, 0);
+          appendEvent(state, event);
+          state.usage = undefined;
+          state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
+          updateIndex(state);
           return event;
         }),
 
       rollbackToTurn: (state: SessionStoreState, throughTurnId: number, reason: string): Effect.Effect<HideEvent> =>
         Effect.sync(() => {
           const event: HideEvent = { type: 'hide', uuid: randomUUID(), kind: 'rollback', throughTurnId, reason, timestamp: new Date().toISOString() };
-          appendEvent(state, event, 0);
+          appendEvent(state, event);
+          const lastUsage = findLastVisibleAssistantUsage(state.transcriptPath);
+          state.usage = lastUsage;
+          state.promptEstimate = lastUsage?.prompt ?? 0;
+          updateIndex(state);
           return event;
         }),
 
@@ -229,7 +285,10 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           }
           if (!lastHideUuid || unhidTargets.has(lastHideUuid)) return null;
           const event: UnhideEvent = { type: 'unhide', uuid: randomUUID(), targetHideUuid: lastHideUuid, timestamp: new Date().toISOString() };
-          appendEvent(state, event, 0);
+          appendEvent(state, event);
+          state.usage = undefined;
+          state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
+          updateIndex(state);
           return event;
         }),
 
@@ -292,19 +351,29 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
     : join(sessionsDir, `${id}.jsonl`);
   const indexPath = transcriptPath.replace('.jsonl', '.index.json');
   let currentTurnId = 0;
-  let tokenCountEstimate = 0;
+  let usage: TokenUsage | undefined = undefined;
+  let promptEstimate = 0;
   try {
     if (existsSync(indexPath)) {
       const idx = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
       currentTurnId = idx.currentTurnId ?? 0;
-      tokenCountEstimate = idx.tokenCountEstimate ?? 0;
+      usage = idx.usage ?? undefined;
+      promptEstimate = idx.promptEstimate ?? 0;
     }
   } catch { /* ignore corrupt index */ }
+  if (!usage && promptEstimate === 0) {
+    const lastUsage = findLastVisibleAssistantUsage(transcriptPath);
+    if (lastUsage) {
+      usage = lastUsage;
+      promptEstimate = lastUsage.prompt;
+    }
+  }
   return {
     sessionId: id, cwd: normalizedCwd, projectPath, transcriptPath,
     indexPath,
     messageCount: 0, sessionMeta: null, title: id.slice(0, 8), currentTurnId,
-    tokenCountEstimate,
+    usage,
+    promptEstimate,
   };
 }
 
@@ -371,6 +440,22 @@ export function applyVisibilityEvents(events: SessionEvent[]): Set<string> {
   return hidden;
 }
 
+/**
+ * Find the usage of the last visible assistant event in the session history.
+ * Used to restore the precise token anchor after rollback/fork.
+ */
+export function findLastVisibleAssistantUsage(path: string): TokenUsage | undefined {
+  const events = readHistory(path);
+  const messages = buildMessagesFromEvents(events);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== 'assistant') continue;
+    const usage = (m as any).usage as TokenUsage | undefined;
+    if (usage) return usage;
+  }
+  return undefined;
+}
+
 export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
   const hidden = applyVisibilityEvents(events);
 
@@ -390,10 +475,12 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
         messages.push({ role: 'user', content: event.content });
         break;
       case 'assistant': {
+        const ev = event as AssistantEvent;
         const msg: Message = { role: 'assistant', content: event.content };
         if (event.toolCalls && event.toolCalls.length > 0) {
           (msg as any).tool_calls = event.toolCalls.map((tc: any) => ({ id: tc.id, name: tc.name, arguments: tc.arguments }));
         }
+        if (ev.usage) (msg as any).usage = ev.usage;
         messages.push(msg);
         break;
       }
@@ -406,21 +493,49 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
     }
   }
 
-  // Strip trailing assistant messages whose tool_calls lack matching tool_results
+  // Collect all resolved tool_call_ids
   const resolvedIds = new Set<string>();
   for (const m of messages) {
     if (m.role === 'tool') resolvedIds.add((m as any).tool_call_id);
   }
-  while (messages.length > 0) {
-    const last = messages[messages.length - 1];
-    if (last.role !== 'assistant') break;
-    const tcs = (last as any).tool_calls as Array<{ id: string }> | undefined;
-    if (!tcs || tcs.length === 0) break;
-    if (tcs.every((tc) => resolvedIds.has(tc.id))) break;
-    messages.pop();
+
+  // Identify which assistant messages have all their tool_calls resolved
+  const validAssistantIds = new Set<string>();
+  for (const m of messages) {
+    if (m.role !== 'assistant') continue;
+    const tcs = (m as any).tool_calls as Array<{ id: string }> | undefined;
+    if (!tcs || tcs.length === 0) continue;
+    if (tcs.every((tc) => resolvedIds.has(tc.id))) {
+      for (const tc of tcs) validAssistantIds.add(tc.id);
+    }
   }
 
-  return messages;
+  // Remove assistant messages with unresolved tool_calls, and orphaned tool results
+  const filtered = messages.filter((m) => {
+    if (m.role === 'assistant') {
+      const tcs = (m as any).tool_calls as Array<{ id: string }> | undefined;
+      if (!tcs || tcs.length === 0) return true;
+      return tcs.every((tc) => resolvedIds.has(tc.id));
+    }
+    if (m.role === 'tool') {
+      return validAssistantIds.has((m as any).tool_call_id);
+    }
+    return true;
+  });
+
+  // Merge adjacent messages with the same non-system role to keep a valid LLM sequence.
+  // Tool messages must not be merged (each needs its own tool_call_id).
+  // Assistant messages with tool_calls must also not be merged.
+  for (let i = filtered.length - 1; i > 0; i--) {
+    if (filtered[i].role === filtered[i - 1].role && filtered[i].role !== 'system') {
+      if (filtered[i].role === 'tool') continue;
+      if (filtered[i].role === 'assistant' && (filtered[i] as any).tool_calls?.length > 0) continue;
+      filtered[i - 1].content += '\n\n' + filtered[i].content;
+      filtered.splice(i, 1);
+    }
+  }
+
+  return filtered;
 }
 
 export function listSessions(projectPath?: string): SessionIndex[] {
@@ -443,7 +558,7 @@ export function listSessions(projectPath?: string): SessionIndex[] {
         if (meta?.cwd && meta?.sessionId) {
           const h = readHistory(jsonlPath);
           const firstUser = findFirstUserContent(h);
-          results.push({ sessionId: meta.sessionId, projectPath: meta.projectPath, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8), currentTurnId: 0, tokenCountEstimate: 0, permissionMode: 'default' });
+          results.push({ sessionId: meta.sessionId, projectPath: meta.projectPath, cwd: meta.cwd, model: meta.model, createdAt: meta.createdAt, updatedAt: meta.createdAt, messageCount: h.filter((e) => e.type !== 'session_meta').length, title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8), currentTurnId: 0, usage: undefined, promptEstimate: 0, permissionMode: 'default' });
         }
       }
     }
@@ -451,19 +566,18 @@ export function listSessions(projectPath?: string): SessionIndex[] {
   return results;
 }
 
-function appendEvent(state: SessionStoreState, event: SessionEvent, tokenDelta: number = 0): void {
+function appendEvent(state: SessionStoreState, event: SessionEvent): void {
   appendLine(state.transcriptPath, event);
   state.messageCount++;
-  updateIndex(state, tokenDelta);
+  updateIndex(state);
 }
 
 function appendLine(path: string, event: object): void {
   appendFileSync(path, JSON.stringify(event) + '\n', 'utf8');
 }
 
-function updateIndex(state: SessionStoreState, tokenDelta: number = 0): void {
+function updateIndex(state: SessionStoreState): void {
   if (!state.sessionMeta) return;
-  state.tokenCountEstimate = Math.max(0, state.tokenCountEstimate + tokenDelta);
   const current = readCurrentIndex(state.indexPath);
   const index: SessionIndex = {
     sessionId: state.sessionId, projectPath: state.projectPath, cwd: state.cwd,
@@ -472,7 +586,8 @@ function updateIndex(state: SessionStoreState, tokenDelta: number = 0): void {
     updatedAt: new Date().toISOString(),
     messageCount: state.messageCount, title: state.title,
     currentTurnId: state.currentTurnId,
-    tokenCountEstimate: state.tokenCountEstimate,
+    usage: state.usage,
+    promptEstimate: state.promptEstimate,
     permissionMode: current?.permissionMode ?? 'default',
   };
   enqueueWrite(state.sessionId, state.indexPath, index);
@@ -558,15 +673,26 @@ export function forkSession(sourceSessionId: string, sourceJsonlPath: string, at
   // Copy index from source if it exists
   const sourceIdxPath = sourceJsonlPath.replace('.jsonl', '.index.json');
   let title = newSessionId.slice(0, 8);
-  let tokenCountEstimate = 0;
+  let usage: TokenUsage | undefined = undefined;
+  let promptEstimate = 0;
   let permissionMode = 'default';
   if (existsSync(sourceIdxPath)) {
     try {
       const srcIdx = JSON.parse(readFileSync(sourceIdxPath, 'utf8')) as SessionIndex;
       title = srcIdx.title;
-      tokenCountEstimate = srcIdx.tokenCountEstimate;
+      usage = srcIdx.usage ?? undefined;
+      promptEstimate = srcIdx.promptEstimate ?? 0;
       permissionMode = srcIdx.permissionMode ?? 'default';
     } catch { /* corrupt */ }
+  }
+
+  const lastUsage = findLastVisibleAssistantUsage(newJsonlPath);
+  if (lastUsage) {
+    usage = lastUsage;
+    promptEstimate = lastUsage.prompt;
+  } else {
+    usage = undefined;
+    promptEstimate = estimateTokens(buildMessages(newJsonlPath));
   }
 
   const meta = chain[0] as SessionMetaEvent | undefined;
@@ -580,7 +706,8 @@ export function forkSession(sourceSessionId: string, sourceJsonlPath: string, at
     messageCount: chain.filter((e) => e.type !== 'session_meta').length,
     title,
     currentTurnId: turnId,
-    tokenCountEstimate,
+    usage,
+    promptEstimate,
     permissionMode,
   };
   writeFileSync(newIndexPath, JSON.stringify(newIdx, null, 2), 'utf8');
@@ -618,7 +745,7 @@ export function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string
   const turnsMap = new Map<number, { id: string; items: object[]; status: string }>();
   for (const event of events) {
     if (event.type === 'session_meta') continue;
-    if (event.type === 'summary' || event.type === 'hide' || event.type === 'unhide' || event.type === 'title') continue;
+    if (event.type === 'summary' || event.type === 'hide' || event.type === 'unhide' || event.type === 'title' || event.type === 'tool_budget') continue;
     let turn = turnsMap.get(event.turnId);
     if (!turn) {
       turn = { id: String(event.turnId), items: [], status: 'completed' };

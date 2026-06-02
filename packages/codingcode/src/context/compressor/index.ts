@@ -1,20 +1,21 @@
 import { randomUUID } from 'crypto';
-import { readHistory, buildMessagesFromEvents, findSessionIndex } from '../../session/store.js';
+import { readHistory, findSessionIndex } from '../../session/store.js';
 import { resolveSessionDir } from '../../session/store.js';
-import { estimateTokensForContent } from '../utils/tokens.js';
+import { estimateTokens, estimateMessageTokens } from '../utils/tokens.js';
 import { resolveCompactionLLM } from './llm-resolver.js';
 import { COMPACTION_SYSTEM_PROMPT } from './prompt.js';
 import type { ContextConfig } from '../config.js';
 import type { Message } from '../../core/types.js';
 import type { SessionEvent, SummaryEvent } from '../../session/types.js';
 import type { LLMClient } from '../../llm/client.js';
-import { persistToolResult } from '../persist/store.js';
+import { assemblePayload } from '../organizer.js';
 import { join } from 'path';
 import { appendFileSync } from 'fs';
 
 export interface CompressResult {
   didCompress: boolean;
   released: number;
+  promptEstimate: number;
 }
 
 interface CompressContext {
@@ -27,43 +28,46 @@ interface CompressContext {
   hiddenUuids: Set<string>;
 }
 
-/**
- * Compress in a single linear pass. Each step is idempotent within one turn.
- */
-export async function run(
+const compactFailureTracker = new Map<string, { count: number; lastAttempt: number }>();
+const FAILURE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function getFailures(sessionId: string): number {
+  const entry = compactFailureTracker.get(sessionId);
+  if (!entry) return 0;
+  if (Date.now() - entry.lastAttempt > FAILURE_TTL_MS) {
+    compactFailureTracker.delete(sessionId);
+    return 0;
+  }
+  return entry.count;
+}
+
+export async function compactIfNeeded(
   sessionId: string,
   encodedProjectPath: string,
-  usage: number,
-  llm: LLMClient | null,
+  promptEstimate: number,
+  modelMaxTokens: number,
   config: ContextConfig,
+  llm: LLMClient | null,
 ): Promise<CompressResult> {
-  const idx = findSessionIndex(sessionId);
-  const currentTurnId = idx?.currentTurnId ?? 0;
-  const ctx = buildContext(sessionId, encodedProjectPath, config, llm, currentTurnId);
-  const budget = config.defaultMaxTokens;
-
-  let remaining = usage;
-
-  // L1 Persist (always: large results from persistable tools → disk)
-  remaining -= applyToolResultBudget(ctx);
-
-  // Prune (>70% budget)
-  if (remaining > budget * config.thresholds.prune) {
-    remaining -= tryPruneTools(ctx);
+  const failures = getFailures(sessionId);
+  if (failures >= 3) {
+    return { didCompress: false, released: 0, promptEstimate };
   }
 
-  // L2 Snip (message count threshold)
-  remaining -= trySnip(ctx);
-
-  // L3 Microcompact (tool result count threshold)
-  remaining -= tryMicrocompact(ctx);
-
-  // L5 Compaction (>90% budget)
-  if (remaining > budget * config.thresholds.compaction) {
-    remaining -= await tryL5Compaction(ctx);
+  const threshold = modelMaxTokens * config.compactionThreshold;
+  if (promptEstimate <= threshold) {
+    return { didCompress: false, released: 0, promptEstimate };
   }
 
-  return { didCompress: remaining < usage, released: usage - remaining };
+  const result = await compactWithLLM(sessionId, encodedProjectPath, config, llm, promptEstimate, modelMaxTokens);
+
+  if (result.didCompress) {
+    compactFailureTracker.set(sessionId, { count: 0, lastAttempt: Date.now() });
+  } else {
+    compactFailureTracker.set(sessionId, { count: failures + 1, lastAttempt: Date.now() });
+  }
+
+  return result;
 }
 
 export async function compactWithLLM(
@@ -71,12 +75,24 @@ export async function compactWithLLM(
   encodedProjectPath: string,
   config: ContextConfig,
   llm: LLMClient | null,
+  usage?: number,
+  modelMaxTokens?: number,
 ): Promise<CompressResult> {
   const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
   const ctx = buildContext(sessionId, encodedProjectPath, config, llm, currentTurnId);
-  const released = await tryL5Compaction(ctx);
-  return { didCompress: released > 0, released };
+
+  let released = 0;
+
+  const threshold = modelMaxTokens ? modelMaxTokens * config.compactionThreshold : Infinity;
+  if (usage === undefined || usage - released > threshold) {
+    released += await tryL5Compaction(ctx);
+  }
+
+  const payload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
+  const promptEstimate = estimateTokens(payload.messages);
+
+  return { didCompress: released > 0, released, promptEstimate };
 }
 
 // ---------- Context building ----------
@@ -152,146 +168,7 @@ function appendSummaryToSession(sessionId: string, event: SummaryEvent): void {
   appendFileSync(jsonlPath, JSON.stringify(event) + '\n', 'utf8');
 }
 
-// ---------- L1 Persist ----------
-
-function applyToolResultBudget(ctx: CompressContext): number {
-  const { sessionId, encodedProjectPath, config, events, hiddenUuids } = ctx;
-  let released = 0;
-
-  for (const ev of events) {
-    if (ev.type !== 'tool_result') continue;
-    if (hiddenUuids.has(ev.uuid)) continue;
-    if (ev.tokenCount <= config.thresholdTokens) continue;
-
-    const { path } = persistToolResult(encodedProjectPath, sessionId, ev.toolCallId, ev.output);
-    const preview = ev.output.slice(0, config.persistPreviewChars);
-    const replacement = `${preview}\n\n[…full output persisted at: ${path}. Use Read tool to access if needed.]`;
-
-    const summaryEvent: SummaryEvent = {
-      type: 'summary',
-      uuid: randomUUID(),
-      replaces: [ev.uuid],
-      summaryText: replacement,
-      method: 'collapse-llm',
-      timestamp: new Date().toISOString(),
-    };
-    appendSummaryToSession(sessionId,summaryEvent);
-    hiddenUuids.add(ev.uuid);
-    released += ev.tokenCount - estimateTokensForContent(replacement);
-  }
-
-  return released;
-}
-
-// ---------- L2 Prune ----------
-
-function tryPruneTools(ctx: CompressContext): number {
-  const { sessionId, config, currentTurnId, events, hiddenUuids } = ctx;
-  const candidates = collectPrunableTools(events, hiddenUuids, config, currentTurnId);
-  if (candidates.length === 0) return 0;
-
-  let released = 0;
-  for (const tool of candidates) {
-    if (released >= config.pruneMinRelease) break;
-    const tokenCount = estimateTokensForContent(tool.output);
-    const replacement = '[Old tool result content cleared]';
-
-    const event: SummaryEvent = {
-      type: 'summary',
-      uuid: randomUUID(),
-      replaces: [tool.uuid],
-      summaryText: replacement,
-      method: 'prune',
-      timestamp: new Date().toISOString(),
-    };
-    appendSummaryToSession(sessionId,event);
-    hiddenUuids.add(tool.uuid);
-    released += tokenCount - estimateTokensForContent(replacement);
-  }
-  return released;
-}
-
-// ---------- L2 Snip ----------
-
-function trySnip(ctx: CompressContext): number {
-  const { sessionId, config, events, hiddenUuids } = ctx;
-
-  // Build visible non-meta events for snip count
-  const visibleEvents = events.filter((ev) => {
-    if (ev.type === 'session_meta') return false;
-    if ('uuid' in ev && hiddenUuids.has((ev as any).uuid)) return false;
-    return true;
-  });
-
-  if (visibleEvents.length <= config.snipMaxMessages) return 0;
-
-  const headCount = config.snipKeepHead;
-  const tailCount = config.snipMaxMessages - config.snipKeepHead;
-
-  const head = visibleEvents.slice(0, headCount);
-  const tail = visibleEvents.slice(-tailCount);
-
-  const snippedEvents = visibleEvents.slice(headCount, visibleEvents.length - tailCount);
-  if (snippedEvents.length === 0) return 0;
-
-  const snippedTokens = snippedEvents.reduce((s, ev) => {
-    if ('content' in ev && typeof ev.content === 'string') return s + estimateTokensForContent(ev.content);
-    if ('output' in ev && typeof (ev as any).output === 'string') return s + estimateTokensForContent((ev as any).output);
-    return s;
-  }, 0);
-
-  const lastHeadTurn = head.length > 0 && 'turnId' in head[head.length - 1] ? (head[head.length - 1] as any).turnId : 0;
-  const firstTailTurn = tail.length > 0 && 'turnId' in tail[0] ? (tail[0] as any).turnId : lastHeadTurn;
-
-  // Collect uuids of snipped events
-  const snippedUuids = snippedEvents.filter((e) => 'uuid' in e).map((e) => (e as any).uuid as string);
-
-  const summaryText = `[${snippedEvents.length} messages snipped from conversation middle]`;
-
-  const event: SummaryEvent = {
-    type: 'summary',
-    uuid: randomUUID(),
-    replaces: snippedUuids,
-    summaryText,
-    method: 'context-collapse',
-    timestamp: new Date().toISOString(),
-  };
-  appendSummaryToSession(sessionId,event);
-  for (const u of snippedUuids) hiddenUuids.add(u);
-  return Math.max(0, snippedTokens - estimateTokensForContent(summaryText));
-}
-
-// ---------- L3 Microcompact ----------
-
-function tryMicrocompact(ctx: CompressContext): number {
-  const { sessionId, config, events, hiddenUuids } = ctx;
-  const toolResults = events.filter((ev) => ev.type === 'tool_result' && !hiddenUuids.has(ev.uuid)) as Extract<SessionEvent, { type: 'tool_result' }>[];
-  if (toolResults.length <= config.microKeepRecentTools) return 0;
-
-  let released = 0;
-  const recentIds = new Set(toolResults.slice(-config.microKeepRecentTools).map((e) => e.uuid));
-  for (const tool of toolResults) {
-    if (recentIds.has(tool.uuid)) continue;
-    if (tool.output.length <= 120) continue;
-    const originalTokens = tool.tokenCount;
-    const replacement = '[Earlier tool result compacted. Re-run if needed.]';
-
-    const event: SummaryEvent = {
-      type: 'summary',
-      uuid: randomUUID(),
-      replaces: [tool.uuid],
-      summaryText: replacement,
-      method: 'prune',
-      timestamp: new Date().toISOString(),
-    };
-    appendSummaryToSession(sessionId,event);
-    hiddenUuids.add(tool.uuid);
-    released += originalTokens - estimateTokensForContent(replacement);
-  }
-  return released;
-}
-
-// ---------- L5 Compaction ----------
+// ---------- LLM Compaction ----------
 
 async function tryL5Compaction(ctx: CompressContext): Promise<number> {
   const { sessionId, config, currentTurnId, events, hiddenUuids } = ctx;
@@ -301,13 +178,6 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
   if (endTurn < startTurn) return 0;
   const turnsInRange = endTurn - startTurn + 1;
   if (turnsInRange < config.minTurnsBetweenCompactions) return 0;
-
-  // Check if there's already a summary covering this range
-  for (const ev of events) {
-    if (ev.type !== 'summary') continue;
-    // Simple check: if any summary event replaces events in this range, skip
-    // (Exact range overlap check would require knowing turnIds of replaced events)
-  }
 
   // Collect visible messages in the range for LLM transcript
   const inRange = events.filter((ev) => {
@@ -353,8 +223,9 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
   appendSummaryToSession(sessionId,event);
   for (const u of replacedUuids) hiddenUuids.add(u);
 
-  const replacedTokens = transcript.reduce((sum, m) => sum + estimateTokensForContent(m.content), 0);
-  const summaryTokens = estimateTokensForContent(summary);
+  const replacedTokens = transcript.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+  const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
+  const summaryTokens = estimateMessageTokens(summaryMsg);
   return Math.max(0, replacedTokens - summaryTokens);
 }
 
@@ -392,38 +263,3 @@ function extractSummary(raw: string): string {
 }
 
 // ---------- Helpers ----------
-
-function collectPrunableTools(
-  events: SessionEvent[],
-  hiddenUuids: Set<string>,
-  config: ContextConfig,
-  currentTurnId: number,
-): Extract<SessionEvent, { type: 'tool_result' }>[] {
-  const all = events.filter(
-    (ev): ev is Extract<SessionEvent, { type: 'tool_result' }> =>
-      ev.type === 'tool_result' && !hiddenUuids.has(ev.uuid),
-  );
-
-  const turnCutoff = currentTurnId - config.prefixTurnsProtected - 1;
-  const oldEnough = all.filter((t) => t.turnId <= turnCutoff);
-
-  const whitelisted = oldEnough.filter(
-    (t) => !config.toolsExemptFromPrune.includes(t.toolName ?? ''),
-  );
-
-  const sortedByTurn = [...whitelisted].sort((a, b) => b.turnId - a.turnId);
-  const prunable: typeof all = [];
-  let recentTokenSum = 0;
-  for (const tool of sortedByTurn) {
-    const t = tool.tokenCount;
-    if (recentTokenSum < config.pruneProtectedTokens) {
-      recentTokenSum += t;
-      continue;
-    }
-    prunable.push(tool);
-  }
-
-  return prunable.sort(
-    (a, b) => (b.output?.length ?? 0) - (a.output?.length ?? 0),
-  );
-}

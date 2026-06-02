@@ -64,6 +64,8 @@ interface AgentState {
   contextUsage: { used: number; contextWindow: number } | null
   todoByThreadId: Record<string, TodoPanelState>
   pendingInput: string | null
+  usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>
+  isCompressing: boolean
 }
 
 interface EditorState {
@@ -120,6 +122,7 @@ interface GlobalActions {
   setModel: (model: string) => void
   setModels: (models: ModelEntry[]) => void
   setContextUsage: (usage: { used: number; contextWindow: number } | null) => void
+  setThreadUsage: (threadId: string, usage: { prompt: number; completion: number; total: number }) => void
   setCursor: (line: number, col: number) => void
   loadThreads: (threads: Thread[]) => void
   updateToolCallStatus: (threadId: string, callId: string, status: 'pending' | 'approved' | 'rejected' | 'running') => void
@@ -142,6 +145,8 @@ interface GlobalActions {
   markScopeRestored: (threadId: string, turnId: string, scope: 'agent' | 'all') => void
   initRevertedFilesFromState: (threadId: string) => void
   setTurnCheckpointMapping: (threadId: string, checkpointId: number, uiTurnId: string) => void
+  startCompressing: () => void
+  stopCompressing: () => void
 }
 
 const initialGit: GitStatus = {
@@ -185,6 +190,8 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         contextUsage: null,
         todoByThreadId: {},
         pendingInput: null,
+        usageByThreadId: {},
+        isCompressing: false,
       },
       editor: {
         cursorLine: 1,
@@ -246,7 +253,20 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setGit: (status) => set((s) => { s.git = status }),
       addTerminal: (session) => set((s) => { s.terminals.push(session) }),
       removeTerminal: (id) => set((s) => { s.terminals = s.terminals.filter((t) => t.id !== id) }),
-      setCurrentThread: (id) => set((s) => { s.agent.currentThreadId = id }),
+      setCurrentThread: (id) => set((s) => {
+        s.agent.currentThreadId = id
+        if (id) {
+          const usage = s.agent.usageByThreadId[id]
+          const model = s.agent.models.find((m) => m.id === s.agent.model)
+          if (usage && model) {
+            s.agent.contextUsage = { used: usage.total, contextWindow: model.context_window }
+          } else {
+            s.agent.contextUsage = null
+          }
+        } else {
+          s.agent.contextUsage = null
+        }
+      }),
       upsertThread: (thread) => set((s) => { s.agent.threads[thread.id] = thread }),
       setThreadTurns: (threadId, turns) => set((s) => {
         const thread = s.agent.threads[threadId]
@@ -263,6 +283,9 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setModel: (model) => set((s) => { s.agent.model = model }),
       setModels: (models) => set((s) => { s.agent.models = models }),
       setContextUsage: (usage) => set((s) => { s.agent.contextUsage = usage }),
+      setThreadUsage: (threadId, usage) => set((s) => {
+        s.agent.usageByThreadId[threadId] = usage
+      }),
       setCursor: (line, col) => set((s) => { s.editor.cursorLine = line; s.editor.cursorCol = col }),
 
       loadThreads: (threads) => set((s) => {
@@ -280,6 +303,12 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           }
         }
         s.agent.threads = next
+        // Clean up usage entries for deleted threads
+        for (const id of Object.keys(s.agent.usageByThreadId)) {
+          if (!incomingIds.has(id)) {
+            delete s.agent.usageByThreadId[id]
+          }
+        }
       }),
 
       updateToolCallStatus: (threadId, callId, status) => set((s) => {
@@ -503,6 +532,8 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         }
         s.rollback.turnCheckpointMapping[threadId][checkpointId] = uiTurnId
       }),
+      startCompressing: () => set((s) => { s.agent.isCompressing = true }),
+      stopCompressing: () => set((s) => { s.agent.isCompressing = false }),
     })),
     {
       name: 'codingcode-desktop-store',
@@ -528,6 +559,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         agent: {
           approvalPolicy: state.agent.approvalPolicy,
           model: state.agent.model,
+          usageByThreadId: state.agent.usageByThreadId,
         },
         editor: {
           cursorLine: state.editor.cursorLine,
@@ -551,6 +583,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           threads: {},
           todoByThreadId: {},
           contextUsage: null,
+          usageByThreadId: (persisted as any).agent?.usageByThreadId ?? {},
         },
       }),
     },

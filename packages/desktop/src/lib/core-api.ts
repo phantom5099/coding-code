@@ -230,11 +230,11 @@ export function rollbackCodeToTurn(sessionId: string, cwd: string, throughTurnId
   return clients.sessions.rollbackCodeToTurn({ sessionId, cwd, throughTurnId }) as any
 }
 
-export function rollbackContext(sessionId: string, cwd: string, throughTurnId: number): Promise<{ ok: boolean; turns: any[]; rolledBackMessage?: string }> {
+export function rollbackContext(sessionId: string, cwd: string, throughTurnId: number): Promise<{ ok: boolean; turns: any[]; rolledBackMessage?: string; promptEstimate?: number }> {
   return clients.sessions.rollbackContext({ sessionId, cwd, throughTurnId }) as any
 }
 
-export function rollbackBothToTurn(sessionId: string, cwd: string, throughTurnId: number): Promise<{ ok: boolean; turns: any[]; codeResult: CodeRollbackResult }> {
+export function rollbackBothToTurn(sessionId: string, cwd: string, throughTurnId: number): Promise<{ ok: boolean; turns: any[]; codeResult: CodeRollbackResult; promptEstimate?: number }> {
   return clients.sessions.rollbackBothToTurn({ sessionId, cwd, throughTurnId }) as any
 }
 

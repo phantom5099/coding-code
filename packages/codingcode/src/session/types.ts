@@ -27,6 +27,7 @@ export interface AssistantEvent {
   toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
   model: string;
   timestamp: string;
+  usage?: TokenUsage;
 }
 
 export interface ToolResultEvent {
@@ -84,6 +85,16 @@ export interface TitleEvent {
   timestamp: string;
 }
 
+export interface ToolBudgetEvent {
+  type: 'tool_budget';
+  uuid: string;
+  toolCallId: string;
+  path: string;
+  preview: string;
+  bytes: number;
+  timestamp: string;
+}
+
 export type SessionEvent =
   | SessionMetaEvent
   | UserEvent
@@ -92,7 +103,14 @@ export type SessionEvent =
   | SummaryEvent
   | HideEvent
   | UnhideEvent
-  | TitleEvent;
+  | TitleEvent
+  | ToolBudgetEvent;
+
+export interface TokenUsage {
+  prompt: number;
+  completion: number;
+  total: number;
+}
 
 export interface SessionIndex {
   sessionId: string;
@@ -104,6 +122,7 @@ export interface SessionIndex {
   messageCount: number;
   title: string;
   currentTurnId: number;
-  tokenCountEstimate: number;
+  usage: TokenUsage | undefined;
+  promptEstimate?: number;
   permissionMode: string;
 }

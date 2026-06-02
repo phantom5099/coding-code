@@ -14,6 +14,16 @@ describe('AgentEvent type', () => {
     if (ev._tag === 'Done') expect(ev.content).toBe('result');
   });
 
+  it('should accept a Usage event', () => {
+    const ev: AgentEvent = { _tag: 'Usage', prompt: 1000, completion: 500, total: 1500 };
+    expect(ev._tag).toBe('Usage');
+    if (ev._tag === 'Usage') {
+      expect(ev.prompt).toBe(1000);
+      expect(ev.completion).toBe(500);
+      expect(ev.total).toBe(1500);
+    }
+  });
+
   it('should narrow correctly via discriminated union switch', () => {
     const ev: AgentEvent = { _tag: 'Error', error: { _tag: 'MaxStepsReached', maxSteps: 5, message: 'test' } };
     switch (ev._tag) {

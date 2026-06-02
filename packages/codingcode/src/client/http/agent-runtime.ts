@@ -65,6 +65,12 @@ export function createHttpAgentClient(
           case 'todo_update':
             yield { type: 'todo_update', items: data.items as any };
             break;
+          case 'usage':
+            yield { type: 'usage', prompt: data.prompt as number, completion: data.completion as number, total: data.total as number };
+            break;
+          case 'reactive_compact':
+            yield { type: 'reactive_compact', released: data.released as number, promptEstimate: data.promptEstimate as number };
+            break;
           case 'error':
             throw new Error(data.message as string);
           case 'done':

@@ -18,6 +18,8 @@ beforeEach(() => {
       contextUsage: null,
       todoByThreadId: {},
       pendingInput: null,
+      usageByThreadId: {},
+      isCompressing: false,
     },
     workspace: {
       rootPath: '',
@@ -434,5 +436,54 @@ describe('global store - project management', () => {
     useGlobalStore.getState().setCurrentProject('xyz')
     expect(useGlobalStore.getState().workspace.currentProjectId).toBe('xyz')
     expect(useGlobalStore.getState().workspace.rootPath).toBe('/some/path')
+  })
+})
+
+describe('global store - token usage', () => {
+  it('setThreadUsage stores usage by threadId', () => {
+    useGlobalStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 })
+    expect(useGlobalStore.getState().agent.usageByThreadId['t1']).toEqual({ prompt: 1000, completion: 500, total: 1500 })
+  })
+
+  it('setThreadUsage stores usage but does not update contextUsage', () => {
+    useGlobalStore.getState().setModels([{ id: 'm1', name: 'Model', provider: 'openai', context_window: 128000 }])
+    useGlobalStore.getState().setModel('m1')
+    useGlobalStore.getState().setCurrentThread('t1')
+    useGlobalStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 })
+    expect(useGlobalStore.getState().agent.usageByThreadId['t1']).toEqual({ prompt: 1000, completion: 500, total: 1500 })
+    // contextUsage is no longer updated by setThreadUsage
+    expect(useGlobalStore.getState().agent.contextUsage).toBeNull()
+  })
+
+  it('setCurrentThread restores contextUsage from usageByThreadId', () => {
+    useGlobalStore.getState().setModels([{ id: 'm1', name: 'Model', provider: 'openai', context_window: 128000 }])
+    useGlobalStore.getState().setModel('m1')
+    useGlobalStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 })
+    useGlobalStore.getState().setCurrentThread('t1')
+    expect(useGlobalStore.getState().agent.contextUsage).toEqual({ used: 1500, contextWindow: 128000 })
+  })
+
+  it('setCurrentThread clears contextUsage when no usage for thread', () => {
+    useGlobalStore.getState().setContextUsage({ used: 100, contextWindow: 128000 })
+    useGlobalStore.getState().setCurrentThread('t1')
+    expect(useGlobalStore.getState().agent.contextUsage).toBeNull()
+  })
+})
+
+describe('global store - compressing state', () => {
+  it('initial isCompressing is false', () => {
+    expect(useGlobalStore.getState().agent.isCompressing).toBe(false)
+  })
+
+  it('startCompressing sets isCompressing to true', () => {
+    useGlobalStore.getState().startCompressing()
+    expect(useGlobalStore.getState().agent.isCompressing).toBe(true)
+  })
+
+  it('stopCompressing sets isCompressing to false', () => {
+    useGlobalStore.getState().startCompressing()
+    expect(useGlobalStore.getState().agent.isCompressing).toBe(true)
+    useGlobalStore.getState().stopCompressing()
+    expect(useGlobalStore.getState().agent.isCompressing).toBe(false)
   })
 })

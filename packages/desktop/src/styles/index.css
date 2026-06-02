@@ -32,19 +32,21 @@ body,
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 14px;
+  height: 14px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #1e1e1e;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #424242;
-  border-radius: 3px;
+  background: #555;
+  border-radius: 7px;
+  border: 3px solid #1e1e1e;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555555;
+  background: #666;
 }

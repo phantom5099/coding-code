@@ -15,7 +15,9 @@ export type StreamChunk =
   | { type: 'tool_denied'; id: string; name: string; reason: string }
   | { type: 'error'; message: string }
   | { type: 'done' }
-  | { type: 'todo_update'; items: ReadonlyArray<{ step: string; status: string }> };
+  | { type: 'todo_update'; items: ReadonlyArray<{ step: string; status: string }> }
+  | { type: 'usage'; prompt: number; completion: number; total: number }
+  | { type: 'reactive_compact'; released: number; promptEstimate: number };
 
 export interface AgentClient {
   sendMessage(input: string, cwd?: string): AsyncGenerator<StreamChunk>;

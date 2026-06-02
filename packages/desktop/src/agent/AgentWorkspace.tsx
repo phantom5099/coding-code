@@ -10,16 +10,57 @@ import ApprovalPanel from './ApprovalPanel'
 
 function ContextIndicator({ threadId }: { threadId: string }) {
   const contextUsage = useGlobalStore((s) => s.agent.contextUsage)
+  const usage = useGlobalStore((s) => s.agent.usageByThreadId[threadId])
   const setContextUsage = useGlobalStore((s) => s.setContextUsage)
-  if (!contextUsage) return null
-  const pct = Math.min(contextUsage.used / contextUsage.contextWindow, 1)
-  const color = pct < 0.4 ? '#4ec9b0' : pct < 0.75 ? '#e5c07b' : '#f44747'
+  const isCompressing = useGlobalStore((s) => s.agent.isCompressing)
+  const startCompressing = useGlobalStore((s) => s.startCompressing)
+  const stopCompressing = useGlobalStore((s) => s.stopCompressing)
+
   const r = 7
   const circ = 2 * Math.PI * r
+
+  if (isCompressing) {
+    return (
+      <button type="button" disabled
+        className="w-5 h-5 flex items-center justify-center animate-pulse cursor-default">
+        <svg width="18" height="18" viewBox="0 0 18 18">
+          <circle cx="9" cy="9" r={r} fill="none" stroke="#2a2a2a" strokeWidth="2.5" />
+          <circle cx="9" cy="9" r={r} fill="none" stroke="#555" strokeWidth="2.5"
+            strokeDasharray={circ} strokeDashoffset={circ * 0.6}
+            strokeLinecap="round" transform="rotate(-90 9 9)" />
+        </svg>
+      </button>
+    )
+  }
+
+  if (!contextUsage) return null
+  // When LLM only returns total (no prompt/completion split), fall back to total for both pct and detail
+  const effectiveUsed = usage && usage.prompt === 0 && usage.completion === 0
+    ? usage.total
+    : contextUsage.used
+  const pct = Math.min(effectiveUsed / contextUsage.contextWindow, 1)
+  const color = pct < 0.4 ? '#4ec9b0' : pct < 0.75 ? '#e5c07b' : '#f44747'
+  const detail = usage
+    ? usage.prompt === 0 && usage.completion === 0
+      ? `${usage.total.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens`
+      : `prompt: ${usage.prompt.toLocaleString()}, completion: ${usage.completion.toLocaleString()}, total: ${usage.total.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens`
+    : `${contextUsage.used.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens`
   return (
     <button type="button"
-      onClick={async () => { await api(`/api/sessions/${threadId}/compact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: '' }) }).catch((e) => { console.error('Failed to compact session:', e) }); setContextUsage(null) }}
-      title={`上下文: ${Math.round(pct * 100)}% (${contextUsage.used.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens)\n点击压缩`}
+      onClick={async () => {
+        startCompressing()
+        try {
+          const res = await api<{ promptEstimate: number; didCompress: boolean; released: number }>(`/api/sessions/${threadId}/compact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: '' }) })
+          if (res.promptEstimate != null && contextUsage) {
+            setContextUsage({ used: res.promptEstimate, contextWindow: contextUsage.contextWindow })
+          }
+        } catch (e) {
+          console.error('Failed to compact session:', e)
+        } finally {
+          stopCompressing()
+        }
+      }}
+      title={`上下文: ${Math.round(pct * 100)}% (${detail})\n点击压缩`}
       className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition-opacity">
       <svg width="18" height="18" viewBox="0 0 18 18">
         <circle cx="9" cy="9" r={r} fill="none" stroke="#2a2a2a" strokeWidth="2.5" />
@@ -193,6 +234,7 @@ interface AgentWorkspaceProps {
 
 export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspaceProps) {
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
+  const isCompressing = useGlobalStore((s) => s.agent.isCompressing)
   const workspace = useGlobalStore((s) => s.workspace)
 
   if (!currentThreadId) {
@@ -211,6 +253,12 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
       <MessageStream key={currentThreadId} threadId={currentThreadId} />
       <ApprovalPanel threadId={currentThreadId} />
       <TodoPanel threadId={currentThreadId} />
+      {isCompressing && (
+        <div className="shrink-0 px-5 py-1.5 bg-[#1a1a1a] border-t border-[#2d2d2d] flex items-center gap-2 text-[13px] text-[#888]">
+          <span className="w-3 h-3 border-2 border-[#555] border-t-transparent rounded-full animate-spin" />
+          <span>正在压缩上下文...</span>
+        </div>
+      )}
       <div className="shrink-0">
         <InputBox sendMessage={sendMessage} abort={abort} />
       </div>

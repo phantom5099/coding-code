@@ -31,6 +31,7 @@ export function useAgent() {
   const setModels = useGlobalStore((s) => s.setModels)
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)
   const setContextUsage = useGlobalStore((s) => s.setContextUsage)
+  const setThreadUsage = useGlobalStore((s) => s.setThreadUsage)
   const setProjects = useGlobalStore((s) => s.setProjects)
   const switchProject = useGlobalStore((s) => s.switchProject)
   const addProject = useGlobalStore((s) => s.addProject)
@@ -78,11 +79,16 @@ export function useAgent() {
           updatedAt: new Date(s.updatedAt).getTime(),
         }))
         loadThreads(threads)
+        for (const s of sessions) {
+          if (s.usage) {
+            setThreadUsage(s.sessionId, { prompt: s.usage.prompt, completion: s.usage.completion, total: s.usage.total })
+          }
+        }
       }).catch((e) => { console.error('Failed to load sessions:', e) })
     }
 
     // Restore persisted projects, approval policy, model - already done by persist middleware
-  }, [loadThreads, setModel, setModels, workspace.rootPath])
+  }, [loadThreads, setModel, setModels, setThreadUsage, workspace.rootPath])
 
   // Load history from HTTP when switching to a thread with no turns
   useEffect(() => {
@@ -118,13 +124,30 @@ export function useAgent() {
       case 'todo_update':
         applyTodoUpdate(threadId, event.items as any)
         return null
+      case 'usage': {
+        setThreadUsage(threadId, { prompt: event.prompt, completion: event.completion, total: event.total })
+        const state = useGlobalStore.getState()
+        const model = state.agent.models.find((m) => m.id === state.agent.model)
+        if (model) {
+          setContextUsage({ used: event.prompt, contextWindow: model.context_window })
+        }
+        return null
+      }
+      case 'reactive_compact':
+        {
+          const contextUsage = useGlobalStore.getState().agent.contextUsage
+          if (contextUsage) {
+            setContextUsage({ used: event.promptEstimate, contextWindow: contextUsage.contextWindow })
+          }
+        }
+        return null
       case 'done':
       case 'session_id':
         return null
       default:
         return null
     }
-  }, [applyTodoUpdate, updateTurnId])
+  }, [applyTodoUpdate, updateTurnId, setThreadUsage, setContextUsage])
 
   const sendMessage = useCallback(
     async (content: string, cwd?: string) => {
@@ -148,7 +171,6 @@ export function useAgent() {
       const turn: Turn = { id: turnId, items: [userItem], status: 'running' }
 
       startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) })
-      setContextUsage(null)
 
       const controller = new AbortController()
       abortControllers.current.set(threadId, controller)
@@ -186,7 +208,7 @@ export function useAgent() {
         abortControllers.current.delete(threadId)
       }
     },
-    [startTurn, setCurrentThread, setContextUsage, streamChunkToItem, applyChunk, completeTurn, workspace.rootPath, approvalPolicy, currentThreadId]
+    [startTurn, setCurrentThread, streamChunkToItem, applyChunk, completeTurn, workspace.rootPath, approvalPolicy, currentThreadId]
   )
 
   const abort = useCallback(() => {
@@ -238,10 +260,15 @@ export function useAgent() {
             updatedAt: new Date(s.updatedAt).getTime(),
           }))
           loadThreads(threads)
+          for (const s of sessions) {
+            if (s.usage) {
+              setThreadUsage(s.sessionId, { prompt: s.usage.prompt, completion: s.usage.completion, total: s.usage.total })
+            }
+          }
         }
       }
     },
-    [loadThreads]
+    [loadThreads, setThreadUsage]
   )
 
   // Rollback methods
@@ -333,15 +360,31 @@ export function useAgent() {
     if (res.rolledBackMessage) {
       setPendingInput(res.rolledBackMessage)
     }
+    if (res.promptEstimate != null) {
+      const state = useGlobalStore.getState()
+      const entry = state.agent.models.find((m) => m.id === state.agent.model)
+      const contextWindow = entry?.context_window ?? 0
+      if (contextWindow > 0) {
+        setContextUsage({ used: res.promptEstimate, contextWindow })
+      }
+    }
     return res
-  }, [workspace.rootPath, setThreadTurns, clearRunningTurns, setPendingInput])
+  }, [workspace.rootPath, setThreadTurns, clearRunningTurns, setPendingInput, setContextUsage])
 
   const rollbackBoth = useCallback(async (threadId: string, throughTurnId: number) => {
     const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
     const res = await rollbackBothToTurn(threadId, cwd, throughTurnId)
     setThreadTurns(threadId, res.turns as Turn[])
+    if (res.promptEstimate != null) {
+      const state = useGlobalStore.getState()
+      const entry = state.agent.models.find((m) => m.id === state.agent.model)
+      const contextWindow = entry?.context_window ?? 0
+      if (contextWindow > 0) {
+        setContextUsage({ used: res.promptEstimate, contextWindow })
+      }
+    }
     return res
-  }, [workspace.rootPath, setThreadTurns])
+  }, [workspace.rootPath, setThreadTurns, setContextUsage])
 
   const undoCodeRollback = useCallback(async (threadId: string, uiTurnId: string, force?: boolean, files?: string[]) => {
     const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath

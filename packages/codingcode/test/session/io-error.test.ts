@@ -28,7 +28,8 @@ describe('SessionService — SESSION_IO_ERROR', () => {
         currentTurnId: 1,
         sessionMeta: { model: 'test', version: '0.1.0', createdAt: new Date().toISOString() },
         title: 'io-err-sid'.slice(0, 8),
-        tokenCountEstimate: 0,
+        usage: undefined,
+        promptEstimate: 0,
       };
       return yield* session.recordUser(state, 'hello');
     });
@@ -51,7 +52,8 @@ describe('SessionService — SESSION_IO_ERROR', () => {
         currentTurnId: 1,
         sessionMeta: { model: 'test', version: '0.1.0', createdAt: new Date().toISOString() },
         title: 'io-err-asst'.slice(0, 8),
-        tokenCountEstimate: 0,
+        usage: undefined,
+        promptEstimate: 0,
       };
       return yield* session.recordAssistant(state, 'hi', [], 'model');
     });

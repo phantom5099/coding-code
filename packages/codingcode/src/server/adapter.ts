@@ -22,6 +22,8 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
       return { type: 'done' };
     case 'TodoUpdate':
       return { type: 'todo_update', items: event.items as unknown as Record<string, unknown>[] };
+    case 'Usage':
+      return { type: 'usage', prompt: event.prompt, completion: event.completion, total: event.total };
     case 'LlmChunk':
     case 'Assistant':
     case 'ReactiveCompact':

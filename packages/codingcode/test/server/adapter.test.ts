@@ -50,9 +50,31 @@ describe('agentEventToSseEvent', () => {
       .toEqual({ type: 'todo_update', items });
   });
 
+  it('maps Usage to usage event', () => {
+    expect(agentEventToSseEvent({ _tag: 'Usage', prompt: 1000, completion: 500, total: 1500 }))
+      .toEqual({ type: 'usage', prompt: 1000, completion: 500, total: 1500 });
+  });
+
   it('returns null for Assistant and ReactiveCompact', () => {
     expect(agentEventToSseEvent({ _tag: 'Assistant', content: 'ok' })).toBeNull();
     expect(agentEventToSseEvent({ _tag: 'ReactiveCompact', attempt: 1, released: 100 })).toBeNull();
+  });
+});
+
+describe('toSseEvents with Usage', () => {
+  it('Usage events flow through toSseEvents', async () => {
+    async function* source(): AsyncGenerator<AgentEvent, void, unknown> {
+      yield { _tag: 'Step', step: 1, max: 10 };
+      yield { _tag: 'Assistant', content: 'ok' };
+      yield { _tag: 'Usage', prompt: 1000, completion: 500, total: 1500 };
+    }
+    const result: any[] = [];
+    for await (const s of toSseEvents(source())) result.push(s);
+    expect(result).toEqual([
+      { type: 'step', step: 1 },
+      { type: 'message', id: 1, content: 'ok', partial: false },
+      { type: 'usage', prompt: 1000, completion: 500, total: 1500 },
+    ]);
   });
 });
 

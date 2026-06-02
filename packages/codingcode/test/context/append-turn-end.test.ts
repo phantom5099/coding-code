@@ -52,7 +52,6 @@ describe('appendTurnEnd', () => {
 
   it('compression thresholds have sensible defaults', () => {
     const config = getContextConfig();
-    expect(config.thresholds.prune).toBeGreaterThan(0);
-    expect(config.thresholds.compaction).toBeGreaterThan(0);
+    expect(config.compactionThreshold).toBeGreaterThan(0);
   });
 });
