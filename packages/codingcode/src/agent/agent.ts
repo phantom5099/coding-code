@@ -100,7 +100,7 @@ interface RunReActDeps {
   ctx: ContextService;
   session: SessionService;
   checkpoint: CheckpointService;
-  hooks: any; // HookService
+  hooks: HookService;
 }
 
 export class AgentService extends Effect.Service<AgentService>()('Agent', {
@@ -141,7 +141,7 @@ export async function* runReActLoop(
     platform: process.platform,
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
     variant: systemPromptVariant ?? 'default',
-    skillInstruction: opts.skillInstruction,
+    skillInstruction,
   });
 
   const memoryBlock = loadMemoryForPrompt(projectPath);
@@ -249,7 +249,7 @@ export async function* runReActLoop(
       const toolCalls = resp.toolCalls;
       const assistantMsg: Message = { role: 'assistant', content: resp.content };
       if (toolCalls && toolCalls.length > 0) {
-        (assistantMsg as any).tool_calls = toolCalls;
+        assistantMsg.tool_calls = toolCalls;
       }
       messages.push(assistantMsg);
       yield { _tag: 'Assistant', content: resp.content, toolCalls };
@@ -260,7 +260,7 @@ export async function* runReActLoop(
       if (!toolCalls || toolCalls.length === 0) {
         // LLM done — record assistant, then check stop hook
         await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls || [], model, resp.usage));
-        const stopDecision: any = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
+        const stopDecision = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
           sessionId, content: resp.content, turnId: state.currentTurnId,
         }));
 
@@ -326,14 +326,14 @@ export async function* runReActLoop(
           const isOk = r.type === 'ok';
           yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk };
         }
-        if (!messages.find(m => (m as any).tool_call_id === r.id)) {
+        if (!messages.find(m => m.tool_call_id === r.id)) {
           const content = r.type === 'denied'
             ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
             : r.output ?? '';
           messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
         }
         if (!todoPrinted && (r.name === 'todo_write' || r.name === 'todo_read')) {
-          yield { _tag: 'TodoUpdate', items: sharedTodoStore.read(sessionId) as any };
+          yield { _tag: 'TodoUpdate', items: sharedTodoStore.read(sessionId) };
           todoPrinted = true;
         }
       }
@@ -365,7 +365,6 @@ export async function* runReActLoop(
     await Effect.runPromise(hooks.emit('agent.turn.end', {
       sessionId, turnId: state.currentTurnId, status: 'maxSteps'
     }));
-    flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
     return Result.err(AgentError.maxStepsReached(maxSteps));
   }
 

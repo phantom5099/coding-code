@@ -14,7 +14,6 @@ export const todoWriteTool: ToolDefinition = {
   name: 'todo_write',
   description: 'Replace the current task list. Use for multi-step work to track plan and progress. Pass the full updated plan; previous list is replaced entirely.',
   shortDescription: 'Maintain task list for multi-step work',
-  deferred: true,
   parameters: todoSchema,
   execute: async (args, ctx) => {
     const sessionId = ctx?.sessionId;

@@ -7,7 +7,6 @@ export const todoReadTool: ToolDefinition = {
   name: 'todo_read',
   description: 'Read the current task list. Returns in_progress items first, then pending, completed last.',
   shortDescription: 'Read current task list',
-  deferred: true,
   parameters: z.object({}),
   execute: async (_args, ctx) => {
     const sessionId = ctx?.sessionId;

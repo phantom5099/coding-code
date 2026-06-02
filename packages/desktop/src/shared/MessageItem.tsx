@@ -5,14 +5,6 @@ import ToolCallCard from './ToolCallCard'
 import DiffBlock from './DiffBlock'
 import ToolSummary from './ToolSummary'
 
-const TOOL_ICONS: Record<string, string> = {
-  shell: '⚡',
-  file_read: '📄',
-  apply_patch: '✏️',
-  list_dir: '📁',
-  search: '🔍',
-}
-
 interface MessageItemProps {
   item: Item
   threadId: string
@@ -155,14 +147,12 @@ export default function MessageItem({ item, threadId, onApprove, onReject, callI
 
   if (item.type === 'tool_call') {
     if (item.status === 'pending') {
-      const icon = TOOL_ICONS[item.name] ?? '🔧'
       const a = item.args as Record<string, unknown>
       const path = typeof a.path === 'string' ? a.path : typeof a.file_path === 'string' ? a.file_path : ''
       const cmd = typeof a.command === 'string' ? a.command : ''
       const label = path || cmd || item.name
       return (
         <div className="mb-2 flex items-center gap-1.5 text-[13px] text-[#777]">
-          <span>{icon}</span>
           <span className="font-mono text-[#dcdcaa]">{label}</span>
           <span className="text-[#666]">等待审批</span>
         </div>
@@ -173,11 +163,9 @@ export default function MessageItem({ item, threadId, onApprove, onReject, callI
       return <ToolSummary toolCall={item} toolResult={toolResult} />
     }
 
-    const icon = TOOL_ICONS[item.name] ?? '🔧'
     const isRejected = item.status === 'rejected'
     return (
       <div className="mb-2 flex items-center gap-1.5 text-[13px]">
-        <span>{icon}</span>
         <span className={`font-mono ${isRejected ? 'text-[#666] line-through' : 'text-[#dcdcaa]'}`}>{item.name}</span>
         {item.status === 'running' && (
           <span className="text-[#569cd6] flex items-center gap-1">

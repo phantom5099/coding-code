@@ -113,4 +113,66 @@ describe('buildToolSummaryTitle', () => {
     const title = buildToolSummaryTitle(call, result)
     expect(title.title).toBe('成功编辑 result.ts')
   })
+
+  it('returns "读取文件 {path}" for read_file with path arg', () => {
+    const call = makeToolCall('read_file', 'approved', { path: 'src/app.ts' })
+    const title = buildToolSummaryTitle(call)
+    expect(title.title).toBe('读取文件 src/app.ts')
+  })
+
+  it('returns "读取文件" for read_file without path', () => {
+    const call = makeToolCall('read_file', 'approved', {})
+    const title = buildToolSummaryTitle(call)
+    expect(title.title).toBe('读取文件')
+  })
+
+  it('marks read_file as error when exitCode is non-zero', () => {
+    const call = makeToolCall('read_file', 'approved', { path: 'missing.txt' })
+    const result = makeToolResult('read_file', { exitCode: 1 })
+    const title = buildToolSummaryTitle(call, result)
+    expect(title.title).toBe('读取文件 missing.txt')
+    expect(title.isError).toBe(true)
+  })
+
+  it('returns command title for execute_command with command arg', () => {
+    const call = makeToolCall('execute_command', 'approved', { command: 'git status' })
+    const title = buildToolSummaryTitle(call)
+    expect(title.title).toBe('执行命令 git status')
+  })
+
+  it('returns generic command title for execute_command without command arg', () => {
+    const call = makeToolCall('execute_command', 'approved', {})
+    const title = buildToolSummaryTitle(call)
+    expect(title.title).toBe('执行命令 execute_command')
+  })
+
+  it('returns "搜索 \"{query}\"" for search_files with query', () => {
+    const call = makeToolCall('search_files', 'approved', { query: 'TODO' })
+    const title = buildToolSummaryTitle(call)
+    expect(title.title).toBe('搜索 "TODO"')
+  })
+
+  it('returns "搜索 \"{regex}\"" for grep_search with regex', () => {
+    const call = makeToolCall('grep_search', 'approved', { regex: 'function.*\\(' })
+    const title = buildToolSummaryTitle(call)
+    expect(title.title).toBe('搜索 "function.*\\("')
+  })
+
+  it('returns "搜索文件" for search without query or regex', () => {
+    const call = makeToolCall('search_files', 'approved', {})
+    const title = buildToolSummaryTitle(call)
+    expect(title.title).toBe('搜索文件')
+  })
+
+  it('returns "列出目录 {path}" for list_dir with path', () => {
+    const call = makeToolCall('list_dir', 'approved', { path: 'src/components' })
+    const title = buildToolSummaryTitle(call)
+    expect(title.title).toBe('列出目录 src/components')
+  })
+
+  it('returns "列出目录" for list_dir without path', () => {
+    const call = makeToolCall('list_dir', 'approved', {})
+    const title = buildToolSummaryTitle(call)
+    expect(title.title).toBe('列出目录')
+  })
 })
