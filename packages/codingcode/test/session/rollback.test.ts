@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { buildMessages } from '../../src/session/store.js';
+import { buildMessages } from '../../src/session/messages.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');

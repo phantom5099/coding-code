@@ -184,14 +184,6 @@ export function deleteSession(sessionId: string): void {
   try { if (existsSync(subagentDir)) rmSync(subagentDir, { recursive: true, force: true }); } catch {}
 }
 
-export function truncateJsonl(path: string, byteOffset: number): void {
-  try {
-    truncateSync(path, byteOffset);
-  } catch (err) {
-    logger.error(`truncateJsonl error for ${path}:`, err);
-  }
-}
-
 // Serialized write queue per session: ensures ordered, non-overlapping writes
 const writeQueues = new Map<string, Promise<void>>();
 

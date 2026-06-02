@@ -1,5 +1,6 @@
 ﻿import { Effect } from 'effect';
-import { SessionService, deleteSession } from '../../session/store.js';
+import { SessionService } from '../../session/store.js';
+import { deleteSession } from '../../session/io.js';
 import { getWorkspaceCwd } from '../../core/workspace.js';
 import type { PermissionMode } from '../../approval/types.js';
 

@@ -1,5 +1,7 @@
 export { AgentService } from './agent/agent.js';
-export { SessionService, findSessionIndex, readUIHistory, deleteSession, listSessions } from './session/store.js';
+export { SessionService } from './session/store.js';
+export { readHistory, findSessionIndex, listSessions, deleteSession } from './session/io.js';
+export { readUIHistory } from './session/messages.js';
 export type { SessionStoreState } from './session/store.js';
 export { normalizePath, encodeProjectPath } from './core/path.js';
 export {

@@ -17,23 +17,14 @@ import {
   listSessions,
   setPermissionMode,
   getPermissionMode,
-  deleteSession,
-  truncateJsonl,
   enqueueWrite,
-  enqueueTask,
   persistToolResult,
   readCurrentIndex,
-  resolveSessionDir,
   countNonMetaEvents,
-  buildIndexFromMeta,
   makeTitle,
   findFirstUserContent,
 } from './io.js';
 import { buildMessages, findLastVisibleAssistantUsage } from './messages.js';
-
-// Re-exports for backward compatibility (tests and consumers import from store.ts)
-export { buildMessagesFromEvents, applyVisibilityEvents, buildMessages, findLastVisibleAssistantUsage, sessionEventsToTurns, readUIHistory } from './messages.js';
-export { readHistory, appendLine, findSessionIndex, listSessions, setPermissionMode, getPermissionMode, deleteSession, truncateJsonl, enqueueWrite, enqueueTask, persistToolResult, resolveSessionDir, ensureDirs, readCurrentIndex, projectSessionsDir, countNonMetaEvents, buildIndexFromMeta, makeTitle, findFirstUserContent, quickReadMeta, CODINGCODE_DIR, PROJECT_BASE } from './io.js';
 
 export interface PersistResult {
   path: string;

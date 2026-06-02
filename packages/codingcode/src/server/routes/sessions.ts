@@ -1,11 +1,12 @@
 ﻿import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { join } from 'path';
-import { SessionService, resolveSessionDir, getPermissionMode, setPermissionMode, readUIHistory, readHistory } from '../../session/store.js';
+import { SessionService } from '../../session/store.js';
+import { resolveSessionDir, getPermissionMode, setPermissionMode, readHistory, deleteSession } from '../../session/io.js';
+import { readUIHistory } from '../../session/messages.js';
 import { ContextService } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
-import { deleteSession } from '../../session/store.js';
 import { runWithLayer, errorResponse } from '../util.js';
 
 export const sessionsRouter = new Hono();
