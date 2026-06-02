@@ -6,7 +6,6 @@ import { ToolService } from './tools/registry';
 import { HookService } from './hooks/registry';
 import { McpService } from './mcp/index';
 import { SkillService } from './skills/index';
-import { SandboxService } from './sandbox/index';
 import { ApprovalService } from './approval/index';
 import { ApprovalWaitService } from './approval/async-confirm';
 import { ToolExecutorService } from './tools/executor';
@@ -20,7 +19,6 @@ export const ContextLayer = ContextService.Default;
 export const ToolLayer = ToolService.Default;
 export const HookLayer = HookService.Default;
 export const SkillLayer = SkillService.Default;
-export const SandboxLayer = SandboxService.Default;
 export const ApprovalWaitLayer = ApprovalWaitService.Default;
 export const SubagentRegistryLayer = SubagentRegistry.Default;
 /** ApprovalService depends on HookService + ApprovalWaitService — provide them eagerly. */
@@ -34,12 +32,11 @@ const InfraLayer = Layer.mergeAll(ToolLayer, HookLayer);
 /** MCP depends on ToolLayer + HookLayer. */
 export const McpLayer = McpService.Default.pipe(Layer.provide(InfraLayer));
 
-/** ToolExecutor depends on ToolLayer + HookLayer + ApprovalLayer + SandboxLayer. */
+/** ToolExecutor depends on ToolLayer + HookLayer + ApprovalLayer. */
 const ExecutorDeps = Layer.mergeAll(
   ToolLayer,
   HookLayer,
   ApprovalLayer,
-  SandboxLayer,
 );
 const ExecutorLayer = ToolExecutorService.Default.pipe(
   Layer.provide(ExecutorDeps),
@@ -71,7 +68,6 @@ export const AppLayer = Layer.mergeAll(
   InfraLayer,
   McpLayer,
   SkillLayer,
-  SandboxLayer,
   ApprovalLayer,
   ApprovalWaitLayer,
   CheckpointLayer,

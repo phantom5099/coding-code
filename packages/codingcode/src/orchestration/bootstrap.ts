@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import { ToolService } from '../tools/registry.js';
-import { SandboxService } from '../sandbox/index.js';
 import { SubagentRegistry, EXPLORE_PROFILE } from '../subagent/registry.js';
 import { SessionService } from '../session/store.js';
 import { ApprovalService } from '../approval/index.js';
@@ -24,18 +23,12 @@ import { loadAgentProfiles } from '../subagent/loader.js';
 export const bootstrapApplication = (cwd: string) =>
   Effect.gen(function* () {
     const tools = yield* ToolService;
-    const sandbox = yield* SandboxService;
     const subagentRegistry = yield* SubagentRegistry;
     const session = yield* SessionService;
     const approval = yield* ApprovalService;
     const hooks = yield* HookService;
     const toolSearchSvc = yield* ToolSearchService;
     const mcp = yield* McpService;
-
-    yield* sandbox.initialize({
-      denyReadPaths: ['/etc/shadow', '/etc/passwd'],
-      denyWritePaths: ['/', '/etc', '/sys', '/proc'],
-    });
 
     yield* tools.register(readFileTool);
     yield* tools.register(writeFileTool);

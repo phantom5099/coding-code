@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { Effect } from 'effect';
 export type { ToolDescription } from '../core/types';
 
 export interface ToolExecCtx {
@@ -10,9 +9,6 @@ export interface ToolExecCtx {
   agentRunner?: {
     agentService: any; // AgentService — use any to avoid circular imports
     llm: any; // LLMClient — use any to avoid circular imports
-  };
-  sandbox?: {
-    wrapCommand: (command: string) => Effect.Effect<string>;
   };
 }
 

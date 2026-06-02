@@ -4,16 +4,11 @@ import { bootstrapApplication } from '../../src/orchestration/bootstrap.js';
 import { ToolService } from '../../src/tools/registry.js';
 import { ToolSearchService } from '../../src/tools/tool-search-service.js';
 import { SubagentRegistry } from '../../src/subagent/registry.js';
-import { SandboxService } from '../../src/sandbox/index.js';
 import { McpService } from '../../src/mcp/index.js';
 import { SkillService } from '../../src/skills/index.js';
 import { SessionService } from '../../src/session/store.js';
 import { ApprovalService } from '../../src/approval/index.js';
 import { HookService } from '../../src/hooks/registry.js';
-
-const sandboxLayer = Layer.succeed(SandboxService, {
-  initialize: () => Effect.void,
-} as any);
 
 const mcpLayer = Layer.succeed(McpService, {
   syncConnections: (_: string) => Effect.void,
@@ -51,7 +46,6 @@ const testLayer = Layer.mergeAll(
   toolLayer,
   toolSearchLayer,
   registryLayer,
-  sandboxLayer,
   mcpLayer,
   skillLayer,
   sessionLayer,
