@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+﻿import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { join } from 'path';
 import { SessionService, resolveSessionDir, getPermissionMode, setPermissionMode, readUIHistory, readHistory } from '../../session/store.js';
@@ -33,7 +33,7 @@ sessionsRouter.post('/', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
-      return yield* svc.create(normalizedCwd, 'unknown', '0.1.0');
+      return yield* svc.create(normalizedCwd, 'unknown');
     }),
   );
   if (!result.ok) {
@@ -57,7 +57,7 @@ sessionsRouter.post('/:id/resume', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
-      const state = yield* svc.create(resolveWorkspaceCwd(body.cwd), 'unknown', '0.1.0', sessionId);
+      const state = yield* svc.create(resolveWorkspaceCwd(body.cwd), 'unknown', sessionId);
       return yield* svc.readHistory(state);
     }),
   );
@@ -75,7 +75,7 @@ sessionsRouter.post('/:id/compact', async (c) => {
     Effect.gen(function* () {
       const svc = yield* SessionService;
       const ctx = yield* ContextService;
-      const state = yield* svc.create(resolveWorkspaceCwd(body.cwd), 'unknown', '0.1.0', sessionId);
+      const state = yield* svc.create(resolveWorkspaceCwd(body.cwd), 'unknown', sessionId);
       return yield* ctx.compress(state.sessionId, state.projectPath, null);
     }),
   );
@@ -315,7 +315,7 @@ sessionsRouter.post('/:id/rollback-context', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
-      const state = yield* svc.create(cwd, 'unknown', '0.1.0', sessionId);
+      const state = yield* svc.create(cwd, 'unknown', sessionId);
       yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
       // Find user message of the rolled-back turn for input refill
@@ -352,7 +352,7 @@ sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
       const checkpoint = yield* CheckpointService;
       const svc = yield* SessionService;
       const codeResult = checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
-      const state = yield* svc.create(cwd, 'unknown', '0.1.0', sessionId);
+      const state = yield* svc.create(cwd, 'unknown', sessionId);
       yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
       return { ok: true, turns, codeResult, promptEstimate: state.promptEstimate };
@@ -384,7 +384,7 @@ sessionsRouter.post('/:id/undo-code-rollback', async (c) => {
   return c.json({ ok: true, result: result.value });
 });
 
-// ---- C13: undo context rollback — intentionally NOT implemented ----
+// ---- C13: undo context rollback 鈥?intentionally NOT implemented ----
 
 // ---- C14: fork ----
 
@@ -395,7 +395,7 @@ sessionsRouter.post('/:id/fork', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
-      const state = yield* svc.create(cwd, 'unknown', '0.1.0', sessionId);
+      const state = yield* svc.create(cwd, 'unknown', sessionId);
       const newSessionId = yield* svc.forkSession(state, body.atUuid ?? '');
       const turns = readUIHistory(newSessionId);
       return { sessionId: newSessionId, turns };

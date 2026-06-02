@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { HookService } from '../../src/hooks/registry.js';
 
@@ -8,7 +8,7 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(TestLayer) as any));
 }
 
-describe('HookService — Decision Handlers', () => {
+describe('HookService 鈥?Decision Handlers', () => {
   it('should return null from emitDecision when no handlers registered', async () => {
     const result = await run(Effect.gen(function* () {
       const hooks = yield* HookService;

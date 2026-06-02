@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'crypto';
 import { buildMessagesFromEvents } from '../../src/session/store.js';
 import type { SessionEvent } from '../../src/session/types.js';
 
 function makeEvents(overrides: Partial<SessionEvent>[] = []): SessionEvent[] {
   const base: SessionEvent[] = [
-    { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+    { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
     { type: 'user', turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
     { type: 'assistant', turnId: 1, uuid: 'a1', content: 'hi there', toolCalls: [], model: 'test', timestamp: new Date().toISOString() },
     { type: 'user', turnId: 2, uuid: 'u2', content: 'run a command', timestamp: new Date().toISOString() },
@@ -27,7 +27,7 @@ describe('buildMessagesFromEvents', () => {
   it('converts user/assistant/tool_result events to messages', () => {
     const events = makeEvents();
     const messages = buildMessagesFromEvents(events);
-    // session_meta is filtered out; 7 visible events → 7 messages
+    // session_meta is filtered out; 7 visible events 鈫?7 messages
     expect(messages).toHaveLength(7);
     expect(messages[0]).toEqual({ role: 'user', content: 'hello' });
     expect(messages[1]).toEqual({ role: 'assistant', content: 'hi there' });
@@ -100,7 +100,7 @@ describe('buildMessagesFromEvents', () => {
 
   it('strips trailing assistant messages with unresolved tool_calls', () => {
     const events: SessionEvent[] = [
-      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'do something', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'ok', toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }], model: 'test', timestamp: new Date().toISOString() },
       // Missing tool_result for tc1
@@ -113,7 +113,7 @@ describe('buildMessagesFromEvents', () => {
 
   it('filters assistant with partially resolved tool_calls and their orphaned tool results', () => {
     const events: SessionEvent[] = [
-      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'step 1', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'ok', toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }, { id: 'tc2', name: 'read', arguments: {} }], model: 'test', timestamp: new Date().toISOString() },
       { type: 'tool_result', turnId: 1, uuid: 't1', parentUuid: 'a1', toolName: 'bash', toolCallId: 'tc1', output: 'bash output', timestamp: new Date().toISOString(), tokenCount: 10 },
@@ -122,7 +122,7 @@ describe('buildMessagesFromEvents', () => {
       // tc2's tool_result is missing (e.g. hidden by summary)
     ];
     const messages = buildMessagesFromEvents(events);
-    // a1 has unresolved tc2 → entire a1 and its matched tc1 result should be removed
+    // a1 has unresolved tc2 鈫?entire a1 and its matched tc1 result should be removed
     expect(messages.filter((m) => m.role === 'assistant')).toHaveLength(1);
     expect((messages.find((m) => m.role === 'assistant') as any).content).toBe('done');
     expect(messages.filter((m) => m.role === 'tool')).toHaveLength(0);
@@ -130,7 +130,7 @@ describe('buildMessagesFromEvents', () => {
 
   it('removes assistant when summary hides its tool_results but not the assistant itself', () => {
     const events: SessionEvent[] = [
-      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'do something', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'ok', toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }], model: 'test', timestamp: new Date().toISOString() },
       { type: 'tool_result', turnId: 1, uuid: 't1', parentUuid: 'a1', toolName: 'bash', toolCallId: 'tc1', output: 'old output', timestamp: new Date().toISOString(), tokenCount: 10 },
@@ -150,7 +150,7 @@ describe('buildMessagesFromEvents', () => {
 
   it('merges adjacent user messages after filtering out an unresolved assistant', () => {
     const events: SessionEvent[] = [
-      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'first', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'ok', toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }, { id: 'tc2', name: 'bash', arguments: {} }], model: 'test', timestamp: new Date().toISOString() },
       { type: 'tool_result', turnId: 1, uuid: 't1', parentUuid: 'a1', toolName: 'bash', toolCallId: 'tc1', output: 'out1', timestamp: new Date().toISOString(), tokenCount: 10 },
@@ -165,7 +165,7 @@ describe('buildMessagesFromEvents', () => {
 
   it('does not merge adjacent tool messages', () => {
     const events: SessionEvent[] = [
-      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'do something', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'ok', toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }, { id: 'tc2', name: 'bash', arguments: {} }], model: 'test', timestamp: new Date().toISOString() },
       { type: 'tool_result', turnId: 1, uuid: 't1', parentUuid: 'a1', toolName: 'bash', toolCallId: 'tc1', output: 'out1', timestamp: new Date().toISOString(), tokenCount: 10 },
@@ -177,7 +177,7 @@ describe('buildMessagesFromEvents', () => {
 
   it('merges adjacent plain assistant messages without tool_calls', () => {
     const events: SessionEvent[] = [
-      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'q1', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'reply1', toolCalls: [], model: 'test', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 2, uuid: 'a2', content: 'reply2', toolCalls: [], model: 'test', timestamp: new Date().toISOString() },

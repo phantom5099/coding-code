@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 
@@ -29,7 +29,7 @@ describe('recordToolResult proactive persist', () => {
   it('persists large tool results (> thresholdTokens) and replaces output', async () => {
 
     const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create('/tmp/persist-test', 'test-model', '0.1.0'))),
+      SessionService.pipe(Effect.flatMap((s) => s.create('/tmp/persist-test', 'test-model'))),
     );
 
     const longOutput = 'x'.repeat(30000);
@@ -48,7 +48,7 @@ describe('recordToolResult proactive persist', () => {
   it('does NOT persist read tool results even if large', async () => {
 
     const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create('/tmp/persist-test-read', 'test-model', '0.1.0'))),
+      SessionService.pipe(Effect.flatMap((s) => s.create('/tmp/persist-test-read', 'test-model'))),
     );
 
     const longOutput = 'x'.repeat(30000);
@@ -66,7 +66,7 @@ describe('recordToolResult proactive persist', () => {
   it('does NOT persist small tool results', async () => {
 
     const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create('/tmp/persist-test-small', 'test-model', '0.1.0'))),
+      SessionService.pipe(Effect.flatMap((s) => s.create('/tmp/persist-test-small', 'test-model'))),
     );
 
     const shortOutput = 'small result';

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { agentRouter } from '../../src/server/routes/agent.js';
 
 describe('GET /permission-mode', () => {

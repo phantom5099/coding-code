@@ -16,17 +16,8 @@ interface ToolCallCardProps {
   onReject: (threadId: string, callId: string) => void
 }
 
-const TOOL_ICONS: Record<string, string> = {
-  shell: '⚡',
-  file_read: '📄',
-  apply_patch: '✏️',
-  list_dir: '📁',
-  search: '🔍',
-}
-
 export default function ToolCallCard({ item, threadId, onApprove, onReject }: ToolCallCardProps) {
   const [argsOpen, setArgsOpen] = useState(false)
-  const icon = TOOL_ICONS[item.name] ?? '🔧'
   const argsJson = JSON.stringify(item.args, null, 2)
   const isRejected = item.status === 'rejected'
   const hasArgs = argsJson !== '{}'
@@ -41,18 +32,14 @@ export default function ToolCallCard({ item, threadId, onApprove, onReject }: To
             className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
           >
             <span className={`transition-transform text-[10px] text-[#555] ${argsOpen ? 'rotate-90' : ''}`}>▶</span>
-            <span>{icon}</span>
             <span className={`font-mono text-sm font-medium ${isRejected ? 'line-through text-[#666]' : 'text-[#dcdcaa]'}`}>
               {item.name}
             </span>
           </button>
         ) : (
-          <>
-            <span>{icon}</span>
-            <span className={`font-mono text-sm font-medium ${isRejected ? 'line-through text-[#666]' : 'text-[#dcdcaa]'}`}>
-              {item.name}
-            </span>
-          </>
+          <span className={`font-mono text-sm font-medium ${isRejected ? 'line-through text-[#666]' : 'text-[#dcdcaa]'}`}>
+            {item.name}
+          </span>
         )}
         <div className="ml-auto flex items-center gap-1">
           {item.status === 'pending' && (

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { agentEventToSseEvent } from '../../src/server/adapter.js';
 
 describe('agentEventToSseEvent with TodoUpdate', () => {

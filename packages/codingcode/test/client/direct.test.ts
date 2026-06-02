@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { createDirectClient, agentEventToStreamChunk } from '../../src/client/direct.js';
 import { registerEmitter, unregisterEmitter } from '../../src/approval/async-confirm.js';
 

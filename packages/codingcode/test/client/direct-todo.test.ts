@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { agentEventToStreamChunk } from '../../src/client/direct.js';
 
 describe('agentEventToStreamChunk with TodoUpdate', () => {

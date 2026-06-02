@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { errorResponse } from '../../src/server/util.js';
 import { AgentError } from '../../src/core/error.js';
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { ToolService } from '../../src/tools/registry.js';
 import { ToolSearchService } from '../../src/tools/tool-search-service.js';

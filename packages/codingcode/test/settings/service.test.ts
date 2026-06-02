@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AlreadyExistsError, NotFoundError } from '../../src/settings/service.js';
 
 // Mock the file system based modules

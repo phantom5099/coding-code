@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -14,7 +14,7 @@ function makeFixture(sessionId: string, slug: string, usage?: { prompt: number; 
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
 
-  const meta = { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' };
+  const meta = { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString() };
   writeFileSync(transcriptPath, JSON.stringify(meta) + '\n', 'utf8');
 
   const idx: SessionIndex = {

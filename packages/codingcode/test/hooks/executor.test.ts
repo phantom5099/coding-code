@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { setHookRuntimeEnabled, isHookRuntimeEnabled } from '../../src/hooks/executor.js';
 
 describe('hook runtime enabled toggle', () => {

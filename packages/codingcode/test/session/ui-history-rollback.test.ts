@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, appendFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -15,7 +15,7 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
   const indexPath = join(dir, `${sessionId}.index.json`);
 
   const lines: any[] = [
-    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString() },
     { type: 'user', turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
     { type: 'assistant', turnId: 1, uuid: 'a1', content: 'hi', toolCalls: [], model: 'test', timestamp: new Date().toISOString() },
     { type: 'user', turnId: 2, uuid: 'u2', content: 'do stuff', timestamp: new Date().toISOString() },
@@ -45,7 +45,7 @@ describe('applyVisibilityEvents', () => {
     const slug = randomUUID();
     try {
       const events = [
-        { type: 'session_meta' as const, sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString(), version: '0.1.0' },
+        { type: 'session_meta' as const, sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString() },
         { type: 'user' as const, turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
         { type: 'assistant' as const, turnId: 1, uuid: 'a1', content: 'hi', toolCalls: [], model: 't', timestamp: new Date().toISOString() },
         { type: 'user' as const, turnId: 2, uuid: 'u2', content: 'bye', timestamp: new Date().toISOString() },
@@ -64,7 +64,7 @@ describe('applyVisibilityEvents', () => {
 
   it('unhide restores rollback-hidden events', () => {
     const events = [
-      { type: 'session_meta' as const, sessionId: 's', projectPath: 'p', cwd: '/tmp', model: 't', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta' as const, sessionId: 's', projectPath: 'p', cwd: '/tmp', model: 't', createdAt: new Date().toISOString() },
       { type: 'user' as const, turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
       { type: 'assistant' as const, turnId: 1, uuid: 'a1', content: 'hi', toolCalls: [], model: 't', timestamp: new Date().toISOString() },
       { type: 'user' as const, turnId: 2, uuid: 'u2', content: 'bye', timestamp: new Date().toISOString() },
@@ -79,7 +79,7 @@ describe('applyVisibilityEvents', () => {
 
   it('message hide only hides the target', () => {
     const events = [
-      { type: 'session_meta' as const, sessionId: 's', projectPath: 'p', cwd: '/tmp', model: 't', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta' as const, sessionId: 's', projectPath: 'p', cwd: '/tmp', model: 't', createdAt: new Date().toISOString() },
       { type: 'user' as const, turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
       { type: 'assistant' as const, turnId: 1, uuid: 'a1', content: 'hi', toolCalls: [], model: 't', timestamp: new Date().toISOString() },
       { type: 'hide' as const, uuid: 'h1', kind: 'message' as const, targetUuid: 'u1', reason: 'test', timestamp: new Date().toISOString() },
@@ -111,7 +111,7 @@ describe('buildMessages with visibility filtering', () => {
     const slug = randomUUID();
     try {
       const beforeEvents = [
-        { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString(), version: '0.1.0' },
+        { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString() },
         { type: 'user', turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
         { type: 'assistant', turnId: 1, uuid: 'a1', content: 'hi', toolCalls: [], model: 't', timestamp: new Date().toISOString() },
       ];
@@ -139,7 +139,7 @@ describe('undoLastHide only undoes message hides', () => {
     const slug = randomUUID();
     try {
       const events = [
-        { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString(), version: '0.1.0' },
+        { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString() },
         { type: 'user', turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
         { type: 'assistant', turnId: 1, uuid: 'a1', content: 'hi', toolCalls: [], model: 't', timestamp: new Date().toISOString() },
         { type: 'hide', uuid: 'h-msg', kind: 'message' as const, targetUuid: 'u1', reason: 'test', timestamp: new Date().toISOString() },
@@ -176,7 +176,7 @@ describe('undoLastHide only undoes message hides', () => {
     const slug = randomUUID();
     try {
       const events = [
-        { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString(), version: '0.1.0' },
+        { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString() },
         { type: 'user', turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
         { type: 'assistant', turnId: 1, uuid: 'a1', content: 'hi', toolCalls: [], model: 't', timestamp: new Date().toISOString() },
         { type: 'user', turnId: 2, uuid: 'u2', content: 'bye', timestamp: new Date().toISOString() },
@@ -224,7 +224,7 @@ describe('readUIHistory with visibility filtering', () => {
     const slug = randomUUID();
     try {
       const events = [
-        { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString(), version: '0.1.0' },
+        { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp', model: 't', createdAt: new Date().toISOString() },
         { type: 'user', turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
         { type: 'assistant', turnId: 1, uuid: 'a1', content: 'hi', toolCalls: [], model: 't', timestamp: new Date().toISOString() },
         { type: 'user', turnId: 2, uuid: 'u2', content: 'bye', timestamp: new Date().toISOString() },

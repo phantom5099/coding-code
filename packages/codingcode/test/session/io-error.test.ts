@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { AppLayer } from '../../src/layer.js';
 import { SessionService } from '../../src/session/store.js';
@@ -14,7 +14,7 @@ function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
 }
 
-describe('SessionService — SESSION_IO_ERROR', () => {
+describe('SessionService 鈥?SESSION_IO_ERROR', () => {
   it('recordUser propagates SESSION_IO_ERROR when appendFileSync throws', async () => {
     const program = Effect.gen(function* () {
       const session = yield* SessionService;
@@ -26,7 +26,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
         indexPath: '/tmp/io-err.index.json',
         messageCount: 0,
         currentTurnId: 1,
-        sessionMeta: { model: 'test', version: '0.1.0', createdAt: new Date().toISOString() },
+        sessionMeta: { model: 'test', createdAt: new Date().toISOString() },
         title: 'io-err-sid'.slice(0, 8),
         usage: undefined,
         promptEstimate: 0,
@@ -50,7 +50,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
         indexPath: '/tmp/io-err-asst.index.json',
         messageCount: 0,
         currentTurnId: 1,
-        sessionMeta: { model: 'test', version: '0.1.0', createdAt: new Date().toISOString() },
+        sessionMeta: { model: 'test', createdAt: new Date().toISOString() },
         title: 'io-err-asst'.slice(0, 8),
         usage: undefined,
         promptEstimate: 0,

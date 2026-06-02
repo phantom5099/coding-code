@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import type { AgentEvent } from '../../src/agent/agent.js';
 import { AgentError } from '../../src/core/error.js';
 
@@ -8,6 +8,7 @@ describe('reactive compact event', () => {
       _tag: 'ReactiveCompact',
       attempt: 1,
       released: 5000,
+      promptEstimate: 0,
     };
 
     expect(event._tag).toBe('ReactiveCompact');
@@ -20,6 +21,7 @@ describe('reactive compact event', () => {
       _tag: 'ReactiveCompact',
       attempt: 2,
       released: 3000,
+      promptEstimate: 0,
     };
 
     let matched = false;
@@ -41,6 +43,7 @@ describe('reactive compact event', () => {
       _tag: 'ReactiveCompact',
       attempt: 1,
       released: 100,
+      promptEstimate: 0,
     };
 
     expect(Object.keys(event)).toContain('attempt');
@@ -88,6 +91,7 @@ describe('reactive compact event', () => {
       _tag: 'ReactiveCompact',
       attempt: 1,
       released: 2000,
+      promptEstimate: 0,
     };
     events.push(compactEvent);
 

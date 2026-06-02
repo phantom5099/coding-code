@@ -79,7 +79,6 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       const createEffect = (deps.session as any).create(
         ctx?.projectPath ?? process.cwd(),
         ctx?.model ?? 'subagent',
-        '0.1.0',
         childUuid,
         {
           parentSessionId: ctx?.sessionId,

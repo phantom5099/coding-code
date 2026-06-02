@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getEffectiveTypes, getAllTypesWithStatus, setMemoryTypeDisabled, addMemoryExtraType, updateMemoryExtraType, deleteMemoryExtraType } from '../../src/memory/config.js';
 import type { MemoryConfig, MemoryTypeConfig } from '@codingcode/infra';
 

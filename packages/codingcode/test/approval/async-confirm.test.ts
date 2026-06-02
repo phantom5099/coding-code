@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { ApprovalWaitService, registerEmitter, unregisterEmitter, hasEmitter, delegateEmitter } from '../../src/approval/async-confirm';
 import type { ConfirmResult } from '../../src/approval/confirmation';

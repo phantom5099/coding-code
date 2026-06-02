@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockCompactWithLLM, mockLLM } = vi.hoisted(() => ({
   mockCompactWithLLM: vi.fn(),
@@ -43,8 +43,15 @@ vi.mock('fs', async (importOriginal) => {
   };
 });
 
+vi.mock('../../../src/context/utils/tokens.js', () => ({
+  estimateTokens: vi.fn(),
+  estimateMessageTokens: vi.fn(),
+  estimateTokensForContent: vi.fn(),
+}));
+
 import { compactIfNeeded } from '../../../src/context/compressor/index.js';
 import { findSessionIndex } from '../../../src/session/store.js';
+import { estimateTokens, estimateMessageTokens } from '../../../src/context/utils/tokens.js';
 
 function config(threshold: number, maxTokens = 10000) {
   return {
@@ -69,10 +76,14 @@ describe('compactIfNeeded', () => {
   beforeEach(() => {
     mockCompactWithLLM.mockClear();
     (findSessionIndex as any).mockReturnValue({ currentTurnId: 10 });
+    (estimateTokens as any).mockReturnValue(0);
+    (estimateMessageTokens as any).mockReturnValue(50);
+    mockCompactWithLLM.mockResolvedValue({ didCompress: true, released: 1000, promptEstimate: 5000 });
   });
 
   it('returns didCompress=false when promptEstimate is below threshold', async () => {
-    const result = await compactIfNeeded('s1', 'proj', 100, 10000, config(0.5), null);
+    (estimateTokens as any).mockReturnValue(100);
+    const result = await compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
     expect(result.promptEstimate).toBe(100);
@@ -80,21 +91,24 @@ describe('compactIfNeeded', () => {
   });
 
   it('returns didCompress=false when promptEstimate equals threshold', async () => {
-    const result = await compactIfNeeded('s1', 'proj', 5000, 10000, config(0.5), null);
+    (estimateTokens as any).mockReturnValue(5000);
+    const result = await compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
     expect(mockCompactWithLLM).not.toHaveBeenCalled();
   });
 
   it('returns didCompress=true when promptEstimate exceeds threshold', async () => {
-    const result = await compactIfNeeded('s1', 'proj', 10000, 10000, config(0.5), null);
+    (estimateTokens as any).mockReturnValue(10000);
+    const result = await compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
     expect(result.didCompress).toBe(true);
     expect(result.released).toBeGreaterThan(0);
     expect(result.promptEstimate).toBeGreaterThanOrEqual(0);
   });
 
   it('does not return restoredFiles field (removed)', async () => {
-    const result = await compactIfNeeded('s1', 'proj', 10000, 10000, config(0.5), null);
+    (estimateTokens as any).mockReturnValue(10000);
+    const result = await compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
     expect('restoredFiles' in result).toBe(false);
   });
 
@@ -103,12 +117,13 @@ describe('compactIfNeeded', () => {
     (findSessionIndex as any).mockReturnValue({ currentTurnId: 0 });
 
     // First 3 calls: compactWithLLM returns didCompress=false (insufficient turns)
-    await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
-    await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
-    await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
+    (estimateTokens as any).mockReturnValue(10000);
+    await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
+    await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
+    await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
 
     // 4th call blocked by failure tracker (failures >= 3)
-    const blocked = await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
+    const blocked = await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
     expect(blocked.didCompress).toBe(false);
 
     // Advance time past 24h TTL
@@ -116,7 +131,7 @@ describe('compactIfNeeded', () => {
     vi.spyOn(Date, 'now').mockReturnValue(originalNow() + 25 * 60 * 60 * 1000);
 
     // After TTL, failure count resets, compaction is attempted again (still fails due to turns)
-    const afterTTL = await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
+    const afterTTL = await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
     expect(afterTTL.didCompress).toBe(false);
 
     vi.restoreAllMocks();

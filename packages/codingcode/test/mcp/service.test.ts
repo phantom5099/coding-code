@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { McpService } from '../../src/mcp/index.js';
 import { ToolService } from '../../src/tools/registry.js';

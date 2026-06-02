@@ -1,7 +1,7 @@
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
 import { resolveSessionDir, readHistory, applyVisibilityEvents, findSessionIndex, buildMessagesFromEvents, persistToolResult } from '../session/store.js';
-import { estimateMessageTokens, estimateTokensForContent } from './utils/tokens.js';
+import { estimateMessageTokens, estimateTokens, estimateTokensForContent } from './utils/tokens.js';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import type { SessionEvent, ToolResultEvent, ToolBudgetEvent, SummaryEvent, UserEvent } from '../session/types.js';
@@ -9,6 +9,7 @@ import type { SessionEvent, ToolResultEvent, ToolBudgetEvent, SummaryEvent, User
 export interface BuildResult {
   messages: Message[];
   newBudgets: ToolBudgetEvent[];
+  promptEstimate: number;
 }
 
 export function assemblePayload(
@@ -35,7 +36,7 @@ export function assemblePayload(
 
   const messages = buildMessagesFromEvents(compacted as any);
 
-  return { messages, newBudgets };
+  return { messages, newBudgets, promptEstimate: estimateTokens(messages) };
 }
 
 function applyLocalCompaction(

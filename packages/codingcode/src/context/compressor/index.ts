@@ -44,11 +44,12 @@ function getFailures(sessionId: string): number {
 export async function compactIfNeeded(
   sessionId: string,
   encodedProjectPath: string,
-  promptEstimate: number,
+  messages: import('../../core/types.js').Message[],
   modelMaxTokens: number,
   config: ContextConfig,
   llm: LLMClient | null,
 ): Promise<CompressResult> {
+  const promptEstimate = estimateTokens(messages);
   const failures = getFailures(sessionId);
   if (failures >= 3) {
     return { didCompress: false, released: 0, promptEstimate };

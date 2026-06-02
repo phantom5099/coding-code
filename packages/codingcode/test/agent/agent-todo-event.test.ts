@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
@@ -51,7 +51,7 @@ const mockState = {
   indexPath: '/tmp/test.index.json',
   messageCount: 0,
   currentTurnId: 1,
-  sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
+  sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
   title: 'test',
   usage: undefined,
 };

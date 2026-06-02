@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import { executeHookCommand } from '../../src/hooks/executor';
 import { EventEmitter } from 'events';
 

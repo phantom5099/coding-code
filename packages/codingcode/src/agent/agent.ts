@@ -4,7 +4,6 @@ import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
 import type { ToolDescription } from '../tools/types.js';
-import type { LLMResponse } from '../llm/types.js';
 import type { LLMClient } from '../llm/client.js';
 import { ToolService } from '../tools/registry.js';
 import { ToolExecutorService } from '../tools/executor.js';
@@ -14,7 +13,6 @@ import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
-import { estimateTokens } from '../context/utils/tokens.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
 import { sharedTodoStore } from '../self/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
@@ -46,7 +44,7 @@ export const sendMessage = (
     yield* hooks.reloadUserHooks(cwd);
     yield* mcp.syncConnections(cwd);
 
-    const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
+    const state = yield* session.create(cwd, llm.modelInfo.model, sessionId);
     const sid = state.sessionId;
 
     const turnId = session.incrementTurn(state);
@@ -102,7 +100,7 @@ interface RunReActDeps {
   ctx: ContextService;
   session: SessionService;
   checkpoint: CheckpointService;
-  hooks: any; // HookService
+  hooks: HookService;
 }
 
 export class AgentService extends Effect.Service<AgentService>()('Agent', {
@@ -143,7 +141,7 @@ export async function* runReActLoop(
     platform: process.platform,
     shell: process.env.SHELL || process.env.ComSpec || 'bash',
     variant: systemPromptVariant ?? 'default',
-    skillInstruction: opts.skillInstruction,
+    skillInstruction,
   });
 
   const memoryBlock = loadMemoryForPrompt(projectPath);
@@ -199,7 +197,7 @@ export async function* runReActLoop(
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
       // Threshold-triggered LLM compaction
-      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, estimateTokens(messages), llm.modelInfo.maxTokens, config));
+      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, messages, llm.modelInfo.maxTokens, config));
       if (compressResult.didCompress) {
         yield { _tag: 'ReactiveCompact', attempt: 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
 
@@ -212,7 +210,7 @@ export async function* runReActLoop(
         messages.length = 0;
         messages.push(...rebuilt.messages);
         state.usage = undefined;
-        state.promptEstimate = estimateTokens(rebuilt.messages);
+        state.promptEstimate = rebuilt.promptEstimate;
       }
 
       // Build LLM messages: original messages + step.before transients
@@ -251,7 +249,7 @@ export async function* runReActLoop(
       const toolCalls = resp.toolCalls;
       const assistantMsg: Message = { role: 'assistant', content: resp.content };
       if (toolCalls && toolCalls.length > 0) {
-        (assistantMsg as any).tool_calls = toolCalls;
+        assistantMsg.tool_calls = toolCalls;
       }
       messages.push(assistantMsg);
       yield { _tag: 'Assistant', content: resp.content, toolCalls };
@@ -262,7 +260,7 @@ export async function* runReActLoop(
       if (!toolCalls || toolCalls.length === 0) {
         // LLM done — record assistant, then check stop hook
         await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls || [], model, resp.usage));
-        const stopDecision: any = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
+        const stopDecision = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
           sessionId, content: resp.content, turnId: state.currentTurnId,
         }));
 
@@ -328,14 +326,14 @@ export async function* runReActLoop(
           const isOk = r.type === 'ok';
           yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk };
         }
-        if (!messages.find(m => (m as any).tool_call_id === r.id)) {
+        if (!messages.find(m => m.tool_call_id === r.id)) {
           const content = r.type === 'denied'
             ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
             : r.output ?? '';
           messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
         }
         if (!todoPrinted && (r.name === 'todo_write' || r.name === 'todo_read')) {
-          yield { _tag: 'TodoUpdate', items: sharedTodoStore.read(sessionId) as any };
+          yield { _tag: 'TodoUpdate', items: sharedTodoStore.read(sessionId) };
           todoPrinted = true;
         }
       }
@@ -367,7 +365,6 @@ export async function* runReActLoop(
     await Effect.runPromise(hooks.emit('agent.turn.end', {
       sessionId, turnId: state.currentTurnId, status: 'maxSteps'
     }));
-    flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
     return Result.err(AgentError.maxStepsReached(maxSteps));
   }
 

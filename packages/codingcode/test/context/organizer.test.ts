@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { assemblePayload, pruneByTokens } from '../../src/context/organizer.js';
 import type { SessionEvent, ToolResultEvent } from '../../src/session/types.js';
 

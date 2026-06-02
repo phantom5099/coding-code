@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -42,7 +42,7 @@ describe('applyToolResultBudget integration', () => {
     indexPath = join(sessionDir, `${sessionId}.index.json`);
 
     const lines: any[] = [
-      { type: 'session_meta', sessionId, projectPath: projectSlug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId, projectPath: projectSlug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString() },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'q1', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'r1', toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }, { id: 'tc2', name: 'bash', arguments: {} }], model: 'test', timestamp: new Date().toISOString() },
       { type: 'tool_result', turnId: 1, uuid: 't1', parentUuid: 'a1', toolName: 'bash', toolCallId: 'tc1', output: 'x'.repeat(200), timestamp: new Date().toISOString(), tokenCount: 0 },

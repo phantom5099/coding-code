@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach } from 'vitest';
 import { z } from 'zod';
 import { sharedTodoStore } from '../../src/self/todo.js';
 import { todoWriteTool } from '../../src/tools/domains/self/todo-write.js';
@@ -7,6 +7,10 @@ import { todoReadTool } from '../../src/tools/domains/self/todo-read.js';
 beforeEach(() => { sharedTodoStore.reset(); });
 
 describe('todo_write tool', () => {
+  it('is a core tool (not deferred)', () => {
+    expect(todoWriteTool.deferred).not.toBe(true);
+  });
+
   it('returns pending/in_progress/completed counts', async () => {
     const result = await todoWriteTool.execute({
       plan: [
@@ -60,6 +64,10 @@ describe('todo_write tool', () => {
 });
 
 describe('todo_read tool', () => {
+  it('is a core tool (not deferred)', () => {
+    expect(todoReadTool.deferred).not.toBe(true);
+  });
+
   it('returns in_progress items first, then pending, completed last', async () => {
     sharedTodoStore.write('test-reader', [
       { step: 'Z completed', status: 'completed' },

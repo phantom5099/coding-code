@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { createToolSearchTool } from '../../src/tools/domains/self/tool-search.js';
 
 describe('createToolSearchTool', () => {

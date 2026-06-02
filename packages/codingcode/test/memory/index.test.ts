@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -193,7 +193,7 @@ describe('Memory Index', () => {
     it('loadMemoryForPrompt does not short-circuit when runtime enabled', () => {
       setMemoryEnabled(true);
       expect(getMemoryEnabled()).toBe(true);
-      // No memory files → still empty, but NOT because of disabled check
+      // No memory files 鈫?still empty, but NOT because of disabled check
       const result = loadMemoryForPrompt(tmpDir);
       expect(result).toBe('');
     });
