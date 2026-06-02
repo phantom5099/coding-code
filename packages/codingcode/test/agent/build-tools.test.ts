@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { z } from 'zod';
 import { ToolService } from '../../src/tools/registry.js';
@@ -111,7 +111,7 @@ describe('buildDeferredCatalogContent', () => {
 
       const content = buildDeferredCatalogContent(toolSearch, 'agent-loaded-all');
       // If there are only deferred tools and we loaded them all, should be null
-      // But other tests also registered deferred tools — those are unloaded for this agent
+      // But other tests also registered deferred tools 鈥?those are unloaded for this agent
       // So this might not be null. We check that zzz_another_deferred is NOT in the message.
       if (content) {
         expect(content!).not.toContain('zzz_another_deferred');

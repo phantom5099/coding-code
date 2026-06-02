@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { resolveConfig } from '../../src/agent/config.js';
 
 describe('resolveConfig', () => {

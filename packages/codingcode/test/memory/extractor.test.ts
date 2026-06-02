@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import { extractMemory } from '../../src/memory/extractor.js';
 import type { StructuredTranscript } from '../../src/memory/extractor.js';
 import type { MemoryTypeConfig } from '@codingcode/infra';
@@ -131,7 +131,7 @@ describe('Memory Extractor', () => {
     });
 
     const callArgs = mockLlm.completeStream.mock.calls[0][0];
-    expect(callArgs.messages[0].content).toContain('已有记忆');
+    expect(callArgs.messages[0].content).toContain('宸叉湁璁板繂');
     expect(callArgs.messages[0].content).toContain('Old info');
   });
 
@@ -219,8 +219,8 @@ describe('Memory Extractor', () => {
 
     const callArgs = mockLlm.completeStream.mock.calls[0][0];
     // system contains instructions, not transcript data
-    expect(callArgs.system).toContain('规则');
-    expect(callArgs.system).toContain('记忆类型');
+    expect(callArgs.system).toContain('瑙勫垯');
+    expect(callArgs.system).toContain('璁板繂绫诲瀷');
     expect(callArgs.system).not.toContain('I use Python');
     // messages contains transcript data, not instructions
     expect(callArgs.messages[0].content).toContain('I use Python');

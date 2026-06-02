@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+﻿import { describe, it, expect, vi, afterEach } from 'vitest';
 import { resolveMemoryLLM } from '../../src/memory/llm-resolver.js';
 import type { MemoryConfig } from '@codingcode/infra';
 import type { LLMStreamAdapter } from '../../src/agent/agent.js';

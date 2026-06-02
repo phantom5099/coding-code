@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sseHandler } from '../../src/server/handler.js';
 import { sendMessage } from '../../src/agent/agent.js';

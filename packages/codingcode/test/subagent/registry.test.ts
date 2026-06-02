@@ -1,4 +1,4 @@
-import { expect, it, describe } from 'vitest';
+﻿import { expect, it, describe } from 'vitest';
 import { Effect } from 'effect';
 import { SubagentRegistry, EXPLORE_PROFILE } from '../../src/subagent/registry';
 import { SubagentRegistryLayer } from '../../src/layer';

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import { settingsRouter } from '../../src/server/routes/settings.js';
 
 vi.mock('../../src/memory/config.js', () => ({

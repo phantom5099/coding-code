@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getGlobalPermissionMode,
   setGlobalPermissionMode,
@@ -29,7 +29,7 @@ describe('Global permission mode state', () => {
 
   it('is shared across multiple reads (module-level singleton)', () => {
     setGlobalPermissionMode('plan');
-    // Both reads return the same value — no per-call isolation
+    // Both reads return the same value 鈥?no per-call isolation
     expect(getGlobalPermissionMode()).toBe('plan');
     expect(getGlobalPermissionMode()).toBe('plan');
   });

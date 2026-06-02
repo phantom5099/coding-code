@@ -1,16 +1,16 @@
-import { expect, it, describe, vi } from 'vitest';
+﻿import { expect, it, describe, vi } from 'vitest';
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent';
 import { Result } from '../../src/core/result';
 import type { RunStreamOptions } from '../../src/agent/agent';
 import { randomUUID } from 'crypto';
 
-describe('runReActLoop — loop options', () => {
+describe('runReActLoop 鈥?loop options', () => {
   const mockState = {
     sessionId: 'test-session',
     cwd: process.cwd(),
     currentTurnId: randomUUID(),
-    sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
+    sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
     title: 'test',
     usage: undefined,
   };
@@ -210,7 +210,7 @@ describe('runReActLoop — loop options', () => {
     const opts: RunStreamOptions = {
       state: mockState,
       llm: mockLlm as any,
-      // maxStopContinuations not set in opts → should use deps value
+      // maxStopContinuations not set in opts 鈫?should use deps value
     };
 
     const gen = runReActLoop(opts, baseMockDeps({ maxStopContinuations: 5 }));

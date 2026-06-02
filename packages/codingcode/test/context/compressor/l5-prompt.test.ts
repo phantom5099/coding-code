@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 
 describe('L5 compaction prompt and extraction', () => {
   it('should extract summary from dual-tag format', () => {

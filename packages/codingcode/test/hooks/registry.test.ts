@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
@@ -84,7 +84,7 @@ describe('HookService', () => {
     expect(results).toEqual(['done']);
   });
 
-  it('should isolate handler exceptions — later handlers still run after one throws', async () => {
+  it('should isolate handler exceptions 鈥?later handlers still run after one throws', async () => {
     const called: string[] = [];
 
     const program = Effect.gen(function* () {
@@ -98,7 +98,7 @@ describe('HookService', () => {
     expect(called).toEqual(['second']);
   });
 
-  it('should isolate decision handler exceptions — skips erroring handler and tries next', async () => {
+  it('should isolate decision handler exceptions 鈥?skips erroring handler and tries next', async () => {
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
       yield* hooks.registerDecision('agent.turn.stop', async () => { throw new Error('bad decision'); }, { priority: 0 });
@@ -171,7 +171,7 @@ describe('HookService.reloadUserHooks', () => {
 
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
-      // Register with source: 'system' — should survive reload
+      // Register with source: 'system' 鈥?should survive reload
       yield* hooks.register('tool.execute.before', () => { called.push('system'); }, { source: 'system' });
       yield* hooks.reloadUserHooks(testDir);
 
@@ -188,7 +188,7 @@ describe('HookService.reloadUserHooks', () => {
 
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
-      // No source option — defaults to 'user', should be cleared
+      // No source option 鈥?defaults to 'user', should be cleared
       yield* hooks.register('tool.execute.before', () => { called.push('default-user'); });
       yield* hooks.reloadUserHooks(testDir);
 

@@ -1,4 +1,4 @@
-import { expect, it, describe, beforeEach, afterEach } from 'vitest';
+﻿import { expect, it, describe, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { loadAgentProfiles, writeAgentProfile, updateAgentProfile, deleteAgentProfile } from '../../src/subagent/loader';

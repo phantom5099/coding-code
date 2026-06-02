@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const streamText = vi.fn();
 const stepCountIs = vi.fn((count: number) => ({ count }));

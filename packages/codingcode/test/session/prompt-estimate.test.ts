@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -18,7 +18,7 @@ function makeFixture(sessionId: string, slug: string, usage?: { prompt: number; 
   const indexPath = join(dir, `${sessionId}.index.json`);
 
   const lines: any[] = [
-    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString() },
     { type: 'user', turnId: 1, uuid: 'u1', content: 'hello world', timestamp: new Date().toISOString() },
     { type: 'assistant', turnId: 1, uuid: 'a1', content: 'hi there', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage },
     { type: 'user', turnId: 2, uuid: 'u2', content: 'do stuff', timestamp: new Date().toISOString() },
@@ -73,7 +73,7 @@ describe('promptEstimate', () => {
     const usage1 = { prompt: 100, completion: 50, total: 150 };
     const usage2 = { prompt: 200, completion: 100, total: 300 };
     const lines: any[] = [
-      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
+      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString() },
       { type: 'assistant', turnId: 1, uuid: 'a1', content: 'first', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage: usage1 },
       { type: 'hide', uuid: 'h1', kind: 'message', targetUuid: 'a1', reason: 'test', timestamp: new Date().toISOString() },
       { type: 'assistant', turnId: 2, uuid: 'a2', content: 'second', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage: usage2 },
@@ -142,7 +142,7 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
       );
       expect(state.promptEstimate).toBe(0);
 
@@ -160,7 +160,7 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
       );
 
       await run(
@@ -182,7 +182,7 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
       );
 
       const usage = { prompt: 999, completion: 111, total: 1110 };
@@ -200,7 +200,7 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
       );
 
       const assistantEvent = await run(
@@ -222,7 +222,7 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
       );
 
       const userEv = await run(
@@ -247,7 +247,7 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
       );
 
       // Turn 1
@@ -262,7 +262,7 @@ describe('SessionService record methods update promptEstimate', () => {
       expect(state.promptEstimate).toBe(5000);
       expect(state.usage).toBeDefined();
 
-      // Rollback to turn 1 — should hide turn 2 messages
+      // Rollback to turn 1 鈥?should hide turn 2 messages
       await run(SessionService.pipe(Effect.flatMap((s) => s.rollbackToTurn(state, 1, 'test rollback'))));
 
       // promptEstimate should restore from last visible assistant usage.prompt, not 5000

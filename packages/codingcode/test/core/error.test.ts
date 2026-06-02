@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { AgentError } from '../../src/core/error.js';
 
 describe('AgentError.httpStatus', () => {

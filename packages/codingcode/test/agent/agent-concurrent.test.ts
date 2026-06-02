@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
@@ -50,7 +50,7 @@ const mockState = {
   indexPath: '/tmp/test.index.json',
   messageCount: 0,
   currentTurnId: 1,
-  sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
+  sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
   title: 'test',
   usage: undefined,
 };
@@ -74,7 +74,7 @@ function makeDeps(overrides?: Record<string, any>) {
   };
 }
 
-describe('runReActLoop �?concurrent tool execution', () => {
+describe('runReActLoop 锟?concurrent tool execution', () => {
   it('should execute multiple tool calls concurrently', async () => {
     const executionOrder: string[] = [];
     const resolveBarrier = new Promise<void>((r) => setTimeout(r, 100));

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { ContextService } from '../../src/context/context.js';
 import { SessionService } from '../../src/session/store.js';
@@ -33,7 +33,7 @@ const MockToolExecutorLayer = Layer.succeed(ToolExecutorService, ToolExecutorSer
 
 const MockContextLayer = Layer.succeed(ContextService, ContextService.of({
   _tag: 'Context' as any,
-  build: () => Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] })),
+  build: () => Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [], promptEstimate: 0 })),
   compress: () => Effect.succeed({ didCompress: true, released: 0, promptEstimate: 0 }),
   compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
 }));
@@ -128,7 +128,7 @@ describe('ContextService', () => {
     // Step 2: verify message was recorded by trying to resume
     const g3 = Effect.gen(function* () {
       const svc = yield* SessionService;
-      const state = yield* svc.create('/tmp/test', 'unknown', '0.1.0', sid1);
+      const state = yield* svc.create('/tmp/test', 'unknown', sid1);
       return yield* svc.readHistory(state);
     }) as any;
     const history3 = await Effect.runPromise(g3.pipe(Effect.provide(mockSessionLayer) as any)) as any[];

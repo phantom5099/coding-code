@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { globTool } from '../../src/tools/domains/fs/glob.js';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { resolve, join } from 'path';
@@ -25,7 +25,7 @@ describe('globTool', () => {
     await setup();
     const cwd = process.cwd;
     try {
-      // Override cwd just for this test — globTool resolves relative to cwd,
+      // Override cwd just for this test 鈥?globTool resolves relative to cwd,
       // but path param is resolved within execute to absolute path
       const result = await globTool.execute({
         pattern: '*.ts',
@@ -90,7 +90,7 @@ describe('globTool', () => {
       path: '/nonexistent/path/xyz123',
       max_results: 50,
     });
-    // Should not throw — globby returns empty array for nonexistent dirs
+    // Should not throw 鈥?globby returns empty array for nonexistent dirs
     expect(typeof result).toBe('string');
   });
 });

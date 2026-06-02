@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { readFileTool } from '../../src/tools/domains/fs/read.js';
 import { writeFileTool } from '../../src/tools/domains/fs/write.js';
 import { bashTool } from '../../src/tools/domains/bash/exec.js';

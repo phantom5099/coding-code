@@ -146,7 +146,7 @@ function findFirstUserContent(history: SessionEvent[]): string | null {
 export class SessionService extends Effect.Service<SessionService>()('Session', {
   effect: Effect.gen(function* () {
     return {
-      create: (cwd: string, model: string, version: string, sessionId?: string, opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }): Effect.Effect<SessionStoreState, AgentError> =>
+      create: (cwd: string, model: string, sessionId?: string, opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }): Effect.Effect<SessionStoreState, AgentError> =>
         Effect.try({
           try: () => {
             if (sessionId && !opts?.parentSessionId) assertResumeWorkspace(cwd, sessionId);
@@ -168,7 +168,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             const meta: SessionMetaEvent = {
               type: 'session_meta', sessionId: state.sessionId,
               projectPath: state.projectPath, cwd: state.cwd,
-              model, createdAt: new Date().toISOString(), version,
+              model, createdAt: new Date().toISOString(),
               ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
               ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
               ...(opts?.agentName && { agentName: opts.agentName }),

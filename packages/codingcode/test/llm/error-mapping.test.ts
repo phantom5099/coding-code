@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { mapLlmError } from '../../src/llm/errors.js';
 import { AgentError } from '../../src/core/error.js';
 

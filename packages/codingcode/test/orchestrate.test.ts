@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sendMessage } from '../src/agent/agent.js';
 import { SessionService } from '../src/session/store.js';
@@ -19,6 +19,7 @@ const mockState = {
 };
 
 const mockLlm = {
+  modelInfo: { provider: 'mock', model: 'mock-model', maxTokens: 1000, supportsToolCalling: true, supportsStreaming: true },
   completeStream: (_params: any) => {
     const stream = async function* () { yield 'Hello'; yield ' '; yield 'world'; }();
     return { stream, response: Promise.resolve(Result.ok({ content: 'Hello world' })) };

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
 import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
 

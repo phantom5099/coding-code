@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { parseApprovalResponse } from '../../src/approval/response.js';
 
 describe('parseApprovalResponse', () => {

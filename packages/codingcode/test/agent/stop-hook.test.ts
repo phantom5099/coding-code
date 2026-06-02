@@ -1,16 +1,16 @@
-import { expect, it, describe, vi } from 'vitest';
+﻿import { expect, it, describe, vi } from 'vitest';
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent';
 import { Result } from '../../src/core/result';
 import type { RunStreamOptions } from '../../src/agent/agent';
 import { randomUUID } from 'crypto';
 
-describe('runReActLoop — stop hook', () => {
+describe('runReActLoop 鈥?stop hook', () => {
   const mockState = {
     sessionId: 'test-session',
     cwd: process.cwd(),
     currentTurnId: randomUUID(),
-    sessionMeta: { model: 'test-model', version: '0.1.0', createdAt: new Date().toISOString() } as any,
+    sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
     title: 'test',
     usage: undefined,
   };

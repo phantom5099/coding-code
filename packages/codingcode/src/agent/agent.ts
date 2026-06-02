@@ -4,7 +4,6 @@ import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
 import type { ToolDescription } from '../tools/types.js';
-import type { LLMResponse } from '../llm/types.js';
 import type { LLMClient } from '../llm/client.js';
 import { ToolService } from '../tools/registry.js';
 import { ToolExecutorService } from '../tools/executor.js';
@@ -14,7 +13,6 @@ import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
-import { estimateTokens } from '../context/utils/tokens.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
 import { sharedTodoStore } from '../self/todo.js';
 import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
@@ -46,7 +44,7 @@ export const sendMessage = (
     yield* hooks.reloadUserHooks(cwd);
     yield* mcp.syncConnections(cwd);
 
-    const state = yield* session.create(cwd, 'unknown', '0.1.0', sessionId);
+    const state = yield* session.create(cwd, llm.modelInfo.model, sessionId);
     const sid = state.sessionId;
 
     const turnId = session.incrementTurn(state);
@@ -199,7 +197,7 @@ export async function* runReActLoop(
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
       // Threshold-triggered LLM compaction
-      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, estimateTokens(messages), llm.modelInfo.maxTokens, config));
+      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, messages, llm.modelInfo.maxTokens, config));
       if (compressResult.didCompress) {
         yield { _tag: 'ReactiveCompact', attempt: 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
 
@@ -212,7 +210,7 @@ export async function* runReActLoop(
         messages.length = 0;
         messages.push(...rebuilt.messages);
         state.usage = undefined;
-        state.promptEstimate = estimateTokens(rebuilt.messages);
+        state.promptEstimate = rebuilt.promptEstimate;
       }
 
       // Build LLM messages: original messages + step.before transients

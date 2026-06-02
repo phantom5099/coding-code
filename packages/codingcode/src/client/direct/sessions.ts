@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+﻿import { Effect } from 'effect';
 import { SessionService, deleteSession } from '../../session/store.js';
 import { getWorkspaceCwd } from '../../core/workspace.js';
 import type { PermissionMode } from '../../approval/types.js';
@@ -34,7 +34,7 @@ export function createDirectSessionClient(
       return runWithLayer(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.create(cwd, 'unknown', '0.1.0');
+          const state = yield* svc.create(cwd, 'unknown');
           return { sessionId: state.sessionId };
         }),
       );
@@ -44,7 +44,7 @@ export function createDirectSessionClient(
       return runWithLayer(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.create(cwd, 'unknown', '0.1.0', sessionId);
+          const state = yield* svc.create(cwd, 'unknown', sessionId);
           return yield* svc.readHistory(state);
         }),
       );
@@ -63,7 +63,7 @@ export function createDirectSessionClient(
       return runWithLayer(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', '0.1.0', sessionId);
+          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', sessionId);
           return yield* svc.readHistory(state);
         }),
       );
@@ -77,7 +77,7 @@ export function createDirectSessionClient(
       return runWithLayer(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', '0.1.0', sessionId);
+          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', sessionId);
           return yield* svc.getPermissionMode(state);
         }),
       );
@@ -87,7 +87,7 @@ export function createDirectSessionClient(
       return runWithLayer(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', '0.1.0', sessionId);
+          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', sessionId);
           return yield* svc.setPermissionMode(state, mode);
         }),
       );
@@ -108,7 +108,7 @@ export function createDirectSessionClient(
       return runWithLayer(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', '0.1.0', sessionId);
+          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', sessionId);
           return yield* svc.forkSession(state, atUuid ?? '');
         }),
       );

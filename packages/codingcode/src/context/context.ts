@@ -22,10 +22,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
           const cfg = config ?? getContextConfig();
           return await compactWithLLM(sessionId, encodedProjectPath, cfg, llm, usage, modelMaxTokens);
         }),
-      compactIfNeeded: (sessionId: string, encodedProjectPath: string, llm: LLMClient | null, promptEstimate: number, modelMaxTokens: number, config?: ContextConfig): Effect.Effect<CompressResult> =>
+      compactIfNeeded: (sessionId: string, encodedProjectPath: string, llm: LLMClient | null, messages: import('../core/types.js').Message[], modelMaxTokens: number, config?: ContextConfig): Effect.Effect<CompressResult> =>
         Effect.promise(async () => {
           const cfg = config ?? getContextConfig();
-          return await compactIfNeeded(sessionId, encodedProjectPath, promptEstimate, modelMaxTokens, cfg, llm);
+          return await compactIfNeeded(sessionId, encodedProjectPath, messages, modelMaxTokens, cfg, llm);
         }),
     };
   }),
