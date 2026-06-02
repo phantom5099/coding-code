@@ -16,11 +16,8 @@ export const bashTool: ToolDefinition = {
   execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { command, cwd, timeout_ms } = args as any;
     const workDir = cwd || ctx?.projectPath || getWorkspaceCwd();
-    const finalCommand = ctx?.sandbox
-      ? await Effect.runPromise(ctx.sandbox.wrapCommand(command))
-      : command;
     return new Promise<string>((resolve, reject) => {
-      const proc = spawn(finalCommand, {
+      const proc = spawn(command, {
         shell: true,
         cwd: workDir,
         env: process.env,

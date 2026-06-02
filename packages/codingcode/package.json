@@ -8,9 +8,6 @@
     "./client/http": "./src/client/http/index.ts",
     "./client/types": "./src/client/types.ts"
   },
-  "optionalDependencies": {
-    "@anthropic-ai/sandbox-runtime": "^1.0.0"
-  },
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.35",
     "@ai-sdk/openai": "^3.0.63",
