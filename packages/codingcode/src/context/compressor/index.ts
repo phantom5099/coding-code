@@ -45,7 +45,6 @@ export async function compactIfNeeded(
   sessionId: string,
   encodedProjectPath: string,
   promptEstimate: number,
-  snipTokensFreed: number,
   modelMaxTokens: number,
   config: ContextConfig,
   llm: LLMClient | null,
@@ -56,8 +55,7 @@ export async function compactIfNeeded(
   }
 
   const threshold = modelMaxTokens * config.compactionThreshold;
-  const effectiveEstimate = promptEstimate - (snipTokensFreed ?? 0);
-  if (effectiveEstimate <= threshold) {
+  if (promptEstimate <= threshold) {
     return { didCompress: false, released: 0, promptEstimate };
   }
 
@@ -91,7 +89,7 @@ export async function compactWithLLM(
     released += await tryL5Compaction(ctx);
   }
 
-  const payload = assemblePayload(sessionId, encodedProjectPath, config);
+  const payload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
   const promptEstimate = estimateTokens(payload.messages);
 
   return { didCompress: released > 0, released, promptEstimate };

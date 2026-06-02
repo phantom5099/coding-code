@@ -33,7 +33,7 @@ const MockToolExecutorLayer = Layer.succeed(ToolExecutorService, ToolExecutorSer
 
 const MockContextLayer = Layer.succeed(ContextService, ContextService.of({
   _tag: 'Context' as any,
-  build: () => Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], snipTokensFreed: 0, newBudgets: [] })),
+  build: () => Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] })),
   compress: () => Effect.succeed({ didCompress: true, released: 0, promptEstimate: 0 }),
   compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
 }));

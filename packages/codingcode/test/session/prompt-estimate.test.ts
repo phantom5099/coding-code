@@ -240,4 +240,36 @@ describe('SessionService record methods update promptEstimate', () => {
       expect(state.promptEstimate).toBeGreaterThanOrEqual(0);
     } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
   });
+
+  it('rollbackToTurn recalculates promptEstimate from visible messages, not old usage', async () => {
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug);
+    mkdirSync(dir, { recursive: true });
+    try {
+      const state = await run(
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model', '0.1.0'))),
+      );
+
+      // Turn 1
+      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))));
+      await run(SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply one', [], 'test-model', { prompt: 1000, completion: 100, total: 1100 }))));
+
+      // Turn 2
+      state.currentTurnId = 2;
+      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'do more stuff'))));
+      await run(SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply two', [], 'test-model', { prompt: 5000, completion: 200, total: 5200 }))));
+
+      expect(state.promptEstimate).toBe(5000);
+      expect(state.usage).toBeDefined();
+
+      // Rollback to turn 1 — should hide turn 2 messages
+      await run(SessionService.pipe(Effect.flatMap((s) => s.rollbackToTurn(state, 1, 'test rollback'))));
+
+      // promptEstimate should restore from last visible assistant usage.prompt, not 5000
+      expect(state.promptEstimate).toBeLessThan(5000);
+      expect(state.promptEstimate).toBe(1000); // turn 1 assistant usage.prompt
+      // usage should be restored from last visible assistant
+      expect(state.usage).toEqual({ prompt: 1000, completion: 100, total: 1100 });
+    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+  });
 });

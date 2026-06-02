@@ -161,7 +161,7 @@ export async function* runReActLoop(
   const maxStopContinuations = opts.maxStopContinuations ?? deps.maxStopContinuations;
 
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
-    const { messages, snipTokensFreed, newBudgets } = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
+    const { messages, newBudgets } = Effect.runSync(ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens));
     if (newBudgets.length > 0) {
       for (const ev of newBudgets) {
         appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');
@@ -199,11 +199,11 @@ export async function* runReActLoop(
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
       // Threshold-triggered LLM compaction
-      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, estimateTokens(messages), snipTokensFreed, llm.modelInfo.maxTokens, config));
+      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, estimateTokens(messages), llm.modelInfo.maxTokens, config));
       if (compressResult.didCompress) {
         yield { _tag: 'ReactiveCompact', attempt: 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
 
-        const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath));
+        const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens));
         if (rebuilt.newBudgets.length > 0) {
           for (const ev of rebuilt.newBudgets) {
             appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');

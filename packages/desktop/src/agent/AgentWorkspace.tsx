@@ -34,7 +34,11 @@ function ContextIndicator({ threadId }: { threadId: string }) {
   }
 
   if (!contextUsage) return null
-  const pct = Math.min(contextUsage.used / contextUsage.contextWindow, 1)
+  // When LLM only returns total (no prompt/completion split), fall back to total for both pct and detail
+  const effectiveUsed = usage && usage.prompt === 0 && usage.completion === 0
+    ? usage.total
+    : contextUsage.used
+  const pct = Math.min(effectiveUsed / contextUsage.contextWindow, 1)
   const color = pct < 0.4 ? '#4ec9b0' : pct < 0.75 ? '#e5c07b' : '#f44747'
   const detail = usage
     ? usage.prompt === 0 && usage.completion === 0

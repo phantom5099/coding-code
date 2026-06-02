@@ -11,10 +11,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
        * Build the message array to send to the LLM next. Uses the event
        * pipeline (raw JSONL → summary/hide filter).
        */
-      build: (sessionId: string, encodedProjectPath: string, config?: ContextConfig): Effect.Effect<BuildResult> =>
+      build: (sessionId: string, encodedProjectPath: string, contextWindow?: number, config?: ContextConfig): Effect.Effect<BuildResult> =>
         Effect.sync(() => {
           const cfg = config ?? getContextConfig();
-          return assemblePayload(sessionId, encodedProjectPath, cfg);
+          return assemblePayload(sessionId, encodedProjectPath, cfg, contextWindow);
         }),
 
       compress: (sessionId: string, encodedProjectPath: string, llm: LLMClient | null = null, usage?: number, modelMaxTokens?: number, config?: ContextConfig): Effect.Effect<CompressResult> =>
@@ -22,10 +22,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
           const cfg = config ?? getContextConfig();
           return await compactWithLLM(sessionId, encodedProjectPath, cfg, llm, usage, modelMaxTokens);
         }),
-      compactIfNeeded: (sessionId: string, encodedProjectPath: string, llm: LLMClient | null, promptEstimate: number, snipTokensFreed: number, modelMaxTokens: number, config?: ContextConfig): Effect.Effect<CompressResult> =>
+      compactIfNeeded: (sessionId: string, encodedProjectPath: string, llm: LLMClient | null, promptEstimate: number, modelMaxTokens: number, config?: ContextConfig): Effect.Effect<CompressResult> =>
         Effect.promise(async () => {
           const cfg = config ?? getContextConfig();
-          return await compactIfNeeded(sessionId, encodedProjectPath, promptEstimate, snipTokensFreed, modelMaxTokens, cfg, llm);
+          return await compactIfNeeded(sessionId, encodedProjectPath, promptEstimate, modelMaxTokens, cfg, llm);
         }),
     };
   }),

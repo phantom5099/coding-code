@@ -285,12 +285,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setContextUsage: (usage) => set((s) => { s.agent.contextUsage = usage }),
       setThreadUsage: (threadId, usage) => set((s) => {
         s.agent.usageByThreadId[threadId] = usage
-        if (s.agent.currentThreadId === threadId) {
-          const model = s.agent.models.find((m) => m.id === s.agent.model)
-          if (model) {
-            s.agent.contextUsage = { used: usage.total, contextWindow: model.context_window }
-          }
-        }
       }),
       setCursor: (line, col) => set((s) => { s.editor.cursorLine = line; s.editor.cursorCol = col }),
 

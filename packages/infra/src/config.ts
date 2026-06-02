@@ -6,7 +6,6 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 export interface ContextConfig {
   compactionThreshold: number;
   keepRecentTurns: number;
-  toolsExemptFromMicrocompact: string[];
   minTurnsBetweenCompactions: number;
   /** Model for context compaction. Empty string falls back to main session LLM.
    *  Use full id format "model@API_KEY_ENV" to avoid ambiguity (e.g. "deepseek-chat@DEEPSEEK_API_KEY").
@@ -15,10 +14,13 @@ export interface ContextConfig {
   thresholdTokens: number;
   reactiveCompactMaxRetries: number;
   reactiveCompactKeepTurns: number;
-  snipMaxMessages: number;
+  tokenPruneThreshold: number;
+  tokenPruneTurns: number;
+  minTurnsBeforePrune: number;
+  tokenPruneMinReleaseRatio: number;
+  tokenPruneMaxExtraTurns: number;
   persistPreviewChars: number;
   toolResultBudgetThreshold: number;
-  keepRecentToolResults: number;
 }
 
 export interface MemoryTypeConfig {
@@ -60,16 +62,18 @@ export interface AppConfig {
 const DEFAULT_CONTEXT: ContextConfig = {
   compactionThreshold: 0.9,
   keepRecentTurns: 3,
-  toolsExemptFromMicrocompact: ['Read', 'todo_write', 'todo_read', 'tool_search'],
   minTurnsBetweenCompactions: 5,
   compactionModel: '',
   reactiveCompactMaxRetries: 3,
   reactiveCompactKeepTurns: 3,
-  snipMaxMessages: 50,
+  tokenPruneThreshold: 0.8,
+  tokenPruneTurns: 2,
+  minTurnsBeforePrune: 5,
+  tokenPruneMinReleaseRatio: 0.5,
+  tokenPruneMaxExtraTurns: 2,
   persistPreviewChars: 2000,
   thresholdTokens: 8000,
   toolResultBudgetThreshold: 50000,
-  keepRecentToolResults: 3,
 };
 
 export const DEFAULT_MEMORY_TYPES: MemoryTypeConfig[] = [

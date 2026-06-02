@@ -267,13 +267,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           const event: HideEvent = { type: 'hide', uuid: randomUUID(), kind: 'rollback', throughTurnId, reason, timestamp: new Date().toISOString() };
           appendEvent(state, event);
           const lastUsage = findLastVisibleAssistantUsage(state.transcriptPath);
-          if (lastUsage) {
-            state.usage = lastUsage;
-            state.promptEstimate = lastUsage.prompt;
-          } else {
-            state.usage = undefined;
-            state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
-          }
+          state.usage = lastUsage;
+          state.promptEstimate = lastUsage?.prompt ?? 0;
           updateIndex(state);
           return event;
         }),
@@ -451,13 +446,12 @@ export function applyVisibilityEvents(events: SessionEvent[]): Set<string> {
  */
 export function findLastVisibleAssistantUsage(path: string): TokenUsage | undefined {
   const events = readHistory(path);
-  const hidden = applyVisibilityEvents(events);
-  for (let i = events.length - 1; i >= 0; i--) {
-    const ev = events[i];
-    if (ev.type === 'hide' || ev.type === 'unhide') continue;
-    if (ev.type !== 'assistant') continue;
-    if ('uuid' in ev && hidden.has((ev as any).uuid)) continue;
-    return (ev as AssistantEvent).usage;
+  const messages = buildMessagesFromEvents(events);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== 'assistant') continue;
+    const usage = (m as any).usage as TokenUsage | undefined;
+    if (usage) return usage;
   }
   return undefined;
 }
@@ -481,10 +475,12 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
         messages.push({ role: 'user', content: event.content });
         break;
       case 'assistant': {
+        const ev = event as AssistantEvent;
         const msg: Message = { role: 'assistant', content: event.content };
         if (event.toolCalls && event.toolCalls.length > 0) {
           (msg as any).tool_calls = event.toolCalls.map((tc: any) => ({ id: tc.id, name: tc.name, arguments: tc.arguments }));
         }
+        if (ev.usage) (msg as any).usage = ev.usage;
         messages.push(msg);
         break;
       }
@@ -497,21 +493,49 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
     }
   }
 
-  // Strip trailing assistant messages whose tool_calls lack matching tool_results
+  // Collect all resolved tool_call_ids
   const resolvedIds = new Set<string>();
   for (const m of messages) {
     if (m.role === 'tool') resolvedIds.add((m as any).tool_call_id);
   }
-  while (messages.length > 0) {
-    const last = messages[messages.length - 1];
-    if (last.role !== 'assistant') break;
-    const tcs = (last as any).tool_calls as Array<{ id: string }> | undefined;
-    if (!tcs || tcs.length === 0) break;
-    if (tcs.every((tc) => resolvedIds.has(tc.id))) break;
-    messages.pop();
+
+  // Identify which assistant messages have all their tool_calls resolved
+  const validAssistantIds = new Set<string>();
+  for (const m of messages) {
+    if (m.role !== 'assistant') continue;
+    const tcs = (m as any).tool_calls as Array<{ id: string }> | undefined;
+    if (!tcs || tcs.length === 0) continue;
+    if (tcs.every((tc) => resolvedIds.has(tc.id))) {
+      for (const tc of tcs) validAssistantIds.add(tc.id);
+    }
   }
 
-  return messages;
+  // Remove assistant messages with unresolved tool_calls, and orphaned tool results
+  const filtered = messages.filter((m) => {
+    if (m.role === 'assistant') {
+      const tcs = (m as any).tool_calls as Array<{ id: string }> | undefined;
+      if (!tcs || tcs.length === 0) return true;
+      return tcs.every((tc) => resolvedIds.has(tc.id));
+    }
+    if (m.role === 'tool') {
+      return validAssistantIds.has((m as any).tool_call_id);
+    }
+    return true;
+  });
+
+  // Merge adjacent messages with the same non-system role to keep a valid LLM sequence.
+  // Tool messages must not be merged (each needs its own tool_call_id).
+  // Assistant messages with tool_calls must also not be merged.
+  for (let i = filtered.length - 1; i > 0; i--) {
+    if (filtered[i].role === filtered[i - 1].role && filtered[i].role !== 'system') {
+      if (filtered[i].role === 'tool') continue;
+      if (filtered[i].role === 'assistant' && (filtered[i] as any).tool_calls?.length > 0) continue;
+      filtered[i - 1].content += '\n\n' + filtered[i].content;
+      filtered.splice(i, 1);
+    }
+  }
+
+  return filtered;
 }
 
 export function listSessions(projectPath?: string): SessionIndex[] {

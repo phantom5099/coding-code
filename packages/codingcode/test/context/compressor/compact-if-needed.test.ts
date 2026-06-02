@@ -51,15 +51,17 @@ function config(threshold: number, maxTokens = 10000) {
     compactionThreshold: threshold,
     keepRecentTurns: 2,
     minTurnsBetweenCompactions: 5,
-    toolsExemptFromMicrocompact: [],
     compactionModel: '',
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
-    snipMaxMessages: 100,
+    tokenPruneThreshold: 0.8,
+    tokenPruneTurns: 2,
+    minTurnsBeforePrune: 5,
+    tokenPruneMinReleaseRatio: 0.5,
+    tokenPruneMaxExtraTurns: 2,
     persistPreviewChars: 2000,
     thresholdTokens: 2000,
     toolResultBudgetThreshold: 50000,
-    keepRecentToolResults: 3,
   } as any;
 }
 
@@ -70,7 +72,7 @@ describe('compactIfNeeded', () => {
   });
 
   it('returns didCompress=false when promptEstimate is below threshold', async () => {
-    const result = await compactIfNeeded('s1', 'proj', 100, 0, 10000, config(0.5), null);
+    const result = await compactIfNeeded('s1', 'proj', 100, 10000, config(0.5), null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
     expect(result.promptEstimate).toBe(100);
@@ -78,21 +80,21 @@ describe('compactIfNeeded', () => {
   });
 
   it('returns didCompress=false when promptEstimate equals threshold', async () => {
-    const result = await compactIfNeeded('s1', 'proj', 5000, 0, 10000, config(0.5), null);
+    const result = await compactIfNeeded('s1', 'proj', 5000, 10000, config(0.5), null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
     expect(mockCompactWithLLM).not.toHaveBeenCalled();
   });
 
   it('returns didCompress=true when promptEstimate exceeds threshold', async () => {
-    const result = await compactIfNeeded('s1', 'proj', 10000, 0, 10000, config(0.5), null);
+    const result = await compactIfNeeded('s1', 'proj', 10000, 10000, config(0.5), null);
     expect(result.didCompress).toBe(true);
     expect(result.released).toBeGreaterThan(0);
     expect(result.promptEstimate).toBeGreaterThanOrEqual(0);
   });
 
   it('does not return restoredFiles field (removed)', async () => {
-    const result = await compactIfNeeded('s1', 'proj', 10000, 0, 10000, config(0.5), null);
+    const result = await compactIfNeeded('s1', 'proj', 10000, 10000, config(0.5), null);
     expect('restoredFiles' in result).toBe(false);
   });
 
@@ -101,12 +103,12 @@ describe('compactIfNeeded', () => {
     (findSessionIndex as any).mockReturnValue({ currentTurnId: 0 });
 
     // First 3 calls: compactWithLLM returns didCompress=false (insufficient turns)
-    await compactIfNeeded('ttl-session', 'proj', 10000, 0, 10000, config(0.5), null);
-    await compactIfNeeded('ttl-session', 'proj', 10000, 0, 10000, config(0.5), null);
-    await compactIfNeeded('ttl-session', 'proj', 10000, 0, 10000, config(0.5), null);
+    await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
+    await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
+    await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
 
     // 4th call blocked by failure tracker (failures >= 3)
-    const blocked = await compactIfNeeded('ttl-session', 'proj', 10000, 0, 10000, config(0.5), null);
+    const blocked = await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
     expect(blocked.didCompress).toBe(false);
 
     // Advance time past 24h TTL
@@ -114,7 +116,7 @@ describe('compactIfNeeded', () => {
     vi.spyOn(Date, 'now').mockReturnValue(originalNow() + 25 * 60 * 60 * 1000);
 
     // After TTL, failure count resets, compaction is attempted again (still fails due to turns)
-    const afterTTL = await compactIfNeeded('ttl-session', 'proj', 10000, 0, 10000, config(0.5), null);
+    const afterTTL = await compactIfNeeded('ttl-session', 'proj', 10000, 10000, config(0.5), null);
     expect(afterTTL.didCompress).toBe(false);
 
     vi.restoreAllMocks();

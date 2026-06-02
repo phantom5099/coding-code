@@ -13,16 +13,18 @@ function cfg(compactionModel: string): ContextConfig {
   return {
     compactionThreshold: 0.9,
     keepRecentTurns: 2,
-    toolsExemptFromMicrocompact: [],
     minTurnsBetweenCompactions: 3,
     compactionModel,
     reactiveCompactMaxRetries: 1,
     reactiveCompactKeepTurns: 3,
-    snipMaxMessages: 100,
+    tokenPruneThreshold: 0.8,
+    tokenPruneTurns: 2,
+    minTurnsBeforePrune: 5,
+    tokenPruneMinReleaseRatio: 0.5,
+    tokenPruneMaxExtraTurns: 2,
     persistPreviewChars: 2000,
     thresholdTokens: 2000,
     toolResultBudgetThreshold: 50000,
-    keepRecentToolResults: 3,
   };
 }
 

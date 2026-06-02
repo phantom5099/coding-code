@@ -12,16 +12,18 @@ function makeBudgetConfig() {
   return {
     compactionThreshold: 0.9,
     keepRecentTurns: 3,
-    toolsExemptFromMicrocompact: ['Read'],
     minTurnsBetweenCompactions: 5,
     compactionModel: '',
     reactiveCompactMaxRetries: 3,
     reactiveCompactKeepTurns: 3,
-    snipMaxMessages: 50,
+    tokenPruneThreshold: 0.8,
+    tokenPruneTurns: 2,
+    minTurnsBeforePrune: 5,
+    tokenPruneMinReleaseRatio: 0.5,
+    tokenPruneMaxExtraTurns: 2,
     persistPreviewChars: 2000,
     thresholdTokens: 8000,
     toolResultBudgetThreshold: 100, // low threshold for testing
-    keepRecentToolResults: 3,
   } as any;
 }
 
@@ -42,7 +44,7 @@ describe('applyToolResultBudget integration', () => {
     const lines: any[] = [
       { type: 'session_meta', sessionId, projectPath: projectSlug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString(), version: '0.1.0' },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'q1', timestamp: new Date().toISOString() },
-      { type: 'assistant', turnId: 1, uuid: 'a1', content: 'r1', toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }], model: 'test', timestamp: new Date().toISOString() },
+      { type: 'assistant', turnId: 1, uuid: 'a1', content: 'r1', toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }, { id: 'tc2', name: 'bash', arguments: {} }], model: 'test', timestamp: new Date().toISOString() },
       { type: 'tool_result', turnId: 1, uuid: 't1', parentUuid: 'a1', toolName: 'bash', toolCallId: 'tc1', output: 'x'.repeat(200), timestamp: new Date().toISOString(), tokenCount: 0 },
       { type: 'tool_result', turnId: 1, uuid: 't2', parentUuid: 'a1', toolName: 'bash', toolCallId: 'tc2', output: 'y'.repeat(200), timestamp: new Date().toISOString(), tokenCount: 0 },
     ];
@@ -77,10 +79,9 @@ describe('applyToolResultBudget integration', () => {
     expect(result.newBudgets.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('returns snipTokensFreed >= 0', () => {
+  it('returns newBudgets array', () => {
     const config = makeBudgetConfig();
     const result = assemblePayload(sessionId, projectSlug, config);
-    expect(typeof result.snipTokensFreed).toBe('number');
-    expect(result.snipTokensFreed).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(result.newBudgets)).toBe(true);
   });
 });

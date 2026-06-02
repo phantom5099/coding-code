@@ -1,137 +1,201 @@
 import { describe, it, expect } from 'vitest';
-import { assemblePayload, snipEvents, microcompact } from '../../src/context/organizer.js';
+import { assemblePayload, pruneByTokens } from '../../src/context/organizer.js';
 import type { SessionEvent, ToolResultEvent } from '../../src/session/types.js';
 
 const baseConfig = {
-  snipMaxMessages: 50,
-  toolsExemptFromMicrocompact: ['Read'],
-  keepRecentToolResults: 3,
+  tokenPruneThreshold: 0.8,
+  tokenPruneTurns: 2,
+  minTurnsBeforePrune: 5,
+  tokenPruneMinReleaseRatio: 0.5,
+  tokenPruneMaxExtraTurns: 2,
 } as any;
 
 function makeUserEvent(content: string, turnId: number): SessionEvent {
   return { type: 'user', uuid: `u${turnId}`, content, turnId, timestamp: new Date().toISOString() };
 }
 
+function makeAssistant(content: string, turnId: number): SessionEvent {
+  return { type: 'assistant', uuid: `a${turnId}`, content, turnId, toolCalls: [], model: 'test', timestamp: new Date().toISOString() };
+}
+
 function makeToolResult(toolName: string, output: string, turnId: number, uuid: string): ToolResultEvent {
   return { type: 'tool_result', uuid, parentUuid: 'a1', toolName, toolCallId: `tc${uuid}`, output, turnId, timestamp: new Date().toISOString(), tokenCount: 0 };
 }
 
-describe('snipEvents', () => {
-  it('returns all events when under threshold', () => {
-    const events: SessionEvent[] = Array.from({ length: 10 }, (_, i) => makeUserEvent(`msg${i}`, i));
-    const result = snipEvents(events, baseConfig);
-    expect(result.events).toHaveLength(10);
-    expect(result.tokensFreed).toBe(0);
-  });
-
-  it('truncates head, keeping only tail snipMaxMessages', () => {
-    const events: SessionEvent[] = Array.from({ length: 60 }, (_, i) => makeUserEvent(`msg${i}`, i));
-    const result = snipEvents(events, baseConfig);
-    expect(result.events).toHaveLength(51); // 1 summary + 50 events
-    const summary0 = result.events[0];
-    expect(summary0!.type).toBe('summary');
-    expect((summary0 as any).summaryText).toContain('messages snipped');
-    expect((result.events[1] as any).content).toBe('msg10');
-    expect(result.tokensFreed).toBeGreaterThan(0);
-  });
-
-  it('retreats to user boundary and inserts summary placeholder', () => {
+describe('pruneByTokens', () => {
+  it('returns all events when token count is under threshold', () => {
     const events: SessionEvent[] = [
       makeUserEvent('q1', 1),
-      { type: 'assistant', uuid: 'a1', content: 'a1', turnId: 1, toolCalls: [], model: 'test', timestamp: new Date().toISOString() },
-      makeToolResult('bash', 'r1', 1, 't1'),
+      makeAssistant('a1', 1),
+    ];
+    const result = pruneByTokens(events, baseConfig, 100000);
+    expect(result).toHaveLength(2);
+    expect((result[0] as any).content).toBe('q1');
+    expect((result[1] as any).content).toBe('a1');
+  });
+
+  it('returns all events when total turns <= minTurnsBeforePrune', () => {
+    const longOutput = 'x'.repeat(5000);
+    const events: SessionEvent[] = [
+      makeUserEvent('q1', 1),
+      makeAssistant('a1', 1),
+      makeToolResult('bash', longOutput, 1, 't1'),
       makeUserEvent('q2', 2),
-      { type: 'assistant', uuid: 'a2', content: 'a2', turnId: 2, toolCalls: [], model: 'test', timestamp: new Date().toISOString() },
-      makeToolResult('bash', 'r2', 2, 't2'),
+      makeAssistant('a2', 2),
+      makeToolResult('bash', longOutput, 2, 't2'),
+      makeUserEvent('q3', 3),
+      makeAssistant('a3', 3),
+      makeToolResult('bash', longOutput, 3, 't3'),
+      makeUserEvent('q4', 4),
+      makeAssistant('a4', 4),
+      makeToolResult('bash', longOutput, 4, 't4'),
     ];
-    const result = snipEvents(events, { ...baseConfig, snipMaxMessages: 4 });
-    expect(result.events.length).toBe(4);
-    const summary1 = result.events[0];
-    expect(summary1!.type).toBe('summary');
-    expect((summary1 as any).summaryText).toContain('messages snipped');
-    expect((result.events[1] as any).content).toBe('q2');
-    expect(result.tokensFreed).toBeGreaterThan(0);
+    const result = pruneByTokens(events, baseConfig, 100);
+    expect(result).toHaveLength(events.length);
+    // All tool results should be intact because turns <= 5
+    expect((result[2] as ToolResultEvent).output).toBe(longOutput);
   });
 
-  it('counts summary event tokens in tokensFreed', () => {
+  it('clears oldest turn when token count exceeds threshold (maxPrunable=1 for 6 turns)', () => {
+    const longOutput = 'x'.repeat(5000);
     const events: SessionEvent[] = [
-      { type: 'summary', uuid: 's1', replaces: [], summaryText: 'A'.repeat(100), method: 'auto-compact', timestamp: new Date().toISOString() },
       makeUserEvent('q1', 1),
-      { type: 'assistant', uuid: 'a1', content: 'a1', turnId: 1, toolCalls: [], model: 'test', timestamp: new Date().toISOString() },
+      makeAssistant('a1', 1),
+      makeToolResult('bash', longOutput, 1, 't1'),
+      makeUserEvent('q2', 2),
+      makeAssistant('a2', 2),
+      makeToolResult('bash', longOutput, 2, 't2'),
+      makeUserEvent('q3', 3),
+      makeAssistant('a3', 3),
+      makeToolResult('bash', longOutput, 3, 't3'),
+      makeUserEvent('q4', 4),
+      makeAssistant('a4', 4),
+      makeToolResult('bash', longOutput, 4, 't4'),
+      makeUserEvent('q5', 5),
+      makeAssistant('a5', 5),
+      makeToolResult('bash', longOutput, 5, 't5'),
+      makeUserEvent('q6', 6),
+      makeAssistant('a6', 6),
+      makeToolResult('bash', longOutput, 6, 't6'),
     ];
-    const result = snipEvents(events, { ...baseConfig, snipMaxMessages: 2 });
-    expect(result.events.length).toBe(3);
-    expect(result.tokensFreed).toBeGreaterThan(0);
-  });
-});
-
-describe('microcompact', () => {
-  it('keeps all when tool_result count <= keepRecentToolResults', () => {
-    const events: SessionEvent[] = [
-      makeToolResult('bash', 'a'.repeat(200), 1, 't1'),
-      makeToolResult('bash', 'b'.repeat(200), 2, 't2'),
-    ];
-    const result = microcompact(events, baseConfig);
-    expect((result[0] as ToolResultEvent).output).toBe('a'.repeat(200));
-    expect((result[1] as ToolResultEvent).output).toBe('b'.repeat(200));
-  });
-
-  it('replaces old tool results with placeholder, keeps recent 3', () => {
-    const longContent = 'x'.repeat(500); // ~143 tokens > 120
-    const events: SessionEvent[] = [
-      makeToolResult('bash', longContent, 1, 't1'),
-      makeToolResult('bash', longContent, 2, 't2'),
-      makeToolResult('bash', longContent, 3, 't3'),
-      makeToolResult('bash', longContent, 4, 't4'),
-      makeToolResult('bash', longContent, 5, 't5'),
-    ];
-    const result = microcompact(events, { ...baseConfig, keepRecentToolResults: 3 });
-    expect((result[0] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
-    expect((result[1] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
-    expect((result[2] as ToolResultEvent).output).toBe(longContent);
-    expect((result[3] as ToolResultEvent).output).toBe(longContent);
-    expect((result[4] as ToolResultEvent).output).toBe(longContent);
+    const result = pruneByTokens(events, baseConfig, 100);
+    // 6 turns => maxPrunable = 1, only turn 1 can be pruned
+    expect((result[2] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    // Turns 2-6 should be intact
+    expect((result[5] as ToolResultEvent).output).toBe(longOutput);
+    expect((result[8] as ToolResultEvent).output).toBe(longOutput);
+    expect((result[11] as ToolResultEvent).output).toBe(longOutput);
+    expect((result[14] as ToolResultEvent).output).toBe(longOutput);
+    expect((result[17] as ToolResultEvent).output).toBe(longOutput);
+    // User and assistant messages should never be touched
+    expect((result[0] as any).content).toBe('q1');
+    expect((result[1] as any).content).toBe('a1');
   });
 
-  it('skips exempt tools', () => {
-    const longContent = 'x'.repeat(500); // ~143 tokens > 120
+  it('prunes only base turns when release ratio is sufficient', () => {
+    // Turn 1,2 have large tool results; turns 3-8 have small ones
+    const largeOutput = 'x'.repeat(10000);
+    const smallOutput = 'x'.repeat(100);
     const events: SessionEvent[] = [
-      makeToolResult('Read', longContent, 1, 't1'),
-      makeToolResult('bash', longContent, 1, 't2'),
-      makeToolResult('bash', longContent, 2, 't3'),
+      makeUserEvent('q1', 1), makeAssistant('a1', 1), makeToolResult('bash', largeOutput, 1, 't1'),
+      makeUserEvent('q2', 2), makeAssistant('a2', 2), makeToolResult('bash', largeOutput, 2, 't2'),
+      makeUserEvent('q3', 3), makeAssistant('a3', 3), makeToolResult('bash', smallOutput, 3, 't3'),
+      makeUserEvent('q4', 4), makeAssistant('a4', 4), makeToolResult('bash', smallOutput, 4, 't4'),
+      makeUserEvent('q5', 5), makeAssistant('a5', 5), makeToolResult('bash', smallOutput, 5, 't5'),
+      makeUserEvent('q6', 6), makeAssistant('a6', 6), makeToolResult('bash', smallOutput, 6, 't6'),
+      makeUserEvent('q7', 7), makeAssistant('a7', 7), makeToolResult('bash', smallOutput, 7, 't7'),
+      makeUserEvent('q8', 8), makeAssistant('a8', 8), makeToolResult('bash', smallOutput, 8, 't8'),
     ];
-    // keepRecentToolResults=1: only the most recent non-exempt tool is kept
-    const result = microcompact(events, { ...baseConfig, keepRecentToolResults: 1 });
-    expect((result[0] as ToolResultEvent).output).toBe(longContent); // Read exempt
-    expect((result[1] as ToolResultEvent).output).toBe('[Old tool result content cleared]'); // t2 replaced
-    expect((result[2] as ToolResultEvent).output).toBe(longContent); // t3 recent, kept
+    const result = pruneByTokens(events, baseConfig, 5000);
+    // Oldest 2 turns release enough tokens (>> 50% of excess), stop at base turns
+    expect((result[2] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    expect((result[5] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    // Turns 3-8 should be intact
+    expect((result[8] as ToolResultEvent).output).toBe(smallOutput);
+    expect((result[11] as ToolResultEvent).output).toBe(smallOutput);
   });
 
-  it('skips short content <= 120 chars', () => {
+  it('adds extra turns when base release ratio is insufficient', () => {
+    // Turn 1,2 have small tool results; turn 3,4 have large ones
+    const smallOutput = 'x'.repeat(100);
+    const largeOutput = 'x'.repeat(10000);
     const events: SessionEvent[] = [
-      makeToolResult('bash', 'short', 1, 't1'),
-      makeToolResult('bash', 'x'.repeat(200), 2, 't2'),
+      makeUserEvent('q1', 1), makeAssistant('a1', 1), makeToolResult('bash', smallOutput, 1, 't1'),
+      makeUserEvent('q2', 2), makeAssistant('a2', 2), makeToolResult('bash', smallOutput, 2, 't2'),
+      makeUserEvent('q3', 3), makeAssistant('a3', 3), makeToolResult('bash', largeOutput, 3, 't3'),
+      makeUserEvent('q4', 4), makeAssistant('a4', 4), makeToolResult('bash', largeOutput, 4, 't4'),
+      makeUserEvent('q5', 5), makeAssistant('a5', 5), makeToolResult('bash', largeOutput, 5, 't5'),
+      makeUserEvent('q6', 6), makeAssistant('a6', 6), makeToolResult('bash', largeOutput, 6, 't6'),
+      makeUserEvent('q7', 7), makeAssistant('a7', 7), makeToolResult('bash', largeOutput, 7, 't7'),
+      makeUserEvent('q8', 8), makeAssistant('a8', 8), makeToolResult('bash', largeOutput, 8, 't8'),
+      makeUserEvent('q9', 9), makeAssistant('a9', 9), makeToolResult('bash', largeOutput, 9, 't9'),
     ];
-    const result = microcompact(events, { ...baseConfig, keepRecentToolResults: 1 });
-    expect((result[0] as ToolResultEvent).output).toBe('short'); // <= 120, not replaced
-    expect((result[1] as ToolResultEvent).output).toBe('x'.repeat(200)); // recent, kept
+    const result = pruneByTokens(events, baseConfig, 8000);
+    // Base 2 turns release < 50% of excess; adding turns 3,4 pushes ratio above threshold
+    expect((result[2] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    expect((result[5] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    expect((result[8] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    expect((result[11] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    // Turns 5-9 should be intact
+    expect((result[14] as ToolResultEvent).output).toBe(largeOutput);
+    expect((result[17] as ToolResultEvent).output).toBe(largeOutput);
   });
 
-  it('replaces tool results when token count exceeds 120 tokens', () => {
-    const longContent = 'x'.repeat(500); // ~143 tokens > 120
+  it('prunes up to hard limit when ratio never meets threshold', () => {
+    // All tool results are small; even pruning all allowed turns won't meet ratio
+    const tinyOutput = 'x'.repeat(100);
     const events: SessionEvent[] = [
-      makeToolResult('bash', longContent, 1, 't1'),
-      makeToolResult('bash', longContent, 2, 't2'),
-      makeToolResult('bash', longContent, 3, 't3'),
-      makeToolResult('bash', longContent, 4, 't4'),
-      makeToolResult('bash', longContent, 5, 't5'),
+      makeUserEvent('q1', 1), makeAssistant('a1', 1), makeToolResult('bash', tinyOutput, 1, 't1'),
+      makeUserEvent('q2', 2), makeAssistant('a2', 2), makeToolResult('bash', tinyOutput, 2, 't2'),
+      makeUserEvent('q3', 3), makeAssistant('a3', 3), makeToolResult('bash', tinyOutput, 3, 't3'),
+      makeUserEvent('q4', 4), makeAssistant('a4', 4), makeToolResult('bash', tinyOutput, 4, 't4'),
+      makeUserEvent('q5', 5), makeAssistant('a5', 5), makeToolResult('bash', tinyOutput, 5, 't5'),
+      makeUserEvent('q6', 6), makeAssistant('a6', 6), makeToolResult('bash', tinyOutput, 6, 't6'),
+      makeUserEvent('q7', 7), makeAssistant('a7', 7), makeToolResult('bash', tinyOutput, 7, 't7'),
+      makeUserEvent('q8', 8), makeAssistant('a8', 8), makeToolResult('bash', tinyOutput, 8, 't8'),
     ];
-    const result = microcompact(events, { ...baseConfig, keepRecentToolResults: 3 });
-    expect((result[0] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
-    expect((result[1] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
-    expect((result[2] as ToolResultEvent).output).toBe(longContent);
-    expect((result[3] as ToolResultEvent).output).toBe(longContent);
-    expect((result[4] as ToolResultEvent).output).toBe(longContent);
+    const result = pruneByTokens(events, baseConfig, 100);
+    // 8 turns => maxPrunable = 3, hardLimit = 4 => pruneable = 3 turns
+    // All pruned because ratio never meets threshold but we execute up to limit
+    expect((result[2] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    expect((result[5] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    expect((result[8] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    // Turns 4-8 should be intact
+    expect((result[11] as ToolResultEvent).output).toBe(tinyOutput);
+    expect((result[14] as ToolResultEvent).output).toBe(tinyOutput);
+  });
+
+  it('does not prune summary or hide events', () => {
+    const longOutput = 'x'.repeat(5000);
+    const events: SessionEvent[] = [
+      { type: 'summary', uuid: 's1', replaces: [], summaryText: 'Summary text', method: 'auto-compact', timestamp: new Date().toISOString() },
+      makeUserEvent('q1', 1),
+      makeAssistant('a1', 1),
+      makeToolResult('bash', longOutput, 1, 't1'),
+      makeUserEvent('q2', 2),
+      makeAssistant('a2', 2),
+      makeToolResult('bash', longOutput, 2, 't2'),
+      makeUserEvent('q3', 3),
+      makeAssistant('a3', 3),
+      makeToolResult('bash', longOutput, 3, 't3'),
+      makeUserEvent('q4', 4),
+      makeAssistant('a4', 4),
+      makeToolResult('bash', longOutput, 4, 't4'),
+      makeUserEvent('q5', 5),
+      makeAssistant('a5', 5),
+      makeToolResult('bash', longOutput, 5, 't5'),
+      makeUserEvent('q6', 6),
+      makeAssistant('a6', 6),
+      makeToolResult('bash', longOutput, 6, 't6'),
+    ];
+    const result = pruneByTokens(events, baseConfig, 100);
+    // Summary should remain
+    expect(result[0].type).toBe('summary');
+    expect((result[0] as any).summaryText).toBe('Summary text');
+    // Oldest tool results cleared
+    expect((result[3] as ToolResultEvent).output).toBe('[Old tool result content cleared]');
+    // Recent tool results intact
+    expect((result[18] as ToolResultEvent).output).toBe(longOutput);
   });
 });
 

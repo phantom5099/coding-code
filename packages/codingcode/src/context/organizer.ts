@@ -8,7 +8,6 @@ import type { SessionEvent, ToolResultEvent, ToolBudgetEvent, SummaryEvent, User
 
 export interface BuildResult {
   messages: Message[];
-  snipTokensFreed: number;
   newBudgets: ToolBudgetEvent[];
 }
 
@@ -16,6 +15,7 @@ export function assemblePayload(
   sessionId: string,
   encodedProjectPath: string,
   config: ContextConfig,
+  contextWindow: number = 128000,
 ): BuildResult {
   const dir = resolveSessionDir(sessionId);
   if (!dir) throw new Error(`Session ${sessionId} not found`);
@@ -31,11 +31,11 @@ export function assemblePayload(
 
   const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
-  const { events: compacted, snipTokensFreed, newBudgets } = applyLocalCompaction(visible, currentTurnId, config, jsonlPath, sessionId, encodedProjectPath);
+  const { events: compacted, newBudgets } = applyLocalCompaction(visible, currentTurnId, config, jsonlPath, sessionId, encodedProjectPath, contextWindow);
 
   const messages = buildMessagesFromEvents(compacted as any);
 
-  return { messages, snipTokensFreed, newBudgets };
+  return { messages, newBudgets };
 }
 
 function applyLocalCompaction(
@@ -45,11 +45,11 @@ function applyLocalCompaction(
   jsonlPath: string,
   sessionId: string,
   encodedProjectPath: string,
-): { events: SessionEvent[]; snipTokensFreed: number; newBudgets: ToolBudgetEvent[] } {
+  contextWindow: number,
+): { events: SessionEvent[]; newBudgets: ToolBudgetEvent[] } {
   const budgetResult = applyToolResultBudget(events, config, jsonlPath, sessionId, encodedProjectPath);
-  const snipResult = snipEvents(budgetResult.events, config);
-  const result = microcompact(snipResult.events, config);
-  return { events: result, snipTokensFreed: snipResult.tokensFreed, newBudgets: budgetResult.newBudgets };
+  const result = pruneByTokens(budgetResult.events, config, contextWindow);
+  return { events: result, newBudgets: budgetResult.newBudgets };
 }
 
 function toolMsgTokens(output: string, tool: ToolResultEvent): number {
@@ -135,69 +135,80 @@ function replaceBudgeted(
     });
 }
 
-interface SnipResult {
-  events: SessionEvent[];
-  tokensFreed: number;
-}
+export function pruneByTokens(
+  events: SessionEvent[],
+  config: ContextConfig,
+  contextWindow: number,
+): SessionEvent[] {
+  const threshold = contextWindow * config.tokenPruneThreshold;
+  const totalTokens = events.reduce((sum, e) => sum + estimateEventTokens(e), 0);
+  if (totalTokens <= threshold) return events;
 
-export function snipEvents(events: SessionEvent[], config: ContextConfig): SnipResult {
-  if (events.length <= config.snipMaxMessages) return { events, tokensFreed: 0 };
+  const turnIds = [...new Set(
+    events
+      .filter(e => e.type === 'user' || e.type === 'assistant' || e.type === 'tool_result')
+      .map(e => e.turnId)
+      .filter((t): t is number => t !== undefined)
+  )].sort((a, b) => a - b);
 
-  const keepFrom = events.length - config.snipMaxMessages;
-  let boundary = keepFrom;
-  while (boundary < events.length && events[boundary]?.type !== 'user') {
-    boundary++;
+  if (turnIds.length <= config.minTurnsBeforePrune) return events;
+
+  const excessTokens = totalTokens - threshold;
+  const maxPrunable = turnIds.length - config.minTurnsBeforePrune;
+  const hardLimit = config.tokenPruneTurns + config.tokenPruneMaxExtraTurns;
+  const pruneableTurnIds = turnIds.slice(0, Math.min(maxPrunable, hardLimit));
+
+  let pruneCount = config.tokenPruneTurns;
+  let cumulativeOriginal = 0;
+  let cumulativePlaceholder = 0;
+
+  for (let i = 0; i < pruneableTurnIds.length; i++) {
+    const tid = pruneableTurnIds[i];
+    let turnToolCount = 0;
+
+    for (const e of events) {
+      if (e.type === 'tool_result' && e.turnId === tid) {
+        cumulativeOriginal += estimateEventTokens(e);
+        turnToolCount++;
+      }
+    }
+
+    const placeholderMsg: any = {
+      role: 'tool',
+      content: '[Old tool result content cleared]',
+      tool_call_id: 'x',
+      tool_name: 'x',
+    };
+    cumulativePlaceholder += turnToolCount * estimateMessageTokens(placeholderMsg);
+
+    if (i + 1 >= config.tokenPruneTurns) {
+      const netReleased = cumulativeOriginal - cumulativePlaceholder;
+      if (netReleased / excessTokens >= config.tokenPruneMinReleaseRatio) {
+        pruneCount = i + 1;
+        break;
+      }
+      pruneCount = i + 1;
+    }
   }
-  if (boundary >= events.length) return { events, tokensFreed: 0 };
 
-  const snipped = events.slice(0, boundary);
-  const snippedTokens = snipped.reduce((sum, e) => {
-    if (e.type === 'user') return sum + estimateMessageTokens({ role: 'user', content: e.content });
-    if (e.type === 'assistant') return sum + estimateMessageTokens({ role: 'assistant', content: e.content });
-    if (e.type === 'tool_result') {
-      return sum + estimateMessageTokens({ role: 'tool', content: e.output, tool_call_id: e.toolCallId, tool_name: e.toolName } as any);
-    }
-    if (e.type === 'summary') {
-      return sum + estimateMessageTokens({ role: 'system', name: 'compacted_history', content: e.summaryText });
-    }
-    return sum;
-  }, 0);
-
-  const summary: SummaryEvent = {
-    type: 'summary',
-    uuid: randomUUID(),
-    replaces: snipped.filter(e => 'uuid' in e).map(e => (e as any).uuid),
-    summaryText: `[${snipped.length} messages snipped]`,
-    method: 'context-collapse',
-    timestamp: new Date().toISOString(),
-  };
-
-  return { events: [summary, ...events.slice(boundary)], tokensFreed: snippedTokens };
-}
-
-export function microcompact(events: SessionEvent[], config: ContextConfig): SessionEvent[] {
-  const replacement = '[Old tool result content cleared]';
-  const toolResults = events.filter((e): e is ToolResultEvent => {
-    if (e.type !== 'tool_result') return false;
-    if (config.toolsExemptFromMicrocompact.includes(e.toolName ?? '')) return false;
-    if (estimateTokensForContent(e.output ?? '') <= 120) return false;
-    return true;
-  });
-
-  if (toolResults.length <= config.keepRecentToolResults) return events;
-
-  const recentUuids = new Set(
-    toolResults.slice(-config.keepRecentToolResults).map(e => e.uuid)
-  );
-  const prunedUuids = new Set(
-    toolResults.filter(e => !recentUuids.has(e.uuid)).map(e => e.uuid)
-  );
-
+  const actualPruneIds = new Set(pruneableTurnIds.slice(0, pruneCount));
   return events.map(e => {
-    if (e.type === 'tool_result' && prunedUuids.has(e.uuid)) {
-      return { ...e, output: replacement };
+    if (e.type === 'tool_result' && actualPruneIds.has(e.turnId)) {
+      return { ...e, output: '[Old tool result content cleared]' };
     }
     return e;
   });
+}
+
+function estimateEventTokens(e: SessionEvent): number {
+  if (e.type === 'user') return estimateMessageTokens({ role: 'user', content: e.content });
+  if (e.type === 'assistant') return estimateMessageTokens({ role: 'assistant', content: e.content });
+  if (e.type === 'tool_result') {
+    return estimateMessageTokens({ role: 'tool', content: e.output, tool_call_id: e.toolCallId, tool_name: e.toolName } as any);
+  }
+  if (e.type === 'summary') {
+    return estimateMessageTokens({ role: 'system', name: 'compacted_history', content: e.summaryText });
+  }
+  return 0;
 }
 

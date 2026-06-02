@@ -331,7 +331,7 @@ sessionsRouter.post('/:id/rollback-context', async (c) => {
           }
         }
       }
-      return { ok: true, turns, rolledBackMessage };
+      return { ok: true, turns, rolledBackMessage, promptEstimate: state.promptEstimate };
     }),
   );
   if (!result.ok) {
@@ -355,7 +355,7 @@ sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
       const state = yield* svc.create(cwd, 'unknown', '0.1.0', sessionId);
       yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
-      return { ok: true, turns, codeResult };
+      return { ok: true, turns, codeResult, promptEstimate: state.promptEstimate };
     }),
   );
   if (!result.ok) {

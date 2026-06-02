@@ -124,9 +124,15 @@ export function useAgent() {
       case 'todo_update':
         applyTodoUpdate(threadId, event.items as any)
         return null
-      case 'usage':
+      case 'usage': {
         setThreadUsage(threadId, { prompt: event.prompt, completion: event.completion, total: event.total })
+        const state = useGlobalStore.getState()
+        const model = state.agent.models.find((m) => m.id === state.agent.model)
+        if (model) {
+          setContextUsage({ used: event.prompt, contextWindow: model.context_window })
+        }
         return null
+      }
       case 'reactive_compact':
         {
           const contextUsage = useGlobalStore.getState().agent.contextUsage
@@ -354,15 +360,31 @@ export function useAgent() {
     if (res.rolledBackMessage) {
       setPendingInput(res.rolledBackMessage)
     }
+    if (res.promptEstimate != null) {
+      const state = useGlobalStore.getState()
+      const entry = state.agent.models.find((m) => m.id === state.agent.model)
+      const contextWindow = entry?.context_window ?? 0
+      if (contextWindow > 0) {
+        setContextUsage({ used: res.promptEstimate, contextWindow })
+      }
+    }
     return res
-  }, [workspace.rootPath, setThreadTurns, clearRunningTurns, setPendingInput])
+  }, [workspace.rootPath, setThreadTurns, clearRunningTurns, setPendingInput, setContextUsage])
 
   const rollbackBoth = useCallback(async (threadId: string, throughTurnId: number) => {
     const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
     const res = await rollbackBothToTurn(threadId, cwd, throughTurnId)
     setThreadTurns(threadId, res.turns as Turn[])
+    if (res.promptEstimate != null) {
+      const state = useGlobalStore.getState()
+      const entry = state.agent.models.find((m) => m.id === state.agent.model)
+      const contextWindow = entry?.context_window ?? 0
+      if (contextWindow > 0) {
+        setContextUsage({ used: res.promptEstimate, contextWindow })
+      }
+    }
     return res
-  }, [workspace.rootPath, setThreadTurns])
+  }, [workspace.rootPath, setThreadTurns, setContextUsage])
 
   const undoCodeRollback = useCallback(async (threadId: string, uiTurnId: string, force?: boolean, files?: string[]) => {
     const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath
