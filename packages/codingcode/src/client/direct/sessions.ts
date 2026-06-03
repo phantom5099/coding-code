@@ -55,7 +55,7 @@ export function createDirectSessionClient(
   runWithLayer: <T>(eff: any) => Promise<T>
 ): SessionClient {
   return {
-    async createSession({ cwd, initialPermissionMode }) {
+    async createSession({ cwd, initialPermissionMode: _initialPermissionMode }) {
       return runWithLayer(
         Effect.gen(function* () {
           const svc = yield* SessionService;

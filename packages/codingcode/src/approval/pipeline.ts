@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 import type { ApprovalDecision, PermissionMode, PermissionRule, ToolCallRequest } from './types';
 import type { RuleEngine } from './rule-engine';
-import type { ConfirmResult } from './confirmation';
 import { userConfirm, userConfirmAsync } from './confirmation';
 import type { ApprovalWaitService } from './async-confirm';
 

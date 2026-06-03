@@ -3,10 +3,8 @@ import { sendMessage } from '../../agent/agent.js';
 import { ApprovalWaitService } from '../../approval/async-confirm.js';
 import { parseApprovalResponse } from '../../approval/response.js';
 import { ContextService } from '../../context/context.js';
-import { AppLayer } from '../../layer.js';
 import type { StreamChunk } from '../types.js';
 import { agentEventToStreamChunk } from '../direct.js';
-import { getWorkspaceCwd } from '../../core/workspace.js';
 
 export interface AgentRuntimeClient {
   sendMessage(

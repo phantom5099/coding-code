@@ -42,6 +42,84 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
       };
     }
 
+    function makeForkedService(
+      engine: RuleEngine,
+      permMode: PermissionMode,
+      roTools: Set<string>,
+      destTools: Set<string>
+    ): ApprovalService {
+      let currentPermMode = permMode;
+      return ApprovalService.make({
+        evaluate: (request: {
+          tool: string;
+          input: Record<string, unknown>;
+          context?: Record<string, unknown>;
+          callId?: string;
+          sessionId: string;
+        }): Effect.Effect<ApprovalDecision> =>
+          Effect.gen(function* () {
+            return yield* runPipeline(
+              {
+                tool: request.tool,
+                input: request.input,
+                context: request.context,
+                callId: request.callId,
+              },
+              {
+                ruleEngine: engine,
+                readonlyTools: roTools,
+                destructiveTools: destTools,
+                permissionMode: currentPermMode,
+                hooks: buildPipelineHooks(),
+                interactive: process.stdin.isTTY ?? false,
+                asyncConfirm: hasEmitter(request.sessionId),
+                asyncConfirmService: approvalWait,
+                onAlways: (rule) => engine.addRule(rule),
+                onNever: (rule) => engine.addRule(rule),
+                sessionId: request.sessionId,
+                callId: request.callId,
+              }
+            );
+          }),
+        addRule: (rule: PermissionRule): Effect.Effect<void> =>
+          Effect.sync(() => engine.addRule(rule)),
+        removeRule: (id: string): Effect.Effect<void> => Effect.sync(() => engine.removeRule(id)),
+        setPermissionMode: (mode: PermissionMode): Effect.Effect<void> =>
+          Effect.sync(() => {
+            currentPermMode = mode;
+          }),
+        getPermissionMode: (): PermissionMode => currentPermMode,
+        fork: (opts?: {
+          extraDenyRules?: PermissionRule[];
+          readonly?: boolean;
+        }): Effect.Effect<ApprovalService> =>
+          Effect.sync(() => {
+            const nextEngine = createRuleEngine(engine.getAllRules());
+            if (opts?.extraDenyRules) {
+              for (const rule of opts.extraDenyRules) {
+                nextEngine.addRule(rule);
+              }
+            }
+            if (opts?.readonly) {
+              for (const toolName of DESTRUCTIVE_TOOL_NAMES) {
+                nextEngine.addRule({
+                  id: `readonly-${toolName}`,
+                  action: 'deny' as const,
+                  toolPattern: toolName,
+                  source: 'system' as const,
+                });
+              }
+            }
+            return makeForkedService(
+              nextEngine,
+              currentPermMode,
+              new Set(roTools),
+              new Set(destTools)
+            );
+          }),
+      });
+    }
+
     return {
       evaluate: (request: {
         tool: string;
@@ -110,116 +188,12 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               childEngine.addRule(rule);
             }
           }
-          let childPermissionMode: PermissionMode = _globalPermissionMode;
-          const childReadonlyTools = new Set(readonlyTools);
-          const childDestructiveTools = new Set(destructiveTools);
-          return {
-            evaluate: (request: {
-              tool: string;
-              input: Record<string, unknown>;
-              context?: Record<string, unknown>;
-              callId?: string;
-              sessionId: string;
-            }) =>
-              Effect.gen(function* () {
-                return yield* runPipeline(
-                  {
-                    tool: request.tool,
-                    input: request.input,
-                    context: request.context,
-                    callId: request.callId,
-                  },
-                  {
-                    ruleEngine: childEngine,
-                    readonlyTools: childReadonlyTools,
-                    destructiveTools: childDestructiveTools,
-                    permissionMode: childPermissionMode,
-                    hooks: buildPipelineHooks(),
-                    interactive: process.stdin.isTTY ?? false,
-                    asyncConfirm: hasEmitter(request.sessionId),
-                    asyncConfirmService: approvalWait,
-                    onAlways: (rule) => childEngine.addRule(rule),
-                    onNever: (rule) => childEngine.addRule(rule),
-                    sessionId: request.sessionId,
-                    callId: request.callId,
-                  }
-                );
-              }),
-            addRule: (rule: PermissionRule) => Effect.sync(() => childEngine.addRule(rule)),
-            removeRule: (id: string) => Effect.sync(() => childEngine.removeRule(id)),
-            setPermissionMode: (mode: PermissionMode) =>
-              Effect.sync(() => {
-                childPermissionMode = mode;
-              }),
-            getPermissionMode: () => childPermissionMode,
-            fork: (opts2: any) => {
-              const nestedParentRules = childEngine.getAllRules();
-              const nestedEngine = createRuleEngine(nestedParentRules);
-              if (opts2?.extraDenyRules) {
-                for (const rule of opts2.extraDenyRules) {
-                  nestedEngine.addRule(rule);
-                }
-              }
-              if (opts2?.readonly) {
-                const denyRules: PermissionRule[] = DESTRUCTIVE_TOOL_NAMES.map((toolName) => ({
-                  id: `readonly-${toolName}`,
-                  action: 'deny' as const,
-                  toolPattern: toolName,
-                  source: 'system' as const,
-                }));
-                for (const rule of denyRules) {
-                  nestedEngine.addRule(rule);
-                }
-              }
-              let nestedPermissionMode: PermissionMode = childPermissionMode;
-              const nestedReadonlyTools = new Set(childReadonlyTools);
-              const nestedDestructiveTools = new Set(childDestructiveTools);
-              return Effect.succeed({
-                evaluate: (request: {
-                  tool: string;
-                  input: Record<string, unknown>;
-                  context?: Record<string, unknown>;
-                  callId?: string;
-                  sessionId: string;
-                }) =>
-                  Effect.gen(function* () {
-                    return yield* runPipeline(
-                      {
-                        tool: request.tool,
-                        input: request.input,
-                        context: request.context,
-                        callId: request.callId,
-                      },
-                      {
-                        ruleEngine: nestedEngine,
-                        readonlyTools: nestedReadonlyTools,
-                        destructiveTools: nestedDestructiveTools,
-                        permissionMode: nestedPermissionMode,
-                        hooks: buildPipelineHooks(),
-                        interactive: process.stdin.isTTY ?? false,
-                        asyncConfirm: hasEmitter(request.sessionId),
-                        asyncConfirmService: approvalWait,
-                        onAlways: (rule: PermissionRule) => nestedEngine.addRule(rule),
-                        onNever: (rule: PermissionRule) => nestedEngine.addRule(rule),
-                        sessionId: request.sessionId,
-                        callId: request.callId,
-                      }
-                    );
-                  }),
-                addRule: (rule: PermissionRule) => Effect.sync(() => nestedEngine.addRule(rule)),
-                removeRule: (id: string) => Effect.sync(() => nestedEngine.removeRule(id)),
-                setPermissionMode: (mode: PermissionMode) =>
-                  Effect.sync(() => {
-                    nestedPermissionMode = mode;
-                  }),
-                getPermissionMode: () => nestedPermissionMode,
-                fork: (opts3: any) => {
-                  // Nested fork not commonly used, use parent's fork for now
-                  return Effect.fail(new Error('Deeply nested fork not supported'));
-                },
-              } as any);
-            },
-          } as any;
+          return makeForkedService(
+            childEngine,
+            _globalPermissionMode,
+            new Set(readonlyTools),
+            new Set(destructiveTools)
+          );
         }),
     };
   }),

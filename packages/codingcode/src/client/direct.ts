@@ -1,11 +1,9 @@
 import { Effect } from 'effect';
 import type { AgentEvent } from '../agent/agent.js';
 import { sendMessage } from '../agent/agent.js';
-import { ApprovalWaitService } from '../approval/async-confirm.js';
-import { parseApprovalResponse } from '../approval/response.js';
 import { AppLayer } from '../layer.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
-import { getLLMClient, switchModel as switchActiveModel } from '../llm/factory.js';
+import { getLLMClient } from '../llm/factory.js';
 import { getWorkspaceCwd } from '../core/workspace.js';
 import { getGlobalPermissionMode, setGlobalPermissionMode } from '../approval/index.js';
 import type { PermissionMode } from '../approval/types.js';
