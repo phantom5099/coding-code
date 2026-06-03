@@ -46,7 +46,9 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
       );
       await Effect.runPromise(forked.setPermissionMode(mode));
       approvalOverride = forked;
-      registerSessionApproval(sessionId, forked);
+      registerSessionApproval(sessionId, {
+        setPermissionMode: (m) => Effect.runPromise(forked.setPermissionMode(m)),
+      });
     }
   }
 
@@ -55,7 +57,7 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
     input,
     normalizedCwd,
     llm,
-    { signal: c.req.raw.signal }
+    { signal: c.req.raw.signal, approvalOverride }
   );
 
   const result = await runWithLayer(program);
@@ -75,7 +77,9 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
       }).pipe(Effect.provide(AppLayer) as any)
     );
     approvalOverride = forked;
-    registerSessionApproval(sessionId, forked);
+    registerSessionApproval(sessionId, {
+      setPermissionMode: (m) => Effect.runPromise(forked.setPermissionMode(m)),
+    });
   }
 
   return sseHandler(
