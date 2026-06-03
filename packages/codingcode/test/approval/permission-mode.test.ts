@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { getGlobalPermissionMode, setGlobalPermissionMode } from '../../src/approval/index.js';
 
 describe('Global permission mode state', () => {
@@ -11,13 +11,8 @@ describe('Global permission mode state', () => {
     expect(getGlobalPermissionMode()).toBe('default');
   });
 
-  it('can be set to dontAsk', () => {
-    setGlobalPermissionMode('dontAsk');
-    expect(getGlobalPermissionMode()).toBe('dontAsk');
-  });
-
   it('can be set to all valid modes', () => {
-    const modes = ['default', 'acceptEdits', 'dontAsk', 'plan', 'bypass'] as const;
+    const modes = ['default', 'acceptEdits', 'plan', 'bypass'] as const;
     for (const mode of modes) {
       setGlobalPermissionMode(mode);
       expect(getGlobalPermissionMode()).toBe(mode);

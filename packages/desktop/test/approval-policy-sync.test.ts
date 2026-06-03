@@ -1,27 +1,32 @@
 import { describe, it, expect } from 'vitest';
 
-// Mirrors the mapping in agent.handler.ts
+// Mirrors the mapping in useAgent.ts
 const POLICY_TO_CORE_MODE: Record<string, string> = {
-  suggest: 'default',
-  'auto-edit': 'acceptEdits',
-  'full-auto': 'dontAsk',
+  'ask-all': 'default',
+  'smart-allow': 'acceptEdits',
+  'full-allow': 'bypass',
+  'read-only': 'plan',
 };
 
 describe('approvalPolicy → PermissionMode mapping', () => {
-  it('suggest maps to default', () => {
-    expect(POLICY_TO_CORE_MODE['suggest']).toBe('default');
+  it('ask-all maps to default', () => {
+    expect(POLICY_TO_CORE_MODE['ask-all']).toBe('default');
   });
 
-  it('auto-edit maps to acceptEdits', () => {
-    expect(POLICY_TO_CORE_MODE['auto-edit']).toBe('acceptEdits');
+  it('smart-allow maps to acceptEdits', () => {
+    expect(POLICY_TO_CORE_MODE['smart-allow']).toBe('acceptEdits');
   });
 
-  it('full-auto maps to dontAsk', () => {
-    expect(POLICY_TO_CORE_MODE['full-auto']).toBe('dontAsk');
+  it('full-allow maps to bypass', () => {
+    expect(POLICY_TO_CORE_MODE['full-allow']).toBe('bypass');
   });
 
-  it('all three desktop policies have a core mapping', () => {
-    const policies = ['suggest', 'auto-edit', 'full-auto'] as const;
+  it('read-only maps to plan', () => {
+    expect(POLICY_TO_CORE_MODE['read-only']).toBe('plan');
+  });
+
+  it('all four desktop policies have a core mapping', () => {
+    const policies = ['ask-all', 'smart-allow', 'full-allow', 'read-only'] as const;
     for (const p of policies) {
       expect(POLICY_TO_CORE_MODE[p]).toBeDefined();
     }

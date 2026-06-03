@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react
 import { createPortal } from 'react-dom';
 import { useGlobalStore } from '../stores/global.store';
 import { API_BASE, api } from '../lib/api';
+import { setSessionPermissionMode } from '../lib/core-api';
 import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
 import ApprovalPanel from './ApprovalPanel';
@@ -237,14 +238,16 @@ function InputBox({
   }, [text, isStreaming, sendMessage, workspace.rootPath]);
 
   const POLICY_LABELS: Record<string, string> = {
-    suggest: '自动审查',
-    'auto-edit': '自动编辑',
-    'full-auto': '全自动',
+    'ask-all': '全部询问',
+    'smart-allow': '半自动',
+    'full-allow': '完全放行',
+    'read-only': '只读模式',
   };
-  const POLICY_NEXT: Record<string, 'auto-edit' | 'full-auto' | 'suggest'> = {
-    suggest: 'auto-edit',
-    'auto-edit': 'full-auto',
-    'full-auto': 'suggest',
+  const POLICY_NEXT: Record<string, 'ask-all' | 'smart-allow' | 'full-allow' | 'read-only'> = {
+    'ask-all': 'smart-allow',
+    'smart-allow': 'full-allow',
+    'full-allow': 'read-only',
+    'read-only': 'ask-all',
   };
 
   return (
@@ -292,13 +295,27 @@ function InputBox({
           <button
             type="button"
             onClick={() => {
-              const next = POLICY_NEXT[approvalPolicy] ?? 'auto-edit';
+              const next = POLICY_NEXT[approvalPolicy] ?? 'ask-all';
               setApprovalPolicy(next);
+              if (currentThreadId) {
+                const POLICY_TO_CORE_MODE: Record<string, string> = {
+                  'ask-all': 'default',
+                  'smart-allow': 'acceptEdits',
+                  'full-allow': 'bypass',
+                  'read-only': 'plan',
+                };
+                setSessionPermissionMode(
+                  currentThreadId,
+                  POLICY_TO_CORE_MODE[next] ?? 'default'
+                ).catch((e) => {
+                  console.error('Failed to sync permission mode:', e);
+                });
+              }
             }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors"
           >
             <span className="text-[#569cd6] text-[10px]">⊙</span>
-            <span>{POLICY_LABELS[approvalPolicy] ?? '自动审查'}</span>
+            <span>{POLICY_LABELS[approvalPolicy] ?? '全部询问'}</span>
             <span className="text-[#3c3c3c] text-[10px]">▾</span>
           </button>
           <div className="ml-auto flex items-center gap-2">

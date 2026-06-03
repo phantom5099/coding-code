@@ -31,6 +31,7 @@ export const sendMessage = (
   llm: LLMClient,
   options?: {
     signal?: AbortSignal;
+    approvalOverride?: any;
   }
 ) =>
   Effect.gen(function* () {
@@ -60,6 +61,7 @@ export const sendMessage = (
       llm,
       skillInstruction: matchedSkill?.instruction,
       abortSignal: options?.signal,
+      approvalOverride: options?.approvalOverride,
     });
 
     return { stream, sessionId: sid };

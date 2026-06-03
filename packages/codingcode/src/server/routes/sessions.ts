@@ -1,4 +1,4 @@
-﻿import { Hono } from 'hono';
+import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { join } from 'path';
 import { SessionService } from '../../session/store.js';
@@ -16,6 +16,13 @@ import { resolveWorkspaceCwd } from '../../core/workspace.js';
 import { runWithLayer, errorResponse } from '../util.js';
 
 export const sessionsRouter = new Hono();
+
+// Active session ApprovalService forks, keyed by sessionId.
+// messages.ts registers/unregisters; this file's PUT route updates them.
+export const activeApprovalForks = new Map<
+  string,
+  { setPermissionMode: (mode: any) => Promise<void> | void }
+>();
 
 // ---- C0: Existing routes ----
 
@@ -122,6 +129,9 @@ sessionsRouter.put('/:id/permission-mode', async (c) => {
   if (!dir) return c.json({ error: 'Session not found' }, 404);
   const idxPath = join(dir, `${sessionId}.index.json`);
   setPermissionMode(sessionId, idxPath, mode);
+  // Also update the in-memory ApprovalService fork if the session is active
+  const handle = activeApprovalForks.get(sessionId);
+  if (handle) handle.setPermissionMode(mode);
   return c.json({ ok: true });
 });
 

@@ -55,7 +55,7 @@ export interface SessionClient {
 export function createHttpSessionClient(
   request: ReturnType<typeof createRequestHelpers>
 ): SessionClient {
-  const { apiGet, apiPost, apiDelete } = request;
+  const { apiGet, apiPost, apiPut, apiDelete } = request;
 
   return {
     async createSession({ cwd, initialPermissionMode }) {
@@ -87,7 +87,7 @@ export function createHttpSessionClient(
     },
 
     async setSessionPermissionMode({ sessionId, mode }) {
-      await apiPost(`/api/sessions/${sessionId}/permission-mode`, { mode });
+      await apiPut(`/api/sessions/${sessionId}/permission-mode`, { mode });
     },
 
     async getCheckpointDiff({ sessionId, cwd, turnId }) {
