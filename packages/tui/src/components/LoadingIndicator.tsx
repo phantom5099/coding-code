@@ -6,8 +6,7 @@ export function LoadingIndicator() {
   return (
     <Box paddingLeft={2}>
       <Text color="green">
-        <Spinner type="dots" />
-        {' '}AI 思考中...
+        <Spinner type="dots" /> AI 思考中...
       </Text>
     </Box>
   );

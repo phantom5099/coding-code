@@ -5,8 +5,23 @@ import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
-import type { SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, HideEvent, UnhideEvent, TitleEvent, SessionIndex, TokenUsage } from './types.js';
-import { estimateTokens, estimateTokensForContent, estimateMessageTokens } from '../context/utils/tokens.js';
+import type {
+  SessionMetaEvent,
+  UserEvent,
+  AssistantEvent,
+  ToolResultEvent,
+  SummaryEvent,
+  HideEvent,
+  UnhideEvent,
+  TitleEvent,
+  SessionIndex,
+  TokenUsage,
+} from './types.js';
+import {
+  estimateTokens,
+  estimateTokensForContent,
+  estimateMessageTokens,
+} from '../context/utils/tokens.js';
 import { getContextConfig } from '../context/config.js';
 import {
   projectSessionsDir,
@@ -51,7 +66,12 @@ function assertResumeWorkspace(cwd: string, sessionId: string): void {
 export class SessionService extends Effect.Service<SessionService>()('Session', {
   effect: Effect.gen(function* () {
     return {
-      create: (cwd: string, model: string, sessionId?: string, opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }): Effect.Effect<SessionStoreState, AgentError> =>
+      create: (
+        cwd: string,
+        model: string,
+        sessionId?: string,
+        opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }
+      ): Effect.Effect<SessionStoreState, AgentError> =>
         Effect.try({
           try: () => {
             if (sessionId && !opts?.parentSessionId) assertResumeWorkspace(cwd, sessionId);
@@ -60,7 +80,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
             if (existsSync(state.transcriptPath)) {
               const history = readHistory(state.transcriptPath);
-              const meta = history.find((e) => e.type === 'session_meta') as SessionMetaEvent | undefined;
+              const meta = history.find((e) => e.type === 'session_meta') as
+                | SessionMetaEvent
+                | undefined;
               if (meta) {
                 state.sessionMeta = meta;
                 state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
@@ -71,9 +93,12 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             }
 
             const meta: SessionMetaEvent = {
-              type: 'session_meta', sessionId: state.sessionId,
-              projectPath: state.projectPath, cwd: state.cwd,
-              model, createdAt: new Date().toISOString(),
+              type: 'session_meta',
+              sessionId: state.sessionId,
+              projectPath: state.projectPath,
+              cwd: state.cwd,
+              model,
+              createdAt: new Date().toISOString(),
               ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
               ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
               ...(opts?.agentName && { agentName: opts.agentName }),
@@ -84,13 +109,25 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             updateIndex(state);
             return state;
           },
-          catch: (e) => e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+          catch: (e) =>
+            e instanceof AgentError
+              ? e
+              : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      recordUser: (state: SessionStoreState, content: string): Effect.Effect<UserEvent, AgentError> =>
+      recordUser: (
+        state: SessionStoreState,
+        content: string
+      ): Effect.Effect<UserEvent, AgentError> =>
         Effect.try({
           try: () => {
-            const event: UserEvent = { type: 'user', turnId: state.currentTurnId, uuid: randomUUID(), content, timestamp: new Date().toISOString() };
+            const event: UserEvent = {
+              type: 'user',
+              turnId: state.currentTurnId,
+              uuid: randomUUID(),
+              content,
+              timestamp: new Date().toISOString(),
+            };
             if (state.title === state.sessionId.slice(0, 8)) {
               state.title = makeTitle(content);
             }
@@ -103,10 +140,25 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      recordAssistant: (state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], model: string, usage?: TokenUsage): Effect.Effect<AssistantEvent, AgentError> =>
+      recordAssistant: (
+        state: SessionStoreState,
+        content: string,
+        toolCalls: AssistantEvent['toolCalls'],
+        model: string,
+        usage?: TokenUsage
+      ): Effect.Effect<AssistantEvent, AgentError> =>
         Effect.try({
           try: () => {
-            const event: AssistantEvent = { type: 'assistant', turnId: state.currentTurnId, uuid: randomUUID(), content, toolCalls, model, timestamp: new Date().toISOString(), usage };
+            const event: AssistantEvent = {
+              type: 'assistant',
+              turnId: state.currentTurnId,
+              uuid: randomUUID(),
+              content,
+              toolCalls,
+              model,
+              timestamp: new Date().toISOString(),
+              usage,
+            };
             appendLine(state.transcriptPath, event);
             state.messageCount++;
             updateIndex(state);
@@ -121,7 +173,13 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      recordToolResult: (state: SessionStoreState, parentUuid: string, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent, AgentError> =>
+      recordToolResult: (
+        state: SessionStoreState,
+        parentUuid: string,
+        toolName: string,
+        toolCallId: string,
+        output: string
+      ): Effect.Effect<ToolResultEvent, AgentError> =>
         Effect.try({
           try: () => {
             const cfg = getContextConfig();
@@ -130,28 +188,63 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             let finalOutput = output;
             let finalTokenCount = tokenCount;
 
-            if (tokenCount > cfg.thresholdTokens &&
-                toolName !== 'read' && toolName !== 'read_file') {
-              const { path } = persistToolResult(state.projectPath, state.sessionId, toolCallId, output);
+            if (
+              tokenCount > cfg.thresholdTokens &&
+              toolName !== 'read' &&
+              toolName !== 'read_file'
+            ) {
+              const { path } = persistToolResult(
+                state.projectPath,
+                state.sessionId,
+                toolCallId,
+                output
+              );
               const preview = output.slice(0, cfg.persistPreviewChars);
               finalOutput = `${preview}\n\n[…full output persisted at: ${path}. Use Read tool to access if needed.]`;
               finalTokenCount = estimateTokensForContent(finalOutput);
             }
 
-            const event: ToolResultEvent = { type: 'tool_result', turnId: state.currentTurnId, uuid: randomUUID(), parentUuid, toolName, toolCallId, output: finalOutput, timestamp: new Date().toISOString(), tokenCount: finalTokenCount };
+            const event: ToolResultEvent = {
+              type: 'tool_result',
+              turnId: state.currentTurnId,
+              uuid: randomUUID(),
+              parentUuid,
+              toolName,
+              toolCallId,
+              output: finalOutput,
+              timestamp: new Date().toISOString(),
+              tokenCount: finalTokenCount,
+            };
             appendLine(state.transcriptPath, event);
             state.messageCount++;
             updateIndex(state);
-            state.promptEstimate += estimateMessageTokens({ role: 'tool', content: finalOutput, tool_call_id: toolCallId, tool_name: toolName });
+            state.promptEstimate += estimateMessageTokens({
+              role: 'tool',
+              content: finalOutput,
+              tool_call_id: toolCallId,
+              tool_name: toolName,
+            });
             return event;
           },
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      appendSummary: (state: SessionStoreState, replaces: string[], summaryText: string, method: SummaryEvent['method']): Effect.Effect<SummaryEvent, AgentError> =>
+      appendSummary: (
+        state: SessionStoreState,
+        replaces: string[],
+        summaryText: string,
+        method: SummaryEvent['method']
+      ): Effect.Effect<SummaryEvent, AgentError> =>
         Effect.try({
           try: () => {
-            const event: SummaryEvent = { type: 'summary', uuid: randomUUID(), replaces, summaryText, method, timestamp: new Date().toISOString() };
+            const event: SummaryEvent = {
+              type: 'summary',
+              uuid: randomUUID(),
+              replaces,
+              summaryText,
+              method,
+              timestamp: new Date().toISOString(),
+            };
             appendLine(state.transcriptPath, event);
             state.messageCount++;
             updateIndex(state);
@@ -162,9 +255,20 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
         }),
 
-      hideMessage: (state: SessionStoreState, targetUuid: string, reason: string): Effect.Effect<HideEvent> =>
+      hideMessage: (
+        state: SessionStoreState,
+        targetUuid: string,
+        reason: string
+      ): Effect.Effect<HideEvent> =>
         Effect.sync(() => {
-          const event: HideEvent = { type: 'hide', uuid: randomUUID(), kind: 'message', targetUuid, reason, timestamp: new Date().toISOString() };
+          const event: HideEvent = {
+            type: 'hide',
+            uuid: randomUUID(),
+            kind: 'message',
+            targetUuid,
+            reason,
+            timestamp: new Date().toISOString(),
+          };
           appendLine(state.transcriptPath, event);
           state.messageCount++;
           updateIndex(state);
@@ -173,9 +277,20 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           return event;
         }),
 
-      rollbackToTurn: (state: SessionStoreState, throughTurnId: number, reason: string): Effect.Effect<HideEvent> =>
+      rollbackToTurn: (
+        state: SessionStoreState,
+        throughTurnId: number,
+        reason: string
+      ): Effect.Effect<HideEvent> =>
         Effect.sync(() => {
-          const event: HideEvent = { type: 'hide', uuid: randomUUID(), kind: 'rollback', throughTurnId, reason, timestamp: new Date().toISOString() };
+          const event: HideEvent = {
+            type: 'hide',
+            uuid: randomUUID(),
+            kind: 'rollback',
+            throughTurnId,
+            reason,
+            timestamp: new Date().toISOString(),
+          };
           appendLine(state.transcriptPath, event);
           state.messageCount++;
           updateIndex(state);
@@ -195,7 +310,12 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             if (ev.type === 'unhide') unhidTargets.add(ev.targetHideUuid);
           }
           if (!lastHideUuid || unhidTargets.has(lastHideUuid)) return null;
-          const event: UnhideEvent = { type: 'unhide', uuid: randomUUID(), targetHideUuid: lastHideUuid, timestamp: new Date().toISOString() };
+          const event: UnhideEvent = {
+            type: 'unhide',
+            uuid: randomUUID(),
+            targetHideUuid: lastHideUuid,
+            timestamp: new Date().toISOString(),
+          };
           appendLine(state.transcriptPath, event);
           state.messageCount++;
           updateIndex(state);
@@ -211,7 +331,12 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
       renameSession: (state: SessionStoreState, text: string): Effect.Effect<TitleEvent> =>
         Effect.sync(() => {
-          const event: TitleEvent = { type: 'title', uuid: randomUUID(), text, timestamp: new Date().toISOString() };
+          const event: TitleEvent = {
+            type: 'title',
+            uuid: randomUUID(),
+            text,
+            timestamp: new Date().toISOString(),
+          };
           state.title = text;
           appendLine(state.transcriptPath, event);
           state.messageCount++;
@@ -272,7 +397,9 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
       usage = idx.usage ?? undefined;
       promptEstimate = idx.promptEstimate ?? 0;
     }
-  } catch { /* ignore corrupt index */ }
+  } catch {
+    /* ignore corrupt index */
+  }
   if (!usage && promptEstimate === 0) {
     const lastUsage = findLastVisibleAssistantUsage(transcriptPath);
     if (lastUsage) {
@@ -281,9 +408,15 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
     }
   }
   return {
-    sessionId: id, cwd: normalizedCwd, projectPath, transcriptPath,
+    sessionId: id,
+    cwd: normalizedCwd,
+    projectPath,
+    transcriptPath,
     indexPath,
-    messageCount: 0, sessionMeta: null, title: id.slice(0, 8), currentTurnId,
+    messageCount: 0,
+    sessionMeta: null,
+    title: id.slice(0, 8),
+    currentTurnId,
     usage,
     promptEstimate,
   };
@@ -293,11 +426,14 @@ function updateIndex(state: SessionStoreState): void {
   if (!state.sessionMeta) return;
   const current = readCurrentIndex(state.indexPath);
   const index: SessionIndex = {
-    sessionId: state.sessionId, projectPath: state.projectPath, cwd: state.cwd,
+    sessionId: state.sessionId,
+    projectPath: state.projectPath,
+    cwd: state.cwd,
     model: state.sessionMeta.model,
     createdAt: state.sessionMeta.createdAt,
     updatedAt: new Date().toISOString(),
-    messageCount: state.messageCount, title: state.title,
+    messageCount: state.messageCount,
+    title: state.title,
     currentTurnId: state.currentTurnId,
     usage: state.usage,
     promptEstimate: state.promptEstimate,
@@ -306,7 +442,11 @@ function updateIndex(state: SessionStoreState): void {
   enqueueWrite(state.sessionId, state.indexPath, index);
 }
 
-export function forkSession(sourceSessionId: string, sourceJsonlPath: string, atUuid: string): string {
+export function forkSession(
+  sourceSessionId: string,
+  sourceJsonlPath: string,
+  atUuid: string
+): string {
   const events = readHistory(sourceJsonlPath);
   const atIdx = atUuid ? events.findIndex((e) => 'uuid' in e && (e as any).uuid === atUuid) : -1;
 
@@ -321,7 +461,7 @@ export function forkSession(sourceSessionId: string, sourceJsonlPath: string, at
   let turnId = 0;
 
   for (const ev of chain) {
-    const oldUuid = 'uuid' in ev ? (ev as any).uuid as string : undefined;
+    const oldUuid = 'uuid' in ev ? ((ev as any).uuid as string) : undefined;
     const newUuid = randomUUID();
     if (oldUuid) uuidMap.set(oldUuid, newUuid);
 
@@ -352,7 +492,9 @@ export function forkSession(sourceSessionId: string, sourceJsonlPath: string, at
       usage = srcIdx.usage ?? undefined;
       promptEstimate = srcIdx.promptEstimate ?? 0;
       permissionMode = srcIdx.permissionMode ?? 'default';
-    } catch { /* corrupt */ }
+    } catch {
+      /* corrupt */
+    }
   }
 
   const lastUsage = findLastVisibleAssistantUsage(newJsonlPath);

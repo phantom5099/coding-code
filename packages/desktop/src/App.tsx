@@ -1,23 +1,23 @@
-import { useEffect } from 'react'
-import { useGlobalStore } from './stores/global.store'
-import AgentLayout from './layouts/AgentLayout'
-import IDELayout from './layouts/IDELayout'
-import TitleBar from './TitleBar'
-import ErrorBoundary from './shared/ErrorBoundary'
+import { useEffect } from 'react';
+import { useGlobalStore } from './stores/global.store';
+import AgentLayout from './layouts/AgentLayout';
+import IDELayout from './layouts/IDELayout';
+import TitleBar from './TitleBar';
+import ErrorBoundary from './shared/ErrorBoundary';
 
 export default function App() {
-  const mode = useGlobalStore((s) => s.ui.mode)
-  const setMode = useGlobalStore((s) => s.setMode)
+  const mode = useGlobalStore((s) => s.ui.mode);
+  const setMode = useGlobalStore((s) => s.setMode);
 
   useEffect(() => {
-    const off = window.electronAPI?.onFsChange?.(() => {})
+    const off = window.electronAPI?.onFsChange?.(() => {});
     window.addEventListener('menu:switchMode', ((e: CustomEvent<'agent' | 'ide'>) => {
-      setMode(e.detail)
-    }) as EventListener)
+      setMode(e.detail);
+    }) as EventListener);
     return () => {
-      off?.()
-    }
-  }, [setMode])
+      off?.();
+    };
+  }, [setMode]);
 
   return (
     <ErrorBoundary>
@@ -32,5 +32,5 @@ export default function App() {
         </div>
       </div>
     </ErrorBoundary>
-  )
+  );
 }

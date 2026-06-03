@@ -24,7 +24,9 @@ export function InputBox({ onSubmit, disabled, width = 80 }: Props) {
     <Box flexDirection="column">
       <Text color={borderColor}>{'─'.repeat(w)}</Text>
       <Box paddingX={1}>
-        <Text color="blue" bold>{'> '}</Text>
+        <Text color="blue" bold>
+          {'> '}
+        </Text>
         <TextInput
           value={input}
           onChange={setInput}

@@ -29,12 +29,12 @@ export function parseWorkspaceArgs(argv: string[]): { workspaceCwd?: string; arg
       workspaceCwd = next;
       continue;
     }
-    if (arg.startsWith('--cwd=')) {
-      workspaceCwd = arg.slice('--cwd='.length);
+    if (arg!.startsWith('--cwd=')) {
+      workspaceCwd = arg!.slice('--cwd='.length);
       if (!workspaceCwd) throw new AgentError('CONFIG_INVALID', '--cwd requires a directory path');
       continue;
     }
-    args.push(arg);
+    args.push(arg!);
   }
   return { workspaceCwd, args };
 }

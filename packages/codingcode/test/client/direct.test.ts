@@ -39,7 +39,12 @@ describe('agentEventToStreamChunk - approval interleaving', () => {
   it('yields approval_request chunks without blocking on subsequent events', async () => {
     async function* source() {
       yield { _tag: 'LlmChunk' as const, text: 'before' };
-      yield { _tag: 'ApprovalRequest' as const, id: 'apr-1', tool: 'bash', args: { command: 'ls' } };
+      yield {
+        _tag: 'ApprovalRequest' as const,
+        id: 'apr-1',
+        tool: 'bash',
+        args: { command: 'ls' },
+      };
       yield { _tag: 'LlmChunk' as const, text: 'after' };
       yield { _tag: 'Done' as const, content: 'done' };
     }
@@ -50,7 +55,12 @@ describe('agentEventToStreamChunk - approval interleaving', () => {
     }
 
     expect(chunks[0]).toEqual({ type: 'text', text: 'before', messageId: 0 });
-    expect(chunks[1]).toEqual({ type: 'approval_request', id: 'apr-1', tool: 'bash', args: { command: 'ls' } });
+    expect(chunks[1]).toEqual({
+      type: 'approval_request',
+      id: 'apr-1',
+      tool: 'bash',
+      args: { command: 'ls' },
+    });
     expect(chunks[2]).toEqual({ type: 'text', text: 'after', messageId: 0 });
     expect(chunks[3]).toEqual({ type: 'done' });
   });
@@ -85,7 +95,7 @@ describe('agentEventToStreamChunk - approval interleaving', () => {
     }
 
     expect(chunks).toEqual([
-      { type: 'text', text: 'ok', messageId: 1 },
+      { type: 'message', id: 1, content: 'ok', partial: false },
       { type: 'usage', prompt: 1000, completion: 500, total: 1500 },
     ]);
   });

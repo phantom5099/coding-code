@@ -11,7 +11,9 @@ export function CodeBlock({ code, language }: Props) {
 
   return (
     <Box flexDirection="column" marginY={1}>
-      <Text color="cyan" bold>{language}</Text>
+      <Text color="cyan" bold>
+        {language}
+      </Text>
       {lines.map((line, i) => (
         <Text key={i}>{line}</Text>
       ))}

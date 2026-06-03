@@ -1,7 +1,7 @@
-import { app, BrowserWindow, Menu, MenuItemConstructorOptions, shell } from 'electron'
+import { app, BrowserWindow, Menu, MenuItemConstructorOptions, shell } from 'electron';
 
 export function createMenu(win: BrowserWindow): void {
-  const isMac = process.platform === 'darwin'
+  const isMac = process.platform === 'darwin';
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac
@@ -30,7 +30,7 @@ export function createMenu(win: BrowserWindow): void {
           accelerator: 'CmdOrCtrl+O',
           click: () => {
             // Handled in renderer via IPC
-            win.webContents.send('menu:openFolder')
+            win.webContents.send('menu:openFolder');
           },
         },
         { type: 'separator' },
@@ -85,8 +85,8 @@ export function createMenu(win: BrowserWindow): void {
         },
       ],
     },
-  ]
+  ];
 
-  const menu = Menu.buildFromTemplate(template)
-  Menu.setApplicationMenu(menu)
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 }

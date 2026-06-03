@@ -1,26 +1,26 @@
-import { Component, type ReactNode } from 'react'
+import { Component, type ReactNode } from 'react';
 
 interface Props {
-  children: ReactNode
+  children: ReactNode;
 }
 
 interface State {
-  hasError: boolean
-  error?: Error
+  hasError: boolean;
+  error?: Error;
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
-    super(props)
-    this.state = { hasError: false }
+    super(props);
+    this.state = { hasError: false };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error }
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('React ErrorBoundary caught:', error, info)
+    console.error('React ErrorBoundary caught:', error, info);
   }
 
   render() {
@@ -41,8 +41,8 @@ export default class ErrorBoundary extends Component<Props, State> {
             </pre>
           )}
         </div>
-      )
+      );
     }
-    return this.props.children
+    return this.props.children;
   }
 }

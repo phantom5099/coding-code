@@ -15,7 +15,11 @@ vi.mock('../../src/subagent/loader.js', () => ({
 }));
 
 vi.mock('../../src/subagent/registry.js', () => ({
-  EXPLORE_PROFILE: { name: 'explore', description: 'Read-only code exploration', tools: ['read_file', 'search_code'] },
+  EXPLORE_PROFILE: {
+    name: 'explore',
+    description: 'Read-only code exploration',
+    tools: ['read_file', 'search_code'],
+  },
   isAgentDisabledState: vi.fn().mockReturnValue(false),
   setAgentDisabledState: vi.fn(),
 }));
@@ -44,7 +48,11 @@ vi.mock('../../src/memory/index.js', () => ({
 }));
 
 vi.mock('../../src/subagent/registry.js', () => ({
-  EXPLORE_PROFILE: { name: 'explore', description: 'Read-only code exploration', tools: ['read_file', 'search_code'] },
+  EXPLORE_PROFILE: {
+    name: 'explore',
+    description: 'Read-only code exploration',
+    tools: ['read_file', 'search_code'],
+  },
   isAgentDisabledState: vi.fn().mockReturnValue(false),
   setAgentDisabledState: vi.fn(),
   getSubagentEnabledState: vi.fn().mockReturnValue(true),
@@ -53,10 +61,26 @@ vi.mock('../../src/subagent/registry.js', () => ({
 
 import * as service from '../../src/settings/service.js';
 import { loadMcpConfig, writeMcpConfig } from '../../src/mcp/config.js';
-import { loadAgentProfiles, writeAgentProfile, updateAgentProfile } from '../../src/subagent/loader.js';
+import {
+  loadAgentProfiles,
+  writeAgentProfile,
+  updateAgentProfile,
+} from '../../src/subagent/loader.js';
 import { loadHookConfigs, writeHookConfigs } from '../../src/hooks/config.js';
-import { EXPLORE_PROFILE, isAgentDisabledState, getSubagentEnabledState, setSubagentEnabledState } from '../../src/subagent/registry.js';
-import { getMemoryConfig, getAllTypesWithStatus, setMemoryTypeDisabled, addMemoryExtraType, updateMemoryExtraType, deleteMemoryExtraType } from '../../src/memory/config.js';
+import {
+  EXPLORE_PROFILE,
+  isAgentDisabledState,
+  getSubagentEnabledState,
+  setSubagentEnabledState,
+} from '../../src/subagent/registry.js';
+import {
+  getMemoryConfig,
+  getAllTypesWithStatus,
+  setMemoryTypeDisabled,
+  addMemoryExtraType,
+  updateMemoryExtraType,
+  deleteMemoryExtraType,
+} from '../../src/memory/config.js';
 import { getMemoryEnabled, setMemoryEnabled } from '../../src/memory/index.js';
 
 const mockLoadMcpConfig = vi.mocked(loadMcpConfig);
@@ -73,16 +97,30 @@ beforeEach(() => {
 
 describe('MCP server operations', () => {
   it('createMcpServer throws AlreadyExistsError on duplicate name', () => {
-    mockLoadMcpConfig.mockReturnValue([{ name: 'existing', transport: 'stdio', command: 'echo', concurrency: 1, autoReconnect: false } as any]);
-    expect(() => service.createMcpServer('/cwd', { name: 'existing', transport: 'stdio', command: 'echo' } as any))
-      .toThrow(AlreadyExistsError);
+    mockLoadMcpConfig.mockReturnValue([
+      {
+        name: 'existing',
+        transport: 'stdio',
+        command: 'echo',
+        concurrency: 1,
+        autoReconnect: false,
+      } as any,
+    ]);
+    expect(() =>
+      service.createMcpServer('/cwd', {
+        name: 'existing',
+        transport: 'stdio',
+        command: 'echo',
+      } as any)
+    ).toThrow(AlreadyExistsError);
     expect(mockWriteMcpConfig).not.toHaveBeenCalled();
   });
 
   it('updateMcpServer throws NotFoundError when server missing', () => {
     mockLoadMcpConfig.mockReturnValue([]);
-    expect(() => service.updateMcpServer('/cwd', 'nonexistent', { name: 'nonexistent' } as any))
-      .toThrow(NotFoundError);
+    expect(() =>
+      service.updateMcpServer('/cwd', 'nonexistent', { name: 'nonexistent' } as any)
+    ).toThrow(NotFoundError);
   });
 
   it('updateMcpServer throws AlreadyExistsError on rename conflict', () => {
@@ -90,51 +128,110 @@ describe('MCP server operations', () => {
       { name: 'a', transport: 'stdio', command: 'echo', concurrency: 1, autoReconnect: false },
       { name: 'b', transport: 'stdio', command: 'echo', concurrency: 1, autoReconnect: false },
     ] as any);
-    expect(() => service.updateMcpServer('/cwd', 'a', { name: 'b' } as any)).toThrow(AlreadyExistsError);
+    expect(() => service.updateMcpServer('/cwd', 'a', { name: 'b' } as any)).toThrow(
+      AlreadyExistsError
+    );
   });
 });
 
 describe('Agent operations', () => {
   it('createAgent throws AlreadyExistsError on duplicate name', () => {
-    mockLoadAgentProfiles.mockReturnValue([{ name: 'existing', description: 'test', systemPrompt: 'prompt' }]);
-    expect(() => service.createAgent('/cwd', { name: 'existing', description: 'test', systemPrompt: 'prompt' })).toThrow(AlreadyExistsError);
+    mockLoadAgentProfiles.mockReturnValue([
+      { name: 'existing', description: 'test', systemPrompt: 'prompt' },
+    ]);
+    expect(() =>
+      service.createAgent('/cwd', { name: 'existing', description: 'test', systemPrompt: 'prompt' })
+    ).toThrow(AlreadyExistsError);
     expect(mockWriteAgentProfile).not.toHaveBeenCalled();
   });
 
   it('updateAgent throws NotFoundError when agent missing', () => {
     mockLoadAgentProfiles.mockReturnValue([]);
-    expect(() => service.updateAgent('/cwd', 'nonexistent', { name: 'test', description: 'test', systemPrompt: 'p' })).toThrow(NotFoundError);
+    expect(() =>
+      service.updateAgent('/cwd', 'nonexistent', {
+        name: 'test',
+        description: 'test',
+        systemPrompt: 'p',
+      })
+    ).toThrow(NotFoundError);
   });
 
   it('updateAgent throws AlreadyExistsError on rename conflict', () => {
-    mockLoadAgentProfiles.mockReturnValue([{ name: 'a', description: 'x', systemPrompt: 'p1' }, { name: 'b', description: 'y', systemPrompt: 'p2' }]);
-    expect(() => service.updateAgent('/cwd', 'a', { name: 'b', description: 'z', systemPrompt: 'p1' })).toThrow(AlreadyExistsError);
+    mockLoadAgentProfiles.mockReturnValue([
+      { name: 'a', description: 'x', systemPrompt: 'p1' },
+      { name: 'b', description: 'y', systemPrompt: 'p2' },
+    ]);
+    expect(() =>
+      service.updateAgent('/cwd', 'a', { name: 'b', description: 'z', systemPrompt: 'p1' })
+    ).toThrow(AlreadyExistsError);
   });
 });
 
 describe('Hook operations', () => {
   it('createHook throws AlreadyExistsError on duplicate name', () => {
-    mockLoadHookConfigs.mockReturnValue([{ name: 'existing', point: 'tool.execute.before' as const, command: 'echo', enabled: true, type: 'observer' as const }]);
-    expect(() => service.createHook('/cwd', { name: 'existing', point: 'tool.execute.before' as const, command: 'echo', enabled: true, type: 'observer' as const })).toThrow(AlreadyExistsError);
+    mockLoadHookConfigs.mockReturnValue([
+      {
+        name: 'existing',
+        point: 'tool.execute.before' as const,
+        command: 'echo',
+        enabled: true,
+        type: 'observer' as const,
+      },
+    ]);
+    expect(() =>
+      service.createHook('/cwd', {
+        name: 'existing',
+        point: 'tool.execute.before' as const,
+        command: 'echo',
+        enabled: true,
+        type: 'observer' as const,
+      })
+    ).toThrow(AlreadyExistsError);
     expect(mockWriteHookConfigs).not.toHaveBeenCalled();
   });
 
   it('updateHook throws NotFoundError when hook missing', () => {
     mockLoadHookConfigs.mockReturnValue([]);
-    expect(() => service.updateHook('/cwd', 'nonexistent', { name: 'test', point: 'tool.execute.before' as const, command: 'echo', enabled: true, type: 'observer' as const })).toThrow(NotFoundError);
+    expect(() =>
+      service.updateHook('/cwd', 'nonexistent', {
+        name: 'test',
+        point: 'tool.execute.before' as const,
+        command: 'echo',
+        enabled: true,
+        type: 'observer' as const,
+      })
+    ).toThrow(NotFoundError);
   });
 
   it('setHookDisabled updates both runtime and config enabled state', () => {
-    const hooks = [{ name: 'test-hook', point: 'tool.execute.before' as const, command: 'echo', enabled: true, type: 'observer' as const }];
+    const hooks = [
+      {
+        name: 'test-hook',
+        point: 'tool.execute.before' as const,
+        command: 'echo',
+        enabled: true,
+        type: 'observer' as const,
+      },
+    ];
     mockLoadHookConfigs.mockReturnValue(hooks);
     service.setHookDisabled('/cwd', 'test-hook', true);
-    expect(mockWriteHookConfigs).toHaveBeenCalledWith('/cwd', [{ name: 'test-hook', point: 'tool.execute.before' as const, command: 'echo', enabled: false, type: 'observer' as const }]);
+    expect(mockWriteHookConfigs).toHaveBeenCalledWith('/cwd', [
+      {
+        name: 'test-hook',
+        point: 'tool.execute.before' as const,
+        command: 'echo',
+        enabled: false,
+        type: 'observer' as const,
+      },
+    ]);
   });
 });
 
 describe('listAgents', () => {
   it('includes explore profile and custom agents with disabled state', () => {
-    mockLoadAgentProfiles.mockReturnValue([{ name: 'custom', description: 'Custom agent', systemPrompt: 'p' }]);
+    mockLoadAgentProfiles.mockReturnValue([
+      { name: 'custom', description: 'Custom agent', systemPrompt: 'p' },
+    ]);
     vi.mocked(isAgentDisabledState).mockReturnValue(true);
     const result = service.listAgents('/cwd');
     expect(result).toHaveLength(2);
@@ -146,7 +243,11 @@ describe('listAgents', () => {
 
 describe('Memory operations', () => {
   it('getMemoryConfigWithTypes returns enabled and types', () => {
-    vi.mocked(getMemoryConfig).mockReturnValue({ enabled: true, disabledTypes: [], extraTypes: [] } as any);
+    vi.mocked(getMemoryConfig).mockReturnValue({
+      enabled: true,
+      disabledTypes: [],
+      extraTypes: [],
+    } as any);
     vi.mocked(getAllTypesWithStatus).mockReturnValue([
       { name: 'test', description: 'Test', isBuiltIn: true, disabled: false },
     ]);
@@ -170,14 +271,18 @@ describe('Memory operations', () => {
     vi.mocked(addMemoryExtraType).mockImplementation(() => {
       throw new Error("Memory type 'dup' already exists");
     });
-    expect(() => service.addMemoryExtraTypeService({ name: 'dup', description: 'x' })).toThrow(AlreadyExistsError);
+    expect(() => service.addMemoryExtraTypeService({ name: 'dup', description: 'x' })).toThrow(
+      AlreadyExistsError
+    );
   });
 
   it('updateMemoryExtraTypeService wraps NotFoundError', () => {
     vi.mocked(updateMemoryExtraType).mockImplementation(() => {
       throw new Error("Memory type 'missing' not found");
     });
-    expect(() => service.updateMemoryExtraTypeService('missing', { name: 'missing', description: 'x' })).toThrow(NotFoundError);
+    expect(() =>
+      service.updateMemoryExtraTypeService('missing', { name: 'missing', description: 'x' })
+    ).toThrow(NotFoundError);
   });
 
   it('deleteMemoryExtraTypeService delegates to deleteMemoryExtraType', () => {

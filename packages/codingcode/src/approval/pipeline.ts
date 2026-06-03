@@ -1,12 +1,6 @@
 import { Effect } from 'effect';
-import type {
-  ApprovalDecision,
-  PermissionMode,
-  PermissionRule,
-  ToolCallRequest,
-} from './types';
+import type { ApprovalDecision, PermissionMode, PermissionRule, ToolCallRequest } from './types';
 import type { RuleEngine } from './rule-engine';
-import type { ConfirmResult } from './confirmation';
 import { userConfirm, userConfirmAsync } from './confirmation';
 import type { ApprovalWaitService } from './async-confirm';
 
@@ -62,7 +56,7 @@ const LAYER_NAMES = [
 
 export function runPipeline(
   request: ToolCallRequest,
-  opts: PipelineOptions,
+  opts: PipelineOptions
 ): Effect.Effect<ApprovalDecision> {
   return Effect.gen(function* () {
     const layers: string[] = [];
@@ -96,7 +90,7 @@ export function runPipeline(
         request.tool,
         opts.permissionMode,
         opts.readonlyTools,
-        opts.destructiveTools,
+        opts.destructiveTools
       );
       if (modeResult) {
         layers.push(LAYER_NAMES[2]);
@@ -138,11 +132,19 @@ export function runPipeline(
     // Layer 5: User Confirmation
     {
       layers.push(LAYER_NAMES[4]);
-      const confirmResult = yield* (
-        opts.asyncConfirm && opts.asyncConfirmService
-          ? userConfirmAsync(request.tool, request.input, opts.asyncConfirmService, opts.sessionId, opts.callId)
-          : userConfirm(request.tool, request.input, opts.interactive ? 'interactive' : 'default-deny')
-      );
+      const confirmResult = yield* opts.asyncConfirm && opts.asyncConfirmService
+        ? userConfirmAsync(
+            request.tool,
+            request.input,
+            opts.asyncConfirmService,
+            opts.sessionId,
+            opts.callId
+          )
+        : userConfirm(
+            request.tool,
+            request.input,
+            opts.interactive ? 'interactive' : 'default-deny'
+          );
 
       let result: ApprovalDecision;
       switch (confirmResult.type) {
@@ -172,13 +174,17 @@ function applyPermissionMode(
   tool: string,
   mode: PermissionMode,
   readonlyTools: Set<string>,
-  destructiveTools: Set<string>,
+  destructiveTools: Set<string>
 ): ApprovalDecision | null {
   switch (mode) {
     case 'plan':
       // Plan mode: only read-only tools allowed
       if (!readonlyTools.has(tool)) {
-        return { type: 'deny', reason: 'Write operations denied in plan mode', source: 'permission-mode' };
+        return {
+          type: 'deny',
+          reason: 'Write operations denied in plan mode',
+          source: 'permission-mode',
+        };
       }
       return { type: 'allow', source: 'permission-mode' };
 
@@ -207,7 +213,7 @@ function layer6Audit(
   request: ToolCallRequest,
   decision: ApprovalDecision,
   passedLayers: string[],
-  opts: PipelineOptions,
+  opts: PipelineOptions
 ): Effect.Effect<ApprovalDecision> {
   return Effect.gen(function* () {
     passedLayers.push(LAYER_NAMES[5]);

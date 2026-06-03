@@ -10,7 +10,10 @@ import type { UserHookConfig } from '../../hooks/config.js';
 
 export interface SettingsClient {
   getMemoryEnabled(): Promise<boolean>;
-  getMemoryConfig(): Promise<{ enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> }>;
+  getMemoryConfig(): Promise<{
+    enabled: boolean;
+    types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
+  }>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
   setMemoryTypeDisabled(name: string, disabled: boolean): Promise<void>;
   addMemoryExtraType(type: { name: string; description: string }): Promise<void>;
@@ -40,7 +43,7 @@ export interface SettingsClient {
 }
 
 export function createDirectSettingsClient(
-  runWithLayer: <T>(eff: any) => Promise<T>,
+  runWithLayer: <T>(eff: any) => Promise<T>
 ): SettingsClient {
   return {
     async getMemoryEnabled() {
@@ -84,7 +87,7 @@ export function createDirectSettingsClient(
         Effect.gen(function* () {
           const mcp = yield* McpService;
           return yield* mcp.status();
-        }),
+        })
       );
     },
 
@@ -92,8 +95,8 @@ export function createDirectSettingsClient(
       await runWithLayer(
         Effect.gen(function* () {
           const mcp = yield* McpService;
-          return yield* (disabled ? mcp.disable(name) : mcp.enable(name));
-        }),
+          return yield* disabled ? mcp.disable(name) : mcp.enable(name);
+        })
       );
     },
 
@@ -114,7 +117,7 @@ export function createDirectSettingsClient(
         Effect.gen(function* () {
           const skill = yield* SkillService;
           return yield* skill.listWithStatus();
-        }),
+        })
       );
     },
 
@@ -122,8 +125,8 @@ export function createDirectSettingsClient(
       await runWithLayer(
         Effect.gen(function* () {
           const skill = yield* SkillService;
-          return yield* (enabled ? skill.enableSkill(name) : skill.disableSkill(name));
-        }),
+          return yield* enabled ? skill.enableSkill(name) : skill.disableSkill(name);
+        })
       );
     },
 

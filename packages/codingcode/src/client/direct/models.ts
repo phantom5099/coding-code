@@ -1,4 +1,9 @@
-import { getActiveEntry, getLLMClient, listModels, switchModel as switchActiveModel } from '../../llm/factory.js';
+import {
+  getActiveEntry,
+  getLLMClient,
+  listModels,
+  switchModel as switchActiveModel,
+} from '../../llm/factory.js';
 
 export interface ModelClient {
   listModels(): Promise<any>;
@@ -11,7 +16,10 @@ export function createDirectModelClient(): ModelClient {
       const modelsResult = listModels();
       if (!modelsResult.ok) throw modelsResult.error;
       const activeResult = getActiveEntry();
-      return { models: modelsResult.value, activeId: activeResult.ok ? activeResult.value.id : null };
+      return {
+        models: modelsResult.value,
+        activeId: activeResult.ok ? activeResult.value.id : null,
+      };
     },
 
     async switchModel({ id }) {

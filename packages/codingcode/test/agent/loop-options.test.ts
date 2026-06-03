@@ -9,16 +9,21 @@ describe('runReActLoop 鈥?loop options', () => {
   const mockState = {
     sessionId: 'test-session',
     cwd: process.cwd(),
-    currentTurnId: randomUUID(),
+    currentTurnId: 0,
     sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
     title: 'test',
     usage: undefined,
+    projectPath: '',
+    transcriptPath: '',
+    indexPath: '',
+    messageCount: 0,
+    promptEstimate: 0,
   };
 
   const mockHooks = {
     emit: vi.fn(() => Effect.succeed(undefined)),
     emitDecision: vi.fn(() => Effect.succeed(null)),
-  };
+  } as any;
 
   function baseMockDeps(overrides: Record<string, any> = {}) {
     return {
@@ -34,10 +39,18 @@ describe('runReActLoop 鈥?loop options', () => {
         listUnloadedDeferred: () => [],
       } as any,
       agentIdResolver: { resolve: () => 'agent-id' } as any,
+      agentService: { runStream: () => (async function* () {})() } as any,
       ctx: {
-        build: () => Effect.succeed([]),
-        compress: () => Effect.succeed({ released: 0 }),
+        build: () =>
+          Effect.succeed({
+            messages: [{ role: 'user' as const, content: 'hi' }],
+            newBudgets: [],
+            promptEstimate: 0,
+          }),
+        compress: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
         appendTurnEnd: () => Effect.succeed(undefined),
+        compactIfNeeded: () =>
+          Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
       } as any,
       session: {
         recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
@@ -58,14 +71,14 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       systemOverride: 'Custom system prompt',
     };
 
@@ -76,7 +89,7 @@ describe('runReActLoop 鈥?loop options', () => {
     }
 
     expect(mockLlm.completeStream).toHaveBeenCalled();
-    const lastCall = mockLlm.completeStream.mock.calls[0]?.[0];
+    const lastCall = (mockLlm.completeStream as any).mock?.calls?.[0]?.[0];
     expect(lastCall?.system).toBe('Custom system prompt');
   });
 
@@ -86,13 +99,15 @@ describe('runReActLoop 鈥?loop options', () => {
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
-        response: new Promise(r => setTimeout(() => r(Result.ok({ content: 'Response', toolCalls: [] })), 100)),
+        response: new Promise((r) =>
+          setTimeout(() => r(Result.ok({ content: 'Response', toolCalls: [] })), 100)
+        ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       abortSignal: controller.signal,
     };
 
@@ -107,7 +122,7 @@ describe('runReActLoop 鈥?loop options', () => {
 
     const errorEvent = events.find((e: any) => e._tag === 'Error');
     expect(errorEvent).toBeDefined();
-    expect(errorEvent?.error?.code).toBe('AGENT_ABORTED');
+    expect((errorEvent as any)?.error?.code).toBe('AGENT_ABORTED');
   });
 
   it('should support coreAllowlist to filter available tools', async () => {
@@ -118,14 +133,14 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       coreAllowlist: new Set(['allowed_tool']),
     };
 
@@ -146,14 +161,14 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       maxStepsOverride: 5,
     };
 
@@ -175,7 +190,7 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
@@ -186,7 +201,7 @@ describe('runReActLoop 鈥?loop options', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       approvalOverride: mockApproval as any,
     };
 
@@ -209,7 +224,7 @@ describe('runReActLoop 鈥?loop options', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       // maxStopContinuations not set in opts 鈫?should use deps value
     };
 
@@ -230,14 +245,14 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
     };
 
     const gen = runReActLoop(opts, baseMockDeps());
@@ -248,11 +263,11 @@ describe('runReActLoop 鈥?loop options', () => {
 
     expect(mockHooks.emit).toHaveBeenCalledWith(
       'agent.turn.start',
-      expect.objectContaining({ sessionId: mockState.sessionId }),
+      expect.objectContaining({ sessionId: mockState.sessionId })
     );
     expect(mockHooks.emit).toHaveBeenCalledWith(
       'agent.turn.end',
-      expect.objectContaining({ status: 'done' }),
+      expect.objectContaining({ status: 'done' })
     );
   });
 });

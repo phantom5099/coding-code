@@ -97,8 +97,8 @@ describe('ToolService', () => {
       yield* svc.register(makeTool('deferred_d', true));
       const deferred = svc.allDeferred();
       expect(deferred).toHaveLength(2);
-      expect(deferred.every(t => t.deferred === true)).toBe(true);
-      expect(deferred.map(t => t.name).sort()).toEqual(['deferred_b', 'deferred_d']);
+      expect(deferred.every((t) => t.deferred === true)).toBe(true);
+      expect(deferred.map((t) => t.name).sort()).toEqual(['deferred_b', 'deferred_d']);
     });
     await runWithLayer(program);
   });
@@ -110,8 +110,8 @@ describe('ToolService', () => {
       yield* svc.register(makeTool('deferred_b', true));
       yield* svc.register(makeTool('core_c'));
       const core = svc.allCore();
-      expect(core.every(t => t.deferred !== true)).toBe(true);
-      const names = core.map(t => t.name);
+      expect(core.every((t) => t.deferred !== true)).toBe(true);
+      const names = core.map((t) => t.name);
       expect(names).toContain('core_a');
       expect(names).toContain('core_c');
       expect(names).not.toContain('deferred_b');

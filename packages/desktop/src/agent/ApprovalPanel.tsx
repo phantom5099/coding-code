@@ -1,23 +1,26 @@
-import { useState } from 'react'
-import type { Item } from '@shared/types'
-import { useGlobalStore } from '../stores/global.store'
-import { useAgent } from '../hooks/useAgent'
-import ToolCallCard from '../shared/ToolCallCard'
+import { useState } from 'react';
+import type { Item } from '@shared/types';
+import { useGlobalStore } from '../stores/global.store';
+import { useAgent } from '../hooks/useAgent';
+import ToolCallCard from '../shared/ToolCallCard';
 
 interface ApprovalPanelProps {
-  threadId: string
+  threadId: string;
 }
 
 export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
-  const [collapsed, setCollapsed] = useState(false)
-  const thread = useGlobalStore((s) => s.agent.threads[threadId])
-  const { approveTool, rejectTool } = useAgent()
+  const [collapsed, setCollapsed] = useState(false);
+  const thread = useGlobalStore((s) => s.agent.threads[threadId]);
+  const { approveTool, rejectTool } = useAgent();
 
-  const pendingItems = thread?.turns.flatMap((turn) =>
-    turn.items.filter((i): i is Item & { type: 'tool_call' } => i.type === 'tool_call' && i.status === 'pending'),
-  ) ?? []
+  const pendingItems =
+    thread?.turns.flatMap((turn) =>
+      turn.items.filter(
+        (i): i is Item & { type: 'tool_call' } => i.type === 'tool_call' && i.status === 'pending'
+      )
+    ) ?? [];
 
-  if (pendingItems.length === 0) return null
+  if (pendingItems.length === 0) return null;
 
   if (collapsed) {
     return (
@@ -31,7 +34,7 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
           <span>{pendingItems.length} 个工具等待审批</span>
         </button>
       </div>
-    )
+    );
   }
 
   return (
@@ -40,7 +43,9 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
         <div className="flex items-center justify-between px-4 py-3 bg-[#252526] border-b border-[#3c3c3c]">
           <div className="flex items-center gap-2">
             <span>🔧</span>
-            <span className="text-[13px] text-[#ccc] font-medium">工具审批 ({pendingItems.length})</span>
+            <span className="text-[13px] text-[#ccc] font-medium">
+              工具审批 ({pendingItems.length})
+            </span>
           </div>
           <button
             type="button"
@@ -63,5 +68,5 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }

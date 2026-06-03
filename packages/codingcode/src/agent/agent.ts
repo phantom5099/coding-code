@@ -30,8 +30,8 @@ export const sendMessage = (
   cwd: string,
   llm: LLMClient,
   options?: {
-    signal?: AbortSignal
-  },
+    signal?: AbortSignal;
+  }
 ) =>
   Effect.gen(function* () {
     const session = yield* SessionService;
@@ -55,7 +55,12 @@ export const sendMessage = (
     const turnTitle = actualInput.trim().slice(0, 5) || '(empty)';
     checkpoint.snapshotBaseline(state.cwd, sid, turnId, turnTitle);
 
-    const stream = agent.runStream({ state, llm, skillInstruction: matchedSkill?.instruction, abortSignal: options?.signal });
+    const stream = agent.runStream({
+      state,
+      llm,
+      skillInstruction: matchedSkill?.instruction,
+      abortSignal: options?.signal,
+    });
 
     return { stream, sessionId: sid };
   });
@@ -63,17 +68,54 @@ export const sendMessage = (
 export type AgentEvent =
   | { readonly _tag: 'LlmChunk'; readonly text: string }
   | { readonly _tag: 'Assistant'; readonly content: string; readonly toolCalls?: ToolCall[] }
-  | { readonly _tag: 'ToolStart'; readonly id: string; readonly name: string; readonly args: Record<string, unknown> }
-  | { readonly _tag: 'ToolDenied'; readonly id: string; readonly name: string; readonly reason: string }
-  | { readonly _tag: 'ApprovalRequest'; readonly id: string; readonly tool: string; readonly args: Record<string, unknown> }
-  | { readonly _tag: 'ToolResult'; readonly id: string; readonly name: string; readonly output: string; readonly ok: boolean }
+  | {
+      readonly _tag: 'ToolStart';
+      readonly id: string;
+      readonly name: string;
+      readonly args: Record<string, unknown>;
+    }
+  | {
+      readonly _tag: 'ToolDenied';
+      readonly id: string;
+      readonly name: string;
+      readonly reason: string;
+    }
+  | {
+      readonly _tag: 'ApprovalRequest';
+      readonly id: string;
+      readonly tool: string;
+      readonly args: Record<string, unknown>;
+    }
+  | {
+      readonly _tag: 'ToolResult';
+      readonly id: string;
+      readonly name: string;
+      readonly output: string;
+      readonly ok: boolean;
+    }
   | { readonly _tag: 'Step'; readonly step: number; readonly max: number }
-  | { readonly _tag: 'ReactiveCompact'; readonly attempt: number; readonly released: number; readonly promptEstimate: number }
+  | {
+      readonly _tag: 'ReactiveCompact';
+      readonly attempt: number;
+      readonly released: number;
+      readonly promptEstimate: number;
+    }
   | { readonly _tag: 'Error'; readonly error: AgentError }
   | { readonly _tag: 'Done'; readonly content: string }
-  | { readonly _tag: 'TodoUpdate'; readonly items: ReadonlyArray<{ readonly step: string; readonly status: 'pending' | 'in_progress' | 'completed' }> }
+  | {
+      readonly _tag: 'TodoUpdate';
+      readonly items: ReadonlyArray<{
+        readonly step: string;
+        readonly status: 'pending' | 'in_progress' | 'completed';
+      }>;
+    }
   | { readonly _tag: 'TurnId'; readonly turnId: number }
-  | { readonly _tag: 'Usage'; readonly prompt: number; readonly completion: number; readonly total: number };
+  | {
+      readonly _tag: 'Usage';
+      readonly prompt: number;
+      readonly completion: number;
+      readonly total: number;
+    };
 
 export interface RunStreamOptions {
   state: SessionStoreState;
@@ -96,7 +138,11 @@ interface RunReActDeps {
   executor: ToolExecutorService;
   toolRegistry: ToolService;
   toolSearch: ToolSearchService;
-  agentService: { runStream: (opts: RunStreamOptions) => AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> };
+  agentService: {
+    runStream: (
+      opts: RunStreamOptions
+    ) => AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown>;
+  };
   ctx: ContextService;
   session: SessionService;
   checkpoint: CheckpointService;
@@ -114,12 +160,23 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
     const hooks = yield* HookService;
     const { maxSteps, maxStopContinuations } = resolveConfig();
 
-    const service: { runStream: (opts: RunStreamOptions) => AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> } = {
+    const service: {
+      runStream: (
+        opts: RunStreamOptions
+      ) => AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown>;
+    } = {
       runStream: (opts: RunStreamOptions) =>
         runReActLoop(opts, {
-          maxSteps, maxStopContinuations, executor, toolRegistry, toolSearch,
+          maxSteps,
+          maxStopContinuations,
+          executor,
+          toolRegistry,
+          toolSearch,
           agentService: service,
-          ctx, session, checkpoint, hooks,
+          ctx,
+          session,
+          checkpoint,
+          hooks,
         }),
     };
 
@@ -129,20 +186,22 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
 
 export async function* runReActLoop(
   opts: RunStreamOptions,
-  deps: RunReActDeps,
+  deps: RunReActDeps
 ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> {
   const { state, llm, skillInstruction, systemPromptVariant } = opts;
   const sessionId = state.sessionId;
   const projectPath = state.cwd;
 
   // Build system prompt
-  const basePrompt = opts.systemOverride ?? buildSystemPrompt({
-    cwd: projectPath,
-    platform: process.platform,
-    shell: process.env.SHELL || process.env.ComSpec || 'bash',
-    variant: systemPromptVariant ?? 'default',
-    skillInstruction,
-  });
+  const basePrompt =
+    opts.systemOverride ??
+    buildSystemPrompt({
+      cwd: projectPath,
+      platform: process.platform,
+      shell: process.env.SHELL || process.env.ComSpec || 'bash',
+      variant: systemPromptVariant ?? 'default',
+      skillInstruction,
+    });
 
   const memoryBlock = loadMemoryForPrompt(projectPath);
   const system = [basePrompt, memoryBlock].filter(Boolean).join('\n\n');
@@ -159,7 +218,9 @@ export async function* runReActLoop(
   const maxStopContinuations = opts.maxStopContinuations ?? deps.maxStopContinuations;
 
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
-    const { messages, newBudgets } = Effect.runSync(ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens));
+    const { messages, newBudgets } = Effect.runSync(
+      ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens)
+    );
     if (newBudgets.length > 0) {
       for (const ev of newBudgets) {
         appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');
@@ -180,15 +241,26 @@ export async function* runReActLoop(
       // Check abort signal
       if (opts.abortSignal?.aborted) {
         yield { _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') };
-        await Effect.runPromise(hooks.emit('agent.turn.end', {
-          sessionId, turnId: state.currentTurnId, status: 'aborted'
-        }));
-        flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
+        await Effect.runPromise(
+          hooks.emit('agent.turn.end', {
+            sessionId,
+            turnId: state.currentTurnId,
+            status: 'aborted',
+          })
+        );
+        flushSessionToMemory(state.sessionId, llm).catch((e) =>
+          logger.error('memory flush failed:', e)
+        );
         return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
       }
 
       // Build tools with coreAllowlist filter
-      const tools: ToolDescription[] = buildToolsForAgent(toolRegistry, toolSearch, sessionId, opts.coreAllowlist);
+      const tools: ToolDescription[] = buildToolsForAgent(
+        toolRegistry,
+        toolSearch,
+        sessionId,
+        opts.coreAllowlist
+      );
       const catalog = buildDeferredCatalogContent(toolSearch, sessionId);
       const systemWithCatalog = catalog ? `${system}\n\n${catalog}` : system;
 
@@ -197,11 +269,27 @@ export async function* runReActLoop(
       await Effect.runPromise(hooks.emitDecision('agent.step.before', stepBeforePayload));
 
       // Threshold-triggered LLM compaction
-      const compressResult = await Effect.runPromise(ctx.compactIfNeeded(state.sessionId, state.projectPath, llm, messages, llm.modelInfo.maxTokens, config));
+      const compressResult = await Effect.runPromise(
+        ctx.compactIfNeeded(
+          state.sessionId,
+          state.projectPath,
+          llm,
+          messages,
+          llm.modelInfo.maxTokens,
+          config
+        )
+      );
       if (compressResult.didCompress) {
-        yield { _tag: 'ReactiveCompact', attempt: 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
+        yield {
+          _tag: 'ReactiveCompact',
+          attempt: 1,
+          released: compressResult.released,
+          promptEstimate: compressResult.promptEstimate,
+        };
 
-        const rebuilt = Effect.runSync(ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens));
+        const rebuilt = Effect.runSync(
+          ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens)
+        );
         if (rebuilt.newBudgets.length > 0) {
           for (const ev of rebuilt.newBudgets) {
             appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');
@@ -219,9 +307,15 @@ export async function* runReActLoop(
       // Add step.before transient messages (if any)
       // Note: transient messages are not persisted to JSONL
 
-      const { stream: rawStream, response: respPromise } = llm.completeStream({
-        messages: llmMessages, system: systemWithCatalog, tools, maxSteps: 1,
-      }, opts.abortSignal);
+      const { stream: rawStream, response: respPromise } = llm.completeStream(
+        {
+          messages: llmMessages,
+          system: systemWithCatalog,
+          tools,
+          maxSteps: 1,
+        },
+        opts.abortSignal
+      );
 
       for await (const chunk of rawStream) {
         if (opts.abortSignal?.aborted) break;
@@ -232,16 +326,34 @@ export async function* runReActLoop(
       if (!llmResult.ok) {
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
           const aggressiveConfig = { ...config, keepRecentTurns: config.reactiveCompactKeepTurns };
-          const compressResult = await Effect.runPromise(ctx.compress(state.sessionId, state.projectPath, null, undefined, llm.modelInfo.maxTokens, aggressiveConfig));
-          yield { _tag: 'ReactiveCompact', attempt: attempt + 1, released: compressResult.released, promptEstimate: compressResult.promptEstimate };
+          const compressResult = await Effect.runPromise(
+            ctx.compress(
+              state.sessionId,
+              state.projectPath,
+              null,
+              undefined,
+              llm.modelInfo.maxTokens,
+              aggressiveConfig
+            )
+          );
+          yield {
+            _tag: 'ReactiveCompact',
+            attempt: attempt + 1,
+            released: compressResult.released,
+            promptEstimate: compressResult.promptEstimate,
+          };
           overflow = true;
           break;
         }
         yield { _tag: 'Error', error: llmResult.error };
         lastResult = Result.err(llmResult.error);
-        await Effect.runPromise(hooks.emit('agent.turn.end', {
-          sessionId, turnId: state.currentTurnId, status: 'error'
-        }));
+        await Effect.runPromise(
+          hooks.emit('agent.turn.end', {
+            sessionId,
+            turnId: state.currentTurnId,
+            status: 'error',
+          })
+        );
         break;
       }
 
@@ -254,24 +366,44 @@ export async function* runReActLoop(
       messages.push(assistantMsg);
       yield { _tag: 'Assistant', content: resp.content, toolCalls };
       if (resp.usage) {
-        yield { _tag: 'Usage', prompt: resp.usage.prompt, completion: resp.usage.completion, total: resp.usage.total };
+        yield {
+          _tag: 'Usage',
+          prompt: resp.usage.prompt,
+          completion: resp.usage.completion,
+          total: resp.usage.total,
+        };
       }
 
       if (!toolCalls || toolCalls.length === 0) {
         // LLM done — record assistant, then check stop hook
-        await Effect.runPromise(session.recordAssistant(state, resp.content, toolCalls || [], model, resp.usage));
-        const stopDecision = await Effect.runPromise(hooks.emitDecision('agent.turn.stop', {
-          sessionId, content: resp.content, turnId: state.currentTurnId,
-        }));
+        await Effect.runPromise(
+          session.recordAssistant(state, resp.content, toolCalls || [], model, resp.usage)
+        );
+        const stopDecision = await Effect.runPromise(
+          hooks.emitDecision('agent.turn.stop', {
+            sessionId,
+            content: resp.content,
+            turnId: state.currentTurnId,
+          })
+        );
 
         if (stopDecision && stopDecision.decision === 'continue') {
           // Continue for another iteration
           if (stopContinuations >= maxStopContinuations) {
-            yield { _tag: 'Error', error: new AgentError('STOP_LOOP', 'max stop continuations exceeded') };
-            await Effect.runPromise(hooks.emit('agent.turn.end', {
-              sessionId, turnId: state.currentTurnId, status: 'error'
-            }));
-            flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
+            yield {
+              _tag: 'Error',
+              error: new AgentError('STOP_LOOP', 'max stop continuations exceeded'),
+            };
+            await Effect.runPromise(
+              hooks.emit('agent.turn.end', {
+                sessionId,
+                turnId: state.currentTurnId,
+                status: 'error',
+              })
+            );
+            flushSessionToMemory(state.sessionId, llm).catch((e) =>
+              logger.error('memory flush failed:', e)
+            );
             return Result.err(new AgentError('STOP_LOOP', 'max stop continuations exceeded'));
           }
           stopContinuations++;
@@ -285,9 +417,13 @@ export async function* runReActLoop(
         // Normal completion
         yield { _tag: 'Done', content: resp.content };
         lastResult = Result.ok(resp.content);
-        await Effect.runPromise(hooks.emit('agent.turn.end', {
-          sessionId, turnId: state.currentTurnId, status: 'done'
-        }));
+        await Effect.runPromise(
+          hooks.emit('agent.turn.end', {
+            sessionId,
+            turnId: state.currentTurnId,
+            status: 'done',
+          })
+        );
         break;
       }
 
@@ -301,7 +437,13 @@ export async function* runReActLoop(
       // Execute tool calls — record assistant, execute batch, record results in one pipeline
       const allResults = await Effect.runPromise(
         Effect.gen(function* () {
-          const record = yield* session.recordAssistant(state, resp.content, toolCalls!, model, resp.usage);
+          const record = yield* session.recordAssistant(
+            state,
+            resp.content,
+            toolCalls!,
+            model,
+            resp.usage
+          );
           const results = yield* executor.executeBatch(toolCalls, state.sessionId, {
             turnId: state.currentTurnId,
             projectPath,
@@ -314,7 +456,7 @@ export async function* runReActLoop(
             yield* session.recordToolResult(state, record.uuid, r.name, r.id, resultOut);
           }
           return results;
-        }),
+        })
       );
 
       let todoPrinted = false;
@@ -326,10 +468,11 @@ export async function* runReActLoop(
           const isOk = r.type === 'ok';
           yield { _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk };
         }
-        if (!messages.find(m => m.tool_call_id === r.id)) {
-          const content = r.type === 'denied'
-            ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
-            : r.output ?? '';
+        if (!messages.find((m) => m.tool_call_id === r.id)) {
+          const content =
+            r.type === 'denied'
+              ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
+              : (r.output ?? '');
           messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
         }
         if (!todoPrinted && (r.name === 'todo_write' || r.name === 'todo_read')) {
@@ -341,13 +484,18 @@ export async function* runReActLoop(
       // If abort fired during tool execution, terminate immediately
       if (opts.abortSignal?.aborted) {
         yield { _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') };
-        await Effect.runPromise(hooks.emit('agent.turn.end', {
-          sessionId, turnId: state.currentTurnId, status: 'aborted'
-        }));
-        flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
+        await Effect.runPromise(
+          hooks.emit('agent.turn.end', {
+            sessionId,
+            turnId: state.currentTurnId,
+            status: 'aborted',
+          })
+        );
+        flushSessionToMemory(state.sessionId, llm).catch((e) =>
+          logger.error('memory flush failed:', e)
+        );
         return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
       }
-
     }
 
     if (overflow) continue;
@@ -356,22 +504,32 @@ export async function* runReActLoop(
     checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
 
     // Fire-and-forget memory flush
-    flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
+    flushSessionToMemory(state.sessionId, llm).catch((e) =>
+      logger.error('memory flush failed:', e)
+    );
 
     if (lastResult) return lastResult;
 
     // Max steps exhausted without result
     yield { _tag: 'Error', error: AgentError.maxStepsReached(maxSteps) };
-    await Effect.runPromise(hooks.emit('agent.turn.end', {
-      sessionId, turnId: state.currentTurnId, status: 'maxSteps'
-    }));
+    await Effect.runPromise(
+      hooks.emit('agent.turn.end', {
+        sessionId,
+        turnId: state.currentTurnId,
+        status: 'maxSteps',
+      })
+    );
     return Result.err(AgentError.maxStepsReached(maxSteps));
   }
 
   yield { _tag: 'Error', error: AgentError.maxStepsReached(maxSteps) };
-  await Effect.runPromise(hooks.emit('agent.turn.end', {
-    sessionId, turnId: state.currentTurnId, status: 'maxSteps'
-  }));
-  flushSessionToMemory(state.sessionId, llm).catch(e => logger.error('memory flush failed:', e));
+  await Effect.runPromise(
+    hooks.emit('agent.turn.end', {
+      sessionId,
+      turnId: state.currentTurnId,
+      status: 'maxSteps',
+    })
+  );
+  flushSessionToMemory(state.sessionId, llm).catch((e) => logger.error('memory flush failed:', e));
   return Result.err(AgentError.maxStepsReached(maxSteps));
 }

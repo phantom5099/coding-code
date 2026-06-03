@@ -2,7 +2,10 @@ import type { PermissionMode } from '../../approval/types.js';
 import type { createRequestHelpers } from './request.js';
 
 export interface SessionClient {
-  createSession(input: { cwd: string; initialPermissionMode?: string }): Promise<{ sessionId: string }>;
+  createSession(input: {
+    cwd: string;
+    initialPermissionMode?: string;
+  }): Promise<{ sessionId: string }>;
   resumeSession(input: { sessionId: string; cwd: string }): Promise<any>;
   listSessions(input: { cwd: string }): Promise<any[]>;
   getSessionHistory(input: { sessionId: string }): Promise<any[]>;
@@ -10,22 +13,47 @@ export interface SessionClient {
   getSessionPermissionMode(input: { sessionId: string }): Promise<PermissionMode>;
   setSessionPermissionMode(input: { sessionId: string; mode: PermissionMode }): Promise<void>;
 
-  getCheckpointDiff(input: { sessionId: string; cwd: string; turnId?: number }): Promise<{ turnId: number; files: any[] }>;
+  getCheckpointDiff(input: {
+    sessionId: string;
+    cwd: string;
+    turnId?: number;
+  }): Promise<{ turnId: number; files: any[] }>;
   revertCheckpointFile(input: { sessionId: string; cwd: string; file: string }): Promise<any>;
   revertCheckpointFiles(input: { sessionId: string; cwd: string; files: string[] }): Promise<any>;
   revertCheckpointAgentFiles(input: { sessionId: string; cwd: string }): Promise<any>;
   revertCheckpointAllFiles(input: { sessionId: string; cwd: string }): Promise<any>;
-  previewRollbackDiff(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<any>;
-  rollbackCodeToTurn(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<any>;
+  previewRollbackDiff(input: {
+    sessionId: string;
+    cwd: string;
+    throughTurnId: number;
+  }): Promise<any>;
+  rollbackCodeToTurn(input: {
+    sessionId: string;
+    cwd: string;
+    throughTurnId: number;
+  }): Promise<any>;
   rollbackContext(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<any>;
-  rollbackBothToTurn(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<any>;
-  undoLastCodeRollback(input: { sessionId: string; cwd: string; force?: boolean; files?: string[] }): Promise<any>;
+  rollbackBothToTurn(input: {
+    sessionId: string;
+    cwd: string;
+    throughTurnId: number;
+  }): Promise<any>;
+  undoLastCodeRollback(input: {
+    sessionId: string;
+    cwd: string;
+    force?: boolean;
+    files?: string[];
+  }): Promise<any>;
   getRollbackState(input: { sessionId: string; cwd: string }): Promise<any>;
-  forkSession(input: { sessionId: string; cwd: string; atUuid?: string }): Promise<{ sessionId: string; turns: any[] }>;
+  forkSession(input: {
+    sessionId: string;
+    cwd: string;
+    atUuid?: string;
+  }): Promise<{ sessionId: string; turns: any[] }>;
 }
 
 export function createHttpSessionClient(
-  request: ReturnType<typeof createRequestHelpers>,
+  request: ReturnType<typeof createRequestHelpers>
 ): SessionClient {
   const { apiGet, apiPost, apiDelete } = request;
 
@@ -52,7 +80,9 @@ export function createHttpSessionClient(
     },
 
     async getSessionPermissionMode({ sessionId }) {
-      const data = await apiGet<{ mode: PermissionMode }>(`/api/sessions/${sessionId}/permission-mode`);
+      const data = await apiGet<{ mode: PermissionMode }>(
+        `/api/sessions/${sessionId}/permission-mode`
+      );
       return data.mode;
     },
 
@@ -62,7 +92,9 @@ export function createHttpSessionClient(
 
     async getCheckpointDiff({ sessionId, cwd, turnId }) {
       const segment = turnId != null ? String(turnId) : 'latest';
-      return apiGet(`/api/sessions/${sessionId}/checkpoints/${segment}/diff?cwd=${encodeURIComponent(cwd)}`);
+      return apiGet(
+        `/api/sessions/${sessionId}/checkpoints/${segment}/diff?cwd=${encodeURIComponent(cwd)}`
+      );
     },
 
     async revertCheckpointFile({ sessionId, cwd, file }) {
@@ -82,7 +114,9 @@ export function createHttpSessionClient(
     },
 
     async previewRollbackDiff({ sessionId, cwd, throughTurnId }) {
-      return apiGet(`/api/sessions/${sessionId}/rollback-preview?cwd=${encodeURIComponent(cwd)}&throughTurnId=${throughTurnId}`);
+      return apiGet(
+        `/api/sessions/${sessionId}/rollback-preview?cwd=${encodeURIComponent(cwd)}&throughTurnId=${throughTurnId}`
+      );
     },
 
     async rollbackCodeToTurn({ sessionId, cwd, throughTurnId }) {

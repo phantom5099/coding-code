@@ -1,20 +1,22 @@
-import { useGlobalStore } from './stores/global.store'
+import { useGlobalStore } from './stores/global.store';
 
-const isWindows = window.electronAPI?.platform === 'win32'
+const isWindows = window.electronAPI?.platform === 'win32';
 
 export default function TitleBar() {
-  const mode = useGlobalStore((s) => s.ui.mode)
-  const setMode = useGlobalStore((s) => s.setMode)
+  const mode = useGlobalStore((s) => s.ui.mode);
+  const setMode = useGlobalStore((s) => s.setMode);
 
-  if (!isWindows) return null
+  if (!isWindows) return null;
 
   return (
     <div
       className="shrink-0 flex items-center px-3 bg-[#1a1a1a] select-none"
-      style={{
-        height: 'env(titlebar-area-height, 36px)',
-        WebkitAppRegion: 'drag',
-      } as React.CSSProperties}
+      style={
+        {
+          height: 'env(titlebar-area-height, 36px)',
+          WebkitAppRegion: 'drag',
+        } as React.CSSProperties
+      }
     >
       <span className="text-[#858585] text-xs font-medium">Coding Code</span>
       <div
@@ -43,5 +45,5 @@ export default function TitleBar() {
         </button>
       </div>
     </div>
-  )
+  );
 }

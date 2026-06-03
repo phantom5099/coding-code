@@ -43,20 +43,24 @@ describe('ToolExecCtx propagation', () => {
       const executor = yield* ToolExecutorService;
       yield* tools.register(stubTool);
       yield* allowTool('ctx_capture');
-      const result = yield* executor.execute('ctx_capture', {}, {
-        signal: undefined,
-        sessionId: 'sess-1',
-        turnId: 5,
-        projectPath: '/proj',
-      });
+      const result = yield* executor.execute(
+        'ctx_capture',
+        {},
+        {
+          signal: undefined,
+          sessionId: 'sess-1',
+          turnId: 5,
+          projectPath: '/proj',
+        }
+      );
       return result;
     });
 
     await runWithLayer(program);
     expect(captured).toHaveLength(1);
-    expect(captured[0].sessionId).toBe('sess-1');
-    expect(captured[0].turnId).toBe(5);
-    expect(captured[0].projectPath).toBe('/proj');
+    expect(captured[0]!.sessionId).toBe('sess-1');
+    expect(captured[0]!.turnId).toBe(5);
+    expect(captured[0]!.projectPath).toBe('/proj');
   });
 
   it('should pass sessionId when provided without other optional fields', async () => {
@@ -77,15 +81,19 @@ describe('ToolExecCtx propagation', () => {
       const executor = yield* ToolExecutorService;
       yield* tools.register(stubTool);
       yield* allowTool('ctx_no_agent');
-      yield* executor.execute('ctx_no_agent', {}, {
-        sessionId: 'sess-2',
-        turnId: 1,
-        projectPath: '/proj',
-      });
+      yield* executor.execute(
+        'ctx_no_agent',
+        {},
+        {
+          sessionId: 'sess-2',
+          turnId: 1,
+          projectPath: '/proj',
+        }
+      );
     });
 
     await runWithLayer(program);
     expect(captured).toHaveLength(1);
-    expect(captured[0].sessionId).toBe('sess-2');
+    expect(captured[0]!.sessionId).toBe('sess-2');
   });
 });

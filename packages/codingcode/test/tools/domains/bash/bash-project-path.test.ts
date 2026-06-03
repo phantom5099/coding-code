@@ -16,13 +16,25 @@ describe('tools/domains/bash projectPath isolation', () => {
     mkdirSync(globalDir, { recursive: true });
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(join(globalDir, 'config'), { recursive: true });
-    writeFileSync(join(globalDir, 'config', 'models.json'), '{"active":"p","providers":[]}', 'utf8');
+    writeFileSync(
+      join(globalDir, 'config', 'models.json'),
+      '{"active":"p","providers":[]}',
+      'utf8'
+    );
     initWorkspace({ installRoot: globalDir, workspaceCwd: globalDir });
   });
 
   afterEach(() => {
-    try { rmSync(globalDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    try { rmSync(projectDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(globalDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+    try {
+      rmSync(projectDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 
   const ctx = (cwd: string) => ({ projectPath: cwd });
@@ -34,10 +46,7 @@ describe('tools/domains/bash projectPath isolation', () => {
       ? `powershell -Command "'hello' | Out-File -Encoding utf8 test-bash.txt"`
       : `echo hello > test-bash.txt`;
 
-    const result = await bashTool.execute(
-      { command: cmd, timeout_ms: 10000 },
-      ctx(projectDir),
-    );
+    const result = await bashTool.execute({ command: cmd, timeout_ms: 10000 }, ctx(projectDir));
 
     // Verify the file was written to projectDir, not globalDir
     expect(() => readFileSync(join(projectDir, 'test-bash.txt'), 'utf8')).not.toThrow();
@@ -51,10 +60,7 @@ describe('tools/domains/bash projectPath isolation', () => {
       ? `powershell -Command "'fallback' | Out-File -Encoding utf8 test-fallback.txt"`
       : `echo fallback > test-fallback.txt`;
 
-    const result = await bashTool.execute(
-      { command: cmd, timeout_ms: 10000 },
-      undefined,
-    );
+    const result = await bashTool.execute({ command: cmd, timeout_ms: 10000 }, undefined);
 
     expect(() => readFileSync(join(globalDir, 'test-fallback.txt'), 'utf8')).not.toThrow();
     expect(readFileSync(join(globalDir, 'test-fallback.txt'), 'utf8').trim()).toBe('fallback');
@@ -71,13 +77,17 @@ describe('tools/domains/bash projectPath isolation', () => {
 
       const result = await bashTool.execute(
         { command: cmd, cwd: otherDir, timeout_ms: 10000 },
-        ctx(projectDir),
+        ctx(projectDir)
       );
 
       expect(() => readFileSync(join(otherDir, 'test-other.txt'), 'utf8')).not.toThrow();
       expect(() => readFileSync(join(projectDir, 'test-other.txt'), 'utf8')).toThrow();
     } finally {
-      try { rmSync(otherDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      try {
+        rmSync(otherDir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
     }
   });
 });

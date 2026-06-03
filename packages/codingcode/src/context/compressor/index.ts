@@ -46,7 +46,7 @@ export async function compactIfNeeded(
   messages: import('../../core/types.js').Message[],
   modelMaxTokens: number,
   config: ContextConfig,
-  llm: LLMClient | null,
+  llm: LLMClient | null
 ): Promise<CompressResult> {
   const promptEstimate = estimateTokens(messages);
   const failures = getFailures(sessionId);
@@ -59,7 +59,14 @@ export async function compactIfNeeded(
     return { didCompress: false, released: 0, promptEstimate };
   }
 
-  const result = await compactWithLLM(sessionId, encodedProjectPath, config, llm, promptEstimate, modelMaxTokens);
+  const result = await compactWithLLM(
+    sessionId,
+    encodedProjectPath,
+    config,
+    llm,
+    promptEstimate,
+    modelMaxTokens
+  );
 
   if (result.didCompress) {
     compactFailureTracker.set(sessionId, { count: 0, lastAttempt: Date.now() });
@@ -76,7 +83,7 @@ export async function compactWithLLM(
   config: ContextConfig,
   llm: LLMClient | null,
   usage?: number,
-  modelMaxTokens?: number,
+  modelMaxTokens?: number
 ): Promise<CompressResult> {
   const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
@@ -102,7 +109,7 @@ function buildContext(
   encodedProjectPath: string,
   config: ContextConfig,
   llm: LLMClient | null,
-  currentTurnId: number,
+  currentTurnId: number
 ): CompressContext {
   const dir = resolveSessionDir(sessionId);
   if (!dir) throw new Error(`Session ${sessionId} not found`);
@@ -183,7 +190,8 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
   const inRange = events.filter((ev) => {
     if (ev.type === 'session_meta') return false;
     if ('uuid' in ev && hiddenUuids.has((ev as any).uuid)) return false;
-    if ('turnId' in ev && (ev as any).turnId >= startTurn && (ev as any).turnId <= endTurn) return true;
+    if ('turnId' in ev && (ev as any).turnId >= startTurn && (ev as any).turnId <= endTurn)
+      return true;
     return false;
   });
 
@@ -201,7 +209,12 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
         transcript.push({ role: 'assistant', content: ev.content });
         break;
       case 'tool_result':
-        transcript.push({ role: 'tool', content: ev.output, tool_call_id: ev.toolCallId, tool_name: ev.toolName } as any);
+        transcript.push({
+          role: 'tool',
+          content: ev.output,
+          tool_call_id: ev.toolCallId,
+          tool_name: ev.toolName,
+        } as any);
         break;
       case 'summary':
         transcript.push({ role: 'system', name: 'compacted_history', content: ev.summaryText });
@@ -220,7 +233,7 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
     method: 'auto-compact',
     timestamp: new Date().toISOString(),
   };
-  appendSummaryToSession(sessionId,event);
+  appendSummaryToSession(sessionId, event);
   for (const u of replacedUuids) hiddenUuids.add(u);
 
   const replacedTokens = transcript.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
@@ -232,7 +245,7 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
 async function callLLMForCompaction(
   transcript: Message[],
   fallbackLlm: LLMClient | null,
-  config: ContextConfig,
+  config: ContextConfig
 ): Promise<string | null> {
   const llm = await resolveCompactionLLM(config, fallbackLlm);
   if (!llm) return null;

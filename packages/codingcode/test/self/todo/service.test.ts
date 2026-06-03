@@ -3,7 +3,9 @@ import { sharedTodoStore, countByStatus } from '../../../src/self/todo.js';
 import type { Todo } from '../../../src/self/todo.js';
 
 describe('TodoService (module-level store)', () => {
-  beforeEach(() => { sharedTodoStore.reset(); });
+  beforeEach(() => {
+    sharedTodoStore.reset();
+  });
 
   it('write then read returns full list', () => {
     const plan: Todo[] = [

@@ -3,6 +3,14 @@ import { parseSseStream } from './sse.js';
 import { createHttpClients } from './http/index.js';
 
 export type { AgentClient, StreamChunk } from './types.js';
+export { createHttpClients } from './http/index.js';
+export type {
+  HttpClients,
+  AgentRuntimeClient,
+  SessionClient,
+  ModelClient,
+  SettingsClient,
+} from './http/index.js';
 
 export async function createHttpClient(serverUrl: string): Promise<AgentClient> {
   let currentSessionId: string | undefined;
@@ -10,11 +18,14 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
 
   return {
     async *sendMessage(input: string, cwd?: string): AsyncGenerator<StreamChunk> {
-      const response = await fetch(`${serverUrl}/api/sessions/${currentSessionId || '_'}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ input, cwd: cwd ?? '' }),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await fetch(
+        `${serverUrl}/api/sessions/${currentSessionId || '_'}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ input, cwd: cwd ?? '' }),
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       for await (const data of parseSseStream(response)) {
@@ -27,28 +38,63 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
             yield { type: 'turn_id', turnId: data.turnId as number };
             break;
           case 'text':
-            yield { type: 'text', text: data.text as string, messageId: data.messageId as number | undefined };
+            yield {
+              type: 'text',
+              text: data.text as string,
+              messageId: data.messageId as number | undefined,
+            };
             break;
           case 'message':
-            yield { type: 'message', id: data.id as number, content: data.content as string, partial: false };
+            yield {
+              type: 'message',
+              id: data.id as number,
+              content: data.content as string,
+              partial: false,
+            };
             break;
           case 'approval_request':
-            yield { type: 'approval_request', id: data.id as string, tool: data.tool as string, args: data.args as Record<string, unknown> };
+            yield {
+              type: 'approval_request',
+              id: data.id as string,
+              tool: data.tool as string,
+              args: data.args as Record<string, unknown>,
+            };
             break;
           case 'tool_start':
-            yield { type: 'tool_start', id: data.id as string, name: data.name as string, args: data.args as Record<string, unknown> };
+            yield {
+              type: 'tool_start',
+              id: data.id as string,
+              name: data.name as string,
+              args: data.args as Record<string, unknown>,
+            };
             break;
           case 'tool_result':
-            yield { type: 'tool_result', id: data.id as string, name: data.name as string, output: data.output as string, ok: data.ok as boolean };
+            yield {
+              type: 'tool_result',
+              id: data.id as string,
+              name: data.name as string,
+              output: data.output as string,
+              ok: data.ok as boolean,
+            };
             break;
           case 'tool_denied':
-            yield { type: 'tool_denied', id: data.id as string, name: data.name as string, reason: data.reason as string };
+            yield {
+              type: 'tool_denied',
+              id: data.id as string,
+              name: data.name as string,
+              reason: data.reason as string,
+            };
             break;
           case 'todo_update':
             yield { type: 'todo_update', items: data.items as any };
             break;
           case 'usage':
-            yield { type: 'usage', prompt: data.prompt as number, completion: data.completion as number, total: data.total as number };
+            yield {
+              type: 'usage',
+              prompt: data.prompt as number,
+              completion: data.completion as number,
+              total: data.total as number,
+            };
             break;
           case 'error':
             throw new Error(data.message as string);
@@ -62,7 +108,11 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
 
     async sendApprovalResponse(id: string, response: string) {
       if (!currentSessionId) return;
-      await clients.agent.sendApprovalResponse({ sessionId: currentSessionId, approvalId: id, response });
+      await clients.agent.sendApprovalResponse({
+        sessionId: currentSessionId,
+        approvalId: id,
+        response,
+      });
     },
 
     async resumeSession(sid: string) {
@@ -82,26 +132,113 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       await clients.models.switchModel({ id });
     },
 
-    getSessionId() { return currentSessionId ?? 'unknown'; },
+    getSessionId() {
+      return currentSessionId ?? 'unknown';
+    },
 
-    async classifyLastCompletedChanges() { return null; },
+    async classifyLastCompletedChanges() {
+      return null;
+    },
     async revertLastCompleted(_mode: 'agent' | 'all') {},
     async revertCheckpoint(_turnId: number, _mode: 'agent' | 'all') {},
     async forwardLastRevert() {},
-    async hasForwardStack() { return false; },
-    async getCheckpoints() { return []; },
-    async getCheckpointDiff() { return { turnId: 0, files: [] }; },
-    async revertCheckpointFile() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
-    async revertCheckpointFiles() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
-    async revertCheckpointAgentFiles() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
-    async revertCheckpointAllFiles() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
-    async previewRollbackDiff() { return { throughTurnId: 0, baseTurnId: null, affectedTurns: [], diff: '' }; },
-    async rollbackCodeToTurn() { return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }; },
-    async rollbackContext() { return { turns: [], rollbackState: {} }; },
-    async rollbackBothToTurn() { return { turns: [], codeResult: { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null }, rollbackState: {} }; },
-    async undoLastCodeRollback() { return { restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] }; },
-    async getRollbackState() { return { context: { active: false, currentThroughTurnId: null }, code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null } }; },
-    async forkSession() { return ''; },
+    async hasForwardStack() {
+      return false;
+    },
+    async getCheckpoints() {
+      return [];
+    },
+    async getCheckpointDiff() {
+      return { turnId: 0, files: [] };
+    },
+    async revertCheckpointFile() {
+      return {
+        reverted: false,
+        throughTurnId: 0,
+        baseTurnId: null,
+        affectedTurns: [],
+        selectedFiles: [],
+        restoreEntry: null,
+      };
+    },
+    async revertCheckpointFiles() {
+      return {
+        reverted: false,
+        throughTurnId: 0,
+        baseTurnId: null,
+        affectedTurns: [],
+        selectedFiles: [],
+        restoreEntry: null,
+      };
+    },
+    async revertCheckpointAgentFiles() {
+      return {
+        reverted: false,
+        throughTurnId: 0,
+        baseTurnId: null,
+        affectedTurns: [],
+        selectedFiles: [],
+        restoreEntry: null,
+      };
+    },
+    async revertCheckpointAllFiles() {
+      return {
+        reverted: false,
+        throughTurnId: 0,
+        baseTurnId: null,
+        affectedTurns: [],
+        selectedFiles: [],
+        restoreEntry: null,
+      };
+    },
+    async previewRollbackDiff() {
+      return { throughTurnId: 0, baseTurnId: null, affectedTurns: [], diff: '' };
+    },
+    async rollbackCodeToTurn() {
+      return {
+        reverted: false,
+        throughTurnId: 0,
+        baseTurnId: null,
+        affectedTurns: [],
+        selectedFiles: [],
+        restoreEntry: null,
+      };
+    },
+    async rollbackContext() {
+      return { turns: [], rollbackState: {} };
+    },
+    async rollbackBothToTurn() {
+      return {
+        turns: [],
+        codeResult: {
+          reverted: false,
+          throughTurnId: 0,
+          baseTurnId: null,
+          affectedTurns: [],
+          selectedFiles: [],
+          restoreEntry: null,
+        },
+        rollbackState: {},
+      };
+    },
+    async undoLastCodeRollback() {
+      return {
+        restored: false,
+        conflict: false,
+        conflictFiles: [],
+        restoredFiles: [],
+        remainingRolledBack: [],
+      };
+    },
+    async getRollbackState() {
+      return {
+        context: { active: false, currentThroughTurnId: null },
+        code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null },
+      };
+    },
+    async forkSession() {
+      return '';
+    },
 
     async compact() {
       if (!currentSessionId) return;

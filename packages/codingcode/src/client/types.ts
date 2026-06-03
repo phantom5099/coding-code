@@ -2,7 +2,12 @@ import type { PermissionMode } from '../approval/types.js';
 import type { McpServerConfig, McpStatus } from '../mcp/types.js';
 import type { SubagentProfile } from '../subagent/registry.js';
 import type { UserHookConfig } from '../hooks/config.js';
-import type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff } from '../checkpoint/checkpoint-service.js';
+import type {
+  CheckpointDiff,
+  CodeRollbackResult,
+  CodeRollbackUndoResult,
+  RollbackPreviewDiff,
+} from '../checkpoint/checkpoint-service.js';
 
 export type StreamChunk =
   | { type: 'session_id'; sessionId: string }
@@ -27,12 +32,17 @@ export interface AgentClient {
   listModels(): Promise<any>;
   switchModel(id: string): Promise<void>;
   getSessionId(): string;
-  classifyLastCompletedChanges(): Promise<{ agentModified: string[]; unknownSource: string[] } | null>;
+  classifyLastCompletedChanges(): Promise<{
+    agentModified: string[];
+    unknownSource: string[];
+  } | null>;
   revertLastCompleted(mode: 'agent' | 'all'): Promise<void>;
   revertCheckpoint(turnId: number, mode: 'agent' | 'all'): Promise<void>;
   forwardLastRevert(): Promise<void>;
   hasForwardStack(): Promise<boolean>;
-  getCheckpoints(): Promise<Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }>>;
+  getCheckpoints(): Promise<
+    Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }>
+  >;
   getCheckpointDiff(turnId?: number): Promise<CheckpointDiff>;
   revertCheckpointFile(turnId: number, file: string): Promise<CodeRollbackResult>;
   revertCheckpointFiles(turnId: number, files: string[]): Promise<CodeRollbackResult>;
@@ -41,14 +51,19 @@ export interface AgentClient {
   previewRollbackDiff(throughTurnId: number): Promise<RollbackPreviewDiff>;
   rollbackCodeToTurn(throughTurnId: number): Promise<CodeRollbackResult>;
   rollbackContext(throughTurnId: number): Promise<{ turns: any[]; rollbackState: any }>;
-  rollbackBothToTurn(throughTurnId: number): Promise<{ turns: any[]; codeResult: CodeRollbackResult; rollbackState: any }>;
+  rollbackBothToTurn(
+    throughTurnId: number
+  ): Promise<{ turns: any[]; codeResult: CodeRollbackResult; rollbackState: any }>;
   undoLastCodeRollback(force?: boolean, files?: string[]): Promise<CodeRollbackUndoResult>;
   getRollbackState(): Promise<any>;
   forkSession(atUuid?: string): Promise<string>;
   compact(): Promise<void>;
   getMemoryEnabled(): Promise<boolean>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
-  getMemoryConfig(): Promise<{ enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> }>;
+  getMemoryConfig(): Promise<{
+    enabled: boolean;
+    types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
+  }>;
   setTypeDisabled(name: string, disabled: boolean): Promise<void>;
   addExtraType(type: { name: string; description: string }): Promise<void>;
   updateExtraType(name: string, type: { name: string; description: string }): Promise<void>;
@@ -63,7 +78,18 @@ export interface AgentClient {
   enableMcp(name: string): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(name: string, enabled: boolean): Promise<void>;
-  listAgents(): Promise<Array<{ name: string; description: string; tools?: string[]; mcpServers?: string[]; readonly?: boolean; maxSteps?: number; model?: string; disabled?: boolean }>>;
+  listAgents(): Promise<
+    Array<{
+      name: string;
+      description: string;
+      tools?: string[];
+      mcpServers?: string[];
+      readonly?: boolean;
+      maxSteps?: number;
+      model?: string;
+      disabled?: boolean;
+    }>
+  >;
   createAgent(profile: SubagentProfile): Promise<void>;
   updateAgent(name: string, profile: SubagentProfile): Promise<void>;
   deleteAgent(name: string): Promise<void>;

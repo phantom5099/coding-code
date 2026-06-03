@@ -13,26 +13,79 @@ import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
-function makeFixture(sessionId: string, slug: string, usage?: { prompt: number; completion: number; total: number }) {
+function makeFixture(
+  sessionId: string,
+  slug: string,
+  usage?: { prompt: number; completion: number; total: number }
+) {
   const dir = join(PROJECT_BASE, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
 
   const lines: any[] = [
-    { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString() },
-    { type: 'user', turnId: 1, uuid: 'u1', content: 'hello world', timestamp: new Date().toISOString() },
-    { type: 'assistant', turnId: 1, uuid: 'a1', content: 'hi there', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage },
-    { type: 'user', turnId: 2, uuid: 'u2', content: 'do stuff', timestamp: new Date().toISOString() },
-    { type: 'assistant', turnId: 2, uuid: 'a2', content: 'ok done', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage: usage ? { prompt: usage.prompt + 100, completion: usage.completion + 50, total: usage.total + 150 } : undefined },
+    {
+      type: 'session_meta',
+      sessionId,
+      projectPath: slug,
+      cwd: '/tmp/test',
+      model: 'test',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      type: 'user',
+      turnId: 1,
+      uuid: 'u1',
+      content: 'hello world',
+      timestamp: new Date().toISOString(),
+    },
+    {
+      type: 'assistant',
+      turnId: 1,
+      uuid: 'a1',
+      content: 'hi there',
+      toolCalls: [],
+      model: 'test',
+      timestamp: new Date().toISOString(),
+      usage,
+    },
+    {
+      type: 'user',
+      turnId: 2,
+      uuid: 'u2',
+      content: 'do stuff',
+      timestamp: new Date().toISOString(),
+    },
+    {
+      type: 'assistant',
+      turnId: 2,
+      uuid: 'a2',
+      content: 'ok done',
+      toolCalls: [],
+      model: 'test',
+      timestamp: new Date().toISOString(),
+      usage: usage
+        ? {
+            prompt: usage.prompt + 100,
+            completion: usage.completion + 50,
+            total: usage.total + 150,
+          }
+        : undefined,
+    },
   ];
 
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
   const idx: SessionIndex = {
-    sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    messageCount: 4, title: 'fixture', currentTurnId: 2,
+    sessionId,
+    projectPath: slug,
+    cwd: '/tmp/test',
+    model: 'test',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    messageCount: 4,
+    title: 'fixture',
+    currentTurnId: 2,
     usage: usage ?? undefined,
     promptEstimate: usage ? usage.prompt : estimateTokens(buildMessages(transcriptPath)),
     permissionMode: 'default',
@@ -52,7 +105,9 @@ describe('promptEstimate', () => {
     try {
       const result = findLastVisibleAssistantUsage(fx.transcriptPath);
       expect(result).toEqual(lastUsage);
-    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
   });
 
   it('findLastVisibleAssistantUsage returns undefined when no assistant usage', () => {
@@ -62,7 +117,9 @@ describe('promptEstimate', () => {
     try {
       const result = findLastVisibleAssistantUsage(fx.transcriptPath);
       expect(result).toBeUndefined();
-    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
   });
 
   it('findLastVisibleAssistantUsage skips hidden assistant events', () => {
@@ -75,17 +132,51 @@ describe('promptEstimate', () => {
     const usage1 = { prompt: 100, completion: 50, total: 150 };
     const usage2 = { prompt: 200, completion: 100, total: 300 };
     const lines: any[] = [
-      { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString() },
-      { type: 'assistant', turnId: 1, uuid: 'a1', content: 'first', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage: usage1 },
-      { type: 'hide', uuid: 'h1', kind: 'message', targetUuid: 'a1', reason: 'test', timestamp: new Date().toISOString() },
-      { type: 'assistant', turnId: 2, uuid: 'a2', content: 'second', toolCalls: [], model: 'test', timestamp: new Date().toISOString(), usage: usage2 },
+      {
+        type: 'session_meta',
+        sessionId,
+        projectPath: slug,
+        cwd: '/tmp/test',
+        model: 'test',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        type: 'assistant',
+        turnId: 1,
+        uuid: 'a1',
+        content: 'first',
+        toolCalls: [],
+        model: 'test',
+        timestamp: new Date().toISOString(),
+        usage: usage1,
+      },
+      {
+        type: 'hide',
+        uuid: 'h1',
+        kind: 'message',
+        targetUuid: 'a1',
+        reason: 'test',
+        timestamp: new Date().toISOString(),
+      },
+      {
+        type: 'assistant',
+        turnId: 2,
+        uuid: 'a2',
+        content: 'second',
+        toolCalls: [],
+        model: 'test',
+        timestamp: new Date().toISOString(),
+        usage: usage2,
+      },
     ];
     writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
     try {
       const result = findLastVisibleAssistantUsage(transcriptPath);
       expect(result).toEqual(usage2);
-    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
   });
 
   it('findSessionIndex reads promptEstimate from index.json', () => {
@@ -96,7 +187,9 @@ describe('promptEstimate', () => {
       const idx = findSessionIndex(sessionId);
       expect(idx).not.toBeNull();
       expect(idx!.promptEstimate).toBe(500);
-    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
   });
 
   it('forkSession restores usage and promptEstimate from last visible assistant', () => {
@@ -110,7 +203,9 @@ describe('promptEstimate', () => {
       const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
       expect(idx.usage).toEqual(usage);
       expect(idx.promptEstimate).toBe(usage.prompt);
-    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
   });
 
   it('forkSession falls back to estimateTokens when no assistant usage', () => {
@@ -122,7 +217,9 @@ describe('promptEstimate', () => {
       const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
       const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
       expect(idx.promptEstimate).toBeGreaterThan(0);
-    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
   });
 });
 
@@ -144,16 +241,18 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
       );
       expect(state.promptEstimate).toBe(0);
 
       const before = state.promptEstimate;
-      await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))),
-      );
+      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))));
       expect(state.promptEstimate).toBeGreaterThan(before);
-    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      await new Promise((r) => setTimeout(r, 50));
+      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('recordAssistant without usage increments promptEstimate', async () => {
@@ -162,20 +261,24 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
       );
 
-      await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello'))),
-      );
+      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello'))));
       const before = state.promptEstimate;
 
       await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model'))),
+        SessionService.pipe(
+          Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model'))
+        )
       );
       expect(state.promptEstimate).toBeGreaterThan(before);
       expect(state.usage).toBeUndefined();
-    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      await new Promise((r) => setTimeout(r, 50));
+      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('recordAssistant with usage sets promptEstimate to usage.prompt', async () => {
@@ -184,16 +287,22 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
       );
 
       const usage = { prompt: 999, completion: 111, total: 1110 };
       await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', usage))),
+        SessionService.pipe(
+          Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', usage))
+        )
       );
       expect(state.promptEstimate).toBe(999);
       expect(state.usage).toEqual(usage);
-    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      await new Promise((r) => setTimeout(r, 50));
+      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('recordToolResult increments promptEstimate and stores tokenCount', async () => {
@@ -202,20 +311,37 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
       );
 
       const assistantEvent = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'use tool', [{ id: 'tc1', name: 'bash', arguments: {} }], 'test-model'))),
+        SessionService.pipe(
+          Effect.flatMap((s) =>
+            s.recordAssistant(
+              state,
+              'use tool',
+              [{ id: 'tc1', name: 'bash', arguments: {} }],
+              'test-model'
+            )
+          )
+        )
       );
       const before = state.promptEstimate;
 
       const toolEvent = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', 'tool output here'))),
+        SessionService.pipe(
+          Effect.flatMap((s) =>
+            s.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', 'tool output here')
+          )
+        )
       );
       expect(state.promptEstimate).toBeGreaterThan(before);
       expect(toolEvent.tokenCount).toBeGreaterThan(0);
-    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      await new Promise((r) => setTimeout(r, 50));
+      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('hideMessage resets usage and recalculates promptEstimate', async () => {
@@ -224,23 +350,35 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
       );
 
       const userEv = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))),
+        SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world')))
       );
       await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', { prompt: 100, completion: 50, total: 150 }))),
+        SessionService.pipe(
+          Effect.flatMap((s) =>
+            s.recordAssistant(state, 'reply', [], 'test-model', {
+              prompt: 100,
+              completion: 50,
+              total: 150,
+            })
+          )
+        )
       );
       expect(state.usage).toBeDefined();
 
       await run(
-        SessionService.pipe(Effect.flatMap((s) => s.hideMessage(state, userEv.uuid, 'test'))),
+        SessionService.pipe(Effect.flatMap((s) => s.hideMessage(state, userEv.uuid, 'test')))
       );
       expect(state.usage).toBeUndefined();
       expect(state.promptEstimate).toBeGreaterThanOrEqual(0);
-    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      await new Promise((r) => setTimeout(r, 50));
+      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('rollbackToTurn recalculates promptEstimate from visible messages, not old usage', async () => {
@@ -249,29 +387,55 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
       );
 
       // Turn 1
       await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))));
-      await run(SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply one', [], 'test-model', { prompt: 1000, completion: 100, total: 1100 }))));
+      await run(
+        SessionService.pipe(
+          Effect.flatMap((s) =>
+            s.recordAssistant(state, 'reply one', [], 'test-model', {
+              prompt: 1000,
+              completion: 100,
+              total: 1100,
+            })
+          )
+        )
+      );
 
       // Turn 2
       state.currentTurnId = 2;
       await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'do more stuff'))));
-      await run(SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply two', [], 'test-model', { prompt: 5000, completion: 200, total: 5200 }))));
+      await run(
+        SessionService.pipe(
+          Effect.flatMap((s) =>
+            s.recordAssistant(state, 'reply two', [], 'test-model', {
+              prompt: 5000,
+              completion: 200,
+              total: 5200,
+            })
+          )
+        )
+      );
 
       expect(state.promptEstimate).toBe(5000);
       expect(state.usage).toBeDefined();
 
       // Rollback to turn 1 鈥?should hide turn 2 messages
-      await run(SessionService.pipe(Effect.flatMap((s) => s.rollbackToTurn(state, 1, 'test rollback'))));
+      await run(
+        SessionService.pipe(Effect.flatMap((s) => s.rollbackToTurn(state, 1, 'test rollback')))
+      );
 
       // promptEstimate should restore from last visible assistant usage.prompt, not 5000
       expect(state.promptEstimate).toBeLessThan(5000);
       expect(state.promptEstimate).toBe(1000); // turn 1 assistant usage.prompt
       // usage should be restored from last visible assistant
       expect(state.usage).toEqual({ prompt: 1000, completion: 100, total: 1100 });
-    } finally { await new Promise((r) => setTimeout(r, 50)); rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      await new Promise((r) => setTimeout(r, 50));
+      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

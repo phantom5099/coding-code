@@ -26,6 +26,9 @@ export interface SkillServiceApi {
   readonly select: (query: string) => import('effect').Effect.Effect<Skill | undefined>;
   readonly selectImplicit: (
     query: string,
-    matcher: (skills: readonly Skill[], query: string) => import('effect').Effect.Effect<string | undefined>,
+    matcher: (
+      skills: readonly Skill[],
+      query: string
+    ) => import('effect').Effect.Effect<string | undefined>
   ) => import('effect').Effect.Effect<Skill | undefined>;
 }

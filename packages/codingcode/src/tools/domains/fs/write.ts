@@ -6,7 +6,8 @@ import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const writeFileTool: ToolDefinition = {
   name: 'write_file',
-  description: 'Write content to a file, creating parent directories if needed. Overwrites existing files.',
+  description:
+    'Write content to a file, creating parent directories if needed. Overwrites existing files.',
   parameters: z.object({
     path: z.string().describe('Path to the file'),
     content: z.string().describe('Content to write'),

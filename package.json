@@ -1,6 +1,7 @@
 {
   "name": "coding-agent",
   "version": "0.1.0",
+  "packageManager": "pnpm@11.3.0",
   "type": "module",
   "workspaces": [
     "packages/infra",
@@ -12,7 +13,11 @@
     "start": "tsx packages/codingcode/src/cli.ts",
     "dev": "tsx --watch packages/codingcode/src/cli.ts",
     "test": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b",
+    "lint": "eslint \"packages/*/src/**/*.ts\" \"packages/*/src/**/*.tsx\" \"packages/*/test/**/*.ts\"",
+    "lint:fix": "eslint \"packages/*/src/**/*.ts\" \"packages/*/src/**/*.tsx\" \"packages/*/test/**/*.ts\" --fix",
+    "format": "prettier --write \"packages/**/*.{ts,tsx,json}\" \"*.json\" \"*.ts\"",
+    "format:check": "prettier --check \"packages/**/*.{ts,tsx,json}\" \"*.json\" \"*.ts\"",
     "debug": "tsx src/debug.ts"
   },
   "dependencies": {
@@ -35,10 +40,20 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
+    "eslint": "^10.4.1",
     "playwright-core": "^1.60.0",
+    "prettier": "^3.8.3",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
+    "typescript-eslint": "^8.60.1",
+    "vite": "^6.4.2",
     "vitest": "^3.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "^6.4.2"
+    }
   }
 }

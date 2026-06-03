@@ -4,7 +4,9 @@ import { sharedTodoStore } from '../../src/self/todo.js';
 import { todoWriteTool } from '../../src/tools/domains/self/todo-write.js';
 import { todoReadTool } from '../../src/tools/domains/self/todo-read.js';
 
-beforeEach(() => { sharedTodoStore.reset(); });
+beforeEach(() => {
+  sharedTodoStore.reset();
+});
 
 describe('todo_write tool', () => {
   it('is a core tool (not deferred)', () => {
@@ -12,13 +14,16 @@ describe('todo_write tool', () => {
   });
 
   it('returns pending/in_progress/completed counts', async () => {
-    const result = await todoWriteTool.execute({
-      plan: [
-        { step: 'first', status: 'pending' },
-        { step: 'second', status: 'in_progress' },
-        { step: 'third', status: 'completed' },
-      ],
-    }, { sessionId: 'test-agent' });
+    const result = await todoWriteTool.execute(
+      {
+        plan: [
+          { step: 'first', status: 'pending' },
+          { step: 'second', status: 'in_progress' },
+          { step: 'third', status: 'completed' },
+        ],
+      },
+      { sessionId: 'test-agent' }
+    );
     expect(result).toBe('pending=1 in_progress=1 completed=1');
   });
 
@@ -27,16 +32,14 @@ describe('todo_write tool', () => {
       step: `step ${i}`,
       status: 'pending' as const,
     }));
-    await expect(
-      todoWriteTool.parameters.parseAsync({ plan }),
-    ).rejects.toThrow();
+    await expect(todoWriteTool.parameters.parseAsync({ plan })).rejects.toThrow();
   });
 
   it('rejects step longer than 60 chars', async () => {
     await expect(
       todoWriteTool.parameters.parseAsync({
         plan: [{ step: 'x'.repeat(61), status: 'pending' }],
-      }),
+      })
     ).rejects.toThrow();
   });
 
@@ -44,7 +47,7 @@ describe('todo_write tool', () => {
     await expect(
       todoWriteTool.parameters.parseAsync({
         plan: [{ step: 'test', status: 'invalid' }],
-      }),
+      })
     ).rejects.toThrow();
   });
 
@@ -52,13 +55,13 @@ describe('todo_write tool', () => {
     await expect(
       todoWriteTool.parameters.parseAsync({
         plan: [{ step: 'test', status: 'cancelled' }],
-      }),
+      })
     ).rejects.toThrow();
   });
 
   it('throws if sessionId is missing', async () => {
     await expect(
-      todoWriteTool.execute({ plan: [{ step: 'x', status: 'pending' }] }, {}),
+      todoWriteTool.execute({ plan: [{ step: 'x', status: 'pending' }] }, {})
     ).rejects.toThrow('todo_write requires sessionId');
   });
 });
@@ -88,9 +91,7 @@ describe('todo_read tool', () => {
   });
 
   it('throws if sessionId is missing', async () => {
-    await expect(
-      todoReadTool.execute({}, {}),
-    ).rejects.toThrow('todo_read requires sessionId');
+    await expect(todoReadTool.execute({}, {})).rejects.toThrow('todo_read requires sessionId');
   });
 
   it('different sessionIds are isolated', async () => {

@@ -23,20 +23,31 @@ const mockToolSearch = {
 };
 
 const mockAgentService = {
-  runStream: () => { throw new Error('not implemented'); },
+  runStream: () => {
+    throw new Error('not implemented');
+  },
 };
 
 const mockCtx = {
-  build: (_sessionId: string) => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
-  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: false, released: 0 }),
-  compress: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: true, released: 1000 }),
+  build: (_sessionId: string) =>
+    Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] })),
+  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) =>
+    Effect.succeed({ didCompress: false, released: 0 }),
+  compress: (_sessionId: string, _llm?: any, _config?: any) =>
+    Effect.succeed({ didCompress: true, released: 1000 }),
+  compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
 };
 
 const mockSession = {
   recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
     Effect.sync(() => ({ uuid: 'a1' })),
-  recordToolResult: (_state: any, _parentUuid: string, _toolName: string, _toolCallId: string, _output: string) =>
-    Effect.sync(() => ({})),
+  recordToolResult: (
+    _state: any,
+    _parentUuid: string,
+    _toolName: string,
+    _toolCallId: string,
+    _output: string
+  ) => Effect.sync(() => ({})),
 };
 
 const mockCheckpoint = {
@@ -88,15 +99,13 @@ describe('runReActLoop', () => {
           yield ' ';
           yield 'world';
         })(),
-        response: Promise.resolve(
-          Result.ok({ content: 'Hello world' }),
-        ),
+        response: Promise.resolve(Result.ok({ content: 'Hello world' })),
       }),
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any },
-      makeDeps(),
+      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
+      makeDeps()
     );
 
     const events: any[] = [];
@@ -117,8 +126,8 @@ describe('runReActLoop', () => {
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any },
-      makeDeps(),
+      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
+      makeDeps()
     );
 
     const events: any[] = [];
@@ -136,17 +145,25 @@ describe('runReActLoop', () => {
         stream: (async function* () {
           yield '\n[Using: execute_command]\n';
         })(),
-        response: Promise.resolve(Result.ok({
-          content: '',
-          toolCalls: [{ id: 'tc1', name: 'execute_command', arguments: { command: 'git status' } }],
-        })),
+        response: Promise.resolve(
+          Result.ok({
+            content: '',
+            toolCalls: [
+              { id: 'tc1', name: 'execute_command', arguments: { command: 'git status' } },
+            ],
+          })
+        ),
       }),
     };
 
     const toolRegistryWithBash = {
       ...mockToolRegistry,
       describeAll: () => [
-        { name: 'execute_command', description: 'Run shell command', parameters: { type: 'object' } },
+        {
+          name: 'execute_command',
+          description: 'Run shell command',
+          parameters: { type: 'object' },
+        },
       ],
     };
 
@@ -155,13 +172,22 @@ describe('runReActLoop', () => {
         Effect.succeed('On branch main\nnothing to commit'),
       executeBatch: (_toolCalls: any[]) =>
         Effect.succeed(
-          _toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: 'On branch main\nnothing to commit' })),
+          _toolCalls.map((tc: any) => ({
+            type: 'ok' as const,
+            id: tc.id,
+            name: tc.name,
+            output: 'On branch main\nnothing to commit',
+          }))
         ),
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any },
-      makeDeps({ maxSteps: 1, toolRegistry: toolRegistryWithBash as any, executor: mockExecutor as any }),
+      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
+      makeDeps({
+        maxSteps: 1,
+        toolRegistry: toolRegistryWithBash as any,
+        executor: mockExecutor as any,
+      })
     );
 
     const events: any[] = [];
@@ -181,10 +207,12 @@ describe('runReActLoop', () => {
         stream: (async function* () {
           yield '\n[Using: readFile]\n';
         })(),
-        response: Promise.resolve(Result.ok({
-          content: '',
-          toolCalls: [{ id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } }],
-        })),
+        response: Promise.resolve(
+          Result.ok({
+            content: '',
+            toolCalls: [{ id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } }],
+          })
+        ),
       }),
     };
 
@@ -200,13 +228,22 @@ describe('runReActLoop', () => {
         Effect.succeed('file content'),
       executeBatch: (_toolCalls: any[]) =>
         Effect.succeed(
-          _toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: 'file content' })),
+          _toolCalls.map((tc: any) => ({
+            type: 'ok' as const,
+            id: tc.id,
+            name: tc.name,
+            output: 'file content',
+          }))
         ),
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any },
-      makeDeps({ maxSteps: 1, toolRegistry: toolRegistryWithTool as any, executor: mockExecutor as any }),
+      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
+      makeDeps({
+        maxSteps: 1,
+        toolRegistry: toolRegistryWithTool as any,
+        executor: mockExecutor as any,
+      })
     );
 
     const events: any[] = [];
@@ -231,11 +268,16 @@ describe('runReActLoop', () => {
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any, skillInstruction: 'Use strict TypeScript' },
-      makeDeps(),
+      {
+        state: mockState,
+        llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
+        skillInstruction: 'Use strict TypeScript',
+      },
+      makeDeps()
     );
 
-    for await (const _ of gen) {}
+    for await (const _ of gen) {
+    }
 
     expect(capturedSystem).toContain('Use strict TypeScript');
   });
@@ -246,10 +288,12 @@ describe('runReActLoop', () => {
         stream: (async function* () {
           yield 'calling tool';
         })(),
-        response: Promise.resolve(Result.ok({
-          content: '',
-          toolCalls: [{ id: 'tc1', name: 'read_file', arguments: { path: 'x' } }],
-        })),
+        response: Promise.resolve(
+          Result.ok({
+            content: '',
+            toolCalls: [{ id: 'tc1', name: 'read_file', arguments: { path: 'x' } }],
+          })
+        ),
       }),
     };
 
@@ -261,7 +305,7 @@ describe('runReActLoop', () => {
             id: tc.id,
             name: tc.name,
             output: 'file content',
-          })),
+          }))
         ),
     };
 
@@ -280,7 +324,7 @@ describe('runReActLoop', () => {
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any },
+      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
       makeDeps({
         maxSteps: 1,
         toolRegistry: {
@@ -291,7 +335,7 @@ describe('runReActLoop', () => {
         } as any,
         executor: mockExecutor as any,
         hooks: trackingHooks as unknown as HookService,
-      }),
+      })
     );
 
     const events: any[] = [];
@@ -299,7 +343,9 @@ describe('runReActLoop', () => {
       events.push(event);
     }
 
-    const maxStepErrors = events.filter((e: any) => e._tag === 'Error' && e.error?.code === 'MAX_STEPS');
+    const maxStepErrors = events.filter(
+      (e: any) => e._tag === 'Error' && e.error?.code === 'MAX_STEPS_REACHED'
+    );
     expect(maxStepErrors).toHaveLength(1);
     expect(turnEndCalls).toHaveLength(1);
     expect(turnEndCalls[0].status).toBe('maxSteps');

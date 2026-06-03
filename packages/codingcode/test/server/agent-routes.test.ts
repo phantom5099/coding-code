@@ -5,7 +5,7 @@ describe('GET /permission-mode', () => {
   it('returns 200 with current permission mode', async () => {
     const res = await agentRouter.request('/permission-mode');
     expect(res.status).toBe(200);
-    const body = await res.json() as { mode: string };
+    const body = (await res.json()) as { mode: string };
     expect(body).toHaveProperty('mode');
     expect(typeof body.mode).toBe('string');
   });
@@ -19,7 +19,7 @@ describe('POST /permission-mode', () => {
       body: JSON.stringify({ mode: 'default' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { mode: string };
+    const body = (await res.json()) as { mode: string };
     expect(body.mode).toBe('default');
   });
 
@@ -30,7 +30,7 @@ describe('POST /permission-mode', () => {
       body: JSON.stringify({ mode: 'invalid_mode' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain('Invalid mode');
   });
 });

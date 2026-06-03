@@ -24,6 +24,8 @@ const store = new Map<string, Todo[]>();
 
 export const sharedTodoStore = {
   read: (sessionId: string): Todo[] => store.get(sessionId) ?? [],
-  write: (sessionId: string, plan: Todo[]): void => { store.set(sessionId, plan); },
+  write: (sessionId: string, plan: Todo[]): void => {
+    store.set(sessionId, plan);
+  },
   reset: (): void => store.clear(),
 };

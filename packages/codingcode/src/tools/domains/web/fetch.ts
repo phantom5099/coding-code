@@ -37,7 +37,8 @@ export const webFetchTool: ToolDefinition = {
       const text = await response.text();
       const truncated =
         text.length > max_length
-          ? text.slice(0, max_length) + `\n\n... (truncated, original ${text.length} chars, showing first ${max_length})`
+          ? text.slice(0, max_length) +
+            `\n\n... (truncated, original ${text.length} chars, showing first ${max_length})`
           : text;
 
       return [

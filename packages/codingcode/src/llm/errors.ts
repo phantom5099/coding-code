@@ -2,8 +2,13 @@ import { AgentError } from '../core/error';
 
 export const LLMErrors = {
   timeout: (timeoutMs: number) => AgentError.llmTimeout(),
-  failed: (cause?: unknown) => AgentError.llmFailed(typeof cause === 'string' ? cause : String(cause ?? '')),
-  rateLimited: (retryAfter?: number) => new AgentError('LLM_RATE_LIMITED', `Rate limited${retryAfter ? `, retry after ${retryAfter}s` : ''}`),
+  failed: (cause?: unknown) =>
+    AgentError.llmFailed(typeof cause === 'string' ? cause : String(cause ?? '')),
+  rateLimited: (retryAfter?: number) =>
+    new AgentError(
+      'LLM_RATE_LIMITED',
+      `Rate limited${retryAfter ? `, retry after ${retryAfter}s` : ''}`
+    ),
 };
 
 export function mapLlmError(provider: string, e: unknown): AgentError {
@@ -17,8 +22,5 @@ export function mapLlmError(provider: string, e: unknown): AgentError {
     code === 'context_length_exceeded' ||
     /context (length|window)|prompt.*too long|maximum context/i.test(msg);
 
-  return isOverflow
-    ? AgentError.contextOverflow(provider, e)
-    : AgentError.llmFailed(e);
+  return isOverflow ? AgentError.contextOverflow(provider, e) : AgentError.llmFailed(e);
 }
-

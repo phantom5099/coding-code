@@ -1,5 +1,13 @@
 import { spawnSync } from 'child_process';
-import { existsSync, mkdirSync, statSync, writeFileSync, unlinkSync, openSync, closeSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  statSync,
+  writeFileSync,
+  unlinkSync,
+  openSync,
+  closeSync,
+} from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
@@ -10,8 +18,18 @@ const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 const NULL_DEVICE = process.platform === 'win32' ? 'NUL' : '/dev/null';
 
 const IGNORE_RULES = [
-  'node_modules/', '.venv/', 'venv/', 'dist/', 'build/',
-  '*.log', '.env', '.env.*', '*.tmp', '*.temp', '.DS_Store', 'Thumbs.db',
+  'node_modules/',
+  '.venv/',
+  'venv/',
+  'dist/',
+  'build/',
+  '*.log',
+  '.env',
+  '.env.*',
+  '*.tmp',
+  '*.temp',
+  '.DS_Store',
+  'Thumbs.db',
 ];
 
 const FILE_COUNT_CAP = 10_000;
@@ -37,7 +55,9 @@ export class ShadowGit {
       mkdirSync(this.gitDir, { recursive: true });
       // init --bare requires the path as a positional argument, not as --git-dir
       spawnSync('git', ['init', '--bare', this.gitDir], {
-        env: process.env, cwd: this.projectPath, encoding: 'utf-8',
+        env: process.env,
+        cwd: this.projectPath,
+        encoding: 'utf-8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       const infoDir = join(this.gitDir, 'info');
@@ -84,7 +104,9 @@ export class ShadowGit {
   diffFiles(commitA: string, commitB: string): Array<{ status: string; file: string }> {
     const result = this.run('diff', '--name-status', commitA, commitB);
     if (result.status !== 0 || !result.stdout.trim()) return [];
-    return result.stdout.trim().split('\n')
+    return result.stdout
+      .trim()
+      .split('\n')
       .filter(Boolean)
       .map((line) => {
         const [status = '', ...rest] = line.split('\t');
@@ -118,7 +140,9 @@ export class ShadowGit {
     for (const f of files) {
       try {
         totalBytes += statSync(join(this.projectPath, f)).size;
-      } catch { continue; }
+      } catch {
+        continue;
+      }
       if (totalBytes > SIZE_CAP_MB * 1024 * 1024) return true;
     }
     return false;
@@ -139,23 +163,31 @@ export class ShadowGit {
 
   unlock(): void {
     if (this.lockFd !== null) {
-      try { unlinkSync(this.lockPath); } catch { /* ignore */ }
+      try {
+        unlinkSync(this.lockPath);
+      } catch {
+        /* ignore */
+      }
       this.lockFd = null;
     }
   }
 
   // ---- Private ----
   private run(...args: string[]): { stdout: string; stderr: string; status: number | null } {
-    const result = spawnSync('git', ['--git-dir', this.gitDir, '--work-tree', this.projectPath, ...args], {
-      env: {
-        ...process.env,
-        GIT_CONFIG_GLOBAL: NULL_DEVICE,
-        GIT_CONFIG_SYSTEM: NULL_DEVICE,
-      },
-      cwd: this.projectPath,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const result = spawnSync(
+      'git',
+      ['--git-dir', this.gitDir, '--work-tree', this.projectPath, ...args],
+      {
+        env: {
+          ...process.env,
+          GIT_CONFIG_GLOBAL: NULL_DEVICE,
+          GIT_CONFIG_SYSTEM: NULL_DEVICE,
+        },
+        cwd: this.projectPath,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
     return {
       stdout: result.stdout ?? '',
       stderr: result.stderr ?? '',

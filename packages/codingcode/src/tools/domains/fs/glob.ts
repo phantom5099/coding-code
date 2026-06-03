@@ -10,11 +10,24 @@ export const globTool: ToolDefinition = {
     'Find files matching a glob pattern. Returns file paths sorted by modification time (newest first). Useful for locating files by name or extension across the project.',
   parameters: z.object({
     pattern: z.string().describe('Glob pattern to match files, e.g. "**/*.ts", "src/**/*.tsx"'),
-    path: z.string().default('.').describe('Base directory for the search (default: current working directory)'),
-    max_results: z.number().int().min(1).max(500).default(50).describe('Maximum number of file paths to return'),
+    path: z
+      .string()
+      .default('.')
+      .describe('Base directory for the search (default: current working directory)'),
+    max_results: z
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .default(50)
+      .describe('Maximum number of file paths to return'),
   }),
   execute: async (args: unknown, ctx?: ToolExecCtx) => {
-    const { pattern, path, max_results } = args as { pattern: string; path: string; max_results: number };
+    const { pattern, path, max_results } = args as {
+      pattern: string;
+      path: string;
+      max_results: number;
+    };
     const base = ctx?.projectPath ?? getWorkspaceCwd();
     const basePath = resolve(base, path);
 

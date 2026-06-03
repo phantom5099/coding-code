@@ -1,5 +1,19 @@
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, openSync, readSync, closeSync, truncateSync, statSync, unlinkSync, rmSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  appendFileSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  openSync,
+  readSync,
+  closeSync,
+  truncateSync,
+  statSync,
+  unlinkSync,
+  rmSync,
+} from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import { createLogger } from '@codingcode/infra';
@@ -21,16 +35,26 @@ export function resolveSessionDir(sessionId: string): string | null {
   for (const encoded of readdirSync(PROJECT_BASE)) {
     const sessionsDir = join(PROJECT_BASE, encoded, 'sessions');
     if (!existsSync(sessionsDir)) continue;
-    try { if (!statSync(sessionsDir).isDirectory()) continue; } catch { continue; }
+    try {
+      if (!statSync(sessionsDir).isDirectory()) continue;
+    } catch {
+      continue;
+    }
     if (existsSync(join(sessionsDir, `${sessionId}.jsonl`))) return sessionsDir;
     try {
       for (const entry of readdirSync(sessionsDir)) {
         const entryPath = join(sessionsDir, entry);
-        try { if (!statSync(entryPath).isDirectory()) continue; } catch { continue; }
+        try {
+          if (!statSync(entryPath).isDirectory()) continue;
+        } catch {
+          continue;
+        }
         const subagentDir = join(entryPath, 'subagents');
         if (existsSync(join(subagentDir, `${sessionId}.jsonl`))) return subagentDir;
       }
-    } catch { /* race: directory removed between existsSync and readdirSync */ }
+    } catch {
+      /* race: directory removed between existsSync and readdirSync */
+    }
   }
   return null;
 }
@@ -98,7 +122,9 @@ export function findSessionIndex(sessionId: string): SessionIndex | null {
     try {
       const index = JSON.parse(readFileSync(idxPath, 'utf8')) as SessionIndex;
       if (index.sessionId === sessionId) return index;
-    } catch { /* corrupt */ }
+    } catch {
+      /* corrupt */
+    }
   }
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
   if (!existsSync(jsonlPath)) return null;
@@ -110,7 +136,11 @@ export function findSessionIndex(sessionId: string): SessionIndex | null {
 
 export function listSessions(projectPath?: string): SessionIndex[] {
   const results: SessionIndex[] = [];
-  const encodedDirs = projectPath ? [projectPath] : existsSync(PROJECT_BASE) ? readdirSync(PROJECT_BASE) : [];
+  const encodedDirs = projectPath
+    ? [projectPath]
+    : existsSync(PROJECT_BASE)
+      ? readdirSync(PROJECT_BASE)
+      : [];
   for (const encoded of encodedDirs) {
     const sessionsDir = join(PROJECT_BASE, encoded, 'sessions');
     if (!existsSync(sessionsDir)) continue;
@@ -119,7 +149,11 @@ export function listSessions(projectPath?: string): SessionIndex[] {
       const idxPath = jsonlPath.replace('.jsonl', '.index.json');
       let index: SessionIndex | null = null;
       if (existsSync(idxPath)) {
-        try { index = JSON.parse(readFileSync(idxPath, 'utf8')) as SessionIndex; } catch { /* corrupt */ }
+        try {
+          index = JSON.parse(readFileSync(idxPath, 'utf8')) as SessionIndex;
+        } catch {
+          /* corrupt */
+        }
       }
       if (index) {
         results.push(index);
@@ -138,7 +172,10 @@ export function listSessions(projectPath?: string): SessionIndex[] {
 export function readHistory(path: string): SessionEvent[] {
   if (!existsSync(path)) return [];
   const content = readFileSync(path, 'utf8');
-  return content.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l) as SessionEvent);
+  return content
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as SessionEvent);
 }
 
 export function appendLine(path: string, event: object): void {
@@ -146,13 +183,21 @@ export function appendLine(path: string, event: object): void {
 }
 
 export function readCurrentIndex(indexPath: string): Partial<SessionIndex> | null {
-  try { return JSON.parse(readFileSync(indexPath, 'utf8')); } catch { return null; }
+  try {
+    return JSON.parse(readFileSync(indexPath, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 export function setPermissionMode(sessionId: string, indexPath: string, mode: string): void {
   let index: SessionIndex | null = null;
   if (existsSync(indexPath)) {
-    try { index = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex; } catch { /* corrupt */ }
+    try {
+      index = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
+    } catch {
+      /* corrupt */
+    }
   }
   if (!index) {
     index = findSessionIndex(sessionId);
@@ -179,9 +224,15 @@ export function deleteSession(sessionId: string): void {
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
   const idxPath = join(dir, `${sessionId}.index.json`);
   const subagentDir = join(dir, sessionId);
-  try { if (existsSync(jsonlPath)) unlinkSync(jsonlPath); } catch {}
-  try { if (existsSync(idxPath)) unlinkSync(idxPath); } catch {}
-  try { if (existsSync(subagentDir)) rmSync(subagentDir, { recursive: true, force: true }); } catch {}
+  try {
+    if (existsSync(jsonlPath)) unlinkSync(jsonlPath);
+  } catch {}
+  try {
+    if (existsSync(idxPath)) unlinkSync(idxPath);
+  } catch {}
+  try {
+    if (existsSync(subagentDir)) rmSync(subagentDir, { recursive: true, force: true });
+  } catch {}
 }
 
 // Serialized write queue per session: ensures ordered, non-overlapping writes
@@ -190,8 +241,12 @@ const writeQueues = new Map<string, Promise<void>>();
 export function enqueueWrite(sessionId: string, path: string, data: unknown): void {
   const prev = writeQueues.get(sessionId) ?? Promise.resolve();
   const task = prev
-    .then(() => { writeFileSync(path, JSON.stringify(data, null, 2), 'utf8'); })
-    .catch((err) => { logger.error(`write queue error for ${path}:`, err); });
+    .then(() => {
+      writeFileSync(path, JSON.stringify(data, null, 2), 'utf8');
+    })
+    .catch((err) => {
+      logger.error(`write queue error for ${path}:`, err);
+    });
   writeQueues.set(sessionId, task);
 }
 
@@ -199,7 +254,7 @@ export function persistToolResult(
   encodedProjectPath: string,
   sessionId: string,
   toolCallId: string,
-  content: string,
+  content: string
 ): { path: string; bytes: number } {
   const dir = join(PROJECT_BASE, encodedProjectPath, 'tool-results', sessionId);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });

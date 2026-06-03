@@ -15,19 +15,39 @@ function makeUserEvent(content: string, turnId: number): SessionEvent {
 }
 
 function makeAssistant(content: string, turnId: number): SessionEvent {
-  return { type: 'assistant', uuid: `a${turnId}`, content, turnId, toolCalls: [], model: 'test', timestamp: new Date().toISOString() };
+  return {
+    type: 'assistant',
+    uuid: `a${turnId}`,
+    content,
+    turnId,
+    toolCalls: [],
+    model: 'test',
+    timestamp: new Date().toISOString(),
+  };
 }
 
-function makeToolResult(toolName: string, output: string, turnId: number, uuid: string): ToolResultEvent {
-  return { type: 'tool_result', uuid, parentUuid: 'a1', toolName, toolCallId: `tc${uuid}`, output, turnId, timestamp: new Date().toISOString(), tokenCount: 0 };
+function makeToolResult(
+  toolName: string,
+  output: string,
+  turnId: number,
+  uuid: string
+): ToolResultEvent {
+  return {
+    type: 'tool_result',
+    uuid,
+    parentUuid: 'a1',
+    toolName,
+    toolCallId: `tc${uuid}`,
+    output,
+    turnId,
+    timestamp: new Date().toISOString(),
+    tokenCount: 0,
+  };
 }
 
 describe('pruneByTokens', () => {
   it('returns all events when token count is under threshold', () => {
-    const events: SessionEvent[] = [
-      makeUserEvent('q1', 1),
-      makeAssistant('a1', 1),
-    ];
+    const events: SessionEvent[] = [makeUserEvent('q1', 1), makeAssistant('a1', 1)];
     const result = pruneByTokens(events, baseConfig, 100000);
     expect(result).toHaveLength(2);
     expect((result[0] as any).content).toBe('q1');
@@ -97,14 +117,30 @@ describe('pruneByTokens', () => {
     const largeOutput = 'x'.repeat(10000);
     const smallOutput = 'x'.repeat(100);
     const events: SessionEvent[] = [
-      makeUserEvent('q1', 1), makeAssistant('a1', 1), makeToolResult('bash', largeOutput, 1, 't1'),
-      makeUserEvent('q2', 2), makeAssistant('a2', 2), makeToolResult('bash', largeOutput, 2, 't2'),
-      makeUserEvent('q3', 3), makeAssistant('a3', 3), makeToolResult('bash', smallOutput, 3, 't3'),
-      makeUserEvent('q4', 4), makeAssistant('a4', 4), makeToolResult('bash', smallOutput, 4, 't4'),
-      makeUserEvent('q5', 5), makeAssistant('a5', 5), makeToolResult('bash', smallOutput, 5, 't5'),
-      makeUserEvent('q6', 6), makeAssistant('a6', 6), makeToolResult('bash', smallOutput, 6, 't6'),
-      makeUserEvent('q7', 7), makeAssistant('a7', 7), makeToolResult('bash', smallOutput, 7, 't7'),
-      makeUserEvent('q8', 8), makeAssistant('a8', 8), makeToolResult('bash', smallOutput, 8, 't8'),
+      makeUserEvent('q1', 1),
+      makeAssistant('a1', 1),
+      makeToolResult('bash', largeOutput, 1, 't1'),
+      makeUserEvent('q2', 2),
+      makeAssistant('a2', 2),
+      makeToolResult('bash', largeOutput, 2, 't2'),
+      makeUserEvent('q3', 3),
+      makeAssistant('a3', 3),
+      makeToolResult('bash', smallOutput, 3, 't3'),
+      makeUserEvent('q4', 4),
+      makeAssistant('a4', 4),
+      makeToolResult('bash', smallOutput, 4, 't4'),
+      makeUserEvent('q5', 5),
+      makeAssistant('a5', 5),
+      makeToolResult('bash', smallOutput, 5, 't5'),
+      makeUserEvent('q6', 6),
+      makeAssistant('a6', 6),
+      makeToolResult('bash', smallOutput, 6, 't6'),
+      makeUserEvent('q7', 7),
+      makeAssistant('a7', 7),
+      makeToolResult('bash', smallOutput, 7, 't7'),
+      makeUserEvent('q8', 8),
+      makeAssistant('a8', 8),
+      makeToolResult('bash', smallOutput, 8, 't8'),
     ];
     const result = pruneByTokens(events, baseConfig, 5000);
     // Oldest 2 turns release enough tokens (>> 50% of excess), stop at base turns
@@ -120,15 +156,33 @@ describe('pruneByTokens', () => {
     const smallOutput = 'x'.repeat(100);
     const largeOutput = 'x'.repeat(10000);
     const events: SessionEvent[] = [
-      makeUserEvent('q1', 1), makeAssistant('a1', 1), makeToolResult('bash', smallOutput, 1, 't1'),
-      makeUserEvent('q2', 2), makeAssistant('a2', 2), makeToolResult('bash', smallOutput, 2, 't2'),
-      makeUserEvent('q3', 3), makeAssistant('a3', 3), makeToolResult('bash', largeOutput, 3, 't3'),
-      makeUserEvent('q4', 4), makeAssistant('a4', 4), makeToolResult('bash', largeOutput, 4, 't4'),
-      makeUserEvent('q5', 5), makeAssistant('a5', 5), makeToolResult('bash', largeOutput, 5, 't5'),
-      makeUserEvent('q6', 6), makeAssistant('a6', 6), makeToolResult('bash', largeOutput, 6, 't6'),
-      makeUserEvent('q7', 7), makeAssistant('a7', 7), makeToolResult('bash', largeOutput, 7, 't7'),
-      makeUserEvent('q8', 8), makeAssistant('a8', 8), makeToolResult('bash', largeOutput, 8, 't8'),
-      makeUserEvent('q9', 9), makeAssistant('a9', 9), makeToolResult('bash', largeOutput, 9, 't9'),
+      makeUserEvent('q1', 1),
+      makeAssistant('a1', 1),
+      makeToolResult('bash', smallOutput, 1, 't1'),
+      makeUserEvent('q2', 2),
+      makeAssistant('a2', 2),
+      makeToolResult('bash', smallOutput, 2, 't2'),
+      makeUserEvent('q3', 3),
+      makeAssistant('a3', 3),
+      makeToolResult('bash', largeOutput, 3, 't3'),
+      makeUserEvent('q4', 4),
+      makeAssistant('a4', 4),
+      makeToolResult('bash', largeOutput, 4, 't4'),
+      makeUserEvent('q5', 5),
+      makeAssistant('a5', 5),
+      makeToolResult('bash', largeOutput, 5, 't5'),
+      makeUserEvent('q6', 6),
+      makeAssistant('a6', 6),
+      makeToolResult('bash', largeOutput, 6, 't6'),
+      makeUserEvent('q7', 7),
+      makeAssistant('a7', 7),
+      makeToolResult('bash', largeOutput, 7, 't7'),
+      makeUserEvent('q8', 8),
+      makeAssistant('a8', 8),
+      makeToolResult('bash', largeOutput, 8, 't8'),
+      makeUserEvent('q9', 9),
+      makeAssistant('a9', 9),
+      makeToolResult('bash', largeOutput, 9, 't9'),
     ];
     const result = pruneByTokens(events, baseConfig, 8000);
     // Base 2 turns release < 50% of excess; adding turns 3,4 pushes ratio above threshold
@@ -145,14 +199,30 @@ describe('pruneByTokens', () => {
     // All tool results are small; even pruning all allowed turns won't meet ratio
     const tinyOutput = 'x'.repeat(100);
     const events: SessionEvent[] = [
-      makeUserEvent('q1', 1), makeAssistant('a1', 1), makeToolResult('bash', tinyOutput, 1, 't1'),
-      makeUserEvent('q2', 2), makeAssistant('a2', 2), makeToolResult('bash', tinyOutput, 2, 't2'),
-      makeUserEvent('q3', 3), makeAssistant('a3', 3), makeToolResult('bash', tinyOutput, 3, 't3'),
-      makeUserEvent('q4', 4), makeAssistant('a4', 4), makeToolResult('bash', tinyOutput, 4, 't4'),
-      makeUserEvent('q5', 5), makeAssistant('a5', 5), makeToolResult('bash', tinyOutput, 5, 't5'),
-      makeUserEvent('q6', 6), makeAssistant('a6', 6), makeToolResult('bash', tinyOutput, 6, 't6'),
-      makeUserEvent('q7', 7), makeAssistant('a7', 7), makeToolResult('bash', tinyOutput, 7, 't7'),
-      makeUserEvent('q8', 8), makeAssistant('a8', 8), makeToolResult('bash', tinyOutput, 8, 't8'),
+      makeUserEvent('q1', 1),
+      makeAssistant('a1', 1),
+      makeToolResult('bash', tinyOutput, 1, 't1'),
+      makeUserEvent('q2', 2),
+      makeAssistant('a2', 2),
+      makeToolResult('bash', tinyOutput, 2, 't2'),
+      makeUserEvent('q3', 3),
+      makeAssistant('a3', 3),
+      makeToolResult('bash', tinyOutput, 3, 't3'),
+      makeUserEvent('q4', 4),
+      makeAssistant('a4', 4),
+      makeToolResult('bash', tinyOutput, 4, 't4'),
+      makeUserEvent('q5', 5),
+      makeAssistant('a5', 5),
+      makeToolResult('bash', tinyOutput, 5, 't5'),
+      makeUserEvent('q6', 6),
+      makeAssistant('a6', 6),
+      makeToolResult('bash', tinyOutput, 6, 't6'),
+      makeUserEvent('q7', 7),
+      makeAssistant('a7', 7),
+      makeToolResult('bash', tinyOutput, 7, 't7'),
+      makeUserEvent('q8', 8),
+      makeAssistant('a8', 8),
+      makeToolResult('bash', tinyOutput, 8, 't8'),
     ];
     const result = pruneByTokens(events, baseConfig, 100);
     // 8 turns => maxPrunable = 3, hardLimit = 4 => pruneable = 3 turns
@@ -168,7 +238,14 @@ describe('pruneByTokens', () => {
   it('does not prune summary or hide events', () => {
     const longOutput = 'x'.repeat(5000);
     const events: SessionEvent[] = [
-      { type: 'summary', uuid: 's1', replaces: [], summaryText: 'Summary text', method: 'auto-compact', timestamp: new Date().toISOString() },
+      {
+        type: 'summary',
+        uuid: 's1',
+        replaces: [],
+        summaryText: 'Summary text',
+        method: 'auto-compact',
+        timestamp: new Date().toISOString(),
+      },
       makeUserEvent('q1', 1),
       makeAssistant('a1', 1),
       makeToolResult('bash', longOutput, 1, 't1'),
@@ -190,7 +267,7 @@ describe('pruneByTokens', () => {
     ];
     const result = pruneByTokens(events, baseConfig, 100);
     // Summary should remain
-    expect(result[0].type).toBe('summary');
+    expect(result[0]!.type).toBe('summary');
     expect((result[0] as any).summaryText).toBe('Summary text');
     // Oldest tool results cleared
     expect((result[3] as ToolResultEvent).output).toBe('[Old tool result content cleared]');

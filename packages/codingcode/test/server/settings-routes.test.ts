@@ -3,7 +3,11 @@ import { settingsRouter } from '../../src/server/routes/settings.js';
 
 vi.mock('../../src/memory/config.js', () => ({
   getMemoryConfig: vi.fn().mockReturnValue({ enabled: true, disabledTypes: [], extraTypes: [] }),
-  getAllTypesWithStatus: vi.fn().mockReturnValue([{ name: 'builtin', description: 'Built-in', isBuiltIn: true, disabled: false }]),
+  getAllTypesWithStatus: vi
+    .fn()
+    .mockReturnValue([
+      { name: 'builtin', description: 'Built-in', isBuiltIn: true, disabled: false },
+    ]),
   setMemoryTypeDisabled: vi.fn(),
   addMemoryExtraType: vi.fn(),
   updateMemoryExtraType: vi.fn(),
@@ -14,7 +18,9 @@ vi.mock('../../src/memory/index.js', () => {
   let enabled = true;
   return {
     getMemoryEnabled: vi.fn().mockImplementation(() => enabled),
-    setMemoryEnabled: vi.fn().mockImplementation((value: boolean) => { enabled = value; }),
+    setMemoryEnabled: vi.fn().mockImplementation((value: boolean) => {
+      enabled = value;
+    }),
   };
 });
 
@@ -63,7 +69,7 @@ describe('GET /memory/config', () => {
   it('returns memory config with types', async () => {
     const res = await settingsRouter.request('/memory/config');
     expect(res.status).toBe(200);
-    const body = await res.json() as { enabled: boolean; types: any[] };
+    const body = (await res.json()) as { enabled: boolean; types: any[] };
     expect(body.enabled).toBe(true);
     expect(body.types).toHaveLength(1);
     expect(body.types[0]!.name).toBe('builtin');
@@ -78,7 +84,7 @@ describe('POST /memory/enabled', () => {
       body: JSON.stringify({ enabled: false }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { enabled: boolean };
+    const body = (await res.json()) as { enabled: boolean };
     expect(body.enabled).toBe(false);
   });
 });
@@ -95,7 +101,7 @@ describe('POST /memory/extra-type', () => {
       body: JSON.stringify({ name: 'dup', description: 'duplicate' }),
     });
     expect(res.status).toBe(409);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain('already exists');
   });
 });
@@ -112,7 +118,7 @@ describe('PUT /memory/extra-type/:name', () => {
       body: JSON.stringify({ name: 'missing', description: 'x' }),
     });
     expect(res.status).toBe(404);
-    const body = await res.json() as { error: string };
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain('not found');
   });
 });
@@ -121,7 +127,7 @@ describe('GET /subagent/enabled', () => {
   it('returns enabled state', async () => {
     const res = await settingsRouter.request('/subagent/enabled');
     expect(res.status).toBe(200);
-    const body = await res.json() as { enabled: boolean };
+    const body = (await res.json()) as { enabled: boolean };
     expect(body.enabled).toBe(true);
   });
 });
@@ -134,7 +140,7 @@ describe('POST /subagent/enabled', () => {
       body: JSON.stringify({ enabled: false }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean };
+    const body = (await res.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
   });
 });

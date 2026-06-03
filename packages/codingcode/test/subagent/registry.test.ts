@@ -24,7 +24,7 @@ describe('SubagentRegistry', () => {
         const retrieved = registry.get('test-agent');
 
         expect(retrieved).toEqual(profile);
-      }),
+      })
     );
   });
 
@@ -47,9 +47,9 @@ describe('SubagentRegistry', () => {
 
         const all = registry.list();
         expect(all.length).toBeGreaterThanOrEqual(2);
-        expect(all.some(p => p.name === 'agent1')).toBe(true);
-        expect(all.some(p => p.name === 'agent2')).toBe(true);
-      }),
+        expect(all.some((p) => p.name === 'agent1')).toBe(true);
+        expect(all.some((p) => p.name === 'agent2')).toBe(true);
+      })
     );
   });
 
@@ -58,7 +58,7 @@ describe('SubagentRegistry', () => {
       testEffect((registry) => {
         const result = registry.get('unknown-agent');
         expect(result).toBeUndefined();
-      }),
+      })
     );
   });
 
@@ -91,7 +91,7 @@ describe('SubagentRegistry', () => {
         expect(retrieved?.tools).toContain('tool1');
         expect(retrieved?.maxSteps).toBe(15);
         expect(retrieved?.readonly).toBe(false);
-      }),
+      })
     );
   });
 
@@ -109,7 +109,7 @@ describe('SubagentRegistry', () => {
         registry.reset();
 
         expect(registry.get('temp')).toBeUndefined();
-      }),
+      })
     );
   });
 
@@ -117,7 +117,7 @@ describe('SubagentRegistry', () => {
     await Effect.runPromise(
       testEffect((registry) => {
         expect(registry.isEnabled()).toBe(true);
-      }),
+      })
     );
   });
 
@@ -126,7 +126,7 @@ describe('SubagentRegistry', () => {
       testEffect((registry) => {
         registry.setEnabled(false);
         expect(registry.isEnabled()).toBe(false);
-      }),
+      })
     );
   });
 
@@ -136,7 +136,7 @@ describe('SubagentRegistry', () => {
         registry.setEnabled(false);
         registry.setEnabled(true);
         expect(registry.isEnabled()).toBe(true);
-      }),
+      })
     );
   });
 
@@ -147,7 +147,7 @@ describe('SubagentRegistry', () => {
         expect(registry.isEnabled()).toBe(false);
         registry.reset();
         expect(registry.isEnabled()).toBe(true);
-      }),
+      })
     );
   });
 
@@ -156,7 +156,7 @@ describe('SubagentRegistry', () => {
       await Effect.runPromise(
         testEffect((registry) => {
           expect(registry.isAgentDisabled('any-agent')).toBe(false);
-        }),
+        })
       );
     });
 
@@ -168,7 +168,7 @@ describe('SubagentRegistry', () => {
           expect(registry.isAgentDisabled('test')).toBe(true);
           registry.enableAgent('test');
           expect(registry.isAgentDisabled('test')).toBe(false);
-        }),
+        })
       );
     });
 
@@ -179,7 +179,7 @@ describe('SubagentRegistry', () => {
           registry.disableAgent('test');
           registry.reset();
           expect(registry.isAgentDisabled('test')).toBe(false);
-        }),
+        })
       );
     });
   });

@@ -1,7 +1,12 @@
 ﻿import { expect, it, describe, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { loadAgentProfiles, writeAgentProfile, updateAgentProfile, deleteAgentProfile } from '../../src/subagent/loader';
+import {
+  loadAgentProfiles,
+  writeAgentProfile,
+  updateAgentProfile,
+  deleteAgentProfile,
+} from '../../src/subagent/loader';
 
 describe('loadAgentProfiles', () => {
   const testDir = join(process.cwd(), '.test-agents');
@@ -30,9 +35,9 @@ You are a basic test agent.`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].name).toBe('basic-agent');
-    expect(results[0].description).toBe('A basic agent for testing');
-    expect(results[0].systemPrompt).toBe('You are a basic test agent.');
+    expect(results[0]!.name).toBe('basic-agent');
+    expect(results[0]!.description).toBe('A basic agent for testing');
+    expect(results[0]!.systemPrompt).toBe('You are a basic test agent.');
   });
 
   it('should parse readonly and maxSteps fields', () => {
@@ -48,8 +53,8 @@ Advanced system prompt.`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].readonly).toBe(true);
-    expect(results[0].maxSteps).toBe(50);
+    expect(results[0]!.readonly).toBe(true);
+    expect(results[0]!.maxSteps).toBe(50);
   });
 
   it('should parse tools array', () => {
@@ -64,7 +69,7 @@ System prompt.`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].tools).toEqual(['read_file', 'write_file', 'bash']);
+    expect(results[0]!.tools).toEqual(['read_file', 'write_file', 'bash']);
   });
 
   it('should parse mcpServers array', () => {
@@ -79,7 +84,7 @@ System prompt.`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].mcpServers).toEqual(['postgres', 'redis']);
+    expect(results[0]!.mcpServers).toEqual(['postgres', 'redis']);
   });
 
   it('should leave mcpServers undefined when not specified', () => {
@@ -93,7 +98,7 @@ System prompt.`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].mcpServers).toBeUndefined();
+    expect(results[0]!.mcpServers).toBeUndefined();
   });
 
   it('should skip files without name or description', () => {
@@ -126,7 +131,7 @@ System 2`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(2);
-    expect(results.map(r => r.name)).toEqual(expect.arrayContaining(['agent1', 'agent2']));
+    expect(results.map((r) => r.name)).toEqual(expect.arrayContaining(['agent1', 'agent2']));
   });
 
   it('should handle profiles without frontmatter', () => {
@@ -156,8 +161,8 @@ Always follow these rules.`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].systemPrompt).toContain('- Task 1');
-    expect(results[0].systemPrompt).toContain('Always follow these rules.');
+    expect(results[0]!.systemPrompt).toContain('- Task 1');
+    expect(results[0]!.systemPrompt).toContain('Always follow these rules.');
   });
 
   it('should ignore non-.md files', () => {
@@ -185,7 +190,7 @@ System prompt.`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].readonly).toBe(false);
+    expect(results[0]!.readonly).toBe(false);
   });
 
   it('should parse model field from frontmatter', () => {
@@ -200,7 +205,7 @@ System prompt.`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].model).toBe('gpt-4o@openai');
+    expect(results[0]!.model).toBe('gpt-4o@openai');
   });
 
   it('should leave model undefined when not specified in frontmatter', () => {
@@ -214,7 +219,7 @@ System prompt.`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].model).toBeUndefined();
+    expect(results[0]!.model).toBeUndefined();
   });
 });
 
@@ -233,9 +238,9 @@ describe('writeAgentProfile', () => {
     });
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].name).toBe('test-agent');
-    expect(results[0].description).toBe('Agent for testing');
-    expect(results[0].systemPrompt).toBe('You are a test agent.');
+    expect(results[0]!.name).toBe('test-agent');
+    expect(results[0]!.description).toBe('Agent for testing');
+    expect(results[0]!.systemPrompt).toBe('You are a test agent.');
   });
 
   it('should write profile with all optional fields', () => {
@@ -251,11 +256,11 @@ describe('writeAgentProfile', () => {
     });
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].tools).toEqual(['read_file', 'glob']);
-    expect(results[0].mcpServers).toEqual(['postgres', 'redis']);
-    expect(results[0].readonly).toBe(true);
-    expect(results[0].maxSteps).toBe(50);
-    expect(results[0].model).toBe('sonnet');
+    expect(results[0]!.tools).toEqual(['read_file', 'glob']);
+    expect(results[0]!.mcpServers).toEqual(['postgres', 'redis']);
+    expect(results[0]!.readonly).toBe(true);
+    expect(results[0]!.maxSteps).toBe(50);
+    expect(results[0]!.model).toBe('sonnet');
   });
 
   it('should overwrite existing profile with same name', () => {
@@ -271,7 +276,7 @@ describe('writeAgentProfile', () => {
     });
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].description).toBe('Updated');
+    expect(results[0]!.description).toBe('Updated');
   });
 });
 
@@ -295,7 +300,7 @@ describe('updateAgentProfile', () => {
     });
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].name).toBe('new-name');
+    expect(results[0]!.name).toBe('new-name');
   });
 });
 
@@ -320,6 +325,6 @@ describe('deleteAgentProfile', () => {
     deleteAgentProfile(testDir, 'to-delete');
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(1);
-    expect(results[0].name).toBe('keep');
+    expect(results[0]!.name).toBe('keep');
   });
 });

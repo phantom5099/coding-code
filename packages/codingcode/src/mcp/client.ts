@@ -8,7 +8,7 @@ export class McpError extends Error {
   constructor(
     public readonly serverName: string,
     public readonly toolName: string,
-    cause: unknown,
+    cause: unknown
   ) {
     super(`[MCP:${serverName}] ${toolName} failed: ${String(cause)}`);
   }
@@ -24,10 +24,7 @@ export class McpClient {
   private toolNames: string[] = [];
 
   constructor(private config: McpServerConfig) {
-    this.client = new Client(
-      { name: 'codingcode', version: '1.0.0' },
-      { capabilities: {} },
-    );
+    this.client = new Client({ name: 'codingcode', version: '1.0.0' }, { capabilities: {} });
 
     if (config.command) {
       this.transport = new StdioClientTransport({
@@ -37,14 +34,11 @@ export class McpClient {
         stderr: 'pipe', // SDK 自动 drain
       });
     } else if (config.url) {
-      this.transport = new StreamableHTTPClientTransport(
-        new URL(config.url),
-        {
-          requestInit: config.headers
-            ? { headers: config.headers as Record<string, string> }
-            : undefined,
-        },
-      );
+      this.transport = new StreamableHTTPClientTransport(new URL(config.url), {
+        requestInit: config.headers
+          ? { headers: config.headers as Record<string, string> }
+          : undefined,
+      });
     } else {
       throw new Error(`MCP server '${config.name}' must have either command or url`);
     }
@@ -79,7 +73,9 @@ export class McpClient {
     // stdio: detect process exit for reconnect
     if (this.transport instanceof StdioClientTransport) {
       // SDK's StdioClientTransport exposes _process for monitoring
-      const proc = (this.transport as unknown as { _process?: { on: (e: string, cb: () => void) => void } })._process;
+      const proc = (
+        this.transport as unknown as { _process?: { on: (e: string, cb: () => void) => void } }
+      )._process;
       if (proc) {
         proc.on('exit', () => {
           if (!this.destroyed && this.config.autoReconnect !== false) {
@@ -103,7 +99,9 @@ export class McpClient {
     }
   }
 
-  async listTools(): Promise<Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>> {
+  async listTools(): Promise<
+    Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>
+  > {
     const result = await this.client.listTools();
     this.toolNames = result.tools.map((t) => t.name);
     return result.tools.map((t) => ({
@@ -121,14 +119,15 @@ export class McpClient {
         self.semaphore = yield* STM.commit(TSemaphore.make(self.config.concurrency ?? 3));
       }
 
-      return yield* TSemaphore.withPermits(self.semaphore, 1)(
+      return yield* TSemaphore.withPermits(
+        self.semaphore,
+        1
+      )(
         Effect.tryPromise({
           try: async () => {
-            const result = await self.client.callTool(
-              { name, arguments: args },
-              undefined,
-              { timeout: 60_000 },
-            );
+            const result = await self.client.callTool({ name, arguments: args }, undefined, {
+              timeout: 60_000,
+            });
             const content = result.content as Array<{ type: string; text?: string }>;
             return content
               .filter((c) => c.type === 'text')
@@ -136,7 +135,7 @@ export class McpClient {
               .join('\n');
           },
           catch: (cause) => new McpError(self.config.name, name, cause),
-        }),
+        })
       );
     });
   }

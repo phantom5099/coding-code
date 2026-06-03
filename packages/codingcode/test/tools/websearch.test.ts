@@ -8,7 +8,10 @@ describe('webSearchTool', () => {
   });
 
   it('should validate parameters', () => {
-    const parsed = webSearchTool.parameters.parse({ query: 'test query' }) as { query: string; max_results: number };
+    const parsed = webSearchTool.parameters.parse({ query: 'test query' }) as {
+      query: string;
+      max_results: number;
+    };
     expect(parsed.query).toBe('test query');
     expect(parsed.max_results).toBe(8); // default
   });

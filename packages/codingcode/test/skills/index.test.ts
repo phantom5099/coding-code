@@ -14,7 +14,8 @@ const TEST_CODINGCODE_DIR = join(TEST_ROOT, '.codingcode');
 
 describe('SkillService', () => {
   beforeEach(() => {
-    if (existsSync(TEST_CODINGCODE_DIR)) rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    if (existsSync(TEST_CODINGCODE_DIR))
+      rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
     const dir = join(TEST_CODINGCODE_DIR, 'skills', 'test-basic');
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -30,11 +31,13 @@ Test the skill system.
 ## Steps
 1. Do something
 2. Verify result
-`);
+`
+    );
   });
 
   afterEach(() => {
-    if (existsSync(TEST_CODINGCODE_DIR)) rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    if (existsSync(TEST_CODINGCODE_DIR))
+      rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
   });
 
   it('should load skills from .codingcode/skills/ on demand', async () => {
@@ -60,12 +63,15 @@ Test the skill system.
 
       const dir = join(TEST_CODINGCODE_DIR, 'skills', 'dynamic-skill');
       mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, 'SKILL.md'), `---
+      writeFileSync(
+        join(dir, 'SKILL.md'),
+        `---
 name: dynamic-skill
 description: "Added at runtime"
 ---
 Dynamic skill body.
-`);
+`
+      );
 
       const after = yield* skill.getAll();
       return { before: before.length, after: after.length };
@@ -97,7 +103,8 @@ description: "Kebab case test"
 ---
 ## Kebab
 Testing kebab-case name parsing.
-`);
+`
+    );
     const program = Effect.gen(function* () {
       const skill = yield* SkillService;
       return yield* skill.select('@my-kebab-skill run tests');
@@ -189,8 +196,8 @@ Testing kebab-case name parsing.
     });
 
     const { before, after } = await runWithLayer(program);
-    const beforeEntry = before.find(s => s.name === 'test-basic');
-    const afterEntry = after.find(s => s.name === 'test-basic');
+    const beforeEntry = before.find((s) => s.name === 'test-basic');
+    const afterEntry = after.find((s) => s.name === 'test-basic');
     expect(beforeEntry?.enabled).toBe(true);
     expect(afterEntry?.enabled).toBe(false);
   });

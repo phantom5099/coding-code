@@ -11,8 +11,8 @@ export async function runWithLayer<A, E>(eff: Effect.Effect<A, E, any>): Promise
         onSuccess: (a) => ({ ok: true as const, value: a }),
         onFailure: (e) => ({ ok: false as const, error: e }),
       }),
-      Effect.provide(AppLayer) as any,
-    ),
+      Effect.provide(AppLayer) as any
+    )
   );
 }
 
@@ -20,5 +20,8 @@ export function errorResponse(err: unknown) {
   if (err instanceof AgentError) {
     return { status: err.httpStatus(), body: { error: { code: err.code, message: err.message } } };
   }
-  return { status: 500, body: { error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } } };
+  return {
+    status: 500,
+    body: { error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } },
+  };
 }

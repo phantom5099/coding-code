@@ -12,10 +12,12 @@ describe('z.toJSONSchema (Zod built-in)', () => {
   });
 
   it('should handle optional properties', () => {
-    const result = toJson(z.object({
-      required: z.string(),
-      optional: z.string().optional(),
-    }));
+    const result = toJson(
+      z.object({
+        required: z.string(),
+        optional: z.string().optional(),
+      })
+    );
     expect(result.required).toContain('required');
     expect(result.required).not.toContain('optional');
   });

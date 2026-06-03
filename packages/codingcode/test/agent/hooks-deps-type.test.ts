@@ -23,11 +23,14 @@ const mockToolSearch = {
 };
 
 const mockAgentService = {
-  runStream: () => { throw new Error('not implemented'); },
+  runStream: () => {
+    throw new Error('not implemented');
+  },
 };
 
 const mockCtx = {
-  build: () => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
+  build: () =>
+    Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] })),
   appendTurnEnd: () => Effect.succeed({ didCompress: false, released: 0 }),
 };
 
@@ -85,8 +88,8 @@ describe('RunReActDeps hooks type', () => {
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any },
-      deps,
+      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
+      deps
     );
 
     const result = await gen.next();

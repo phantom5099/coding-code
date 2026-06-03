@@ -21,8 +21,12 @@ interface DispatchAgentDeps {
 export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition {
   return {
     name: 'dispatch_agent',
-    description: 'Spawn an isolated subagent with its own context. Available profiles: ' +
-      deps.registry.list().map(p => `"${p.name}" (${p.description})`).join(', '),
+    description:
+      'Spawn an isolated subagent with its own context. Available profiles: ' +
+      deps.registry
+        .list()
+        .map((p) => `"${p.name}" (${p.description})`)
+        .join(', '),
     shortDescription: 'Spawn isolated subagent',
     parameters: z.object({
       agent: z.string().describe('subagent profile name'),
@@ -54,9 +58,15 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       let llm = parentLlm;
       if (profile.model) {
         const entry = findModel(profile.model);
-        if (!entry) throw new Error(`Subagent profile "${agentName}" specifies unknown model: ${profile.model}`);
+        if (!entry)
+          throw new Error(
+            `Subagent profile "${agentName}" specifies unknown model: ${profile.model}`
+          );
         const clientResult = await createClient(entry);
-        if (!clientResult.ok) throw new Error(`Failed to create client for model "${profile.model}": ${clientResult.error.message}`);
+        if (!clientResult.ok)
+          throw new Error(
+            `Failed to create client for model "${profile.model}": ${clientResult.error.message}`
+          );
         llm = clientResult.value;
       }
 
@@ -66,7 +76,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
           profile: agentName,
           prompt,
           parentSessionId: ctx?.sessionId,
-        }),
+        })
       );
 
       if (spawnDecision && spawnDecision.decision === 'deny') {
@@ -83,7 +93,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         {
           parentSessionId: ctx?.sessionId,
           agentName: agentName,
-        },
+        }
       );
 
       const childState = await Effect.runPromise(createEffect);
@@ -147,7 +157,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
                 profile: agentName,
                 status: 'error',
                 error: event.error,
-              }),
+              })
             );
             throw new Error(`Subagent failed: ${event.error.message}`);
           }
@@ -166,7 +176,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
           childSessionId: childUuid,
           profile: agentName,
           status: 'done',
-        }),
+        })
       );
 
       return finalContent || '(subagent completed without output)';

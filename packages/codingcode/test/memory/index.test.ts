@@ -2,9 +2,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { loadMemoryForPrompt, flushSessionToMemory, getMemoryEnabled, setMemoryEnabled } from '../../src/memory/index.js';
+import {
+  loadMemoryForPrompt,
+  flushSessionToMemory,
+  getMemoryEnabled,
+  setMemoryEnabled,
+} from '../../src/memory/index.js';
 import type { MemoryConfig } from '@codingcode/infra';
-import type { LLMStreamAdapter } from '../../src/agent/agent.js';
 
 const tmpDir = path.join(os.tmpdir(), 'memory-index-test');
 
@@ -82,10 +86,13 @@ describe('Memory Index', () => {
 
       const projectMemFile = path.join(tmpDir, '.codingcode/memory.md');
       fs.mkdirSync(path.dirname(projectMemFile), { recursive: true });
-      fs.writeFileSync(projectMemFile, `<!-- auto:begin -->
+      fs.writeFileSync(
+        projectMemFile,
+        `<!-- auto:begin -->
 ### project
 - Architecture decision 1
-<!-- auto:end -->`);
+<!-- auto:end -->`
+      );
 
       const result = loadMemoryForPrompt(tmpDir);
       expect(result).toContain('## Long-term Memory');
@@ -109,10 +116,13 @@ describe('Memory Index', () => {
 
       const projectMemFile = path.join(tmpDir, '.codingcode/memory.md');
       fs.mkdirSync(path.dirname(projectMemFile), { recursive: true });
-      fs.writeFileSync(projectMemFile, `<!-- auto:begin -->
+      fs.writeFileSync(
+        projectMemFile,
+        `<!-- auto:begin -->
 ### project
 - Very long content that should be truncated ${' x'.repeat(200)}
-<!-- auto:end -->`);
+<!-- auto:end -->`
+      );
 
       const result = loadMemoryForPrompt(tmpDir);
       const bytes = Buffer.byteLength(result.replace('## Long-term Memory\n\n', ''), 'utf-8');

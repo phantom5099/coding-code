@@ -5,8 +5,21 @@ import type { SessionEvent } from '../../src/session/types.js';
 describe('sessionEventsToTurns', () => {
   it('parses edit_file tool_result without diff (diff is computed on frontend)', () => {
     const events: SessionEvent[] = [
-      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
-      { type: 'user', turnId: 1, uuid: 'u1', content: 'edit file', timestamp: new Date().toISOString() },
+      {
+        type: 'session_meta',
+        sessionId: 's1',
+        projectPath: 'p',
+        cwd: '/tmp',
+        model: 'test',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        type: 'user',
+        turnId: 1,
+        uuid: 'u1',
+        content: 'edit file',
+        timestamp: new Date().toISOString(),
+      },
       {
         type: 'assistant',
         turnId: 1,
@@ -51,8 +64,21 @@ describe('sessionEventsToTurns', () => {
 
   it('parses write_file tool_result without diff', () => {
     const events: SessionEvent[] = [
-      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
-      { type: 'user', turnId: 1, uuid: 'u1', content: 'write file', timestamp: new Date().toISOString() },
+      {
+        type: 'session_meta',
+        sessionId: 's1',
+        projectPath: 'p',
+        cwd: '/tmp',
+        model: 'test',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        type: 'user',
+        turnId: 1,
+        uuid: 'u1',
+        content: 'write file',
+        timestamp: new Date().toISOString(),
+      },
       {
         type: 'assistant',
         turnId: 1,
@@ -95,8 +121,21 @@ describe('sessionEventsToTurns', () => {
 
   it('parses non-file tool_result without diff', () => {
     const events: SessionEvent[] = [
-      { type: 'session_meta', sessionId: 's1', projectPath: 'p', cwd: '/tmp', model: 'test', createdAt: new Date().toISOString() },
-      { type: 'user', turnId: 1, uuid: 'u1', content: 'run command', timestamp: new Date().toISOString() },
+      {
+        type: 'session_meta',
+        sessionId: 's1',
+        projectPath: 'p',
+        cwd: '/tmp',
+        model: 'test',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        type: 'user',
+        turnId: 1,
+        uuid: 'u1',
+        content: 'run command',
+        timestamp: new Date().toISOString(),
+      },
       {
         type: 'assistant',
         turnId: 1,

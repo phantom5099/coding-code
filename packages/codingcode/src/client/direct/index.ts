@@ -14,7 +14,7 @@ export interface DirectClients {
 
 export function createDirectClients(
   llm: any,
-  runWithLayer: <T>(eff: any) => Promise<T>,
+  runWithLayer: <T>(eff: any) => Promise<T>
 ): DirectClients {
   return {
     agent: createDirectAgentClient(llm, runWithLayer),

@@ -24,13 +24,11 @@ describe('updateIndex deduplication after removing appendEvent', () => {
 
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
       );
       spy.mockClear();
 
-      await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))),
-      );
+      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))));
 
       expect(spy).toHaveBeenCalledTimes(1);
     } finally {
@@ -49,12 +47,14 @@ describe('updateIndex deduplication after removing appendEvent', () => {
 
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
       );
       spy.mockClear();
 
       await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model'))),
+        SessionService.pipe(
+          Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model'))
+        )
       );
 
       expect(spy).toHaveBeenCalledTimes(1);
@@ -74,12 +74,12 @@ describe('updateIndex deduplication after removing appendEvent', () => {
 
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model'))),
+        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
       );
       spy.mockClear();
 
       await run(
-        SessionService.pipe(Effect.flatMap((s) => s.hideMessage(state, 'dummy-uuid', 'test'))),
+        SessionService.pipe(Effect.flatMap((s) => s.hideMessage(state, 'dummy-uuid', 'test')))
       );
 
       expect(spy).toHaveBeenCalledTimes(1);

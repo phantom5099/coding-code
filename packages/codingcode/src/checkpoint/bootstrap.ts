@@ -33,62 +33,72 @@ function getLedger(projectPath: string): Ledger {
  * Uses source: 'system' so these hooks survive reloadUserHooks() calls.
  * Idempotent — safe to call multiple times with the same HookService.
  */
-export function bootstrapCheckpoint(
-  hooks: HookService,
-): void {
+export function bootstrapCheckpoint(hooks: HookService): void {
   // Pre-execution: record file hash before modification
-  Effect.runSync(hooks.register('tool.execute.before', async (payload) => {
-    const toolName = payload.toolName as string;
-    if (toolName !== 'edit_file' && toolName !== 'write_file') return;
+  Effect.runSync(
+    hooks.register(
+      'tool.execute.before',
+      async (payload) => {
+        const toolName = payload.toolName as string;
+        if (toolName !== 'edit_file' && toolName !== 'write_file') return;
 
-    const args = payload.args as Record<string, unknown> | undefined;
-    const rawPath = args?.path as string | undefined;
-    if (!rawPath) return;
+        const args = payload.args as Record<string, unknown> | undefined;
+        const rawPath = args?.path as string | undefined;
+        if (!rawPath) return;
 
-    const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
-    const resolvedPath = resolve(base, rawPath);
-    const callId = payload.callId as string;
-    if (callId) {
-      pendingHash.set(callId, fileHash(resolvedPath));
-    }
-  }, { source: 'system' }));
+        const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
+        const resolvedPath = resolve(base, rawPath);
+        const callId = payload.callId as string;
+        if (callId) {
+          pendingHash.set(callId, fileHash(resolvedPath));
+        }
+      },
+      { source: 'system' }
+    )
+  );
 
   // Post-execution: record the full entry
-  Effect.runSync(hooks.register('tool.execute.after', async (payload) => {
-    const sessionId = payload.sessionId as string | undefined;
-    if (!sessionId) return;
-    const turnId = payload.turnId as number | undefined;
-    if (turnId === undefined) return;
-    const projectPath = payload.projectPath as string | undefined;
-    if (!projectPath) return;
+  Effect.runSync(
+    hooks.register(
+      'tool.execute.after',
+      async (payload) => {
+        const sessionId = payload.sessionId as string | undefined;
+        if (!sessionId) return;
+        const turnId = payload.turnId as number | undefined;
+        if (turnId === undefined) return;
+        const projectPath = payload.projectPath as string | undefined;
+        if (!projectPath) return;
 
-    const toolName = payload.toolName as string;
-    if (toolName !== 'edit_file' && toolName !== 'write_file') return;
+        const toolName = payload.toolName as string;
+        if (toolName !== 'edit_file' && toolName !== 'write_file') return;
 
-    const args = payload.args as Record<string, unknown> | undefined;
-    const rawPath = args?.path as string | undefined;
-    if (!rawPath) return;
-    const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
-    const resolvedPath = resolve(base, rawPath);
+        const args = payload.args as Record<string, unknown> | undefined;
+        const rawPath = args?.path as string | undefined;
+        if (!rawPath) return;
+        const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
+        const resolvedPath = resolve(base, rawPath);
 
-    const callId = payload.callId as string;
-    const hashBefore = callId ? (pendingHash.get(callId) ?? '') : '';
-    if (callId) {
-      pendingHash.delete(callId);
-    }
+        const callId = payload.callId as string;
+        const hashBefore = callId ? (pendingHash.get(callId) ?? '') : '';
+        if (callId) {
+          pendingHash.delete(callId);
+        }
 
-    const hashAfter = fileHash(resolvedPath);
+        const hashAfter = fileHash(resolvedPath);
 
-    getLedger(projectPath).record({
-      turnId,
-      sessionId,
-      type: toolName,
-      path: resolvedPath,
-      hashBefore,
-      hashAfter,
-      timestamp: new Date().toISOString(),
-    });
-  }, { source: 'system' }));
+        getLedger(projectPath).record({
+          turnId,
+          sessionId,
+          type: toolName,
+          path: resolvedPath,
+          hashBefore,
+          hashAfter,
+          timestamp: new Date().toISOString(),
+        });
+      },
+      { source: 'system' }
+    )
+  );
 }
 
 function fileHash(filePath: string): string {

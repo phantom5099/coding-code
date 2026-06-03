@@ -22,20 +22,34 @@ const mockToolSearch = {
 };
 
 const mockAgentService = {
-  runStream: () => { throw new Error('not implemented'); },
+  runStream: () => {
+    throw new Error('not implemented');
+  },
 };
 
 const mockCtx = {
-  build: (_sessionId: string) => Effect.sync(() => [{ role: 'user' as const, content: 'run all tools' }]),
-  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: false, released: 0 }),
-  compress: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: true, released: 1000 }),
+  build: (_sessionId: string) =>
+    Effect.sync(() => ({
+      messages: [{ role: 'user' as const, content: 'run all tools' }],
+      newBudgets: [],
+    })),
+  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) =>
+    Effect.succeed({ didCompress: false, released: 0 }),
+  compress: (_sessionId: string, _llm?: any, _config?: any) =>
+    Effect.succeed({ didCompress: true, released: 1000 }),
+  compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
 };
 
 const mockSession = {
   recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
     Effect.sync(() => ({ uuid: 'a1' })),
-  recordToolResult: (_state: any, _parentUuid: string, _toolName: string, _toolCallId: string, _output: string) =>
-    Effect.sync(() => ({})),
+  recordToolResult: (
+    _state: any,
+    _parentUuid: string,
+    _toolName: string,
+    _toolCallId: string,
+    _output: string
+  ) => Effect.sync(() => ({})),
 };
 
 const mockCheckpoint = {
@@ -53,6 +67,7 @@ const mockState = {
   sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
   title: 'test',
   usage: undefined,
+  promptEstimate: 0,
 };
 
 function makeDeps(overrides?: Record<string, any>) {
@@ -90,7 +105,7 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
               { id: 'tc2', name: 'tool_b', arguments: { delay: 10 } },
               { id: 'tc3', name: 'tool_c', arguments: { delay: 30 } },
             ],
-          }),
+          })
         ),
       }),
     };
@@ -108,23 +123,37 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
           return `result-${name}`;
         }),
       executeBatch: (toolCalls: any[], _sessionId?: string) =>
-        Effect.forEach(toolCalls, (tc: any) =>
-          mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(
-            Effect.matchEffect({
-              onSuccess: (output) => Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
-              onFailure: (err) => Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: String(err) }),
-            }),
-            Effect.catchAllDefect((defect) =>
-              Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: String(defect) }),
+        (Effect.forEach as any)(
+          toolCalls,
+          (tc: any) =>
+            mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(
+              (Effect.matchEffect as any)({
+                onSuccess: (output: any) =>
+                  Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
+                onFailure: (err: any) =>
+                  Effect.succeed({
+                    type: 'error' as const,
+                    id: tc.id,
+                    name: tc.name,
+                    output: String(err),
+                  }),
+              }),
+              (Effect.catchAllDefect as any)((defect: any) =>
+                Effect.succeed({
+                  type: 'error' as const,
+                  id: tc.id,
+                  name: tc.name,
+                  output: String(defect),
+                })
+              )
             ),
-          ),
-          { concurrency: 'unbounded' },
+          { concurrency: 'unbounded' }
         ),
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any },
-      makeDeps({ maxSteps: 1, executor: mockExecutor as any }),
+      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
+      makeDeps({ maxSteps: 1, executor: mockExecutor as any })
     );
 
     const events: any[] = [];
@@ -152,7 +181,7 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
               { id: 'tc2', name: 'bad_tool', arguments: {} },
               { id: 'tc3', name: 'good_tool2', arguments: {} },
             ],
-          }),
+          })
         ),
       }),
     };
@@ -163,23 +192,37 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
           ? Effect.fail(new Error('Simulated failure') as any)
           : Effect.succeed(`result-${name}`),
       executeBatch: (toolCalls: any[], _sessionId?: string) =>
-        Effect.forEach(toolCalls, (tc: any) =>
-          mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(
-            Effect.matchEffect({
-              onSuccess: (output) => Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
-              onFailure: (err) => Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: String(err) }),
-            }),
-            Effect.catchAllDefect((defect) =>
-              Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: String(defect) }),
+        (Effect.forEach as any)(
+          toolCalls,
+          (tc: any) =>
+            mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(
+              (Effect.matchEffect as any)({
+                onSuccess: (output: any) =>
+                  Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
+                onFailure: (err: any) =>
+                  Effect.succeed({
+                    type: 'error' as const,
+                    id: tc.id,
+                    name: tc.name,
+                    output: String(err),
+                  }),
+              }),
+              (Effect.catchAllDefect as any)((defect: any) =>
+                Effect.succeed({
+                  type: 'error' as const,
+                  id: tc.id,
+                  name: tc.name,
+                  output: String(defect),
+                })
+              )
             ),
-          ),
-          { concurrency: 'unbounded' },
+          { concurrency: 'unbounded' }
         ),
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any },
-      makeDeps({ maxSteps: 1, executor: mockExecutor as any }),
+      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
+      makeDeps({ maxSteps: 1, executor: mockExecutor as any })
     );
 
     const events: any[] = [];

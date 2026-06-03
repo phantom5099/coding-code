@@ -4,16 +4,14 @@ import type { SseEvent } from './adapter.js';
 
 export function sseHandler(
   createGenerator: () => AsyncGenerator<SseEvent, void, unknown>,
-  opts?: { initialEvents?: SseEvent[]; sessionId?: string },
+  opts?: { initialEvents?: SseEvent[]; sessionId?: string }
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
     const sessionId = opts?.sessionId ?? c.req.param('id') ?? 'default';
     const stream = new ReadableStream({
       async start(controller) {
         const enqueue = (data: SseEvent) => {
-          controller.enqueue(
-            new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`),
-          );
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
         registerEmitter(sessionId, (id, tool, args) => {
@@ -48,7 +46,7 @@ export function sseHandler(
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',

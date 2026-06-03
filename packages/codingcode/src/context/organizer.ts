@@ -1,11 +1,22 @@
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
-import { findSessionIndex, resolveSessionDir, readHistory, persistToolResult } from '../session/io.js';
+import {
+  findSessionIndex,
+  resolveSessionDir,
+  readHistory,
+  persistToolResult,
+} from '../session/io.js';
 import { applyVisibilityEvents, buildMessagesFromEvents } from '../session/messages.js';
 import { estimateMessageTokens, estimateTokens, estimateTokensForContent } from './utils/tokens.js';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import type { SessionEvent, ToolResultEvent, ToolBudgetEvent, SummaryEvent, UserEvent } from '../session/types.js';
+import type {
+  SessionEvent,
+  ToolResultEvent,
+  ToolBudgetEvent,
+  SummaryEvent,
+  UserEvent,
+} from '../session/types.js';
 
 export interface BuildResult {
   messages: Message[];
@@ -17,7 +28,7 @@ export function assemblePayload(
   sessionId: string,
   encodedProjectPath: string,
   config: ContextConfig,
-  contextWindow: number = 128000,
+  contextWindow: number = 128000
 ): BuildResult {
   const dir = resolveSessionDir(sessionId);
   if (!dir) throw new Error(`Session ${sessionId} not found`);
@@ -33,7 +44,15 @@ export function assemblePayload(
 
   const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
-  const { events: compacted, newBudgets } = applyLocalCompaction(visible, currentTurnId, config, jsonlPath, sessionId, encodedProjectPath, contextWindow);
+  const { events: compacted, newBudgets } = applyLocalCompaction(
+    visible,
+    currentTurnId,
+    config,
+    jsonlPath,
+    sessionId,
+    encodedProjectPath,
+    contextWindow
+  );
 
   const messages = buildMessagesFromEvents(compacted as any);
 
@@ -47,15 +66,26 @@ function applyLocalCompaction(
   jsonlPath: string,
   sessionId: string,
   encodedProjectPath: string,
-  contextWindow: number,
+  contextWindow: number
 ): { events: SessionEvent[]; newBudgets: ToolBudgetEvent[] } {
-  const budgetResult = applyToolResultBudget(events, config, jsonlPath, sessionId, encodedProjectPath);
+  const budgetResult = applyToolResultBudget(
+    events,
+    config,
+    jsonlPath,
+    sessionId,
+    encodedProjectPath
+  );
   const result = pruneByTokens(budgetResult.events, config, contextWindow);
   return { events: result, newBudgets: budgetResult.newBudgets };
 }
 
 function toolMsgTokens(output: string, tool: ToolResultEvent): number {
-  return estimateMessageTokens({ role: 'tool', content: output, tool_call_id: tool.toolCallId, tool_name: tool.toolName } as any);
+  return estimateMessageTokens({
+    role: 'tool',
+    content: output,
+    tool_call_id: tool.toolCallId,
+    tool_name: tool.toolName,
+  } as any);
 }
 
 function applyToolResultBudget(
@@ -63,14 +93,14 @@ function applyToolResultBudget(
   config: ContextConfig,
   jsonlPath: string,
   sessionId: string,
-  encodedProjectPath: string,
+  encodedProjectPath: string
 ): { events: SessionEvent[]; newBudgets: ToolBudgetEvent[] } {
   const budgetMap = new Map<string, ToolBudgetEvent>();
   for (const ev of events) {
     if (ev.type === 'tool_budget') budgetMap.set(ev.toolCallId, ev);
   }
 
-  const lastUserIdx = [...events].reverse().findIndex(e => e.type === 'user');
+  const lastUserIdx = [...events].reverse().findIndex((e) => e.type === 'user');
   if (lastUserIdx < 0) return { events: replaceBudgeted(events, budgetMap), newBudgets: [] };
 
   const lastUser = events[events.length - 1 - lastUserIdx] as UserEvent;
@@ -83,7 +113,8 @@ function applyToolResultBudget(
     return true;
   });
 
-  if (toolResults.length === 0) return { events: replaceBudgeted(events, budgetMap), newBudgets: [] };
+  if (toolResults.length === 0)
+    return { events: replaceBudgeted(events, budgetMap), newBudgets: [] };
 
   const totalTokens = toolResults.reduce((sum, t) => sum + toolMsgTokens(t.output, t), 0);
 
@@ -124,11 +155,11 @@ function applyToolResultBudget(
 
 function replaceBudgeted(
   events: SessionEvent[],
-  budgetMap: Map<string, ToolBudgetEvent>,
+  budgetMap: Map<string, ToolBudgetEvent>
 ): SessionEvent[] {
   return events
-    .filter(e => e.type !== 'tool_budget')
-    .map(e => {
+    .filter((e) => e.type !== 'tool_budget')
+    .map((e) => {
       if (e.type === 'tool_result' && budgetMap.has(e.toolCallId)) {
         const b = budgetMap.get(e.toolCallId)!;
         return { ...e, output: `[...persisted at: ${b.path} (${b.bytes} bytes)]\n\n${b.preview}` };
@@ -140,18 +171,20 @@ function replaceBudgeted(
 export function pruneByTokens(
   events: SessionEvent[],
   config: ContextConfig,
-  contextWindow: number,
+  contextWindow: number
 ): SessionEvent[] {
   const threshold = contextWindow * config.tokenPruneThreshold;
   const totalTokens = events.reduce((sum, e) => sum + estimateEventTokens(e), 0);
   if (totalTokens <= threshold) return events;
 
-  const turnIds = [...new Set(
-    events
-      .filter(e => e.type === 'user' || e.type === 'assistant' || e.type === 'tool_result')
-      .map(e => e.turnId)
-      .filter((t): t is number => t !== undefined)
-  )].sort((a, b) => a - b);
+  const turnIds = [
+    ...new Set(
+      events
+        .filter((e) => e.type === 'user' || e.type === 'assistant' || e.type === 'tool_result')
+        .map((e) => e.turnId)
+        .filter((t): t is number => t !== undefined)
+    ),
+  ].sort((a, b) => a - b);
 
   if (turnIds.length <= config.minTurnsBeforePrune) return events;
 
@@ -194,7 +227,7 @@ export function pruneByTokens(
   }
 
   const actualPruneIds = new Set(pruneableTurnIds.slice(0, pruneCount));
-  return events.map(e => {
+  return events.map((e) => {
     if (e.type === 'tool_result' && actualPruneIds.has(e.turnId)) {
       return { ...e, output: '[Old tool result content cleared]' };
     }
@@ -204,13 +237,22 @@ export function pruneByTokens(
 
 function estimateEventTokens(e: SessionEvent): number {
   if (e.type === 'user') return estimateMessageTokens({ role: 'user', content: e.content });
-  if (e.type === 'assistant') return estimateMessageTokens({ role: 'assistant', content: e.content });
+  if (e.type === 'assistant')
+    return estimateMessageTokens({ role: 'assistant', content: e.content });
   if (e.type === 'tool_result') {
-    return estimateMessageTokens({ role: 'tool', content: e.output, tool_call_id: e.toolCallId, tool_name: e.toolName } as any);
+    return estimateMessageTokens({
+      role: 'tool',
+      content: e.output,
+      tool_call_id: e.toolCallId,
+      tool_name: e.toolName,
+    } as any);
   }
   if (e.type === 'summary') {
-    return estimateMessageTokens({ role: 'system', name: 'compacted_history', content: e.summaryText });
+    return estimateMessageTokens({
+      role: 'system',
+      name: 'compacted_history',
+      content: e.summaryText,
+    });
   }
   return 0;
 }
-

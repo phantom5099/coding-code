@@ -1,6 +1,10 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
-import { DEFAULT_DENY_RULES, READONLY_TOOL_NAMES, DESTRUCTIVE_TOOL_NAMES } from '../../src/approval/presets.js';
+import {
+  DEFAULT_DENY_RULES,
+  READONLY_TOOL_NAMES,
+  DESTRUCTIVE_TOOL_NAMES,
+} from '../../src/approval/presets.js';
 
 describe('Presets', () => {
   it('should have system-source rules', () => {

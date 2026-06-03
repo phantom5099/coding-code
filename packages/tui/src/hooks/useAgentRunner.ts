@@ -16,127 +16,160 @@ export function useAgentRunner(runner: (input: string) => AsyncGenerator<StreamC
   const [isRunning, setIsRunning] = useState(false);
   const [approval, setApproval] = useState<ApprovalPanel | null>(null);
 
-  const run = useCallback(async (input: string) => {
-    setIsRunning(true);
+  const run = useCallback(
+    async (input: string) => {
+      setIsRunning(true);
 
-    const userMsg: UIMessage = {
-      id: generateId(),
-      timestamp: Date.now(),
-      role: 'user',
-      content: input,
-    };
-    setStaticMessages(prev => [...prev, userMsg]);
+      const userMsg: UIMessage = {
+        id: generateId(),
+        timestamp: Date.now(),
+        role: 'user',
+        content: input,
+      };
+      setStaticMessages((prev) => [...prev, userMsg]);
 
-    const assistantId = generateId();
-    let assistantContent = '';
-    const pendingTodods: UIMessage[] = [];
+      const assistantId = generateId();
+      let assistantContent = '';
+      const pendingTodods: UIMessage[] = [];
 
-    setActiveMessages([{
-      id: assistantId,
-      timestamp: Date.now(),
-      role: 'assistant',
-      content: '',
-      isStreaming: true,
-    }]);
-
-    try {
-      const stream = runner(input);
-
-      for await (const chunk of stream) {
-        if (chunk.type === 'text') {
-          assistantContent += chunk.text;
-          setActiveMessages([{
-            id: assistantId,
-            timestamp: Date.now(),
-            role: 'assistant',
-            content: assistantContent,
-            isStreaming: true,
-          }]);
-        } else if (chunk.type === 'tool_start') {
-          setStaticMessages(prev => [...prev, {
-            id: generateId(),
-            timestamp: Date.now(),
-            role: 'tool',
-            content: '',
-            toolName: chunk.name,
-          }]);
-        } else if (chunk.type === 'tool_denied') {
-          setStaticMessages(prev => [...prev, {
-            id: generateId(),
-            timestamp: Date.now(),
-            role: 'system',
-            content: `⛔ Tool "${chunk.name}" was denied: ${chunk.reason || 'not allowed'}`,
-            toolName: chunk.name,
-          }]);
-        } else if (chunk.type === 'approval_request') {
-          // 收到审批请求 → 显示 InlinePanel，暂停流读取
-          const response = await new Promise<string>((resolve) => {
-            setApproval({
-              id: chunk.id,
-              tool: chunk.tool,
-              args: chunk.args,
-              resolve,
-            });
-          });
-          // 用户已选择 → 关闭面板，继续流
-          setApproval(null);
-        } else if (chunk.type === 'todo_update') {
-          const items = chunk.items as Array<{ step: string; status: string }>;
-          const pending = items.filter(t => t.status === 'pending');
-          const completed = items.filter(t => t.status === 'completed');
-          const cancelled = items.filter(t => t.status === 'cancelled');
-          const summary = `${pending.length} 进行中, ${completed.length} 已完成` +
-            (cancelled.length > 0 ? `, ${cancelled.length} 已取消` : '');
-          pendingTodods.push({
-            id: generateId(),
-            timestamp: Date.now(),
-            role: 'tool',
-            content: items.map(t => {
-              const icon = t.status === 'completed' ? '✓' : t.status === 'cancelled' ? '✗' : '○';
-              return `${icon} ${t.step}`;
-            }).join('\n'),
-            toolName: `Todo (${summary})`,
-          });
-        } else if (chunk.type === 'error') {
-          setStaticMessages(prev => [...prev, {
-            id: generateId(),
-            timestamp: Date.now(),
-            role: 'system',
-            content: `[Error] ${chunk.message}`,
-          }]);
-        }
-        // tool_result and done are intentionally ignored in TUI
-      }
-
-      setActiveMessages([]);
-      setStaticMessages(prev => [
-        ...prev,
+      setActiveMessages([
         {
           id: assistantId,
           timestamp: Date.now(),
           role: 'assistant',
-          content: assistantContent,
-          isStreaming: false,
+          content: '',
+          isStreaming: true,
         },
-        ...pendingTodods,
       ]);
-    } catch (err: any) {
-      setActiveMessages([]);
-      setStaticMessages(prev => [...prev, {
-        id: generateId(),
-        timestamp: Date.now(),
-        role: 'system',
-        content: `[Error] ${err.message || err}`,
-      }]);
-    } finally {
-      setIsRunning(false);
-    }
-  }, [runner]);
+
+      try {
+        const stream = runner(input);
+
+        for await (const chunk of stream) {
+          if (chunk.type === 'text') {
+            assistantContent += chunk.text;
+            setActiveMessages([
+              {
+                id: assistantId,
+                timestamp: Date.now(),
+                role: 'assistant',
+                content: assistantContent,
+                isStreaming: true,
+              },
+            ]);
+          } else if (chunk.type === 'tool_start') {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: generateId(),
+                timestamp: Date.now(),
+                role: 'tool',
+                content: '',
+                toolName: chunk.name,
+              },
+            ]);
+          } else if (chunk.type === 'tool_denied') {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: generateId(),
+                timestamp: Date.now(),
+                role: 'system',
+                content: `⛔ Tool "${chunk.name}" was denied: ${chunk.reason || 'not allowed'}`,
+                toolName: chunk.name,
+              },
+            ]);
+          } else if (chunk.type === 'approval_request') {
+            // 收到审批请求 → 显示 InlinePanel，暂停流读取
+            const response = await new Promise<string>((resolve) => {
+              setApproval({
+                id: chunk.id,
+                tool: chunk.tool,
+                args: chunk.args,
+                resolve,
+              });
+            });
+            // 用户已选择 → 关闭面板，继续流
+            setApproval(null);
+          } else if (chunk.type === 'todo_update') {
+            const items = chunk.items as Array<{ step: string; status: string }>;
+            const pending = items.filter((t) => t.status === 'pending');
+            const completed = items.filter((t) => t.status === 'completed');
+            const cancelled = items.filter((t) => t.status === 'cancelled');
+            const summary =
+              `${pending.length} 进行中, ${completed.length} 已完成` +
+              (cancelled.length > 0 ? `, ${cancelled.length} 已取消` : '');
+            pendingTodods.push({
+              id: generateId(),
+              timestamp: Date.now(),
+              role: 'tool',
+              content: items
+                .map((t) => {
+                  const icon =
+                    t.status === 'completed' ? '✓' : t.status === 'cancelled' ? '✗' : '○';
+                  return `${icon} ${t.step}`;
+                })
+                .join('\n'),
+              toolName: `Todo (${summary})`,
+            });
+          } else if (chunk.type === 'error') {
+            setStaticMessages((prev) => [
+              ...prev,
+              {
+                id: generateId(),
+                timestamp: Date.now(),
+                role: 'system',
+                content: `[Error] ${chunk.message}`,
+              },
+            ]);
+          }
+          // tool_result and done are intentionally ignored in TUI
+        }
+
+        setActiveMessages([]);
+        setStaticMessages((prev) => [
+          ...prev,
+          {
+            id: assistantId,
+            timestamp: Date.now(),
+            role: 'assistant',
+            content: assistantContent,
+            isStreaming: false,
+          },
+          ...pendingTodods,
+        ]);
+      } catch (err: any) {
+        setActiveMessages([]);
+        setStaticMessages((prev) => [
+          ...prev,
+          {
+            id: generateId(),
+            timestamp: Date.now(),
+            role: 'system',
+            content: `[Error] ${err.message || err}`,
+          },
+        ]);
+      } finally {
+        setIsRunning(false);
+      }
+    },
+    [runner]
+  );
 
   const clearMessages = useCallback(() => {
     setStaticMessages([]);
     setActiveMessages([]);
   }, []);
 
-  return { staticMessages, activeMessages, setStaticMessages, setActiveMessages, run, isRunning, clearMessages, approval, setApproval };
+  return {
+    staticMessages,
+    activeMessages,
+    setStaticMessages,
+    setActiveMessages,
+    run,
+    isRunning,
+    clearMessages,
+    approval,
+    setApproval,
+  };
 }

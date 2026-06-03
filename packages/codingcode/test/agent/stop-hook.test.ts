@@ -9,10 +9,15 @@ describe('runReActLoop 鈥?stop hook', () => {
   const mockState = {
     sessionId: 'test-session',
     cwd: process.cwd(),
-    currentTurnId: randomUUID(),
+    currentTurnId: 0,
     sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
     title: 'test',
     usage: undefined,
+    projectPath: '',
+    transcriptPath: '',
+    indexPath: '',
+    messageCount: 0,
+    promptEstimate: 0,
   };
 
   function baseMockDeps(overrides: Record<string, any> = {}) {
@@ -29,10 +34,18 @@ describe('runReActLoop 鈥?stop hook', () => {
         listUnloadedDeferred: () => [],
       } as any,
       agentIdResolver: { resolve: () => 'agent-id' } as any,
+      agentService: { runStream: () => (async function* () {})() } as any,
       ctx: {
-        build: () => Effect.succeed([]),
-        compress: () => Effect.succeed({ released: 0 }),
+        build: () =>
+          Effect.succeed({
+            messages: [{ role: 'user' as const, content: 'hi' }],
+            newBudgets: [],
+            promptEstimate: 0,
+          }),
+        compress: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
         appendTurnEnd: () => Effect.succeed(undefined),
+        compactIfNeeded: () =>
+          Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
       } as any,
       session: {
         recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
@@ -43,7 +56,7 @@ describe('runReActLoop 鈥?stop hook', () => {
       hooks: {
         emit: vi.fn(() => Effect.succeed(undefined)),
         emitDecision: vi.fn(() => Effect.succeed(null)),
-      },
+      } as any,
       ...overrides,
     };
   }
@@ -55,9 +68,7 @@ describe('runReActLoop 鈥?stop hook', () => {
         callCount++;
         return {
           stream: (async function* () {})(),
-          response: Promise.resolve(
-            Result.ok({ content: `Response ${callCount}`, toolCalls: [] }),
-          ),
+          response: Promise.resolve(Result.ok({ content: `Response ${callCount}`, toolCalls: [] })),
         };
       }),
     };
@@ -79,7 +90,7 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
     };
 
     const gen = runReActLoop(opts, deps);
@@ -90,7 +101,7 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     expect(emitDecisionFn).toHaveBeenCalledWith(
       'agent.turn.stop',
-      expect.objectContaining({ sessionId: mockState.sessionId }),
+      expect.objectContaining({ sessionId: mockState.sessionId })
     );
   });
 
@@ -98,9 +109,7 @@ describe('runReActLoop 鈥?stop hook', () => {
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
-        response: Promise.resolve(
-          Result.ok({ content: 'Response', toolCalls: [] }),
-        ),
+        response: Promise.resolve(Result.ok({ content: 'Response', toolCalls: [] })),
       })),
     };
 
@@ -119,7 +128,7 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       maxStopContinuations: 2,
     };
 
@@ -131,16 +140,14 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     const errorEvent = events.find((e: any) => e._tag === 'Error');
     expect(errorEvent).toBeDefined();
-    expect(errorEvent?.error?.code).toBe('STOP_LOOP');
+    expect((errorEvent as any)?.error?.code).toBe('STOP_LOOP');
   });
 
   it('should use default maxStopContinuations of 2', async () => {
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
-        response: Promise.resolve(
-          Result.ok({ content: 'Response', toolCalls: [] }),
-        ),
+        response: Promise.resolve(Result.ok({ content: 'Response', toolCalls: [] })),
       })),
     };
 
@@ -161,7 +168,7 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
     };
 
     const gen = runReActLoop(opts, deps);
@@ -180,9 +187,7 @@ describe('runReActLoop 鈥?stop hook', () => {
         llmCalls++;
         return {
           stream: (async function* () {})(),
-          response: Promise.resolve(
-            Result.ok({ content: 'Response', toolCalls: [] }),
-          ),
+          response: Promise.resolve(Result.ok({ content: 'Response', toolCalls: [] })),
         };
       }),
     };
@@ -197,7 +202,7 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
     };
 
     const gen = runReActLoop(opts, deps);
@@ -217,9 +222,7 @@ describe('runReActLoop 鈥?stop hook', () => {
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
-        response: Promise.resolve(
-          Result.ok({ content: 'Response', toolCalls: [] }),
-        ),
+        response: Promise.resolve(Result.ok({ content: 'Response', toolCalls: [] })),
       })),
     };
 
@@ -243,7 +246,7 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       maxStopContinuations: 1,
     };
 
@@ -253,10 +256,7 @@ describe('runReActLoop 鈥?stop hook', () => {
       events.push(event);
     }
 
-    expect(recordUserFn).toHaveBeenCalledWith(
-      mockState,
-      'Custom injection message',
-    );
+    expect(recordUserFn).toHaveBeenCalledWith(mockState, 'Custom injection message');
   });
 
   it('should use default injection if not provided', async () => {
@@ -265,9 +265,7 @@ describe('runReActLoop 鈥?stop hook', () => {
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
-        response: Promise.resolve(
-          Result.ok({ content: 'Response', toolCalls: [] }),
-        ),
+        response: Promise.resolve(Result.ok({ content: 'Response', toolCalls: [] })),
       })),
     };
 
@@ -291,7 +289,7 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       maxStopContinuations: 1,
     };
 
@@ -301,9 +299,6 @@ describe('runReActLoop 鈥?stop hook', () => {
       events.push(event);
     }
 
-    expect(recordUserFn).toHaveBeenCalledWith(
-      mockState,
-      '(continue)',
-    );
+    expect(recordUserFn).toHaveBeenCalledWith(mockState, '(continue)');
   });
 });

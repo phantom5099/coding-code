@@ -1,179 +1,251 @@
-import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react'
-import { createPortal } from 'react-dom'
-import { useGlobalStore } from '../stores/global.store'
-import { API_BASE, api } from '../lib/api'
-import MessageStream from './MessageStream'
-import TodoPanel from './TodoPanel'
-import ApprovalPanel from './ApprovalPanel'
+import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useGlobalStore } from '../stores/global.store';
+import { API_BASE, api } from '../lib/api';
+import MessageStream from './MessageStream';
+import TodoPanel from './TodoPanel';
+import ApprovalPanel from './ApprovalPanel';
 
 // ─── ContextIndicator ──────────────────────────────────────────────────────
 
 function ContextIndicator({ threadId }: { threadId: string }) {
-  const contextUsage = useGlobalStore((s) => s.agent.contextUsage)
-  const usage = useGlobalStore((s) => s.agent.usageByThreadId[threadId])
-  const setContextUsage = useGlobalStore((s) => s.setContextUsage)
-  const isCompressing = useGlobalStore((s) => s.agent.isCompressing)
-  const startCompressing = useGlobalStore((s) => s.startCompressing)
-  const stopCompressing = useGlobalStore((s) => s.stopCompressing)
+  const contextUsage = useGlobalStore((s) => s.agent.contextUsage);
+  const usage = useGlobalStore((s) => s.agent.usageByThreadId[threadId]);
+  const setContextUsage = useGlobalStore((s) => s.setContextUsage);
+  const isCompressing = useGlobalStore((s) => s.agent.isCompressing);
+  const startCompressing = useGlobalStore((s) => s.startCompressing);
+  const stopCompressing = useGlobalStore((s) => s.stopCompressing);
 
-  const r = 7
-  const circ = 2 * Math.PI * r
+  const r = 7;
+  const circ = 2 * Math.PI * r;
 
   if (isCompressing) {
     return (
-      <button type="button" disabled
-        className="w-5 h-5 flex items-center justify-center animate-pulse cursor-default">
+      <button
+        type="button"
+        disabled
+        className="w-5 h-5 flex items-center justify-center animate-pulse cursor-default"
+      >
         <svg width="18" height="18" viewBox="0 0 18 18">
           <circle cx="9" cy="9" r={r} fill="none" stroke="#2a2a2a" strokeWidth="2.5" />
-          <circle cx="9" cy="9" r={r} fill="none" stroke="#555" strokeWidth="2.5"
-            strokeDasharray={circ} strokeDashoffset={circ * 0.6}
-            strokeLinecap="round" transform="rotate(-90 9 9)" />
+          <circle
+            cx="9"
+            cy="9"
+            r={r}
+            fill="none"
+            stroke="#555"
+            strokeWidth="2.5"
+            strokeDasharray={circ}
+            strokeDashoffset={circ * 0.6}
+            strokeLinecap="round"
+            transform="rotate(-90 9 9)"
+          />
         </svg>
       </button>
-    )
+    );
   }
 
-  if (!contextUsage) return null
+  if (!contextUsage) return null;
   // When LLM only returns total (no prompt/completion split), fall back to total for both pct and detail
-  const effectiveUsed = usage && usage.prompt === 0 && usage.completion === 0
-    ? usage.total
-    : contextUsage.used
-  const pct = Math.min(effectiveUsed / contextUsage.contextWindow, 1)
-  const color = pct < 0.4 ? '#4ec9b0' : pct < 0.75 ? '#e5c07b' : '#f44747'
+  const effectiveUsed =
+    usage && usage.prompt === 0 && usage.completion === 0 ? usage.total : contextUsage.used;
+  const pct = Math.min(effectiveUsed / contextUsage.contextWindow, 1);
+  const color = pct < 0.4 ? '#4ec9b0' : pct < 0.75 ? '#e5c07b' : '#f44747';
   const detail = usage
     ? usage.prompt === 0 && usage.completion === 0
       ? `${usage.total.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens`
       : `prompt: ${usage.prompt.toLocaleString()}, completion: ${usage.completion.toLocaleString()}, total: ${usage.total.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens`
-    : `${contextUsage.used.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens`
+    : `${contextUsage.used.toLocaleString()} / ${contextUsage.contextWindow.toLocaleString()} tokens`;
   return (
-    <button type="button"
+    <button
+      type="button"
       onClick={async () => {
-        startCompressing()
+        startCompressing();
         try {
-          const res = await api<{ promptEstimate: number; didCompress: boolean; released: number }>(`/api/sessions/${threadId}/compact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: '' }) })
+          const res = await api<{ promptEstimate: number; didCompress: boolean; released: number }>(
+            `/api/sessions/${threadId}/compact`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cwd: '' }),
+            }
+          );
           if (res.promptEstimate != null && contextUsage) {
-            setContextUsage({ used: res.promptEstimate, contextWindow: contextUsage.contextWindow })
+            setContextUsage({
+              used: res.promptEstimate,
+              contextWindow: contextUsage.contextWindow,
+            });
           }
         } catch (e) {
-          console.error('Failed to compact session:', e)
+          console.error('Failed to compact session:', e);
         } finally {
-          stopCompressing()
+          stopCompressing();
         }
       }}
       title={`上下文: ${Math.round(pct * 100)}% (${detail})\n点击压缩`}
-      className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition-opacity">
+      className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition-opacity"
+    >
       <svg width="18" height="18" viewBox="0 0 18 18">
         <circle cx="9" cy="9" r={r} fill="none" stroke="#2a2a2a" strokeWidth="2.5" />
-        <circle cx="9" cy="9" r={r} fill="none" stroke={color} strokeWidth="2.5"
-          strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
-          strokeLinecap="round" transform="rotate(-90 9 9)" />
+        <circle
+          cx="9"
+          cy="9"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="2.5"
+          strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - pct)}
+          strokeLinecap="round"
+          transform="rotate(-90 9 9)"
+        />
       </svg>
     </button>
-  )
+  );
 }
 
 // ─── ModelSelector ─────────────────────────────────────────────────────────
 
 function ModelSelector() {
-  const model = useGlobalStore((s) => s.agent.model)
-  const models = useGlobalStore((s) => s.agent.models)
-  const setModel = useGlobalStore((s) => s.setModel)
-  const [open, setOpen] = useState(false)
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const model = useGlobalStore((s) => s.agent.model);
+  const models = useGlobalStore((s) => s.agent.models);
+  const setModel = useGlobalStore((s) => s.setModel);
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const groups = models.reduce<Record<string, typeof models>>((acc, m) => {
-    if (!acc[m.provider]) acc[m.provider] = []
-    acc[m.provider]!.push(m)
-    return acc
-  }, {})
+    if (!acc[m.provider]) acc[m.provider] = [];
+    acc[m.provider]!.push(m);
+    return acc;
+  }, {});
 
-  const currentModel = models.find((m) => m.id === model)
-  const displayName = currentModel?.name ?? (model ? model.split('-').slice(-2).join(' ') : '')
+  const currentModel = models.find((m) => m.id === model);
+  const displayName = currentModel?.name ?? (model ? model.split('-').slice(-2).join(' ') : '');
 
   useLayoutEffect(() => {
     if (open && dropdownRef.current && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect()
-      dropdownRef.current.style.bottom = `${window.innerHeight - rect.top + 8}px`
-      dropdownRef.current.style.right = `${window.innerWidth - rect.right}px`
+      const rect = buttonRef.current.getBoundingClientRect();
+      dropdownRef.current.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+      dropdownRef.current.style.right = `${window.innerWidth - rect.right}px`;
     }
-  }, [open])
+  }, [open]);
 
   return (
     <div>
-      <button ref={buttonRef} type="button" onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors"
+      >
         <span className="max-w-[160px] truncate">{displayName || '选择模型'}</span>
         <span className="text-[#3c3c3c] text-[10px]">▾</span>
       </button>
-      {open && createPortal(
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div ref={dropdownRef} className="fixed bg-[#1e1e1e] border border-[#333] rounded-xl shadow-2xl min-w-[260px] z-50 py-1.5 max-h-[400px] overflow-y-auto">
-            {Object.entries(groups).map(([provider, providerModels]) => (
-              <div key={provider}>
-                <div className="px-3 py-1.5 text-[11px] font-semibold text-[#444] uppercase tracking-wider">{provider}</div>
-                {providerModels.map((m) => (
-                  <button type="button" key={m.id} onClick={async () => { setModel(m.id); setOpen(false); await api(`/api/models/switch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: m.id }) }).catch((e) => { console.error('Failed to switch model:', e) }) }}
-                    className={`w-full text-left px-3 py-2 text-[14px] hover:bg-[#094771] transition-colors flex items-center gap-2 ${m.id === model ? 'text-[#4ec9b0]' : 'text-[#ccc]'}`}>
-                    <span className="w-4 shrink-0 text-center text-[12px]">{m.id === model ? '✓' : ''}</span>
-                    <span className="flex-1">{m.name}</span>
-                    <span className="text-[#3c3c3c] text-[12px] shrink-0">{(m.context_window / 1000).toFixed(0)}k</span>
-                  </button>
-                ))}
-              </div>
-            ))}
-            {models.length === 0 && <div className="px-3 py-3 text-[14px] text-[#444]">无可用模型</div>}
-          </div>
-        </>,
-        document.body
-      )}
+      {open &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div
+              ref={dropdownRef}
+              className="fixed bg-[#1e1e1e] border border-[#333] rounded-xl shadow-2xl min-w-[260px] z-50 py-1.5 max-h-[400px] overflow-y-auto"
+            >
+              {Object.entries(groups).map(([provider, providerModels]) => (
+                <div key={provider}>
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-[#444] uppercase tracking-wider">
+                    {provider}
+                  </div>
+                  {providerModels.map((m) => (
+                    <button
+                      type="button"
+                      key={m.id}
+                      onClick={async () => {
+                        setModel(m.id);
+                        setOpen(false);
+                        await api(`/api/models/switch`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ modelId: m.id }),
+                        }).catch((e) => {
+                          console.error('Failed to switch model:', e);
+                        });
+                      }}
+                      className={`w-full text-left px-3 py-2 text-[14px] hover:bg-[#094771] transition-colors flex items-center gap-2 ${m.id === model ? 'text-[#4ec9b0]' : 'text-[#ccc]'}`}
+                    >
+                      <span className="w-4 shrink-0 text-center text-[12px]">
+                        {m.id === model ? '✓' : ''}
+                      </span>
+                      <span className="flex-1">{m.name}</span>
+                      <span className="text-[#3c3c3c] text-[12px] shrink-0">
+                        {(m.context_window / 1000).toFixed(0)}k
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+              {models.length === 0 && (
+                <div className="px-3 py-3 text-[14px] text-[#444]">无可用模型</div>
+              )}
+            </div>
+          </>,
+          document.body
+        )}
     </div>
-  )
+  );
 }
 
 // ─── InputBox ──────────────────────────────────────────────────────────────
 
-function InputBox({ centered, sendMessage, abort }: {
-  centered?: boolean
-  sendMessage: (content: string, cwd?: string) => Promise<void>
-  abort: () => void
+function InputBox({
+  centered,
+  sendMessage,
+  abort,
+}: {
+  centered?: boolean;
+  sendMessage: (content: string, cwd?: string) => Promise<void>;
+  abort: () => void;
 }) {
-  const [text, setText] = useState('')
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
+  const [text, setText] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
   const isStreaming = useGlobalStore((s) => {
-    const id = s.agent.currentThreadId
-    const turns = id ? s.agent.threads[id]?.turns : undefined
-    return turns ? turns.some((t) => t.status === 'running') : false
-  })
-  const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy)
-  const workspace = useGlobalStore((s) => s.workspace)
-  const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy)
-  const pendingInput = useGlobalStore((s) => s.agent.pendingInput)
-  const setPendingInput = useGlobalStore((s) => s.setPendingInput)
+    const id = s.agent.currentThreadId;
+    const turns = id ? s.agent.threads[id]?.turns : undefined;
+    return turns ? turns.some((t) => t.status === 'running') : false;
+  });
+  const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy);
+  const workspace = useGlobalStore((s) => s.workspace);
+  const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy);
+  const pendingInput = useGlobalStore((s) => s.agent.pendingInput);
+  const setPendingInput = useGlobalStore((s) => s.setPendingInput);
 
   // Consume pendingInput when it's set
   useEffect(() => {
     if (pendingInput !== null) {
-      setText(pendingInput)
-      setPendingInput(null)
+      setText(pendingInput);
+      setPendingInput(null);
       // Focus textarea after setting text
-      setTimeout(() => textareaRef.current?.focus(), 0)
+      setTimeout(() => textareaRef.current?.focus(), 0);
     }
-  }, [pendingInput, setPendingInput])
+  }, [pendingInput, setPendingInput]);
 
   const handleSend = useCallback(() => {
-    const trimmed = text.trim()
-    if (!trimmed || isStreaming) return
-    setText('')
-    sendMessage(trimmed, workspace.rootPath || undefined)
-  }, [text, isStreaming, sendMessage, workspace.rootPath])
+    const trimmed = text.trim();
+    if (!trimmed || isStreaming) return;
+    setText('');
+    sendMessage(trimmed, workspace.rootPath || undefined);
+  }, [text, isStreaming, sendMessage, workspace.rootPath]);
 
-  const POLICY_LABELS: Record<string, string> = { suggest: '自动审查', 'auto-edit': '自动编辑', 'full-auto': '全自动' }
+  const POLICY_LABELS: Record<string, string> = {
+    suggest: '自动审查',
+    'auto-edit': '自动编辑',
+    'full-auto': '全自动',
+  };
   const POLICY_NEXT: Record<string, 'auto-edit' | 'full-auto' | 'suggest'> = {
-    suggest: 'auto-edit', 'auto-edit': 'full-auto', 'full-auto': 'suggest',
-  }
+    suggest: 'auto-edit',
+    'auto-edit': 'full-auto',
+    'full-auto': 'suggest',
+  };
 
   return (
     <div className={centered ? 'w-full max-w-[740px]' : 'px-5 pb-5 pt-2'}>
@@ -184,7 +256,12 @@ function InputBox({ centered, sendMessage, abort }: {
             ref={textareaRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
             placeholder="可向 AI 询问任何事"
             disabled={isStreaming}
             rows={3}
@@ -192,25 +269,34 @@ function InputBox({ centered, sendMessage, abort }: {
           />
           {/* Send / Stop — vertically centered to the right of textarea */}
           {isStreaming ? (
-            <button type="button" onClick={() => abort()}
-              className="w-9 h-9 shrink-0 flex items-center justify-center bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#ccc] rounded-full transition-colors text-sm">
+            <button
+              type="button"
+              onClick={() => abort()}
+              className="w-9 h-9 shrink-0 flex items-center justify-center bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#ccc] rounded-full transition-colors text-sm"
+            >
               ■
             </button>
           ) : (
-            <button type="button" onClick={handleSend} disabled={!text.trim()}
-              className="w-9 h-9 shrink-0 flex items-center justify-center bg-white disabled:bg-[#2a2a2a] disabled:text-[#444] text-[#111] rounded-full transition-colors font-bold text-base">
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!text.trim()}
+              className="w-9 h-9 shrink-0 flex items-center justify-center bg-white disabled:bg-[#2a2a2a] disabled:text-[#444] text-[#111] rounded-full transition-colors font-bold text-base"
+            >
               ↑
             </button>
           )}
         </div>
         {/* Row 2: toolbar */}
         <div className="flex items-center gap-2 px-3 pb-3 pt-0">
-          <button type="button"
+          <button
+            type="button"
             onClick={() => {
-              const next = POLICY_NEXT[approvalPolicy] ?? 'auto-edit'
-              setApprovalPolicy(next)
+              const next = POLICY_NEXT[approvalPolicy] ?? 'auto-edit';
+              setApprovalPolicy(next);
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors">
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors"
+          >
             <span className="text-[#569cd6] text-[10px]">⊙</span>
             <span>{POLICY_LABELS[approvalPolicy] ?? '自动审查'}</span>
             <span className="text-[#3c3c3c] text-[10px]">▾</span>
@@ -222,30 +308,34 @@ function InputBox({ centered, sendMessage, abort }: {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ─── AgentWorkspace ────────────────────────────────────────────────────────
 
 interface AgentWorkspaceProps {
-  sendMessage: (content: string, cwd?: string) => Promise<void>
-  abort: () => void
+  sendMessage: (content: string, cwd?: string) => Promise<void>;
+  abort: () => void;
 }
 
 export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspaceProps) {
-  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId)
-  const isCompressing = useGlobalStore((s) => s.agent.isCompressing)
-  const workspace = useGlobalStore((s) => s.workspace)
+  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
+  const isCompressing = useGlobalStore((s) => s.agent.isCompressing);
+  const workspace = useGlobalStore((s) => s.workspace);
 
   if (!currentThreadId) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-[#111] overflow-hidden px-6">
         <h2 className="text-[22px] font-medium text-[#ccc] tracking-tight">
-          在 <span className="text-white font-semibold">{workspace.name || workspace.rootPath.split(/[\\/]/).pop() || '当前目录'}</span> 中构建什么？
+          在{' '}
+          <span className="text-white font-semibold">
+            {workspace.name || workspace.rootPath.split(/[\\/]/).pop() || '当前目录'}
+          </span>{' '}
+          中构建什么？
         </h2>
         <InputBox centered sendMessage={sendMessage} abort={abort} />
       </div>
-    )
+    );
   }
 
   return (
@@ -263,5 +353,5 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
         <InputBox sendMessage={sendMessage} abort={abort} />
       </div>
     </div>
-  )
+  );
 }

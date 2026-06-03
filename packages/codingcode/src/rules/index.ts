@@ -1,19 +1,19 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
-import * as os from "node:os";
-import { spawn } from "node:child_process";
-import { getWorkspaceCwd } from "../core/workspace.js";
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import { spawn } from 'node:child_process';
+import { getWorkspaceCwd } from '../core/workspace.js';
 
 // ── Paths ──
 
 /** 全局规则文件路径 */
 function getGlobalRulesPath(): string {
-  return path.join(os.homedir(), ".codingcode", "rules.md");
+  return path.join(os.homedir(), '.codingcode', 'rules.md');
 }
 
 /** 项目规则文件路径 */
 function getProjectRulesPath(): string {
-  return path.join(getWorkspaceCwd(), "AGENTS.md");
+  return path.join(getWorkspaceCwd(), 'AGENTS.md');
 }
 
 // ── Read ──
@@ -21,18 +21,18 @@ function getProjectRulesPath(): string {
 /** 读取全局规则，不存在返回空字符串 */
 export function getGlobalRules(): string {
   try {
-    return fs.readFileSync(getGlobalRulesPath(), "utf-8").trim();
+    return fs.readFileSync(getGlobalRulesPath(), 'utf-8').trim();
   } catch {
-    return "";
+    return '';
   }
 }
 
 /** 读取项目规则，不存在返回空字符串 */
 export function getProjectRules(): string {
   try {
-    return fs.readFileSync(getProjectRulesPath(), "utf-8").trim();
+    return fs.readFileSync(getProjectRulesPath(), 'utf-8').trim();
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -49,7 +49,7 @@ export function getAllRules(): string {
     parts.push(`## Project-level Rules\n\n${project}`);
   }
 
-  return parts.join("\n\n");
+  return parts.join('\n\n');
 }
 
 // ── Clear ──
@@ -76,23 +76,22 @@ export function clearProjectRules(): void {
 
 /** 在编辑器中打开文件（非阻塞），返回是否成功启动 */
 export function editInEditor(filePath: string): boolean {
-  const editor = process.env.EDITOR
-    || process.env.VISUAL
-    || (process.platform === "win32" ? "notepad" : "vim");
+  const editor =
+    process.env.EDITOR || process.env.VISUAL || (process.platform === 'win32' ? 'notepad' : 'vim');
 
   try {
     // Windows 上使用 start 命令启动 GUI 编辑器，不会阻塞终端
-    if (process.platform === "win32") {
-      spawn("cmd.exe", ["/c", "start", "", editor, filePath], {
+    if (process.platform === 'win32') {
+      spawn('cmd.exe', ['/c', 'start', '', editor, filePath], {
         detached: true,
-        stdio: "ignore",
+        stdio: 'ignore',
         windowsHide: true,
       }).unref();
     } else {
       // Unix 上 spawn 子进程并脱离父进程
       spawn(editor, [filePath], {
         detached: true,
-        stdio: "ignore",
+        stdio: 'ignore',
       }).unref();
     }
     return true;
@@ -107,7 +106,7 @@ export function editGlobalRules(): boolean {
   const dir = path.dirname(p);
   fs.mkdirSync(dir, { recursive: true });
   if (!fs.existsSync(p)) {
-    fs.writeFileSync(p, "", "utf-8");
+    fs.writeFileSync(p, '', 'utf-8');
   }
   return editInEditor(p);
 }
@@ -116,7 +115,7 @@ export function editGlobalRules(): boolean {
 export function editProjectRules(): boolean {
   const p = getProjectRulesPath();
   if (!fs.existsSync(p)) {
-    fs.writeFileSync(p, "", "utf-8");
+    fs.writeFileSync(p, '', 'utf-8');
   }
   return editInEditor(p);
 }

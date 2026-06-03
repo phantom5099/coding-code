@@ -96,10 +96,10 @@ describe('reactive compact event', () => {
     events.push(compactEvent);
 
     expect(events.length).toBe(1);
-    expect(events[0]._tag).toBe('ReactiveCompact');
-    if (events[0]._tag === 'ReactiveCompact') {
-      expect(events[0].attempt).toBe(1);
-      expect(events[0].released).toBe(2000);
+    expect(events[0]!._tag).toBe('ReactiveCompact');
+    if (events[0]!._tag === 'ReactiveCompact') {
+      expect(events[0]!.attempt).toBe(1);
+      expect(events[0]!.released).toBe(2000);
     }
   });
 

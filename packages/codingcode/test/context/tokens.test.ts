@@ -1,5 +1,9 @@
 ﻿import { describe, it, expect } from 'vitest';
-import { estimateTokensForContent, estimateTokens, estimateMessageTokens } from '../../src/context/utils/tokens.js';
+import {
+  estimateTokensForContent,
+  estimateTokens,
+  estimateMessageTokens,
+} from '../../src/context/utils/tokens.js';
 
 describe('token estimation', () => {
   it('empty content returns 0', () => {
@@ -12,13 +16,13 @@ describe('token estimation', () => {
   });
 
   it('CJK text estimates ~1 token per char', () => {
-    expect(estimateTokensForContent('浣犲ソ涓栫晫')).toBe(4);
-    expect(estimateTokensForContent('杩欐槸涓€涓祴璇曞瓧绗︿覆')).toBe(9);
-    expect(estimateTokensForContent('杩欐槸涓€涓祴璇曞瓧绗︿覆鍝?)).toBe(10);
+    expect(estimateTokensForContent('你好世界')).toBe(4);
+    expect(estimateTokensForContent('这是一个测试字符串')).toBe(9);
+    expect(estimateTokensForContent('这是一个测试字符串吗')).toBe(10);
   });
 
   it('mixed CJK and ASCII sums separately', () => {
-    expect(estimateTokensForContent('hello涓栫晫')).toBe(4);
+    expect(estimateTokensForContent('hello世界')).toBe(4);
   });
 });
 
@@ -52,7 +56,7 @@ describe('estimateTokens', () => {
   it('aggregates full message tokens across array', () => {
     const messages = [
       { role: 'user', content: 'hello' },
-      { role: 'assistant', content: '浣犲ソ' },
+      { role: 'assistant', content: '你好' },
     ] as any;
     // user: content(2) + role(2) + structure(4) = 8
     // assistant: content(2) + role(3) + structure(4) = 9

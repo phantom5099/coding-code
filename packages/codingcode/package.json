@@ -11,10 +11,12 @@
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.35",
     "@ai-sdk/openai": "^3.0.63",
+    "@ai-sdk/provider": "^3.0.0",
+    "@ai-sdk/provider-utils": "^4.0.0",
     "ai": "^6.0.180",
     "effect": "^3.21.2",
     "hono": "^4.12.19",
     "zod": "^4.4.3",
-    "@codingcode/infra": "*"
+    "@codingcode/infra": "workspace:*"
   }
 }

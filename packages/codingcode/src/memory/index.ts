@@ -1,7 +1,17 @@
 import type { LLMClient } from '../llm/client.js';
 import { findSessionIndex, resolveSessionDir } from '../session/io.js';
 import type { SessionEvent } from '../session/types.js';
-import { readMemoryFile, resolveProjectMemoryPath, resolveUserMemoryPath, extractAutoBlock, replaceAutoBlock, mergeAutoBlocks, enforceMaxBytes, writeMemoryFileAtomic, stripMarkersForPrompt } from './storage.js';
+import {
+  readMemoryFile,
+  resolveProjectMemoryPath,
+  resolveUserMemoryPath,
+  extractAutoBlock,
+  replaceAutoBlock,
+  mergeAutoBlocks,
+  enforceMaxBytes,
+  writeMemoryFileAtomic,
+  stripMarkersForPrompt,
+} from './storage.js';
 import { resolveMemoryLLM } from './llm-resolver.js';
 import { getMemoryConfig, getEffectiveTypes, updateMemoryEnabled } from './config.js';
 import { extractMemory, type StructuredTranscript } from './extractor.js';
@@ -9,8 +19,13 @@ import { getWorkspaceCwd } from '../core/workspace.js';
 
 let _runtimeEnabled: boolean | null = null;
 
-export function setMemoryEnabled(v: boolean): void { _runtimeEnabled = v; updateMemoryEnabled(v); }
-export function getMemoryEnabled(): boolean { return _runtimeEnabled ?? getMemoryConfig().enabled; }
+export function setMemoryEnabled(v: boolean): void {
+  _runtimeEnabled = v;
+  updateMemoryEnabled(v);
+}
+export function getMemoryEnabled(): boolean {
+  return _runtimeEnabled ?? getMemoryConfig().enabled;
+}
 
 export function loadMemoryForPrompt(cwd: string): string {
   if (!getMemoryEnabled()) return '';
@@ -74,7 +89,11 @@ function buildStructuredTranscript(events: SessionEvent[]): StructuredTranscript
         userAndAssistant.push(`[assistant] ${event.content}`);
         break;
       case 'tool_result':
-        if (event.toolName === 'fetch_url' || event.toolName === 'read_file' || event.toolName === 'Read') {
+        if (
+          event.toolName === 'fetch_url' ||
+          event.toolName === 'read_file' ||
+          event.toolName === 'Read'
+        ) {
           userAndTools.push(`[tool:${event.toolName}] ${event.output}`);
         }
         break;
@@ -90,7 +109,7 @@ function buildStructuredTranscript(events: SessionEvent[]): StructuredTranscript
 
 export async function flushSessionToMemory(
   sessionId: string,
-  llm: LLMClient | null,
+  llm: LLMClient | null
 ): Promise<{ written: boolean; bytes: number }> {
   if (!getMemoryEnabled()) {
     return { written: false, bytes: 0 };

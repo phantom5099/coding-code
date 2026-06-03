@@ -2,7 +2,13 @@
 import { Effect } from 'effect';
 import { join } from 'path';
 import { SessionService } from '../../session/store.js';
-import { resolveSessionDir, getPermissionMode, setPermissionMode, readHistory, deleteSession } from '../../session/io.js';
+import {
+  resolveSessionDir,
+  getPermissionMode,
+  setPermissionMode,
+  readHistory,
+  deleteSession,
+} from '../../session/io.js';
 import { readUIHistory } from '../../session/messages.js';
 import { ContextService } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
@@ -19,7 +25,7 @@ sessionsRouter.get('/', async (c) => {
     Effect.gen(function* () {
       const svc = yield* SessionService;
       return yield* svc.listSessions(cwd);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -29,13 +35,13 @@ sessionsRouter.get('/', async (c) => {
 });
 
 sessionsRouter.post('/', async (c) => {
-  const body = await c.req.json() as { cwd: string; initialPermissionMode?: string };
+  const body = (await c.req.json()) as { cwd: string; initialPermissionMode?: string };
   const normalizedCwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
       return yield* svc.create(normalizedCwd, 'unknown');
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body: resp } = errorResponse(result.error);
@@ -54,13 +60,13 @@ sessionsRouter.post('/', async (c) => {
 
 sessionsRouter.post('/:id/resume', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string };
+  const body = (await c.req.json()) as { cwd: string };
   const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
       const state = yield* svc.create(resolveWorkspaceCwd(body.cwd), 'unknown', sessionId);
       return yield* svc.readHistory(state);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -71,14 +77,14 @@ sessionsRouter.post('/:id/resume', async (c) => {
 
 sessionsRouter.post('/:id/compact', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string };
+  const body = (await c.req.json()) as { cwd: string };
   const result = await runWithLayer(
     Effect.gen(function* () {
       const svc = yield* SessionService;
       const ctx = yield* ContextService;
       const state = yield* svc.create(resolveWorkspaceCwd(body.cwd), 'unknown', sessionId);
       return yield* ctx.compress(state.sessionId, state.projectPath, null);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -137,7 +143,7 @@ sessionsRouter.get('/:id/rollback-state', async (c) => {
           lastEntryId: entry?.id ?? null,
         },
       };
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -155,7 +161,7 @@ sessionsRouter.get('/:id/checkpoints/latest/diff', async (c) => {
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
       return checkpoint.getCheckpointDiff(cwd, sessionId);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -172,7 +178,7 @@ sessionsRouter.get('/:id/checkpoints/:turnId/diff', async (c) => {
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
       return checkpoint.getCheckpointDiff(cwd, sessionId, isNaN(turnId) ? undefined : turnId);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -185,16 +191,24 @@ sessionsRouter.get('/:id/checkpoints/:turnId/diff', async (c) => {
 
 sessionsRouter.post('/:id/checkpoints/latest/revert-file', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string; file: string };
+  const body = (await c.req.json()) as { cwd: string; file: string };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
       const completedTurns = checkpoint.getCompletedTurns(cwd, sessionId);
-      if (completedTurns.length === 0) return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+      if (completedTurns.length === 0)
+        return {
+          reverted: false,
+          throughTurnId: 0,
+          baseTurnId: null,
+          affectedTurns: [],
+          selectedFiles: [],
+          restoreEntry: null,
+        };
       const latestTurnId = completedTurns[completedTurns.length - 1]!;
       return checkpoint.revertCheckpointFile(cwd, sessionId, latestTurnId, body.file);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -207,16 +221,24 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-file', async (c) => {
 
 sessionsRouter.post('/:id/checkpoints/latest/revert-files', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string; files: string[] };
+  const body = (await c.req.json()) as { cwd: string; files: string[] };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
       const completedTurns = checkpoint.getCompletedTurns(cwd, sessionId);
-      if (completedTurns.length === 0) return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+      if (completedTurns.length === 0)
+        return {
+          reverted: false,
+          throughTurnId: 0,
+          baseTurnId: null,
+          affectedTurns: [],
+          selectedFiles: [],
+          restoreEntry: null,
+        };
       const latestTurnId = completedTurns[completedTurns.length - 1]!;
       return checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, body.files);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -229,16 +251,24 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-files', async (c) => {
 
 sessionsRouter.post('/:id/checkpoints/latest/revert-agent', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string };
+  const body = (await c.req.json()) as { cwd: string };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
       const completedTurns = checkpoint.getCompletedTurns(cwd, sessionId);
-      if (completedTurns.length === 0) return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+      if (completedTurns.length === 0)
+        return {
+          reverted: false,
+          throughTurnId: 0,
+          baseTurnId: null,
+          affectedTurns: [],
+          selectedFiles: [],
+          restoreEntry: null,
+        };
       const latestTurnId = completedTurns[completedTurns.length - 1]!;
       return checkpoint.revertCheckpointAgentFiles(cwd, sessionId, latestTurnId);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -251,16 +281,24 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-agent', async (c) => {
 
 sessionsRouter.post('/:id/checkpoints/latest/revert-all', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string };
+  const body = (await c.req.json()) as { cwd: string };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
       const completedTurns = checkpoint.getCompletedTurns(cwd, sessionId);
-      if (completedTurns.length === 0) return { reverted: false, throughTurnId: 0, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+      if (completedTurns.length === 0)
+        return {
+          reverted: false,
+          throughTurnId: 0,
+          baseTurnId: null,
+          affectedTurns: [],
+          selectedFiles: [],
+          restoreEntry: null,
+        };
       const latestTurnId = completedTurns[completedTurns.length - 1]!;
       return checkpoint.revertCheckpointAllFiles(cwd, sessionId, latestTurnId);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -279,7 +317,7 @@ sessionsRouter.get('/:id/rollback-preview', async (c) => {
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
       return checkpoint.previewRollbackDiff(cwd, sessionId, throughTurnId);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -292,13 +330,13 @@ sessionsRouter.get('/:id/rollback-preview', async (c) => {
 
 sessionsRouter.post('/:id/rollback-code-to-turn', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string; throughTurnId: number };
+  const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
       return checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -311,7 +349,7 @@ sessionsRouter.post('/:id/rollback-code-to-turn', async (c) => {
 
 sessionsRouter.post('/:id/rollback-context', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string; throughTurnId: number };
+  const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
@@ -333,7 +371,7 @@ sessionsRouter.post('/:id/rollback-context', async (c) => {
         }
       }
       return { ok: true, turns, rolledBackMessage, promptEstimate: state.promptEstimate };
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -346,7 +384,7 @@ sessionsRouter.post('/:id/rollback-context', async (c) => {
 
 sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string; throughTurnId: number };
+  const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
@@ -357,7 +395,7 @@ sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
       yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
       return { ok: true, turns, codeResult, promptEstimate: state.promptEstimate };
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -370,13 +408,16 @@ sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
 
 sessionsRouter.post('/:id/undo-code-rollback', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string; force?: boolean; files?: string[] };
+  const body = (await c.req.json()) as { cwd: string; force?: boolean; files?: string[] };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
-      return checkpoint.undoLastCodeRollback(cwd, sessionId, { force: body.force, files: body.files });
-    }),
+      return checkpoint.undoLastCodeRollback(cwd, sessionId, {
+        force: body.force,
+        files: body.files,
+      });
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -391,7 +432,7 @@ sessionsRouter.post('/:id/undo-code-rollback', async (c) => {
 
 sessionsRouter.post('/:id/fork', async (c) => {
   const sessionId = c.req.param('id');
-  const body = await c.req.json() as { cwd: string; atUuid?: string };
+  const body = (await c.req.json()) as { cwd: string; atUuid?: string };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
@@ -400,7 +441,7 @@ sessionsRouter.post('/:id/fork', async (c) => {
       const newSessionId = yield* svc.forkSession(state, body.atUuid ?? '');
       const turns = readUIHistory(newSessionId);
       return { sessionId: newSessionId, turns };
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);

@@ -25,10 +25,16 @@ describe('createHttpAgentClient.sendMessage', () => {
         JSON.stringify({ type: 'turn_id', turnId: 42 }),
         JSON.stringify({ type: 'text', text: 'hello', messageId: 1 }),
         JSON.stringify({ type: 'tool_start', id: 'tc-1', name: 'bash', args: { command: 'ls' } }),
-        JSON.stringify({ type: 'tool_result', id: 'tc-1', name: 'bash', output: 'file.txt', ok: true }),
+        JSON.stringify({
+          type: 'tool_result',
+          id: 'tc-1',
+          name: 'bash',
+          output: 'file.txt',
+          ok: true,
+        }),
         JSON.stringify({ type: 'done' }),
         JSON.stringify({ type: 'complete' }),
-      ]),
+      ])
     );
 
     const request = createRequestHelpers('http://localhost:8080');
@@ -52,19 +58,21 @@ describe('createHttpAgentClient.sendMessage', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ input: 'hi', cwd: '/tmp' }),
-      }),
+      })
     );
 
     fetchSpy.mockRestore();
   });
 
   it('uses "_" placeholder when sessionId is undefined', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      createSseResponse([
-        JSON.stringify({ type: 'session_id', sessionId: 'new-sess' }),
-        JSON.stringify({ type: 'complete' }),
-      ]),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        createSseResponse([
+          JSON.stringify({ type: 'session_id', sessionId: 'new-sess' }),
+          JSON.stringify({ type: 'complete' }),
+        ])
+      );
 
     const request = createRequestHelpers('http://localhost:8080');
     const client = createHttpAgentClient('http://localhost:8080', request);
@@ -77,18 +85,18 @@ describe('createHttpAgentClient.sendMessage', () => {
     expect(chunks).toEqual([{ type: 'session_id', sessionId: 'new-sess' }]);
     expect(fetchSpy).toHaveBeenCalledWith(
       'http://localhost:8080/api/sessions/_/messages',
-      expect.any(Object),
+      expect.any(Object)
     );
 
     fetchSpy.mockRestore();
   });
 
   it('throws on error event', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      createSseResponse([
-        JSON.stringify({ type: 'error', message: 'something broke' }),
-      ]),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        createSseResponse([JSON.stringify({ type: 'error', message: 'something broke' })])
+      );
 
     const request = createRequestHelpers('http://localhost:8080');
     const client = createHttpAgentClient('http://localhost:8080', request);

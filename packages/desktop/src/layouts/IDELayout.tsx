@@ -1,7 +1,7 @@
-import { useGlobalStore } from '../stores/global.store'
+import { useGlobalStore } from '../stores/global.store';
 
 export default function IDELayout() {
-  const setMode = useGlobalStore((s) => s.setMode)
+  const setMode = useGlobalStore((s) => s.setMode);
 
   return (
     <div className="flex-1 flex items-center justify-center flex-col gap-6 bg-[#252526]">
@@ -14,5 +14,5 @@ export default function IDELayout() {
         返回 Agent 模式 (Ctrl+Shift+A)
       </button>
     </div>
-  )
+  );
 }

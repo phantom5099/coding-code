@@ -60,8 +60,8 @@ async function main() {
         onSuccess: () => ({ type: 'ok' as const }),
         onFailure: (err: unknown) => ({ type: 'err' as const, err }),
       }),
-      Effect.provide(AppLayer),
-    ),
+      Effect.provide(AppLayer)
+    )
   );
 
   if (result.type === 'err') {

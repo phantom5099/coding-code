@@ -41,7 +41,10 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
         } catch {
           const inner = strValue.slice(1, -1).trim();
           if (inner) {
-            value = inner.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+            value = inner
+              .split(',')
+              .map((s: string) => s.trim())
+              .filter((s: string) => s.length > 0);
           } else {
             value = [];
           }
@@ -51,7 +54,10 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
     }
   }
 
-  const body = lines.slice(endIdx + 1).join('\n').trim();
+  const body = lines
+    .slice(endIdx + 1)
+    .join('\n')
+    .trim();
   return { frontmatter, body };
 }
 
@@ -63,7 +69,7 @@ export function loadAgentProfiles(projectCwd: string): SubagentProfile[] {
 
   const profiles: SubagentProfile[] = [];
   try {
-    const files = readdirSync(agentsDir).filter(f => f.endsWith('.md'));
+    const files = readdirSync(agentsDir).filter((f) => f.endsWith('.md'));
     for (const file of files) {
       try {
         const filePath = join(agentsDir, file);
@@ -83,7 +89,9 @@ export function loadAgentProfiles(projectCwd: string): SubagentProfile[] {
           description,
           systemPrompt: body || 'You are a specialized agent.',
           tools: Array.isArray(frontmatter.tools) ? frontmatter.tools.map(String) : undefined,
-          mcpServers: Array.isArray(frontmatter.mcpServers) ? frontmatter.mcpServers.map(String) : undefined,
+          mcpServers: Array.isArray(frontmatter.mcpServers)
+            ? frontmatter.mcpServers.map(String)
+            : undefined,
           readonly: Boolean(frontmatter.readonly),
           maxSteps: typeof frontmatter.maxSteps === 'number' ? frontmatter.maxSteps : undefined,
           model: typeof frontmatter.model === 'string' ? frontmatter.model : undefined,
@@ -121,16 +129,18 @@ function serializeAgentProfile(profile: SubagentProfile): string {
 }
 
 function agentNameToFilename(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') + '.md';
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') + '.md'
+  );
 }
 
 function findAgentFile(projectCwd: string, name: string): string | null {
   const agentsDir = join(projectCwd, '.codingcode', 'agents');
   if (!existsSync(agentsDir)) return null;
-  const files = readdirSync(agentsDir).filter(f => f.endsWith('.md'));
+  const files = readdirSync(agentsDir).filter((f) => f.endsWith('.md'));
   for (const file of files) {
     const filePath = join(agentsDir, file);
     const content = readFileSync(filePath, 'utf-8');
@@ -148,7 +158,11 @@ export function writeAgentProfile(projectCwd: string, profile: SubagentProfile):
   writeFileSync(filePath, serializeAgentProfile(profile), 'utf-8');
 }
 
-export function updateAgentProfile(projectCwd: string, oldName: string, profile: SubagentProfile): void {
+export function updateAgentProfile(
+  projectCwd: string,
+  oldName: string,
+  profile: SubagentProfile
+): void {
   if (oldName !== profile.name) {
     const oldFile = findAgentFile(projectCwd, oldName);
     if (oldFile) unlinkSync(oldFile);

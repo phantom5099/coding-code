@@ -1,22 +1,10 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ESNext"],
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "declaration": true,
-    "outDir": "./dist",
-    "rootDir": ".",
-    "types": ["node"],
-    "jsx": "react-jsx"
-  },
-  "include": ["packages/**/*.ts", "packages/**/*.tsx"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "files": [],
+  "references": [
+    { "path": "./packages/infra" },
+    { "path": "./packages/codingcode" },
+    { "path": "./packages/codingcode/test" },
+    { "path": "./packages/desktop" },
+    { "path": "./packages/tui" }
+  ]
 }
