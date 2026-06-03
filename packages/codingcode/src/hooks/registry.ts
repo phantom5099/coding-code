@@ -6,11 +6,17 @@ import { createLogger } from '@codingcode/infra';
 const logger = createLogger();
 
 export type HookPoint =
-  | 'tool.execute.before' | 'tool.execute.after' | 'tool.execute.error'
+  | 'tool.execute.before'
+  | 'tool.execute.after'
+  | 'tool.execute.error'
   | 'tool.execute.denied'
-  | 'tool.approval.pre' | 'tool.approval.post'
-  | 'llm.request.before' | 'llm.response.after' | 'llm.response.error'
-  | 'session.save.before' | 'session.save.after'
+  | 'tool.approval.pre'
+  | 'tool.approval.post'
+  | 'llm.request.before'
+  | 'llm.response.after'
+  | 'llm.response.error'
+  | 'session.save.before'
+  | 'session.save.after'
   | 'agent.turn.start'
   | 'agent.step.before'
   | 'agent.turn.stop'
@@ -29,7 +35,7 @@ export interface HookDecision {
 
 type ObserverHandler = (payload: Record<string, unknown>) => void | Promise<void>;
 type DecisionHandler = (
-  payload: Record<string, unknown>,
+  payload: Record<string, unknown>
 ) => HookDecision | null | Promise<HookDecision | null>;
 
 interface HandlerEntry {
@@ -55,7 +61,7 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
       register: (
         point: HookPoint,
         handler: ObserverHandler,
-        opts?: { source?: 'system' | 'user' },
+        opts?: { source?: 'system' | 'user' }
       ): Effect.Effect<() => void> =>
         Effect.sync(() => {
           const entry: HandlerEntry = {
@@ -81,7 +87,7 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
       registerDecision: (
         point: HookPoint,
         handler: DecisionHandler,
-        opts?: { priority?: number; source?: 'system' | 'user' },
+        opts?: { priority?: number; source?: 'system' | 'user' }
       ): Effect.Effect<() => void> =>
         Effect.sync(() => {
           const entry: HandlerEntry = {
@@ -120,7 +126,7 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
       /** Emit a decision event. Handlers run in priority order; first non-null decision wins. */
       emitDecision: (
         point: HookPoint,
-        payload: Record<string, unknown>,
+        payload: Record<string, unknown>
       ): Effect.Effect<HookDecision | null> =>
         Effect.promise(async () => {
           for (const entry of sortedEntries(point)) {
@@ -140,7 +146,7 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
       reloadUserHooks: (cwd: string): Effect.Effect<void> =>
         Effect.sync(() => {
           for (const [point, entries] of observers) {
-            const filtered = entries.filter(e => e.source !== 'user');
+            const filtered = entries.filter((e) => e.source !== 'user');
             if (filtered.length === 0) observers.delete(point);
             else observers.set(point, filtered);
           }
@@ -149,15 +155,16 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
             const hookName = hc.name;
             const entry: HandlerEntry = {
               id: `${hc.type === 'observer' ? 'obs' : 'dec'}-${++entryCounter}`,
-              handler: hc.type === 'observer'
-                ? (payload: Record<string, unknown>) => {
-                    if (!isHookRuntimeEnabled(hookName)) return;
-                    return executeHookCommand(hc, payload);
-                  }
-                : (payload: Record<string, unknown>) => {
-                    if (!isHookRuntimeEnabled(hookName)) return null;
-                    return executeDecisionHookCommand(hc, payload);
-                  },
+              handler:
+                hc.type === 'observer'
+                  ? (payload: Record<string, unknown>) => {
+                      if (!isHookRuntimeEnabled(hookName)) return;
+                      return executeHookCommand(hc, payload);
+                    }
+                  : (payload: Record<string, unknown>) => {
+                      if (!isHookRuntimeEnabled(hookName)) return null;
+                      return executeDecisionHookCommand(hc, payload);
+                    },
               priority: hc.priority ?? 0,
               source: 'user',
               type: hc.type,

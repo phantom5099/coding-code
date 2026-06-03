@@ -45,7 +45,9 @@ export function discoverSkillDirs(projectRoot: string): SkillDirectory[] {
 }
 
 /** Parse SKILL.md: returns { frontMatter, body } */
-export function readSkillMd(dirPath: string): { frontMatter: SkillFrontMatter; body: string } | null {
+export function readSkillMd(
+  dirPath: string
+): { frontMatter: SkillFrontMatter; body: string } | null {
   const skillMdPath = join(dirPath, 'SKILL.md');
   if (!existsSync(skillMdPath)) return null;
 

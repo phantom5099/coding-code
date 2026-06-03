@@ -10,7 +10,13 @@ export const readFileTool: ToolDefinition = {
   parameters: z.object({
     path: z.string().describe('Path to the file (absolute or relative)'),
     offset: z.number().int().min(1).default(1).describe('Line to start reading from (1-indexed)'),
-    limit: z.number().int().min(1).max(500).default(200).describe('Maximum number of lines to read'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .default(200)
+      .describe('Maximum number of lines to read'),
   }),
   execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { path, offset, limit } = args as any;
@@ -20,7 +26,8 @@ export const readFileTool: ToolDefinition = {
     const start = Math.max(0, offset - 1);
     const slice = lines.slice(start, start + limit);
     return (
-      slice.map((line, i) => `${String(start + i + 1).padStart(4, ' ')}| ${line}`).join('\n') || '(empty file)'
+      slice.map((line, i) => `${String(start + i + 1).padStart(4, ' ')}| ${line}`).join('\n') ||
+      '(empty file)'
     );
   },
 };

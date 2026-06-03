@@ -3,10 +3,12 @@
 const { mockCompactWithLLM, mockLLM } = vi.hoisted(() => ({
   mockCompactWithLLM: vi.fn(),
   mockLLM: {
-    complete: vi.fn(() => Promise.resolve({
-      ok: true,
-      value: { content: '<summary>compacted</summary>' },
-    })),
+    complete: vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        value: { content: '<summary>compacted</summary>' },
+      })
+    ),
   },
 }));
 
@@ -78,7 +80,11 @@ describe('compactIfNeeded', () => {
     (findSessionIndex as any).mockReturnValue({ currentTurnId: 10 });
     (estimateTokens as any).mockReturnValue(0);
     (estimateMessageTokens as any).mockReturnValue(50);
-    mockCompactWithLLM.mockResolvedValue({ didCompress: true, released: 1000, promptEstimate: 5000 });
+    mockCompactWithLLM.mockResolvedValue({
+      didCompress: true,
+      released: 1000,
+      promptEstimate: 5000,
+    });
   });
 
   it('returns didCompress=false when promptEstimate is below threshold', async () => {

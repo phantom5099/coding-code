@@ -8,44 +8,63 @@ import { initWorkspace } from '../../src/core/workspace.js';
 import { HookService } from '../../src/hooks/registry.js';
 
 const hooksLayer = Layer.succeed(HookService, {
-  register: (point, handler, opts) => Effect.sync(() => {
-    const entries = (hooksLayer as any)._entries ?? new Map();
-    (hooksLayer as any)._entries = entries;
-    const set = entries.get(point) ?? [];
-    set.push({ id: `obs-${Math.random()}`, handler, priority: 0, source: opts?.source ?? 'user', type: 'observer' });
-    entries.set(point, set);
-    return () => {
-      const s = entries.get(point);
-      if (s) {
-        const idx = s.findIndex((e: any) => e.handler === handler);
-        if (idx >= 0) s.splice(idx, 1);
+  register: (point, handler, opts) =>
+    Effect.sync(() => {
+      const entries = (hooksLayer as any)._entries ?? new Map();
+      (hooksLayer as any)._entries = entries;
+      const set = entries.get(point) ?? [];
+      set.push({
+        id: `obs-${Math.random()}`,
+        handler,
+        priority: 0,
+        source: opts?.source ?? 'user',
+        type: 'observer',
+      });
+      entries.set(point, set);
+      return () => {
+        const s = entries.get(point);
+        if (s) {
+          const idx = s.findIndex((e: any) => e.handler === handler);
+          if (idx >= 0) s.splice(idx, 1);
+        }
+      };
+    }),
+  emit: (point, payload) =>
+    Effect.promise(async () => {
+      const entries = ((hooksLayer as any)._entries ?? new Map()).get(point) ?? [];
+      for (const entry of entries.slice().sort((a: any, b: any) => a.priority - b.priority)) {
+        if (entry.type === 'observer') {
+          try {
+            await entry.handler(payload);
+          } catch (e) {
+            /* ignore */
+          }
+        }
       }
-    };
-  }),
-  emit: (point, payload) => Effect.promise(async () => {
-    const entries = ((hooksLayer as any)._entries ?? new Map()).get(point) ?? [];
-    for (const entry of entries.slice().sort((a: any, b: any) => a.priority - b.priority)) {
-      if (entry.type === 'observer') {
-        try { await entry.handler(payload); } catch (e) { /* ignore */ }
-      }
-    }
-  }),
+    }),
   emitDecision: (_: any, _2: any) => Effect.succeed(null),
   reloadUserHooks: (_: string) => Effect.void,
-  registerDecision: (point, handler, opts) => Effect.sync(() => {
-    const entries = (hooksLayer as any)._entries ?? new Map();
-    (hooksLayer as any)._entries = entries;
-    const set = entries.get(point) ?? [];
-    set.push({ id: `dec-${Math.random()}`, handler, priority: opts?.priority ?? 0, source: opts?.source ?? 'user', type: 'decision' });
-    entries.set(point, set);
-    return () => {
-      const s = entries.get(point);
-      if (s) {
-        const idx = s.findIndex((e: any) => e.handler === handler);
-        if (idx >= 0) s.splice(idx, 1);
-      }
-    };
-  }),
+  registerDecision: (point, handler, opts) =>
+    Effect.sync(() => {
+      const entries = (hooksLayer as any)._entries ?? new Map();
+      (hooksLayer as any)._entries = entries;
+      const set = entries.get(point) ?? [];
+      set.push({
+        id: `dec-${Math.random()}`,
+        handler,
+        priority: opts?.priority ?? 0,
+        source: opts?.source ?? 'user',
+        type: 'decision',
+      });
+      entries.set(point, set);
+      return () => {
+        const s = entries.get(point);
+        if (s) {
+          const idx = s.findIndex((e: any) => e.handler === handler);
+          if (idx >= 0) s.splice(idx, 1);
+        }
+      };
+    }),
 } as any);
 
 const testLayer = hooksLayer;
@@ -64,20 +83,34 @@ describe('checkpoint/bootstrap projectPath isolation', () => {
     mkdirSync(globalDir, { recursive: true });
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(join(globalDir, 'config'), { recursive: true });
-    writeFileSync(join(globalDir, 'config', 'models.json'), '{"active":"p","providers":[]}', 'utf8');
+    writeFileSync(
+      join(globalDir, 'config', 'models.json'),
+      '{"active":"p","providers":[]}',
+      'utf8'
+    );
     initWorkspace({ installRoot: globalDir, workspaceCwd: globalDir });
   });
 
   afterEach(() => {
-    try { rmSync(globalDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    try { rmSync(projectDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(globalDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+    try {
+      rmSync(projectDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 
   async function getHooks() {
-    return await run(Effect.gen(function* () {
-      const svc = yield* HookService;
-      return svc;
-    }));
+    return await run(
+      Effect.gen(function* () {
+        const svc = yield* HookService;
+        return svc;
+      })
+    );
   }
 
   it('bootstrap checkpoint records correct file path via payload.projectPath', async () => {

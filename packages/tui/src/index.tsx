@@ -12,6 +12,6 @@ interface TuiOptions {
 }
 
 export async function runTui(options: TuiOptions = {}) {
-  const client: AgentClient = options.client ?? await createDirectClient(options.llm);
+  const client: AgentClient = options.client ?? (await createDirectClient(options.llm));
   render(<App client={client} />);
 }

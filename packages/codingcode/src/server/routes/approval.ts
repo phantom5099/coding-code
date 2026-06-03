@@ -15,7 +15,7 @@ router.post('/sessions/:sessionId/approval/:id', async (c) => {
     Effect.gen(function* () {
       const svc = yield* ApprovalWaitService;
       return yield* svc.resolveConfirm(id, sessionId, parseApprovalResponse(response));
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);

@@ -7,9 +7,15 @@ interface PendingEntry {
 }
 
 const pending = new Map<string, PendingEntry>();
-const emitters = new Map<string, (id: string, tool: string, args: Record<string, unknown>) => void>();
+const emitters = new Map<
+  string,
+  (id: string, tool: string, args: Record<string, unknown>) => void
+>();
 
-export function registerEmitter(sessionId: string, fn: (id: string, tool: string, args: Record<string, unknown>) => void): void {
+export function registerEmitter(
+  sessionId: string,
+  fn: (id: string, tool: string, args: Record<string, unknown>) => void
+): void {
   emitters.set(sessionId, fn);
 }
 
@@ -38,7 +44,11 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
           return yield* Deferred.await(d);
         }),
 
-      resolveConfirm: (id: string, _sessionId: string, result: ConfirmResult): Effect.Effect<boolean> =>
+      resolveConfirm: (
+        id: string,
+        _sessionId: string,
+        result: ConfirmResult
+      ): Effect.Effect<boolean> =>
         Effect.sync(() => {
           const entry = pending.get(id);
           if (!entry) return false;
@@ -57,7 +67,12 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
           return Array.from(pending.keys());
         }),
 
-      emitApprovalRequest: (sessionId: string, id: string, tool: string, args: Record<string, unknown>): Effect.Effect<void> =>
+      emitApprovalRequest: (
+        sessionId: string,
+        id: string,
+        tool: string,
+        args: Record<string, unknown>
+      ): Effect.Effect<void> =>
         Effect.sync(() => {
           emitters.get(sessionId)?.(id, tool, args);
         }),

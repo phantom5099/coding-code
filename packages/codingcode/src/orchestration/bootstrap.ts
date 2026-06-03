@@ -48,6 +48,6 @@ export const bootstrapApplication = (cwd: string) =>
     }
 
     yield* tools.register(
-      createDispatchAgentTool({ session, approval, hooks, registry: subagentRegistry, mcp }),
+      createDispatchAgentTool({ session, approval, hooks, registry: subagentRegistry, mcp })
     );
   });

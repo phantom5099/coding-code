@@ -1,6 +1,6 @@
 interface CodeBlockProps {
-  code: string
-  language?: string
+  code: string;
+  language?: string;
 }
 
 export default function CodeBlock({ code, language }: CodeBlockProps) {
@@ -15,5 +15,5 @@ export default function CodeBlock({ code, language }: CodeBlockProps) {
         <code>{code}</code>
       </pre>
     </div>
-  )
+  );
 }

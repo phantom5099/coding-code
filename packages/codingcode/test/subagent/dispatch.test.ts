@@ -1,7 +1,11 @@
 ﻿import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
 import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch';
-import { SubagentRegistry, EXPLORE_PROFILE, setSubagentEnabledState } from '../../src/subagent/registry';
+import {
+  SubagentRegistry,
+  EXPLORE_PROFILE,
+  setSubagentEnabledState,
+} from '../../src/subagent/registry';
 import { SubagentRegistryLayer } from '../../src/layer';
 import { registerEmitter, unregisterEmitter, hasEmitter } from '../../src/approval/async-confirm';
 
@@ -39,9 +43,9 @@ describe('dispatch_agent tool', () => {
   });
   async function makeRegistry(): Promise<SubagentRegistry> {
     return await Effect.runPromise(
-      Effect.gen(function* () { return yield* SubagentRegistry; }).pipe(
-        Effect.provide(SubagentRegistryLayer),
-      ),
+      Effect.gen(function* () {
+        return yield* SubagentRegistry;
+      }).pipe(Effect.provide(SubagentRegistryLayer))
     );
   }
 
@@ -95,10 +99,7 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps);
 
     try {
-      await tool.execute(
-        { agent: 'unknown-agent', prompt: 'test' },
-        {},
-      );
+      await tool.execute({ agent: 'unknown-agent', prompt: 'test' }, {});
       expect.fail('Should have thrown error');
     } catch (e: any) {
       expect(e.message).toContain('Unknown subagent');
@@ -122,7 +123,9 @@ describe('dispatch_agent tool', () => {
     try {
       await tool.execute(
         { agent: 'explore', prompt: 'test' },
-        { /* no agentRunner */ },
+        {
+          /* no agentRunner */
+        }
       );
       expect.fail('Should have thrown error');
     } catch (e: any) {
@@ -141,17 +144,19 @@ describe('dispatch_agent tool', () => {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: emitFn,
@@ -176,7 +181,7 @@ describe('dispatch_agent tool', () => {
             llm: {},
           },
           sessionId: 'parent-session',
-        },
+        }
       );
     } catch (e) {
       // Might fail due to mocking, but we're testing the hook emission
@@ -184,7 +189,7 @@ describe('dispatch_agent tool', () => {
 
     expect(emitDecisionFn).toHaveBeenCalledWith(
       'agent.subagent.spawn.before',
-      expect.objectContaining({ profile: 'explore' }),
+      expect.objectContaining({ profile: 'explore' })
     );
   });
 
@@ -197,10 +202,11 @@ describe('dispatch_agent tool', () => {
       approval: {} as any,
       hooks: {
         emit: (() => Effect.succeed(undefined)) as any,
-        emitDecision: (() => Effect.succeed({
-          decision: 'deny',
-          reason: 'Not allowed',
-        })) as any,
+        emitDecision: (() =>
+          Effect.succeed({
+            decision: 'deny',
+            reason: 'Not allowed',
+          })) as any,
       },
       mcp: mockMcp,
       registry,
@@ -216,7 +222,7 @@ describe('dispatch_agent tool', () => {
             agentService: {},
             llm: {},
           },
-        },
+        }
       );
       expect.fail('Should have thrown error');
     } catch (e: any) {
@@ -235,17 +241,19 @@ describe('dispatch_agent tool', () => {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: emitFn,
@@ -271,13 +279,13 @@ describe('dispatch_agent tool', () => {
           llm: {},
         },
         sessionId: 'parent-session',
-      },
+      }
     );
 
     expect(result).toContain('Subagent completed');
     expect(emitFn).toHaveBeenCalledWith(
       'agent.subagent.complete',
-      expect.objectContaining({ status: 'done' }),
+      expect.objectContaining({ status: 'done' })
     );
   });
 
@@ -305,17 +313,19 @@ describe('dispatch_agent tool', () => {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: () => Effect.succeed(undefined),
@@ -332,7 +342,7 @@ describe('dispatch_agent tool', () => {
       {
         agentRunner: { agentService, llm: {} },
         sessionId: 'parent-session',
-      },
+      }
     );
 
     expect(runStreamCalls[0].systemOverride).toBe('Custom system prompt');
@@ -363,17 +373,19 @@ describe('dispatch_agent tool', () => {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: () => Effect.succeed(undefined),
@@ -390,7 +402,7 @@ describe('dispatch_agent tool', () => {
       {
         agentRunner: { agentService, llm: {} },
         sessionId: 'parent-session',
-      },
+      }
     );
 
     // dispatch_agent should be filtered out from allowlist
@@ -416,17 +428,19 @@ describe('dispatch_agent tool', () => {
       session: {
         create: () => Effect.sync(() => ({ sessionId: 'child' })),
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: emitFn,
@@ -444,7 +458,7 @@ describe('dispatch_agent tool', () => {
         {
           agentRunner: { agentService, llm: {} },
           sessionId: 'parent-session',
-        },
+        }
       );
       expect.fail('Should have thrown error');
     } catch (e: any) {
@@ -453,7 +467,7 @@ describe('dispatch_agent tool', () => {
 
     expect(emitFn).toHaveBeenCalledWith(
       'agent.subagent.complete',
-      expect.objectContaining({ status: 'error' }),
+      expect.objectContaining({ status: 'error' })
     );
   });
 
@@ -465,7 +479,9 @@ describe('dispatch_agent tool', () => {
     const agentService = {
       runStream: (opts: any) => {
         runStreamCalls.push(opts);
-        return (async function* () { yield { _tag: 'Done', content: 'Done' }; })();
+        return (async function* () {
+          yield { _tag: 'Done', content: 'Done' };
+        })();
       },
     };
     const parentLlm = { _tag: 'parent-llm' };
@@ -474,17 +490,19 @@ describe('dispatch_agent tool', () => {
       session: {
         create: () => Effect.sync(() => ({})),
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: () => Effect.succeed(undefined),
@@ -497,7 +515,7 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'explore', prompt: 'test' },
-      { agentRunner: { agentService, llm: parentLlm }, sessionId: 'parent-session' },
+      { agentRunner: { agentService, llm: parentLlm }, sessionId: 'parent-session' }
     );
 
     expect(runStreamCalls[0].llm).toBe(parentLlm);
@@ -517,7 +535,9 @@ describe('dispatch_agent tool', () => {
     const agentService = {
       runStream: (opts: any) => {
         runStreamCalls.push(opts);
-        return (async function* () { yield { _tag: 'Done', content: 'Done' }; })();
+        return (async function* () {
+          yield { _tag: 'Done', content: 'Done' };
+        })();
       },
     };
     const parentLlm = { _tag: 'parent-llm' };
@@ -526,17 +546,19 @@ describe('dispatch_agent tool', () => {
       session: {
         create: () => Effect.sync(() => ({})),
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: () => Effect.succeed(undefined),
@@ -549,7 +571,7 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'model-agent', prompt: 'test' },
-      { agentRunner: { agentService, llm: parentLlm }, sessionId: 'parent-session' },
+      { agentRunner: { agentService, llm: parentLlm }, sessionId: 'parent-session' }
     );
 
     // Should use the resolved subagent LLM, not the parent's
@@ -583,7 +605,7 @@ describe('dispatch_agent tool', () => {
     try {
       await tool.execute(
         { agent: 'bad-model-agent', prompt: 'test' },
-        { agentRunner: { agentService: {}, llm: {} } },
+        { agentRunner: { agentService: {}, llm: {} } }
       );
       expect.fail('Should have thrown error');
     } catch (e: any) {
@@ -613,7 +635,7 @@ describe('dispatch_agent tool', () => {
     try {
       await tool.execute(
         { agent: 'explore', prompt: 'test' },
-        { agentRunner: { agentService: {}, llm: {} } },
+        { agentRunner: { agentService: {}, llm: {} } }
       );
       expect.fail('Should have thrown error');
     } catch (e: any) {
@@ -628,7 +650,9 @@ describe('dispatch_agent tool', () => {
 
     const createCalls: any[] = [];
     const agentService = {
-      runStream: async function* () { yield { _tag: 'Done', content: 'done' }; },
+      runStream: async function* () {
+        yield { _tag: 'Done', content: 'done' };
+      },
     };
 
     const deps = {
@@ -638,17 +662,19 @@ describe('dispatch_agent tool', () => {
           return Effect.sync(() => ({}));
         },
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: () => Effect.succeed(undefined),
@@ -661,11 +687,11 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'explore', prompt: 'task' },
-      { agentRunner: { agentService, llm: {} }, sessionId: 'parent-session-uuid' },
+      { agentRunner: { agentService, llm: {} }, sessionId: 'parent-session-uuid' }
     );
 
     expect(createCalls.length).toBe(1);
-    const [, , , childUuid, opts] = createCalls[0];
+    const [, , childUuid, opts] = createCalls[0];
     // sessionId must be a plain UUID (no colon)
     expect(typeof childUuid).toBe('string');
     expect(childUuid).toMatch(/^[0-9a-f-]{36}$/);
@@ -685,7 +711,9 @@ describe('dispatch_agent tool', () => {
     const agentService = {
       runStream: (opts: any) => {
         runStreamCalls.push(opts);
-        return (async function* () { yield { _tag: 'Done', content: 'done' }; })();
+        return (async function* () {
+          yield { _tag: 'Done', content: 'done' };
+        })();
       },
     };
 
@@ -696,17 +724,19 @@ describe('dispatch_agent tool', () => {
           return Effect.sync(() => ({}));
         },
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: () => Effect.succeed(undefined),
@@ -719,7 +749,7 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'explore', prompt: 'task' },
-      { agentRunner: { agentService, llm: {} }, sessionId: 'p' },
+      { agentRunner: { agentService, llm: {} }, sessionId: 'p' }
     );
 
     const childUuid = createCalls[0][3];
@@ -738,9 +768,11 @@ describe('dispatch_agent tool', () => {
     // Register a parent emitter
     registerEmitter(parentSid, () => {});
 
-    let createCalls: any[] = [];
+    const createCalls: any[] = [];
     const agentService = {
-      runStream: async function* () { yield { _tag: 'Done', content: 'done' }; },
+      runStream: async function* () {
+        yield { _tag: 'Done', content: 'done' };
+      },
     };
 
     const deps = {
@@ -750,17 +782,19 @@ describe('dispatch_agent tool', () => {
           return Effect.sync(() => ({}));
         },
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: () => Effect.succeed(undefined),
@@ -773,7 +807,7 @@ describe('dispatch_agent tool', () => {
     const tool = createDispatchAgentTool(deps as any);
     await tool.execute(
       { agent: 'explore', prompt: 'task' },
-      { agentRunner: { agentService, llm: {} }, sessionId: parentSid },
+      { agentRunner: { agentService, llm: {} }, sessionId: parentSid }
     );
 
     capturedChildUuid = createCalls[0][3];
@@ -792,7 +826,7 @@ describe('dispatch_agent tool', () => {
     const parentSid = 'parent-error-test-' + Math.random().toString(36).slice(2);
     registerEmitter(parentSid, () => {});
 
-    let createCalls: any[] = [];
+    const createCalls: any[] = [];
     const agentService = {
       runStream: async function* () {
         yield { _tag: 'Error', error: { message: 'boom' } };
@@ -806,17 +840,19 @@ describe('dispatch_agent tool', () => {
           return Effect.sync(() => ({}));
         },
         incrementTurn: () => 1,
-        recordUser: () => Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
+        recordUser: () =>
+          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
       },
       approval: {
-        fork: () => Effect.succeed({
-          getPermissionMode: () => 'default',
-          evaluate: () => Effect.succeed({ decision: 'allow' }),
-          addRule: () => Effect.succeed(undefined),
-          removeRule: () => Effect.succeed(undefined),
-          setPermissionMode: () => Effect.succeed(undefined),
-          fork: () => Effect.fail(new Error('nested')),
-        }),
+        fork: () =>
+          Effect.succeed({
+            getPermissionMode: () => 'default',
+            evaluate: () => Effect.succeed({ decision: 'allow' }),
+            addRule: () => Effect.succeed(undefined),
+            removeRule: () => Effect.succeed(undefined),
+            setPermissionMode: () => Effect.succeed(undefined),
+            fork: () => Effect.fail(new Error('nested')),
+          }),
       },
       hooks: {
         emit: () => Effect.succeed(undefined),
@@ -830,7 +866,7 @@ describe('dispatch_agent tool', () => {
     try {
       await tool.execute(
         { agent: 'explore', prompt: 'task' },
-        { agentRunner: { agentService, llm: {} }, sessionId: parentSid },
+        { agentRunner: { agentService, llm: {} }, sessionId: parentSid }
       );
     } catch {}
 

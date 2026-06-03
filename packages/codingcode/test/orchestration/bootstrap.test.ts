@@ -50,7 +50,7 @@ const testLayer = Layer.mergeAll(
   skillLayer,
   sessionLayer,
   approvalLayer,
-  hooksLayer,
+  hooksLayer
 );
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
@@ -58,9 +58,18 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 }
 
 const EXPECTED_TOOLS = [
-  'read_file', 'write_file', 'edit_file', 'execute_command',
-  'search_code', 'search_files', 'fetch_url', 'web_search',
-  'todo_write', 'todo_read', 'tool_search', 'dispatch_agent',
+  'read_file',
+  'write_file',
+  'edit_file',
+  'execute_command',
+  'search_code',
+  'search_files',
+  'fetch_url',
+  'web_search',
+  'todo_write',
+  'todo_read',
+  'tool_search',
+  'dispatch_agent',
 ];
 
 describe('bootstrapApplication', () => {
@@ -68,7 +77,7 @@ describe('bootstrapApplication', () => {
     const program = Effect.gen(function* () {
       yield* bootstrapApplication('/fake/cwd');
       const tools = yield* ToolService;
-      return tools.describeAll().map(t => t.name);
+      return tools.describeAll().map((t) => t.name);
     });
 
     const registered = await run(program);
@@ -82,7 +91,7 @@ describe('bootstrapApplication', () => {
     const program = Effect.gen(function* () {
       yield* bootstrapApplication('/fake/cwd');
       const registry = yield* SubagentRegistry;
-      return registry.list().map(p => p.name);
+      return registry.list().map((p) => p.name);
     });
 
     const profiles = await run(program);

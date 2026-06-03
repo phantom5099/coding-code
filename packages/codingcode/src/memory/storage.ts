@@ -45,8 +45,10 @@ export function replaceAutoBlock(content: string, newAutoInner: string): string 
 
   if (content.includes(marker) && content.includes(endMarker)) {
     return content.replace(
-      new RegExp(`${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${endMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
-      `${marker}\n${newAutoInner}\n${endMarker}`,
+      new RegExp(
+        `${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${endMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`
+      ),
+      `${marker}\n${newAutoInner}\n${endMarker}`
     );
   }
 
@@ -67,7 +69,7 @@ export function enforceMaxBytes(content: string, maxBytes: number): string {
   }
 
   const sections = content.split(/^### /m).filter(Boolean);
-  const namedSections = sections.map(s => {
+  const namedSections = sections.map((s) => {
     const lines = s.split('\n');
     const name = lines[0];
     const body = lines.slice(1).join('\n');

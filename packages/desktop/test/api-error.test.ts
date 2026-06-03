@@ -6,7 +6,10 @@ const { ApiError } = await import('../src/lib/api');
 
 describe('ApiError', () => {
   it('uses body.message as message when available', () => {
-    const err = new ApiError(404, '/api/sessions/abc', { code: 'SESSION_NOT_FOUND', message: 'Not found' });
+    const err = new ApiError(404, '/api/sessions/abc', {
+      code: 'SESSION_NOT_FOUND',
+      message: 'Not found',
+    });
     expect(err.message).toBe('Not found');
     expect(err.status).toBe(404);
   });

@@ -2,7 +2,9 @@
  * Generic SSE stream parser.
  * Reads a fetch Response body as an SSE stream and yields parsed `data:` JSON lines.
  */
-export async function* parseSseStream(response: Response): AsyncGenerator<Record<string, unknown>, void, unknown> {
+export async function* parseSseStream(
+  response: Response
+): AsyncGenerator<Record<string, unknown>, void, unknown> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('No response body');
 

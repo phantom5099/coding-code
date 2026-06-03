@@ -20,13 +20,25 @@ describe('tools/domains/fs projectPath isolation', () => {
     mkdirSync(globalDir, { recursive: true });
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(join(globalDir, 'config'), { recursive: true });
-    writeFileSync(join(globalDir, 'config', 'models.json'), '{"active":"p","providers":[]}', 'utf8');
+    writeFileSync(
+      join(globalDir, 'config', 'models.json'),
+      '{"active":"p","providers":[]}',
+      'utf8'
+    );
     initWorkspace({ installRoot: globalDir, workspaceCwd: globalDir });
   });
 
   afterEach(() => {
-    try { rmSync(globalDir, { recursive: true, force: true }); } catch { /* ignore */ }
-    try { rmSync(projectDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(globalDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+    try {
+      rmSync(projectDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 
   const ctx = (cwd: string) => ({ projectPath: cwd });
@@ -35,16 +47,13 @@ describe('tools/domains/fs projectPath isolation', () => {
     writeFileSync(join(projectDir, 'a.txt'), 'hello', 'utf8');
     const result = await readFileTool.execute(
       { path: 'a.txt', offset: 1, limit: 200 },
-      ctx(projectDir),
+      ctx(projectDir)
     );
     expect(result).toContain('hello');
   });
 
   it('write_file writes to ctx.projectPath', async () => {
-    await writeFileTool.execute(
-      { path: 'b.txt', content: 'written' },
-      ctx(projectDir),
-    );
+    await writeFileTool.execute({ path: 'b.txt', content: 'written' }, ctx(projectDir));
     expect(globalDir).not.toBe(projectDir);
     const written = readFileSync(join(projectDir, 'b.txt'), 'utf8');
     expect(written).toBe('written');
@@ -55,7 +64,7 @@ describe('tools/domains/fs projectPath isolation', () => {
     writeFileSync(join(projectDir, 'c.txt'), 'old', 'utf8');
     const result = await editFileTool.execute(
       { path: 'c.txt', old_string: 'old', new_string: 'new' },
-      ctx(projectDir),
+      ctx(projectDir)
     );
     expect(result).toContain('1 replacement');
     expect(readFileSync(join(projectDir, 'c.txt'), 'utf8')).toBe('new');
@@ -66,7 +75,7 @@ describe('tools/domains/fs projectPath isolation', () => {
     writeFileSync(join(globalDir, 'e.txt'), 'needle', 'utf8');
     const result = await searchTool.execute(
       { pattern: 'needle', glob: '*.txt', max_results: 30 },
-      ctx(projectDir),
+      ctx(projectDir)
     );
     expect(result).toContain('d.txt');
     expect(result).not.toContain('e.txt');
@@ -77,7 +86,7 @@ describe('tools/domains/fs projectPath isolation', () => {
     writeFileSync(join(globalDir, 'g.ts'), '', 'utf8');
     const result = await globTool.execute(
       { pattern: '*.ts', path: '.', max_results: 50 },
-      ctx(projectDir),
+      ctx(projectDir)
     );
     expect(result).toContain('f.ts');
     expect(result).not.toContain('g.ts');

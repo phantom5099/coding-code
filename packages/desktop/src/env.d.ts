@@ -1,9 +1,9 @@
-import type { ElectronAPI } from '../electron/preload'
+import type { ElectronAPI } from '../electron/preload';
 
-declare module '*.css'
+declare module '*.css';
 
 declare global {
   interface Window {
-    electronAPI: ElectronAPI
+    electronAPI: ElectronAPI;
   }
 }

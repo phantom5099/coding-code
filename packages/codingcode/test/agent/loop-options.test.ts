@@ -35,9 +35,11 @@ describe('runReActLoop 鈥?loop options', () => {
       } as any,
       agentIdResolver: { resolve: () => 'agent-id' } as any,
       ctx: {
-        build: () => Effect.succeed([]),
+        build: () =>
+          Effect.succeed({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] }),
         compress: () => Effect.succeed({ released: 0 }),
         appendTurnEnd: () => Effect.succeed(undefined),
+        compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
       } as any,
       session: {
         recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
@@ -58,14 +60,14 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       systemOverride: 'Custom system prompt',
     };
 
@@ -86,13 +88,15 @@ describe('runReActLoop 鈥?loop options', () => {
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
-        response: new Promise(r => setTimeout(() => r(Result.ok({ content: 'Response', toolCalls: [] })), 100)),
+        response: new Promise((r) =>
+          setTimeout(() => r(Result.ok({ content: 'Response', toolCalls: [] })), 100)
+        ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       abortSignal: controller.signal,
     };
 
@@ -118,14 +122,14 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       coreAllowlist: new Set(['allowed_tool']),
     };
 
@@ -146,14 +150,14 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       maxStepsOverride: 5,
     };
 
@@ -175,7 +179,7 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
@@ -186,7 +190,7 @@ describe('runReActLoop 鈥?loop options', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       approvalOverride: mockApproval as any,
     };
 
@@ -209,7 +213,7 @@ describe('runReActLoop 鈥?loop options', () => {
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
       // maxStopContinuations not set in opts 鈫?should use deps value
     };
 
@@ -230,14 +234,14 @@ describe('runReActLoop 鈥?loop options', () => {
           Result.ok({
             content: 'Done',
             toolCalls: [],
-          }),
+          })
         ),
       })),
     };
 
     const opts: RunStreamOptions = {
       state: mockState,
-      llm: mockLlm as any,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
     };
 
     const gen = runReActLoop(opts, baseMockDeps());
@@ -248,11 +252,11 @@ describe('runReActLoop 鈥?loop options', () => {
 
     expect(mockHooks.emit).toHaveBeenCalledWith(
       'agent.turn.start',
-      expect.objectContaining({ sessionId: mockState.sessionId }),
+      expect.objectContaining({ sessionId: mockState.sessionId })
     );
     expect(mockHooks.emit).toHaveBeenCalledWith(
       'agent.turn.end',
-      expect.objectContaining({ status: 'done' }),
+      expect.objectContaining({ status: 'done' })
     );
   });
 });

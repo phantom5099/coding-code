@@ -25,17 +25,27 @@ export interface AgentRuntimeClient {
 
 export function createDirectAgentClient(
   llm: any,
-  runWithLayer: <T>(eff: any) => Promise<T>,
+  runWithLayer: <T>(eff: any) => Promise<T>
 ): AgentRuntimeClient {
   return {
     async *sendMessage(input, { sessionId, cwd }) {
       const program = sendMessage(sessionId || undefined, input, cwd, llm);
-      const { stream: agentGen, sessionId: resolvedSessionId } = await runWithLayer(program) as any;
+      const { stream: agentGen, sessionId: resolvedSessionId } = (await runWithLayer(
+        program
+      )) as any;
 
       yield { type: 'session_id', sessionId: resolvedSessionId };
 
-      let notify: ((req: { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }) => void) | null = null;
-      const { registerEmitter, unregisterEmitter } = await import('../../approval/async-confirm.js');
+      let notify:
+        | ((req: {
+            type: 'approval_request';
+            id: string;
+            tool: string;
+            args: Record<string, unknown>;
+          }) => void)
+        | null = null;
+      const { registerEmitter, unregisterEmitter } =
+        await import('../../approval/async-confirm.js');
       registerEmitter(resolvedSessionId, (id, tool, args) => {
         notify?.({ type: 'approval_request', id, tool, args });
       });
@@ -45,13 +55,24 @@ export function createDirectAgentClient(
         let pending = gen.next();
 
         while (true) {
-          const approvalPromise = new Promise<{ type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }>((resolve) => {
+          const approvalPromise = new Promise<{
+            type: 'approval_request';
+            id: string;
+            tool: string;
+            args: Record<string, unknown>;
+          }>((resolve) => {
             notify = resolve;
           });
 
           const winner = await Promise.race([
-            pending.then((c): { tag: 'chunk'; value: IteratorResult<StreamChunk, void> } => ({ tag: 'chunk', value: c })),
-            approvalPromise.then((req): { tag: 'approval'; value: typeof req } => ({ tag: 'approval', value: req })),
+            pending.then((c): { tag: 'chunk'; value: IteratorResult<StreamChunk, void> } => ({
+              tag: 'chunk',
+              value: c,
+            })),
+            approvalPromise.then((req): { tag: 'approval'; value: typeof req } => ({
+              tag: 'approval',
+              value: req,
+            })),
           ]);
 
           if (winner.tag === 'chunk') {
@@ -74,7 +95,7 @@ export function createDirectAgentClient(
         Effect.gen(function* () {
           const svc = yield* ApprovalWaitService;
           return yield* svc.resolveConfirm(approvalId, sessionId, result);
-        }),
+        })
       );
     },
 
@@ -83,7 +104,7 @@ export function createDirectAgentClient(
         Effect.gen(function* () {
           const ctx = yield* ContextService;
           return yield* ctx.compress(sessionId, cwd, null);
-        }),
+        })
       );
     },
   };

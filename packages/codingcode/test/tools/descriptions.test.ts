@@ -18,9 +18,7 @@ const allTools: ToolDefinition[] = [
 describe('tool descriptions', () => {
   it('should not mention tool name in description', () => {
     for (const tool of allTools) {
-      expect(tool.description).not.toMatch(
-        /tool name is/i,
-      );
+      expect(tool.description).not.toMatch(/tool name is/i);
       expect(tool.description).not.toContain(tool.name);
     }
   });
@@ -28,9 +26,7 @@ describe('tool descriptions', () => {
   it('should not inline parameter docs in description', () => {
     for (const tool of allTools) {
       // Description should describe behavior, not list params
-      expect(tool.description).not.toMatch(
-        /parameters?\s*:/i,
-      );
+      expect(tool.description).not.toMatch(/parameters?\s*:/i);
     }
   });
 

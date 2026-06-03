@@ -19,21 +19,18 @@ export interface AgentRuntimeClient {
 
 export function createHttpAgentClient(
   baseUrl: string,
-  request: ReturnType<typeof createRequestHelpers>,
+  request: ReturnType<typeof createRequestHelpers>
 ): AgentRuntimeClient {
   const { apiPost } = request;
 
   return {
     async *sendMessage(input, { sessionId, cwd, signal }) {
-      const response = await fetch(
-        `${baseUrl}/api/sessions/${sessionId || '_'}/messages`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ input, cwd }),
-          headers: { 'Content-Type': 'application/json' },
-          signal,
-        },
-      );
+      const response = await fetch(`${baseUrl}/api/sessions/${sessionId || '_'}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ input, cwd }),
+        headers: { 'Content-Type': 'application/json' },
+        signal,
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       for await (const data of parseSseStream(response)) {
@@ -45,31 +42,70 @@ export function createHttpAgentClient(
             yield { type: 'turn_id', turnId: data.turnId as number };
             break;
           case 'text':
-            yield { type: 'text', text: data.text as string, messageId: data.messageId as number | undefined };
+            yield {
+              type: 'text',
+              text: data.text as string,
+              messageId: data.messageId as number | undefined,
+            };
             break;
           case 'message':
-            yield { type: 'message', id: data.id as number, content: data.content as string, partial: false };
+            yield {
+              type: 'message',
+              id: data.id as number,
+              content: data.content as string,
+              partial: false,
+            };
             break;
           case 'approval_request':
-            yield { type: 'approval_request', id: data.id as string, tool: data.tool as string, args: data.args as Record<string, unknown> };
+            yield {
+              type: 'approval_request',
+              id: data.id as string,
+              tool: data.tool as string,
+              args: data.args as Record<string, unknown>,
+            };
             break;
           case 'tool_start':
-            yield { type: 'tool_start', id: data.id as string, name: data.name as string, args: data.args as Record<string, unknown> };
+            yield {
+              type: 'tool_start',
+              id: data.id as string,
+              name: data.name as string,
+              args: data.args as Record<string, unknown>,
+            };
             break;
           case 'tool_result':
-            yield { type: 'tool_result', id: data.id as string, name: data.name as string, output: data.output as string, ok: data.ok as boolean };
+            yield {
+              type: 'tool_result',
+              id: data.id as string,
+              name: data.name as string,
+              output: data.output as string,
+              ok: data.ok as boolean,
+            };
             break;
           case 'tool_denied':
-            yield { type: 'tool_denied', id: data.id as string, name: data.name as string, reason: data.reason as string };
+            yield {
+              type: 'tool_denied',
+              id: data.id as string,
+              name: data.name as string,
+              reason: data.reason as string,
+            };
             break;
           case 'todo_update':
             yield { type: 'todo_update', items: data.items as any };
             break;
           case 'usage':
-            yield { type: 'usage', prompt: data.prompt as number, completion: data.completion as number, total: data.total as number };
+            yield {
+              type: 'usage',
+              prompt: data.prompt as number,
+              completion: data.completion as number,
+              total: data.total as number,
+            };
             break;
           case 'reactive_compact':
-            yield { type: 'reactive_compact', released: data.released as number, promptEstimate: data.promptEstimate as number };
+            yield {
+              type: 'reactive_compact',
+              released: data.released as number,
+              promptEstimate: data.promptEstimate as number,
+            };
             break;
           case 'error':
             throw new Error(data.message as string);

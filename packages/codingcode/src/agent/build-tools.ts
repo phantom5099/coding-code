@@ -7,18 +7,20 @@ export function buildToolsForAgent(
   registry: ToolService,
   toolSearch: ToolSearchService,
   sessionId: string,
-  coreAllowlist?: ReadonlySet<string>,
+  coreAllowlist?: ReadonlySet<string>
 ): ToolDescription[] {
   let core = registry.allCore();
   if (coreAllowlist) {
-    core = core.filter(t => coreAllowlist.has(t.name));
+    core = core.filter((t) => coreAllowlist.has(t.name));
   }
-  const loadedDeferred = registry.allDeferred().filter(t => toolSearch.isLoaded(sessionId, t.name));
+  const loadedDeferred = registry
+    .allDeferred()
+    .filter((t) => toolSearch.isLoaded(sessionId, t.name));
   let deferred = loadedDeferred;
   if (coreAllowlist) {
-    deferred = deferred.filter(t => coreAllowlist.has(t.name));
+    deferred = deferred.filter((t) => coreAllowlist.has(t.name));
   }
-  return [...core, ...deferred].map(t => ({
+  return [...core, ...deferred].map((t) => ({
     name: t.name,
     description: t.description,
     parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
@@ -27,12 +29,12 @@ export function buildToolsForAgent(
 
 export function buildDeferredCatalogContent(
   toolSearch: ToolSearchService,
-  sessionId: string,
+  sessionId: string
 ): string | null {
   const unloaded = toolSearch.listUnloadedDeferred(sessionId);
   if (unloaded.length === 0) return null;
-  const lines = unloaded.map(t =>
-    `- ${t.name}: ${t.shortDescription ?? t.description.slice(0, 80)}`,
+  const lines = unloaded.map(
+    (t) => `- ${t.name}: ${t.shortDescription ?? t.description.slice(0, 80)}`
   );
   return [
     '<available-deferred-tools>',

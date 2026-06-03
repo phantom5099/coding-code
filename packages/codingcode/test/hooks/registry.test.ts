@@ -89,8 +89,12 @@ describe('HookService', () => {
 
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
-      yield* hooks.register('session.save.before', async () => { throw new Error('bad handler'); });
-      yield* hooks.register('session.save.before', () => { called.push('second'); });
+      yield* hooks.register('session.save.before', async () => {
+        throw new Error('bad handler');
+      });
+      yield* hooks.register('session.save.before', () => {
+        called.push('second');
+      });
       yield* hooks.emit('session.save.before', {});
     });
 
@@ -101,8 +105,18 @@ describe('HookService', () => {
   it('should isolate decision handler exceptions 鈥?skips erroring handler and tries next', async () => {
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
-      yield* hooks.registerDecision('agent.turn.stop', async () => { throw new Error('bad decision'); }, { priority: 0 });
-      yield* hooks.registerDecision('agent.turn.stop', async () => ({ decision: 'continue' as const }), { priority: 1 });
+      yield* hooks.registerDecision(
+        'agent.turn.stop',
+        async () => {
+          throw new Error('bad decision');
+        },
+        { priority: 0 }
+      );
+      yield* hooks.registerDecision(
+        'agent.turn.stop',
+        async () => ({ decision: 'continue' as const }),
+        { priority: 1 }
+      );
       return yield* hooks.emitDecision('agent.turn.stop', {});
     });
 
@@ -135,7 +149,9 @@ describe('HookService.reloadUserHooks', () => {
 
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
-      yield* hooks.register('tool.execute.before', () => { called.push('system'); });
+      yield* hooks.register('tool.execute.before', () => {
+        called.push('system');
+      });
       yield* hooks.reloadUserHooks(testDir);
 
       writeHooksYaml('hook-b', 'tool.execute.before', true);
@@ -172,7 +188,13 @@ describe('HookService.reloadUserHooks', () => {
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
       // Register with source: 'system' 鈥?should survive reload
-      yield* hooks.register('tool.execute.before', () => { called.push('system'); }, { source: 'system' });
+      yield* hooks.register(
+        'tool.execute.before',
+        () => {
+          called.push('system');
+        },
+        { source: 'system' }
+      );
       yield* hooks.reloadUserHooks(testDir);
 
       // Emit should still call the system handler
@@ -189,7 +211,9 @@ describe('HookService.reloadUserHooks', () => {
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
       // No source option 鈥?defaults to 'user', should be cleared
-      yield* hooks.register('tool.execute.before', () => { called.push('default-user'); });
+      yield* hooks.register('tool.execute.before', () => {
+        called.push('default-user');
+      });
       yield* hooks.reloadUserHooks(testDir);
 
       yield* hooks.emit('tool.execute.before', {});

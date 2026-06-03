@@ -7,7 +7,13 @@ export const webSearchTool: ToolDefinition = {
     'Search the web and return results with titles, URLs, and snippets. Use this when you need up-to-date information or to find documentation, references, or answers beyond your knowledge cutoff.',
   parameters: z.object({
     query: z.string().describe('The search query string'),
-    max_results: z.number().int().min(1).max(20).default(8).describe('Maximum number of results to return'),
+    max_results: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .default(8)
+      .describe('Maximum number of results to return'),
   }),
   execute: async (args: unknown, _ctx?: ToolExecCtx) => {
     const { query, max_results } = args as { query: string; max_results: number };

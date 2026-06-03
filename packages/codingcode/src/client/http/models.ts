@@ -6,7 +6,7 @@ export interface ModelClient {
 }
 
 export function createHttpModelClient(
-  request: ReturnType<typeof createRequestHelpers>,
+  request: ReturnType<typeof createRequestHelpers>
 ): ModelClient {
   const { apiGet, apiPost } = request;
 

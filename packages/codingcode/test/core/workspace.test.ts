@@ -22,12 +22,24 @@ describe('core/workspace', () => {
     mkdirSync(installRoot, { recursive: true });
     mkdirSync(otherDir, { recursive: true });
     mkdirSync(join(installRoot, 'config'), { recursive: true });
-    writeFileSync(join(installRoot, 'config', 'models.json'), '{"active":"p","providers":[]}', 'utf8');
+    writeFileSync(
+      join(installRoot, 'config', 'models.json'),
+      '{"active":"p","providers":[]}',
+      'utf8'
+    );
   });
 
   afterEach(() => {
-    try { rmSync(installRoot, { recursive: true, force: true }); } catch { /* ignore */ }
-    try { rmSync(otherDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    try {
+      rmSync(installRoot, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+    try {
+      rmSync(otherDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
   });
 
   it('parseWorkspaceArgs extracts --cwd and leaves other flags', () => {
@@ -54,7 +66,8 @@ describe('core/workspace', () => {
   });
 
   it('throws when --cwd path does not exist', () => {
-    expect(() => initWorkspace({ installRoot, workspaceCwd: join(tmpdir(), 'missing-' + randomUUID()) }))
-      .toThrow(/does not exist/);
+    expect(() =>
+      initWorkspace({ installRoot, workspaceCwd: join(tmpdir(), 'missing-' + randomUUID()) })
+    ).toThrow(/does not exist/);
   });
 });

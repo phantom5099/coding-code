@@ -23,7 +23,7 @@ export const ApprovalWaitLayer = ApprovalWaitService.Default;
 export const SubagentRegistryLayer = SubagentRegistry.Default;
 /** ApprovalService depends on HookService + ApprovalWaitService — provide them eagerly. */
 export const ApprovalLayer = ApprovalService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer)),
+  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
 );
 
 /** Layer providing all infrastructure services. */
@@ -33,29 +33,25 @@ const InfraLayer = Layer.mergeAll(ToolLayer, HookLayer);
 export const McpLayer = McpService.Default.pipe(Layer.provide(InfraLayer));
 
 /** ToolExecutor depends on ToolLayer + HookLayer + ApprovalLayer. */
-const ExecutorDeps = Layer.mergeAll(
-  ToolLayer,
-  HookLayer,
-  ApprovalLayer,
-);
-const ExecutorLayer = ToolExecutorService.Default.pipe(
-  Layer.provide(ExecutorDeps),
-);
+const ExecutorDeps = Layer.mergeAll(ToolLayer, HookLayer, ApprovalLayer);
+const ExecutorLayer = ToolExecutorService.Default.pipe(Layer.provide(ExecutorDeps));
 
 /** Checkpoint depends on HookService (for bootstrap observers). */
 const CheckpointDeps = Layer.mergeAll(HookLayer);
-export const CheckpointLayer = CheckpointService.Default.pipe(
-  Layer.provide(CheckpointDeps),
-);
+export const CheckpointLayer = CheckpointService.Default.pipe(Layer.provide(CheckpointDeps));
 
-export const ToolSearchLayer = ToolSearchService.Default.pipe(
-  Layer.provide(ToolLayer),
-);
+export const ToolSearchLayer = ToolSearchService.Default.pipe(Layer.provide(ToolLayer));
 
 /** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService + ToolSearchService + SubagentRegistryLayer. */
 const AgentDeps = Layer.mergeAll(
-  ExecutorLayer, ToolLayer, ContextLayer, SessionLayer, CheckpointLayer,
-  ToolSearchLayer, SubagentRegistryLayer, HookLayer,
+  ExecutorLayer,
+  ToolLayer,
+  ContextLayer,
+  SessionLayer,
+  CheckpointLayer,
+  ToolSearchLayer,
+  SubagentRegistryLayer,
+  HookLayer
 );
 const AgentWithDeps = AgentLayer.pipe(Layer.provide(AgentDeps));
 
@@ -72,5 +68,5 @@ export const AppLayer = Layer.mergeAll(
   ApprovalWaitLayer,
   CheckpointLayer,
   ToolSearchLayer,
-  SubagentRegistryLayer,
+  SubagentRegistryLayer
 );

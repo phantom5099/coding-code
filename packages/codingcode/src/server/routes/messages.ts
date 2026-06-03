@@ -38,7 +38,7 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
         Effect.gen(function* () {
           const approval = yield* ApprovalService;
           return yield* approval.fork({});
-        }).pipe(Effect.provide(AppLayer) as any),
+        }).pipe(Effect.provide(AppLayer) as any)
       );
       await Effect.runPromise(forked.setPermissionMode(mode));
       approvalOverride = forked;
@@ -50,7 +50,7 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
     input,
     normalizedCwd,
     llm,
-    { signal: c.req.raw.signal },
+    { signal: c.req.raw.signal }
   );
 
   const result = await runWithLayer(program);
@@ -67,7 +67,7 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
       Effect.gen(function* () {
         const approval = yield* ApprovalService;
         return yield* approval.fork({});
-      }).pipe(Effect.provide(AppLayer) as any),
+      }).pipe(Effect.provide(AppLayer) as any)
     );
     approvalOverride = forked;
   }
@@ -79,6 +79,6 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
     {
       initialEvents: [{ type: 'session_id', sessionId }],
       sessionId,
-    },
+    }
   )(c);
 });

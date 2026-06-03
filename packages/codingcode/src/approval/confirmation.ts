@@ -24,10 +24,7 @@ async function promptUser(question: string): Promise<string> {
   }
 }
 
-function buildResult(
-  answer: string,
-  tool: string,
-): ConfirmResult {
+function buildResult(answer: string, tool: string): ConfirmResult {
   switch (answer) {
     case 'y':
       return { type: 'allow' };
@@ -63,7 +60,7 @@ function buildResult(
 export function userConfirm(
   tool: string,
   args: Record<string, unknown>,
-  mode: 'interactive' | 'default-deny' = 'default-deny',
+  mode: 'interactive' | 'default-deny' = 'default-deny'
 ): Effect.Effect<ConfirmResult> {
   if (mode === 'default-deny') {
     return Effect.succeed({ type: 'deny' } as ConfirmResult);
@@ -98,7 +95,7 @@ export function userConfirmAsync(
   args: Record<string, unknown>,
   waitSvc: ApprovalWaitService,
   sessionId: string,
-  callId?: string,
+  callId?: string
 ): Effect.Effect<ConfirmResult> {
   return Effect.gen(function* () {
     const id = callId!;

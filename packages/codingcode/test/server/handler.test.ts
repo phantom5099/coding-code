@@ -28,24 +28,27 @@ const mockState = {
 
 function createMockLlm(chunks?: string[], responseContent?: string) {
   return {
+    modelInfo: { maxTokens: 1000 },
     completeStream: (_params: any) => ({
       stream: (async function* () {
         for (const c of chunks ?? []) yield c;
       })(),
-      response: Promise.resolve(
-        Result.ok({ content: responseContent ?? chunks?.join('') ?? '' }),
-      ),
+      response: Promise.resolve(Result.ok({ content: responseContent ?? chunks?.join('') ?? '' })),
     }),
   };
 }
 
-const MockToolExecutorLayer = Layer.succeed(ToolExecutorService, ToolExecutorService.of({
-  _tag: 'ToolExecutor' as const,
-  execute: () => Effect.succeed('done'),
-  executeBatch: (toolCalls: any[]) => Effect.succeed(
-    toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: '' })),
-  ),
-}));
+const MockToolExecutorLayer = Layer.succeed(
+  ToolExecutorService,
+  ToolExecutorService.of({
+    _tag: 'ToolExecutor' as const,
+    execute: () => Effect.succeed('done'),
+    executeBatch: (toolCalls: any[]) =>
+      Effect.succeed(
+        toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: '' }))
+      ),
+  })
+);
 
 const MockSessionLayer = Layer.succeed(
   SessionService,
@@ -53,11 +56,35 @@ const MockSessionLayer = Layer.succeed(
     _tag: 'Session' as const,
     create: () => Effect.succeed(mockState),
     recordUser: () =>
-      Effect.succeed({ type: 'user' as const, uuid: 'u1', content: '', turnId: 0, timestamp: new Date().toISOString() }),
+      Effect.succeed({
+        type: 'user' as const,
+        uuid: 'u1',
+        content: '',
+        turnId: 0,
+        timestamp: new Date().toISOString(),
+      }),
     recordAssistant: () =>
-      Effect.succeed({ type: 'assistant' as const, uuid: 'a1', content: '', toolCalls: [], model: 'test', turnId: 0, timestamp: new Date().toISOString() }),
+      Effect.succeed({
+        type: 'assistant' as const,
+        uuid: 'a1',
+        content: '',
+        toolCalls: [],
+        model: 'test',
+        turnId: 0,
+        timestamp: new Date().toISOString(),
+      }),
     recordToolResult: () =>
-      Effect.succeed({ type: 'tool_result' as const, uuid: 't1', parentUuid: 'a1', toolName: 'test', toolCallId: 'tc1', output: '', turnId: 0, timestamp: new Date().toISOString(), tokenCount: 0 }),
+      Effect.succeed({
+        type: 'tool_result' as const,
+        uuid: 't1',
+        parentUuid: 'a1',
+        toolName: 'test',
+        toolCallId: 'tc1',
+        output: '',
+        turnId: 0,
+        timestamp: new Date().toISOString(),
+        tokenCount: 0,
+      }),
     readHistory: () => Effect.succeed([]),
     readMessages: () => Effect.succeed([]),
     listSessions: () => Effect.succeed([]),
@@ -65,14 +92,20 @@ const MockSessionLayer = Layer.succeed(
     getMessageCount: () => 0,
     incrementTurn: () => 0,
     findSessionIndex: () => Effect.succeed(null),
-  }),
+  })
 );
 
-const MockContextLayer = Layer.succeed(ContextService, ContextService.of({
-  _tag: 'Context' as any,
-  build: () => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
-  compress: () => Effect.succeed({ didCompress: true, released: 0 }),
-}));
+const MockContextLayer = Layer.succeed(
+  ContextService,
+  ContextService.of({
+    _tag: 'Context' as any,
+    build: () =>
+      Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] })),
+    compress: () => Effect.succeed({ didCompress: true, released: 0 }),
+    appendTurnEnd: () => Effect.succeed({ didCompress: false, released: 0 }),
+    compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
+  })
+);
 
 const MockSkillLayer = Layer.succeed(
   SkillService,
@@ -84,28 +117,38 @@ const MockSkillLayer = Layer.succeed(
     select: () => Effect.succeed(undefined),
     selectImplicit: () => Effect.succeed(undefined),
     extractSkill: () => Effect.succeed([undefined, 'hi']),
-  }),
+  })
 );
 
 const { AgentService } = await import('../../src/agent/agent.js');
 const { ToolLayer, HookLayer } = await import('../../src/layer.js');
 
-const MockCheckpointLayer = Layer.succeed(CheckpointService, CheckpointService.of({
-  _tag: 'Checkpoint' as const,
-  snapshotBaseline: () => {},
-  snapshotFinal: () => {},
-  classifyChanges: () => null,
-  getCompletedTurns: () => [],
-  revertFiles: () => {},
-  forward: () => null,
-  hasForwardStack: () => false,
-  getCheckpoints: () => [],
-}));
+const MockCheckpointLayer = Layer.succeed(
+  CheckpointService,
+  CheckpointService.of({
+    _tag: 'Checkpoint' as const,
+    snapshotBaseline: () => {},
+    snapshotFinal: () => {},
+    classifyChanges: () => null,
+    getCompletedTurns: () => [],
+    revertFiles: () => {},
+    forward: () => null,
+    hasForwardStack: () => false,
+    getCheckpoints: () => [],
+  })
+);
 
-const MockToolSearchLayer = Layer.succeed(ToolSearchService, ToolSearchService.of({
-  _tag: 'ToolSearchService' as const, isLoaded: () => false, listLoaded: () => [],
-  listUnloadedDeferred: () => [], search: () => [], reset: () => {},
-}));
+const MockToolSearchLayer = Layer.succeed(
+  ToolSearchService,
+  ToolSearchService.of({
+    _tag: 'ToolSearchService' as const,
+    isLoaded: () => false,
+    listLoaded: () => [],
+    listUnloadedDeferred: () => [],
+    search: () => [],
+    reset: () => {},
+  })
+);
 
 const MockMcpLayer = Layer.succeed(McpService, {
   syncConnections: () => Effect.void,
@@ -125,14 +168,10 @@ const AllDeps = Layer.mergeAll(
   MockSkillLayer,
   HookLayer,
   MockToolSearchLayer,
-  MockMcpLayer,
+  MockMcpLayer
 );
 
-const TestLayer = Layer.mergeAll(
-  AgentService.Default.pipe(Layer.provide(AllDeps)),
-  AllDeps,
-);
-
+const TestLayer = Layer.mergeAll(AgentService.Default.pipe(Layer.provide(AllDeps)), AllDeps);
 
 async function readSSEStream(response: Response): Promise<{ events: any[] }> {
   const reader = response.body!.getReader();
@@ -159,30 +198,41 @@ describe('sseHandler + sendMessage integration', () => {
   it('should stream text chunks and complete event', async () => {
     const llm = createMockLlm(['Hello', ' ', 'world']);
     const program = sendMessage('test-session', 'hi', '/tmp/test', llm) as any;
-    const handler = sseHandler(async function* () {
-      const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
-      yield* toSseEvents(stream);
-    }, { sessionId: 'test' });
+    const handler = sseHandler(
+      async function* () {
+        const { stream } = (await Effect.runPromise(
+          program.pipe(Effect.provide(TestLayer) as any)
+        )) as any;
+        yield* toSseEvents(stream);
+      },
+      { sessionId: 'test' }
+    );
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
-    expect(events).toHaveLength(7); // 1 step + 3 text + 1 message + 1 done + 1 complete
-    expect(events[0]).toEqual({ type: 'step', step: 1 });
-    expect(events[1]).toEqual({ type: 'text', text: 'Hello', messageId: 1 });
-    expect(events[2]).toEqual({ type: 'text', text: ' ', messageId: 1 });
-    expect(events[3]).toEqual({ type: 'text', text: 'world', messageId: 1 });
-    expect(events[4]).toEqual({ type: 'message', id: 1, content: 'Hello world', partial: false });
-    expect(events[5]).toEqual({ type: 'done' });
-    expect(events[6]).toEqual({ type: 'complete' });
+    expect(events).toHaveLength(8); // 1 turn_id + 1 step + 3 text + 1 message + 1 done + 1 complete
+    expect(events[0]).toEqual({ type: 'turn_id', turnId: 0 });
+    expect(events[1]).toEqual({ type: 'step', step: 1 });
+    expect(events[2]).toEqual({ type: 'text', text: 'Hello', messageId: 1 });
+    expect(events[3]).toEqual({ type: 'text', text: ' ', messageId: 1 });
+    expect(events[4]).toEqual({ type: 'text', text: 'world', messageId: 1 });
+    expect(events[5]).toEqual({ type: 'message', id: 1, content: 'Hello world', partial: false });
+    expect(events[6]).toEqual({ type: 'done' });
+    expect(events[7]).toEqual({ type: 'complete' });
   });
 
   it('should send complete event even when LLM returns no text', async () => {
     const llm = createMockLlm([], '');
     const program = sendMessage('test-session', 'hi', '/tmp/test', llm) as any;
-    const handler = sseHandler(async function* () {
-      const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
-      yield* toSseEvents(stream);
-    }, { sessionId: 'test' });
+    const handler = sseHandler(
+      async function* () {
+        const { stream } = (await Effect.runPromise(
+          program.pipe(Effect.provide(TestLayer) as any)
+        )) as any;
+        yield* toSseEvents(stream);
+      },
+      { sessionId: 'test' }
+    );
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -191,6 +241,8 @@ describe('sseHandler + sendMessage integration', () => {
 
   it('should forward [Using: ...] markers when LLM calls tools', async () => {
     const llm = {
+      modelInfo: { maxTokens: 1000 },
+      complete: () => Promise.resolve(Result.ok({ content: '' })),
       completeStream: (_params: any) => ({
         stream: (async function* () {
           yield '\n[Using: readFile]\n';
@@ -199,16 +251,21 @@ describe('sseHandler + sendMessage integration', () => {
           Result.ok({
             content: '',
             toolCalls: [{ id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } }],
-          }),
+          })
         ),
       }),
     };
 
     const program = sendMessage('test-session', 'read file', '/tmp/test', llm) as any;
-    const handler = sseHandler(async function* () {
-      const { stream } = await Effect.runPromise(program.pipe(Effect.provide(TestLayer) as any)) as any;
-      yield* toSseEvents(stream);
-    }, { sessionId: 'test' });
+    const handler = sseHandler(
+      async function* () {
+        const { stream } = (await Effect.runPromise(
+          program.pipe(Effect.provide(TestLayer) as any)
+        )) as any;
+        yield* toSseEvents(stream);
+      },
+      { sessionId: 'test' }
+    );
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
@@ -218,9 +275,12 @@ describe('sseHandler + sendMessage integration', () => {
   });
 
   it('should send error event when factory throws', async () => {
-    const handler = sseHandler(async function* () {
-      throw new Error('boom');
-    }, { sessionId: 'test' });
+    const handler = sseHandler(
+      async function* () {
+        throw new Error('boom');
+      },
+      { sessionId: 'test' }
+    );
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 

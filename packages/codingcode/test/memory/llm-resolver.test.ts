@@ -7,8 +7,18 @@ vi.mock('../../src/llm/factory.js', () => ({
   listModels: vi.fn(() => ({
     ok: true,
     value: [
-      { id: 'claude-opus-4-7', model: 'claude-opus-4-7', name: 'Claude Opus 4.7', provider: 'anthropic' },
-      { id: 'deepseek@deepseek', model: 'deepseek-chat', name: 'DeepSeek Chat', provider: 'deepseek' },
+      {
+        id: 'claude-opus-4-7',
+        model: 'claude-opus-4-7',
+        name: 'Claude Opus 4.7',
+        provider: 'anthropic',
+      },
+      {
+        id: 'deepseek@deepseek',
+        model: 'deepseek-chat',
+        name: 'DeepSeek Chat',
+        provider: 'deepseek',
+      },
     ],
   })),
   createClient: vi.fn(async (modelInfo: any) => ({

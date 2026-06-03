@@ -1,7 +1,12 @@
 ﻿import { expect, it, describe, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { loadAgentProfiles, writeAgentProfile, updateAgentProfile, deleteAgentProfile } from '../../src/subagent/loader';
+import {
+  loadAgentProfiles,
+  writeAgentProfile,
+  updateAgentProfile,
+  deleteAgentProfile,
+} from '../../src/subagent/loader';
 
 describe('loadAgentProfiles', () => {
   const testDir = join(process.cwd(), '.test-agents');
@@ -126,7 +131,7 @@ System 2`;
 
     const results = loadAgentProfiles(testDir);
     expect(results).toHaveLength(2);
-    expect(results.map(r => r.name)).toEqual(expect.arrayContaining(['agent1', 'agent2']));
+    expect(results.map((r) => r.name)).toEqual(expect.arrayContaining(['agent1', 'agent2']));
   });
 
   it('should handle profiles without frontmatter', () => {

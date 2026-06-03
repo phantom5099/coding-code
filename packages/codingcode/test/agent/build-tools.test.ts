@@ -37,7 +37,7 @@ describe('buildToolsForAgent', () => {
       toolSearch.search('agent-1', 'todo');
 
       const result = buildToolsForAgent(tools, toolSearch, 'agent-1');
-      const names = result.map(t => t.name);
+      const names = result.map((t) => t.name);
       expect(names).toContain('core_read');
       expect(names).toContain('deferred_todo');
     });
@@ -53,7 +53,7 @@ describe('buildToolsForAgent', () => {
       yield* tools.register(makeTool('deferred_z', undefined, true));
       // Use a unique agent that hasn't loaded anything
       const result = buildToolsForAgent(tools, toolSearch, 'agent-excl');
-      const names = result.map(t => t.name);
+      const names = result.map((t) => t.name);
       expect(names).not.toContain('deferred_z');
       // Should still contain core tools from other tests
       expect(names.length).toBeGreaterThanOrEqual(0);
@@ -72,8 +72,8 @@ describe('buildToolsForAgent', () => {
 
       const alphaTools = buildToolsForAgent(tools, toolSearch, 'agent-alpha');
       const betaTools = buildToolsForAgent(tools, toolSearch, 'agent-beta');
-      const alphaNames = alphaTools.map(t => t.name);
-      const betaNames = betaTools.map(t => t.name);
+      const alphaNames = alphaTools.map((t) => t.name);
+      const betaNames = betaTools.map((t) => t.name);
 
       expect(alphaNames).toContain('deferred_x');
       expect(betaNames).not.toContain('deferred_x');

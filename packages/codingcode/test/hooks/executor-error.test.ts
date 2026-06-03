@@ -2,12 +2,13 @@
 import { executeHookCommand } from '../../src/hooks/executor';
 import { EventEmitter } from 'events';
 
-const createMockProc = () => Object.assign(new EventEmitter(), {
-  stdout: Object.assign(new EventEmitter(), { on: vi.fn() }),
-  stderr: Object.assign(new EventEmitter(), { on: vi.fn() }),
-  kill: vi.fn(),
-  stdin: { write: vi.fn(), end: vi.fn() },
-});
+const createMockProc = () =>
+  Object.assign(new EventEmitter(), {
+    stdout: Object.assign(new EventEmitter(), { on: vi.fn() }),
+    stderr: Object.assign(new EventEmitter(), { on: vi.fn() }),
+    kill: vi.fn(),
+    stdin: { write: vi.fn(), end: vi.fn() },
+  });
 
 let _mockProc = createMockProc();
 
@@ -18,10 +19,7 @@ vi.mock('child_process', () => ({
 describe('hooks/executor error propagation', () => {
   it('rejects when spawn emits error', async () => {
     _mockProc = createMockProc();
-    const promise = executeHookCommand(
-      { command: 'test-cmd' },
-      { foo: 'bar' },
-    );
+    const promise = executeHookCommand({ command: 'test-cmd' }, { foo: 'bar' });
     _mockProc.emit('error', new Error('spawn failed'));
     await expect(promise).rejects.toThrow('spawn failed');
   });

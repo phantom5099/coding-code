@@ -12,8 +12,12 @@ export interface SubagentProfile {
 }
 
 let _globalSubagentEnabled = true;
-export function getSubagentEnabledState(): boolean { return _globalSubagentEnabled; }
-export function setSubagentEnabledState(v: boolean): void { _globalSubagentEnabled = v; }
+export function getSubagentEnabledState(): boolean {
+  return _globalSubagentEnabled;
+}
+export function setSubagentEnabledState(v: boolean): void {
+  _globalSubagentEnabled = v;
+}
 
 const _disabledAgents = new Set<string>();
 export function setAgentDisabledState(name: string, disabled: boolean): void {
@@ -49,22 +53,32 @@ export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('Subage
         _disabledAgents.clear();
       },
 
-      setEnabled: (v: boolean): void => { _globalSubagentEnabled = v; },
+      setEnabled: (v: boolean): void => {
+        _globalSubagentEnabled = v;
+      },
       isEnabled: (): boolean => _globalSubagentEnabled,
 
-      disableAgent: (name: string): void => { disabledAgents.add(name); _disabledAgents.add(name); },
-      enableAgent: (name: string): void => { disabledAgents.delete(name); _disabledAgents.delete(name); },
-      isAgentDisabled: (name: string): boolean => disabledAgents.has(name) || _disabledAgents.has(name),
+      disableAgent: (name: string): void => {
+        disabledAgents.add(name);
+        _disabledAgents.add(name);
+      },
+      enableAgent: (name: string): void => {
+        disabledAgents.delete(name);
+        _disabledAgents.delete(name);
+      },
+      isAgentDisabled: (name: string): boolean =>
+        disabledAgents.has(name) || _disabledAgents.has(name),
     };
   }),
 }) {}
 
 export const EXPLORE_PROFILE: SubagentProfile = {
   name: 'explore',
-  description: 'Read-only code exploration: searching files, reading symbols, understanding structure. No writes.',
-  systemPrompt: 'You are a read-only code exploration agent. Your role is to help explore and understand codebases through reading files, searching for symbols, and analyzing code structure. You can only read; you cannot write or modify files.',
+  description:
+    'Read-only code exploration: searching files, reading symbols, understanding structure. No writes.',
+  systemPrompt:
+    'You are a read-only code exploration agent. Your role is to help explore and understand codebases through reading files, searching for symbols, and analyzing code structure. You can only read; you cannot write or modify files.',
   tools: ['read_file', 'search_files', 'search_code', 'fetch_url', 'tool_search'],
   readonly: true,
   maxSteps: 30,
 };
-

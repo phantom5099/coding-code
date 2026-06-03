@@ -37,7 +37,9 @@ function request(withTools: boolean) {
   return {
     system: 'system',
     messages: [{ role: 'user', content: 'hello' }],
-    tools: withTools ? [{ name: 'read_file', description: 'Read file', parameters: { type: 'object' } }] : undefined,
+    tools: withTools
+      ? [{ name: 'read_file', description: 'Read file', parameters: { type: 'object' } }]
+      : undefined,
     maxSteps: 1,
   };
 }

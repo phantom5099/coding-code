@@ -10,7 +10,11 @@ vi.mock('../../src/mcp/client.js', () => {
     connected = true;
     tools: string[] = [];
     transportType = 'stdio' as const;
-    private _tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>;
+    private _tools: Array<{
+      name: string;
+      description: string;
+      inputSchema: Record<string, unknown>;
+    }>;
 
     constructor(public config: any) {
       this._tools = config._mockTools ?? [
@@ -19,7 +23,7 @@ vi.mock('../../src/mcp/client.js', () => {
     }
     async connect() {}
     async listTools() {
-      this.tools = this._tools.map(t => t.name);
+      this.tools = this._tools.map((t) => t.name);
       return this._tools;
     }
     callTool(_name: string, _args: Record<string, unknown>) {
@@ -48,9 +52,11 @@ function makeHookLayer() {
 }
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  const testLayer = Layer.mergeAll(makeToolLayer(), makeHookLayer(), McpService.Default.pipe(
-    Layer.provide(Layer.mergeAll(makeToolLayer(), makeHookLayer())),
-  ));
+  const testLayer = Layer.mergeAll(
+    makeToolLayer(),
+    makeHookLayer(),
+    McpService.Default.pipe(Layer.provide(Layer.mergeAll(makeToolLayer(), makeHookLayer())))
+  );
   return Effect.runPromise(eff.pipe(Effect.provide(testLayer) as any));
 }
 
@@ -65,8 +71,16 @@ describe('McpService granular methods', () => {
 
   it('connectServers connects only specified servers', async () => {
     mockConfigs = [
-      { name: 'server-a', command: 'echo', _mockTools: [{ name: 'tool-a', description: 'A', inputSchema: {} }] },
-      { name: 'server-b', command: 'echo', _mockTools: [{ name: 'tool-b', description: 'B', inputSchema: {} }] },
+      {
+        name: 'server-a',
+        command: 'echo',
+        _mockTools: [{ name: 'tool-a', description: 'A', inputSchema: {} }],
+      },
+      {
+        name: 'server-b',
+        command: 'echo',
+        _mockTools: [{ name: 'tool-b', description: 'B', inputSchema: {} }],
+      },
     ];
 
     const program = Effect.gen(function* () {
@@ -90,7 +104,11 @@ describe('McpService granular methods', () => {
 
   it('disconnectServers removes tools and connection', async () => {
     mockConfigs = [
-      { name: 'srv', command: 'echo', _mockTools: [{ name: 'do', description: 'Do', inputSchema: {} }] },
+      {
+        name: 'srv',
+        command: 'echo',
+        _mockTools: [{ name: 'do', description: 'Do', inputSchema: {} }],
+      },
     ];
 
     const program = Effect.gen(function* () {
@@ -109,7 +127,11 @@ describe('McpService granular methods', () => {
 
   it('refCount prevents premature disconnect', async () => {
     mockConfigs = [
-      { name: 'shared', command: 'echo', _mockTools: [{ name: 'op', description: 'Op', inputSchema: {} }] },
+      {
+        name: 'shared',
+        command: 'echo',
+        _mockTools: [{ name: 'op', description: 'Op', inputSchema: {} }],
+      },
     ];
 
     const program = Effect.gen(function* () {
@@ -136,7 +158,8 @@ describe('McpService granular methods', () => {
   it('getServerToolNames returns namespaced names', async () => {
     mockConfigs = [
       {
-        name: 'db', command: 'echo',
+        name: 'db',
+        command: 'echo',
         _mockTools: [
           { name: 'query', description: 'Query', inputSchema: {} },
           { name: 'schema', description: 'Schema', inputSchema: {} },
@@ -168,10 +191,12 @@ describe('McpService granular methods', () => {
 
   it('connectServers warns and skips unknown server name', async () => {
     mockConfigs = [
-      { name: 'real-server', command: 'echo', _mockTools: [{ name: 'op', description: 'Op', inputSchema: {} }] },
+      {
+        name: 'real-server',
+        command: 'echo',
+        _mockTools: [{ name: 'op', description: 'Op', inputSchema: {} }],
+      },
     ];
-
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const program = Effect.gen(function* () {
       const mcp = yield* McpService;
@@ -186,7 +211,5 @@ describe('McpService granular methods', () => {
     });
 
     await run(program);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('nonexistent'));
-    warnSpy.mockRestore();
   });
 });

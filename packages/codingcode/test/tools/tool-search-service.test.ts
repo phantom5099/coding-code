@@ -26,10 +26,12 @@ function makeDeferred(name: string, shortDesc?: string): ToolDefinition {
 
 /** Reset the module-level loaded state via Effect. */
 function resetSearch(): Promise<void> {
-  return run(Effect.gen(function* () {
-    const svc = yield* ToolSearchService;
-    svc.reset();
-  }));
+  return run(
+    Effect.gen(function* () {
+      const svc = yield* ToolSearchService;
+      svc.reset();
+    })
+  );
 }
 
 describe('ToolSearchService', () => {
@@ -45,8 +47,8 @@ describe('ToolSearchService', () => {
 
       const svc = yield* ToolSearchService;
       const unloaded = svc.listUnloadedDeferred('agent-1');
-      expect(unloaded.map(t => t.name)).toContain('def_a');
-      expect(unloaded.map(t => t.name)).toContain('def_b');
+      expect(unloaded.map((t) => t.name)).toContain('def_a');
+      expect(unloaded.map((t) => t.name)).toContain('def_b');
     });
     await run(program);
   });
@@ -60,13 +62,13 @@ describe('ToolSearchService', () => {
 
       const svc = yield* ToolSearchService;
       const hits = svc.search('agent-1', 'todo');
-      const hitNames = hits.map(h => h.name).sort();
+      const hitNames = hits.map((h) => h.name).sort();
       expect(hitNames).toContain('todo_read');
       expect(hitNames).toContain('todo_write');
       expect(hitNames).not.toContain('z_other');
 
       // Loaded tools are no longer in unloaded list
-      const unloadedNames = svc.listUnloadedDeferred('agent-1').map(t => t.name);
+      const unloadedNames = svc.listUnloadedDeferred('agent-1').map((t) => t.name);
       expect(unloadedNames).not.toContain('todo_read');
       expect(unloadedNames).not.toContain('todo_write');
       expect(unloadedNames).toContain('z_other');

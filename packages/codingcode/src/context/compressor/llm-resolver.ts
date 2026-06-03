@@ -16,7 +16,7 @@ import type { ContextConfig } from '../config.js';
  */
 export async function resolveCompactionLLM(
   config: ContextConfig,
-  fallback: LLMClient | null,
+  fallback: LLMClient | null
 ): Promise<LLMClient | null> {
   const target = config.compactionModel?.trim();
   if (!target) return fallback;

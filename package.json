@@ -13,6 +13,10 @@
     "dev": "tsx --watch packages/codingcode/src/cli.ts",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint \"packages/*/src/**/*.ts\" \"packages/*/src/**/*.tsx\" \"packages/*/test/**/*.ts\"",
+    "lint:fix": "eslint \"packages/*/src/**/*.ts\" \"packages/*/src/**/*.tsx\" \"packages/*/test/**/*.ts\" --fix",
+    "format": "prettier --write \"packages/**/*.{ts,tsx,json}\" \"*.json\" \"*.ts\"",
+    "format:check": "prettier --check \"packages/**/*.{ts,tsx,json}\" \"*.json\" \"*.ts\"",
     "debug": "tsx src/debug.ts"
   },
   "dependencies": {
@@ -35,10 +39,14 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
+    "eslint": "^10.4.1",
     "playwright-core": "^1.60.0",
+    "prettier": "^3.8.3",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
+    "typescript-eslint": "^8.60.1",
     "vitest": "^3.0.0"
   }
 }

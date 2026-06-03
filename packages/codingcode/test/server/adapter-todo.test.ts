@@ -40,7 +40,10 @@ describe('agentEventToSseEvent with TodoUpdate', () => {
   });
 
   it('should return structured event for Step, null for LlmChunk (handled by toSseEvents)', () => {
-    expect(agentEventToSseEvent({ _tag: 'Step', step: 1, max: 5 })).toEqual({ type: 'step', step: 1 });
+    expect(agentEventToSseEvent({ _tag: 'Step', step: 1, max: 5 })).toEqual({
+      type: 'step',
+      step: 1,
+    });
     expect(agentEventToSseEvent({ _tag: 'LlmChunk', text: 'hi' })).toBeNull();
   });
 });

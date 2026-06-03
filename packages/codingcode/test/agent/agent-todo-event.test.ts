@@ -23,20 +23,31 @@ const mockToolSearch = {
 };
 
 const mockAgentService = {
-  runStream: () => { throw new Error('not implemented'); },
+  runStream: () => {
+    throw new Error('not implemented');
+  },
 };
 
 const mockCtx = {
-  build: (_sessionId: string) => Effect.sync(() => [{ role: 'user' as const, content: 'hi' }]),
-  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: false, released: 0 }),
-  compress: (_sessionId: string, _llm?: any, _config?: any) => Effect.succeed({ didCompress: true, released: 1000 }),
+  build: (_sessionId: string) =>
+    Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] })),
+  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) =>
+    Effect.succeed({ didCompress: false, released: 0 }),
+  compress: (_sessionId: string, _llm?: any, _config?: any) =>
+    Effect.succeed({ didCompress: true, released: 1000 }),
+  compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
 };
 
 const mockSession = {
   recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
     Effect.sync(() => ({ uuid: 'a1' })),
-  recordToolResult: (_state: any, _parentUuid: string, _toolName: string, _toolCallId: string, _output: string) =>
-    Effect.sync(() => ({})),
+  recordToolResult: (
+    _state: any,
+    _parentUuid: string,
+    _toolName: string,
+    _toolCallId: string,
+    _output: string
+  ) => Effect.sync(() => ({})),
 };
 
 const mockCheckpoint = {
@@ -59,12 +70,12 @@ const mockState = {
 const mockLlm = {
   completeStream: (_params: any) => ({
     stream: (async function* () {})(),
-    response: Promise.resolve(Result.ok({
-      content: '',
-      toolCalls: [
-        { id: 'tc1', name: 'execute_command', arguments: { command: 'echo hi' } },
-      ],
-    })),
+    response: Promise.resolve(
+      Result.ok({
+        content: '',
+        toolCalls: [{ id: 'tc1', name: 'execute_command', arguments: { command: 'echo hi' } }],
+      })
+    ),
   }),
 };
 
@@ -77,13 +88,19 @@ describe('TodoUpdate event', () => {
 
     const mockExecutor = {
       execute: () => Effect.succeed('done'),
-      executeBatch: () => Effect.succeed([
-        { type: 'ok' as const, id: 'tc1', name: 'todo_write', output: 'pending=1 completed=1 in_progress=0' },
-      ]),
+      executeBatch: () =>
+        Effect.succeed([
+          {
+            type: 'ok' as const,
+            id: 'tc1',
+            name: 'todo_write',
+            output: 'pending=1 completed=1 in_progress=0',
+          },
+        ]),
     };
 
     const gen = runReActLoop(
-      { state: mockState, llm: mockLlm as any },
+      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
       {
         maxSteps: 1,
         maxStopContinuations: 2,
@@ -98,7 +115,7 @@ describe('TodoUpdate event', () => {
           emit: () => Effect.succeed(undefined),
           emitDecision: () => Effect.succeed(null),
         } as any,
-      },
+      }
     );
 
     const events: any[] = [];
@@ -119,13 +136,17 @@ describe('TodoUpdate event', () => {
 
     const mockExecutor = {
       execute: () => Effect.succeed('done'),
-      executeBatch: () => Effect.succeed([
-        { type: 'ok' as const, id: 'tc1', name: 'read_file', output: 'file content' },
-      ]),
+      executeBatch: () =>
+        Effect.succeed([
+          { type: 'ok' as const, id: 'tc1', name: 'read_file', output: 'file content' },
+        ]),
     };
 
     const gen = runReActLoop(
-      { state: { ...mockState, sessionId: 'non-todo' }, llm: mockLlm as any },
+      {
+        state: { ...mockState, sessionId: 'non-todo' },
+        llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
+      },
       {
         maxSteps: 1,
         maxStopContinuations: 2,
@@ -140,7 +161,7 @@ describe('TodoUpdate event', () => {
           emit: () => Effect.succeed(undefined),
           emitDecision: () => Effect.succeed(null),
         } as any,
-      },
+      }
     );
 
     const events: any[] = [];

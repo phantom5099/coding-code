@@ -7,11 +7,21 @@ import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const searchTool: ToolDefinition = {
   name: 'search_code',
-  description: 'Search for a text or regex pattern in project files and return matching file paths and line content.',
+  description:
+    'Search for a text or regex pattern in project files and return matching file paths and line content.',
   parameters: z.object({
     pattern: z.string().describe('Text or regex pattern to search for'),
-    glob: z.string().default('**/*').describe("File glob pattern to filter which files to search (e.g. 'src/**/*.ts')"),
-    max_results: z.number().int().min(1).max(100).default(30).describe('Maximum number of matches to return'),
+    glob: z
+      .string()
+      .default('**/*')
+      .describe("File glob pattern to filter which files to search (e.g. 'src/**/*.ts')"),
+    max_results: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(30)
+      .describe('Maximum number of matches to return'),
   }),
   execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { pattern, glob, max_results } = args as any;

@@ -1,5 +1,12 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getEffectiveTypes, getAllTypesWithStatus, setMemoryTypeDisabled, addMemoryExtraType, updateMemoryExtraType, deleteMemoryExtraType } from '../../src/memory/config.js';
+import {
+  getEffectiveTypes,
+  getAllTypesWithStatus,
+  setMemoryTypeDisabled,
+  addMemoryExtraType,
+  updateMemoryExtraType,
+  deleteMemoryExtraType,
+} from '../../src/memory/config.js';
 import type { MemoryConfig, MemoryTypeConfig } from '@codingcode/infra';
 
 // mock the infra persistence functions (hoisted to top so vi.mock factory can access them)
@@ -8,7 +15,7 @@ const { mockUpdateDisabledTypes, mockUpdateExtraTypes } = vi.hoisted(() => ({
   mockUpdateExtraTypes: vi.fn(),
 }));
 vi.mock('@codingcode/infra', async (importOriginal) => {
-  const actual = await importOriginal() as Record<string, unknown>;
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     updateMemoryDisabledTypes: mockUpdateDisabledTypes,
@@ -51,9 +58,9 @@ describe('Memory Config', () => {
 
       const types = getEffectiveTypes(cfg);
       expect(types).toHaveLength(3);
-      expect(types.map(t => t.name)).toContain('user');
-      expect(types.map(t => t.name)).toContain('project');
-      expect(types.map(t => t.name)).toContain('reference');
+      expect(types.map((t) => t.name)).toContain('user');
+      expect(types.map((t) => t.name)).toContain('project');
+      expect(types.map((t) => t.name)).toContain('reference');
     });
 
     it('appends extra types', () => {
@@ -77,7 +84,7 @@ describe('Memory Config', () => {
 
       const types = getEffectiveTypes(cfg);
       expect(types).toHaveLength(4);
-      expect(types.map(t => t.name)).toContain('custom');
+      expect(types.map((t) => t.name)).toContain('custom');
     });
 
     it('filters disabled types', () => {
@@ -117,7 +124,7 @@ describe('Memory Config', () => {
       };
 
       const types = getEffectiveTypes(cfg);
-      expect(types.map(t => t.name)).not.toContain('custom');
+      expect(types.map((t) => t.name)).not.toContain('custom');
     });
 
     it('respects type.enabled flag', () => {
@@ -140,40 +147,44 @@ describe('Memory Config', () => {
       };
 
       const types = getEffectiveTypes(cfg);
-      expect(types.map(t => t.name)).not.toContain('disabled_custom');
+      expect(types.map((t) => t.name)).not.toContain('disabled_custom');
     });
   });
 
   describe('getAllTypesWithStatus', () => {
     it('returns built-in types with isBuiltIn true', () => {
       const types = getAllTypesWithStatus(makeCfg());
-      const builtIn = types.filter(t => t.isBuiltIn);
+      const builtIn = types.filter((t) => t.isBuiltIn);
       expect(builtIn).toHaveLength(3);
-      expect(builtIn.map(t => t.name)).toEqual(['user', 'project', 'reference']);
+      expect(builtIn.map((t) => t.name)).toEqual(['user', 'project', 'reference']);
     });
 
     it('marks types in disabledTypes as disabled', () => {
       const cfg = makeCfg({ disabledTypes: ['user'] });
       const types = getAllTypesWithStatus(cfg);
-      expect(types.find(t => t.name === 'user')?.disabled).toBe(true);
-      expect(types.find(t => t.name === 'project')?.disabled).toBe(false);
+      expect(types.find((t) => t.name === 'user')?.disabled).toBe(true);
+      expect(types.find((t) => t.name === 'project')?.disabled).toBe(false);
     });
 
     it('includes extra types with isBuiltIn false', () => {
-      const extra: MemoryTypeConfig[] = [{ name: 'custom', description: 'Custom type', enabled: true }];
+      const extra: MemoryTypeConfig[] = [
+        { name: 'custom', description: 'Custom type', enabled: true },
+      ];
       const cfg = makeCfg({ extraTypes: extra });
       const types = getAllTypesWithStatus(cfg);
       expect(types).toHaveLength(4);
-      const custom = types.find(t => t.name === 'custom');
+      const custom = types.find((t) => t.name === 'custom');
       expect(custom?.isBuiltIn).toBe(false);
       expect(custom?.description).toBe('Custom type');
     });
 
     it('marks disabled extra types correctly', () => {
-      const extra: MemoryTypeConfig[] = [{ name: 'custom', description: 'Custom type', enabled: true }];
+      const extra: MemoryTypeConfig[] = [
+        { name: 'custom', description: 'Custom type', enabled: true },
+      ];
       const cfg = makeCfg({ extraTypes: extra, disabledTypes: ['custom'] });
       const types = getAllTypesWithStatus(cfg);
-      expect(types.find(t => t.name === 'custom')?.disabled).toBe(true);
+      expect(types.find((t) => t.name === 'custom')?.disabled).toBe(true);
     });
   });
 
@@ -213,7 +224,9 @@ describe('Memory Config', () => {
     });
 
     it('appends to existing extraTypes', () => {
-      const extra: MemoryTypeConfig[] = [{ name: 'existing', description: 'Existing', enabled: true }];
+      const extra: MemoryTypeConfig[] = [
+        { name: 'existing', description: 'Existing', enabled: true },
+      ];
       const cfg = makeCfg({ extraTypes: extra });
       addMemoryExtraType({ name: 'new_type', description: 'New', enabled: true }, cfg);
       expect(mockUpdateExtraTypes).toHaveBeenCalledWith([
@@ -223,10 +236,13 @@ describe('Memory Config', () => {
     });
 
     it('throws on duplicate name', () => {
-      const extra: MemoryTypeConfig[] = [{ name: 'custom', description: 'Existing', enabled: true }];
+      const extra: MemoryTypeConfig[] = [
+        { name: 'custom', description: 'Existing', enabled: true },
+      ];
       const cfg = makeCfg({ extraTypes: extra });
-      expect(() => addMemoryExtraType({ name: 'custom', description: 'Dupe', enabled: true }, cfg))
-        .toThrow('already exists');
+      expect(() =>
+        addMemoryExtraType({ name: 'custom', description: 'Dupe', enabled: true }, cfg)
+      ).toThrow('already exists');
     });
   });
 
@@ -234,7 +250,11 @@ describe('Memory Config', () => {
     it('updates existing extra type', () => {
       const extra: MemoryTypeConfig[] = [{ name: 'custom', description: 'Old', enabled: true }];
       const cfg = makeCfg({ extraTypes: extra });
-      updateMemoryExtraType('custom', { name: 'custom', description: 'Updated', enabled: true }, cfg);
+      updateMemoryExtraType(
+        'custom',
+        { name: 'custom', description: 'Updated', enabled: true },
+        cfg
+      );
       expect(mockUpdateExtraTypes).toHaveBeenCalledWith([
         { name: 'custom', description: 'Updated', enabled: true },
       ]);
@@ -243,7 +263,11 @@ describe('Memory Config', () => {
     it('renames an extra type', () => {
       const extra: MemoryTypeConfig[] = [{ name: 'old_name', description: 'Desc', enabled: true }];
       const cfg = makeCfg({ extraTypes: extra });
-      updateMemoryExtraType('old_name', { name: 'new_name', description: 'Desc', enabled: true }, cfg);
+      updateMemoryExtraType(
+        'old_name',
+        { name: 'new_name', description: 'Desc', enabled: true },
+        cfg
+      );
       expect(mockUpdateExtraTypes).toHaveBeenCalledWith([
         { name: 'new_name', description: 'Desc', enabled: true },
       ]);
@@ -251,8 +275,9 @@ describe('Memory Config', () => {
 
     it('throws if not found', () => {
       const cfg = makeCfg();
-      expect(() => updateMemoryExtraType('nonexistent', { name: 'x', description: 'x', enabled: true }, cfg))
-        .toThrow('not found');
+      expect(() =>
+        updateMemoryExtraType('nonexistent', { name: 'x', description: 'x', enabled: true }, cfg)
+      ).toThrow('not found');
     });
 
     it('throws on rename conflict', () => {
@@ -261,8 +286,9 @@ describe('Memory Config', () => {
         { name: 'b', description: 'B', enabled: true },
       ];
       const cfg = makeCfg({ extraTypes: extra });
-      expect(() => updateMemoryExtraType('a', { name: 'b', description: 'Overwrite', enabled: true }, cfg))
-        .toThrow('already exists');
+      expect(() =>
+        updateMemoryExtraType('a', { name: 'b', description: 'Overwrite', enabled: true }, cfg)
+      ).toThrow('already exists');
     });
   });
 

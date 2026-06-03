@@ -5,8 +5,17 @@ import type { ContextConfig } from '../../../src/context/config.js';
 
 const fakeFallback: LLMClient = {
   complete: async () => ({ ok: true as const, value: { content: '', finishReason: 'stop' } }),
-  completeStream: () => ({ stream: (async function* () {})(), response: Promise.resolve({ ok: true as const, value: { content: '', finishReason: 'stop' } }) }),
-  modelInfo: { provider: 'fake', model: 'fake', maxTokens: 1, supportsToolCalling: false, supportsStreaming: false },
+  completeStream: () => ({
+    stream: (async function* () {})(),
+    response: Promise.resolve({ ok: true as const, value: { content: '', finishReason: 'stop' } }),
+  }),
+  modelInfo: {
+    provider: 'fake',
+    model: 'fake',
+    maxTokens: 1,
+    supportsToolCalling: false,
+    supportsStreaming: false,
+  },
 };
 
 function cfg(compactionModel: string): ContextConfig {

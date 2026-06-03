@@ -22,21 +22,39 @@ export class AgentError extends Error {
     public readonly code: ErrorCode,
     message: string,
     public readonly cause?: unknown,
-    public readonly context?: Record<string, unknown>,
+    public readonly context?: Record<string, unknown>
   ) {
     super(`[${code}] ${message}`);
     this.name = 'AgentError';
   }
 
-  static llmTimeout() { return new AgentError('LLM_TIMEOUT', 'LLM call timed out'); }
-  static llmFailed(msg: unknown) { return new AgentError('LLM_FAILED', String(msg)); }
-  static contextOverflow(provider: string, cause?: unknown) { return new AgentError('CONTEXT_OVERFLOW', `Context window exceeded for ${provider}`, cause); }
-  static toolNotFound(name: string) { return new AgentError('TOOL_NOT_FOUND', `Tool "${name}" not found`); }
-  static toolNotAllowed(name: string) { return new AgentError('TOOL_NOT_ALLOWED', `Tool "${name}" is not allowed`); }
-  static toolExecutionFailed(name: string, e: unknown) { return new AgentError('TOOL_EXECUTION_FAILED', `Tool "${name}" failed: ${String(e)}`, e); }
-  static pathNotAllowed(path: string) { return new AgentError('PATH_NOT_ALLOWED', `Path "${path}" is outside allowed scope`); }
-  static maxStepsReached(max: number) { return new AgentError('MAX_STEPS_REACHED', `Max steps (${max}) reached`); }
-  static configMissing(msg: string) { return new AgentError('CONFIG_MISSING', msg); }
+  static llmTimeout() {
+    return new AgentError('LLM_TIMEOUT', 'LLM call timed out');
+  }
+  static llmFailed(msg: unknown) {
+    return new AgentError('LLM_FAILED', String(msg));
+  }
+  static contextOverflow(provider: string, cause?: unknown) {
+    return new AgentError('CONTEXT_OVERFLOW', `Context window exceeded for ${provider}`, cause);
+  }
+  static toolNotFound(name: string) {
+    return new AgentError('TOOL_NOT_FOUND', `Tool "${name}" not found`);
+  }
+  static toolNotAllowed(name: string) {
+    return new AgentError('TOOL_NOT_ALLOWED', `Tool "${name}" is not allowed`);
+  }
+  static toolExecutionFailed(name: string, e: unknown) {
+    return new AgentError('TOOL_EXECUTION_FAILED', `Tool "${name}" failed: ${String(e)}`, e);
+  }
+  static pathNotAllowed(path: string) {
+    return new AgentError('PATH_NOT_ALLOWED', `Path "${path}" is outside allowed scope`);
+  }
+  static maxStepsReached(max: number) {
+    return new AgentError('MAX_STEPS_REACHED', `Max steps (${max}) reached`);
+  }
+  static configMissing(msg: string) {
+    return new AgentError('CONFIG_MISSING', msg);
+  }
   static sessionNotFound(sessionId: string) {
     return new AgentError('SESSION_NOT_FOUND', `Session "${sessionId}" not found`);
   }
@@ -45,7 +63,7 @@ export class AgentError extends Error {
       'SESSION_WORKSPACE_MISMATCH',
       `Session "${sessionId}" belongs to a different project. cd to: ${expectedCwd}`,
       undefined,
-      { sessionId, expectedCwd },
+      { sessionId, expectedCwd }
     );
   }
 

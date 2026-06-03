@@ -43,12 +43,16 @@ describe('ToolExecCtx propagation', () => {
       const executor = yield* ToolExecutorService;
       yield* tools.register(stubTool);
       yield* allowTool('ctx_capture');
-      const result = yield* executor.execute('ctx_capture', {}, {
-        signal: undefined,
-        sessionId: 'sess-1',
-        turnId: 5,
-        projectPath: '/proj',
-      });
+      const result = yield* executor.execute(
+        'ctx_capture',
+        {},
+        {
+          signal: undefined,
+          sessionId: 'sess-1',
+          turnId: 5,
+          projectPath: '/proj',
+        }
+      );
       return result;
     });
 
@@ -77,11 +81,15 @@ describe('ToolExecCtx propagation', () => {
       const executor = yield* ToolExecutorService;
       yield* tools.register(stubTool);
       yield* allowTool('ctx_no_agent');
-      yield* executor.execute('ctx_no_agent', {}, {
-        sessionId: 'sess-2',
-        turnId: 1,
-        projectPath: '/proj',
-      });
+      yield* executor.execute(
+        'ctx_no_agent',
+        {},
+        {
+          sessionId: 'sess-2',
+          turnId: 1,
+          projectPath: '/proj',
+        }
+      );
     });
 
     await runWithLayer(program);

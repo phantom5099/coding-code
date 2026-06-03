@@ -1,8 +1,5 @@
 ﻿import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  getGlobalPermissionMode,
-  setGlobalPermissionMode,
-} from '../../src/approval/index.js';
+import { getGlobalPermissionMode, setGlobalPermissionMode } from '../../src/approval/index.js';
 
 describe('Global permission mode state', () => {
   beforeEach(() => {

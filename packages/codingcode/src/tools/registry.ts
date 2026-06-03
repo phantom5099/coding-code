@@ -29,20 +29,20 @@ export class ToolService extends Effect.Service<ToolService>()('ToolService', {
         })),
 
       filter: (names: string[]): ToolDefinition[] =>
-        names
-          .map((n) => tools.get(n))
-          .filter((t): t is ToolDefinition => t !== undefined),
+        names.map((n) => tools.get(n)).filter((t): t is ToolDefinition => t !== undefined),
 
       allDeferred: (): ToolDefinition[] =>
-        Array.from(tools.values()).filter(t => t.deferred === true),
+        Array.from(tools.values()).filter((t) => t.deferred === true),
 
       allCore: (): ToolDefinition[] =>
-        Array.from(tools.values()).filter(t => t.deferred !== true),
+        Array.from(tools.values()).filter((t) => t.deferred !== true),
 
       getDef: (name: string): ToolDefinition | undefined => tools.get(name),
 
       unregister: (name: string): Effect.Effect<void> =>
-        Effect.sync(() => { tools.delete(name); }),
+        Effect.sync(() => {
+          tools.delete(name);
+        }),
     };
   }),
 }) {}

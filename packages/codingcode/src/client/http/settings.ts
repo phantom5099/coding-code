@@ -6,7 +6,10 @@ import type { createRequestHelpers } from './request.js';
 
 export interface SettingsClient {
   getMemoryEnabled(): Promise<boolean>;
-  getMemoryConfig(): Promise<{ enabled: boolean; types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }> }>;
+  getMemoryConfig(): Promise<{
+    enabled: boolean;
+    types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
+  }>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
   setMemoryTypeDisabled(name: string, disabled: boolean): Promise<void>;
   addMemoryExtraType(type: { name: string; description: string }): Promise<void>;
@@ -36,7 +39,7 @@ export interface SettingsClient {
 }
 
 export function createHttpSettingsClient(
-  request: ReturnType<typeof createRequestHelpers>,
+  request: ReturnType<typeof createRequestHelpers>
 ): SettingsClient {
   const { apiGet, apiPost, apiPut, apiDelete } = request;
 
@@ -148,7 +151,9 @@ export function createHttpSettingsClient(
     },
 
     async setHookDisabled({ cwd, name, disabled }) {
-      await apiPost(`/api/settings/hooks/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, { disabled });
+      await apiPost(`/api/settings/hooks/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, {
+        disabled,
+      });
     },
 
     async getGlobalPermissionMode() {

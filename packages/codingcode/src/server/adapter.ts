@@ -13,7 +13,13 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
     case 'ApprovalRequest':
       return { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
     case 'ToolResult':
-      return { type: 'tool_result', id: event.id, name: event.name, output: event.output, ok: event.ok };
+      return {
+        type: 'tool_result',
+        id: event.id,
+        name: event.name,
+        output: event.output,
+        ok: event.ok,
+      };
     case 'ToolDenied':
       return { type: 'tool_denied', id: event.id, name: event.name, reason: event.reason };
     case 'Error':
@@ -23,7 +29,12 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
     case 'TodoUpdate':
       return { type: 'todo_update', items: event.items as unknown as Record<string, unknown>[] };
     case 'Usage':
-      return { type: 'usage', prompt: event.prompt, completion: event.completion, total: event.total };
+      return {
+        type: 'usage',
+        prompt: event.prompt,
+        completion: event.completion,
+        total: event.total,
+      };
     case 'LlmChunk':
     case 'Assistant':
     case 'ReactiveCompact':
@@ -34,7 +45,7 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
 }
 
 export async function* toSseEvents(
-  source: AsyncGenerator<AgentEvent, any, unknown>,
+  source: AsyncGenerator<AgentEvent, any, unknown>
 ): AsyncGenerator<SseEvent, void, unknown> {
   let currentStep = 0;
   for await (const event of source) {

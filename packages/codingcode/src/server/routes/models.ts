@@ -12,7 +12,7 @@ modelsRouter.get('/', (c) => {
 });
 
 modelsRouter.post('/switch', async (c) => {
-  const { modelId } = await c.req.json() as { modelId: string };
+  const { modelId } = (await c.req.json()) as { modelId: string };
   const result = switchModel(modelId);
   return c.json({ ok: result.ok, error: result.ok ? undefined : result.error.message });
 });

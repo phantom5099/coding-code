@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { parseUnifiedDiff } from '../lib/diff-parser'
+import { useState } from 'react';
+import { parseUnifiedDiff } from '../lib/diff-parser';
 
 interface UnifiedDiffViewProps {
-  diff: string
+  diff: string;
 }
 
 function DiffLineView({
@@ -11,32 +11,26 @@ function DiffLineView({
   type,
   text,
 }: {
-  oldLineNum: number | null
-  newLineNum: number | null
-  type: 'context' | 'add' | 'remove'
-  text: string
+  oldLineNum: number | null;
+  newLineNum: number | null;
+  type: 'context' | 'add' | 'remove';
+  text: string;
 }) {
   const borderColor =
     type === 'add'
       ? 'border-l-[#2a6a2a]'
       : type === 'remove'
         ? 'border-l-[#6a2a2a]'
-        : 'border-l-transparent'
+        : 'border-l-transparent';
   const bgColor =
-    type === 'add'
-      ? 'bg-[#1a2f1a]'
-      : type === 'remove'
-        ? 'bg-[#2f1a1a]'
-        : 'bg-transparent'
+    type === 'add' ? 'bg-[#1a2f1a]' : type === 'remove' ? 'bg-[#2f1a1a]' : 'bg-transparent';
   const textColor =
-    type === 'add'
-      ? 'text-[#7ee787]'
-      : type === 'remove'
-        ? 'text-[#ffa198]'
-        : 'text-[#aaa]'
+    type === 'add' ? 'text-[#7ee787]' : type === 'remove' ? 'text-[#ffa198]' : 'text-[#aaa]';
 
   return (
-    <div className={`flex font-mono text-[12px] leading-[1.6] ${bgColor} border-l-[3px] ${borderColor}`}>
+    <div
+      className={`flex font-mono text-[12px] leading-[1.6] ${bgColor} border-l-[3px] ${borderColor}`}
+    >
       <div className="w-10 shrink-0 text-right pr-2 text-[#555] select-none tabular-nums">
         {oldLineNum ?? ''}
       </div>
@@ -47,15 +41,11 @@ function DiffLineView({
         {text || '\u00A0'}
       </div>
     </div>
-  )
+  );
 }
 
-function DiffFileView({
-  file,
-}: {
-  file: import('../lib/diff-parser').ParsedDiffFile
-}) {
-  const [collapsed, setCollapsed] = useState(false)
+function DiffFileView({ file }: { file: import('../lib/diff-parser').ParsedDiffFile }) {
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <div className="mb-2 last:mb-0">
@@ -102,14 +92,14 @@ function DiffFileView({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 export default function UnifiedDiffView({ diff }: UnifiedDiffViewProps) {
-  const parsed = parseUnifiedDiff(diff)
+  const parsed = parseUnifiedDiff(diff);
 
   if (parsed.length === 0) {
-    return <div className="text-[12px] text-[#555] px-3 py-2">无差异</div>
+    return <div className="text-[12px] text-[#555] px-3 py-2">无差异</div>;
   }
 
   return (
@@ -118,5 +108,5 @@ export default function UnifiedDiffView({ diff }: UnifiedDiffViewProps) {
         <DiffFileView key={file.fileName} file={file} />
       ))}
     </div>
-  )
+  );
 }

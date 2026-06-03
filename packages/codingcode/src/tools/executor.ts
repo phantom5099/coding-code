@@ -21,8 +21,19 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
     function execute(
       name: string,
       args: unknown,
-      opts?: { signal?: AbortSignal; sessionId?: string; turnId?: number; projectPath?: string; approval?: any; agentRunner?: any; callId?: string },
-    ): Effect.Effect<{ output: string; diff?: string; filePath?: string; insertions?: number; deletions?: number }, AgentError> {
+      opts?: {
+        signal?: AbortSignal;
+        sessionId?: string;
+        turnId?: number;
+        projectPath?: string;
+        approval?: any;
+        agentRunner?: any;
+        callId?: string;
+      }
+    ): Effect.Effect<
+      { output: string; diff?: string; filePath?: string; insertions?: number; deletions?: number },
+      AgentError
+    > {
       return Effect.gen(function* () {
         // All services captured from outer closure — no yield* needed for them
         const toolResult = registry.get(name);
@@ -45,16 +56,12 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
             reason: decision.reason,
             source: decision.source,
           });
-          return yield* Effect.fail(
-            new AgentError('TOOL_NOT_ALLOWED', decision.reason),
-          );
+          return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', decision.reason));
         }
 
         // Use modified input from pipeline if present
         let finalArgs: Record<string, unknown> =
-          decision.type === 'modified'
-            ? decision.input
-            : (args as Record<string, unknown>);
+          decision.type === 'modified' ? decision.input : (args as Record<string, unknown>);
 
         // 2. Hook PreToolUse
         const hookDecision = yield* hooks.emitDecision('tool.approval.pre', {
@@ -70,7 +77,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
             source: 'hook',
           });
           return yield* Effect.fail(
-            new AgentError('TOOL_NOT_ALLOWED', hookDecision.reason ?? 'denied by hook'),
+            new AgentError('TOOL_NOT_ALLOWED', hookDecision.reason ?? 'denied by hook')
           );
         }
 
@@ -102,11 +109,21 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
             agentRunner: opts?.agentRunner,
           });
           if (!opts?.signal) return execPromise;
-          if (opts.signal.aborted) return Promise.reject(Object.assign(new Error('Tool execution aborted'), { name: 'AbortError' }));
+          if (opts.signal.aborted)
+            return Promise.reject(
+              Object.assign(new Error('Tool execution aborted'), { name: 'AbortError' })
+            );
           return Promise.race([
             execPromise,
             new Promise<string>((_, reject) => {
-              opts.signal!.addEventListener('abort', () => reject(Object.assign(new Error('Tool execution aborted'), { name: 'AbortError' })), { once: true });
+              opts.signal!.addEventListener(
+                'abort',
+                () =>
+                  reject(
+                    Object.assign(new Error('Tool execution aborted'), { name: 'AbortError' })
+                  ),
+                { once: true }
+              );
             }),
           ]);
         };
@@ -114,7 +131,8 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         const result = yield* Effect.tryPromise({
           try: () => execWithAbort(),
           catch: (e) => {
-            if ((e as Error)?.name === 'AbortError') return new AgentError('TOOL_NOT_ALLOWED', (e as Error).message);
+            if ((e as Error)?.name === 'AbortError')
+              return new AgentError('TOOL_NOT_ALLOWED', (e as Error).message);
             return e instanceof AgentError ? e : AgentError.toolExecutionFailed(name, e);
           },
         });
@@ -137,32 +155,72 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
             toolName: name,
             args: args as Record<string, unknown>,
             error,
-          }),
-        ),
+          })
+        )
       );
     }
 
-    function execSingle(tc: ToolCall, sessionId?: string, opts?: { turnId?: number; projectPath?: string; signal?: AbortSignal; approval?: any; agentRunner?: any }): Effect.Effect<ToolResultUnion> {
+    function execSingle(
+      tc: ToolCall,
+      sessionId?: string,
+      opts?: {
+        turnId?: number;
+        projectPath?: string;
+        signal?: AbortSignal;
+        approval?: any;
+        agentRunner?: any;
+      }
+    ): Effect.Effect<ToolResultUnion> {
       return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
         Effect.matchEffect({
           onSuccess: (result): Effect.Effect<ToolResultUnion> =>
-            Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output: result.output }),
+            Effect.succeed({
+              type: 'ok' as const,
+              id: tc.id,
+              name: tc.name,
+              output: result.output,
+            }),
           onFailure: (err): Effect.Effect<ToolResultUnion> => {
             if (err instanceof AgentError && err.code === 'TOOL_NOT_ALLOWED') {
-              return Effect.succeed({ type: 'denied' as const, id: tc.id, name: tc.name, reason: err.message });
+              return Effect.succeed({
+                type: 'denied' as const,
+                id: tc.id,
+                name: tc.name,
+                reason: err.message,
+              });
             }
             const code = err instanceof AgentError ? err.code : 'TOOL_EXECUTION_FAILED';
             const msg = err instanceof AgentError ? err.message : String(err);
-            return Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: `[Error: ${code}] ${msg}` });
+            return Effect.succeed({
+              type: 'error' as const,
+              id: tc.id,
+              name: tc.name,
+              output: `[Error: ${code}] ${msg}`,
+            });
           },
         }),
         Effect.catchAllDefect((defect) =>
-          Effect.succeed({ type: 'error' as const, id: tc.id, name: tc.name, output: `[Unexpected] ${String(defect)}` }),
-        ),
+          Effect.succeed({
+            type: 'error' as const,
+            id: tc.id,
+            name: tc.name,
+            output: `[Unexpected] ${String(defect)}`,
+          })
+        )
       );
     }
 
-    function executeBatch(toolCalls: ToolCall[], sessionId?: string, opts?: { turnId?: number; projectPath?: string; signal?: AbortSignal; approval?: any; agentRunner?: any }): Effect.Effect<ToolResultUnion[]> {
+    function executeBatch(
+      toolCalls: ToolCall[],
+      sessionId?: string,
+      opts?: {
+        turnId?: number;
+        projectPath?: string;
+        signal?: AbortSignal;
+        approval?: any;
+        agentRunner?: any;
+      }
+    ): Effect.Effect<ToolResultUnion[]> {
       return Effect.gen(function* () {
         // Separate safe & destructive tools: safe tools run in parallel, Bash runs serially
         const safeTools: ToolCall[] = [];
@@ -182,11 +240,16 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           (tc) => {
             // Check abort before each tool
             if (opts?.signal?.aborted) {
-              return Effect.succeed({ type: 'denied' as const, id: tc.id, name: tc.name, reason: 'aborted' });
+              return Effect.succeed({
+                type: 'denied' as const,
+                id: tc.id,
+                name: tc.name,
+                reason: 'aborted',
+              });
             }
             return execSingle(tc, sessionId, opts);
           },
-          { concurrency: 'unbounded' },
+          { concurrency: 'unbounded' }
         );
 
         // Bash tools — serial (avoid race conditions)
@@ -194,7 +257,12 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         for (const tc of bashTools) {
           // Check abort before each tool
           if (opts?.signal?.aborted) {
-            bashResults.push({ type: 'denied' as const, id: tc.id, name: tc.name, reason: 'aborted' });
+            bashResults.push({
+              type: 'denied' as const,
+              id: tc.id,
+              name: tc.name,
+              reason: 'aborted',
+            });
             continue;
           }
           const r = yield* execSingle(tc, sessionId, opts);

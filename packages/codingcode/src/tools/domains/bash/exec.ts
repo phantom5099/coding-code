@@ -7,7 +7,8 @@ import { AgentError } from '../../../core/error.js';
 
 export const bashTool: ToolDefinition = {
   name: 'execute_command',
-  description: 'Execute a shell command and return its output. Use for running tests, git, npm, build, and other CLI operations.',
+  description:
+    'Execute a shell command and return its output. Use for running tests, git, npm, build, and other CLI operations.',
   parameters: z.object({
     command: z.string().describe('The shell command to execute'),
     cwd: z.string().optional().describe('Working directory (defaults to project root)'),
@@ -28,7 +29,9 @@ export const bashTool: ToolDefinition = {
       let stderr = '';
 
       // Kill process when abort signal fires (e.g. user clicks stop)
-      const onAbort = () => { proc.kill(); };
+      const onAbort = () => {
+        proc.kill();
+      };
       ctx?.signal?.addEventListener('abort', onAbort, { once: true });
 
       proc.stdout?.on('data', (data: Buffer) => {
@@ -46,9 +49,7 @@ export const bashTool: ToolDefinition = {
 
       const timer = setTimeout(() => {
         proc.kill();
-        resolve(
-          `Command timed out after ${timeout_ms}ms\nStdout:\n${stdout}\nStderr:\n${stderr}`,
-        );
+        resolve(`Command timed out after ${timeout_ms}ms\nStdout:\n${stdout}\nStderr:\n${stderr}`);
       }, timeout_ms);
 
       proc.on('close', (code) => {
@@ -61,14 +62,16 @@ export const bashTool: ToolDefinition = {
             stderr ? `Stderr:\n${stderr}` : '',
           ]
             .filter(Boolean)
-            .join('\n') || '(no output)',
+            .join('\n') || '(no output)'
         );
       });
 
       proc.on('error', (err) => {
         clearTimeout(timer);
         ctx?.signal?.removeEventListener('abort', onAbort);
-        reject(new AgentError('TOOL_EXECUTION_FAILED', `Command failed to start: ${err.message}`, err));
+        reject(
+          new AgentError('TOOL_EXECUTION_FAILED', `Command failed to start: ${err.message}`, err)
+        );
       });
     });
   },

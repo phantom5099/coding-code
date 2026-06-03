@@ -7,7 +7,9 @@ import * as fs from 'fs';
 // Mock fs at module level so appendFileSync throws
 vi.mock('fs', async (importOriginal) => ({
   ...(await importOriginal<typeof fs>()),
-  appendFileSync: vi.fn(() => { throw new Error('disk full'); }),
+  appendFileSync: vi.fn(() => {
+    throw new Error('disk full');
+  }),
 }));
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {

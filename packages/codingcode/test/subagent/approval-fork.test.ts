@@ -6,9 +6,9 @@ import { ApprovalLayer } from '../../src/layer';
 describe('ApprovalService.fork', () => {
   async function makeApproval(): Promise<ApprovalService> {
     return await Effect.runPromise(
-      Effect.gen(function* () { return yield* ApprovalService; }).pipe(
-        Effect.provide(ApprovalLayer),
-      ),
+      Effect.gen(function* () {
+        return yield* ApprovalService;
+      }).pipe(Effect.provide(ApprovalLayer))
     );
   }
 
@@ -48,7 +48,7 @@ describe('ApprovalService.fork', () => {
         id: 'parent-rule',
         action: 'deny',
         toolPattern: 'dangerous_tool',
-      }),
+      })
     );
 
     const forkEffect = (parent as any).fork();
@@ -111,7 +111,7 @@ describe('ApprovalService.fork', () => {
         id: 'rule1',
         action: 'allow',
         toolPattern: 'safe_tool',
-      }),
+      })
     );
 
     await Effect.runPromise(
@@ -119,7 +119,7 @@ describe('ApprovalService.fork', () => {
         id: 'rule2',
         action: 'ask',
         toolPattern: 'maybe_tool',
-      }),
+      })
     );
 
     const forkEffect = (parent as any).fork();
@@ -138,7 +138,7 @@ describe('ApprovalService.fork', () => {
         id: 'child-rule',
         action: 'deny',
         toolPattern: 'child_only_tool',
-      }),
+      })
     );
 
     expect(parent).toBeDefined();

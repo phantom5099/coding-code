@@ -48,7 +48,12 @@ export interface RollbackPreviewDiff {
 export interface CodeRestoreEntry {
   id: string;
   sessionId: string;
-  action: 'checkpoint-file' | 'checkpoint-files' | 'checkpoint-agent' | 'checkpoint-all' | 'rollback-to-turn';
+  action:
+    | 'checkpoint-file'
+    | 'checkpoint-files'
+    | 'checkpoint-agent'
+    | 'checkpoint-all'
+    | 'rollback-to-turn';
   throughTurnId: number;
   baseTurnId: number;
   affectedTurns: number[];
@@ -74,14 +79,28 @@ function restorePath(gitDir: string, sessionId: string): string {
 function readRestoreEntry(gitDir: string, sessionId: string): CodeRestoreEntry | null {
   const path = restorePath(gitDir, sessionId);
   if (!existsSync(path)) return null;
-  try { return JSON.parse(readFileSync(path, 'utf8')) as CodeRestoreEntry; }
-  catch { return null; }
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as CodeRestoreEntry;
+  } catch {
+    return null;
+  }
 }
 
-function writeRestoreEntry(gitDir: string, sessionId: string, entry: CodeRestoreEntry | null): void {
+function writeRestoreEntry(
+  gitDir: string,
+  sessionId: string,
+  entry: CodeRestoreEntry | null
+): void {
   const path = restorePath(gitDir, sessionId);
-  if (!entry) { try { unlinkSync(path); } catch { /* ignore */ } }
-  else { writeFileSync(path, JSON.stringify(entry, null, 2), 'utf8'); }
+  if (!entry) {
+    try {
+      unlinkSync(path);
+    } catch {
+      /* ignore */
+    }
+  } else {
+    writeFileSync(path, JSON.stringify(entry, null, 2), 'utf8');
+  }
 }
 
 export function toGitPath(projectPath: string, file: string): string {
@@ -99,19 +118,29 @@ export function hashWorkspaceFile(projectPath: string, file: string): string | n
   try {
     const content = readFileSync(resolve(projectPath, toGitPath(projectPath, file)));
     return createHash('sha256').update(content).digest('hex');
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function classifySafe(
-  projectPath: string, sessionId: string, turnId: number, sg: ShadowGit, ledgerInstance: Ledger,
+  projectPath: string,
+  sessionId: string,
+  turnId: number,
+  sg: ShadowGit,
+  ledgerInstance: Ledger
 ): { agentModified: string[]; unknownSource: string[] } | null {
   const baseline = sg.findCommitByMessage(commitMsg(sessionId, turnId, 'baseline'));
   const final = sg.findCommitByMessage(commitMsg(sessionId, turnId, 'final'));
   if (!baseline || !final) return null;
 
   const allChanges = sg.diffFiles(baseline, final);
-  const allFiles = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase()))];
-  const agentFiles = new Set(ledgerInstance.getAgentFiles(turnId, sessionId).map((p) => normalizePath(p).toLowerCase()));
+  const allFiles = [
+    ...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase())),
+  ];
+  const agentFiles = new Set(
+    ledgerInstance.getAgentFiles(turnId, sessionId).map((p) => normalizePath(p).toLowerCase())
+  );
 
   return {
     agentModified: allFiles.filter((f) => agentFiles.has(f)),
@@ -143,16 +172,34 @@ function getCompletedTurnsFor(sg: ShadowGit, sessionId: string): number[] {
 }
 
 function revertFilesImpl(
-  projectPath: string, sessionId: string, turnId: number,
-  selectedFiles: string[], action: CodeRestoreEntry['action'],
-  sg: ShadowGit,
+  projectPath: string,
+  sessionId: string,
+  turnId: number,
+  selectedFiles: string[],
+  action: CodeRestoreEntry['action'],
+  sg: ShadowGit
 ): CodeRollbackResult {
   if (selectedFiles.length === 0) {
-    return { reverted: false, throughTurnId: turnId, baseTurnId: turnId, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+    return {
+      reverted: false,
+      throughTurnId: turnId,
+      baseTurnId: turnId,
+      affectedTurns: [],
+      selectedFiles: [],
+      restoreEntry: null,
+    };
   }
 
   const baseline = sg.findCommitByMessage(commitMsg(sessionId, turnId, 'baseline'));
-  if (!baseline) return { reverted: false, throughTurnId: turnId, baseTurnId: turnId, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+  if (!baseline)
+    return {
+      reverted: false,
+      throughTurnId: turnId,
+      baseTurnId: turnId,
+      affectedTurns: [],
+      selectedFiles: [],
+      restoreEntry: null,
+    };
 
   sg.lock();
   try {
@@ -167,12 +214,16 @@ function revertFilesImpl(
 
     sg.checkoutFiles(baseline, selectedFiles);
 
-    const combinedFiles = existingEntry && existingEntry.throughTurnId === turnId
-      ? [...new Set([...existingEntry.selectedFiles, ...selectedFiles])]
-      : selectedFiles;
+    const combinedFiles =
+      existingEntry && existingEntry.throughTurnId === turnId
+        ? [...new Set([...existingEntry.selectedFiles, ...selectedFiles])]
+        : selectedFiles;
 
     const entry: CodeRestoreEntry = {
-      id: createHash('sha256').update(`${sessionId}-${turnId}-${Date.now()}`).digest('hex').slice(0, 12),
+      id: createHash('sha256')
+        .update(`${sessionId}-${turnId}-${Date.now()}`)
+        .digest('hex')
+        .slice(0, 12),
       sessionId,
       action,
       throughTurnId: turnId,
@@ -184,7 +235,14 @@ function revertFilesImpl(
     };
     writeRestoreEntry(sg.gitDir, sessionId, entry);
 
-    return { reverted: true, throughTurnId: turnId, baseTurnId: turnId, affectedTurns: [], selectedFiles: combinedFiles, restoreEntry: entry };
+    return {
+      reverted: true,
+      throughTurnId: turnId,
+      baseTurnId: turnId,
+      affectedTurns: [],
+      selectedFiles: combinedFiles,
+      restoreEntry: entry,
+    };
   } finally {
     sg.unlock();
   }
@@ -221,23 +279,38 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     return {
       // ---- Snapshot methods (unchanged) ----
 
-      snapshotBaseline: (projectPath: string, sessionId: string, turnId: number, title?: string): void => {
+      snapshotBaseline: (
+        projectPath: string,
+        sessionId: string,
+        turnId: number,
+        title?: string
+      ): void => {
         const sg = ensure(projectPath);
-        const msg = title ? `${commitMsg(sessionId, turnId, 'baseline')} ${title}` : commitMsg(sessionId, turnId, 'baseline');
+        const msg = title
+          ? `${commitMsg(sessionId, turnId, 'baseline')} ${title}`
+          : commitMsg(sessionId, turnId, 'baseline');
         sg.lock();
-        try { sg.commit(msg); }
-        finally { sg.unlock(); }
+        try {
+          sg.commit(msg);
+        } finally {
+          sg.unlock();
+        }
       },
 
       snapshotFinal: (projectPath: string, sessionId: string, turnId: number): void => {
         const sg = ensure(projectPath);
         sg.lock();
-        try { sg.commit(commitMsg(sessionId, turnId, 'final')); }
-        finally { sg.unlock(); }
+        try {
+          sg.commit(commitMsg(sessionId, turnId, 'final'));
+        } finally {
+          sg.unlock();
+        }
       },
 
       classifyChanges: (
-        projectPath: string, sessionId: string, turnId: number,
+        projectPath: string,
+        sessionId: string,
+        turnId: number
       ): { agentModified: string[]; unknownSource: string[] } | null => {
         const sg = ensure(projectPath);
         const l = ledger(sg);
@@ -250,22 +323,51 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       },
 
       getCheckpoints: (
-        projectPath: string, sessionId: string,
-      ): Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }> => {
+        projectPath: string,
+        sessionId: string
+      ): Array<{
+        turnId: number;
+        title: string;
+        agentModified: string[];
+        unknownSource: string[];
+      }> => {
         const sg = ensure(projectPath);
         const prefix = `turn-${shortSid(sessionId)}-`;
-        const result: Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }> = [];
+        const result: Array<{
+          turnId: number;
+          title: string;
+          agentModified: string[];
+          unknownSource: string[];
+        }> = [];
         for (let i = 1; i <= 10000; i++) {
           const bCommit = sg.findCommitByMessage(`${prefix}${i}-baseline`);
           const fCommit = sg.findCommitByMessage(`${prefix}${i}-final`);
-          if (!bCommit || !fCommit) { if (result.length === 0 && i === 1) continue; else break; }
-          const msgResult = sg.git('log', '--all', '--grep', `${prefix}${i}-baseline`, '--format=%s', '-1');
+          if (!bCommit || !fCommit) {
+            if (result.length === 0 && i === 1) continue;
+            else break;
+          }
+          const msgResult = sg.git(
+            'log',
+            '--all',
+            '--grep',
+            `${prefix}${i}-baseline`,
+            '--format=%s',
+            '-1'
+          );
           const fullMsg = msgResult.stdout.trim();
           const title = fullMsg.includes(' ') ? fullMsg.split(' ').slice(1).join(' ') : '';
 
           const allChanges = sg.diffFiles(bCommit, fCommit);
-          const allFiles = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase()))];
-          const agentFiles = new Set(ledger(sg).getAgentFiles(i, sessionId).map((p) => normalizePath(p).toLowerCase()));
+          const allFiles = [
+            ...new Set(
+              allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase())
+            ),
+          ];
+          const agentFiles = new Set(
+            ledger(sg)
+              .getAgentFiles(i, sessionId)
+              .map((p) => normalizePath(p).toLowerCase())
+          );
 
           result.push({
             turnId: i,
@@ -279,10 +381,15 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
 
       // ---- B1: getCheckpointDiff ----
 
-      getCheckpointDiff: (projectPath: string, sessionId: string, turnId?: number): CheckpointDiff => {
+      getCheckpointDiff: (
+        projectPath: string,
+        sessionId: string,
+        turnId?: number
+      ): CheckpointDiff => {
         const sg = ensure(projectPath);
         const completedTurns = getCompletedTurnsFor(sg, sessionId);
-        const latestTurnId = turnId ?? (completedTurns.length > 0 ? completedTurns[completedTurns.length - 1] : 0);
+        const latestTurnId =
+          turnId ?? (completedTurns.length > 0 ? completedTurns[completedTurns.length - 1] : 0);
         if (latestTurnId === 0) {
           return { turnId: 0, files: [] };
         }
@@ -292,8 +399,16 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!baseline || !final) return { turnId: latestTurnId, files: [] };
 
         const allChanges = sg.diffFiles(baseline, final);
-        const allFiles = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase()))];
-        const agentFiles = new Set(ledger(sg).getAgentFiles(latestTurnId, sessionId).map((p) => normalizePath(p).toLowerCase()));
+        const allFiles = [
+          ...new Set(
+            allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase())
+          ),
+        ];
+        const agentFiles = new Set(
+          ledger(sg)
+            .getAgentFiles(latestTurnId, sessionId)
+            .map((p) => normalizePath(p).toLowerCase())
+        );
 
         const files = allFiles.map((f) => {
           const relPath = toGitPath(projectPath, f);
@@ -303,7 +418,10 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           return {
             path: f,
             source: (agentFiles.has(f) ? 'agent' : 'unknown') as 'agent' | 'unknown',
-            status: allChanges.find((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase() === rawPath)?.status ?? 'M',
+            status:
+              allChanges.find(
+                (c) => normalizePath(resolve(projectPath, c.file)).toLowerCase() === rawPath
+              )?.status ?? 'M',
             diff: diffResult.stdout,
             insertions: stats.insertions,
             deletions: stats.deletions,
@@ -316,14 +434,20 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       // ---- B2: revertCheckpointFile / revertCheckpointFiles ----
 
       revertCheckpointFile: (
-        projectPath: string, sessionId: string, turnId: number, file: string,
+        projectPath: string,
+        sessionId: string,
+        turnId: number,
+        file: string
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
         return revertFilesImpl(projectPath, sessionId, turnId, [file], 'checkpoint-file', sg);
       },
 
       revertCheckpointFiles: (
-        projectPath: string, sessionId: string, turnId: number, files: string[],
+        projectPath: string,
+        sessionId: string,
+        turnId: number,
+        files: string[]
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
         return revertFilesImpl(projectPath, sessionId, turnId, files, 'checkpoint-files', sg);
@@ -332,32 +456,77 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       // ---- B3: revertCheckpointAgentFiles / revertCheckpointAllFiles ----
 
       revertCheckpointAgentFiles: (
-        projectPath: string, sessionId: string, turnId: number,
+        projectPath: string,
+        sessionId: string,
+        turnId: number
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
         const l = ledger(sg);
         const changes = classifySafe(projectPath, sessionId, turnId, sg, l);
-        if (!changes) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
-        if (changes.agentModified.length === 0) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
-        return revertFilesImpl(projectPath, sessionId, turnId, changes.agentModified, 'checkpoint-agent', sg);
+        if (!changes)
+          return {
+            reverted: false,
+            throughTurnId: turnId,
+            baseTurnId: null,
+            affectedTurns: [],
+            selectedFiles: [],
+            restoreEntry: null,
+          };
+        if (changes.agentModified.length === 0)
+          return {
+            reverted: false,
+            throughTurnId: turnId,
+            baseTurnId: null,
+            affectedTurns: [],
+            selectedFiles: [],
+            restoreEntry: null,
+          };
+        return revertFilesImpl(
+          projectPath,
+          sessionId,
+          turnId,
+          changes.agentModified,
+          'checkpoint-agent',
+          sg
+        );
       },
 
       revertCheckpointAllFiles: (
-        projectPath: string, sessionId: string, turnId: number,
+        projectPath: string,
+        sessionId: string,
+        turnId: number
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
         const l = ledger(sg);
         const changes = classifySafe(projectPath, sessionId, turnId, sg, l);
-        if (!changes) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+        if (!changes)
+          return {
+            reverted: false,
+            throughTurnId: turnId,
+            baseTurnId: null,
+            affectedTurns: [],
+            selectedFiles: [],
+            restoreEntry: null,
+          };
         const all = [...changes.agentModified, ...changes.unknownSource];
-        if (all.length === 0) return { reverted: false, throughTurnId: turnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+        if (all.length === 0)
+          return {
+            reverted: false,
+            throughTurnId: turnId,
+            baseTurnId: null,
+            affectedTurns: [],
+            selectedFiles: [],
+            restoreEntry: null,
+          };
         return revertFilesImpl(projectPath, sessionId, turnId, all, 'checkpoint-all', sg);
       },
 
       // ---- B4: previewRollbackDiff ----
 
       previewRollbackDiff: (
-        projectPath: string, sessionId: string, throughTurnId: number,
+        projectPath: string,
+        sessionId: string,
+        throughTurnId: number
       ): RollbackPreviewDiff => {
         const sg = ensure(projectPath);
         const completedTurns = getCompletedTurnsFor(sg, sessionId);
@@ -379,27 +548,53 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       // ---- B5: rollbackCodeToTurn ----
 
       rollbackCodeToTurn: (
-        projectPath: string, sessionId: string, throughTurnId: number,
+        projectPath: string,
+        sessionId: string,
+        throughTurnId: number
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
         const completedTurns = getCompletedTurnsFor(sg, sessionId);
         const affectedTurns = completedTurns.filter((id) => id > throughTurnId);
         if (affectedTurns.length === 0) {
-          return { reverted: true, throughTurnId, baseTurnId: null, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+          return {
+            reverted: true,
+            throughTurnId,
+            baseTurnId: null,
+            affectedTurns: [],
+            selectedFiles: [],
+            restoreEntry: null,
+          };
         }
 
         const baseTurnId = affectedTurns[0]! - 1;
         const baseline = sg.findCommitByMessage(commitMsg(sessionId, baseTurnId, 'baseline'));
         if (!baseline) {
-          return { reverted: false, throughTurnId, baseTurnId, affectedTurns: [], selectedFiles: [], restoreEntry: null };
+          return {
+            reverted: false,
+            throughTurnId,
+            baseTurnId,
+            affectedTurns: [],
+            selectedFiles: [],
+            restoreEntry: null,
+          };
         }
 
         const diffResult = sg.git('diff', '--name-only', baseline);
-        const selectedFiles = diffResult.stdout.trim().split('\n').filter(Boolean)
+        const selectedFiles = diffResult.stdout
+          .trim()
+          .split('\n')
+          .filter(Boolean)
           .map((f) => resolve(projectPath, f));
 
         if (selectedFiles.length === 0) {
-          return { reverted: true, throughTurnId, baseTurnId, affectedTurns, selectedFiles: [], restoreEntry: null };
+          return {
+            reverted: true,
+            throughTurnId,
+            baseTurnId,
+            affectedTurns,
+            selectedFiles: [],
+            restoreEntry: null,
+          };
         }
 
         sg.lock();
@@ -408,7 +603,10 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           sg.checkoutFiles(baseline, selectedFiles);
 
           const entry: CodeRestoreEntry = {
-            id: createHash('sha256').update(`${sessionId}-${Date.now()}`).digest('hex').slice(0, 12),
+            id: createHash('sha256')
+              .update(`${sessionId}-${Date.now()}`)
+              .digest('hex')
+              .slice(0, 12),
             sessionId,
             action: 'rollback-to-turn',
             throughTurnId,
@@ -420,7 +618,14 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           };
           writeRestoreEntry(sg.gitDir, sessionId, entry);
 
-          return { reverted: true, throughTurnId, baseTurnId, affectedTurns, selectedFiles, restoreEntry: entry };
+          return {
+            reverted: true,
+            throughTurnId,
+            baseTurnId,
+            affectedTurns,
+            selectedFiles,
+            restoreEntry: entry,
+          };
         } finally {
           sg.unlock();
         }
@@ -429,26 +634,42 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       // ---- B6: undoLastCodeRollback ----
 
       undoLastCodeRollback: (
-        projectPath: string, sessionId: string,
-        opts?: { force?: boolean; files?: string[] },
+        projectPath: string,
+        sessionId: string,
+        opts?: { force?: boolean; files?: string[] }
       ): CodeRollbackUndoResult => {
         const sg = ensure(projectPath);
         const entry = readRestoreEntry(sg.gitDir, sessionId);
         if (!entry) {
-          return { restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] };
+          return {
+            restored: false,
+            conflict: false,
+            conflictFiles: [],
+            restoredFiles: [],
+            remainingRolledBack: [],
+          };
         }
 
-        const filesToRestore = opts?.files && opts.files.length > 0
-          ? entry.selectedFiles.filter((f) => opts.files!.includes(f))
-          : [...entry.selectedFiles];
+        const filesToRestore =
+          opts?.files && opts.files.length > 0
+            ? entry.selectedFiles.filter((f) => opts.files!.includes(f))
+            : [...entry.selectedFiles];
 
         if (filesToRestore.length === 0) {
-          return { restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: entry.selectedFiles };
+          return {
+            restored: false,
+            conflict: false,
+            conflictFiles: [],
+            restoredFiles: [],
+            remainingRolledBack: entry.selectedFiles,
+          };
         }
 
         // Conflict detection: compare current workspace files against baseline commit.
         // After revert, files should equal baseline. Any divergence = conflict.
-        const baselineCommit = sg.findCommitByMessage(commitMsg(sessionId, entry.baseTurnId, 'baseline'));
+        const baselineCommit = sg.findCommitByMessage(
+          commitMsg(sessionId, entry.baseTurnId, 'baseline')
+        );
         const conflictFiles: string[] = [];
 
         if (baselineCommit) {
@@ -456,9 +677,10 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
             const gitPath = toGitPath(projectPath, f);
             const currentHash = hashWorkspaceFile(projectPath, f);
             const baselineContent = sg.showFile(baselineCommit, gitPath);
-            const baselineHash = baselineContent !== null
-              ? createHash('sha256').update(baselineContent).digest('hex')
-              : null;
+            const baselineHash =
+              baselineContent !== null
+                ? createHash('sha256').update(baselineContent).digest('hex')
+                : null;
 
             if (currentHash !== baselineHash) {
               conflictFiles.push(f);
@@ -468,8 +690,11 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
 
         if (conflictFiles.length > 0 && !opts?.force) {
           return {
-            restored: false, conflict: true, conflictFiles,
-            restoredFiles: [], remainingRolledBack: entry.selectedFiles,
+            restored: false,
+            conflict: true,
+            conflictFiles,
+            restoredFiles: [],
+            remainingRolledBack: entry.selectedFiles,
           };
         }
 

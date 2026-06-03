@@ -9,10 +9,7 @@ describe('createToolSearchTool', () => {
       ],
     });
 
-    const result = await tool.execute(
-      { query: 'todo' },
-      { sessionId: 'test-agent' },
-    );
+    const result = await tool.execute({ query: 'todo' }, { sessionId: 'test-agent' });
     expect(result).toContain('Loaded 1 tool(s)');
     expect(result).toContain('todo_write');
   });
@@ -22,18 +19,15 @@ describe('createToolSearchTool', () => {
       search: () => [],
     });
 
-    const result = await tool.execute(
-      { query: 'zzznonexistent' },
-      { sessionId: 'test-agent' },
-    );
+    const result = await tool.execute({ query: 'zzznonexistent' }, { sessionId: 'test-agent' });
     expect(result).toBe('No deferred tools matched "zzznonexistent".');
   });
 
   it('throws if sessionId is missing', async () => {
     const tool = createToolSearchTool({ search: () => [] });
-    await expect(
-      tool.execute({ query: 'anything' }, {}),
-    ).rejects.toThrow('tool_search requires sessionId');
+    await expect(tool.execute({ query: 'anything' }, {})).rejects.toThrow(
+      'tool_search requires sessionId'
+    );
   });
 
   it('each tool instance uses its own svc closure', async () => {

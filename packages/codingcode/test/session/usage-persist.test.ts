@@ -8,20 +8,39 @@ import type { SessionIndex } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
-function makeFixture(sessionId: string, slug: string, usage?: { prompt: number; completion: number; total: number }) {
+function makeFixture(
+  sessionId: string,
+  slug: string,
+  usage?: { prompt: number; completion: number; total: number }
+) {
   const dir = join(PROJECT_BASE, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
 
-  const meta = { type: 'session_meta', sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test', createdAt: new Date().toISOString() };
+  const meta = {
+    type: 'session_meta',
+    sessionId,
+    projectPath: slug,
+    cwd: '/tmp/test',
+    model: 'test',
+    createdAt: new Date().toISOString(),
+  };
   writeFileSync(transcriptPath, JSON.stringify(meta) + '\n', 'utf8');
 
   const idx: SessionIndex = {
-    sessionId, projectPath: slug, cwd: '/tmp/test', model: 'test',
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    messageCount: 0, title: 'test', currentTurnId: 0,
-    usage: usage as any, promptEstimate: 0, permissionMode: 'default',
+    sessionId,
+    projectPath: slug,
+    cwd: '/tmp/test',
+    model: 'test',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    messageCount: 0,
+    title: 'test',
+    currentTurnId: 0,
+    usage: usage as any,
+    promptEstimate: 0,
+    permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
@@ -38,7 +57,9 @@ describe('session usage persist', () => {
       const idx = findSessionIndex(sessionId);
       expect(idx).not.toBeNull();
       expect(idx!.usage).toEqual(usage);
-    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
   });
 
   it('findSessionIndex returns undefined usage when not present', () => {
@@ -49,6 +70,8 @@ describe('session usage persist', () => {
       const idx = findSessionIndex(sessionId);
       expect(idx).not.toBeNull();
       expect(idx!.usage).toBeUndefined();
-    } finally { rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true }); }
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
   });
 });

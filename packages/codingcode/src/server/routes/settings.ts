@@ -18,19 +18,19 @@ settingsRouter.get('/memory/config', (c) => {
 });
 
 settingsRouter.post('/memory/enabled', async (c) => {
-  const body = await c.req.json() as { enabled: boolean };
+  const body = (await c.req.json()) as { enabled: boolean };
   settingsService.setMemoryEnabledService(body.enabled);
   return c.json({ enabled: settingsService.getMemoryEnabledService() });
 });
 
 settingsRouter.post('/memory/type-disabled', async (c) => {
-  const body = await c.req.json() as { name: string; disabled: boolean };
+  const body = (await c.req.json()) as { name: string; disabled: boolean };
   settingsService.setMemoryTypeDisabledService(body.name, body.disabled);
   return c.json({ ok: true });
 });
 
 settingsRouter.post('/memory/extra-type', async (c) => {
-  const body = await c.req.json() as { name: string; description: string };
+  const body = (await c.req.json()) as { name: string; description: string };
   try {
     settingsService.addMemoryExtraTypeService(body);
     return c.json({ ok: true });
@@ -42,7 +42,7 @@ settingsRouter.post('/memory/extra-type', async (c) => {
 
 settingsRouter.put('/memory/extra-type/:name', async (c) => {
   const name = c.req.param('name');
-  const body = await c.req.json() as { name: string; description: string };
+  const body = (await c.req.json()) as { name: string; description: string };
   try {
     settingsService.updateMemoryExtraTypeService(name, body);
     return c.json({ ok: true });
@@ -72,7 +72,7 @@ settingsRouter.get('/agents', (c) => {
 
 settingsRouter.post('/agents', async (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const body = await c.req.json() as SubagentProfile;
+  const body = (await c.req.json()) as SubagentProfile;
   try {
     settingsService.createAgent(cwd, body);
     return c.json({ ok: true });
@@ -85,7 +85,7 @@ settingsRouter.post('/agents', async (c) => {
 settingsRouter.put('/agents/:name', async (c) => {
   const name = c.req.param('name');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const body = await c.req.json() as SubagentProfile;
+  const body = (await c.req.json()) as SubagentProfile;
   try {
     settingsService.updateAgent(cwd, name, body);
     return c.json({ ok: true });
@@ -105,7 +105,7 @@ settingsRouter.delete('/agents/:name', async (c) => {
 
 settingsRouter.post('/agents/:name/disabled', async (c) => {
   const name = c.req.param('name');
-  const body = await c.req.json() as { disabled: boolean };
+  const body = (await c.req.json()) as { disabled: boolean };
   settingsService.setAgentDisabled(name, body.disabled);
   return c.json({ ok: true });
 });
@@ -118,7 +118,7 @@ settingsRouter.get('/hooks', (c) => {
 
 settingsRouter.post('/hooks', async (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const body = await c.req.json() as UserHookConfig;
+  const body = (await c.req.json()) as UserHookConfig;
   try {
     settingsService.createHook(cwd, body);
     return c.json({ ok: true });
@@ -131,7 +131,7 @@ settingsRouter.post('/hooks', async (c) => {
 settingsRouter.put('/hooks/:name', async (c) => {
   const name = c.req.param('name');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const body = await c.req.json() as UserHookConfig;
+  const body = (await c.req.json()) as UserHookConfig;
   try {
     settingsService.updateHook(cwd, name, body);
     return c.json({ ok: true });
@@ -151,7 +151,7 @@ settingsRouter.delete('/hooks/:name', async (c) => {
 
 settingsRouter.post('/hooks/:name/disabled', async (c) => {
   const name = c.req.param('name');
-  const body = await c.req.json() as { disabled: boolean };
+  const body = (await c.req.json()) as { disabled: boolean };
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   settingsService.setHookDisabled(cwd, name, body.disabled);
   return c.json({ ok: true });
@@ -163,7 +163,7 @@ settingsRouter.get('/mcp', async (c) => {
     Effect.gen(function* () {
       const mcp = yield* McpService;
       return yield* mcp.status();
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -174,7 +174,7 @@ settingsRouter.get('/mcp', async (c) => {
 
 settingsRouter.post('/mcp', async (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const body = await c.req.json() as McpServerConfig;
+  const body = (await c.req.json()) as McpServerConfig;
   try {
     settingsService.createMcpServer(cwd, body);
     return c.json({ ok: true });
@@ -187,7 +187,7 @@ settingsRouter.post('/mcp', async (c) => {
 settingsRouter.put('/mcp/:name', async (c) => {
   const name = c.req.param('name');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
-  const body = await c.req.json() as McpServerConfig;
+  const body = (await c.req.json()) as McpServerConfig;
   try {
     settingsService.updateMcpServer(cwd, name, body);
     return c.json({ ok: true });
@@ -207,12 +207,12 @@ settingsRouter.delete('/mcp/:name', async (c) => {
 
 settingsRouter.post('/mcp/:name/disabled', async (c) => {
   const name = c.req.param('name');
-  const body = await c.req.json() as { disabled: boolean };
+  const body = (await c.req.json()) as { disabled: boolean };
   const result = await runWithLayer(
     Effect.gen(function* () {
       const mcp = yield* McpService;
-      return yield* (body.disabled ? mcp.disable(name) : mcp.enable(name));
-    }),
+      return yield* body.disabled ? mcp.disable(name) : mcp.enable(name);
+    })
   );
   if (!result.ok) {
     const { status, body: resp } = errorResponse(result.error);
@@ -227,7 +227,7 @@ settingsRouter.get('/skills', async (c) => {
     Effect.gen(function* () {
       const skill = yield* SkillService;
       return yield* skill.listWithStatus();
-    }),
+    })
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -237,12 +237,12 @@ settingsRouter.get('/skills', async (c) => {
 });
 
 settingsRouter.post('/skills', async (c) => {
-  const body = await c.req.json() as { name: string; enabled: boolean };
+  const body = (await c.req.json()) as { name: string; enabled: boolean };
   const result = await runWithLayer(
     Effect.gen(function* () {
       const skill = yield* SkillService;
-      return yield* (body.enabled ? skill.enableSkill(body.name) : skill.disableSkill(body.name));
-    }),
+      return yield* body.enabled ? skill.enableSkill(body.name) : skill.disableSkill(body.name);
+    })
   );
   if (!result.ok) {
     const { status, body: resp } = errorResponse(result.error);
@@ -257,7 +257,7 @@ settingsRouter.get('/subagent/enabled', (c) => {
 });
 
 settingsRouter.post('/subagent/enabled', async (c) => {
-  const body = await c.req.json() as { enabled: boolean };
+  const body = (await c.req.json()) as { enabled: boolean };
   settingsService.setSubagentEnabled(body.enabled);
   return c.json({ ok: true });
 });

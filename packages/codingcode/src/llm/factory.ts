@@ -115,15 +115,27 @@ export function getActiveEntry(): Result<SelectableModel, AgentError> {
 
   const cfg = getConfig().activeModel;
   if (!cfg) {
-    return Result.err(new AgentError('CONFIG_INVALID', 'No active model configured. Set activeModel in config.yaml with model and apiKeyEnv fields'));
+    return Result.err(
+      new AgentError(
+        'CONFIG_INVALID',
+        'No active model configured. Set activeModel in config.yaml with model and apiKeyEnv fields'
+      )
+    );
   }
 
   const catResult = loadCatalog();
   if (!catResult.ok) return catResult;
 
-  const found = flattenModels(catResult.value).find((m) => m.model === cfg.model && m.api_key_env === cfg.apiKeyEnv);
+  const found = flattenModels(catResult.value).find(
+    (m) => m.model === cfg.model && m.api_key_env === cfg.apiKeyEnv
+  );
   if (!found) {
-    return Result.err(new AgentError('CONFIG_INVALID', `Model "${cfg.model}" with apiKeyEnv "${cfg.apiKeyEnv}" not found in models.json`));
+    return Result.err(
+      new AgentError(
+        'CONFIG_INVALID',
+        `Model "${cfg.model}" with apiKeyEnv "${cfg.apiKeyEnv}" not found in models.json`
+      )
+    );
   }
 
   currentEntry = found;
@@ -135,7 +147,10 @@ export function switchModel(id: string): Result<SelectableModel, AgentError> {
   if (!catResult.ok) return catResult;
   const all = flattenModels(catResult.value);
   const found = all.find((m) => m.id === id);
-  if (!found) return Result.err(new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /model to list.`));
+  if (!found)
+    return Result.err(
+      new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /model to list.`)
+    );
   currentEntry = found;
   currentClient = null;
   updateActiveModel(found.model, found.api_key_env);
@@ -145,7 +160,14 @@ export function switchModel(id: string): Result<SelectableModel, AgentError> {
 export async function createClient(entry: SelectableModel): Promise<Result<LLMClient, AgentError>> {
   const apiKey = process.env[entry.api_key_env] || process.env.OPENAI_API_KEY || '';
   if (!apiKey) {
-    return Result.err(new AgentError('CONFIG_MISSING', `API key not found. Set environment variable "${entry.api_key_env}" or "OPENAI_API_KEY".`, undefined, { apiKeyEnv: entry.api_key_env }));
+    return Result.err(
+      new AgentError(
+        'CONFIG_MISSING',
+        `API key not found. Set environment variable "${entry.api_key_env}" or "OPENAI_API_KEY".`,
+        undefined,
+        { apiKeyEnv: entry.api_key_env }
+      )
+    );
   }
 
   switch (entry.driver) {
@@ -167,7 +189,12 @@ export async function createClient(entry: SelectableModel): Promise<Result<LLMCl
       return Result.ok(new DeepSeekProvider(deepseek(entry.model), entry));
     }
     default:
-      return Result.err(new AgentError('CONFIG_INVALID', `Unknown driver "${entry.driver}" for provider "${entry.provider}"`));
+      return Result.err(
+        new AgentError(
+          'CONFIG_INVALID',
+          `Unknown driver "${entry.driver}" for provider "${entry.provider}"`
+        )
+      );
   }
 }
 

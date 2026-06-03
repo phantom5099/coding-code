@@ -10,12 +10,14 @@ const TEST_CODINGCODE_DIR = join(__dirname, '..', '..', '..', '.codingcode');
 
 describe('loadMcpConfig', () => {
   beforeEach(() => {
-    if (existsSync(TEST_CODINGCODE_DIR)) rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    if (existsSync(TEST_CODINGCODE_DIR))
+      rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
     mkdirSync(TEST_CODINGCODE_DIR, { recursive: true });
   });
 
   afterEach(() => {
-    if (existsSync(TEST_CODINGCODE_DIR)) rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    if (existsSync(TEST_CODINGCODE_DIR))
+      rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
   });
 
   it('should return empty array when no config exists', () => {
@@ -30,7 +32,7 @@ describe('loadMcpConfig', () => {
   - name: test-stdio
     command: npx
     args: ["-y", "test-server"]
-`,
+`
     );
 
     const configs = loadMcpConfig(join(__dirname, '..', '..', '..'));
@@ -49,7 +51,7 @@ describe('loadMcpConfig', () => {
     headers:
       Authorization: "Bearer token123"
     concurrency: 5
-`,
+`
     );
 
     const configs = loadMcpConfig(join(__dirname, '..', '..', '..'));
@@ -68,7 +70,7 @@ describe('loadMcpConfig', () => {
     url: "https://api.example.com"
     headers:
       Authorization: "Bearer \${TEST_TOKEN}"
-`,
+`
     );
 
     const configs = loadMcpConfig(join(__dirname, '..', '..', '..'));
@@ -85,7 +87,7 @@ describe('loadMcpConfig', () => {
     url: "https://api.example.com"
     headers:
       X-Missing: "\${NONEXISTENT_VAR}"
-`,
+`
     );
 
     const configs = loadMcpConfig(join(__dirname, '..', '..', '..'));
@@ -95,19 +97,19 @@ describe('loadMcpConfig', () => {
 
 describe('writeMcpConfig', () => {
   beforeEach(() => {
-    if (existsSync(TEST_CODINGCODE_DIR)) rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    if (existsSync(TEST_CODINGCODE_DIR))
+      rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
     mkdirSync(TEST_CODINGCODE_DIR, { recursive: true });
   });
 
   afterEach(() => {
-    if (existsSync(TEST_CODINGCODE_DIR)) rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    if (existsSync(TEST_CODINGCODE_DIR))
+      rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
   });
 
   it('should write and read back servers correctly', () => {
     const projectRoot = join(__dirname, '..', '..', '..');
-    const servers = [
-      { name: 'test-server', command: 'npx', args: ['-y', 'test'], concurrency: 5 },
-    ];
+    const servers = [{ name: 'test-server', command: 'npx', args: ['-y', 'test'], concurrency: 5 }];
     writeMcpConfig(projectRoot, servers);
     const result = loadMcpConfig(projectRoot);
     expect(result).toHaveLength(1);

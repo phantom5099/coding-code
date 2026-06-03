@@ -4,7 +4,7 @@ import type { MemoryConfig } from '@codingcode/infra';
 
 export async function resolveMemoryLLM(
   config: MemoryConfig,
-  fallback: LLMClient | null,
+  fallback: LLMClient | null
 ): Promise<LLMClient | null> {
   const target = config.model?.trim();
   if (!target) return fallback;
@@ -13,7 +13,7 @@ export async function resolveMemoryLLM(
   if (!listResult.ok) return fallback;
 
   const found = listResult.value.find(
-    (m) => m.id === target || m.model === target || m.name === target,
+    (m) => m.id === target || m.model === target || m.name === target
   );
   if (!found) return fallback;
 

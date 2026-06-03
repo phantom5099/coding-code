@@ -1,18 +1,18 @@
-import { useGlobalStore } from '../stores/global.store'
-import type { TodoItem } from '@shared/types'
+import { useGlobalStore } from '../stores/global.store';
+import type { TodoItem } from '@shared/types';
 
 function TodoItemRow({ item }: { item: TodoItem }) {
   const statusColor = {
     pending: 'text-[#777]',
     in_progress: 'text-[#569cd6]',
     completed: 'text-[#6a9955]',
-  }[item.status]
+  }[item.status];
 
   const statusIcon = {
     pending: '○',
     in_progress: '●',
     completed: '✓',
-  }[item.status]
+  }[item.status];
 
   return (
     <div className="flex items-start gap-2 text-[13px] leading-relaxed">
@@ -21,28 +21,32 @@ function TodoItemRow({ item }: { item: TodoItem }) {
         {item.step}
       </span>
     </div>
-  )
+  );
 }
 
 export default function TodoPanel({ threadId }: { threadId: string }) {
-  const state = useGlobalStore((s) => s.agent.todoByThreadId[threadId])
-  const toggleCollapsed = useGlobalStore((s) => s.toggleTodoCollapsed)
+  const state = useGlobalStore((s) => s.agent.todoByThreadId[threadId]);
+  const toggleCollapsed = useGlobalStore((s) => s.toggleTodoCollapsed);
 
-  if (!state?.hasSeenNonEmptyTodo) return null
+  if (!state?.hasSeenNonEmptyTodo) return null;
 
-  const { items, collapsed } = state
+  const { items, collapsed } = state;
 
-  const pending = items.filter((i) => i.status === 'pending').length
-  const inProgress = items.filter((i) => i.status === 'in_progress').length
-  const completed = items.filter((i) => i.status === 'completed').length
-  const total = items.length
-  const allCompleted = total > 0 && completed === total
+  const pending = items.filter((i) => i.status === 'pending').length;
+  const inProgress = items.filter((i) => i.status === 'in_progress').length;
+  const completed = items.filter((i) => i.status === 'completed').length;
+  const total = items.length;
+  const allCompleted = total > 0 && completed === total;
 
   const summary = allCompleted
     ? `全部完成 · ${total} 项记录`
-    : [inProgress > 0 ? `${inProgress} 进行中` : '', pending > 0 ? `${pending} 待处理` : '', completed > 0 ? `${completed} 已完成` : '']
+    : [
+        inProgress > 0 ? `${inProgress} 进行中` : '',
+        pending > 0 ? `${pending} 待处理` : '',
+        completed > 0 ? `${completed} 已完成` : '',
+      ]
         .filter(Boolean)
-        .join(' · ') || 'Todo'
+        .join(' · ') || 'Todo';
 
   return (
     <div className="shrink-0 border-t border-[#2a2a2a] bg-[#1a1a1a]">
@@ -62,9 +66,7 @@ export default function TodoPanel({ threadId }: { threadId: string }) {
       {/* Expanded list */}
       {!collapsed && (
         <div className="px-5 pb-3 max-h-[220px] overflow-y-auto">
-          {allCompleted && (
-            <div className="text-[12px] text-[#6a9955] mb-2">全部完成</div>
-          )}
+          {allCompleted && <div className="text-[12px] text-[#6a9955] mb-2">全部完成</div>}
           <div className="space-y-1.5">
             {items.map((item, index) => (
               <TodoItemRow key={index} item={item} />
@@ -73,5 +75,5 @@ export default function TodoPanel({ threadId }: { threadId: string }) {
         </div>
       )}
     </div>
-  )
+  );
 }

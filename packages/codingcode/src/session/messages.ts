@@ -69,14 +69,23 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
         const ev = event as AssistantEvent;
         const msg: Message = { role: 'assistant', content: event.content };
         if (event.toolCalls && event.toolCalls.length > 0) {
-          (msg as any).tool_calls = event.toolCalls.map((tc: any) => ({ id: tc.id, name: tc.name, arguments: tc.arguments }));
+          (msg as any).tool_calls = event.toolCalls.map((tc: any) => ({
+            id: tc.id,
+            name: tc.name,
+            arguments: tc.arguments,
+          }));
         }
         if (ev.usage) (msg as any).usage = ev.usage;
         messages.push(msg);
         break;
       }
       case 'tool_result':
-        messages.push({ role: 'tool', content: event.output, tool_call_id: event.toolCallId, tool_name: event.toolName } as any);
+        messages.push({
+          role: 'tool',
+          content: event.output,
+          tool_call_id: event.toolCallId,
+          tool_name: event.toolName,
+        } as any);
         break;
       case 'summary':
         messages.push({ role: 'system', name: 'compacted_history', content: event.summaryText });
@@ -153,11 +162,20 @@ export function findLastVisibleAssistantUsage(path: string): TokenUsage | undefi
   return undefined;
 }
 
-export function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string; items: object[]; status: string }> {
+export function sessionEventsToTurns(
+  events: SessionEvent[]
+): Array<{ id: string; items: object[]; status: string }> {
   const turnsMap = new Map<number, { id: string; items: object[]; status: string }>();
   for (const event of events) {
     if (event.type === 'session_meta') continue;
-    if (event.type === 'summary' || event.type === 'hide' || event.type === 'unhide' || event.type === 'title' || event.type === 'tool_budget') continue;
+    if (
+      event.type === 'summary' ||
+      event.type === 'hide' ||
+      event.type === 'unhide' ||
+      event.type === 'title' ||
+      event.type === 'tool_budget'
+    )
+      continue;
     let turn = turnsMap.get(event.turnId);
     if (!turn) {
       turn = { id: String(event.turnId), items: [], status: 'completed' };
@@ -169,15 +187,32 @@ export function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string
         break;
       case 'assistant':
         if (event.content) {
-          turn.items.push({ id: event.uuid, type: 'message', role: 'assistant', content: event.content });
+          turn.items.push({
+            id: event.uuid,
+            type: 'message',
+            role: 'assistant',
+            content: event.content,
+          });
         }
         for (const tc of event.toolCalls ?? []) {
           const args = tc.arguments ?? {};
-          turn.items.push({ id: tc.id, type: 'tool_call', name: tc.name, args, status: 'approved' });
+          turn.items.push({
+            id: tc.id,
+            type: 'tool_call',
+            name: tc.name,
+            args,
+            status: 'approved',
+          });
         }
         break;
       case 'tool_result': {
-        const item: Record<string, unknown> = { id: event.uuid, type: 'tool_result', callId: event.toolCallId, name: event.toolName, output: event.output };
+        const item: Record<string, unknown> = {
+          id: event.uuid,
+          type: 'tool_result',
+          callId: event.toolCallId,
+          name: event.toolName,
+          output: event.output,
+        };
         turn.items.push(item);
         break;
       }
@@ -186,7 +221,9 @@ export function sessionEventsToTurns(events: SessionEvent[]): Array<{ id: string
   return [...turnsMap.values()].sort((a, b) => Number(a.id) - Number(b.id));
 }
 
-export function readUIHistory(sessionId: string): Array<{ id: string; items: object[]; status: string }> {
+export function readUIHistory(
+  sessionId: string
+): Array<{ id: string; items: object[]; status: string }> {
   const dir = resolveSessionDir(sessionId);
   if (!dir) return [];
   const jsonlPath = join(dir, `${sessionId}.jsonl`);

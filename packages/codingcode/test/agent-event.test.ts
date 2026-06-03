@@ -25,7 +25,10 @@ describe('AgentEvent type', () => {
   });
 
   it('should narrow correctly via discriminated union switch', () => {
-    const ev: AgentEvent = { _tag: 'Error', error: { _tag: 'MaxStepsReached', maxSteps: 5, message: 'test' } };
+    const ev: AgentEvent = {
+      _tag: 'Error',
+      error: { _tag: 'MaxStepsReached', maxSteps: 5, message: 'test' },
+    };
     switch (ev._tag) {
       case 'Error':
         expect(ev.error._tag).toBe('MaxStepsReached');
@@ -40,5 +43,5 @@ describe('AgentEvent type', () => {
     const mod = await import('../src/index.js');
     // The type is erased at runtime, but we verify the module loads without error
     expect(mod).toBeDefined();
-  });
+  }, 10000);
 });

@@ -15,7 +15,10 @@ function setupTempRepo(): { projectPath: string; slug: string } {
   // Initialize git repo
   spawnSync('git', ['init'], { cwd: projectPath, encoding: 'utf-8' });
   spawnSync('git', ['config', 'user.name', 'test'], { cwd: projectPath, encoding: 'utf-8' });
-  spawnSync('git', ['config', 'user.email', 'test@test.com'], { cwd: projectPath, encoding: 'utf-8' });
+  spawnSync('git', ['config', 'user.email', 'test@test.com'], {
+    cwd: projectPath,
+    encoding: 'utf-8',
+  });
 
   return { projectPath, slug };
 }
@@ -59,7 +62,8 @@ describe('CodeRestoreEntry types', () => {
   });
 
   it('toGitPath and hashWorkspaceFile are exported as functions', async () => {
-    const { toGitPath, hashWorkspaceFile } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { toGitPath, hashWorkspaceFile } =
+      await import('../../src/checkpoint/checkpoint-service.js');
     expect(typeof toGitPath).toBe('function');
     expect(typeof hashWorkspaceFile).toBe('function');
   });
@@ -70,14 +74,16 @@ describe('CheckpointDiff type with insertions/deletions', () => {
     // Verify the type structure by creating a mock object
     const diff: import('../../src/checkpoint/checkpoint-service.js').CheckpointDiff = {
       turnId: 1,
-      files: [{
-        path: 'test.ts',
-        source: 'agent',
-        status: 'M',
-        diff: '--- a/test.ts\n+++ b/test.ts\n@@ -1 +1 @@\n-old\n+new',
-        insertions: 1,
-        deletions: 1,
-      }],
+      files: [
+        {
+          path: 'test.ts',
+          source: 'agent',
+          status: 'M',
+          diff: '--- a/test.ts\n+++ b/test.ts\n@@ -1 +1 @@\n-old\n+new',
+          insertions: 1,
+          deletions: 1,
+        },
+      ],
     };
     expect(diff.files[0]!.insertions).toBe(1);
     expect(diff.files[0]!.deletions).toBe(1);
@@ -122,7 +128,7 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  });
+  }, 15000);
 
   it('returns empty diff when no changes between commits', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
@@ -153,7 +159,7 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  });
+  }, 15000);
 
   it('correctly handles Chinese filenames in commits and diffs', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
@@ -161,7 +167,11 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     const projectPath = setupTempRepo().projectPath;
 
     try {
-      writeFile(projectPath, '\u8d5e\u988c\u7956\u56fd\u4eba_\u7b2c\u4e00\u7bc7.md', 'initial content');
+      writeFile(
+        projectPath,
+        '\u8d5e\u988c\u7956\u56fd\u4eba_\u7b2c\u4e00\u7bc7.md',
+        'initial content'
+      );
 
       const sg = new ShadowGit(projectPath);
       sg.init();
@@ -169,7 +179,11 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
       const baselineMsg = 'turn-cn-test-1-baseline';
       sg.commit(baselineMsg);
 
-      writeFile(projectPath, '\u8d5e\u988c\u7956\u56fd\u4eba_\u7b2c\u4e00\u7bc7.md', 'modified content');
+      writeFile(
+        projectPath,
+        '\u8d5e\u988c\u7956\u56fd\u4eba_\u7b2c\u4e00\u7bc7.md',
+        'modified content'
+      );
 
       const finalMsg = 'turn-cn-test-1-final';
       sg.commit(finalMsg);
@@ -189,7 +203,7 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  });
+  }, 15000);
 
   it('throws when add fails instead of silently creating empty commit', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');

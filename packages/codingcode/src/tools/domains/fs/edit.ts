@@ -10,11 +10,18 @@ export const editFileTool: ToolDefinition = {
     'Perform exact string replacement in a file. Provide the exact text to replace (old_string) and the new text (new_string). If old_string is not unique in the file, the edit will fail — narrow the match to make it unique.',
   parameters: z.object({
     path: z.string().describe('Path to the file to edit'),
-    old_string: z.string().min(1).describe('Exact text to replace — must match exactly one location in the file'),
+    old_string: z
+      .string()
+      .min(1)
+      .describe('Exact text to replace — must match exactly one location in the file'),
     new_string: z.string().describe('Text to replace it with'),
   }),
   execute: async (args: unknown, ctx?: ToolExecCtx) => {
-    const { path, old_string, new_string } = args as { path: string; old_string: string; new_string: string };
+    const { path, old_string, new_string } = args as {
+      path: string;
+      old_string: string;
+      new_string: string;
+    };
     const filePath = resolve(ctx?.projectPath ?? getWorkspaceCwd(), path);
     const content = await readFile(filePath, 'utf-8');
 
@@ -36,7 +43,8 @@ export const editFileTool: ToolDefinition = {
       return `Error: old_string appears ${count} times in ${path}. Make it unique by including more surrounding context so it matches exactly one location.`;
     }
 
-    const newContent = content.slice(0, lastIdx) + new_string + content.slice(lastIdx + old_string.length);
+    const newContent =
+      content.slice(0, lastIdx) + new_string + content.slice(lastIdx + old_string.length);
     await writeFile(filePath, newContent);
 
     const newLines = newContent.split('\n').length;

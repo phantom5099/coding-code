@@ -27,7 +27,18 @@ export type { AgentEvent } from './agent/agent.js';
 export { AgentError } from './core/error.js';
 export { Result } from './core/result.js';
 export { sendMessage } from './agent/agent.js';
-export { AppLayer, AgentLayer, SessionLayer, ContextLayer, ToolLayer, HookLayer, McpLayer, SkillLayer, ApprovalLayer, CheckpointLayer } from './layer.js';
+export {
+  AppLayer,
+  AgentLayer,
+  SessionLayer,
+  ContextLayer,
+  ToolLayer,
+  HookLayer,
+  McpLayer,
+  SkillLayer,
+  ApprovalLayer,
+  CheckpointLayer,
+} from './layer.js';
 export { ApprovalWaitService } from './approval/async-confirm.js';
 export { getGlobalPermissionMode, setGlobalPermissionMode } from './approval/index.js';
 export type { PermissionMode } from './approval/types.js';
@@ -38,7 +49,12 @@ export { createDirectClients } from './client/direct/index.js';
 export type { AgentClient, StreamChunk } from './client/types.js';
 export { createHttpClient } from './client/http.js';
 export { createHttpClients } from './client/http/index.js';
-export type { AgentRuntimeClient, SessionClient, ModelClient, SettingsClient } from './client/http/index.js';
+export type {
+  AgentRuntimeClient,
+  SessionClient,
+  ModelClient,
+  SettingsClient,
+} from './client/http/index.js';
 export { sseHandler } from './server/handler.js';
 export { agentEventToSseEvent, toSseEvents } from './server/adapter.js';
 export type { SseEvent } from './server/adapter.js';
@@ -49,7 +65,12 @@ export type { Todo, TodoStatus } from './self/todo.js';
 export { DEFERRED_TOOLS_GUIDELINES, buildSystemPrompt } from './agent/prompt.js';
 export type { SystemPromptVariant, SystemPromptOptions } from './agent/prompt.js';
 export { bootstrapApplication } from './orchestration/bootstrap.js';
-export { SubagentRegistry, EXPLORE_PROFILE, getSubagentEnabledState, setSubagentEnabledState } from './subagent/registry.js';
+export {
+  SubagentRegistry,
+  EXPLORE_PROFILE,
+  getSubagentEnabledState,
+  setSubagentEnabledState,
+} from './subagent/registry.js';
 export type { SubagentProfile } from './subagent/registry.js';
 export { loadAgentProfiles } from './subagent/loader.js';
 export { getLLMClient } from './llm/factory.js';

@@ -52,7 +52,12 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
       }): Effect.Effect<ApprovalDecision> =>
         Effect.gen(function* () {
           return yield* runPipeline(
-            { tool: request.tool, input: request.input, context: request.context, callId: request.callId },
+            {
+              tool: request.tool,
+              input: request.input,
+              context: request.context,
+              callId: request.callId,
+            },
             {
               ruleEngine,
               readonlyTools,
@@ -66,18 +71,19 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               onNever: (rule) => ruleEngine.addRule(rule),
               sessionId: request.sessionId,
               callId: request.callId,
-            },
+            }
           );
         }),
 
       addRule: (rule: PermissionRule): Effect.Effect<void> =>
         Effect.sync(() => ruleEngine.addRule(rule)),
 
-      removeRule: (id: string): Effect.Effect<void> =>
-        Effect.sync(() => ruleEngine.removeRule(id)),
+      removeRule: (id: string): Effect.Effect<void> => Effect.sync(() => ruleEngine.removeRule(id)),
 
       setPermissionMode: (mode: PermissionMode): Effect.Effect<void> =>
-        Effect.sync(() => { setGlobalPermissionMode(mode); }),
+        Effect.sync(() => {
+          setGlobalPermissionMode(mode);
+        }),
 
       getPermissionMode: (): PermissionMode => getGlobalPermissionMode(),
 
@@ -108,10 +114,21 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
           const childReadonlyTools = new Set(readonlyTools);
           const childDestructiveTools = new Set(destructiveTools);
           return {
-            evaluate: (request: { tool: string; input: Record<string, unknown>; context?: Record<string, unknown>; callId?: string; sessionId: string }) =>
+            evaluate: (request: {
+              tool: string;
+              input: Record<string, unknown>;
+              context?: Record<string, unknown>;
+              callId?: string;
+              sessionId: string;
+            }) =>
               Effect.gen(function* () {
                 return yield* runPipeline(
-                  { tool: request.tool, input: request.input, context: request.context, callId: request.callId },
+                  {
+                    tool: request.tool,
+                    input: request.input,
+                    context: request.context,
+                    callId: request.callId,
+                  },
                   {
                     ruleEngine: childEngine,
                     readonlyTools: childReadonlyTools,
@@ -125,12 +142,15 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
                     onNever: (rule) => childEngine.addRule(rule),
                     sessionId: request.sessionId,
                     callId: request.callId,
-                  },
+                  }
                 );
               }),
             addRule: (rule: PermissionRule) => Effect.sync(() => childEngine.addRule(rule)),
             removeRule: (id: string) => Effect.sync(() => childEngine.removeRule(id)),
-            setPermissionMode: (mode: PermissionMode) => Effect.sync(() => { childPermissionMode = mode; }),
+            setPermissionMode: (mode: PermissionMode) =>
+              Effect.sync(() => {
+                childPermissionMode = mode;
+              }),
             getPermissionMode: () => childPermissionMode,
             fork: (opts2: any) => {
               const nestedParentRules = childEngine.getAllRules();
@@ -155,10 +175,21 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               const nestedReadonlyTools = new Set(childReadonlyTools);
               const nestedDestructiveTools = new Set(childDestructiveTools);
               return Effect.succeed({
-                evaluate: (request: { tool: string; input: Record<string, unknown>; context?: Record<string, unknown>; callId?: string; sessionId: string }) =>
+                evaluate: (request: {
+                  tool: string;
+                  input: Record<string, unknown>;
+                  context?: Record<string, unknown>;
+                  callId?: string;
+                  sessionId: string;
+                }) =>
                   Effect.gen(function* () {
                     return yield* runPipeline(
-                      { tool: request.tool, input: request.input, context: request.context, callId: request.callId },
+                      {
+                        tool: request.tool,
+                        input: request.input,
+                        context: request.context,
+                        callId: request.callId,
+                      },
                       {
                         ruleEngine: nestedEngine,
                         readonlyTools: nestedReadonlyTools,
@@ -172,12 +203,15 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
                         onNever: (rule: PermissionRule) => nestedEngine.addRule(rule),
                         sessionId: request.sessionId,
                         callId: request.callId,
-                      },
+                      }
                     );
                   }),
                 addRule: (rule: PermissionRule) => Effect.sync(() => nestedEngine.addRule(rule)),
                 removeRule: (id: string) => Effect.sync(() => nestedEngine.removeRule(id)),
-                setPermissionMode: (mode: PermissionMode) => Effect.sync(() => { nestedPermissionMode = mode; }),
+                setPermissionMode: (mode: PermissionMode) =>
+                  Effect.sync(() => {
+                    nestedPermissionMode = mode;
+                  }),
                 getPermissionMode: () => nestedPermissionMode,
                 fork: (opts3: any) => {
                   // Nested fork not commonly used, use parent's fork for now

@@ -15,9 +15,7 @@ export async function extractMemory(opts: {
 }): Promise<string | null> {
   const { currentAuto, transcript, types, llm } = opts;
 
-  const typeDescriptions = types
-    .map((t) => `- **${t.name}**: ${t.description}`)
-    .join('\n');
+  const typeDescriptions = types.map((t) => `- **${t.name}**: ${t.description}`).join('\n');
 
   const typeGuidelineMap: Record<string, string> = {
     user: '- **user**: 从 [user] 标签提取用户角色、技能栈、对 Agent 的工作偏好及纠正',
@@ -26,12 +24,12 @@ export async function extractMemory(opts: {
   };
 
   const typeGuidance = types
-    .map(t => typeGuidelineMap[t.name])
+    .map((t) => typeGuidelineMap[t.name])
     .filter(Boolean)
     .join('\n');
 
   const formatExamples = types
-    .map(t => {
+    .map((t) => {
       switch (t.name) {
         case 'user':
           return '### user\n- 要点一\n- 要点二';

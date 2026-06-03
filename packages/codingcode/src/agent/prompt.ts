@@ -33,8 +33,7 @@ export interface SystemPromptOptions {
 }
 
 function renderBase(opts: SystemPromptOptions): string {
-  return DEFAULT_SYSTEM_PROMPT
-    .replace('{{cwd}}', opts.cwd)
+  return DEFAULT_SYSTEM_PROMPT.replace('{{cwd}}', opts.cwd)
     .replace('{{platform}}', opts.platform)
     .replace('{{shell}}', opts.shell);
 }

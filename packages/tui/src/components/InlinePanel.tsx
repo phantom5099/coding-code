@@ -52,11 +52,18 @@ export function truncateToDisplayWidth(value: string, maxWidth: number): string 
   return result;
 }
 
-export function getVisiblePanelRange(selectedIdx: number, itemCount: number, maxHeight: number): [number, number] {
+export function getVisiblePanelRange(
+  selectedIdx: number,
+  itemCount: number,
+  maxHeight: number
+): [number, number] {
   if (itemCount <= 0 || maxHeight <= 0) return [0, 0];
   const visibleHeight = Math.min(itemCount, maxHeight);
   const selected = Math.max(0, Math.min(selectedIdx, itemCount - 1));
-  const start = Math.min(Math.max(0, selected - visibleHeight + 1), Math.max(0, itemCount - visibleHeight));
+  const start = Math.min(
+    Math.max(0, selected - visibleHeight + 1),
+    Math.max(0, itemCount - visibleHeight)
+  );
   return [start, start + visibleHeight];
 }
 
@@ -72,7 +79,7 @@ export function InlinePanel<T extends string>({
   const [searchText, setSearchText] = useState('');
   const [selectedIdx, setSelectedIdx] = useState(() => {
     if (activeValue) {
-      const idx = items.findIndex(i => i.value === activeValue);
+      const idx = items.findIndex((i) => i.value === activeValue);
       return idx >= 0 ? idx : 0;
     }
     return 0;
@@ -81,7 +88,7 @@ export function InlinePanel<T extends string>({
   useEffect(() => {
     setSearchText('');
     if (activeValue) {
-      const idx = items.findIndex(i => i.value === activeValue);
+      const idx = items.findIndex((i) => i.value === activeValue);
       setSelectedIdx(idx >= 0 ? idx : 0);
     } else {
       setSelectedIdx(0);
@@ -91,9 +98,8 @@ export function InlinePanel<T extends string>({
   const filtered = useMemo(() => {
     if (!searchText) return items;
     const q = searchText.toLowerCase();
-    return items.filter(i =>
-      i.label.toLowerCase().includes(q) ||
-      (i.description ?? '').toLowerCase().includes(q)
+    return items.filter(
+      (i) => i.label.toLowerCase().includes(q) || (i.description ?? '').toLowerCase().includes(q)
     );
   }, [items, searchText]);
 
@@ -106,27 +112,30 @@ export function InlinePanel<T extends string>({
   const clampedSelectedIdx = Math.max(0, Math.min(selectedIdx, filtered.length - 1));
 
   useInput((input, key) => {
-    if (key.escape) { onCancel(); return; }
+    if (key.escape) {
+      onCancel();
+      return;
+    }
     if (key.return) {
       const item = filtered[clampedSelectedIdx];
       if (item) onSelect(item.value);
       return;
     }
     if (key.upArrow || (key.tab && key.shift)) {
-      setSelectedIdx(prev => (prev <= 0 ? Math.max(0, filtered.length - 1) : prev - 1));
+      setSelectedIdx((prev) => (prev <= 0 ? Math.max(0, filtered.length - 1) : prev - 1));
       return;
     }
     if (key.downArrow || key.tab) {
-      setSelectedIdx(prev => (prev >= filtered.length - 1 ? 0 : prev + 1));
+      setSelectedIdx((prev) => (prev >= filtered.length - 1 ? 0 : prev + 1));
       return;
     }
     if (key.backspace || key.delete) {
-      setSearchText(s => s.slice(0, -1));
+      setSearchText((s) => s.slice(0, -1));
       setSelectedIdx(0);
       return;
     }
     if (input && !key.ctrl && !key.meta) {
-      setSearchText(s => (s + input).slice(0, 50));
+      setSearchText((s) => (s + input).slice(0, 50));
       setSelectedIdx(0);
     }
   });
@@ -135,19 +144,36 @@ export function InlinePanel<T extends string>({
   const innerW = Math.max(1, panelWidth - 4);
   const lineStr = '─'.repeat(innerW);
   const visibleHeight = Math.min(filtered.length, maxHeight);
-  const [visibleStart, visibleEnd] = getVisiblePanelRange(clampedSelectedIdx, filtered.length, maxHeight);
+  const [visibleStart, visibleEnd] = getVisiblePanelRange(
+    clampedSelectedIdx,
+    filtered.length,
+    maxHeight
+  );
   const visibleItems = filtered.slice(visibleStart, visibleEnd);
   const itemWidth = Math.max(1, innerW - 1);
 
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor="magenta" width={panelWidth} paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="single"
+      borderColor="magenta"
+      width={panelWidth}
+      paddingX={1}
+    >
       <Box>
-        <Text bold color="magenta">{title}</Text>
-        <Text color="gray"> · {filtered.length}/{items.length}</Text>
+        <Text bold color="magenta">
+          {title}
+        </Text>
+        <Text color="gray">
+          {' '}
+          · {filtered.length}/{items.length}
+        </Text>
         {searchText !== '' && <Text color="yellow"> · 筛选: {searchText}_</Text>}
       </Box>
 
-      <Box><Text color="gray">{lineStr}</Text></Box>
+      <Box>
+        <Text color="gray">{lineStr}</Text>
+      </Box>
 
       <Box flexDirection="column" height={visibleHeight}>
         {filtered.length === 0 ? (
@@ -162,7 +188,10 @@ export function InlinePanel<T extends string>({
             const indicator = isSelected ? '▸' : ' ';
             const dot = isActive ? '●' : ' ';
             const desc = item.description ? ` · ${item.description}` : '';
-            const line = truncateToDisplayWidth(`${indicator} ${dot} ${item.label}${desc}`, itemWidth);
+            const line = truncateToDisplayWidth(
+              `${indicator} ${dot} ${item.label}${desc}`,
+              itemWidth
+            );
 
             return (
               <Box key={item.value}>
@@ -179,7 +208,9 @@ export function InlinePanel<T extends string>({
         )}
       </Box>
 
-      <Box><Text color="gray">{lineStr}</Text></Box>
+      <Box>
+        <Text color="gray">{lineStr}</Text>
+      </Box>
 
       <Box>
         <Text color="gray">

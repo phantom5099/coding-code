@@ -33,13 +33,15 @@ describe('writeHookConfigs', () => {
   });
 
   it('should write and read back hooks', () => {
-    writeHookConfigs(testDir, [{
-      name: 'test-hook',
-      point: 'session.save.before',
-      type: 'observer',
-      command: 'echo',
-      enabled: true,
-    }]);
+    writeHookConfigs(testDir, [
+      {
+        name: 'test-hook',
+        point: 'session.save.before',
+        type: 'observer',
+        command: 'echo',
+        enabled: true,
+      },
+    ]);
     const result = loadHookConfigs(testDir);
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('test-hook');
@@ -48,8 +50,12 @@ describe('writeHookConfigs', () => {
   });
 
   it('should overwrite existing hooks', () => {
-    writeHookConfigs(testDir, [{ name: 'old', point: 'agent.turn.start', type: 'observer', command: 'echo', enabled: true }]);
-    writeHookConfigs(testDir, [{ name: 'new', point: 'agent.turn.end', type: 'observer', command: 'ls', enabled: false }]);
+    writeHookConfigs(testDir, [
+      { name: 'old', point: 'agent.turn.start', type: 'observer', command: 'echo', enabled: true },
+    ]);
+    writeHookConfigs(testDir, [
+      { name: 'new', point: 'agent.turn.end', type: 'observer', command: 'ls', enabled: false },
+    ]);
     const result = loadHookConfigs(testDir);
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('new');
@@ -59,7 +65,9 @@ describe('writeHookConfigs', () => {
   it('should preserve other top-level keys', () => {
     const p = join(testDir, '.codingcode', 'hooks.yaml');
     writeFileSync(p, 'otherKey: value\nhooks: []\n');
-    writeHookConfigs(testDir, [{ name: 'srv', point: 'agent.turn.start', type: 'observer', command: 'echo', enabled: true }]);
+    writeHookConfigs(testDir, [
+      { name: 'srv', point: 'agent.turn.start', type: 'observer', command: 'echo', enabled: true },
+    ]);
     const raw = JSON.parse(JSON.stringify(parseYaml(readFileSync(p, 'utf8'))));
     expect(raw.otherKey).toBe('value');
     expect(raw.hooks).toHaveLength(1);
