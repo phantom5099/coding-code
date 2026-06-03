@@ -267,7 +267,7 @@ describe('pruneByTokens', () => {
     ];
     const result = pruneByTokens(events, baseConfig, 100);
     // Summary should remain
-    expect(result[0].type).toBe('summary');
+    expect(result[0]!.type).toBe('summary');
     expect((result[0] as any).summaryText).toBe('Summary text');
     // Oldest tool results cleared
     expect((result[3] as ToolResultEvent).output).toBe('[Old tool result content cleared]');

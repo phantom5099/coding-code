@@ -37,9 +37,9 @@ describe('loadMcpConfig', () => {
 
     const configs = loadMcpConfig(join(__dirname, '..', '..', '..'));
     expect(configs).toHaveLength(1);
-    expect(configs[0].name).toBe('test-stdio');
-    expect(configs[0].command).toBe('npx');
-    expect(configs[0].args).toEqual(['-y', 'test-server']);
+    expect(configs[0]!.name).toBe('test-stdio');
+    expect(configs[0]!.command).toBe('npx');
+    expect(configs[0]!.args).toEqual(['-y', 'test-server']);
   });
 
   it('should load SSE server config from mcp.yaml', () => {
@@ -56,9 +56,9 @@ describe('loadMcpConfig', () => {
 
     const configs = loadMcpConfig(join(__dirname, '..', '..', '..'));
     expect(configs).toHaveLength(1);
-    expect(configs[0].name).toBe('test-sse');
-    expect(configs[0].url).toBe('https://mcp.example.com/sse');
-    expect(configs[0].concurrency).toBe(5);
+    expect(configs[0]!.name).toBe('test-sse');
+    expect(configs[0]!.url).toBe('https://mcp.example.com/sse');
+    expect(configs[0]!.concurrency).toBe(5);
   });
 
   it('should resolve ${ENV_VAR} placeholders', () => {
@@ -74,7 +74,7 @@ describe('loadMcpConfig', () => {
     );
 
     const configs = loadMcpConfig(join(__dirname, '..', '..', '..'));
-    expect(configs[0].headers!.Authorization).toBe('Bearer resolved-token');
+    expect(configs[0]!.headers!.Authorization).toBe('Bearer resolved-token');
 
     delete process.env.TEST_TOKEN;
   });
@@ -91,7 +91,7 @@ describe('loadMcpConfig', () => {
     );
 
     const configs = loadMcpConfig(join(__dirname, '..', '..', '..'));
-    expect(configs[0].headers!.Authorization).toBeUndefined();
+    expect(configs[0]!.headers!.Authorization).toBeUndefined();
   });
 });
 
@@ -113,8 +113,8 @@ describe('writeMcpConfig', () => {
     writeMcpConfig(projectRoot, servers);
     const result = loadMcpConfig(projectRoot);
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('test-server');
-    expect(result[0].concurrency).toBe(5);
+    expect(result[0]!.name).toBe('test-server');
+    expect(result[0]!.concurrency).toBe(5);
   });
 
   it('should overwrite existing servers list', () => {
@@ -123,7 +123,7 @@ describe('writeMcpConfig', () => {
     writeMcpConfig(projectRoot, [{ name: 'new', command: 'ls' }]);
     const result = loadMcpConfig(projectRoot);
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('new');
+    expect(result[0]!.name).toBe('new');
   });
 
   it('should preserve other top-level keys in the yaml', () => {

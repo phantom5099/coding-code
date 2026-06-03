@@ -127,10 +127,10 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
           toolCalls,
           (tc: any) =>
             mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(
-              Effect.matchEffect({
-                onSuccess: (output) =>
+              (Effect.matchEffect as any)({
+                onSuccess: (output: any) =>
                   Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
-                onFailure: (err) =>
+                onFailure: (err: any) =>
                   Effect.succeed({
                     type: 'error' as const,
                     id: tc.id,
@@ -138,7 +138,7 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
                     output: String(err),
                   }),
               }),
-              Effect.catchAllDefect((defect) =>
+              (Effect.catchAllDefect as any)((defect: any) =>
                 Effect.succeed({
                   type: 'error' as const,
                   id: tc.id,
@@ -196,10 +196,10 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
           toolCalls,
           (tc: any) =>
             mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(
-              Effect.matchEffect({
-                onSuccess: (output) =>
+              (Effect.matchEffect as any)({
+                onSuccess: (output: any) =>
                   Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
-                onFailure: (err) =>
+                onFailure: (err: any) =>
                   Effect.succeed({
                     type: 'error' as const,
                     id: tc.id,
@@ -207,7 +207,7 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
                     output: String(err),
                   }),
               }),
-              Effect.catchAllDefect((defect) =>
+              (Effect.catchAllDefect as any)((defect: any) =>
                 Effect.succeed({
                   type: 'error' as const,
                   id: tc.id,

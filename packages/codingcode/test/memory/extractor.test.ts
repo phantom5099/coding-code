@@ -5,15 +5,28 @@ import type { MemoryTypeConfig } from '@codingcode/infra';
 
 describe('Memory Extractor', () => {
   const createMockLlm = (response: string) => ({
+    complete: vi.fn(() =>
+      Promise.resolve({
+        ok: true as const,
+        value: { content: response, finishReason: 'stop' as const },
+      })
+    ),
     completeStream: vi.fn(() => ({
       stream: (async function* () {
         yield response;
       })(),
       response: Promise.resolve({
-        ok: true,
-        value: { content: response },
+        ok: true as const,
+        value: { content: response, finishReason: 'stop' as const },
       }),
     })),
+    modelInfo: {
+      provider: 'mock',
+      model: 'mock',
+      maxTokens: 4096,
+      supportsToolCalling: true,
+      supportsStreaming: true,
+    },
   });
 
   const defaultTypes: MemoryTypeConfig[] = [
@@ -83,6 +96,12 @@ describe('Memory Extractor', () => {
 
   it('handles LLM call failure gracefully', async () => {
     const llm = {
+      complete: vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          value: { content: '' },
+        } as any)
+      ),
       completeStream: vi.fn(() => ({
         stream: (async function* () {
           throw new Error('Stream error');
@@ -92,6 +111,13 @@ describe('Memory Extractor', () => {
           value: { content: '' },
         } as any),
       })),
+      modelInfo: {
+        provider: 'mock',
+        model: 'mock',
+        maxTokens: 4096,
+        supportsToolCalling: true,
+        supportsStreaming: true,
+      },
     };
 
     const transcript: StructuredTranscript = {
@@ -129,7 +155,7 @@ describe('Memory Extractor', () => {
       llm: mockLlm,
     });
 
-    const callArgs = mockLlm.completeStream.mock.calls[0][0];
+    const callArgs = (mockLlm.completeStream.mock.calls as any)[0][0] as any;
     expect(callArgs.messages[0].content).toContain('已有记忆');
     expect(callArgs.messages[0].content).toContain('Old info');
   });
@@ -150,7 +176,7 @@ describe('Memory Extractor', () => {
       llm: mockLlm,
     });
 
-    const callArgs = mockLlm.completeStream.mock.calls[0][0];
+    const callArgs = (mockLlm.completeStream.mock.calls as any)[0][0] as any;
     expect(callArgs.messages[0].content).toContain('[user]');
     expect(callArgs.messages[0].content).toContain('[user+assistant]');
     expect(callArgs.messages[0].content).toContain('[user+tool]');
@@ -173,7 +199,7 @@ describe('Memory Extractor', () => {
       llm: mockLlm,
     });
 
-    const callArgs = mockLlm.completeStream.mock.calls[0][0];
+    const callArgs = (mockLlm.completeStream.mock.calls as any)[0][0] as any;
     // Should not mention reference guidance
     expect(callArgs.system).not.toContain('reference');
   });
@@ -194,7 +220,7 @@ describe('Memory Extractor', () => {
       llm: mockLlm,
     });
 
-    const callArgs = mockLlm.completeStream.mock.calls[0][0];
+    const callArgs = (mockLlm.completeStream.mock.calls as any)[0][0] as any;
     expect(callArgs.messages).toHaveLength(1);
     expect(callArgs.messages[0].role).toBe('user');
     expect(callArgs.messages[0].content).toBeTruthy();
@@ -216,7 +242,7 @@ describe('Memory Extractor', () => {
       llm: mockLlm,
     });
 
-    const callArgs = mockLlm.completeStream.mock.calls[0][0];
+    const callArgs = (mockLlm.completeStream.mock.calls as any)[0][0] as any;
     // system contains instructions, not transcript data
     expect(callArgs.system).toContain('规则');
     expect(callArgs.system).toContain('记忆类型');

@@ -10,9 +10,15 @@ import { SubagentRegistryLayer } from '../../src/layer';
 import { registerEmitter, unregisterEmitter, hasEmitter } from '../../src/approval/async-confirm';
 
 const mockMcp = {
+  _tag: 'Mcp' as const,
   connectServers: () => Effect.void,
   disconnectServers: () => Effect.void,
   getServerToolNames: () => [] as string[],
+  syncConnections: () => Effect.void,
+  disconnectAll: () => Effect.void,
+  disable: () => Effect.void,
+  enable: () => Effect.void,
+  status: () => Effect.succeed([]),
 };
 
 const mockModelEntry = {

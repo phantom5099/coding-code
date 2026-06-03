@@ -1,5 +1,6 @@
 ﻿import { describe, it, expect, vi, afterEach } from 'vitest';
 import { resolveMemoryLLM } from '../../src/memory/llm-resolver.js';
+import type { LLMClient } from '../../src/llm/client.js';
 import type { MemoryConfig } from '@codingcode/infra';
 
 vi.mock('../../src/llm/factory.js', () => ({
@@ -20,13 +21,21 @@ vi.mock('../../src/llm/factory.js', () => ({
       },
     ],
   })),
-  createClient: vi.fn(async (modelInfo: any) => ({
+  createClient: vi.fn(async (_modelInfo: any) => ({
     ok: true,
     value: {
+      complete: () => Promise.resolve({ ok: true, value: { content: '' } }),
       completeStream: () => ({
         stream: async function* () {},
         response: Promise.resolve({ ok: true, value: { content: '' } }),
       }),
+      modelInfo: {
+        provider: 'mock',
+        model: 'mock',
+        maxTokens: 4096,
+        supportsToolCalling: true,
+        supportsStreaming: true,
+      },
     } as any,
   })),
 }));
@@ -49,7 +58,7 @@ describe('Memory LLM Resolver', () => {
 
   it('returns fallback when model is empty', async () => {
     const cfg = createCfg('');
-    const fallback = {} as LLMStreamAdapter;
+    const fallback = {} as LLMClient;
     const result = await resolveMemoryLLM(cfg, fallback);
     expect(result).toBe(fallback);
   });
@@ -59,14 +68,14 @@ describe('Memory LLM Resolver', () => {
     vi.mocked(listModels).mockReturnValue({ ok: false, error: 'error' } as any);
 
     const cfg = createCfg('claude-opus-4-7');
-    const fallback = {} as LLMStreamAdapter;
+    const fallback = {} as LLMClient;
     const result = await resolveMemoryLLM(cfg, fallback);
     expect(result).toBe(fallback);
   });
 
   it('returns fallback when model not found', async () => {
     const cfg = createCfg('nonexistent-model');
-    const fallback = {} as LLMStreamAdapter;
+    const fallback = {} as LLMClient;
     const result = await resolveMemoryLLM(cfg, fallback);
     expect(result).toBe(fallback);
   });
@@ -91,14 +100,14 @@ describe('Memory LLM Resolver', () => {
 
   it('creates and returns client when model matches by id', async () => {
     const cfg = createCfg('claude-opus-4-7');
-    const fallback = {} as any;
+    const fallback = {} as LLMClient;
     const result = await resolveMemoryLLM(cfg, fallback);
     expect(result).not.toBe(fallback);
   });
 
   it('creates and returns client when model matches by bare id', async () => {
     const cfg = createCfg('deepseek-chat');
-    const fallback = {} as any;
+    const fallback = {} as LLMClient;
     const result = await resolveMemoryLLM(cfg, fallback);
     expect(result).not.toBe(fallback);
   });

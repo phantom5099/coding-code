@@ -44,9 +44,9 @@ describe('writeHookConfigs', () => {
     ]);
     const result = loadHookConfigs(testDir);
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('test-hook');
-    expect(result[0].point).toBe('session.save.before');
-    expect(result[0].type).toBe('observer');
+    expect(result[0]!.name).toBe('test-hook');
+    expect(result[0]!.point).toBe('session.save.before');
+    expect(result[0]!.type).toBe('observer');
   });
 
   it('should overwrite existing hooks', () => {
@@ -58,8 +58,8 @@ describe('writeHookConfigs', () => {
     ]);
     const result = loadHookConfigs(testDir);
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('new');
-    expect(result[0].enabled).toBe(false);
+    expect(result[0]!.name).toBe('new');
+    expect(result[0]!.enabled).toBe(false);
   });
 
   it('should preserve other top-level keys', () => {

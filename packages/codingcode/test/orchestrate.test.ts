@@ -32,14 +32,20 @@ const mockLlm = {
     supportsToolCalling: true,
     supportsStreaming: true,
   },
-  complete: () => Promise.resolve(Result.ok({ content: 'Hello world', finishReason: 'stop' })),
+  complete: () =>
+    Promise.resolve(Result.ok({ content: 'Hello world', finishReason: 'stop' as const })),
   completeStream: (_params: any) => {
     const stream = (async function* () {
       yield 'Hello';
       yield ' ';
       yield 'world';
     })();
-    return { stream, response: Promise.resolve(Result.ok({ content: 'Hello world' })) };
+    return {
+      stream,
+      response: Promise.resolve(
+        Result.ok({ content: 'Hello world', finishReason: 'stop' as const })
+      ),
+    };
   },
 };
 
@@ -47,7 +53,7 @@ const MockToolExecutorLayer = Layer.succeed(
   ToolExecutorService,
   ToolExecutorService.of({
     _tag: 'ToolExecutor' as const,
-    execute: () => Effect.succeed('done'),
+    execute: () => Effect.succeed({ output: 'done' }),
     executeBatch: (toolCalls: any[]) =>
       Effect.succeed(
         toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: '' }))
@@ -90,11 +96,49 @@ const MockSessionLayer = Layer.succeed(
         timestamp: new Date().toISOString(),
         tokenCount: 0,
       }),
+    appendSummary: () =>
+      Effect.succeed({
+        type: 'summary' as const,
+        uuid: 's1',
+        replaces: [],
+        summaryText: '',
+        method: 'prune' as const,
+        timestamp: new Date().toISOString(),
+      }),
+    hideMessage: () =>
+      Effect.succeed({
+        type: 'hide' as const,
+        uuid: 'h1',
+        kind: 'message' as const,
+        targetUuid: '',
+        reason: '',
+        timestamp: new Date().toISOString(),
+      }),
+    rollbackToTurn: () =>
+      Effect.succeed({
+        type: 'hide' as const,
+        uuid: 'h1',
+        kind: 'rollback' as const,
+        throughTurnId: 0,
+        reason: '',
+        timestamp: new Date().toISOString(),
+      }),
+    undoLastHide: () => Effect.succeed(null),
+    forkSession: () => Effect.succeed('fork-id'),
+    renameSession: () =>
+      Effect.succeed({
+        type: 'title' as const,
+        uuid: 't1',
+        text: 'renamed',
+        timestamp: new Date().toISOString(),
+      }),
     readHistory: () => Effect.succeed([]),
     readMessages: () => Effect.succeed([]),
     listSessions: () => Effect.succeed([]),
     getSessionId: () => 'test',
     getMessageCount: () => 0,
+    setPermissionMode: () => Effect.succeed(undefined),
+    getPermissionMode: () => Effect.succeed('default'),
     incrementTurn: () => 0,
     findSessionIndex: () => Effect.succeed(null),
   })
@@ -111,7 +155,6 @@ const MockContextLayer = Layer.succeed(
         promptEstimate: 0,
       })),
     compress: () => Effect.succeed({ didCompress: true, released: 0, promptEstimate: 0 }),
-    appendTurnEnd: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
     compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
   })
 );

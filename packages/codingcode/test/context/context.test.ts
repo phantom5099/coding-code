@@ -24,15 +24,27 @@ const mockState = {
 };
 
 const mockLlm = {
-  modelInfo: { maxTokens: 1000, model: 'test-model' },
-  complete: () => Promise.resolve(Result.ok({ content: 'Hello world', finishReason: 'stop' })),
+  modelInfo: {
+    provider: 'mock',
+    model: 'test-model',
+    maxTokens: 1000,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
+  complete: () =>
+    Promise.resolve(Result.ok({ content: 'Hello world', finishReason: 'stop' as const })),
   completeStream: (_params: any) => {
     const stream = (async function* () {
       yield 'Hello';
       yield ' ';
       yield 'world';
     })();
-    return { stream, response: Promise.resolve(Result.ok({ content: 'Hello world', finishReason: 'stop' })) };
+    return {
+      stream,
+      response: Promise.resolve(
+        Result.ok({ content: 'Hello world', finishReason: 'stop' as const })
+      ),
+    };
   },
 };
 
@@ -122,9 +134,9 @@ function makeMockSessionLayer(state: any) {
       getSessionId: () => state.sessionId,
       getMessageCount: () => 0,
       incrementTurn: () => 0,
-    findSessionIndex: () => Effect.succeed(null),
-  } as any)
-);
+      findSessionIndex: () => Effect.succeed(null),
+    } as any)
+  );
 }
 
 describe('ContextService', () => {

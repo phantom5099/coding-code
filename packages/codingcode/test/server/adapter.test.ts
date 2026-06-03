@@ -77,7 +77,14 @@ describe('agentEventToSseEvent', () => {
 
   it('returns null for Assistant and ReactiveCompact', () => {
     expect(agentEventToSseEvent({ _tag: 'Assistant', content: 'ok' })).toBeNull();
-    expect(agentEventToSseEvent({ _tag: 'ReactiveCompact', attempt: 1, released: 100, promptEstimate: 0 })).toBeNull();
+    expect(
+      agentEventToSseEvent({
+        _tag: 'ReactiveCompact',
+        attempt: 1,
+        released: 100,
+        promptEstimate: 0,
+      })
+    ).toBeNull();
   });
 });
 

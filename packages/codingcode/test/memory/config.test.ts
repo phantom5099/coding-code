@@ -101,7 +101,7 @@ describe('Memory Config', () => {
 
       const types = getEffectiveTypes(cfg);
       expect(types).toHaveLength(1);
-      expect(types[0].name).toBe('reference');
+      expect(types[0]!.name).toBe('reference');
     });
 
     it('filters disabled extra types', () => {

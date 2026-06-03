@@ -58,9 +58,9 @@ describe('ToolExecCtx propagation', () => {
 
     await runWithLayer(program);
     expect(captured).toHaveLength(1);
-    expect(captured[0].sessionId).toBe('sess-1');
-    expect(captured[0].turnId).toBe(5);
-    expect(captured[0].projectPath).toBe('/proj');
+    expect(captured[0]!.sessionId).toBe('sess-1');
+    expect(captured[0]!.turnId).toBe(5);
+    expect(captured[0]!.projectPath).toBe('/proj');
   });
 
   it('should pass sessionId when provided without other optional fields', async () => {
@@ -94,6 +94,6 @@ describe('ToolExecCtx propagation', () => {
 
     await runWithLayer(program);
     expect(captured).toHaveLength(1);
-    expect(captured[0].sessionId).toBe('sess-2');
+    expect(captured[0]!.sessionId).toBe('sess-2');
   });
 });
