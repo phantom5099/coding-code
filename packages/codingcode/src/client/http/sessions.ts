@@ -55,7 +55,7 @@ export interface SessionClient {
 export function createHttpSessionClient(
   request: ReturnType<typeof createRequestHelpers>
 ): SessionClient {
-  const { apiGet, apiPost, apiDelete } = request;
+  const { apiGet, apiPost, apiPut, apiDelete } = request;
 
   return {
     async createSession({ cwd, initialPermissionMode }) {
