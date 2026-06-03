@@ -1,6 +1,7 @@
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
-import { resolveSessionDir, readHistory, applyVisibilityEvents, findSessionIndex, buildMessagesFromEvents, persistToolResult } from '../session/store.js';
+import { findSessionIndex, resolveSessionDir, readHistory, persistToolResult } from '../session/io.js';
+import { applyVisibilityEvents, buildMessagesFromEvents } from '../session/messages.js';
 import { estimateMessageTokens, estimateTokens, estimateTokensForContent } from './utils/tokens.js';
 import { join } from 'path';
 import { randomUUID } from 'crypto';

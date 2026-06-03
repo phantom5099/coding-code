@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect } from 'vitest';
-import { sessionEventsToTurns } from '../../src/session/store.js';
+import { sessionEventsToTurns } from '../../src/session/messages.js';
 import type { SessionEvent } from '../../src/session/types.js';
 
 describe('sessionEventsToTurns', () => {

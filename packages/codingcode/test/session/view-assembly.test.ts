@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'crypto';
-import { buildMessagesFromEvents } from '../../src/session/store.js';
+import { buildMessagesFromEvents } from '../../src/session/messages.js';
 import type { SessionEvent } from '../../src/session/types.js';
 
 function makeEvents(overrides: Partial<SessionEvent>[] = []): SessionEvent[] {

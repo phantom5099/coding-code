@@ -1,6 +1,5 @@
 import { randomUUID } from 'crypto';
-import { readHistory, findSessionIndex } from '../../session/store.js';
-import { resolveSessionDir } from '../../session/store.js';
+import { findSessionIndex, readHistory, resolveSessionDir } from '../../session/io.js';
 import { estimateTokens, estimateMessageTokens } from '../utils/tokens.js';
 import { resolveCompactionLLM } from './llm-resolver.js';
 import { COMPACTION_SYSTEM_PROMPT } from './prompt.js';

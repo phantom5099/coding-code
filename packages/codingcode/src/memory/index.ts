@@ -1,5 +1,5 @@
 import type { LLMClient } from '../llm/client.js';
-import { findSessionIndex } from '../session/store.js';
+import { findSessionIndex, resolveSessionDir } from '../session/io.js';
 import type { SessionEvent } from '../session/types.js';
 import { readMemoryFile, resolveProjectMemoryPath, resolveUserMemoryPath, extractAutoBlock, replaceAutoBlock, mergeAutoBlocks, enforceMaxBytes, writeMemoryFileAtomic, stripMarkersForPrompt } from './storage.js';
 import { resolveMemoryLLM } from './llm-resolver.js';
@@ -119,7 +119,6 @@ export async function flushSessionToMemory(
     try {
       const { readFileSync } = await import('node:fs');
       const { join } = await import('node:path');
-      const { resolveSessionDir } = await import('../session/store.js');
 
       const sessionDir = resolveSessionDir(sessionId);
       if (!sessionDir) return { written: false, bytes: 0 };

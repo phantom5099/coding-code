@@ -18,12 +18,12 @@ vi.mock('../../../src/context/compressor/index.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../src/session/store.js', async (importOriginal) => {
+vi.mock('../../../src/session/io.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...(actual as any),
-    resolveSessionDir: vi.fn(() => '/tmp/sessions'),
     findSessionIndex: vi.fn(() => ({ currentTurnId: 10 })),
+    resolveSessionDir: vi.fn(() => '/tmp/sessions'),
     readHistory: vi.fn(() => [
       { type: 'user', content: 'a'.repeat(200), uuid: 'u1', turnId: 1 },
       { type: 'assistant', content: 'b'.repeat(200), uuid: 'a1', turnId: 1 },
@@ -50,7 +50,7 @@ vi.mock('../../../src/context/utils/tokens.js', () => ({
 }));
 
 import { compactIfNeeded } from '../../../src/context/compressor/index.js';
-import { findSessionIndex } from '../../../src/session/store.js';
+import { findSessionIndex } from '../../../src/session/io.js';
 import { estimateTokens, estimateMessageTokens } from '../../../src/context/utils/tokens.js';
 
 function config(threshold: number, maxTokens = 10000) {
