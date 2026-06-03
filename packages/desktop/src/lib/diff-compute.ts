@@ -25,9 +25,14 @@ export function computeDiff(
   const oldLines = oldContent.split('\n');
   const newLines = newContent.split('\n');
 
-  // Simple LCS-based diff
   const m = oldLines.length;
   const n = newLines.length;
+
+  // Large file protection: use O(n) simplified diff when lines exceed threshold
+  const MAX_LCS_LINES = 500;
+  if (m > MAX_LCS_LINES || n > MAX_LCS_LINES) {
+    return simplifiedDiff(oldLines, newLines);
+  }
 
   // Build LCS table
   const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0)) as number[][];
@@ -70,6 +75,28 @@ export function computeDiff(
     insertions,
     deletions,
   };
+}
+
+/**
+ * O(n) simplified diff for large files: show all old lines as deletions,
+ * all new lines as insertions. No LCS computation.
+ */
+function simplifiedDiff(
+  oldLines: string[],
+  newLines: string[]
+): { diff: string; insertions: number; deletions: number } {
+  const diffLines: string[] = [];
+  let deletions = 0;
+  let insertions = 0;
+  for (const line of oldLines) {
+    diffLines.push(`-${line}`);
+    deletions++;
+  }
+  for (const line of newLines) {
+    diffLines.push(`+${line}`);
+    insertions++;
+  }
+  return { diff: diffLines.join('\n'), insertions, deletions };
 }
 
 export function wrapUnifiedDiff(

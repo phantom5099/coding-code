@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type {
   FileNode,
@@ -23,6 +23,7 @@ export function enrichTurnDiffs(turn: Turn): void {
   for (let i = 0; i < turn.items.length; i++) {
     const item = turn.items[i]!;
     if (item.type !== 'tool_result') continue;
+    if ((item as any).diff) continue; // already computed by applyChunk
     const callItem = turn.items.find(
       (j) => j.type === 'tool_call' && j.id === (item as any).callId
     ) as any;
@@ -78,6 +79,7 @@ interface AgentState {
   pendingInput: string | null;
   usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>;
   isCompressing: boolean;
+  hasRunningTurn: boolean;
 }
 
 interface EditorState {
@@ -175,6 +177,26 @@ const initialGit: GitStatus = {
   unstaged: [],
 };
 
+// Debounced localStorage adapter to avoid blocking main thread on every set()
+let persistDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+const debouncedStateStorage = {
+  getItem: (name: string): string | null => localStorage.getItem(name),
+  setItem: (name: string, value: string): void => {
+    clearTimeout(persistDebounceTimer);
+    persistDebounceTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(name, value);
+      } catch (e) {
+        console.error('Failed to persist state:', e);
+      }
+    }, 500);
+  },
+  removeItem: (name: string): void => {
+    clearTimeout(persistDebounceTimer);
+    localStorage.removeItem(name);
+  },
+};
+
 export const useGlobalStore = create<GlobalState & GlobalActions>()(
   persist(
     immer((set) => ({
@@ -211,6 +233,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         pendingInput: null,
         usageByThreadId: {},
         isCompressing: false,
+        hasRunningTurn: false,
       },
       editor: {
         cursorLine: 1,
@@ -437,6 +460,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
             thread.turns.push(turn);
             thread.updatedAt = Date.now();
           }
+          s.agent.hasRunningTurn = true;
         }),
 
       applyChunk: (threadId, turnId, chunk) =>
@@ -489,8 +513,21 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
 
           if (chunk.type === 'tool_result') {
             let targetChunk = chunk;
+            // Search current turn first (most common case)
+            let callIdx = turn.items.findIndex(
+              (i) => i.type === 'tool_call' && i.id === chunk.callId
+            );
+            if (callIdx >= 0) {
+              const callItem = turn.items[callIdx] as any;
+              callItem.status = 'approved';
+              targetChunk = buildToolDiff(chunk, callItem) as any;
+              turn.items.splice(callIdx + 1, 0, targetChunk);
+              return;
+            }
+            // Fallback: search other turns (rare)
             for (const t of thread.turns) {
-              const callIdx = t.items.findIndex(
+              if (t === turn) continue;
+              callIdx = t.items.findIndex(
                 (i) => i.type === 'tool_call' && i.id === chunk.callId
               );
               if (callIdx >= 0) {
@@ -535,6 +572,10 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
               item.partial = false;
             }
           }
+          // Recalculate hasRunningTurn across all threads
+          s.agent.hasRunningTurn = Object.values(s.agent.threads).some((t) =>
+            t.turns.some((tu) => tu.status === 'running')
+          );
         }),
 
       setPendingInput: (input) =>
@@ -547,6 +588,9 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           const thread = s.agent.threads[threadId];
           if (!thread) return;
           thread.turns = thread.turns.filter((t) => t.status !== 'running');
+          s.agent.hasRunningTurn = Object.values(s.agent.threads).some((t) =>
+            t.turns.some((tu) => tu.status === 'running')
+          );
         }),
 
       applyTodoUpdate: (threadId, items) =>
@@ -669,6 +713,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
     })),
     {
       name: 'codingcode-desktop-store',
+      storage: createJSONStorage(() => debouncedStateStorage),
       partialize: (state) => ({
         ui: {
           mode: state.ui.mode,
@@ -691,7 +736,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         agent: {
           approvalPolicy: state.agent.approvalPolicy,
           model: state.agent.model,
-          usageByThreadId: state.agent.usageByThreadId,
         },
         editor: {
           cursorLine: state.editor.cursorLine,
@@ -726,7 +770,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
             threads: {},
             todoByThreadId: {},
             contextUsage: null,
-            usageByThreadId: persistedAny.agent?.usageByThreadId ?? {},
+            usageByThreadId: {},
           },
         };
       },

@@ -28,6 +28,9 @@ const api = {
   // Folder dialog
   openFolderDialog: (): Promise<string | null> => ipcRenderer.invoke('project:openFolderDialog'),
 
+  // Workspace cwd sync (renderer -> main)
+  setWorkspaceCwd: (cwd: string): void => ipcRenderer.send('workspace:setCwd', cwd),
+
   // Git (explicit cwd)
   gitStatus: (cwd: string): Promise<unknown> => ipcRenderer.invoke('git:status', cwd),
   gitBranches: (cwd: string): Promise<string[]> => ipcRenderer.invoke('git:branches', cwd),

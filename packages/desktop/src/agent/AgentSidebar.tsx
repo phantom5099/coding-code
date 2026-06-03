@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useGlobalStore } from '../stores/global.store';
-import { API_BASE, api } from '../lib/api';
-import type { Thread } from '@shared/types';
+import { api } from '../lib/api';
 
 function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`);
@@ -17,25 +16,23 @@ function relativeTime(ts: number): string {
   return `${Math.floor(days / 7)}周`;
 }
 
-function getProjectThreads(threads: Record<string, Thread>, rootPath: string): Thread[] {
-  const normalizedRoot = normalizeCwd(rootPath);
-  return Object.values(threads)
-    .filter((t) => {
-      const tcwd = normalizeCwd(t.cwd);
-      return tcwd.startsWith(normalizedRoot);
-    })
-    .sort((a, b) => b.updatedAt - a.updatedAt);
-}
-
 export default function AgentSidebar() {
   const sidebarCollapsed = useGlobalStore((s) => s.ui.sidebarCollapsed);
-  const threads = useGlobalStore((s) => s.agent.threads);
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
+  const rootPath = useGlobalStore((s) => s.workspace.rootPath);
   const workspace = useGlobalStore((s) => s.workspace);
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
   const toggleSidebar = useGlobalStore((s) => s.toggleSidebar);
 
-  const projectThreads = getProjectThreads(threads, workspace.rootPath);
+  // Fine-grained selector: only extract thread list metadata, not full thread objects
+  const threadList = useGlobalStore((s) => {
+    const normalizedRoot = normalizeCwd(rootPath);
+    return Object.values(s.agent.threads)
+      .filter((t) => normalizeCwd(t.cwd).startsWith(normalizedRoot))
+      .map((t) => ({ id: t.id, title: t.title, cwd: t.cwd, updatedAt: t.updatedAt }))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  });
+
   const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
 
   const handleDelete = async (threadId: string) => {
@@ -127,7 +124,7 @@ export default function AgentSidebar() {
             会话
           </span>
         </div>
-        {projectThreads.slice(0, 15).map((t) => (
+        {threadList.slice(0, 15).map((t) => (
           <button
             type="button"
             key={t.id}
@@ -175,15 +172,15 @@ export default function AgentSidebar() {
             )}
           </button>
         ))}
-        {projectThreads.length > 15 && (
+        {threadList.length > 15 && (
           <button
             type="button"
             className="w-full text-left px-4 py-1.5 text-[12px] text-[#3a3a3a] hover:text-[#555] transition-colors"
           >
-            +{projectThreads.length - 15} 条更多
+            +{threadList.length - 15} 条更多
           </button>
         )}
-        {projectThreads.length === 0 && (
+        {threadList.length === 0 && (
           <div className="px-3 py-4 text-[13px] text-[#3a3a3a]">暂无对话</div>
         )}
       </div>
