@@ -1,5 +1,6 @@
 ﻿import { describe, it, expect } from 'vitest';
 import type { AgentEvent } from '../src/agent/agent.js';
+import { AgentError } from '../src/core/error.js';
 
 describe('AgentEvent type', () => {
   it('should accept an LlmChunk event', () => {
@@ -25,13 +26,14 @@ describe('AgentEvent type', () => {
   });
 
   it('should narrow correctly via discriminated union switch', () => {
+    const err = AgentError.maxStepsReached(5);
     const ev: AgentEvent = {
       _tag: 'Error',
-      error: { _tag: 'MaxStepsReached', maxSteps: 5, message: 'test' },
+      error: err,
     };
     switch (ev._tag) {
       case 'Error':
-        expect(ev.error._tag).toBe('MaxStepsReached');
+        expect(ev.error).toBeInstanceOf(AgentError);
         break;
       default:
         // Should not reach here for this test

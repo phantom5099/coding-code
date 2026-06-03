@@ -9,7 +9,6 @@ import {
   setMemoryEnabled,
 } from '../../src/memory/index.js';
 import type { MemoryConfig } from '@codingcode/infra';
-import type { LLMStreamAdapter } from '../../src/agent/agent.js';
 
 const tmpDir = path.join(os.tmpdir(), 'memory-index-test');
 

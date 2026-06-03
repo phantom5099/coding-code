@@ -29,11 +29,12 @@ const mockState = {
 function createMockLlm(chunks?: string[], responseContent?: string) {
   return {
     modelInfo: { maxTokens: 1000 },
+    complete: () => Promise.resolve(Result.ok({ content: responseContent ?? chunks?.join('') ?? '', finishReason: 'stop' })),
     completeStream: (_params: any) => ({
       stream: (async function* () {
         for (const c of chunks ?? []) yield c;
       })(),
-      response: Promise.resolve(Result.ok({ content: responseContent ?? chunks?.join('') ?? '' })),
+      response: Promise.resolve(Result.ok({ content: responseContent ?? chunks?.join('') ?? '', finishReason: 'stop' })),
     }),
   };
 }
@@ -100,10 +101,14 @@ const MockContextLayer = Layer.succeed(
   ContextService.of({
     _tag: 'Context' as any,
     build: () =>
-      Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] })),
-    compress: () => Effect.succeed({ didCompress: true, released: 0 }),
-    appendTurnEnd: () => Effect.succeed({ didCompress: false, released: 0 }),
-    compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
+      Effect.sync(() => ({
+        messages: [{ role: 'user' as const, content: 'hi' }],
+        newBudgets: [],
+        promptEstimate: 0,
+      })),
+    compress: () => Effect.succeed({ didCompress: true, released: 0, promptEstimate: 0 }),
+    appendTurnEnd: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
+    compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
   })
 );
 
@@ -111,12 +116,14 @@ const MockSkillLayer = Layer.succeed(
   SkillService,
   SkillService.of({
     _tag: 'Skill' as const,
-    loadAll: () => Effect.succeed(undefined),
     getAll: () => Effect.succeed([]),
     findByName: () => Effect.succeed(undefined),
     select: () => Effect.succeed(undefined),
     selectImplicit: () => Effect.succeed(undefined),
     extractSkill: () => Effect.succeed([undefined, 'hi']),
+    disableSkill: () => Effect.succeed(undefined),
+    enableSkill: () => Effect.succeed(undefined),
+    listWithStatus: () => Effect.succeed([]),
   })
 );
 
@@ -131,11 +138,10 @@ const MockCheckpointLayer = Layer.succeed(
     snapshotFinal: () => {},
     classifyChanges: () => null,
     getCompletedTurns: () => [],
-    revertFiles: () => {},
     forward: () => null,
     hasForwardStack: () => false,
     getCheckpoints: () => [],
-  })
+  } as any)
 );
 
 const MockToolSearchLayer = Layer.succeed(

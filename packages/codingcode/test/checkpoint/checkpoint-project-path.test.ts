@@ -8,7 +8,7 @@ import { initWorkspace } from '../../src/core/workspace.js';
 import { HookService } from '../../src/hooks/registry.js';
 
 const hooksLayer = Layer.succeed(HookService, {
-  register: (point, handler, opts) =>
+  register: (point: any, handler: any, opts?: any) =>
     Effect.sync(() => {
       const entries = (hooksLayer as any)._entries ?? new Map();
       (hooksLayer as any)._entries = entries;
@@ -29,7 +29,7 @@ const hooksLayer = Layer.succeed(HookService, {
         }
       };
     }),
-  emit: (point, payload) =>
+  emit: (point: any, payload: any) =>
     Effect.promise(async () => {
       const entries = ((hooksLayer as any)._entries ?? new Map()).get(point) ?? [];
       for (const entry of entries.slice().sort((a: any, b: any) => a.priority - b.priority)) {
@@ -44,7 +44,7 @@ const hooksLayer = Layer.succeed(HookService, {
     }),
   emitDecision: (_: any, _2: any) => Effect.succeed(null),
   reloadUserHooks: (_: string) => Effect.void,
-  registerDecision: (point, handler, opts) =>
+  registerDecision: (point: any, handler: any, opts?: any) =>
     Effect.sync(() => {
       const entries = (hooksLayer as any)._entries ?? new Map();
       (hooksLayer as any)._entries = entries;

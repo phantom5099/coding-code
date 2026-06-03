@@ -1,2 +1,11 @@
+packages:
+  - 'packages/*'
+
 allowBuilds:
+  electron: true
   esbuild: true
+
+settings:
+  onlyBuiltDependencies:
+    - electron
+    - esbuild

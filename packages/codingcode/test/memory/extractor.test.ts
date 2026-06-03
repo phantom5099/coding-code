@@ -2,10 +2,9 @@
 import { extractMemory } from '../../src/memory/extractor.js';
 import type { StructuredTranscript } from '../../src/memory/extractor.js';
 import type { MemoryTypeConfig } from '@codingcode/infra';
-import type { LLMStreamAdapter } from '../../src/agent/agent.js';
 
 describe('Memory Extractor', () => {
-  const createMockLlm = (response: string): LLMStreamAdapter => ({
+  const createMockLlm = (response: string) => ({
     completeStream: vi.fn(() => ({
       stream: (async function* () {
         yield response;
@@ -83,7 +82,7 @@ describe('Memory Extractor', () => {
   });
 
   it('handles LLM call failure gracefully', async () => {
-    const llm: LLMStreamAdapter = {
+    const llm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {
           throw new Error('Stream error');
@@ -159,7 +158,7 @@ describe('Memory Extractor', () => {
 
   it('only calls system prompt with specified types', async () => {
     const mockLlm = createMockLlm('<memory></memory>');
-    const twoTypes = [defaultTypes[0], defaultTypes[1]];
+    const twoTypes: MemoryTypeConfig[] = [defaultTypes[0]!, defaultTypes[1]!];
 
     const transcript: StructuredTranscript = {
       userOnly: 'text',

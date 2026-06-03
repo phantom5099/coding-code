@@ -67,6 +67,7 @@ const mockState = {
   sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
   title: 'test',
   usage: undefined,
+  promptEstimate: 0,
 };
 
 function makeDeps(overrides?: Record<string, any>) {
@@ -122,7 +123,7 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
           return `result-${name}`;
         }),
       executeBatch: (toolCalls: any[], _sessionId?: string) =>
-        Effect.forEach(
+        (Effect.forEach as any)(
           toolCalls,
           (tc: any) =>
             mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(
@@ -191,7 +192,7 @@ describe('runReActLoop 锟?concurrent tool execution', () => {
           ? Effect.fail(new Error('Simulated failure') as any)
           : Effect.succeed(`result-${name}`),
       executeBatch: (toolCalls: any[], _sessionId?: string) =>
-        Effect.forEach(
+        (Effect.forEach as any)(
           toolCalls,
           (tc: any) =>
             mockExecutor.execute(tc.name, tc.arguments ?? {}).pipe(

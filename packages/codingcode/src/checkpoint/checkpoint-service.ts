@@ -389,7 +389,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         const sg = ensure(projectPath);
         const completedTurns = getCompletedTurnsFor(sg, sessionId);
         const latestTurnId =
-          turnId ?? (completedTurns.length > 0 ? completedTurns[completedTurns.length - 1] : 0);
+          turnId ?? (completedTurns.length > 0 ? completedTurns[completedTurns.length - 1]! : 0);
         if (latestTurnId === 0) {
           return { turnId: 0, files: [] };
         }

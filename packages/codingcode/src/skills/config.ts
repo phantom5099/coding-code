@@ -63,8 +63,8 @@ export function readSkillMd(
     };
   }
 
-  const frontMatter = parseYaml(match[1]) as SkillFrontMatter;
-  const body = match[2].trim();
+  const frontMatter = parseYaml(match[1]!) as SkillFrontMatter;
+  const body = match[2]!.trim();
 
   return { frontMatter, body };
 }

@@ -34,7 +34,7 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
         Effect.sync(() => {
           const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
           if (!match) return undefined;
-          const name = match[1];
+          const name = match[1]!;
           if (_disabled.has(name)) return undefined;
           return readAll().find((s) => s.name === name);
         }),
@@ -56,7 +56,7 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
           const skill = yield* Effect.sync(() => {
             const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
             if (!match) return undefined;
-            const name = match[1];
+            const name = match[1]!;
             if (_disabled.has(name)) return undefined;
             return readAll().find((s) => s.name === name);
           });

@@ -9,16 +9,21 @@ describe('runReActLoop 鈥?loop options', () => {
   const mockState = {
     sessionId: 'test-session',
     cwd: process.cwd(),
-    currentTurnId: randomUUID(),
+    currentTurnId: 0,
     sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
     title: 'test',
     usage: undefined,
+    projectPath: '',
+    transcriptPath: '',
+    indexPath: '',
+    messageCount: 0,
+    promptEstimate: 0,
   };
 
   const mockHooks = {
     emit: vi.fn(() => Effect.succeed(undefined)),
     emitDecision: vi.fn(() => Effect.succeed(null)),
-  };
+  } as any;
 
   function baseMockDeps(overrides: Record<string, any> = {}) {
     return {
@@ -34,12 +39,18 @@ describe('runReActLoop 鈥?loop options', () => {
         listUnloadedDeferred: () => [],
       } as any,
       agentIdResolver: { resolve: () => 'agent-id' } as any,
+      agentService: { runStream: () => (async function* () {})() } as any,
       ctx: {
         build: () =>
-          Effect.succeed({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] }),
-        compress: () => Effect.succeed({ released: 0 }),
+          Effect.succeed({
+            messages: [{ role: 'user' as const, content: 'hi' }],
+            newBudgets: [],
+            promptEstimate: 0,
+          }),
+        compress: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
         appendTurnEnd: () => Effect.succeed(undefined),
-        compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
+        compactIfNeeded: () =>
+          Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
       } as any,
       session: {
         recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
@@ -78,7 +89,7 @@ describe('runReActLoop 鈥?loop options', () => {
     }
 
     expect(mockLlm.completeStream).toHaveBeenCalled();
-    const lastCall = mockLlm.completeStream.mock.calls[0]?.[0];
+    const lastCall = (mockLlm.completeStream as any).mock?.calls?.[0]?.[0];
     expect(lastCall?.system).toBe('Custom system prompt');
   });
 
@@ -111,7 +122,7 @@ describe('runReActLoop 鈥?loop options', () => {
 
     const errorEvent = events.find((e: any) => e._tag === 'Error');
     expect(errorEvent).toBeDefined();
-    expect(errorEvent?.error?.code).toBe('AGENT_ABORTED');
+    expect((errorEvent as any)?.error?.code).toBe('AGENT_ABORTED');
   });
 
   it('should support coreAllowlist to filter available tools', async () => {

@@ -1,6 +1,5 @@
-import { generateText, streamText, stepCountIs, jsonSchema } from 'ai';
+import { generateText, streamText, stepCountIs, jsonSchema, type ModelMessage } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
-import type { ModelMessage } from '@ai-sdk/provider-utils';
 import { Result } from '../../core/result';
 import { AgentError } from '../../core/error';
 import { mapLlmError } from '../errors.js';

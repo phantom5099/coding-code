@@ -4,6 +4,7 @@ import { buildMessagesFromEvents } from '../../src/session/messages.js';
 import type { SessionEvent } from '../../src/session/types.js';
 
 function makeEvents(overrides: Partial<SessionEvent>[] = []): SessionEvent[] {
+  // Use type assertion to handle Partial→SessionEvent incompatibility
   const base: SessionEvent[] = [
     {
       type: 'session_meta',

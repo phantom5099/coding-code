@@ -9,10 +9,15 @@ describe('runReActLoop 鈥?stop hook', () => {
   const mockState = {
     sessionId: 'test-session',
     cwd: process.cwd(),
-    currentTurnId: randomUUID(),
+    currentTurnId: 0,
     sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
     title: 'test',
     usage: undefined,
+    projectPath: '',
+    transcriptPath: '',
+    indexPath: '',
+    messageCount: 0,
+    promptEstimate: 0,
   };
 
   function baseMockDeps(overrides: Record<string, any> = {}) {
@@ -29,12 +34,18 @@ describe('runReActLoop 鈥?stop hook', () => {
         listUnloadedDeferred: () => [],
       } as any,
       agentIdResolver: { resolve: () => 'agent-id' } as any,
+      agentService: { runStream: () => (async function* () {})() } as any,
       ctx: {
         build: () =>
-          Effect.succeed({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] }),
-        compress: () => Effect.succeed({ released: 0 }),
+          Effect.succeed({
+            messages: [{ role: 'user' as const, content: 'hi' }],
+            newBudgets: [],
+            promptEstimate: 0,
+          }),
+        compress: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
         appendTurnEnd: () => Effect.succeed(undefined),
-        compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
+        compactIfNeeded: () =>
+          Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
       } as any,
       session: {
         recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
@@ -45,7 +56,7 @@ describe('runReActLoop 鈥?stop hook', () => {
       hooks: {
         emit: vi.fn(() => Effect.succeed(undefined)),
         emitDecision: vi.fn(() => Effect.succeed(null)),
-      },
+      } as any,
       ...overrides,
     };
   }
@@ -129,7 +140,7 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     const errorEvent = events.find((e: any) => e._tag === 'Error');
     expect(errorEvent).toBeDefined();
-    expect(errorEvent?.error?.code).toBe('STOP_LOOP');
+    expect((errorEvent as any)?.error?.code).toBe('STOP_LOOP');
   });
 
   it('should use default maxStopContinuations of 2', async () => {

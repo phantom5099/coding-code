@@ -65,6 +65,7 @@ const mockState = {
   sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
   title: 'test',
   usage: undefined,
+  promptEstimate: 0,
 };
 
 const mockLlm = {

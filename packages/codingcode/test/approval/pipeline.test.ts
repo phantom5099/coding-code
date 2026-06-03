@@ -32,7 +32,7 @@ describe('Approval Pipeline', () => {
       )
     );
     expect(decision.type).toBe('deny');
-    expect(decision.source).toContain('rule:');
+    expect((decision as any).source).toContain('rule:');
   });
 
   it('Layer 2: Read-only whitelist should auto-allow', async () => {
@@ -51,7 +51,7 @@ describe('Approval Pipeline', () => {
       )
     );
     expect(decision.type).toBe('allow');
-    expect(decision.source).toBe('readonly-whitelist');
+    expect((decision as any).source).toBe('readonly-whitelist');
   });
 
   it('Layer 3: Plan mode should deny write tools', async () => {
@@ -70,7 +70,7 @@ describe('Approval Pipeline', () => {
       )
     );
     expect(decision.type).toBe('deny');
-    expect(decision.reason).toContain('plan mode');
+    expect((decision as any).reason).toContain('plan mode');
   });
 
   it('Layer 3: Plan mode should allow read-only tools', async () => {
@@ -107,7 +107,7 @@ describe('Approval Pipeline', () => {
       )
     );
     expect(decision.type).toBe('allow');
-    expect(decision.source).toBe('permission-mode');
+    expect((decision as any).source).toBe('permission-mode');
   });
 
   it('Layer 3: AcceptEdits mode should auto-allow non-destructive tools', async () => {
@@ -145,7 +145,7 @@ describe('Approval Pipeline', () => {
     );
     // Should continue to user confirmation layer (which returns deny in non-interactive mode)
     expect(decision.type).toBe('deny');
-    expect(decision.source).toBe('user-confirm');
+    expect((decision as any).source).toBe('user-confirm');
   });
 
   it('Layer 4: PreToolUse hook can deny (non-readonly tool)', async () => {
@@ -169,7 +169,7 @@ describe('Approval Pipeline', () => {
       )
     );
     expect(decision.type).toBe('deny');
-    expect(decision.source).toBe('hook');
+    expect((decision as any).source).toBe('hook');
   });
 
   it('Layer 4: PreToolUse hook can allow (skiping user confirmation)', async () => {
@@ -192,7 +192,7 @@ describe('Approval Pipeline', () => {
       )
     );
     expect(decision.type).toBe('allow');
-    expect(decision.source).toBe('hook');
+    expect((decision as any).source).toBe('hook');
   });
 
   it('Layer 6: Audit log is recorded for every decision', async () => {

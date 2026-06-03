@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -8,12 +8,13 @@
     "jsx": "react-jsx",
     "outDir": "./out/renderer",
     "rootDir": ".",
-    "composite": false,
-    "declaration": false,
+    "composite": true,
     "paths": {
-      "@shared/*": ["./shared/*"]
+      "@shared/*": ["./shared/*"],
+      "@codingcode/core/*": ["../codingcode/src/*"]
     }
   },
   "include": ["src/**/*", "shared/**/*"],
-  "exclude": ["node_modules", "out", "electron"]
+  "exclude": ["node_modules", "out", "electron"],
+  "references": [{ "path": "../codingcode" }, { "path": "../infra" }]
 }

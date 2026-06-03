@@ -127,10 +127,12 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
   // Tool messages must not be merged (each needs its own tool_call_id).
   // Assistant messages with tool_calls must also not be merged.
   for (let i = filtered.length - 1; i > 0; i--) {
-    if (filtered[i].role === filtered[i - 1].role && filtered[i].role !== 'system') {
-      if (filtered[i].role === 'tool') continue;
-      if (filtered[i].role === 'assistant' && (filtered[i] as any).tool_calls?.length > 0) continue;
-      filtered[i - 1].content += '\n\n' + filtered[i].content;
+    const curr = filtered[i]!;
+    const prev = filtered[i - 1]!;
+    if (curr.role === prev.role && curr.role !== 'system') {
+      if (curr.role === 'tool') continue;
+      if (curr.role === 'assistant' && (curr as any).tool_calls?.length > 0) continue;
+      prev.content += '\n\n' + curr.content;
       filtered.splice(i, 1);
     }
   }
@@ -154,7 +156,7 @@ export function findLastVisibleAssistantUsage(path: string): TokenUsage | undefi
   const events = readHistory(path);
   const messages = buildMessagesFromEvents(events);
   for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
+    const m = messages[i]!;
     if (m.role !== 'assistant') continue;
     const usage = (m as any).usage as TokenUsage | undefined;
     if (usage) return usage;

@@ -36,7 +36,7 @@ export function readMemoryFile(absPath: string): string {
 
 export function extractAutoBlock(content: string): string {
   const match = content.match(/<!-- auto:begin -->([\s\S]*?)<!-- auto:end -->/);
-  return match ? match[1].trim() : '';
+  return match ? match[1]!.trim() : '';
 }
 
 export function replaceAutoBlock(content: string, newAutoInner: string): string {
@@ -69,9 +69,9 @@ export function enforceMaxBytes(content: string, maxBytes: number): string {
   }
 
   const sections = content.split(/^### /m).filter(Boolean);
-  const namedSections = sections.map((s) => {
+    const namedSections = sections.map((s) => {
     const lines = s.split('\n');
-    const name = lines[0];
+    const name = lines[0]!;
     const body = lines.slice(1).join('\n');
     return { name, body, full: `### ${s}` };
   });
@@ -92,7 +92,7 @@ export function mergeAutoBlocks(base: string, incoming: string): string {
     const parts = content.split(/^### /m).filter(Boolean);
     for (const part of parts) {
       const lines = part.split('\n');
-      const name = lines[0];
+      const name = lines[0]!;
       const body = lines.slice(1).join('\n').trim();
       sections[name] = body;
     }

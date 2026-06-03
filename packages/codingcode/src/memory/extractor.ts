@@ -91,7 +91,7 @@ ${currentAuto}
       return null;
     }
 
-    const extracted = memoryMatch[1].trim();
+    const extracted = memoryMatch[1]!.trim();
     return extracted || null;
   } catch {
     return null;

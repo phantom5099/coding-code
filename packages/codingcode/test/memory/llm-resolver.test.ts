@@ -1,7 +1,6 @@
 ﻿import { describe, it, expect, vi, afterEach } from 'vitest';
 import { resolveMemoryLLM } from '../../src/memory/llm-resolver.js';
 import type { MemoryConfig } from '@codingcode/infra';
-import type { LLMStreamAdapter } from '../../src/agent/agent.js';
 
 vi.mock('../../src/llm/factory.js', () => ({
   listModels: vi.fn(() => ({
@@ -28,7 +27,7 @@ vi.mock('../../src/llm/factory.js', () => ({
         stream: async function* () {},
         response: Promise.resolve({ ok: true, value: { content: '' } }),
       }),
-    } as LLMStreamAdapter,
+    } as any,
   })),
 }));
 
@@ -92,14 +91,14 @@ describe('Memory LLM Resolver', () => {
 
   it('creates and returns client when model matches by id', async () => {
     const cfg = createCfg('claude-opus-4-7');
-    const fallback = {} as LLMStreamAdapter;
+    const fallback = {} as any;
     const result = await resolveMemoryLLM(cfg, fallback);
     expect(result).not.toBe(fallback);
   });
 
   it('creates and returns client when model matches by bare id', async () => {
     const cfg = createCfg('deepseek-chat');
-    const fallback = {} as LLMStreamAdapter;
+    const fallback = {} as any;
     const result = await resolveMemoryLLM(cfg, fallback);
     expect(result).not.toBe(fallback);
   });

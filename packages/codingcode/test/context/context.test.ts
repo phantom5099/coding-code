@@ -20,17 +20,19 @@ const mockState = {
   currentTurnId: 0,
   sessionMeta: null,
   title: 'test-sess',
+  promptEstimate: 0,
 };
 
 const mockLlm = {
   modelInfo: { maxTokens: 1000, model: 'test-model' },
+  complete: () => Promise.resolve(Result.ok({ content: 'Hello world', finishReason: 'stop' })),
   completeStream: (_params: any) => {
     const stream = (async function* () {
       yield 'Hello';
       yield ' ';
       yield 'world';
     })();
-    return { stream, response: Promise.resolve(Result.ok({ content: 'Hello world' })) };
+    return { stream, response: Promise.resolve(Result.ok({ content: 'Hello world', finishReason: 'stop' })) };
   },
 };
 
@@ -38,7 +40,7 @@ const MockToolExecutorLayer = Layer.succeed(
   ToolExecutorService,
   ToolExecutorService.of({
     _tag: 'ToolExecutor' as const,
-    execute: () => Effect.succeed('done'),
+    execute: () => Effect.succeed({ output: 'done' } as any),
     executeBatch: (toolCalls: any[]) =>
       Effect.succeed(
         toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: '' }))
@@ -69,11 +71,10 @@ const MockCheckpointLayer = Layer.succeed(
     snapshotFinal: () => {},
     classifyChanges: () => null,
     getCompletedTurns: () => [],
-    revertFiles: () => {},
     forward: () => null,
     hasForwardStack: () => false,
     getCheckpoints: () => [],
-  })
+  } as any)
 );
 
 function makeMockSessionLayer(state: any) {
@@ -121,9 +122,9 @@ function makeMockSessionLayer(state: any) {
       getSessionId: () => state.sessionId,
       getMessageCount: () => 0,
       incrementTurn: () => 0,
-      findSessionIndex: () => Effect.succeed(null),
-    })
-  );
+    findSessionIndex: () => Effect.succeed(null),
+  } as any)
+);
 }
 
 describe('ContextService', () => {
@@ -136,13 +137,15 @@ describe('ContextService', () => {
       SkillService,
       SkillService.of({
         _tag: 'Skill' as const,
-        loadAll: () => Effect.succeed(undefined),
         getAll: () => Effect.succeed([]),
         findByName: () => Effect.succeed(undefined),
         select: () => Effect.succeed(undefined),
         selectImplicit: () => Effect.succeed(undefined),
         extractSkill: (_input: string) =>
           Effect.succeed([undefined, _input] as [undefined, string]),
+        disableSkill: () => Effect.succeed(undefined),
+        enableSkill: () => Effect.succeed(undefined),
+        listWithStatus: () => Effect.succeed([]),
       })
     );
 
