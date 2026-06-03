@@ -5,7 +5,6 @@ import type { PermissionMode } from '../../approval/types.js';
 const VALID_PERMISSION_MODES = new Set<PermissionMode>([
   'default',
   'acceptEdits',
-  'dontAsk',
   'plan',
   'bypass',
 ]);

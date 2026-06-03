@@ -199,10 +199,6 @@ function applyPermissionMode(
       }
       return null; // Continue to next layers
 
-    case 'dontAsk':
-      // Don't ask: allow everything (bypass + audit)
-      return { type: 'allow', source: 'permission-mode' };
-
     case 'default':
     default:
       return null; // Continue to next layers

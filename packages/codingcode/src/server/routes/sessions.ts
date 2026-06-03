@@ -1,4 +1,4 @@
-﻿import { Hono } from 'hono';
+import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { join } from 'path';
 import { SessionService } from '../../session/store.js';
@@ -9,6 +9,7 @@ import {
   readHistory,
   deleteSession,
 } from '../../session/io.js';
+import { updateSessionPermissionMode } from '../../approval/index.js';
 import { readUIHistory } from '../../session/messages.js';
 import { ContextService } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
@@ -122,6 +123,8 @@ sessionsRouter.put('/:id/permission-mode', async (c) => {
   if (!dir) return c.json({ error: 'Session not found' }, 404);
   const idxPath = join(dir, `${sessionId}.index.json`);
   setPermissionMode(sessionId, idxPath, mode);
+  // Also update the in-memory ApprovalService fork if the session is active
+  updateSessionPermissionMode(sessionId, mode as any);
   return c.json({ ok: true });
 });
 

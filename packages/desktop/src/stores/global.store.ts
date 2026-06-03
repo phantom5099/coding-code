@@ -70,7 +70,7 @@ interface TodoPanelState {
 interface AgentState {
   currentThreadId: string | null;
   threads: Record<string, Thread>;
-  approvalPolicy: 'suggest' | 'auto-edit' | 'full-auto';
+  approvalPolicy: 'ask-all' | 'smart-allow' | 'full-allow' | 'read-only';
   model: string;
   models: ModelEntry[];
   contextUsage: { used: number; contextWindow: number } | null;
@@ -203,7 +203,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       agent: {
         currentThreadId: null,
         threads: {},
-        approvalPolicy: 'suggest',
+        approvalPolicy: 'ask-all',
         model: '',
         models: [],
         contextUsage: null,
@@ -698,26 +698,38 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           cursorCol: state.editor.cursorCol,
         },
       }),
-      merge: (persisted, current) => ({
-        ...current,
-        ...(persisted as any),
-        git: initialGit,
-        terminals: [],
-        files: {
-          ...current.files,
-          ...(persisted as any).files,
-          tree: [],
-          activeFilePath: null,
-        },
-        agent: {
-          ...current.agent,
-          ...(persisted as any).agent,
-          threads: {},
-          todoByThreadId: {},
-          contextUsage: null,
-          usageByThreadId: (persisted as any).agent?.usageByThreadId ?? {},
-        },
-      }),
+      merge: (persisted, current) => {
+        const persistedAny = persisted as any;
+        // Migrate old approvalPolicy values to new names
+        const OLD_POLICY_MAP: Record<string, string> = {
+          suggest: 'ask-all',
+          'auto-edit': 'smart-allow',
+          'full-auto': 'full-allow',
+        };
+        const rawPolicy = persistedAny?.agent?.approvalPolicy;
+        const migratedPolicy = rawPolicy ? (OLD_POLICY_MAP[rawPolicy] ?? rawPolicy) : undefined;
+        return {
+          ...current,
+          ...persistedAny,
+          git: initialGit,
+          terminals: [],
+          files: {
+            ...current.files,
+            ...persistedAny.files,
+            tree: [],
+            activeFilePath: null,
+          },
+          agent: {
+            ...current.agent,
+            ...persistedAny.agent,
+            approvalPolicy: migratedPolicy ?? current.agent.approvalPolicy,
+            threads: {},
+            todoByThreadId: {},
+            contextUsage: null,
+            usageByThreadId: persistedAny.agent?.usageByThreadId ?? {},
+          },
+        };
+      },
     }
   )
 );

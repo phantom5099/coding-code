@@ -4,7 +4,7 @@ import type { SseEvent } from './adapter.js';
 
 export function sseHandler(
   createGenerator: () => AsyncGenerator<SseEvent, void, unknown>,
-  opts?: { initialEvents?: SseEvent[]; sessionId?: string }
+  opts?: { initialEvents?: SseEvent[]; sessionId?: string; onDone?: () => void }
 ): (c: Context) => Promise<Response> {
   return async (c: Context) => {
     const sessionId = opts?.sessionId ?? c.req.param('id') ?? 'default';
@@ -37,6 +37,7 @@ export function sseHandler(
           });
         } finally {
           unregisterEmitter(sessionId);
+          opts?.onDone?.();
         }
         controller.close();
       },

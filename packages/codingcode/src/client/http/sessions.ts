@@ -87,7 +87,7 @@ export function createHttpSessionClient(
     },
 
     async setSessionPermissionMode({ sessionId, mode }) {
-      await apiPost(`/api/sessions/${sessionId}/permission-mode`, { mode });
+      await apiPut(`/api/sessions/${sessionId}/permission-mode`, { mode });
     },
 
     async getCheckpointDiff({ sessionId, cwd, turnId }) {

@@ -248,12 +248,13 @@ export function useAgent() {
 
       let threadId = currentThreadId;
       if (!threadId) {
-        const initialMode =
-          approvalPolicy === 'suggest'
-            ? 'default'
-            : approvalPolicy === 'auto-edit'
-              ? 'acceptEdits'
-              : 'dontAsk';
+        const POLICY_TO_MODE: Record<string, string> = {
+          'ask-all': 'default',
+          'smart-allow': 'acceptEdits',
+          'full-allow': 'bypass',
+          'read-only': 'plan',
+        };
+        const initialMode = POLICY_TO_MODE[approvalPolicy] ?? 'default';
         const data = await createServerSession(effectiveCwd, initialMode);
         threadId = data.sessionId;
         setCurrentThread(threadId);

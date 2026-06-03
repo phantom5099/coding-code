@@ -20,9 +20,8 @@ import {
 const PERMISSION_MODE_LABELS: Record<string, string> = {
   default: '默认 (逐次确认)',
   acceptEdits: '接受编辑 (自动允许文件操作)',
-  dontAsk: '自动审查 (全部允许)',
   plan: '计划模式 (只读)',
-  bypass: '绕过审批',
+  bypass: '完全放行',
 };
 interface AppProps {
   client: AgentClient;
@@ -590,14 +589,10 @@ export function App({ client }: AppProps) {
               value: 'acceptEdits',
             },
             {
-              label: `${panel.currentMode === 'dontAsk' ? '●' : '○'} 自动审查 — 全部允许`,
-              value: 'dontAsk',
-            },
-            {
               label: `${panel.currentMode === 'plan' ? '●' : '○'} 计划模式 — 仅只读`,
               value: 'plan',
             },
-            { label: `${panel.currentMode === 'bypass' ? '●' : '○'} 绕过审批`, value: 'bypass' },
+            { label: `${panel.currentMode === 'bypass' ? '●' : '○'} 完全放行`, value: 'bypass' },
           ]}
           activeValue={panel.currentMode}
           onSelect={async (value) => {

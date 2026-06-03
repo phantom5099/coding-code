@@ -7,7 +7,7 @@ beforeEach(() => {
     agent: {
       currentThreadId: null,
       threads: {},
-      approvalPolicy: 'suggest',
+      approvalPolicy: 'ask-all',
       model: '',
       models: [],
       contextUsage: null,

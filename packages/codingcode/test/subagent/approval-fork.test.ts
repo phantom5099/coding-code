@@ -1,4 +1,4 @@
-﻿import { expect, it, describe } from 'vitest';
+import { expect, it, describe } from 'vitest';
 import { Effect } from 'effect';
 import { ApprovalService } from '../../src/approval/index';
 import { ApprovalLayer } from '../../src/layer';
@@ -97,10 +97,10 @@ describe('ApprovalService.fork', () => {
     expect(child2).toBeDefined();
 
     await Effect.runPromise(child1.setPermissionMode('acceptEdits'));
-    await Effect.runPromise(child2.setPermissionMode('dontAsk'));
+    await Effect.runPromise(child2.setPermissionMode('bypass'));
 
     expect(child1.getPermissionMode()).toBe('acceptEdits');
-    expect(child2.getPermissionMode()).toBe('dontAsk');
+    expect(child2.getPermissionMode()).toBe('bypass');
   });
 
   it('should preserve parent rules in fork', async () => {
