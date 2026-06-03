@@ -5,11 +5,8 @@ import { sendMessage } from '../../agent/agent.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
 import { AppLayer } from '../../layer.js';
 import { toSseEvents } from '../adapter.js';
-import {
-  ApprovalService,
-  registerSessionApproval,
-  unregisterSessionApproval,
-} from '../../approval/index.js';
+import { ApprovalService } from '../../approval/index.js';
+import { activeApprovalForks } from './sessions.js';
 import { resolveSessionDir, getPermissionMode } from '../../session/io.js';
 import { join } from 'path';
 import type { PermissionMode } from '../../approval/types.js';
@@ -46,7 +43,7 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
       );
       await Effect.runPromise(forked.setPermissionMode(mode));
       approvalOverride = forked;
-      registerSessionApproval(sessionId, {
+      activeApprovalForks.set(sessionId, {
         setPermissionMode: (m) => Effect.runPromise(forked.setPermissionMode(m)),
       });
     }
@@ -77,7 +74,7 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
       }).pipe(Effect.provide(AppLayer) as any)
     );
     approvalOverride = forked;
-    registerSessionApproval(sessionId, {
+    activeApprovalForks.set(sessionId, {
       setPermissionMode: (m) => Effect.runPromise(forked.setPermissionMode(m)),
     });
   }
@@ -90,7 +87,7 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
       initialEvents: [{ type: 'session_id', sessionId }],
       sessionId,
       onDone: () => {
-        unregisterSessionApproval(sessionId);
+        activeApprovalForks.delete(sessionId);
       },
     }
   )(c);

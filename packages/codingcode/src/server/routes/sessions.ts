@@ -9,7 +9,6 @@ import {
   readHistory,
   deleteSession,
 } from '../../session/io.js';
-import { updateSessionPermissionMode } from '../../approval/index.js';
 import { readUIHistory } from '../../session/messages.js';
 import { ContextService } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
@@ -17,6 +16,13 @@ import { resolveWorkspaceCwd } from '../../core/workspace.js';
 import { runWithLayer, errorResponse } from '../util.js';
 
 export const sessionsRouter = new Hono();
+
+// Active session ApprovalService forks, keyed by sessionId.
+// messages.ts registers/unregisters; this file's PUT route updates them.
+export const activeApprovalForks = new Map<
+  string,
+  { setPermissionMode: (mode: any) => Promise<void> | void }
+>();
 
 // ---- C0: Existing routes ----
 
@@ -124,7 +130,8 @@ sessionsRouter.put('/:id/permission-mode', async (c) => {
   const idxPath = join(dir, `${sessionId}.index.json`);
   setPermissionMode(sessionId, idxPath, mode);
   // Also update the in-memory ApprovalService fork if the session is active
-  updateSessionPermissionMode(sessionId, mode as any);
+  const handle = activeApprovalForks.get(sessionId);
+  if (handle) handle.setPermissionMode(mode);
   return c.json({ ok: true });
 });
 
