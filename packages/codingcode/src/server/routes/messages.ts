@@ -5,7 +5,11 @@ import { sendMessage } from '../../agent/agent.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
 import { AppLayer } from '../../layer.js';
 import { toSseEvents } from '../adapter.js';
-import { ApprovalService, registerSessionApproval, unregisterSessionApproval } from '../../approval/index.js';
+import {
+  ApprovalService,
+  registerSessionApproval,
+  unregisterSessionApproval,
+} from '../../approval/index.js';
 import { resolveSessionDir, getPermissionMode } from '../../session/io.js';
 import { join } from 'path';
 import type { PermissionMode } from '../../approval/types.js';

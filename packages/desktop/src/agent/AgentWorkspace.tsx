@@ -304,7 +304,10 @@ function InputBox({
                   'full-allow': 'bypass',
                   'read-only': 'plan',
                 };
-                setSessionPermissionMode(currentThreadId, POLICY_TO_CORE_MODE[next] ?? 'default').catch((e) => {
+                setSessionPermissionMode(
+                  currentThreadId,
+                  POLICY_TO_CORE_MODE[next] ?? 'default'
+                ).catch((e) => {
                   console.error('Failed to sync permission mode:', e);
                 });
               }
