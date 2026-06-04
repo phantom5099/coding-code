@@ -106,7 +106,7 @@ function writeRestoreEntry(
 export function toGitPath(projectPath: string, file: string): string {
   const normalized = normalizePath(file);
   const base = normalizePath(projectPath);
-  if (normalized.startsWith(base)) {
+  if (normalized.toLowerCase().startsWith(base.toLowerCase())) {
     let rel = normalized.slice(base.length);
     if (rel.startsWith('/') || rel.startsWith('\\')) rel = rel.slice(1);
     return rel;
@@ -135,16 +135,15 @@ function classifySafe(
   if (!baseline || !final) return null;
 
   const allChanges = sg.diffFiles(baseline, final);
-  const allFiles = [
-    ...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase())),
-  ];
+  const rawAllFiles = allChanges.map((c) => normalizePath(resolve(projectPath, c.file)));
+  const allFiles = [...new Set(rawAllFiles)];
   const agentFiles = new Set(
     ledgerInstance.getAgentFiles(turnId, sessionId).map((p) => normalizePath(p).toLowerCase())
   );
 
   return {
-    agentModified: allFiles.filter((f) => agentFiles.has(f)),
-    unknownSource: allFiles.filter((f) => !agentFiles.has(f)),
+    agentModified: allFiles.filter((f) => agentFiles.has(f.toLowerCase())),
+    unknownSource: allFiles.filter((f) => !agentFiles.has(f.toLowerCase())),
   };
 }
 
@@ -216,7 +215,14 @@ function revertFilesImpl(
 
     const combinedFiles =
       existingEntry && existingEntry.throughTurnId === turnId
-        ? [...new Set([...existingEntry.selectedFiles, ...selectedFiles])]
+        ? [
+            ...new Map(
+              [...existingEntry.selectedFiles, ...selectedFiles].map((f) => [
+                normalizePath(f).toLowerCase(),
+                f,
+              ])
+            ).values(),
+          ]
         : selectedFiles;
 
     const entry: CodeRestoreEntry = {
@@ -358,11 +364,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           const title = fullMsg.includes(' ') ? fullMsg.split(' ').slice(1).join(' ') : '';
 
           const allChanges = sg.diffFiles(bCommit, fCommit);
-          const allFiles = [
-            ...new Set(
-              allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase())
-            ),
-          ];
+          const rawAllFiles = allChanges.map((c) => normalizePath(resolve(projectPath, c.file)));
+          const allFiles = [...new Set(rawAllFiles)];
           const agentFiles = new Set(
             ledger(sg)
               .getAgentFiles(i, sessionId)
@@ -372,8 +375,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           result.push({
             turnId: i,
             title,
-            agentModified: allFiles.filter((f) => agentFiles.has(f)),
-            unknownSource: allFiles.filter((f) => !agentFiles.has(f)),
+            agentModified: allFiles.filter((f) => agentFiles.has(f.toLowerCase())),
+            unknownSource: allFiles.filter((f) => !agentFiles.has(f.toLowerCase())),
           });
         }
         return result;
@@ -399,11 +402,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!baseline || !final) return { turnId: latestTurnId, files: [] };
 
         const allChanges = sg.diffFiles(baseline, final);
-        const allFiles = [
-          ...new Set(
-            allChanges.map((c) => normalizePath(resolve(projectPath, c.file)).toLowerCase())
-          ),
-        ];
+        const rawAllFiles = allChanges.map((c) => normalizePath(resolve(projectPath, c.file)));
+        const allFiles = [...new Set(rawAllFiles)];
         const agentFiles = new Set(
           ledger(sg)
             .getAgentFiles(latestTurnId, sessionId)
@@ -413,14 +413,14 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         const files = allFiles.map((f) => {
           const relPath = toGitPath(projectPath, f);
           const diffResult = sg.git('diff', baseline, final, '--', relPath);
-          const rawPath = normalizePath(resolve(projectPath, relPath)).toLowerCase();
+          const rawPath = normalizePath(resolve(projectPath, relPath));
           const stats = parseDiffStats(diffResult.stdout);
           return {
             path: f,
-            source: (agentFiles.has(f) ? 'agent' : 'unknown') as 'agent' | 'unknown',
+            source: (agentFiles.has(f.toLowerCase()) ? 'agent' : 'unknown') as 'agent' | 'unknown',
             status:
               allChanges.find(
-                (c) => normalizePath(resolve(projectPath, c.file)).toLowerCase() === rawPath
+                (c) => normalizePath(resolve(projectPath, c.file)).toLowerCase() === rawPath.toLowerCase()
               )?.status ?? 'M',
             diff: diffResult.stdout,
             insertions: stats.insertions,
@@ -650,10 +650,15 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           };
         }
 
-        const filesToRestore =
+        const normalizedOptsFiles =
           opts?.files && opts.files.length > 0
-            ? entry.selectedFiles.filter((f) => opts.files!.includes(f))
-            : [...entry.selectedFiles];
+            ? new Set(opts.files.map((f) => normalizePath(f).toLowerCase()))
+            : null;
+        const filesToRestore = normalizedOptsFiles
+          ? entry.selectedFiles.filter(
+              (f) => normalizedOptsFiles.has(normalizePath(f).toLowerCase())
+            )
+          : [...entry.selectedFiles];
 
         if (filesToRestore.length === 0) {
           return {
@@ -702,7 +707,11 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         try {
           sg.checkoutFiles(entry.safetyCommit, filesToRestore);
 
-          const remainingFiles = entry.selectedFiles.filter((f) => !filesToRestore.includes(f));
+          const remainingFiles = entry.selectedFiles.filter(
+            (f) => !filesToRestore.some(
+              (rf) => normalizePath(rf).toLowerCase() === normalizePath(f).toLowerCase()
+            )
+          );
           if (remainingFiles.length === 0) {
             writeRestoreEntry(sg.gitDir, sessionId, null);
           } else {

@@ -97,7 +97,10 @@ export class ShadowGit {
     if (files.length === 0) return;
     // restore --source handles both existing files (restores content) and
     // non-existing files at baseline (deletes them) — unlike checkout which errors
-    this.run('restore', '--source', commit, '--', ...files);
+    const result = this.run('restore', '--source', commit, '--', ...files);
+    if (result.status !== 0) {
+      throw new Error(`ShadowGit restore failed: ${result.stderr}`);
+    }
   }
 
   /** git diff --name-status between two commits. Returns [{ status, file }] */
@@ -115,7 +118,7 @@ export class ShadowGit {
   }
 
   findCommitByMessage(pattern: string): string | null {
-    const result = this.run('log', '--all', '--grep', pattern, '--format=%H');
+    const result = this.run('log', '--all', '--grep', pattern, '--format=%H', '-n', '1');
     const hash = result.stdout.trim();
     return hash || null;
   }

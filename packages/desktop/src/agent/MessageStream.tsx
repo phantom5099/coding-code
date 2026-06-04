@@ -20,7 +20,7 @@ interface TurnDiffPanelProps {
   isInterrupted?: boolean;
   threadId: string;
   checkpointDiffs: Record<string, CheckpointDiff>;
-  turnCheckpointMapping: Record<string, Record<number, string>>;
+  turnCheckpointMapping: Record<number, string>;
   revertedFilesByTurnId: Record<string, string[]>;
   onRevertFile: (uiTurnId: string, file: string, isReverted: boolean) => void;
   onRevertScope: (uiTurnId: string, scope: 'agent' | 'all', isReverted: boolean) => void;
@@ -30,24 +30,21 @@ function getCheckpointKey(
   threadId: string,
   uiTurnId: string,
   checkpointDiffs: Record<string, CheckpointDiff>,
-  turnCheckpointMapping: Record<string, Record<number, string>>
+  turnCheckpointMapping: Record<number, string>
 ): string | null {
   const directKey = `${threadId}:${uiTurnId}`;
   if (checkpointDiffs[directKey]) {
     return directKey;
   }
-  const mapping = turnCheckpointMapping[threadId];
-  if (mapping) {
-    for (const [cpId, mappedUiId] of Object.entries(mapping)) {
-      if (mappedUiId === uiTurnId) {
-        return `${threadId}:${cpId}`;
-      }
+  for (const [cpId, mappedUiId] of Object.entries(turnCheckpointMapping)) {
+    if (mappedUiId === uiTurnId) {
+      return `${threadId}:${cpId}`;
     }
   }
   for (const key of Object.keys(checkpointDiffs)) {
     if (!key.startsWith(`${threadId}:`)) continue;
     const cpIntStr = key.slice(threadId.length + 1);
-    if (turnCheckpointMapping[threadId]?.[Number(cpIntStr)] === uiTurnId) {
+    if (turnCheckpointMapping[Number(cpIntStr)] === uiTurnId) {
       return key;
     }
   }
@@ -392,8 +389,10 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const handleRevertFile = useCallback(
     async (uiTurnId: string, file: string, isReverted: boolean) => {
       if (isReverted) {
-        await undoCodeRollback(threadId, uiTurnId, false, [file]);
-        markFileRestored(threadId, uiTurnId, file);
+        const result = await undoCodeRollback(threadId, uiTurnId, false, [file]);
+        if (result.restored) {
+          markFileRestored(threadId, uiTurnId, file);
+        }
       } else {
         await revertFile(threadId, file);
       }
@@ -404,8 +403,10 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const handleRevertScope = useCallback(
     async (uiTurnId: string, scope: 'agent' | 'all', isReverted: boolean) => {
       if (isReverted) {
-        await undoCodeRollback(threadId, uiTurnId, false);
-        markScopeRestored(threadId, uiTurnId, scope);
+        const result = await undoCodeRollback(threadId, uiTurnId, false);
+        if (result.restored) {
+          markScopeRestored(threadId, uiTurnId, scope);
+        }
       } else if (scope === 'agent') {
         await revertAgentFiles(threadId);
       } else {
