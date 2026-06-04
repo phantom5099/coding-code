@@ -72,27 +72,19 @@ describe('global store - hasRunningTurn', () => {
   });
 
   it('startTurn sets hasRunningTurn to true', () => {
-    useGlobalStore
-      .getState()
-      .startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
+    useGlobalStore.getState().startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
     expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(true);
   });
 
   it('completeTurn sets hasRunningTurn to false when no other running turns', () => {
-    useGlobalStore
-      .getState()
-      .startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
+    useGlobalStore.getState().startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
     useGlobalStore.getState().completeTurn('t1', 'turn-1', 'completed');
     expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(false);
   });
 
   it('hasRunningTurn stays true when one of two turns is still running', () => {
-    useGlobalStore
-      .getState()
-      .startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
-    useGlobalStore
-      .getState()
-      .startTurn('t2', { id: 'turn-2', items: [], status: 'running' });
+    useGlobalStore.getState().startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
+    useGlobalStore.getState().startTurn('t2', { id: 'turn-2', items: [], status: 'running' });
 
     useGlobalStore.getState().completeTurn('t1', 'turn-1', 'completed');
     expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(true);
@@ -102,9 +94,7 @@ describe('global store - hasRunningTurn', () => {
   });
 
   it('clearRunningTurns recalculates hasRunningTurn', () => {
-    useGlobalStore
-      .getState()
-      .startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
+    useGlobalStore.getState().startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
     expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(true);
 
     useGlobalStore.getState().clearRunningTurns('t1');
@@ -215,7 +205,13 @@ describe('enrichTurnDiffs - skip already computed', () => {
       id: 'turn-1',
       status: 'completed',
       items: [
-        { id: 'call-1', type: 'tool_call', name: 'edit_file', args: {}, status: 'approved' } as Item,
+        {
+          id: 'call-1',
+          type: 'tool_call',
+          name: 'edit_file',
+          args: {},
+          status: 'approved',
+        } as Item,
         {
           id: 'res-1',
           type: 'tool_result',
@@ -341,7 +337,13 @@ describe('global store - applyChunk tool_result uses push', () => {
       items: [
         { id: 'msg-1', type: 'message', role: 'user', content: 'hi' } as Item,
         { id: 'call-1', type: 'tool_call', name: 'read_file', args: {}, status: 'running' } as Item,
-        { id: 'msg-2', type: 'message', role: 'assistant', content: 'done', partial: false } as Item,
+        {
+          id: 'msg-2',
+          type: 'message',
+          role: 'assistant',
+          content: 'done',
+          partial: false,
+        } as Item,
       ],
       status: 'running',
     });
@@ -371,7 +373,13 @@ describe('global store - applyChunk tool_result uses push', () => {
       id: 'turn-1',
       items: [
         { id: 'call-1', type: 'tool_call', name: 'edit', args: {}, status: 'running' } as Item,
-        { id: 'msg-1', type: 'message', role: 'assistant', content: 'editing', partial: true } as Item,
+        {
+          id: 'msg-1',
+          type: 'message',
+          role: 'assistant',
+          content: 'editing',
+          partial: true,
+        } as Item,
       ],
       status: 'running',
     });
@@ -405,9 +413,7 @@ describe('turnsStructureKey - content changes do not affect structure', () => {
       {
         id: 'turn-1',
         status: 'running',
-        items: [
-          { id: 'msg-1', type: 'message', role: 'assistant', content: 'hello' },
-        ],
+        items: [{ id: 'msg-1', type: 'message', role: 'assistant', content: 'hello' }],
       },
     ];
     const turns2 = [
@@ -422,7 +428,10 @@ describe('turnsStructureKey - content changes do not affect structure', () => {
 
     const buildKey = (turns: any[]) =>
       turns
-        .map((t) => `${t.id}:${t.status}:${t.items.length}:${t.items.map((i: any) => `${i.type}:${i.id}`).join(',')}`)
+        .map(
+          (t) =>
+            `${t.id}:${t.status}:${t.items.length}:${t.items.map((i: any) => `${i.type}:${i.id}`).join(',')}`
+        )
         .join('|');
 
     // Same structure: same id, status, item count, item types and ids
@@ -434,9 +443,7 @@ describe('turnsStructureKey - content changes do not affect structure', () => {
       {
         id: 'turn-1',
         status: 'running',
-        items: [
-          { id: 'msg-1', type: 'message', role: 'assistant', content: 'hello' },
-        ],
+        items: [{ id: 'msg-1', type: 'message', role: 'assistant', content: 'hello' }],
       },
     ];
     const turns2 = [
@@ -452,23 +459,27 @@ describe('turnsStructureKey - content changes do not affect structure', () => {
 
     const buildKey = (turns: any[]) =>
       turns
-        .map((t) => `${t.id}:${t.status}:${t.items.length}:${t.items.map((i: any) => `${i.type}:${i.id}`).join(',')}`)
+        .map(
+          (t) =>
+            `${t.id}:${t.status}:${t.items.length}:${t.items.map((i: any) => `${i.type}:${i.id}`).join(',')}`
+        )
         .join('|');
 
     expect(buildKey(turns1)).not.toBe(buildKey(turns2));
   });
 
   it('structure key changes when turn status changes', () => {
-    const turns1 = [
-      { id: 'turn-1', status: 'running', items: [{ id: 'msg-1', type: 'message' }] },
-    ];
+    const turns1 = [{ id: 'turn-1', status: 'running', items: [{ id: 'msg-1', type: 'message' }] }];
     const turns2 = [
       { id: 'turn-1', status: 'completed', items: [{ id: 'msg-1', type: 'message' }] },
     ];
 
     const buildKey = (turns: any[]) =>
       turns
-        .map((t) => `${t.id}:${t.status}:${t.items.length}:${t.items.map((i: any) => `${i.type}:${i.id}`).join(',')}`)
+        .map(
+          (t) =>
+            `${t.id}:${t.status}:${t.items.length}:${t.items.map((i: any) => `${i.type}:${i.id}`).join(',')}`
+        )
         .join('|');
 
     expect(buildKey(turns1)).not.toBe(buildKey(turns2));
@@ -492,7 +503,14 @@ describe('entryCountByTurnId - correct counts for multiple turns', () => {
         items: [
           { id: 'msg-3', type: 'message', role: 'user', content: 'do it' },
           { id: 'call-1', type: 'tool_call', name: 'edit', args: {}, status: 'approved' },
-          { id: 'res-1', type: 'tool_result', callId: 'call-1', name: 'edit', output: 'ok', exitCode: 0 },
+          {
+            id: 'res-1',
+            type: 'tool_result',
+            callId: 'call-1',
+            name: 'edit',
+            output: 'ok',
+            exitCode: 0,
+          },
           { id: 'msg-4', type: 'message', role: 'assistant', content: 'done' },
         ],
       },
@@ -564,9 +582,7 @@ describe('ApprovalPanel - pendingKey stability', () => {
       turns: [
         {
           id: 'turn-1',
-          items: [
-            { id: 'call-1', type: 'tool_call', name: 'edit', args: {}, status: 'approved' },
-          ],
+          items: [{ id: 'call-1', type: 'tool_call', name: 'edit', args: {}, status: 'approved' }],
         },
       ],
     };

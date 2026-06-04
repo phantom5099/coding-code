@@ -4,9 +4,9 @@ import { createRequestHelpers } from '../../../src/client/http/request.js';
 
 describe('createHttpSessionClient.setSessionPermissionMode', () => {
   it('calls PUT /api/sessions/:id/permission-mode', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({}), { status: 200 })
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
 
     const request = createRequestHelpers('http://localhost:8080');
     const client = createHttpSessionClient(request);

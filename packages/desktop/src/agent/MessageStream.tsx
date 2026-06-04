@@ -75,10 +75,7 @@ function TurnDiffPanel({
     return null;
   }
 
-  const totalInsertions = diff.files.reduce(
-    (sum: number, f: any) => sum + (f.insertions ?? 0),
-    0
-  );
+  const totalInsertions = diff.files.reduce((sum: number, f: any) => sum + (f.insertions ?? 0), 0);
   const totalDeletions = diff.files.reduce((sum: number, f: any) => sum + (f.deletions ?? 0), 0);
 
   return (
@@ -210,10 +207,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   // Fine-grained subscriptions: only subscribe to what we actually use
   const turns = useGlobalStore((s) => s.agent.threads[threadId]?.turns ?? []);
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
-  const {
-    approveTool,
-    rejectTool,
-  } = useAgentApproval();
+  const { approveTool, rejectTool } = useAgentApproval();
   const {
     loadCheckpointDiff,
     revertFile,
@@ -258,7 +252,10 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const turnsStructureKey = useMemo(
     () =>
       turns
-        .map((t) => `${t.id}:${t.status}:${t.items.length}:${t.items.map((i) => `${i.type}:${i.id}`).join(',')}`)
+        .map(
+          (t) =>
+            `${t.id}:${t.status}:${t.items.length}:${t.items.map((i) => `${i.type}:${i.id}`).join(',')}`
+        )
         .join('|'),
     [turns]
   );
@@ -299,7 +296,12 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       }
     }
 
-    return { renderEntries: entries, callIdToToolName: nameMap, entryCountByTurnId: countMap, turnById: turnMap };
+    return {
+      renderEntries: entries,
+      callIdToToolName: nameMap,
+      entryCountByTurnId: countMap,
+      turnById: turnMap,
+    };
   }, [turnsStructureKey]);
 
   const { turnEndIndices, turnRollbackCallbacks } = useMemo(() => {
@@ -345,15 +347,20 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       idx++;
     }
     return { turnEndIndices: endIndices, turnRollbackCallbacks: rollbackCbs };
-  }, [turns, entryCountByTurnId, threadId, previewRollback, forkThread, setCurrentThread, setPendingInput]);
+  }, [
+    turns,
+    entryCountByTurnId,
+    threadId,
+    previewRollback,
+    forkThread,
+    setCurrentThread,
+    setPendingInput,
+  ]);
 
   const totalCount = renderEntries.length;
 
   // Memoized turnStatusKey for auto-load diff effect
-  const turnStatusKey = useMemo(
-    () => turns.map((t) => `${t.id}:${t.status}`).join(','),
-    [turns]
-  );
+  const turnStatusKey = useMemo(() => turns.map((t) => `${t.id}:${t.status}`).join(','), [turns]);
 
   // Auto-load diff when a turn completes or errors
   const handleLoadDiff = useCallback(
