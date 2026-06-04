@@ -181,6 +181,131 @@ describe('undoLastCodeRollback end-to-end via ShadowGit', () => {
   }, 15000);
 });
 
+describe('rollbackCodeToTurn uses inclusive target turn', () => {
+  async function makeCheckpointLayer() {
+    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { HookService } = await import('../../src/hooks/registry.js');
+
+    const mockHookLayer = Layer.succeed(HookService, {
+      register: () => Effect.succeed(() => {}),
+      emit: () => Effect.succeed(undefined),
+      emitDecision: () => Effect.succeed(null),
+      reloadUserHooks: () => Effect.void,
+      registerDecision: () => Effect.succeed(() => {}),
+    } as any);
+
+    return CheckpointService.Default.pipe(Layer.provide(mockHookLayer));
+  }
+
+  it('previews the first turn diff when rolling back a single-turn session', async () => {
+    const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
+    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { createHash } = await import('crypto');
+    const checkpointLayer = await makeCheckpointLayer();
+    const { projectPath } = setupTempRepo();
+
+    try {
+      const sessionId = 'sess-single-preview';
+      const shortSid = createHash('sha256').update(sessionId).digest('hex').slice(0, 8);
+      const sg = new ShadowGit(projectPath);
+      sg.init();
+      sg.commit(`turn-${shortSid}-1-baseline`);
+      writeFile(projectPath, 'articles/one.md', '# one');
+      sg.commit(`turn-${shortSid}-1-final`);
+
+      const preview = await Effect.runPromise(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.previewRollbackDiff(projectPath, sessionId, 1);
+        }).pipe(Effect.provide(checkpointLayer))
+      );
+
+      expect(preview.baseTurnId).toBe(1);
+      expect(preview.affectedTurns).toEqual([1]);
+      expect(preview.diff).toContain('articles/one.md');
+    } finally {
+      cleanupTempRepo(projectPath);
+    }
+  }, 15000);
+
+  it('rolls back files created by the first turn in a single-turn session', async () => {
+    const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
+    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { createHash } = await import('crypto');
+    const checkpointLayer = await makeCheckpointLayer();
+    const { projectPath } = setupTempRepo();
+
+    try {
+      const sessionId = 'sess-single-rollback';
+      const shortSid = createHash('sha256').update(sessionId).digest('hex').slice(0, 8);
+      const sg = new ShadowGit(projectPath);
+      sg.init();
+      sg.commit(`turn-${shortSid}-1-baseline`);
+      writeFile(projectPath, 'articles/one.md', '# one');
+      sg.commit(`turn-${shortSid}-1-final`);
+
+      const result = await Effect.runPromise(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.rollbackCodeToTurn(projectPath, sessionId, 1);
+        }).pipe(Effect.provide(checkpointLayer))
+      );
+
+      expect(result.reverted).toBe(true);
+      expect(result.baseTurnId).toBe(1);
+      expect(result.affectedTurns).toEqual([1]);
+      expect(result.selectedFiles.some((f) => f.replace(/\\/g, '/').endsWith('articles/one.md'))).toBe(
+        true
+      );
+      expect(existsSync(join(projectPath, 'articles/one.md'))).toBe(false);
+    } finally {
+      cleanupTempRepo(projectPath);
+    }
+  }, 15000);
+
+  it('includes the target and later turns when rolling back a multi-turn session', async () => {
+    const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
+    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { createHash } = await import('crypto');
+    const checkpointLayer = await makeCheckpointLayer();
+    const { projectPath } = setupTempRepo();
+
+    try {
+      const sessionId = 'sess-multi-rollback';
+      const shortSid = createHash('sha256').update(sessionId).digest('hex').slice(0, 8);
+      const sg = new ShadowGit(projectPath);
+      sg.init();
+
+      writeFile(projectPath, 'one.txt', 'one');
+      sg.commit(`turn-${shortSid}-1-baseline`);
+      writeFile(projectPath, 'one.txt', 'one-final');
+      sg.commit(`turn-${shortSid}-1-final`);
+
+      sg.commit(`turn-${shortSid}-2-baseline`);
+      writeFile(projectPath, 'two.txt', 'two-final');
+      sg.commit(`turn-${shortSid}-2-final`);
+
+      sg.commit(`turn-${shortSid}-3-baseline`);
+      writeFile(projectPath, 'three.txt', 'three-final');
+      sg.commit(`turn-${shortSid}-3-final`);
+
+      const preview = await Effect.runPromise(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          return checkpoint.previewRollbackDiff(projectPath, sessionId, 2);
+        }).pipe(Effect.provide(checkpointLayer))
+      );
+
+      expect(preview.baseTurnId).toBe(2);
+      expect(preview.affectedTurns).toEqual([2, 3]);
+      expect(preview.diff).toContain('two.txt');
+      expect(preview.diff).toContain('three.txt');
+    } finally {
+      cleanupTempRepo(projectPath);
+    }
+  }, 15000);
+});
+
 describe('toGitPath preserves original casing for git paths', () => {
   it('returns relative path with original casing from git diff', async () => {
     const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');

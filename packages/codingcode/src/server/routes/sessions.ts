@@ -17,6 +17,19 @@ import { runWithLayer, errorResponse } from '../util.js';
 
 export const sessionsRouter = new Hono();
 
+function findUserMessageForTurn(sessionId: string, turnId: number): string {
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) return '';
+  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+  const rawEvents = readHistory(jsonlPath);
+  for (const ev of rawEvents) {
+    if (ev.type === 'user' && (ev as any).turnId === turnId) {
+      return (ev as any).content ?? '';
+    }
+  }
+  return '';
+}
+
 // Active session ApprovalService forks, keyed by sessionId.
 // messages.ts registers/unregisters; this file's PUT route updates them.
 export const activeApprovalForks = new Map<
@@ -365,21 +378,9 @@ sessionsRouter.post('/:id/rollback-context', async (c) => {
     Effect.gen(function* () {
       const svc = yield* SessionService;
       const state = yield* svc.create(cwd, 'unknown', sessionId);
+      const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId);
       yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
-      // Find user message of the rolled-back turn for input refill
-      let rolledBackMessage = '';
-      const dir = resolveSessionDir(sessionId);
-      if (dir) {
-        const jsonlPath = join(dir, `${sessionId}.jsonl`);
-        const rawEvents = readHistory(jsonlPath);
-        for (const ev of rawEvents) {
-          if (ev.type === 'user' && (ev as any).turnId === body.throughTurnId) {
-            rolledBackMessage = (ev as any).content ?? '';
-            break;
-          }
-        }
-      }
       return { ok: true, turns, rolledBackMessage, promptEstimate: state.promptEstimate };
     })
   );
@@ -402,9 +403,10 @@ sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
       const svc = yield* SessionService;
       const codeResult = checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
       const state = yield* svc.create(cwd, 'unknown', sessionId);
+      const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId);
       yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
-      return { ok: true, turns, codeResult, promptEstimate: state.promptEstimate };
+      return { ok: true, turns, codeResult, rolledBackMessage, promptEstimate: state.promptEstimate };
     })
   );
   if (!result.ok) {
