@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useGlobalStore } from '../stores/global.store';
 import { api } from '../lib/api';
 
@@ -24,14 +24,15 @@ export default function AgentSidebar() {
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
   const toggleSidebar = useGlobalStore((s) => s.toggleSidebar);
 
-  // Fine-grained selector: only extract thread list metadata, not full thread objects
-  const threadList = useGlobalStore((s) => {
+  // Subscribe to raw threads, derive list with useMemo for stable reference
+  const rawThreads = useGlobalStore((s) => s.agent.threads);
+  const threadList = useMemo(() => {
     const normalizedRoot = normalizeCwd(rootPath);
-    return Object.values(s.agent.threads)
+    return Object.values(rawThreads)
       .filter((t) => normalizeCwd(t.cwd).startsWith(normalizedRoot))
       .map((t) => ({ id: t.id, title: t.title, cwd: t.cwd, updatedAt: t.updatedAt }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
-  });
+  }, [rawThreads, rootPath]);
 
   const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
 

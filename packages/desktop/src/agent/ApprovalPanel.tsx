@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { Item } from '@shared/types';
 import { useGlobalStore } from '../stores/global.store';
-import { useAgent } from '../hooks/useAgent';
+import { useAgentApproval } from '../hooks/useAgent';
 import ToolCallCard from '../shared/ToolCallCard';
 
 interface ApprovalPanelProps {
@@ -10,15 +10,30 @@ interface ApprovalPanelProps {
 
 export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const thread = useGlobalStore((s) => s.agent.threads[threadId]);
-  const { approveTool, rejectTool } = useAgent();
+  const { approveTool, rejectTool } = useAgentApproval();
 
-  const pendingItems =
-    thread?.turns.flatMap((turn) =>
+  // Stable string key: only changes when pending item IDs change, not on every content update
+  const pendingKey = useGlobalStore((s) => {
+    const thread = s.agent.threads[threadId];
+    if (!thread) return '';
+    return thread.turns
+      .flatMap((t) => t.items)
+      .filter((i) => i.type === 'tool_call' && i.status === 'pending')
+      .map((i) => i.id)
+      .join(',');
+  });
+
+  // Only compute pending items when the key changes
+  const pendingItems = useMemo(() => {
+    if (!pendingKey) return [];
+    const thread = useGlobalStore.getState().agent.threads[threadId];
+    if (!thread) return [];
+    return thread.turns.flatMap((turn) =>
       turn.items.filter(
         (i): i is Item & { type: 'tool_call' } => i.type === 'tool_call' && i.status === 'pending'
       )
-    ) ?? [];
+    );
+  }, [pendingKey, threadId]);
 
   if (pendingItems.length === 0) return null;
 

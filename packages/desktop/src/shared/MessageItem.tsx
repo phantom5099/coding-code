@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect } from 'react';
+import { useState, useRef, useLayoutEffect, useMemo } from 'react';
 import type { Item } from '@shared/types';
 import CodeBlock from './CodeBlock';
 import ToolCallCard from './ToolCallCard';
@@ -64,6 +64,14 @@ export default function MessageItem({
   const rollbackBtnRef = useRef<HTMLButtonElement>(null);
   const rollbackMenuRef = useRef<HTMLDivElement>(null);
   const [menuFlip, setMenuFlip] = useState<{ vertical?: boolean; horizontal?: boolean }>({});
+
+  // Cache markdown parsing — only re-parses when content changes
+  const messageContent = item.type === 'message' ? item.content : null;
+  const isAssistant = item.type === 'message' && item.role === 'assistant';
+  const parsedContent = useMemo(
+    () => (isAssistant && messageContent != null ? parseMarkdown(messageContent) : null),
+    [isAssistant, messageContent]
+  );
 
   // Dynamically flip menu if it would overflow the viewport
   useLayoutEffect(() => {
@@ -148,7 +156,7 @@ export default function MessageItem({
     return (
       <div className="flex justify-start mb-4">
         <div className="max-w-[88%] text-[15px] text-[#d4d4d4] leading-relaxed">
-          {parseMarkdown(content)}
+          {parsedContent}
           {item.partial && (
             <span className="inline-block w-1.5 h-[1.1em] bg-[#569cd6] animate-pulse ml-0.5 align-middle" />
           )}

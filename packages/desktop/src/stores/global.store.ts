@@ -514,27 +514,28 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           if (chunk.type === 'tool_result') {
             let targetChunk = chunk;
             // Search current turn first (most common case)
-            let callIdx = turn.items.findIndex(
+            const callIdx = turn.items.findIndex(
               (i) => i.type === 'tool_call' && i.id === chunk.callId
             );
             if (callIdx >= 0) {
               const callItem = turn.items[callIdx] as any;
               callItem.status = 'approved';
               targetChunk = buildToolDiff(chunk, callItem) as any;
-              turn.items.splice(callIdx + 1, 0, targetChunk);
+              // Push to end instead of splice to avoid shifting existing item indices
+              turn.items.push(targetChunk);
               return;
             }
             // Fallback: search other turns (rare)
             for (const t of thread.turns) {
               if (t === turn) continue;
-              callIdx = t.items.findIndex(
+              const otherCallIdx = t.items.findIndex(
                 (i) => i.type === 'tool_call' && i.id === chunk.callId
               );
-              if (callIdx >= 0) {
-                const callItem = t.items[callIdx] as any;
+              if (otherCallIdx >= 0) {
+                const callItem = t.items[otherCallIdx] as any;
                 callItem.status = 'approved';
                 targetChunk = buildToolDiff(chunk, callItem) as any;
-                t.items.splice(callIdx + 1, 0, targetChunk);
+                t.items.push(targetChunk);
                 return;
               }
             }

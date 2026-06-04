@@ -5,13 +5,15 @@ import MessageItem from '../shared/MessageItem';
 import UnifiedDiffView from '../shared/UnifiedDiffView';
 import type { Item } from '@shared/types';
 import type { CheckpointDiff } from '../lib/core-api';
-import { useAgent } from '../hooks/useAgent';
+import { useAgentApproval, useAgentRollback } from '../hooks/useAgent';
 
 interface MessageStreamProps {
   threadId: string;
 }
 
 // ---- Top-level TurnDiffPanel (avoids unmount/remount on parent re-render) ----
+
+const EMPTY_MAPPING: Record<number, string> = {};
 
 interface TurnDiffPanelProps {
   uiTurnId: string;
@@ -205,11 +207,14 @@ function TurnDiffPanel({
 // ---- Main component ----
 
 export default function MessageStream({ threadId }: MessageStreamProps) {
-  const thread = useGlobalStore((s) => s.agent.threads[threadId]);
+  // Fine-grained subscriptions: only subscribe to what we actually use
+  const turns = useGlobalStore((s) => s.agent.threads[threadId]?.turns ?? []);
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
   const {
     approveTool,
     rejectTool,
+  } = useAgentApproval();
+  const {
     loadCheckpointDiff,
     revertFile,
     revertAgentFiles,
@@ -221,26 +226,27 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     undoCodeRollback,
     forkThread,
     revertedFilesByTurnId,
-  } = useAgent();
+  } = useAgentRollback();
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const wasAtBottomRef = useRef(true);
 
-  // Fine-grained selectors: only subscribe to current thread's data
-  const checkpointDiffs = useGlobalStore((s) => {
-    const prefix = `${threadId}:`;
-    const result: Record<string, CheckpointDiff> = {};
-    for (const [k, v] of Object.entries(s.rollback.checkpointDiffByTurnId)) {
-      if (k.startsWith(prefix)) result[k] = v;
-    }
-    return result;
-  });
-  const turnCheckpointMapping = useGlobalStore(
-    (s) => s.rollback.turnCheckpointMapping[threadId] ?? {}
-  );
+  // Subscribe to raw store data (stable references), derive with useMemo below
+  const rawCheckpointDiffByTurnId = useGlobalStore((s) => s.rollback.checkpointDiffByTurnId);
+  const rawTurnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping);
   const markScopeRestored = useGlobalStore((s) => s.markScopeRestored);
   const markFileRestored = useGlobalStore((s) => s.markFileRestored);
   const setPendingInput = useGlobalStore((s) => s.setPendingInput);
+
+  // Derive thread-scoped data with useMemo for stable references
+  const checkpointDiffs = useMemo(() => {
+    const prefix = `${threadId}:`;
+    const result: Record<string, CheckpointDiff> = {};
+    for (const [k, v] of Object.entries(rawCheckpointDiffByTurnId)) {
+      if (k.startsWith(prefix)) result[k] = v;
+    }
+    return result;
+  }, [threadId, rawCheckpointDiffByTurnId]);
+
+  const turnCheckpointMapping = rawTurnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
 
   // Rollback modal state
   const [showRollbackPanel, setShowRollbackPanel] = useState<{
@@ -248,9 +254,19 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     preview: any;
   } | null>(null);
 
-  // ---- Memoized rendering data ----
+  // ---- Structure signature: only changes when turns structure changes (not content) ----
+  const turnsStructureKey = useMemo(
+    () =>
+      turns
+        .map((t) => `${t.id}:${t.status}:${t.items.length}:${t.items.map((i) => `${i.type}:${i.id}`).join(',')}`)
+        .join('|'),
+    [turns]
+  );
 
-  const { renderEntries, callIdToToolName } = useMemo(() => {
+  // ---- Memoized rendering data ----
+  // Depends on turnsStructureKey instead of thread, so content updates don't trigger rebuild
+
+  const { renderEntries, callIdToToolName, entryCountByTurnId, turnById } = useMemo(() => {
     const entries: Array<{
       item: Item;
       turnId: string;
@@ -258,31 +274,33 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     }> = [];
     const toolResultByCallId: Record<string, Item & { type: 'tool_result' }> = {};
     const nameMap: Record<string, string> = {};
+    const countMap = new Map<string, number>();
+    const turnMap = new Map<string, (typeof turns)[number]>();
 
-    if (thread) {
-      for (const turn of thread.turns) {
-        for (const item of turn.items) {
-          if (item.type === 'tool_result') {
-            toolResultByCallId[item.callId] = item as any;
-          } else if (item.type === 'tool_call') {
-            nameMap[item.id] = item.name;
-          }
-        }
-      }
-      for (const turn of thread.turns) {
-        for (const item of turn.items) {
-          if (item.type === 'tool_result') continue;
-          if (item.type === 'tool_call') {
-            entries.push({ item, turnId: turn.id, toolResult: toolResultByCallId[item.id] });
-          } else {
-            entries.push({ item, turnId: turn.id });
-          }
+    for (const turn of turns) {
+      turnMap.set(turn.id, turn);
+      for (const item of turn.items) {
+        if (item.type === 'tool_result') {
+          toolResultByCallId[item.callId] = item as any;
+        } else if (item.type === 'tool_call') {
+          nameMap[item.id] = item.name;
         }
       }
     }
+    for (const turn of turns) {
+      for (const item of turn.items) {
+        if (item.type === 'tool_result') continue;
+        if (item.type === 'tool_call') {
+          entries.push({ item, turnId: turn.id, toolResult: toolResultByCallId[item.id] });
+        } else {
+          entries.push({ item, turnId: turn.id });
+        }
+        countMap.set(turn.id, (countMap.get(turn.id) ?? 0) + 1);
+      }
+    }
 
-    return { renderEntries: entries, callIdToToolName: nameMap };
-  }, [thread]);
+    return { renderEntries: entries, callIdToToolName: nameMap, entryCountByTurnId: countMap, turnById: turnMap };
+  }, [turnsStructureKey]);
 
   const { turnEndIndices, turnRollbackCallbacks } = useMemo(() => {
     const endIndices = new Set<number>();
@@ -293,10 +311,9 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
         onForkFromHere?: () => void;
       }
     >();
-    const turns = thread?.turns ?? [];
     let idx = 0;
     for (const turn of turns) {
-      const turnEntryCount = renderEntries.filter((e) => e.turnId === turn.id).length;
+      const turnEntryCount = entryCountByTurnId.get(turn.id) ?? 0;
       idx += turnEntryCount - 1;
       if (turn.status === 'completed' || turn.status === 'error') {
         endIndices.add(idx);
@@ -328,31 +345,15 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       idx++;
     }
     return { turnEndIndices: endIndices, turnRollbackCallbacks: rollbackCbs };
-  }, [thread, renderEntries, threadId, previewRollback, forkThread, setCurrentThread, setPendingInput]);
+  }, [turns, entryCountByTurnId, threadId, previewRollback, forkThread, setCurrentThread, setPendingInput]);
 
   const totalCount = renderEntries.length;
-  const isLargeList = totalCount > 100;
-  const turns = thread?.turns ?? [];
 
   // Memoized turnStatusKey for auto-load diff effect
   const turnStatusKey = useMemo(
     () => turns.map((t) => `${t.id}:${t.status}`).join(','),
     [turns]
   );
-
-  const handleScroll = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  }, []);
-
-  useEffect(() => {
-    if (totalCount === 0 || isLargeList) return;
-    if (!wasAtBottomRef.current) return;
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-  }, [totalCount, isLargeList]);
 
   // Auto-load diff when a turn completes or errors
   const handleLoadDiff = useCallback(
@@ -416,7 +417,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       const isLastInTurn = turnEndIndices.has(index);
       const cbs = turnRollbackCallbacks.get(entry.turnId);
       const isUserMsg = entry.item.type === 'message' && entry.item.role === 'user';
-      const turn = turns.find((t) => t.id === entry.turnId);
+      const turn = turnById.get(entry.turnId);
       const isInterrupted = turn?.status === 'error';
 
       return (
@@ -454,7 +455,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       renderEntries,
       turnEndIndices,
       turnRollbackCallbacks,
-      turns,
+      turnById,
       threadId,
       approveTool,
       rejectTool,
@@ -469,7 +470,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
 
   // ---- Empty state ----
 
-  if (!thread || renderEntries.length === 0) {
+  if (turns.length === 0 || renderEntries.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-[#444] text-[15px]">
         发送消息开始对话
@@ -521,40 +522,18 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     </div>
   );
 
-  // ---- Virtuoso path (many items) ----
-
-  if (isLargeList) {
-    return (
-      <div className="flex-1 flex flex-col min-h-0">
-        <Virtuoso
-          ref={virtuosoRef}
-          className="flex-1 select-text"
-          totalCount={totalCount}
-          itemContent={renderItem}
-          followOutput={(isAtBottom: boolean) => (isAtBottom ? 'smooth' : false)}
-          style={{ flex: 1 }}
-        />
-        {rollbackModal}
-      </div>
-    );
-  }
-
-  // ---- Non-Virtuoso path (few items) ----
+  // ---- Unified Virtuoso path ----
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto select-text"
-      >
-        <div className="pt-8 pb-4 max-w-[820px] mx-auto">
-          {renderEntries.map((entry, i) => {
-            const key = entry.item.id + (entry.toolResult ? '-' + entry.toolResult.id : '');
-            return <div key={key}>{renderItem(i)}</div>;
-          })}
-        </div>
-      </div>
+      <Virtuoso
+        ref={virtuosoRef}
+        className="flex-1 select-text"
+        totalCount={totalCount}
+        itemContent={renderItem}
+        followOutput={(isAtBottom: boolean) => (isAtBottom ? 'smooth' : false)}
+        style={{ flex: 1 }}
+      />
       {rollbackModal}
     </div>
   );
