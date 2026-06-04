@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { parseUnifiedDiff } from '../lib/diff-parser';
 
 interface DiffBlockProps {
@@ -5,7 +6,7 @@ interface DiffBlockProps {
 }
 
 export default function DiffBlock({ diff }: DiffBlockProps) {
-  const parsed = parseUnifiedDiff(diff);
+  const parsed = useMemo(() => parseUnifiedDiff(diff), [diff]);
   const lines = parsed.flatMap((f) => f.hunks.flatMap((h) => h.lines));
 
   return (

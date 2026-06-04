@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useGlobalStore } from '../stores/global.store';
 import { API_BASE, api } from '../lib/api';
 import type { Project, Thread } from '@shared/types';
@@ -119,7 +119,15 @@ function SessionListPopup({
 export default function ProjectStrip() {
   const projects = useGlobalStore((s) => s.workspace.projects);
   const currentProjectId = useGlobalStore((s) => s.workspace.currentProjectId);
-  const threads = useGlobalStore((s) => s.agent.threads);
+  const rawThreads = useGlobalStore((s) => s.agent.threads);
+  const threadMetadata = useMemo(() => {
+    return Object.values(rawThreads).map((t) => ({
+      id: t.id,
+      title: t.title,
+      cwd: t.cwd,
+      updatedAt: t.updatedAt,
+    }));
+  }, [rawThreads]);
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
   const sidebarCollapsed = useGlobalStore((s) => s.ui.sidebarCollapsed);
   const switchProject = useGlobalStore((s) => s.switchProject);
@@ -169,10 +177,10 @@ export default function ProjectStrip() {
 
   const getThreadsForProject = (rootPath: string): Thread[] => {
     const normalizedRoot = normalizeCwd(rootPath);
-    return Object.values(threads).filter((t) => {
+    return threadMetadata.filter((t) => {
       const tcwd = normalizeCwd(t.cwd);
       return tcwd.startsWith(normalizedRoot);
-    });
+    }) as Thread[];
   };
 
   return (

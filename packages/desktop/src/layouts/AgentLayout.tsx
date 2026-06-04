@@ -1,4 +1,4 @@
-import { useAgent } from '../hooks/useAgent';
+import { useAgentCore } from '../hooks/useAgent';
 import { useGlobalStore } from '../stores/global.store';
 import ProjectStrip from '../agent/ProjectStrip';
 import AgentSidebar from '../agent/AgentSidebar';
@@ -6,7 +6,7 @@ import AgentWorkspace from '../agent/AgentWorkspace';
 import SettingsPage from '../settings/SettingsPage';
 
 export default function AgentLayout() {
-  const { sendMessage, abort } = useAgent();
+  const { sendMessage, abort } = useAgentCore();
   const view = useGlobalStore((s) => s.ui.view);
 
   return (

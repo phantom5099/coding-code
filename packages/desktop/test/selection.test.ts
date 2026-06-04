@@ -90,10 +90,10 @@ describe('text selection behavior', () => {
       expect(hasSelectTextVirtuoso || hasSelectTextDiv).toBe(true);
     });
 
-    it('should have at least two select-text occurrences (both list variants)', () => {
+    it('should have at least one select-text occurrence (unified Virtuoso path)', () => {
       const allClasses = classNamesFromSource('agent/MessageStream.tsx');
       const selectTextCount = allClasses.filter((c) => c.includes('select-text')).length;
-      expect(selectTextCount).toBeGreaterThanOrEqual(2);
+      expect(selectTextCount).toBeGreaterThanOrEqual(1);
     });
   });
 

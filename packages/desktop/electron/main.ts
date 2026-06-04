@@ -3,7 +3,7 @@ import { join } from 'path';
 import { createMenu } from './menu';
 import { registerFsHandlers } from './ipc/fs.handler';
 import { registerGitHandlers } from './ipc/git.handler';
-import { startPolling } from './core/git.service';
+import { startPolling, stopPolling } from './core/git.service';
 import { initBackend } from './core/backend';
 import { startHttpServer } from './core/http-server';
 
@@ -15,6 +15,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 let mainWindow: BrowserWindow | null = null;
+let currentWorkspaceCwd: string = process.cwd();
 
 function createWindow(apiPort: number): BrowserWindow {
   const win = new BrowserWindow({
@@ -54,6 +55,13 @@ function createWindow(apiPort: number): BrowserWindow {
     return { action: 'deny' };
   });
 
+  win.on('closed', () => {
+    stopPolling();
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
+
   return win;
 }
 
@@ -73,11 +81,16 @@ app.whenReady().then(async () => {
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
 
+  // Renderer notifies main process of workspace cwd changes
+  ipcMain.on('workspace:setCwd', (_e, cwd: string) => {
+    currentWorkspaceCwd = cwd;
+  });
+
   registerFsHandlers();
   registerGitHandlers();
 
-  // Git polling uses the current project cwd from platform utility
-  startPolling(mainWindow, () => process.cwd());
+  // Git polling uses the workspace cwd from renderer
+  startPolling(mainWindow, () => currentWorkspaceCwd);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -87,6 +100,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  stopPolling();
   if (process.platform !== 'darwin') {
     app.quit();
   }

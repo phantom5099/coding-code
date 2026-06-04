@@ -209,11 +209,7 @@ function InputBox({
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
-  const isStreaming = useGlobalStore((s) => {
-    const id = s.agent.currentThreadId;
-    const turns = id ? s.agent.threads[id]?.turns : undefined;
-    return turns ? turns.some((t) => t.status === 'running') : false;
-  });
+  const isStreaming = useGlobalStore((s) => s.agent.hasRunningTurn);
   const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy);
   const workspace = useGlobalStore((s) => s.workspace);
   const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy);

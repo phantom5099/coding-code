@@ -40,7 +40,12 @@ function randomId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 11);
 }
 
-export function useAgent() {
+// Module-level abort controllers — shared across hooks (singleton pattern)
+const abortControllers = new Map<string, AbortController>();
+
+// ---- useAgentCore: sendMessage + abort + initialization ----
+
+export function useAgentCore() {
   const startTurn = useGlobalStore((s) => s.startTurn);
   const applyChunk = useGlobalStore((s) => s.applyChunk);
   const updateTurnId = useGlobalStore((s) => s.updateTurnId);
@@ -51,40 +56,16 @@ export function useAgent() {
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
   const loadThreads = useGlobalStore((s) => s.loadThreads);
   const setThreadTurns = useGlobalStore((s) => s.setThreadTurns);
-  const setThreadCwd = useGlobalStore((s) => s.setThreadCwd);
   const setModel = useGlobalStore((s) => s.setModel);
   const setModels = useGlobalStore((s) => s.setModels);
-  const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy);
   const setContextUsage = useGlobalStore((s) => s.setContextUsage);
   const setThreadUsage = useGlobalStore((s) => s.setThreadUsage);
-  const setProjects = useGlobalStore((s) => s.setProjects);
-  const switchProject = useGlobalStore((s) => s.switchProject);
-  const addProject = useGlobalStore((s) => s.addProject);
-  const setWorkspace = useGlobalStore((s) => s.setWorkspace);
-  const updateToolCallStatus = useGlobalStore((s) => s.updateToolCallStatus);
   const workspace = useGlobalStore((s) => s.workspace);
   const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
   const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy);
-  // Rollback store
-  const rollbackStateByThreadId = useGlobalStore((s) => s.rollback.rollbackStateByThreadId);
-  const revertedFilesByTurnId = useGlobalStore((s) => s.rollback.revertedFilesByTurnId);
-  const setRollbackState = useGlobalStore((s) => s.setRollbackState);
-  const setCheckpointDiff = useGlobalStore((s) => s.setCheckpointDiff);
-  const setRollbackPreview = useGlobalStore((s) => s.setRollbackPreview);
-  const clearRollbackPreview = useGlobalStore((s) => s.clearRollbackPreview);
-  const markFileReverted = useGlobalStore((s) => s.markFileReverted);
-  const markFileRestored = useGlobalStore((s) => s.markFileRestored);
-  const markScopeReverted = useGlobalStore((s) => s.markScopeReverted);
-  const markScopeRestored = useGlobalStore((s) => s.markScopeRestored);
-  const setTurnCheckpointMapping = useGlobalStore((s) => s.setTurnCheckpointMapping);
-  const turnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping);
-  const initRevertedFilesFromState = useGlobalStore((s) => s.initRevertedFilesFromState);
-
-  const abortControllers = useRef<Map<string, AbortController>>(new Map());
 
   // Load sessions, models, and projects on mount
   useEffect(() => {
-    // Load models from HTTP
     listModels()
       .then((data) => {
         if (data.models) setModels(data.models);
@@ -94,7 +75,6 @@ export function useAgent() {
         console.error('Failed to load models:', e);
       });
 
-    // Load sessions for current project from HTTP
     const currentCwd = workspace.rootPath;
     if (currentCwd) {
       listSessions(currentCwd)
@@ -123,8 +103,6 @@ export function useAgent() {
           console.error('Failed to load sessions:', e);
         });
     }
-
-    // Restore persisted projects, approval policy, model - already done by persist middleware
   }, [loadThreads, setModel, setModels, setThreadUsage, workspace.rootPath]);
 
   // Load history from HTTP when switching to a thread with no turns
@@ -260,7 +238,7 @@ export function useAgent() {
         setCurrentThread(threadId);
       }
 
-      if (abortControllers.current.has(threadId)) return;
+      if (abortControllers.has(threadId)) return;
 
       let turnId = randomId();
       let assistantMessageId = randomId();
@@ -270,7 +248,7 @@ export function useAgent() {
       startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) });
 
       const controller = new AbortController();
-      abortControllers.current.set(threadId, controller);
+      abortControllers.set(threadId, controller);
 
       try {
         const stream = agentClient.sendMessage(content, {
@@ -302,7 +280,7 @@ export function useAgent() {
         applyChunk(threadId, turnId, { id: randomId(), type: 'error', message: msg });
         completeTurn(threadId, turnId, 'error');
       } finally {
-        abortControllers.current.delete(threadId);
+        abortControllers.delete(threadId);
       }
     },
     [
@@ -320,12 +298,20 @@ export function useAgent() {
   const abort = useCallback(() => {
     const threadId = currentThreadId;
     if (!threadId) return;
-    const controller = abortControllers.current.get(threadId);
+    const controller = abortControllers.get(threadId);
     if (controller) {
       controller.abort();
-      abortControllers.current.delete(threadId);
+      abortControllers.delete(threadId);
     }
   }, [currentThreadId]);
+
+  return { sendMessage, abort };
+}
+
+// ---- useAgentApproval: approveTool + rejectTool ----
+
+export function useAgentApproval() {
+  const updateToolCallStatus = useGlobalStore((s) => s.updateToolCallStatus);
 
   const approveTool = useCallback(
     async (threadId: string, callId: string) => {
@@ -351,44 +337,30 @@ export function useAgent() {
     [updateToolCallStatus]
   );
 
-  const deleteThread = useCallback(
-    async (threadId: string) => {
-      try {
-        await deleteSession(threadId);
-      } catch (e) {
-        console.error('Failed to delete session:', e);
-      }
-      const currentCwd = useGlobalStore.getState().workspace.rootPath;
-      if (currentCwd) {
-        const sessions = await listSessions(currentCwd).catch(() => []);
-        if (sessions) {
-          const threads = sessions.map((s: any) => ({
-            id: s.sessionId,
-            projectId: '',
-            title: s.title ?? s.sessionId.slice(0, 8),
-            cwd: normalizeCwd(s.cwd ?? ''),
-            turns: [],
-            createdAt: new Date(s.createdAt).getTime(),
-            updatedAt: new Date(s.updatedAt).getTime(),
-          }));
-          loadThreads(threads);
-          for (const s of sessions) {
-            if (s.usage) {
-              setThreadUsage(s.sessionId, {
-                prompt: s.usage.prompt,
-                completion: s.usage.completion,
-                total: s.usage.total,
-              });
-            }
-          }
-        }
-      }
-    },
-    [loadThreads, setThreadUsage]
-  );
+  return { approveTool, rejectTool };
+}
 
-  // Rollback methods
-  // Resolve checkpoint integer turn ID → UI turn ID (UUID or integer string)
+// ---- useAgentRollback: all rollback methods ----
+
+export function useAgentRollback() {
+  const workspace = useGlobalStore((s) => s.workspace);
+  const setPendingInput = useGlobalStore((s) => s.setPendingInput);
+  const clearRunningTurns = useGlobalStore((s) => s.clearRunningTurns);
+  const setThreadTurns = useGlobalStore((s) => s.setThreadTurns);
+  const setContextUsage = useGlobalStore((s) => s.setContextUsage);
+  const loadThreads = useGlobalStore((s) => s.loadThreads);
+  const setThreadUsage = useGlobalStore((s) => s.setThreadUsage);
+  // Rollback store
+  const revertedFilesByTurnId = useGlobalStore((s) => s.rollback.revertedFilesByTurnId);
+  const setRollbackState = useGlobalStore((s) => s.setRollbackState);
+  const setCheckpointDiff = useGlobalStore((s) => s.setCheckpointDiff);
+  const setRollbackPreview = useGlobalStore((s) => s.setRollbackPreview);
+  const markFileReverted = useGlobalStore((s) => s.markFileReverted);
+  const markFileRestored = useGlobalStore((s) => s.markFileRestored);
+  const markScopeReverted = useGlobalStore((s) => s.markScopeReverted);
+  const setTurnCheckpointMapping = useGlobalStore((s) => s.setTurnCheckpointMapping);
+  const initRevertedFilesFromState = useGlobalStore((s) => s.initRevertedFilesFromState);
+
   const resolveUITurnId = useCallback((threadId: string, checkpointId: number): string => {
     const mapping = useGlobalStore.getState().rollback.turnCheckpointMapping;
     const uiId = mapping[threadId]?.[checkpointId];
@@ -403,7 +375,6 @@ export function useAgent() {
       const numericTurnId = parsed != null && !isNaN(parsed) ? parsed : undefined;
       const diff = await getCheckpointDiff(threadId, cwd, numericTurnId);
       setCheckpointDiff(threadId, String(diff.turnId), diff);
-      // Map checkpoint turnId to the latest completed UI turn (only when caller didn't specify a turn)
       if (diff.turnId > 0 && numericTurnId == null) {
         const thread = useGlobalStore.getState().agent.threads[threadId];
         if (thread) {
@@ -566,13 +537,43 @@ export function useAgent() {
     [workspace.rootPath, setRollbackState, initRevertedFilesFromState]
   );
 
+  const deleteThread = useCallback(
+    async (threadId: string) => {
+      try {
+        await deleteSession(threadId);
+      } catch (e) {
+        console.error('Failed to delete session:', e);
+      }
+      const currentCwd = useGlobalStore.getState().workspace.rootPath;
+      if (currentCwd) {
+        const sessions = await listSessions(currentCwd).catch(() => []);
+        if (sessions) {
+          const threads = sessions.map((s: any) => ({
+            id: s.sessionId,
+            projectId: '',
+            title: s.title ?? s.sessionId.slice(0, 8),
+            cwd: normalizeCwd(s.cwd ?? ''),
+            turns: [],
+            createdAt: new Date(s.createdAt).getTime(),
+            updatedAt: new Date(s.updatedAt).getTime(),
+          }));
+          loadThreads(threads);
+          for (const s of sessions) {
+            if (s.usage) {
+              setThreadUsage(s.sessionId, {
+                prompt: s.usage.prompt,
+                completion: s.usage.completion,
+                total: s.usage.total,
+              });
+            }
+          }
+        }
+      }
+    },
+    [loadThreads, setThreadUsage]
+  );
+
   return {
-    sendMessage,
-    abort,
-    approveTool,
-    rejectTool,
-    deleteThread,
-    // Rollback
     loadCheckpointDiff,
     revertFile,
     revertFiles,
@@ -585,7 +586,16 @@ export function useAgent() {
     undoCodeRollback,
     forkThread,
     initRollbackState,
-    rollbackStateByThreadId,
+    deleteThread,
     revertedFilesByTurnId,
   };
+}
+
+// ---- Legacy useAgent: combines all three hooks for backward compatibility ----
+
+export function useAgent() {
+  const core = useAgentCore();
+  const approval = useAgentApproval();
+  const rollback = useAgentRollback();
+  return { ...core, ...approval, ...rollback };
 }

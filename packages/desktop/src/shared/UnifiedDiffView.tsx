@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { parseUnifiedDiff } from '../lib/diff-parser';
 
 interface UnifiedDiffViewProps {
@@ -96,7 +96,7 @@ function DiffFileView({ file }: { file: import('../lib/diff-parser').ParsedDiffF
 }
 
 export default function UnifiedDiffView({ diff }: UnifiedDiffViewProps) {
-  const parsed = parseUnifiedDiff(diff);
+  const parsed = useMemo(() => parseUnifiedDiff(diff), [diff]);
 
   if (parsed.length === 0) {
     return <div className="text-[12px] text-[#555] px-3 py-2">无差异</div>;

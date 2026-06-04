@@ -8,14 +8,24 @@ import ErrorBoundary from './shared/ErrorBoundary';
 export default function App() {
   const mode = useGlobalStore((s) => s.ui.mode);
   const setMode = useGlobalStore((s) => s.setMode);
+  const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+
+  // Sync workspace cwd to main process for git polling
+  useEffect(() => {
+    if (rootPath) {
+      window.electronAPI?.setWorkspaceCwd?.(rootPath);
+    }
+  }, [rootPath]);
 
   useEffect(() => {
     const off = window.electronAPI?.onFsChange?.(() => {});
-    window.addEventListener('menu:switchMode', ((e: CustomEvent<'agent' | 'ide'>) => {
+    const handler = ((e: CustomEvent<'agent' | 'ide'>) => {
       setMode(e.detail);
-    }) as EventListener);
+    }) as EventListener;
+    window.addEventListener('menu:switchMode', handler);
     return () => {
       off?.();
+      window.removeEventListener('menu:switchMode', handler);
     };
   }, [setMode]);
 
