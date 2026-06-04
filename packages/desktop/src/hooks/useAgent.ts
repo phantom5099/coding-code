@@ -487,6 +487,9 @@ export function useAgentRollback() {
       const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
       const res = await rollbackBothToTurn(threadId, cwd, throughTurnId);
       setThreadTurns(threadId, res.turns as Turn[]);
+      if (res.rolledBackMessage) {
+        setPendingInput(res.rolledBackMessage);
+      }
       if (res.promptEstimate != null) {
         const state = useGlobalStore.getState();
         const entry = state.agent.models.find((m) => m.id === state.agent.model);
@@ -497,7 +500,7 @@ export function useAgentRollback() {
       }
       return res;
     },
-    [workspace.rootPath, setThreadTurns, setContextUsage]
+    [workspace.rootPath, setThreadTurns, setPendingInput, setContextUsage]
   );
 
   const undoCodeRollback = useCallback(

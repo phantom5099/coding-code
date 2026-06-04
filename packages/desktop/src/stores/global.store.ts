@@ -692,9 +692,12 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           const state = s.rollback.rollbackStateByThreadId[threadId];
           if (!state) return;
           const revertedFiles = state.code.revertedFiles ?? [];
-          if (revertedFiles.length > 0) {
-            s.rollback.revertedFilesByTurnId[threadId] = revertedFiles;
-          }
+          const checkpointTurnId = state.code.lastEntry?.throughTurnId;
+          if (revertedFiles.length === 0 || checkpointTurnId === undefined) return;
+          const uiTurnId = s.rollback.turnCheckpointMapping[threadId]?.[checkpointTurnId];
+          if (!uiTurnId) return;
+          const key = `${threadId}:${uiTurnId}`;
+          s.rollback.revertedFilesByTurnId[key] = revertedFiles;
         }),
       setTurnCheckpointMapping: (threadId, checkpointId, uiTurnId) =>
         set((s) => {
