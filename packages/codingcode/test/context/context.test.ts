@@ -161,7 +161,7 @@ describe('ContextService', () => {
       })
     );
 
-    const { ToolLayer, HookLayer } = await import('../../src/layer.js');
+    const { HookLayer } = await import('../../src/layer.js');
 
     const MockToolSearchLayer = Layer.succeed(
       ToolSearchService,
@@ -186,7 +186,6 @@ describe('ContextService', () => {
 
     const AllDeps = Layer.mergeAll(
       MockToolExecutorLayer,
-      ToolLayer,
       MockContextLayer,
       mockSessionLayer,
       MockCheckpointLayer,

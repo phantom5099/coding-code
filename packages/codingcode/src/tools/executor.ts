@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import { AgentError } from '../core/error';
-import { ToolService } from './registry';
 import { HookService } from '../hooks/registry';
 import { ApprovalService } from '../approval/index';
 import type { ToolDefinition } from './types';
@@ -11,10 +10,10 @@ export type ToolResultUnion =
   | { type: 'denied'; id: string; name: string; reason: string }
   | { type: 'error'; id: string; name: string; output: string };
 
+export type ToolLookup = (name: string) => ToolDefinition | undefined;
+
 export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('ToolExecutor', {
   effect: Effect.gen(function* () {
-    // Capture dependencies once at construction time
-    const registry = yield* ToolService;
     const hooks = yield* HookService;
     const approval = yield* ApprovalService;
 
@@ -29,16 +28,15 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         approval?: any;
         agentRunner?: any;
         callId?: string;
+        toolLookup?: ToolLookup;
       }
     ): Effect.Effect<
       { output: string; diff?: string; filePath?: string; insertions?: number; deletions?: number },
       AgentError
     > {
       return Effect.gen(function* () {
-        // All services captured from outer closure — no yield* needed for them
-        const toolResult = registry.get(name);
-        if (!toolResult.ok) return yield* Effect.fail(toolResult.error);
-        const tool = toolResult.value as ToolDefinition;
+        const tool = opts?.toolLookup?.(name);
+        if (!tool) return yield* Effect.fail(AgentError.toolNotFound(name));
 
         // 1. Approval pipeline (Layers 1-6)
         const decisionApproval: typeof approval = opts?.approval ?? approval;
@@ -169,6 +167,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         signal?: AbortSignal;
         approval?: any;
         agentRunner?: any;
+        toolLookup?: ToolLookup;
       }
     ): Effect.Effect<ToolResultUnion> {
       return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
@@ -219,6 +218,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         signal?: AbortSignal;
         approval?: any;
         agentRunner?: any;
+        toolLookup?: ToolLookup;
       }
     ): Effect.Effect<ToolResultUnion[]> {
       return Effect.gen(function* () {

@@ -6,6 +6,7 @@ import type { ToolVisibilityPolicy } from '../tools/visibility';
 import { HookService } from '../hooks/registry';
 import { McpService } from '../mcp/index';
 import { evictProjectRules } from '../rules/index';
+import { normalizePath } from '../core/path';
 
 export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>()('ProjectRuntime', {
   effect: Effect.gen(function* () {
@@ -39,12 +40,13 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
     return {
       prepareProject: (projectPath: string): Effect.Effect<void> =>
         Effect.gen(function* () {
-          if (prepared.has(projectPath)) return;
-          prepared.add(projectPath);
-          evictProjectRules(projectPath);
-          yield* hooks.reloadUserHooks(projectPath);
-          yield* mcp.syncConnections(projectPath);
-          cachedSubagentProfiles.set(projectPath, buildProfiles(projectPath));
+          const norm = normalizePath(projectPath);
+          if (prepared.has(norm)) return;
+          prepared.add(norm);
+          evictProjectRules(norm);
+          yield* hooks.reloadUserHooks(norm).pipe(Effect.catchAll(() => Effect.void));
+          yield* mcp.syncConnections(norm).pipe(Effect.catchAll(() => Effect.void));
+          cachedSubagentProfiles.set(norm, buildProfiles(norm));
         }),
 
       resolveMainAgentProfile: (projectPath: string, sessionId: string): AgentProfile => {
@@ -56,14 +58,16 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
       },
 
       resolveSubagentProfile: (projectPath: string, name: string): AgentProfile | undefined => {
-        const cached = cachedSubagentProfiles.get(projectPath);
-        if (cached) return cached.find((p) => p.name === name);
-        return undefined;
+        const norm = normalizePath(projectPath);
+        const cached = cachedSubagentProfiles.get(norm);
+        const profiles = cached ?? buildProfiles(norm);
+        return profiles.find((p) => p.name === name);
       },
 
       listAgentProfiles: (projectPath: string): AgentProfile[] => {
-        const cached = cachedSubagentProfiles.get(projectPath);
-        return cached ? [...cached] : buildProfiles(projectPath);
+        const normalized = normalizePath(projectPath);
+        const cached = cachedSubagentProfiles.get(normalized);
+        return cached ? [...cached] : buildProfiles(normalized);
       },
 
       getToolPolicy: (profile: AgentProfile): ToolVisibilityPolicy => ({
@@ -87,9 +91,10 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
 
       disposeProject: (projectPath: string): Effect.Effect<void> =>
         Effect.sync(() => {
-          prepared.delete(projectPath);
-          cachedSubagentProfiles.delete(projectPath);
-          evictProjectRules(projectPath);
+          const norm = normalizePath(projectPath);
+          prepared.delete(norm);
+          cachedSubagentProfiles.delete(norm);
+          evictProjectRules(norm);
         }),
     };
   }),

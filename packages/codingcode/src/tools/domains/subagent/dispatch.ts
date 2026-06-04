@@ -21,7 +21,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
   return {
     name: 'dispatch_agent',
     description:
-      'Spawn an isolated subagent with its own context. Available profiles are listed in the project configuration.',
+      'Spawn an isolated subagent to handle specialized tasks. See "Available Subagents" in the system prompt for available profiles and their capabilities.',
     shortDescription: 'Spawn isolated subagent',
     parameters: z.object({
       agent: z.string().describe('subagent profile name'),

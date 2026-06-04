@@ -183,7 +183,7 @@ const MockSkillLayer = Layer.succeed(
 );
 
 const { AgentService } = await import('../../src/agent/agent.js');
-const { ToolLayer, HookLayer } = await import('../../src/layer.js');
+const { HookLayer } = await import('../../src/layer.js');
 
 const MockCheckpointLayer = Layer.succeed(
   CheckpointService,
@@ -234,7 +234,6 @@ const MockApprovalLayer = ApprovalService.Default.pipe(
 
 const AllDeps = Layer.mergeAll(
   MockToolExecutorLayer,
-  ToolLayer,
   MockContextLayer,
   MockSessionLayer,
   MockCheckpointLayer,

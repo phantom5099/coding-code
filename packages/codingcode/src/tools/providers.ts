@@ -39,7 +39,7 @@ export interface SessionToolResolver {
 
 // ---- Static built-in tools (without context-dependent tools) ----
 
-const STATIC_BUILTIN_TOOLS: ToolDefinition[] = [
+export const STATIC_BUILTIN_TOOLS: ToolDefinition[] = [
   readFileTool,
   writeFileTool,
   editFileTool,

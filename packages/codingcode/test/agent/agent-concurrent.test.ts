@@ -75,7 +75,7 @@ function makeDeps(overrides?: Record<string, any>) {
     maxSteps: 25,
     maxStopContinuations: 2,
     executor: null as any,
-    toolRegistry: mockToolRegistry as any,
+    runtime: { listAgentProfiles: () => [] } as any,
     toolSearch: mockToolSearch as any,
     agentService: mockAgentService as any,
     ctx: mockCtx as any,

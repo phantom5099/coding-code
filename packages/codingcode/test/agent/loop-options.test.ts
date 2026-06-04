@@ -30,10 +30,7 @@ describe('runReActLoop 鈥?loop options', () => {
       maxSteps: 1,
       maxStopContinuations: 2,
       executor: {} as any,
-      toolRegistry: {
-        allCore: () => [],
-        allDeferred: () => [],
-      } as any,
+      runtime: { listAgentProfiles: () => [] } as any,
       toolSearch: {
         isLoaded: () => false,
         listUnloadedDeferred: () => [],

@@ -4,10 +4,9 @@ import { appendFileSync } from 'fs';
 import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
-import type { ToolDescription } from '../tools/types.js';
+import type { ToolDescription, ToolDefinition } from '../tools/types.js';
 import type { LLMClient } from '../llm/client.js';
-import { ToolService } from '../tools/registry.js';
-import { ToolExecutorService } from '../tools/executor.js';
+import { ToolExecutorService, type ToolLookup } from '../tools/executor.js';
 import { ContextService } from '../context/context.js';
 import { SessionService, type SessionStoreState } from '../session/store.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
@@ -25,9 +24,10 @@ import { loadMemoryForPrompt, flushSessionToMemory } from '../memory/index.js';
 import { createLogger } from '@codingcode/infra';
 import type { AgentProfile } from '../subagent/registry';
 import type { ToolVisibilityPolicy } from '../tools/visibility';
-import type { ToolDefinition } from '../tools/types';
 import { ProjectRuntimeService } from '../runtime/project-runtime';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
+import { STATIC_BUILTIN_TOOLS } from '../tools/providers.js';
+import { normalizePath } from '../core/path.js';
 
 const logger = createLogger();
 
@@ -51,13 +51,14 @@ export const sendMessage = (
     const approval = yield* ApprovalService;
 
     const runtime = yield* ProjectRuntimeService;
-    yield* runtime.prepareProject(cwd);
-    yield* skill.evictProject(cwd);
+    const normalizedCwd = normalizePath(cwd);
+    yield* runtime.prepareProject(normalizedCwd);
+    yield* skill.evictProject(normalizedCwd);
 
-    const state = yield* session.create(cwd, llm.modelInfo.model, sessionId);
+    const state = yield* session.create(normalizedCwd, llm.modelInfo.model, sessionId);
     const sid = state.sessionId;
 
-    const profile = runtime.resolveMainAgentProfile(cwd, state.sessionId);
+    const profile = runtime.resolveMainAgentProfile(normalizedCwd, state.sessionId);
     const policy = runtime.getToolPolicy(profile);
 
     const dispatchTool = createDispatchAgentTool({
@@ -164,7 +165,6 @@ interface RunReActDeps {
   maxSteps: number;
   maxStopContinuations: number;
   executor: ToolExecutorService;
-  toolRegistry: ToolService;
   toolSearch: ToolSearchService;
   runtime: ProjectRuntimeService;
   agentService: {
@@ -181,7 +181,6 @@ interface RunReActDeps {
 export class AgentService extends Effect.Service<AgentService>()('Agent', {
   effect: Effect.gen(function* () {
     const executor = yield* ToolExecutorService;
-    const toolRegistry = yield* ToolService;
     const toolSearch = yield* ToolSearchService;
     const runtime = yield* ProjectRuntimeService;
     const ctx = yield* ContextService;
@@ -200,7 +199,6 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
           maxSteps,
           maxStopContinuations,
           executor,
-          toolRegistry,
           toolSearch,
           runtime,
           agentService: service,
@@ -224,6 +222,7 @@ export async function* runReActLoop(
   const projectPath = state.cwd;
 
   // Build system prompt
+  const agentProfiles = deps.runtime.listAgentProfiles(projectPath);
   const basePrompt =
     opts.systemOverride ??
     buildSystemPrompt({
@@ -232,6 +231,7 @@ export async function* runReActLoop(
       shell: process.env.SHELL || process.env.ComSpec || 'bash',
       variant: systemPromptVariant ?? 'default',
       skillInstruction,
+      agentProfiles,
     });
 
   const memoryBlock = loadMemoryForPrompt(projectPath);
@@ -285,53 +285,26 @@ export async function* runReActLoop(
         return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
       }
 
-      // Build tools
-      let tools: ToolDescription[];
-      if (opts.agentProfile && opts.toolPolicy) {
-        const resolveParams = {
-          projectPath,
-          sessionId,
-          profile: opts.agentProfile,
-          policy: opts.toolPolicy,
-        };
-        tools = buildToolsForAgent((_params) => {
-          let allTools = toolRegistry.allCore().concat(toolRegistry.allDeferred());
-          if (opts.dispatchTool) allTools = [...allTools, opts.dispatchTool];
-          const allowed = _params.profile.tools ? new Set(_params.profile.tools) : null;
-          let filtered = allTools;
-          if (allowed) filtered = filtered.filter((t) => allowed.has(t.name));
-          if (_params.policy.allowedTools) {
-            filtered = filtered.filter((t) => _params.policy.allowedTools!.has(t.name));
-          }
-          return filtered.map((t) => ({
-            name: t.name,
-            description: t.description,
-            parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
-          }));
-        }, resolveParams);
-      } else {
-        // Legacy fallback
-        tools = buildToolsForAgent(
-          (_params) => {
-            let core = toolRegistry.allCore();
-            if (_params.profile.tools) {
-              const allowed = new Set(_params.profile.tools);
-              core = core.filter((t) => allowed.has(t.name));
-            }
-            return core.map((t) => ({
-              name: t.name,
-              description: t.description,
-              parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
-            }));
-          },
-          {
-            projectPath,
-            sessionId,
-            profile: opts.agentProfile ?? { name: 'default', description: '' },
-            policy: opts.toolPolicy ?? { allowToolSearch: true, allowDeferredTools: false },
-          }
-        );
-      }
+      // Build tools from static builtin + dispatch
+      let allToolDefs: ToolDefinition[] = [...STATIC_BUILTIN_TOOLS];
+      if (opts.dispatchTool) allToolDefs = [...allToolDefs, opts.dispatchTool];
+
+      // Apply profile and policy filters
+      const allowedByProfile = opts.agentProfile?.tools ? new Set(opts.agentProfile.tools) : null;
+      const allowedByPolicy = opts.toolPolicy?.allowedTools;
+      let filteredDefs = allToolDefs;
+      if (allowedByProfile) filteredDefs = filteredDefs.filter((t) => allowedByProfile.has(t.name));
+      if (allowedByPolicy) filteredDefs = filteredDefs.filter((t) => allowedByPolicy.has(t.name));
+
+      // Convert to ToolDescription for LLM
+      const tools: ToolDescription[] = filteredDefs.map((t) => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
+      }));
+
+      // Build toolLookup for executor
+      const toolLookup: ToolLookup = (name: string) => filteredDefs.find((t) => t.name === name);
       const catalog = buildDeferredCatalogContent(toolSearch, sessionId, opts.toolPolicy);
       const systemWithCatalog = catalog ? `${system}\n\n${catalog}` : system;
 
@@ -521,6 +494,7 @@ export async function* runReActLoop(
             signal: opts.abortSignal,
             approval: opts.approvalOverride,
             agentRunner: { agentService: deps.agentService, llm },
+            toolLookup,
           });
           for (const r of results) {
             const resultOut = r.type === 'denied' ? '' : r.output;

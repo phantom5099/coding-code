@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { ToolService } from './registry';
 import type { ToolDefinition } from './types';
 import type { ToolVisibilityPolicy } from './visibility';
 
@@ -26,7 +25,9 @@ export interface ToolSearchHit {
 
 export class ToolSearchService extends Effect.Service<ToolSearchService>()('ToolSearchService', {
   effect: Effect.gen(function* () {
-    const tools = yield* ToolService;
+    // Deferred tools are registered externally (not from ToolService)
+    const deferredTools: ToolDefinition[] = [];
+
     return {
       isLoaded: (sessionId: string, toolName: string, policy?: ToolVisibilityPolicy): boolean => {
         if (policy?.allowedTools && !policy.allowedTools.has(toolName)) return false;
@@ -41,7 +42,7 @@ export class ToolSearchService extends Effect.Service<ToolSearchService>()('Tool
       ): ToolDefinition[] => {
         const set = getSet(sessionId);
         return filterByPolicy(
-          tools.allDeferred().filter((t) => !set.has(t.name)),
+          deferredTools.filter((t) => !set.has(t.name)),
           policy
         );
       },
@@ -54,7 +55,7 @@ export class ToolSearchService extends Effect.Service<ToolSearchService>()('Tool
         const set = getSet(sessionId);
         const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
         if (tokens.length === 0) return [];
-        const candidates = filterByPolicy(tools.allDeferred(), policy);
+        const candidates = filterByPolicy(deferredTools, policy);
         const hits = candidates.filter((t) => {
           if (set.has(t.name)) return false;
           const haystack = `${t.name} ${t.shortDescription ?? ''} ${t.description}`.toLowerCase();

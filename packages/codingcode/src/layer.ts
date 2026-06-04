@@ -2,7 +2,6 @@ import { Layer } from 'effect';
 import { AgentService } from './agent/agent';
 import { SessionService } from './session/store';
 import { ContextService } from './context/context';
-import { ToolService } from './tools/registry';
 import { HookService } from './hooks/registry';
 import { McpService } from './mcp/index';
 import { SkillService } from './skills/index';
@@ -17,7 +16,6 @@ import { ProjectRuntimeService } from './runtime/project-runtime';
 export const AgentLayer = AgentService.Default;
 export const SessionLayer = SessionService.Default;
 export const ContextLayer = ContextService.Default;
-export const ToolLayer = ToolService.Default;
 export const HookLayer = HookService.Default;
 export const SkillLayer = SkillService.Default;
 export const ApprovalWaitLayer = ApprovalWaitService.Default;
@@ -33,20 +31,19 @@ export const ProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
   Layer.provide(ProjectRuntimeDeps)
 );
 
-/** ToolExecutor depends on ToolLayer + HookLayer + ApprovalLayer. */
-const ExecutorDeps = Layer.mergeAll(ToolLayer, HookLayer, ApprovalLayer);
+/** ToolExecutor depends on HookLayer + ApprovalLayer. */
+const ExecutorDeps = Layer.mergeAll(HookLayer, ApprovalLayer);
 const ExecutorLayer = ToolExecutorService.Default.pipe(Layer.provide(ExecutorDeps));
 
 /** Checkpoint depends on HookService (for bootstrap observers). */
 const CheckpointDeps = Layer.mergeAll(HookLayer);
 export const CheckpointLayer = CheckpointService.Default.pipe(Layer.provide(CheckpointDeps));
 
-export const ToolSearchLayer = ToolSearchService.Default.pipe(Layer.provide(ToolLayer));
+export const ToolSearchLayer = ToolSearchService.Default;
 
-/** Agent depends on ToolExecutor + ToolService + ContextService + SessionService + CheckpointService + ToolSearchService + HookLayer + ProjectRuntime. */
+/** Agent depends on ToolExecutor + ContextService + SessionService + CheckpointService + ToolSearchService + HookLayer + ProjectRuntime. */
 const AgentDeps = Layer.mergeAll(
   ExecutorLayer,
-  ToolLayer,
   ContextLayer,
   SessionLayer,
   CheckpointLayer,
@@ -62,7 +59,6 @@ export const AppLayer = Layer.mergeAll(
   ExecutorLayer,
   SessionLayer,
   ContextLayer,
-  ToolLayer,
   HookLayer,
   McpLayer,
   SkillLayer,

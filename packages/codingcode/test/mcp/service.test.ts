@@ -1,7 +1,6 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { McpService } from '../../src/mcp/index.js';
-import { ToolService } from '../../src/tools/registry.js';
 import { HookService } from '../../src/hooks/registry.js';
 
 // Mock McpClient
@@ -39,10 +38,6 @@ vi.mock('../../src/mcp/config.js', () => ({
   loadMcpConfig: vi.fn(() => []),
 }));
 
-function makeToolLayer() {
-  return ToolService.Default;
-}
-
 function makeHookLayer() {
   return Layer.succeed(HookService, {
     emit: () => Effect.void,
@@ -61,9 +56,8 @@ const TEST_SESSION = 'test-session';
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   const testLayer = Layer.mergeAll(
-    makeToolLayer(),
     makeHookLayer(),
-    McpService.Default.pipe(Layer.provide(Layer.mergeAll(makeToolLayer(), makeHookLayer())))
+    McpService.Default.pipe(Layer.provide(makeHookLayer()))
   );
   return Effect.runPromise(eff.pipe(Effect.provide(testLayer) as any));
 }
