@@ -15,8 +15,6 @@ import {
 import { resolveMemoryLLM } from './llm-resolver.js';
 import { getMemoryConfig, getEffectiveTypes, updateMemoryEnabled } from './config.js';
 import { extractMemory, type StructuredTranscript } from './extractor.js';
-import { getWorkspaceCwd } from '../core/workspace.js';
-
 let _runtimeEnabled: boolean | null = null;
 
 export function setMemoryEnabled(v: boolean): void {

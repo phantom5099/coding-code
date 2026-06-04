@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { spawn } from 'child_process';
 import { Effect } from 'effect';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
-import { getWorkspaceCwd } from '../../../core/workspace.js';
+
 import { AgentError } from '../../../core/error.js';
 
 export const bashTool: ToolDefinition = {
@@ -16,7 +16,7 @@ export const bashTool: ToolDefinition = {
   }),
   execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { command, cwd, timeout_ms } = args as any;
-    const workDir = cwd || ctx?.projectPath || getWorkspaceCwd();
+    const workDir = cwd || ctx?.projectPath || process.cwd();
     return new Promise<string>((resolve, reject) => {
       const proc = spawn(command, {
         shell: true,

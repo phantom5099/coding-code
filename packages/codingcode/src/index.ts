@@ -64,14 +64,13 @@ export { ToolSearchService } from './tools/tool-search-service.js';
 export type { Todo, TodoStatus } from './self/todo.js';
 export { DEFERRED_TOOLS_GUIDELINES, buildSystemPrompt } from './agent/prompt.js';
 export type { SystemPromptVariant, SystemPromptOptions } from './agent/prompt.js';
-export { bootstrapApplication } from './orchestration/bootstrap.js';
 export {
   SubagentRegistry,
   EXPLORE_PROFILE,
   getSubagentEnabledState,
   setSubagentEnabledState,
 } from './subagent/registry.js';
-export type { SubagentProfile } from './subagent/registry.js';
+export type { AgentProfile } from './subagent/registry.js';
 export { loadAgentProfiles } from './subagent/loader.js';
 export { getLLMClient } from './llm/factory.js';
 export { loadConfig, ensureUserConfig } from '@codingcode/infra';

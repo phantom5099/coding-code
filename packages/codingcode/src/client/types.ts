@@ -1,6 +1,6 @@
 import type { PermissionMode } from '../approval/types.js';
 import type { McpServerConfig, McpStatus } from '../mcp/types.js';
-import type { SubagentProfile } from '../subagent/registry.js';
+import type { AgentProfile } from '../subagent/registry.js';
 import type { UserHookConfig } from '../hooks/config.js';
 import type {
   CheckpointDiff,
@@ -90,8 +90,8 @@ export interface AgentClient {
       disabled?: boolean;
     }>
   >;
-  createAgent(profile: SubagentProfile): Promise<void>;
-  updateAgent(name: string, profile: SubagentProfile): Promise<void>;
+  createAgent(profile: AgentProfile): Promise<void>;
+  updateAgent(name: string, profile: AgentProfile): Promise<void>;
   deleteAgent(name: string): Promise<void>;
   setAgentDisabled(name: string, disabled: boolean): Promise<void>;
   listHooks(): Promise<UserHookConfig[]>;

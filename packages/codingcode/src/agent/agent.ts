@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { z } from 'zod';
 import { appendFileSync } from 'fs';
 import type { Message, ToolCall } from '../core/types.js';
 import { AgentError } from '../core/error.js';
@@ -10,6 +11,7 @@ import { ToolExecutorService } from '../tools/executor.js';
 import { ContextService } from '../context/context.js';
 import { SessionService, type SessionStoreState } from '../session/store.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
+import { ApprovalService } from '../approval/index.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
@@ -21,6 +23,11 @@ import { SkillService } from '../skills/index.js';
 import { McpService } from '../mcp/index.js';
 import { loadMemoryForPrompt, flushSessionToMemory } from '../memory/index.js';
 import { createLogger } from '@codingcode/infra';
+import type { AgentProfile } from '../subagent/registry';
+import type { ToolVisibilityPolicy } from '../tools/visibility';
+import type { ToolDefinition } from '../tools/types';
+import { ProjectRuntimeService } from '../runtime/project-runtime';
+import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 
 const logger = createLogger();
 
@@ -41,15 +48,28 @@ export const sendMessage = (
     const hooks = yield* HookService;
     const mcp = yield* McpService;
     const checkpoint = yield* CheckpointService;
+    const approval = yield* ApprovalService;
 
-    yield* hooks.reloadUserHooks(cwd);
-    yield* mcp.syncConnections(cwd);
+    const runtime = yield* ProjectRuntimeService;
+    yield* runtime.prepareProject(cwd);
+    yield* skill.evictProject(cwd);
 
     const state = yield* session.create(cwd, llm.modelInfo.model, sessionId);
     const sid = state.sessionId;
 
+    const profile = runtime.resolveMainAgentProfile(cwd, state.sessionId);
+    const policy = runtime.getToolPolicy(profile);
+
+    const dispatchTool = createDispatchAgentTool({
+      session,
+      approval,
+      hooks,
+      runtime,
+      mcp,
+    });
+
     const turnId = session.incrementTurn(state);
-    const [matchedSkill, actualInput] = yield* skill.extractSkill(input);
+    const [matchedSkill, actualInput] = yield* skill.extractSkill(state.cwd, input);
 
     yield* session.recordUser(state, actualInput);
 
@@ -59,6 +79,9 @@ export const sendMessage = (
     const stream = agent.runStream({
       state,
       llm,
+      agentProfile: profile,
+      toolPolicy: policy,
+      dispatchTool,
       skillInstruction: matchedSkill?.instruction,
       abortSignal: options?.signal,
       approvalOverride: options?.approvalOverride,
@@ -126,6 +149,9 @@ export interface RunStreamOptions {
   systemPromptVariant?: SystemPromptVariant;
   systemOverride?: string;
   coreAllowlist?: ReadonlySet<string>;
+  agentProfile?: AgentProfile;
+  toolPolicy?: ToolVisibilityPolicy;
+  dispatchTool?: ToolDefinition;
   abortSignal?: AbortSignal;
   parentSessionId?: string;
   agentName?: string;
@@ -140,6 +166,7 @@ interface RunReActDeps {
   executor: ToolExecutorService;
   toolRegistry: ToolService;
   toolSearch: ToolSearchService;
+  runtime: ProjectRuntimeService;
   agentService: {
     runStream: (
       opts: RunStreamOptions
@@ -156,6 +183,7 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
     const executor = yield* ToolExecutorService;
     const toolRegistry = yield* ToolService;
     const toolSearch = yield* ToolSearchService;
+    const runtime = yield* ProjectRuntimeService;
     const ctx = yield* ContextService;
     const session = yield* SessionService;
     const checkpoint = yield* CheckpointService;
@@ -174,6 +202,7 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
           executor,
           toolRegistry,
           toolSearch,
+          runtime,
           agentService: service,
           ctx,
           session,
@@ -256,14 +285,54 @@ export async function* runReActLoop(
         return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
       }
 
-      // Build tools with coreAllowlist filter
-      const tools: ToolDescription[] = buildToolsForAgent(
-        toolRegistry,
-        toolSearch,
-        sessionId,
-        opts.coreAllowlist
-      );
-      const catalog = buildDeferredCatalogContent(toolSearch, sessionId);
+      // Build tools
+      let tools: ToolDescription[];
+      if (opts.agentProfile && opts.toolPolicy) {
+        const resolveParams = {
+          projectPath,
+          sessionId,
+          profile: opts.agentProfile,
+          policy: opts.toolPolicy,
+        };
+        tools = buildToolsForAgent((_params) => {
+          let allTools = toolRegistry.allCore().concat(toolRegistry.allDeferred());
+          if (opts.dispatchTool) allTools = [...allTools, opts.dispatchTool];
+          const allowed = _params.profile.tools ? new Set(_params.profile.tools) : null;
+          let filtered = allTools;
+          if (allowed) filtered = filtered.filter((t) => allowed.has(t.name));
+          if (_params.policy.allowedTools) {
+            filtered = filtered.filter((t) => _params.policy.allowedTools!.has(t.name));
+          }
+          return filtered.map((t) => ({
+            name: t.name,
+            description: t.description,
+            parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
+          }));
+        }, resolveParams);
+      } else {
+        // Legacy fallback
+        tools = buildToolsForAgent(
+          (_params) => {
+            let core = toolRegistry.allCore();
+            if (_params.profile.tools) {
+              const allowed = new Set(_params.profile.tools);
+              core = core.filter((t) => allowed.has(t.name));
+            }
+            return core.map((t) => ({
+              name: t.name,
+              description: t.description,
+              parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
+            }));
+          },
+          {
+            projectPath,
+            sessionId,
+            profile: opts.agentProfile ?? { name: 'default', description: '' },
+            policy: opts.toolPolicy ?? { allowToolSearch: true, allowDeferredTools: false },
+          }
+        );
+      }
+      const catalog = buildDeferredCatalogContent(toolSearch, sessionId, opts.toolPolicy);
       const systemWithCatalog = catalog ? `${system}\n\n${catalog}` : system;
 
       // Emit step.before hook and collect transient messages

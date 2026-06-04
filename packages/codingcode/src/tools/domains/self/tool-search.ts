@@ -1,12 +1,20 @@
 import { z } from 'zod';
 import { AgentError } from '../../../core/error';
-import type { ToolDefinition } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types';
+import type { ToolVisibilityPolicy } from '../../visibility';
 
 export interface ToolSearchApi {
-  search: (sessionId: string, query: string) => Array<{ name: string; shortDescription?: string }>;
+  search: (
+    sessionId: string,
+    query: string,
+    policy?: ToolVisibilityPolicy
+  ) => Array<{ name: string; shortDescription?: string }>;
 }
 
-export function createToolSearchTool(svc: ToolSearchApi): ToolDefinition {
+export function createToolSearchTool(
+  svc: ToolSearchApi,
+  policy?: ToolVisibilityPolicy
+): ToolDefinition {
   return {
     name: 'tool_search',
     description:
@@ -22,7 +30,7 @@ export function createToolSearchTool(svc: ToolSearchApi): ToolDefinition {
       if (!sessionId)
         throw new AgentError('TOOL_EXECUTION_FAILED', 'tool_search requires sessionId');
       const { query } = args as { query: string };
-      const hits = svc.search(sessionId, query);
+      const hits = svc.search(sessionId, query, policy);
       if (hits.length === 0) return `No deferred tools matched "${query}".`;
       return [
         `Loaded ${hits.length} tool(s). Their full schemas are now available next turn:`,

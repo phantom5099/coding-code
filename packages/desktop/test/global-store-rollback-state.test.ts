@@ -136,11 +136,12 @@ describe('Rollback state in global store', () => {
   });
 
   it('initRevertedFilesFromState populates from server state', () => {
+    useGlobalStore.getState().setTurnCheckpointMapping('thread1', 5, 'ui-turn-5');
     const state = {
       context: { active: false, currentThroughTurnId: null },
       code: {
         canUndoLast: true,
-        lastEntry: null,
+        lastEntry: { throughTurnId: 5 } as any,
         revertedFiles: ['/a.ts', '/b.ts'],
         lastEntryId: 'e1',
       },
@@ -148,7 +149,8 @@ describe('Rollback state in global store', () => {
     useGlobalStore.getState().setRollbackState('thread1', state as any);
     useGlobalStore.getState().initRevertedFilesFromState('thread1');
 
-    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1'];
+    const key = 'thread1:ui-turn-5';
+    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId[key];
     expect(reverted).toEqual(['/a.ts', '/b.ts']);
   });
 

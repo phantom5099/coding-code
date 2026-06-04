@@ -44,7 +44,7 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   let prompt = renderBase(opts);
   if (variant === 'default') prompt += `\n\n${DEFERRED_TOOLS_GUIDELINES}`;
 
-  const rules = getAllRules();
+  const rules = getAllRules(opts.cwd);
   if (rules) {
     prompt += `\n\n## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`;
   }

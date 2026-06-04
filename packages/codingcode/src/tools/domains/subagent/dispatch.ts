@@ -2,19 +2,18 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { Effect } from 'effect';
 import type { ToolDefinition } from '../../types.js';
-import type { SubagentRegistry } from '../../../subagent/registry.js';
+import type { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import type { SessionService } from '../../../session/store.js';
 import type { ApprovalService } from '../../../approval/index.js';
 import type { HookService } from '../../../hooks/registry.js';
 import type { McpService } from '../../../mcp/index.js';
 import { findModel, createClient } from '../../../llm/factory.js';
-import { delegateEmitter, unregisterEmitter } from '../../../approval/async-confirm.js';
 
 interface DispatchAgentDeps {
   session: SessionService;
   approval: ApprovalService;
   hooks: HookService;
-  registry: SubagentRegistry;
+  runtime: ProjectRuntimeService;
   mcp: McpService;
 }
 
@@ -22,11 +21,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
   return {
     name: 'dispatch_agent',
     description:
-      'Spawn an isolated subagent with its own context. Available profiles: ' +
-      deps.registry
-        .list()
-        .map((p) => `"${p.name}" (${p.description})`)
-        .join(', '),
+      'Spawn an isolated subagent with its own context. Available profiles are listed in the project configuration.',
     shortDescription: 'Spawn isolated subagent',
     parameters: z.object({
       agent: z.string().describe('subagent profile name'),
@@ -34,19 +29,12 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
     }),
     execute: async (args: any, ctx: any) => {
       const { agent: agentName, prompt } = args;
+      const projectPath = ctx?.projectPath || process.cwd();
 
       // Get profile
-      const profile = deps.registry.get(agentName);
+      const profile = deps.runtime.resolveSubagentProfile(projectPath, agentName);
       if (!profile) {
         throw new Error(`Unknown subagent: ${agentName}`);
-      }
-
-      if (!deps.registry.isEnabled()) {
-        throw new Error('Subagent is disabled');
-      }
-
-      if (deps.registry.isAgentDisabled(agentName)) {
-        throw new Error(`Subagent '${agentName}' is disabled`);
       }
 
       if (!ctx?.agentRunner?.agentService || !ctx?.agentRunner?.llm) {
@@ -70,15 +58,14 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         llm = clientResult.value;
       }
 
-      // Emit spawn.before hook
-      const spawnDecision: any = await Effect.runPromise(
-        (deps.hooks as any).emitDecision('agent.subagent.spawn.before', {
+      // Emit spawn.before hook (decision hook, can deny)
+      const spawnDecision = await Effect.runPromise(
+        deps.hooks.emitDecision('agent.subagent.spawn.before', {
           profile: agentName,
           prompt,
           parentSessionId: ctx?.sessionId,
         })
       );
-
       if (spawnDecision && spawnDecision.decision === 'deny') {
         throw new Error(`Subagent spawn denied: ${spawnDecision.reason ?? 'no reason provided'}`);
       }
@@ -86,8 +73,8 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       // Create subagent transcript nested under parent session
       const childUuid = randomUUID();
 
-      const createEffect = (deps.session as any).create(
-        ctx?.projectPath ?? process.cwd(),
+      const createEffect = deps.session.create(
+        projectPath,
         ctx?.model ?? 'subagent',
         childUuid,
         {
@@ -97,46 +84,40 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       );
 
       const childState = await Effect.runPromise(createEffect);
-      (deps.session as any).incrementTurn(childState);
-      await Effect.runPromise((deps.session as any).recordUser(childState, prompt));
+      deps.session.incrementTurn(childState);
+      await Effect.runPromise(deps.session.recordUser(childState, prompt));
 
-      // Fork approval service with readonly if needed
-      const forkEffect = (deps.approval as any).fork({ readonly: profile.readonly });
-      const childApproval = await Effect.runPromise(forkEffect);
-
-      // Delegate parent's emitter to child so subagent approval requests reach the desktop UI
-      const parentSessionId = ctx?.sessionId;
-      if (parentSessionId) {
-        delegateEmitter(childUuid, parentSessionId);
+      // Approval: bypass for readonly, fork without delegateEmitter for non-readonly
+      let childApproval;
+      if (profile.readonly) {
+        childApproval = undefined;
+      } else {
+        const forkEffect = deps.approval.fork({ readonly: false });
+        childApproval = await Effect.runPromise(forkEffect);
+        // Do NOT delegateEmitter — subagent approvals don't pop UI
       }
 
-      // Connect MCP servers for this profile (refCount++)
+      // Attach subagent hooks
+      if (profile.hooks && profile.hooks.length > 0) {
+        await Effect.runPromise(deps.hooks.attachSessionHooks(childUuid, profile.hooks));
+      }
+
+      // Connect MCP servers (session lease)
       const mcpServers = profile.mcpServers;
       if (mcpServers?.length) {
-        const projectRoot = ctx?.projectPath ?? process.cwd();
-        await Effect.runPromise(deps.mcp.connectServers(mcpServers, projectRoot));
+        await Effect.runPromise(deps.mcp.connectServers(projectPath, childUuid, mcpServers));
       }
 
-      // Build coreAllowlist: profile tools + MCP server tools
-      let coreAllowlist: Set<string> | undefined = profile.tools
-        ? new Set(profile.tools.filter((t: string) => t !== 'dispatch_agent'))
-        : undefined;
+      // Build tool policy from profile
+      const childPolicy = deps.runtime.getToolPolicy(profile);
 
-      if (mcpServers?.length) {
-        if (!coreAllowlist) coreAllowlist = new Set();
-        for (const serverName of mcpServers) {
-          for (const toolName of deps.mcp.getServerToolNames(serverName)) {
-            coreAllowlist.add(toolName);
-          }
-        }
-      }
-
-      // Run subagent in isolated context
+      // Run subagent
       const stream = agentService.runStream({
         state: childState,
         llm,
         systemOverride: profile.systemPrompt,
-        coreAllowlist,
+        agentProfile: profile,
+        toolPolicy: childPolicy,
         abortSignal: ctx?.signal,
         parentSessionId: ctx?.sessionId,
         agentName: agentName,
@@ -144,7 +125,15 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         approvalOverride: childApproval,
       });
 
-      // Collect events and extract final result
+      // Emit spawn.after hook
+      await Effect.runPromise(
+        deps.hooks.emit('agent.subagent.spawn.after', {
+          childSessionId: childUuid,
+          profile: agentName,
+        })
+      );
+
+      // Collect events and extract result
       let finalContent = '';
       try {
         for await (const event of stream) {
@@ -152,7 +141,7 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
             finalContent = event.content;
           } else if (event._tag === 'Error') {
             await Effect.runPromise(
-              (deps.hooks as any).emit('agent.subagent.complete', {
+              deps.hooks.emit('agent.subagent.complete', {
                 childSessionId: childUuid,
                 profile: agentName,
                 status: 'error',
@@ -163,16 +152,14 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
           }
         }
       } finally {
-        unregisterEmitter(childUuid);
-        // Disconnect MCP servers (refCount--)
-        if (mcpServers?.length) {
-          await Effect.runPromise(deps.mcp.disconnectServers(mcpServers));
-        }
+        // Cleanup
+        await Effect.runPromise(deps.mcp.disposeSession(childUuid));
+        await Effect.runPromise(deps.hooks.disposeSession(childUuid));
       }
 
       // Emit completion hook
       await Effect.runPromise(
-        (deps.hooks as any).emit('agent.subagent.complete', {
+        deps.hooks.emit('agent.subagent.complete', {
           childSessionId: childUuid,
           profile: agentName,
           status: 'done',

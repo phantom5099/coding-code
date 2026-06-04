@@ -406,7 +406,13 @@ sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
       const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId);
       yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
-      return { ok: true, turns, codeResult, rolledBackMessage, promptEstimate: state.promptEstimate };
+      return {
+        ok: true,
+        turns,
+        codeResult,
+        rolledBackMessage,
+        promptEstimate: state.promptEstimate,
+      };
     })
   );
   if (!result.ok) {

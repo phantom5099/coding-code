@@ -48,8 +48,16 @@ function makeHookLayer() {
     emit: () => Effect.void,
     emitDecision: () => Effect.succeed({ decision: 'allow' } as any),
     reloadUserHooks: () => Effect.void,
+    disableHook: () => Effect.void,
+    enableHook: () => Effect.void,
+    attachSessionHooks: () => Effect.void,
+    disposeSession: () => Effect.void,
+    disposeProject: () => Effect.void,
   } as any);
 }
+
+const TEST_PROJECT = '/fake';
+const TEST_SESSION = 'test-session';
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   const testLayer = Layer.mergeAll(
@@ -85,18 +93,14 @@ describe('McpService granular methods', () => {
 
     const program = Effect.gen(function* () {
       const mcp = yield* McpService;
-      const tools = yield* ToolService;
 
-      yield* mcp.connectServers(['server-a'], '/fake');
+      yield* mcp.connectServers(TEST_PROJECT, TEST_SESSION, ['server-a']);
 
-      // server-a tool should be registered with namespace
-      const toolA = tools.getDef('server-a:tool-a');
-      expect(toolA).toBeDefined();
-      expect(toolA!.description).toContain('[MCP:server-a]');
+      const toolNames = mcp.getServerToolNames(TEST_PROJECT, 'server-a');
+      expect(toolNames).toContain('server-a:tool-a');
 
-      // server-b tool should NOT be registered
-      const toolB = tools.getDef('server-b:tool-b');
-      expect(toolB).toBeUndefined();
+      const toolBNames = mcp.getServerToolNames(TEST_PROJECT, 'server-b');
+      expect(toolBNames).toEqual([]);
     });
 
     await run(program);
@@ -113,19 +117,18 @@ describe('McpService granular methods', () => {
 
     const program = Effect.gen(function* () {
       const mcp = yield* McpService;
-      const tools = yield* ToolService;
 
-      yield* mcp.connectServers(['srv'], '/fake');
-      expect(tools.getDef('srv:do')).toBeDefined();
+      yield* mcp.connectServers(TEST_PROJECT, TEST_SESSION, ['srv']);
+      expect(mcp.getServerToolNames(TEST_PROJECT, 'srv')).toContain('srv:do');
 
-      yield* mcp.disconnectServers(['srv']);
-      expect(tools.getDef('srv:do')).toBeUndefined();
+      yield* mcp.disconnectServers(TEST_PROJECT, TEST_SESSION, ['srv']);
+      expect(mcp.getServerToolNames(TEST_PROJECT, 'srv')).toEqual([]);
     });
 
     await run(program);
   });
 
-  it('refCount prevents premature disconnect', async () => {
+  it('lease prevents premature disconnect', async () => {
     mockConfigs = [
       {
         name: 'shared',
@@ -136,20 +139,18 @@ describe('McpService granular methods', () => {
 
     const program = Effect.gen(function* () {
       const mcp = yield* McpService;
-      const tools = yield* ToolService;
 
-      // First connection (refCount 0 -> 1)
-      yield* mcp.connectServers(['shared'], '/fake');
-      // Second connection (refCount 1 -> 2)
-      yield* mcp.connectServers(['shared'], '/fake');
+      // Two sessions connect
+      yield* mcp.connectServers(TEST_PROJECT, 'session-1', ['shared']);
+      yield* mcp.connectServers(TEST_PROJECT, 'session-2', ['shared']);
 
-      // First disconnect (refCount 2 -> 1, should stay)
-      yield* mcp.disconnectServers(['shared']);
-      expect(tools.getDef('shared:op')).toBeDefined();
+      // First disconnect (lease 2 -> 1, should stay)
+      yield* mcp.disconnectServers(TEST_PROJECT, 'session-1', ['shared']);
+      expect(mcp.getServerToolNames(TEST_PROJECT, 'shared')).toContain('shared:op');
 
-      // Second disconnect (refCount 1 -> 0, should remove)
-      yield* mcp.disconnectServers(['shared']);
-      expect(tools.getDef('shared:op')).toBeUndefined();
+      // Second disconnect (lease 1 -> 0, should remove)
+      yield* mcp.disconnectServers(TEST_PROJECT, 'session-2', ['shared']);
+      expect(mcp.getServerToolNames(TEST_PROJECT, 'shared')).toEqual([]);
     });
 
     await run(program);
@@ -170,8 +171,8 @@ describe('McpService granular methods', () => {
     const program = Effect.gen(function* () {
       const mcp = yield* McpService;
 
-      yield* mcp.connectServers(['db'], '/fake');
-      const names = mcp.getServerToolNames('db');
+      yield* mcp.connectServers(TEST_PROJECT, TEST_SESSION, ['db']);
+      const names = mcp.getServerToolNames(TEST_PROJECT, 'db');
 
       expect(names).toEqual(['db:query', 'db:schema']);
     });
@@ -182,7 +183,7 @@ describe('McpService granular methods', () => {
   it('getServerToolNames returns empty for unknown server', async () => {
     const program = Effect.gen(function* () {
       const mcp = yield* McpService;
-      const names = mcp.getServerToolNames('nonexistent');
+      const names = mcp.getServerToolNames(TEST_PROJECT, 'nonexistent');
       expect(names).toEqual([]);
     });
 
@@ -200,14 +201,11 @@ describe('McpService granular methods', () => {
 
     const program = Effect.gen(function* () {
       const mcp = yield* McpService;
-      const tools = yield* ToolService;
 
-      yield* mcp.connectServers(['real-server', 'nonexistent'], '/fake');
+      yield* mcp.connectServers(TEST_PROJECT, TEST_SESSION, ['real-server', 'nonexistent']);
 
-      // real-server should be connected
-      expect(tools.getDef('real-server:op')).toBeDefined();
-      // nonexistent should not
-      expect(mcp.getServerToolNames('nonexistent')).toEqual([]);
+      expect(mcp.getServerToolNames(TEST_PROJECT, 'real-server')).toContain('real-server:op');
+      expect(mcp.getServerToolNames(TEST_PROJECT, 'nonexistent')).toEqual([]);
     });
 
     await run(program);
