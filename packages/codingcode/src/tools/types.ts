@@ -22,3 +22,10 @@ export interface ToolDefinition {
   jsonSchema?: Record<string, unknown>;
   execute: (args: unknown, ctx?: ToolExecCtx) => Promise<string>;
 }
+
+export interface ToolVisibilityPolicy {
+  allowedTools?: Set<string>;
+  allowedMcpServers?: Set<string>;
+  allowToolSearch?: boolean;
+  allowDeferredTools?: boolean;
+}

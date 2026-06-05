@@ -23,7 +23,7 @@ import { McpService } from '../mcp/index.js';
 import { loadMemoryForPrompt, flushSessionToMemory } from '../memory/index.js';
 import { createLogger } from '@codingcode/infra';
 import type { AgentProfile } from '../subagent/registry';
-import type { ToolVisibilityPolicy } from '../tools/visibility';
+import type { ToolVisibilityPolicy } from '../tools/types';
 import { ProjectRuntimeService } from '../runtime/project-runtime';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { findModel, createClient } from '../llm/factory.js';

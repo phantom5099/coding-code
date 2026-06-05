@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AgentError } from '../../../core/error';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
-import type { ToolVisibilityPolicy } from '../../visibility';
+import type { ToolVisibilityPolicy } from '../../types';
 
 export interface ToolSearchApi {
   search: (

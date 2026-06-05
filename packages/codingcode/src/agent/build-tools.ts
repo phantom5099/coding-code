@@ -1,6 +1,6 @@
 import type { ToolDescription } from '../tools/types';
 import type { AgentProfile } from '../subagent/registry';
-import type { ToolVisibilityPolicy } from '../tools/visibility';
+import type { ToolVisibilityPolicy } from '../tools/types';
 import type { ToolSearchService } from '../tools/tool-search-service';
 
 export function buildToolsForAgent(

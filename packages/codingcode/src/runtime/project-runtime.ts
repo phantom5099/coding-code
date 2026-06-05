@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import type { AgentProfile } from '../subagent/registry';
 import { EXPLORE_PROFILE } from '../subagent/registry';
 import * as agentLoader from '../subagent/loader';
-import type { ToolVisibilityPolicy } from '../tools/visibility';
+import type { ToolVisibilityPolicy } from '../tools/types';
 import { HookService } from '../hooks/registry';
 import { McpService } from '../mcp/index';
 import { evictProjectRules } from '../rules/index';

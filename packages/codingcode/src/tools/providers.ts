@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ToolDefinition, ToolDescription } from './types';
 import type { AgentProfile } from '../subagent/registry';
-import type { ToolVisibilityPolicy } from './visibility';
+import type { ToolVisibilityPolicy } from './types';
 import { readFileTool } from './domains/fs/read.js';
 import { writeFileTool } from './domains/fs/write.js';
 import { editFileTool } from './domains/fs/edit.js';
