@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect, beforeEach } from 'vitest';
-import { sharedTodoStore, countByStatus } from '../../../src/self/todo.js';
-import type { Todo } from '../../../src/self/todo.js';
+import { sharedTodoStore, countByStatus } from '../../../src/agent/todo.js';
+import type { Todo } from '../../../src/agent/todo.js';
 
 describe('TodoService (module-level store)', () => {
   beforeEach(() => {

@@ -59,7 +59,7 @@ export type { SseEvent } from './server/adapter.js';
 export { CheckpointService } from './checkpoint/checkpoint-service.js';
 export { ShadowGit, Ledger } from './checkpoint/index.js';
 export { ToolSearchService } from './tools/tool-search-service.js';
-export type { Todo, TodoStatus } from './self/todo.js';
+export type { Todo, TodoStatus } from './agent/todo.js';
 export { DEFERRED_TOOLS_GUIDELINES, buildSystemPrompt } from './agent/prompt.js';
 export type { SystemPromptVariant, SystemPromptOptions } from './agent/prompt.js';
 export {

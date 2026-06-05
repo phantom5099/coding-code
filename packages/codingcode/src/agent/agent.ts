@@ -15,7 +15,7 @@ import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
-import { sharedTodoStore } from '../self/todo.js';
+import { sharedTodoStore } from './todo.js';
 import { buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
 import { SkillService } from '../skills/index.js';

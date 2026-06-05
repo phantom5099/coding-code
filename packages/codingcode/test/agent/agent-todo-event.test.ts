@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
-import { sharedTodoStore } from '../../src/self/todo.js';
+import { sharedTodoStore } from '../../src/agent/todo.js';
 
 const mockToolRegistry = {
   describeAll: () => [],
