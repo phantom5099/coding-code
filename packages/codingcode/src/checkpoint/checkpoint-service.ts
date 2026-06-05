@@ -293,25 +293,29 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     const hooks = yield* HookService;
     bootstrapCheckpoint(hooks);
 
-    let _sg: ShadowGit | null = null;
-    let _ledger: Ledger | null = null;
-    let _ledgerGitDir: string | null = null;
+    const shadowGitByProject = new Map<string, ShadowGit>();
+    const ledgerByProject = new Map<string, { ledger: Ledger; gitDir: string }>();
 
     function ensure(projectPath: string): ShadowGit {
       const normalized = normalizePath(projectPath);
-      if (!_sg || _sg.projectPath !== normalized) {
-        _sg = new ShadowGit(normalized);
-        _sg.init();
+      let sg = shadowGitByProject.get(normalized);
+      if (!sg || sg.projectPath !== normalized) {
+        sg = new ShadowGit(normalized);
+        sg.init();
+        shadowGitByProject.set(normalized, sg);
       }
-      return _sg;
+      return sg;
     }
 
     function ledger(sg: ShadowGit): Ledger {
-      if (!_ledger || _ledgerGitDir !== sg.gitDir) {
-        _ledger = new Ledger(dirname(sg.gitDir));
-        _ledgerGitDir = sg.gitDir;
+      const key = sg.gitDir;
+      let entry = ledgerByProject.get(key);
+      if (!entry || entry.gitDir !== key) {
+        const l = new Ledger(dirname(sg.gitDir));
+        entry = { ledger: l, gitDir: key };
+        ledgerByProject.set(key, entry);
       }
-      return _ledger;
+      return entry.ledger;
     }
 
     return {
@@ -452,7 +456,9 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
             source: (agentFiles.has(f.toLowerCase()) ? 'agent' : 'unknown') as 'agent' | 'unknown',
             status:
               allChanges.find(
-                (c) => normalizePath(resolve(projectPath, c.file)).toLowerCase() === rawPath.toLowerCase()
+                (c) =>
+                  normalizePath(resolve(projectPath, c.file)).toLowerCase() ===
+                  rawPath.toLowerCase()
               )?.status ?? 'M',
             diff: diffResult.stdout,
             insertions: stats.insertions,
@@ -590,14 +596,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
             selectedFiles: [],
             restoreEntry: null,
           };
-        return revertFilesImpl(
-          projectPath,
-          sessionId,
-          plan,
-          all,
-          'checkpoint-all',
-          sg
-        );
+        return revertFilesImpl(projectPath, sessionId, plan, all, 'checkpoint-all', sg);
       },
 
       // ---- B4: previewRollbackDiff ----
@@ -687,8 +686,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
             ? new Set(opts.files.map((f) => normalizePath(f).toLowerCase()))
             : null;
         const filesToRestore = normalizedOptsFiles
-          ? entry.selectedFiles.filter(
-              (f) => normalizedOptsFiles.has(normalizePath(f).toLowerCase())
+          ? entry.selectedFiles.filter((f) =>
+              normalizedOptsFiles.has(normalizePath(f).toLowerCase())
             )
           : [...entry.selectedFiles];
 
@@ -740,9 +739,10 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           sg.checkoutFiles(entry.safetyCommit, filesToRestore);
 
           const remainingFiles = entry.selectedFiles.filter(
-            (f) => !filesToRestore.some(
-              (rf) => normalizePath(rf).toLowerCase() === normalizePath(f).toLowerCase()
-            )
+            (f) =>
+              !filesToRestore.some(
+                (rf) => normalizePath(rf).toLowerCase() === normalizePath(f).toLowerCase()
+              )
           );
           if (remainingFiles.length === 0) {
             writeRestoreEntry(sg.gitDir, sessionId, null);

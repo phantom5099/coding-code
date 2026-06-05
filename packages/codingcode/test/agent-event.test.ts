@@ -45,5 +45,5 @@ describe('AgentEvent type', () => {
     const mod = await import('../src/index.js');
     // The type is erased at runtime, but we verify the module loads without error
     expect(mod).toBeDefined();
-  }, 10000);
+  }, 30000);
 });

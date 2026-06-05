@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
-import { ToolService } from './registry';
 import type { ToolDefinition } from './types';
+import type { ToolVisibilityPolicy } from './visibility';
 
 const loaded = new Map<string, Set<string>>();
 
@@ -13,6 +13,11 @@ function getSet(sessionId: string): Set<string> {
   return s;
 }
 
+function filterByPolicy(tools: ToolDefinition[], policy?: ToolVisibilityPolicy): ToolDefinition[] {
+  if (!policy || !policy.allowedTools) return tools;
+  return tools.filter((t) => policy.allowedTools!.has(t.name));
+}
+
 export interface ToolSearchHit {
   name: string;
   shortDescription?: string;
@@ -20,22 +25,38 @@ export interface ToolSearchHit {
 
 export class ToolSearchService extends Effect.Service<ToolSearchService>()('ToolSearchService', {
   effect: Effect.gen(function* () {
-    const tools = yield* ToolService;
+    // Deferred tools are registered externally (not from ToolService)
+    const deferredTools: ToolDefinition[] = [];
+
     return {
-      isLoaded: (sessionId: string, toolName: string): boolean => getSet(sessionId).has(toolName),
+      isLoaded: (sessionId: string, toolName: string, policy?: ToolVisibilityPolicy): boolean => {
+        if (policy?.allowedTools && !policy.allowedTools.has(toolName)) return false;
+        return getSet(sessionId).has(toolName);
+      },
 
       listLoaded: (sessionId: string): string[] => Array.from(getSet(sessionId)),
 
-      listUnloadedDeferred: (sessionId: string): ToolDefinition[] => {
+      listUnloadedDeferred: (
+        sessionId: string,
+        policy?: ToolVisibilityPolicy
+      ): ToolDefinition[] => {
         const set = getSet(sessionId);
-        return tools.allDeferred().filter((t) => !set.has(t.name));
+        return filterByPolicy(
+          deferredTools.filter((t) => !set.has(t.name)),
+          policy
+        );
       },
 
-      search: (sessionId: string, query: string): ToolSearchHit[] => {
+      search: (
+        sessionId: string,
+        query: string,
+        policy?: ToolVisibilityPolicy
+      ): ToolSearchHit[] => {
         const set = getSet(sessionId);
         const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
         if (tokens.length === 0) return [];
-        const hits = tools.allDeferred().filter((t) => {
+        const candidates = filterByPolicy(deferredTools, policy);
+        const hits = candidates.filter((t) => {
           if (set.has(t.name)) return false;
           const haystack = `${t.name} ${t.shortDescription ?? ''} ${t.description}`.toLowerCase();
           return tokens.every((tok) => haystack.includes(tok));
@@ -45,6 +66,10 @@ export class ToolSearchService extends Effect.Service<ToolSearchService>()('Tool
       },
 
       reset: (): void => loaded.clear(),
+
+      disposeSession: (sessionId: string): void => {
+        loaded.delete(sessionId);
+      },
     };
   }),
 }) {}

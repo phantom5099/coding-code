@@ -4,9 +4,34 @@ import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
 import { SkillService } from '../../skills/index.js';
 import { getGlobalPermissionMode, setGlobalPermissionMode } from '../../approval/index.js';
 import type { PermissionMode } from '../../approval/types.js';
-import * as settingsService from '../../settings/service.js';
-import type { SubagentProfile } from '../../subagent/registry.js';
+import type { AgentProfile } from '../../subagent/registry.js';
 import type { UserHookConfig } from '../../hooks/config.js';
+import { loadMcpConfig, writeMcpConfig } from '../../mcp/config.js';
+import {
+  loadAgentProfiles,
+  writeAgentProfile,
+  updateAgentProfile,
+  deleteAgentProfile,
+} from '../../subagent/loader.js';
+import {
+  EXPLORE_PROFILE,
+  isAgentDisabledState,
+  setAgentDisabledState,
+  getSubagentEnabledState,
+  setSubagentEnabledState,
+} from '../../subagent/registry.js';
+import { loadHookConfigs, writeHookConfigs } from '../../hooks/config.js';
+import { setHookRuntimeEnabled } from '../../hooks/executor.js';
+import {
+  getMemoryConfig,
+  getAllTypesWithStatus,
+  setMemoryTypeDisabled,
+  addMemoryExtraType as _addMemoryExtraType,
+  updateMemoryExtraType as _updateMemoryExtraType,
+  deleteMemoryExtraType as _deleteMemoryExtraType,
+} from '../../memory/config.js';
+import { getMemoryEnabled, setMemoryEnabled } from '../../memory/index.js';
+import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
 
 export interface SettingsClient {
   getMemoryEnabled(): Promise<boolean>;
@@ -29,8 +54,8 @@ export interface SettingsClient {
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(name: string, enabled: boolean): Promise<void>;
   listAgents(input: { cwd: string }): Promise<any[]>;
-  createAgent(input: { cwd: string; profile: SubagentProfile }): Promise<void>;
-  updateAgent(input: { cwd: string; name: string; profile: SubagentProfile }): Promise<void>;
+  createAgent(input: { cwd: string; profile: AgentProfile }): Promise<void>;
+  updateAgent(input: { cwd: string; name: string; profile: AgentProfile }): Promise<void>;
   deleteAgent(input: { cwd: string; name: string }): Promise<void>;
   setAgentDisabled(name: string, disabled: boolean): Promise<void>;
   listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
@@ -42,51 +67,158 @@ export interface SettingsClient {
   setGlobalPermissionMode(mode: PermissionMode): Promise<void>;
 }
 
+// ---- Helpers with validation ----
+
+function mcpCreateServer(cwd: string, server: McpServerConfig): void {
+  const servers = loadMcpConfig(cwd);
+  if (servers.some((s) => s.name === server.name)) {
+    throw new AlreadyExistsError(`MCP server '${server.name}' already exists`);
+  }
+  servers.push(server);
+  writeMcpConfig(cwd, servers);
+}
+
+function mcpUpdateServer(cwd: string, name: string, server: McpServerConfig): void {
+  const servers = loadMcpConfig(cwd);
+  const idx = servers.findIndex((s) => s.name === name);
+  if (idx === -1) throw new NotFoundError(`MCP server '${name}' not found`);
+  if (server.name !== name && servers.some((s) => s.name === server.name)) {
+    throw new AlreadyExistsError(`MCP server '${server.name}' already exists`);
+  }
+  servers[idx] = server;
+  writeMcpConfig(cwd, servers);
+}
+
+function mcpDeleteServer(cwd: string, name: string): void {
+  const servers = loadMcpConfig(cwd).filter((s) => s.name !== name);
+  writeMcpConfig(cwd, servers);
+}
+
+function agentsList(cwd: string): Array<{
+  name: string;
+  description: string;
+  tools?: string[];
+  mcpServers?: string[];
+  readonly?: boolean;
+  maxSteps?: number;
+  model?: string;
+  disabled: boolean;
+}> {
+  const custom = loadAgentProfiles(cwd);
+  return [EXPLORE_PROFILE, ...custom].map((a) => ({
+    name: a.name,
+    description: a.description,
+    tools: a.tools,
+    mcpServers: a.mcpServers,
+    readonly: a.readonly,
+    maxSteps: a.maxSteps,
+    model: a.model,
+    disabled: isAgentDisabledState(a.name),
+  }));
+}
+
+function agentsCreate(cwd: string, profile: AgentProfile): void {
+  const existing = loadAgentProfiles(cwd);
+  if (existing.some((a) => a.name === profile.name)) {
+    throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
+  }
+  writeAgentProfile(cwd, profile);
+}
+
+function agentsUpdate(cwd: string, name: string, profile: AgentProfile): void {
+  const existing = loadAgentProfiles(cwd);
+  if (!existing.some((a) => a.name === name)) throw new NotFoundError(`Agent '${name}' not found`);
+  if (profile.name !== name && existing.some((a) => a.name === profile.name)) {
+    throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
+  }
+  updateAgentProfile(cwd, name, profile);
+}
+
+function hooksCreate(cwd: string, hook: UserHookConfig): void {
+  const hooks = loadHookConfigs(cwd);
+  if (hooks.some((h) => h.name === hook.name)) {
+    throw new AlreadyExistsError(`Hook '${hook.name}' already exists`);
+  }
+  hooks.push(hook);
+  writeHookConfigs(cwd, hooks);
+}
+
+function hooksUpdate(cwd: string, name: string, hook: UserHookConfig): void {
+  const hooks = loadHookConfigs(cwd);
+  const idx = hooks.findIndex((h) => h.name === name);
+  if (idx === -1) throw new NotFoundError(`Hook '${name}' not found`);
+  if (hook.name !== name && hooks.some((h) => h.name === hook.name)) {
+    throw new AlreadyExistsError(`Hook '${hook.name}' already exists`);
+  }
+  hooks[idx] = hook;
+  writeHookConfigs(cwd, hooks);
+}
+
+function hooksDelete(cwd: string, name: string): void {
+  const hooks = loadHookConfigs(cwd).filter((h) => h.name !== name);
+  writeHookConfigs(cwd, hooks);
+}
+
+function hooksSetDisabled(cwd: string, name: string, disabled: boolean): void {
+  setHookRuntimeEnabled(name, !disabled);
+  const hooks = loadHookConfigs(cwd);
+  const hook = hooks.find((h) => h.name === name);
+  if (hook) {
+    hook.enabled = !disabled;
+    writeHookConfigs(cwd, hooks);
+  }
+}
+
 export function createDirectSettingsClient(
   runWithLayer: <T>(eff: any) => Promise<T>
 ): SettingsClient {
   return {
     async getMemoryEnabled() {
-      return settingsService.getMemoryEnabledService();
+      return getMemoryEnabled();
     },
 
     async getMemoryConfig() {
-      return settingsService.getMemoryConfigWithTypes();
+      const cfg = getMemoryConfig();
+      return { enabled: cfg.enabled, types: getAllTypesWithStatus(cfg) };
     },
 
     async setMemoryEnabled(enabled) {
-      settingsService.setMemoryEnabledService(enabled);
+      setMemoryEnabled(enabled);
     },
 
     async setMemoryTypeDisabled(name, disabled) {
-      settingsService.setMemoryTypeDisabledService(name, disabled);
+      setMemoryTypeDisabled(name, disabled);
     },
 
     async addMemoryExtraType(type) {
-      settingsService.addMemoryExtraTypeService(type);
+      _addMemoryExtraType({ name: type.name, description: type.description, enabled: true });
     },
 
     async updateMemoryExtraType(name, type) {
-      settingsService.updateMemoryExtraTypeService(name, type);
+      _updateMemoryExtraType(name, {
+        name: type.name,
+        description: type.description,
+        enabled: true,
+      });
     },
 
     async deleteMemoryExtraType(name) {
-      settingsService.deleteMemoryExtraTypeService(name);
+      _deleteMemoryExtraType(name);
     },
 
     async getSubagentEnabled() {
-      return settingsService.getSubagentEnabled();
+      return getSubagentEnabledState();
     },
 
     async setSubagentEnabled(enabled) {
-      settingsService.setSubagentEnabled(enabled);
+      setSubagentEnabledState(enabled);
     },
 
     async getMcpStatus() {
       return runWithLayer(
         Effect.gen(function* () {
           const mcp = yield* McpService;
-          return yield* mcp.status();
+          return yield* mcp.status(process.cwd());
         })
       );
     },
@@ -95,28 +227,30 @@ export function createDirectSettingsClient(
       await runWithLayer(
         Effect.gen(function* () {
           const mcp = yield* McpService;
-          return yield* disabled ? mcp.disable(name) : mcp.enable(name);
+          return yield* disabled
+            ? mcp.disable(process.cwd(), name)
+            : mcp.enable(process.cwd(), name);
         })
       );
     },
 
     async createMcpServer({ cwd, server }) {
-      settingsService.createMcpServer(cwd, server);
+      mcpCreateServer(cwd, server);
     },
 
     async updateMcpServer({ cwd, name, server }) {
-      settingsService.updateMcpServer(cwd, name, server);
+      mcpUpdateServer(cwd, name, server);
     },
 
     async deleteMcpServer({ cwd, name }) {
-      settingsService.deleteMcpServer(cwd, name);
+      mcpDeleteServer(cwd, name);
     },
 
     async listSkills() {
       return runWithLayer(
         Effect.gen(function* () {
           const skill = yield* SkillService;
-          return yield* skill.listWithStatus();
+          return yield* skill.listWithStatus(process.cwd());
         })
       );
     },
@@ -125,49 +259,50 @@ export function createDirectSettingsClient(
       await runWithLayer(
         Effect.gen(function* () {
           const skill = yield* SkillService;
-          return yield* enabled ? skill.enableSkill(name) : skill.disableSkill(name);
+          const cwd = process.cwd();
+          return yield* enabled ? skill.enableSkill(cwd, name) : skill.disableSkill(cwd, name);
         })
       );
     },
 
     async listAgents({ cwd }) {
-      return settingsService.listAgents(cwd);
+      return agentsList(cwd);
     },
 
     async createAgent({ cwd, profile }) {
-      settingsService.createAgent(cwd, profile);
+      agentsCreate(cwd, profile);
     },
 
     async updateAgent({ cwd, name, profile }) {
-      settingsService.updateAgent(cwd, name, profile);
+      agentsUpdate(cwd, name, profile);
     },
 
     async deleteAgent({ cwd, name }) {
-      settingsService.deleteAgent(cwd, name);
+      deleteAgentProfile(cwd, name);
     },
 
     async setAgentDisabled(name, disabled) {
-      settingsService.setAgentDisabled(name, disabled);
+      setAgentDisabledState(name, disabled);
     },
 
     async listHooks({ cwd }) {
-      return settingsService.listHooks(cwd);
+      return loadHookConfigs(cwd);
     },
 
     async createHook({ cwd, hook }) {
-      settingsService.createHook(cwd, hook);
+      hooksCreate(cwd, hook);
     },
 
     async updateHook({ cwd, name, hook }) {
-      settingsService.updateHook(cwd, name, hook);
+      hooksUpdate(cwd, name, hook);
     },
 
     async deleteHook({ cwd, name }) {
-      settingsService.deleteHook(cwd, name);
+      hooksDelete(cwd, name);
     },
 
     async setHookDisabled({ cwd, name, disabled }) {
-      settingsService.setHookDisabled(cwd, name, disabled);
+      hooksSetDisabled(cwd, name, disabled);
     },
 
     async getGlobalPermissionMode() {

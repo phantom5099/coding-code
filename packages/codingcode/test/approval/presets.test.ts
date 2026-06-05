@@ -55,6 +55,6 @@ describe('Presets', () => {
 
   it('should define destructive tools', () => {
     expect(DESTRUCTIVE_TOOL_NAMES).toContain('execute_command');
-    expect(DESTRUCTIVE_TOOL_NAMES).toContain('Bash');
+    expect(DESTRUCTIVE_TOOL_NAMES).not.toContain('Bash');
   });
 });

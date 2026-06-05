@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync, readFileSync as fsReadFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  readFileSync as fsReadFileSync,
+} from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
@@ -108,7 +115,8 @@ describe('checkoutFiles error propagation', () => {
       sg.commit('baseline');
 
       // Invalid commit hash (multi-line or non-existent)
-      const invalidCommit = 'deadbeef00000000000000000000000000000000\n0000000000000000000000000000000000000000';
+      const invalidCommit =
+        'deadbeef00000000000000000000000000000000\n0000000000000000000000000000000000000000';
 
       expect(() => sg.checkoutFiles(invalidCommit, ['a.txt'])).toThrow('ShadowGit restore failed');
     } finally {
@@ -172,9 +180,7 @@ describe('undoLastCodeRollback end-to-end via ShadowGit', () => {
       sg.checkoutFiles(storedEntry.safetyCommit, storedEntry.selectedFiles);
 
       // Verify restored to final state
-      expect(fsReadFileSync(join(projectPath, 'src/main.ts'), 'utf8')).toBe(
-        'console.log("final")'
-      );
+      expect(fsReadFileSync(join(projectPath, 'src/main.ts'), 'utf8')).toBe('console.log("final")');
     } finally {
       cleanupTempRepo(projectPath);
     }
@@ -254,9 +260,9 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
       expect(result.reverted).toBe(true);
       expect(result.baseTurnId).toBe(1);
       expect(result.affectedTurns).toEqual([1]);
-      expect(result.selectedFiles.some((f) => f.replace(/\\/g, '/').endsWith('articles/one.md'))).toBe(
-        true
-      );
+      expect(
+        result.selectedFiles.some((f) => f.replace(/\\/g, '/').endsWith('articles/one.md'))
+      ).toBe(true);
       expect(existsSync(join(projectPath, 'articles/one.md'))).toBe(false);
     } finally {
       cleanupTempRepo(projectPath);
@@ -334,9 +340,7 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
       registerDecision: () => Effect.succeed(() => {}),
     } as any);
 
-    const checkpointLayer = CheckpointService.Default.pipe(
-      Layer.provide(mockHookLayer)
-    );
+    const checkpointLayer = CheckpointService.Default.pipe(Layer.provide(mockHookLayer));
 
     const { projectPath } = setupTempRepo();
 
@@ -388,9 +392,7 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
       expect(result.restoredFiles.length).toBeGreaterThan(0);
 
       // Verify restored to final state
-      expect(readFileSync(join(projectPath, 'src/main.ts'), 'utf8')).toBe(
-        'console.log("final")'
-      );
+      expect(readFileSync(join(projectPath, 'src/main.ts'), 'utf8')).toBe('console.log("final")');
     } finally {
       cleanupTempRepo(projectPath);
     }
@@ -413,9 +415,7 @@ describe('revertFilesImpl case-insensitive deduplication', () => {
       registerDecision: () => Effect.succeed(() => {}),
     } as any);
 
-    const checkpointLayer = CheckpointService.Default.pipe(
-      Layer.provide(mockHookLayer)
-    );
+    const checkpointLayer = CheckpointService.Default.pipe(Layer.provide(mockHookLayer));
 
     const { projectPath } = setupTempRepo();
 
@@ -435,9 +435,7 @@ describe('revertFilesImpl case-insensitive deduplication', () => {
       const result1 = await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          return checkpoint.revertCheckpointFiles(projectPath, 'sess', 1, [
-            filePath.toLowerCase(),
-          ]);
+          return checkpoint.revertCheckpointFiles(projectPath, 'sess', 1, [filePath.toLowerCase()]);
         }).pipe(Effect.provide(checkpointLayer))
       );
 

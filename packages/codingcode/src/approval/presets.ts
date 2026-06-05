@@ -95,4 +95,4 @@ export const READONLY_TOOL_NAMES: string[] = [
   'todo_write',
 ];
 
-export const DESTRUCTIVE_TOOL_NAMES: string[] = ['execute_command', 'Bash'];
+export const DESTRUCTIVE_TOOL_NAMES: string[] = ['execute_command'];

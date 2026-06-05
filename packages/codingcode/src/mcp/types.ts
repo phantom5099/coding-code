@@ -23,4 +23,5 @@ export interface McpStatus {
   toolCount: number;
   transport: 'stdio' | 'http';
   reconnectAttempts: number;
+  leaseCount: number;
 }

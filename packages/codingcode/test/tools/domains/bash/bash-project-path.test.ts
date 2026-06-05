@@ -54,7 +54,7 @@ describe('tools/domains/bash projectPath isolation', () => {
     expect(readFileSync(join(projectDir, 'test-bash.txt'), 'utf8').trim()).toBe('hello');
   });
 
-  it('falls back to workspaceCwd when ctx.projectPath is absent and cwd arg is absent', async () => {
+  it('falls back to process.cwd() when ctx.projectPath is absent and cwd arg is absent', async () => {
     const isWin = process.platform === 'win32';
     const cmd = isWin
       ? `powershell -Command "'fallback' | Out-File -Encoding utf8 test-fallback.txt"`
@@ -62,8 +62,9 @@ describe('tools/domains/bash projectPath isolation', () => {
 
     const result = await bashTool.execute({ command: cmd, timeout_ms: 10000 }, undefined);
 
-    expect(() => readFileSync(join(globalDir, 'test-fallback.txt'), 'utf8')).not.toThrow();
-    expect(readFileSync(join(globalDir, 'test-fallback.txt'), 'utf8').trim()).toBe('fallback');
+    const cwd = process.cwd();
+    expect(() => readFileSync(join(cwd, 'test-fallback.txt'), 'utf8')).not.toThrow();
+    expect(readFileSync(join(cwd, 'test-fallback.txt'), 'utf8').trim()).toBe('fallback');
   });
 
   it('respects explicit cwd arg over ctx.projectPath', async () => {

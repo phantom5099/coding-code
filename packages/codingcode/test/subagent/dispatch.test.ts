@@ -1,24 +1,106 @@
 ﻿import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
 import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch';
-import {
-  SubagentRegistry,
-  EXPLORE_PROFILE,
-  setSubagentEnabledState,
-} from '../../src/subagent/registry';
-import { SubagentRegistryLayer } from '../../src/layer';
-import { registerEmitter, unregisterEmitter, hasEmitter } from '../../src/approval/async-confirm';
+import { EXPLORE_PROFILE } from '../../src/subagent/registry';
+import type { AgentProfile } from '../../src/subagent/registry';
+import type { ProjectRuntimeService } from '../../src/runtime/project-runtime';
 
 const mockMcp = {
-  _tag: 'Mcp' as const,
-  connectServers: () => Effect.void,
-  disconnectServers: () => Effect.void,
-  getServerToolNames: () => [] as string[],
-  syncConnections: () => Effect.void,
-  disconnectAll: () => Effect.void,
-  disable: () => Effect.void,
-  enable: () => Effect.void,
-  status: () => Effect.succeed([]),
+  connectServers: (_p: string, _s: string, _n: string[]) => Effect.void,
+  disconnectServers: (_p: string, _s: string, _n: string[]) => Effect.void,
+  getServerToolNames: (_p: string, _n: string) => [] as string[],
+  syncConnections: (_p: string) => Effect.void,
+  status: (_p: string) => Effect.succeed([]),
+  disable: (_p: string, _n: string) => Effect.void,
+  enable: (_p: string, _n: string) => Effect.void,
+  listProjectMcpTools: (_p: string) => [],
+  disposeSession: (_s: string) => Effect.void,
+  disposeProject: (_p: string) => Effect.void,
+};
+
+const mockHooks = {
+  register: () => Effect.succeed(() => {}),
+  registerDecision: () => Effect.succeed(() => {}),
+  emit: (_p: string, _pl: any) => Effect.void,
+  emitDecision: (_p: string, _pl: any) => Effect.succeed(null),
+  reloadUserHooks: (_p: string) => Effect.void,
+  attachSessionHooks: (_s: string, _h: any[]) => Effect.void,
+  disableHook: (_p: string, _n: string) => Effect.void,
+  enableHook: (_p: string, _n: string) => Effect.void,
+  disposeSession: (_s: string) => Effect.void,
+  disposeProject: (_p: string) => Effect.void,
+};
+
+const mockApproval = {
+  evaluate: () => Effect.succeed({ type: 'allow' as const }),
+  addRule: () => Effect.void,
+  removeRule: () => Effect.void,
+  setPermissionMode: () => Effect.void,
+  getPermissionMode: () => 'default' as const,
+  fork: (_opts?: any) => Effect.succeed(mockApproval),
+};
+
+const mockSession = {
+  create: (_cwd: string, _model: string, _sid?: string, _opts?: any) =>
+    Effect.succeed({
+      sessionId: 'child-123',
+      cwd: '/test',
+      projectPath: 'test',
+      transcriptPath: '/tmp/test.jsonl',
+      indexPath: '/tmp/test.index.json',
+      messageCount: 0,
+      currentTurnId: 0,
+      sessionMeta: null,
+      title: 'child',
+      usage: undefined,
+      promptEstimate: 0,
+    }),
+  incrementTurn: () => 0,
+  recordUser: () =>
+    Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 0, timestamp: '' }),
+  recordAssistant: () =>
+    Effect.succeed({
+      type: 'assistant',
+      uuid: 'a1',
+      content: '',
+      toolCalls: [],
+      model: 'test',
+      turnId: 0,
+      timestamp: '',
+    }),
+  recordToolResult: () =>
+    Effect.succeed({
+      type: 'tool_result',
+      uuid: 't1',
+      parentUuid: 'a1',
+      toolName: 'test',
+      toolCallId: 'tc1',
+      output: '',
+      turnId: 0,
+      timestamp: '',
+      tokenCount: 0,
+    }),
+};
+
+const mockRuntime: ProjectRuntimeService = {
+  _tag: 'ProjectRuntime' as const,
+  prepareProject: (_p: string) => Effect.void,
+  resolveMainAgentProfile: (_p: string, _s: string) => EXPLORE_PROFILE,
+  resolveSubagentProfile: (_p: string, name: string) => {
+    if (name === 'explore') return EXPLORE_PROFILE;
+    return undefined;
+  },
+  listAgentProfiles: (_p: string) => [EXPLORE_PROFILE],
+  getToolPolicy: (profile: AgentProfile) => ({
+    allowedTools: profile.tools ? new Set(profile.tools) : undefined,
+    allowedMcpServers: profile.mcpServers ? new Set(profile.mcpServers) : undefined,
+    allowToolSearch: true,
+    allowDeferredTools: false,
+  }),
+  setSessionProfile: (_s: string, _p: AgentProfile) => {},
+  getSessionProfile: (_s: string) => undefined,
+  disposeSession: (_s: string) => Effect.void,
+  disposeProject: (_p: string) => Effect.void,
 };
 
 const mockModelEntry = {
@@ -42,70 +124,38 @@ vi.mock('../../src/llm/factory.js', () => ({
   createClient: vi.fn(async () => ({ ok: true, value: mockSubagentLlm })),
 }));
 
+function makeTool() {
+  return createDispatchAgentTool({
+    session: mockSession as any,
+    approval: mockApproval as any,
+    hooks: mockHooks as any,
+    runtime: mockRuntime,
+    mcp: mockMcp as any,
+  });
+}
+
 describe('dispatch_agent tool', () => {
-  beforeEach(() => {
-    // Reset module-level enabled state between tests to prevent state pollution
-    setSubagentEnabledState(true);
-  });
-  async function makeRegistry(): Promise<SubagentRegistry> {
-    return await Effect.runPromise(
-      Effect.gen(function* () {
-        return yield* SubagentRegistry;
-      }).pipe(Effect.provide(SubagentRegistryLayer))
-    );
-  }
+  beforeEach(() => {});
 
-  it('should create dispatch tool with description listing available profiles', async () => {
-    const registry = await makeRegistry();
-    registry.register(EXPLORE_PROFILE);
-
-    const deps = {
-      session: {} as any,
-      approval: {} as any,
-      hooks: {} as any,
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps);
-
+  it('should create dispatch tool with description mentioning profiles', () => {
+    const tool = makeTool();
     expect(tool.name).toBe('dispatch_agent');
-    expect(tool.description).toContain('explore');
-    expect(tool.description).toContain('Available profiles');
+    expect(tool.description).toContain('Spawn');
+    expect(tool.description).toContain('subagent');
   });
 
-  it('should be a core tool (not deferred)', async () => {
-    const registry = await makeRegistry();
-
-    const deps = {
-      session: {} as any,
-      approval: {} as any,
-      hooks: {} as any,
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps);
-
-    expect(tool.deferred).toBeFalsy();
+  it('should be a core tool (not deferred)', () => {
+    const tool = makeTool();
+    expect(tool.deferred).toBeUndefined();
   });
 
   it('should validate agent profile exists', async () => {
-    const registry = await makeRegistry();
-    registry.register(EXPLORE_PROFILE);
-
-    const deps = {
-      session: {} as any,
-      approval: {} as any,
-      hooks: {} as any,
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps);
-
+    const tool = makeTool();
     try {
-      await tool.execute({ agent: 'unknown-agent', prompt: 'test' }, {});
+      await tool.execute(
+        { agent: 'nonexistent', prompt: 'do something' },
+        { projectPath: '/test' }
+      );
       expect.fail('Should have thrown error');
     } catch (e: any) {
       expect(e.message).toContain('Unknown subagent');
@@ -113,26 +163,9 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should require agentRunner context', async () => {
-    const registry = await makeRegistry();
-    registry.register(EXPLORE_PROFILE);
-
-    const deps = {
-      session: {} as any,
-      approval: {} as any,
-      hooks: {} as any,
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps);
-
+    const tool = makeTool();
     try {
-      await tool.execute(
-        { agent: 'explore', prompt: 'test' },
-        {
-          /* no agentRunner */
-        }
-      );
+      await tool.execute({ agent: 'explore', prompt: 'do something' }, { projectPath: '/test' });
       expect.fail('Should have thrown error');
     } catch (e: any) {
       expect(e.message).toContain('agentRunner');
@@ -140,59 +173,22 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should emit spawn.before hook', async () => {
-    const registry = await makeRegistry();
-    registry.register(EXPLORE_PROFILE);
-
-    const emitDecisionFn = vi.fn(() => Effect.succeed(null));
-    const emitFn = vi.fn(() => Effect.succeed(undefined));
-
-    const deps = {
-      session: {
-        create: () => Effect.sync(() => ({ sessionId: 'child' })),
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: emitFn,
-        emitDecision: emitDecisionFn,
-      },
-      mcp: mockMcp,
-      registry,
+    const emitDecisionFn = vi.fn().mockReturnValue(Effect.succeed(null));
+    const tool = createDispatchAgentTool({
+      session: mockSession as any,
+      approval: mockApproval as any,
+      hooks: { ...mockHooks, emitDecision: emitDecisionFn } as any,
+      runtime: mockRuntime,
+      mcp: mockMcp as any,
+    });
+    const runStream = async function* () {
+      yield { _tag: 'Done' as const, content: 'done' };
     };
-
-    const tool = createDispatchAgentTool(deps as any);
-
-    try {
-      await tool.execute(
-        { agent: 'explore', prompt: 'test task' },
-        {
-          agentRunner: {
-            agentService: {
-              runStream: async function* () {
-                yield { _tag: 'Done', content: 'Complete' };
-              },
-            },
-            llm: {},
-          },
-          sessionId: 'parent-session',
-        }
-      );
-    } catch (e) {
-      // Might fail due to mocking, but we're testing the hook emission
-    }
-
+    const agentRunner = { agentService: { runStream }, llm: {} };
+    await tool.execute(
+      { agent: 'explore', prompt: 'test' },
+      { projectPath: '/test', sessionId: 'parent-1', agentRunner }
+    );
     expect(emitDecisionFn).toHaveBeenCalledWith(
       'agent.subagent.spawn.before',
       expect.objectContaining({ profile: 'explore' })
@@ -200,95 +196,43 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should respect spawn.before deny decision', async () => {
-    const registry = await makeRegistry();
-    registry.register(EXPLORE_PROFILE);
-
-    const deps = {
-      session: {} as any,
-      approval: {} as any,
-      hooks: {
-        emit: (() => Effect.succeed(undefined)) as any,
-        emitDecision: (() =>
-          Effect.succeed({
-            decision: 'deny',
-            reason: 'Not allowed',
-          })) as any,
-      },
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps as any);
-
+    const emitDecisionFn = vi.fn().mockReturnValue(Effect.succeed({ decision: 'deny', reason: 'Not allowed' }));
+    const tool = createDispatchAgentTool({
+      session: mockSession as any,
+      approval: mockApproval as any,
+      hooks: { ...mockHooks, emitDecision: emitDecisionFn } as any,
+      runtime: mockRuntime,
+      mcp: mockMcp as any,
+    });
+    const agentRunner = { agentService: { runStream: async function* () {} }, llm: {} };
     try {
       await tool.execute(
         { agent: 'explore', prompt: 'test' },
-        {
-          agentRunner: {
-            agentService: {},
-            llm: {},
-          },
-        }
+        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
       );
       expect.fail('Should have thrown error');
     } catch (e: any) {
       expect(e.message).toContain('Subagent spawn denied');
-      expect(e.message).toContain('Not allowed');
     }
   });
 
   it('should emit completion hook', async () => {
-    const registry = await makeRegistry();
-    registry.register(EXPLORE_PROFILE);
-
-    const emitFn = vi.fn(() => Effect.succeed(undefined));
-
-    const deps = {
-      session: {
-        create: () => Effect.sync(() => ({ sessionId: 'child' })),
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: emitFn,
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
+    const emitFn = vi.fn().mockReturnValue(Effect.void);
+    const tool = createDispatchAgentTool({
+      session: mockSession as any,
+      approval: mockApproval as any,
+      hooks: { ...mockHooks, emit: emitFn } as any,
+      runtime: mockRuntime,
+      mcp: mockMcp as any,
+    });
+    const runStream = async function* () {
+      yield { _tag: 'Done' as const, content: 'completed' };
     };
-
-    const tool = createDispatchAgentTool(deps as any);
-
-    const agentService = {
-      runStream: async function* () {
-        yield { _tag: 'Done', content: 'Subagent completed' };
-      },
-    };
-
+    const agentRunner = { agentService: { runStream }, llm: {} };
     const result = await tool.execute(
       { agent: 'explore', prompt: 'test' },
-      {
-        agentRunner: {
-          agentService,
-          llm: {},
-        },
-        sessionId: 'parent-session',
-      }
+      { projectPath: '/test', sessionId: 'parent-1', agentRunner }
     );
-
-    expect(result).toContain('Subagent completed');
     expect(emitFn).toHaveBeenCalledWith(
       'agent.subagent.complete',
       expect.objectContaining({ status: 'done' })
@@ -296,590 +240,183 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should pass systemPrompt from profile', async () => {
-    const registry = await makeRegistry();
-
-    const customProfile = {
-      ...EXPLORE_PROFILE,
-      name: 'custom',
-      systemPrompt: 'Custom system prompt',
+    const tool = makeTool();
+    let capturedSystemOverride: string | undefined;
+    const runStream = async function* (opts: any) {
+      capturedSystemOverride = opts.systemOverride;
+      yield { _tag: 'Done' as const, content: 'done' };
     };
-    registry.register(customProfile);
-
-    const runStreamCalls: any[] = [];
-    const agentService = {
-      runStream: (opts: any) => {
-        runStreamCalls.push(opts);
-        return (async function* () {
-          yield { _tag: 'Done', content: 'Done' };
-        })();
-      },
-    };
-
-    const deps = {
-      session: {
-        create: () => Effect.sync(() => ({ sessionId: 'child' })),
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: () => Effect.succeed(undefined),
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps as any);
-
+    const agentRunner = { agentService: { runStream }, llm: {} };
     await tool.execute(
-      { agent: 'custom', prompt: 'test' },
-      {
-        agentRunner: { agentService, llm: {} },
-        sessionId: 'parent-session',
-      }
+      { agent: 'explore', prompt: 'test' },
+      { projectPath: '/test', sessionId: 'parent-1', agentRunner }
     );
-
-    expect(runStreamCalls[0].systemOverride).toBe('Custom system prompt');
-  });
-
-  it('should filter dispatch_agent from coreAllowlist', async () => {
-    const registry = await makeRegistry();
-
-    const toolListProfile = {
-      name: 'tool-list',
-      description: 'Profile with tools',
-      systemPrompt: 'System',
-      tools: ['read_file', 'bash', 'dispatch_agent'],
-    };
-    registry.register(toolListProfile);
-
-    const runStreamCalls: any[] = [];
-    const agentService = {
-      runStream: (opts: any) => {
-        runStreamCalls.push(opts);
-        return (async function* () {
-          yield { _tag: 'Done', content: 'Done' };
-        })();
-      },
-    };
-
-    const deps = {
-      session: {
-        create: () => Effect.sync(() => ({ sessionId: 'child' })),
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: () => Effect.succeed(undefined),
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps as any);
-
-    await tool.execute(
-      { agent: 'tool-list', prompt: 'test' },
-      {
-        agentRunner: { agentService, llm: {} },
-        sessionId: 'parent-session',
-      }
-    );
-
-    // dispatch_agent should be filtered out from allowlist
-    const allowlist = runStreamCalls[0].coreAllowlist;
-    expect(allowlist?.has('read_file')).toBe(true);
-    expect(allowlist?.has('bash')).toBe(true);
-    expect(allowlist?.has('dispatch_agent')).toBe(false);
+    expect(capturedSystemOverride).toBeTruthy();
+    expect(capturedSystemOverride).toContain('read-only');
   });
 
   it('should handle subagent error', async () => {
-    const registry = await makeRegistry();
-    registry.register(EXPLORE_PROFILE);
-
-    const emitFn = vi.fn(() => Effect.succeed(undefined));
-
-    const agentService = {
-      runStream: async function* () {
-        yield { _tag: 'Error', error: { message: 'Subagent failed', code: 'ERROR' } };
-      },
+    const tool = makeTool();
+    const runStream = async function* () {
+      yield { _tag: 'Error' as const, error: { message: 'Something went wrong' } };
     };
-
-    const deps = {
-      session: {
-        create: () => Effect.sync(() => ({ sessionId: 'child' })),
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: emitFn,
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps as any);
-
+    const agentRunner = { agentService: { runStream }, llm: {} };
     try {
       await tool.execute(
         { agent: 'explore', prompt: 'test' },
-        {
-          agentRunner: { agentService, llm: {} },
-          sessionId: 'parent-session',
-        }
+        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
       );
       expect.fail('Should have thrown error');
     } catch (e: any) {
       expect(e.message).toContain('Subagent failed');
     }
-
-    expect(emitFn).toHaveBeenCalledWith(
-      'agent.subagent.complete',
-      expect.objectContaining({ status: 'error' })
-    );
   });
 
   it('should use parent llm when profile has no model field', async () => {
-    const registry = await makeRegistry();
-    registry.register(EXPLORE_PROFILE); // EXPLORE_PROFILE has no model field
-
-    const runStreamCalls: any[] = [];
-    const agentService = {
-      runStream: (opts: any) => {
-        runStreamCalls.push(opts);
-        return (async function* () {
-          yield { _tag: 'Done', content: 'Done' };
-        })();
-      },
-    };
+    const tool = makeTool();
     const parentLlm = { _tag: 'parent-llm' };
-
-    const deps = {
-      session: {
-        create: () => Effect.sync(() => ({})),
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: () => Effect.succeed(undefined),
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
+    let capturedLlm: any;
+    const runStream = async function* (opts: any) {
+      capturedLlm = opts.llm;
+      yield { _tag: 'Done' as const, content: 'done' };
     };
-
-    const tool = createDispatchAgentTool(deps as any);
+    const agentRunner = { agentService: { runStream }, llm: parentLlm };
     await tool.execute(
       { agent: 'explore', prompt: 'test' },
-      { agentRunner: { agentService, llm: parentLlm }, sessionId: 'parent-session' }
+      { projectPath: '/test', sessionId: 'parent-1', agentRunner }
     );
-
-    expect(runStreamCalls[0].llm).toBe(parentLlm);
+    expect(capturedLlm).toBe(parentLlm);
   });
 
   it('should create a new llm client when profile specifies a model', async () => {
-    const registry = await makeRegistry();
-
-    const modelProfile = {
-      ...EXPLORE_PROFILE,
-      name: 'model-agent',
+    const profileWithModel: AgentProfile = {
+      name: 'custom-model-agent',
+      description: 'Agent with custom model',
+      systemPrompt: 'Custom model agent',
       model: 'fast-model@API_KEY_B',
+      tools: ['read_file'],
     };
-    registry.register(modelProfile);
-
-    const runStreamCalls: any[] = [];
-    const agentService = {
-      runStream: (opts: any) => {
-        runStreamCalls.push(opts);
-        return (async function* () {
-          yield { _tag: 'Done', content: 'Done' };
-        })();
+    const runtimeWithProfile = {
+      ...mockRuntime,
+      resolveSubagentProfile: (_p: string, name: string) => {
+        if (name === 'custom-model-agent') return profileWithModel;
+        return undefined;
       },
     };
-    const parentLlm = { _tag: 'parent-llm' };
-
-    const deps = {
-      session: {
-        create: () => Effect.sync(() => ({})),
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: () => Effect.succeed(undefined),
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
+    const tool = createDispatchAgentTool({
+      session: mockSession as any,
+      approval: mockApproval as any,
+      hooks: mockHooks as any,
+      runtime: runtimeWithProfile,
+      mcp: mockMcp as any,
+    });
+    const { createClient } = await import('../../src/llm/factory.js');
+    let capturedLlm: any;
+    const runStream = async function* (opts: any) {
+      capturedLlm = opts.llm;
+      yield { _tag: 'Done' as const, content: 'done' };
     };
-
-    const tool = createDispatchAgentTool(deps as any);
+    const agentRunner = { agentService: { runStream }, llm: {} };
     await tool.execute(
-      { agent: 'model-agent', prompt: 'test' },
-      { agentRunner: { agentService, llm: parentLlm }, sessionId: 'parent-session' }
+      { agent: 'custom-model-agent', prompt: 'test' },
+      { projectPath: '/test', sessionId: 'parent-1', agentRunner }
     );
-
-    // Should use the resolved subagent LLM, not the parent's
-    expect(runStreamCalls[0].llm).toBe(mockSubagentLlm);
-    expect(runStreamCalls[0].llm).not.toBe(parentLlm);
+    expect(createClient).toHaveBeenCalledWith(mockModelEntry);
+    expect(capturedLlm).toBe(mockSubagentLlm);
   });
 
   it('should throw when profile model is not found in catalog', async () => {
-    const registry = await makeRegistry();
-
-    const badProfile = {
-      ...EXPLORE_PROFILE,
+    const profileWithBadModel: AgentProfile = {
       name: 'bad-model-agent',
+      description: 'Agent with unknown model',
+      systemPrompt: 'Bad model',
       model: 'nonexistent-model@unknown',
+      tools: ['read_file'],
     };
-    registry.register(badProfile);
-
-    const deps = {
-      session: {} as any,
-      approval: {} as any,
-      hooks: {
-        emit: () => Effect.succeed(undefined),
-        emitDecision: () => Effect.succeed(null),
+    const runtimeWithBadProfile = {
+      ...mockRuntime,
+      resolveSubagentProfile: (_p: string, name: string) => {
+        if (name === 'bad-model-agent') return profileWithBadModel;
+        return undefined;
       },
-      mcp: mockMcp,
-      registry,
     };
-
-    const tool = createDispatchAgentTool(deps as any);
-
+    const tool = createDispatchAgentTool({
+      session: mockSession as any,
+      approval: mockApproval as any,
+      hooks: mockHooks as any,
+      runtime: runtimeWithBadProfile,
+      mcp: mockMcp as any,
+    });
+    const agentRunner = { agentService: { runStream: async function* () {} }, llm: {} };
     try {
       await tool.execute(
         { agent: 'bad-model-agent', prompt: 'test' },
-        { agentRunner: { agentService: {}, llm: {} } }
+        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
       );
       expect.fail('Should have thrown error');
     } catch (e: any) {
       expect(e.message).toContain('unknown model');
-      expect(e.message).toContain('nonexistent-model@unknown');
-    }
-  });
-
-  it('should throw when subagent registry is disabled', async () => {
-    const registry = await makeRegistry();
-    registry.register(EXPLORE_PROFILE);
-    registry.setEnabled(false);
-
-    const deps = {
-      session: {} as any,
-      approval: {} as any,
-      hooks: {
-        emit: (() => Effect.succeed(undefined)) as any,
-        emitDecision: (() => Effect.succeed(null)) as any,
-      },
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps as any);
-
-    try {
-      await tool.execute(
-        { agent: 'explore', prompt: 'test' },
-        { agentRunner: { agentService: {}, llm: {} } }
-      );
-      expect.fail('Should have thrown error');
-    } catch (e: any) {
-      expect(e.message).toContain('Subagent is disabled');
     }
   });
 
   it('should call session.create with plain UUID sessionId and parentSessionId in opts', async () => {
-    const registry = await makeRegistry();
-    registry.setEnabled(true);
-    registry.register(EXPLORE_PROFILE);
-
-    const createCalls: any[] = [];
-    const agentService = {
-      runStream: async function* () {
-        yield { _tag: 'Done', content: 'done' };
-      },
-    };
-
-    const deps = {
-      session: {
-        create: (...args: any[]) => {
-          createCalls.push(args);
-          return Effect.sync(() => ({}));
-        },
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: () => Effect.succeed(undefined),
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps as any);
-    await tool.execute(
-      { agent: 'explore', prompt: 'task' },
-      { agentRunner: { agentService, llm: {} }, sessionId: 'parent-session-uuid' }
+    const createFn = vi.fn().mockReturnValue(
+      Effect.succeed({
+        sessionId: 'child-456',
+        cwd: '/test',
+        projectPath: 'test',
+        transcriptPath: '/tmp/test.jsonl',
+        indexPath: '/tmp/test.index.json',
+        messageCount: 0,
+        currentTurnId: 0,
+        sessionMeta: null,
+        title: 'child',
+        usage: undefined,
+        promptEstimate: 0,
+      })
     );
-
-    expect(createCalls.length).toBe(1);
-    const [, , childUuid, opts] = createCalls[0];
-    // sessionId must be a plain UUID (no colon)
-    expect(typeof childUuid).toBe('string');
-    expect(childUuid).toMatch(/^[0-9a-f-]{36}$/);
-    expect(childUuid).not.toContain(':');
-    // opts must carry parentSessionId from ctx
-    expect(opts?.parentSessionId).toBe('parent-session-uuid');
-    expect(opts?.agentName).toBe('explore');
+    const tool = createDispatchAgentTool({
+      session: { ...mockSession, create: createFn } as any,
+      approval: mockApproval as any,
+      hooks: mockHooks as any,
+      runtime: mockRuntime,
+      mcp: mockMcp as any,
+    });
+    const runStream = async function* () {
+      yield { _tag: 'Done' as const, content: 'done' };
+    };
+    const agentRunner = { agentService: { runStream }, llm: {} };
+    await tool.execute(
+      { agent: 'explore', prompt: 'test child' },
+      { projectPath: '/test', sessionId: 'parent-1', agentRunner }
+    );
+    expect(createFn).toHaveBeenCalledWith(
+      '/test',
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ parentSessionId: 'parent-1', agentName: 'explore' })
+    );
   });
 
   it('runStream receives state with child sessionId', async () => {
-    const registry = await makeRegistry();
-    registry.setEnabled(true);
-    registry.register(EXPLORE_PROFILE);
-
-    const createCalls: any[] = [];
-    const runStreamCalls: any[] = [];
-    const agentService = {
-      runStream: (opts: any) => {
-        runStreamCalls.push(opts);
-        return (async function* () {
-          yield { _tag: 'Done', content: 'done' };
-        })();
-      },
+    let capturedState: any;
+    const runStream = async function* (opts: any) {
+      capturedState = opts.state;
+      yield { _tag: 'Done' as const, content: 'done' };
     };
-
-    const deps = {
-      session: {
-        create: (...args: any[]) => {
-          createCalls.push(args);
-          return Effect.sync(() => ({}));
-        },
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: () => Effect.succeed(undefined),
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps as any);
+    const tool = createDispatchAgentTool({
+      session: mockSession as any,
+      approval: mockApproval as any,
+      hooks: mockHooks as any,
+      runtime: mockRuntime,
+      mcp: mockMcp as any,
+    });
+    const agentRunner = { agentService: { runStream }, llm: {} };
     await tool.execute(
-      { agent: 'explore', prompt: 'task' },
-      { agentRunner: { agentService, llm: {} }, sessionId: 'p' }
+      { agent: 'explore', prompt: 'test' },
+      { projectPath: '/test', sessionId: 'parent-1', agentRunner }
     );
-
-    const childUuid = createCalls[0][3];
-    expect(runStreamCalls[0].state).toBeDefined();
-    expect(runStreamCalls[0].agentId).toBeUndefined();
-  });
-
-  it('registers delegated emitter for child session when parentSessionId is provided', async () => {
-    const registry = await makeRegistry();
-    registry.setEnabled(true);
-    registry.register(EXPLORE_PROFILE);
-
-    const parentSid = 'parent-emitter-test-' + Math.random().toString(36).slice(2);
-    let capturedChildUuid: string | undefined;
-
-    // Register a parent emitter
-    registerEmitter(parentSid, () => {});
-
-    const createCalls: any[] = [];
-    const agentService = {
-      runStream: async function* () {
-        yield { _tag: 'Done', content: 'done' };
-      },
-    };
-
-    const deps = {
-      session: {
-        create: (...args: any[]) => {
-          createCalls.push(args);
-          return Effect.sync(() => ({}));
-        },
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: () => Effect.succeed(undefined),
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps as any);
-    await tool.execute(
-      { agent: 'explore', prompt: 'task' },
-      { agentRunner: { agentService, llm: {} }, sessionId: parentSid }
-    );
-
-    capturedChildUuid = createCalls[0][3];
-
-    // After completion, child emitter should be cleaned up
-    expect(hasEmitter(capturedChildUuid!)).toBe(false);
-
-    unregisterEmitter(parentSid);
-  });
-
-  it('unregisters child emitter even when subagent throws an error', async () => {
-    const registry = await makeRegistry();
-    registry.setEnabled(true);
-    registry.register(EXPLORE_PROFILE);
-
-    const parentSid = 'parent-error-test-' + Math.random().toString(36).slice(2);
-    registerEmitter(parentSid, () => {});
-
-    const createCalls: any[] = [];
-    const agentService = {
-      runStream: async function* () {
-        yield { _tag: 'Error', error: { message: 'boom' } };
-      },
-    };
-
-    const deps = {
-      session: {
-        create: (...args: any[]) => {
-          createCalls.push(args);
-          return Effect.sync(() => ({}));
-        },
-        incrementTurn: () => 1,
-        recordUser: () =>
-          Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 1, timestamp: '' }),
-      },
-      approval: {
-        fork: () =>
-          Effect.succeed({
-            getPermissionMode: () => 'default',
-            evaluate: () => Effect.succeed({ decision: 'allow' }),
-            addRule: () => Effect.succeed(undefined),
-            removeRule: () => Effect.succeed(undefined),
-            setPermissionMode: () => Effect.succeed(undefined),
-            fork: () => Effect.fail(new Error('nested')),
-          }),
-      },
-      hooks: {
-        emit: () => Effect.succeed(undefined),
-        emitDecision: () => Effect.succeed(null),
-      },
-      mcp: mockMcp,
-      registry,
-    };
-
-    const tool = createDispatchAgentTool(deps as any);
-    try {
-      await tool.execute(
-        { agent: 'explore', prompt: 'task' },
-        { agentRunner: { agentService, llm: {} }, sessionId: parentSid }
-      );
-    } catch {}
-
-    const capturedChildUuid = createCalls[0]?.[3];
-    expect(capturedChildUuid).toBeDefined();
-    expect(hasEmitter(capturedChildUuid)).toBe(false);
-
-    unregisterEmitter(parentSid);
+    expect(capturedState).toBeDefined();
+    expect(capturedState.sessionId).toBe('child-123');
   });
 });

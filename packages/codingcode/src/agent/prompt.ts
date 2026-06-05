@@ -1,4 +1,5 @@
 import { getAllRules } from '../rules/index.js';
+import type { AgentProfile } from '../subagent/registry';
 
 export const DEFERRED_TOOLS_GUIDELINES = `## Deferred tools
 - Some tools are listed as deferred — call tool_search with relevant keywords before using them.`;
@@ -30,6 +31,7 @@ export interface SystemPromptOptions {
   shell: string;
   variant?: SystemPromptVariant;
   skillInstruction?: string;
+  agentProfiles?: AgentProfile[];
 }
 
 function renderBase(opts: SystemPromptOptions): string {
@@ -44,13 +46,24 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   let prompt = renderBase(opts);
   if (variant === 'default') prompt += `\n\n${DEFERRED_TOOLS_GUIDELINES}`;
 
-  const rules = getAllRules();
+  const rules = getAllRules(opts.cwd);
   if (rules) {
     prompt += `\n\n## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`;
   }
 
   if (opts.skillInstruction) {
     prompt += `\n\n## Skill Instructions\n\n${opts.skillInstruction}`;
+  }
+
+  if (opts.agentProfiles && opts.agentProfiles.length > 0) {
+    prompt += '\n\n## Available Subagents\n';
+    prompt += `You can dispatch subagents using the dispatch_agent tool. Available profiles:\n`;
+    for (const p of opts.agentProfiles) {
+      prompt += `\n### ${p.name}\n${p.description}`;
+      if (p.tools && p.tools.length > 0) {
+        prompt += `\nTools: ${p.tools.join(', ')}`;
+      }
+    }
   }
 
   return prompt;

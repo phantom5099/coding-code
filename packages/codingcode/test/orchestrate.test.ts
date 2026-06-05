@@ -171,6 +171,7 @@ const MockSkillLayer = Layer.succeed(
     disableSkill: () => Effect.succeed(undefined),
     enableSkill: () => Effect.succeed(undefined),
     listWithStatus: () => Effect.succeed([]),
+    evictProject: () => Effect.void,
   })
 );
 
@@ -189,12 +190,17 @@ const MockCheckpointLayer = Layer.succeed(
 );
 
 const { AgentService } = await import('../src/agent/agent.js');
-const { ToolLayer, HookLayer } = await import('../src/layer.js');
+const { HookLayer } = await import('../src/layer.js');
 
 const MockMcpLayer = Layer.succeed(McpService, {
   syncConnections: (_: string) => Effect.void,
-  status: () => Effect.succeed([]),
+  status: (_: string) => Effect.succeed([]),
 } as any);
+
+const { ProjectRuntimeService } = await import('../src/runtime/project-runtime.js');
+const MockProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
+  Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer))
+);
 
 const MockToolSearchLayer = Layer.succeed(
   ToolSearchService,
@@ -205,19 +211,29 @@ const MockToolSearchLayer = Layer.succeed(
     listUnloadedDeferred: () => [],
     search: () => [],
     reset: () => {},
+    disposeSession: () => {},
   })
+);
+
+const { ApprovalWaitService } = await import('../src/approval/async-confirm.js');
+const { ApprovalService } = await import('../src/approval/index.js');
+const MockApprovalWaitLayer = ApprovalWaitService.Default;
+const MockApprovalLayer = ApprovalService.Default.pipe(
+  Layer.provide(Layer.mergeAll(HookLayer, MockApprovalWaitLayer))
 );
 
 const AllDeps = Layer.mergeAll(
   MockToolExecutorLayer,
-  ToolLayer,
   MockContextLayer,
   MockSessionLayer,
   MockCheckpointLayer,
   MockSkillLayer,
   HookLayer,
   MockMcpLayer,
-  MockToolSearchLayer
+  MockToolSearchLayer,
+  MockProjectRuntimeLayer,
+  MockApprovalLayer,
+  MockApprovalWaitLayer
 );
 
 const TestLayer = Layer.mergeAll(AgentService.Default.pipe(Layer.provide(AllDeps)), AllDeps);

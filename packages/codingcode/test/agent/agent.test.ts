@@ -73,7 +73,7 @@ function makeDeps(overrides?: Record<string, any>) {
     maxSteps: 25,
     maxStopContinuations: 2,
     executor: null as any,
-    toolRegistry: mockToolRegistry as any,
+    runtime: { listAgentProfiles: () => [] } as any,
     toolSearch: mockToolSearch as any,
     agentService: mockAgentService as any,
     ctx: mockCtx as any,
@@ -185,7 +185,7 @@ describe('runReActLoop', () => {
       { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
       makeDeps({
         maxSteps: 1,
-        toolRegistry: toolRegistryWithBash as any,
+        runtime: { listAgentProfiles: () => [] } as any,
         executor: mockExecutor as any,
       })
     );
@@ -241,7 +241,7 @@ describe('runReActLoop', () => {
       { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
       makeDeps({
         maxSteps: 1,
-        toolRegistry: toolRegistryWithTool as any,
+        runtime: { listAgentProfiles: () => [] } as any,
         executor: mockExecutor as any,
       })
     );
@@ -327,12 +327,7 @@ describe('runReActLoop', () => {
       { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
       makeDeps({
         maxSteps: 1,
-        toolRegistry: {
-          ...mockToolRegistry,
-          describeAll: () => [
-            { name: 'read_file', description: 'Read a file', parameters: { type: 'object' } },
-          ],
-        } as any,
+        runtime: { listAgentProfiles: () => [] } as any,
         executor: mockExecutor as any,
         hooks: trackingHooks as unknown as HookService,
       })

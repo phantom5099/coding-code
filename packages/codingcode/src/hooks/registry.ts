@@ -46,18 +46,75 @@ interface HandlerEntry {
   type: 'observer' | 'decision';
 }
 
+type ProjectPath = string;
+type SessionId = string;
+type HookName = string;
+
 let entryCounter = 0;
 
 export class HookService extends Effect.Service<HookService>()('HookService', {
   effect: Effect.gen(function* () {
-    const observers = new Map<HookPoint, HandlerEntry[]>();
+    const globalHooks = new Map<HookPoint, HandlerEntry[]>();
+    const hooksByProject = new Map<ProjectPath, Map<HookPoint, HandlerEntry[]>>();
+    const hooksBySession = new Map<SessionId, Map<HookPoint, HandlerEntry[]>>();
+    const disabledHooksByProject = new Map<ProjectPath, Set<HookName>>();
+    const disabledHooksBySession = new Map<SessionId, Set<HookName>>();
 
-    function sortedEntries(point: HookPoint): HandlerEntry[] {
-      return (observers.get(point) ?? []).slice().sort((a, b) => a.priority - b.priority);
+    function getMapForScope(
+      projectPath?: string,
+      sessionId?: string
+    ): Map<HookPoint, HandlerEntry[]>[] {
+      const maps: Map<HookPoint, HandlerEntry[]>[] = [globalHooks];
+      if (projectPath) {
+        let pmap = hooksByProject.get(projectPath);
+        if (!pmap) {
+          pmap = new Map();
+          hooksByProject.set(projectPath, pmap);
+        }
+        maps.push(pmap);
+      }
+      if (sessionId) {
+        let smap = hooksBySession.get(sessionId);
+        if (!smap) {
+          smap = new Map();
+          hooksBySession.set(sessionId, smap);
+        }
+        maps.push(smap);
+      }
+      return maps;
+    }
+
+    function sortedEntries(point: HookPoint, entries: HandlerEntry[]): HandlerEntry[] {
+      return entries.slice().sort((a, b) => a.priority - b.priority);
+    }
+
+    function allHandlers(
+      point: HookPoint,
+      projectPath?: string,
+      sessionId?: string
+    ): HandlerEntry[] {
+      const result: HandlerEntry[] = [];
+      // global → project → session
+      const globalList = globalHooks.get(point);
+      if (globalList) result.push(...globalList);
+      if (projectPath) {
+        const projectList = hooksByProject.get(projectPath)?.get(point);
+        if (projectList) result.push(...projectList);
+      }
+      if (sessionId) {
+        const sessionList = hooksBySession.get(sessionId)?.get(point);
+        if (sessionList) result.push(...sessionList);
+      }
+      return sortedEntries(point, result);
+    }
+
+    function isHookDisabled(name: string, projectPath?: string, sessionId?: string): boolean {
+      if (sessionId && disabledHooksBySession.get(sessionId)?.has(name)) return true;
+      if (projectPath && disabledHooksByProject.get(projectPath)?.has(name)) return true;
+      return false;
     }
 
     return {
-      /** Register an observation handler (fire-and-forget, no return value). */
       register: (
         point: HookPoint,
         handler: ObserverHandler,
@@ -71,19 +128,15 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
             source: opts?.source ?? 'user',
             type: 'observer',
           };
-          const set = observers.get(point) ?? [];
+          const set = globalHooks.get(point) ?? [];
           set.push(entry);
-          observers.set(point, set);
+          globalHooks.set(point, set);
           return () => {
-            const s = observers.get(point);
-            if (s) {
-              const idx = s.indexOf(entry);
-              if (idx >= 0) s.splice(idx, 1);
-            }
+            const idx = set.indexOf(entry);
+            if (idx >= 0) set.splice(idx, 1);
           };
         }),
 
-      /** Register a decision handler with priority (lower runs first). */
       registerDecision: (
         point: HookPoint,
         handler: DecisionHandler,
@@ -94,26 +147,26 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
             id: `dec-${++entryCounter}`,
             handler,
             priority: opts?.priority ?? 0,
-            source: opts?.source ?? 'user',
+            source: opts?.source ?? 'system',
             type: 'decision',
           };
-          const set = observers.get(point) ?? [];
+          const set = globalHooks.get(point) ?? [];
           set.push(entry);
-          observers.set(point, set);
+          globalHooks.set(point, set);
           return () => {
-            const s = observers.get(point);
-            if (s) {
-              const idx = s.indexOf(entry);
-              if (idx >= 0) s.splice(idx, 1);
-            }
+            const idx = set.indexOf(entry);
+            if (idx >= 0) set.splice(idx, 1);
           };
         }),
 
-      /** Emit an observer event (fire-and-forget all handlers). */
-      emit: (point: HookPoint, payload: Record<string, unknown>): Effect.Effect<void> =>
-        Effect.promise(async () => {
-          for (const entry of sortedEntries(point)) {
+      emit: (point: HookPoint, payload: Record<string, unknown>): Effect.Effect<void> => {
+        const projectPath = payload.projectPath as string | undefined;
+        const sessionId = payload.sessionId as string | undefined;
+        return Effect.promise(async () => {
+          for (const entry of allHandlers(point, projectPath, sessionId)) {
             if (entry.type === 'observer') {
+              const name = entry.id;
+              if (isHookDisabled(name, projectPath, sessionId)) continue;
               try {
                 await (entry.handler as ObserverHandler)(payload);
               } catch (e) {
@@ -121,16 +174,20 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
               }
             }
           }
-        }),
+        });
+      },
 
-      /** Emit a decision event. Handlers run in priority order; first non-null decision wins. */
       emitDecision: (
         point: HookPoint,
         payload: Record<string, unknown>
-      ): Effect.Effect<HookDecision | null> =>
-        Effect.promise(async () => {
-          for (const entry of sortedEntries(point)) {
+      ): Effect.Effect<HookDecision | null> => {
+        const projectPath = payload.projectPath as string | undefined;
+        const sessionId = payload.sessionId as string | undefined;
+        return Effect.promise(async () => {
+          for (const entry of allHandlers(point, projectPath, sessionId)) {
             if (entry.type === 'decision') {
+              const name = entry.id;
+              if (isHookDisabled(name, projectPath, sessionId)) continue;
               try {
                 const result = await (entry.handler as DecisionHandler)(payload);
                 if (result != null) return result;
@@ -140,17 +197,20 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
             }
           }
           return null;
-        }),
+        });
+      },
 
-      /** Reload user-defined hooks from hooks.yaml, replacing previously loaded user hooks. */
-      reloadUserHooks: (cwd: string): Effect.Effect<void> =>
+      reloadUserHooks: (projectPath: string): Effect.Effect<void> =>
         Effect.sync(() => {
-          for (const [point, entries] of observers) {
+          // Clear user-sourced hooks from globalHooks
+          for (const [point, entries] of globalHooks) {
             const filtered = entries.filter((e) => e.source !== 'user');
-            if (filtered.length === 0) observers.delete(point);
-            else observers.set(point, filtered);
+            if (filtered.length === 0) globalHooks.delete(point);
+            else globalHooks.set(point, filtered);
           }
-          for (const hc of loadHookConfigs(cwd)) {
+          hooksByProject.delete(projectPath);
+          const projectMap = new Map<HookPoint, HandlerEntry[]>();
+          for (const hc of loadHookConfigs(projectPath)) {
             if (!hc.enabled) continue;
             const hookName = hc.name;
             const entry: HandlerEntry = {
@@ -169,10 +229,71 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
               source: 'user',
               type: hc.type,
             };
-            const set = observers.get(hc.point) ?? [];
+            const set = projectMap.get(hc.point) ?? [];
             set.push(entry);
-            observers.set(hc.point, set);
+            projectMap.set(hc.point, set);
           }
+          hooksByProject.set(projectPath, projectMap);
+        }),
+
+      attachSessionHooks: (
+        sessionId: string,
+        hooks: {
+          name: string;
+          point: HookPoint;
+          type: 'observer' | 'decision';
+          command: string;
+          args?: string[];
+          priority?: number;
+        }[]
+      ): Effect.Effect<void> =>
+        Effect.sync(() => {
+          const sessionMap = new Map<HookPoint, HandlerEntry[]>();
+          for (const hc of hooks) {
+            const entry: HandlerEntry = {
+              id: `session-${hc.name}-${++entryCounter}`,
+              handler:
+                hc.type === 'observer'
+                  ? (payload: Record<string, unknown>) =>
+                      executeHookCommand({ command: hc.command, args: hc.args, env: {} }, payload)
+                  : (payload: Record<string, unknown>) =>
+                      executeDecisionHookCommand({ command: hc.command, args: hc.args, env: {} }, payload),
+              priority: hc.priority ?? 0,
+              source: 'user',
+              type: hc.type,
+            };
+            const set = sessionMap.get(hc.point) ?? [];
+            set.push(entry);
+            sessionMap.set(hc.point, set);
+          }
+          hooksBySession.set(sessionId, sessionMap);
+        }),
+
+      disableHook: (projectPath: string, name: string): Effect.Effect<void> =>
+        Effect.sync(() => {
+          let set = disabledHooksByProject.get(projectPath);
+          if (!set) {
+            set = new Set();
+            disabledHooksByProject.set(projectPath, set);
+          }
+          set.add(name);
+        }),
+
+      enableHook: (projectPath: string, name: string): Effect.Effect<void> =>
+        Effect.sync(() => {
+          disabledHooksByProject.get(projectPath)?.delete(name);
+        }),
+
+      disposeSession: (sessionId: string): Effect.Effect<void> =>
+        Effect.sync(() => {
+          hooksBySession.delete(sessionId);
+          disabledHooksBySession.delete(sessionId);
+        }),
+
+      disposeProject: (projectPath: string): Effect.Effect<void> =>
+        Effect.sync(() => {
+          hooksByProject.delete(projectPath);
+          disabledHooksByProject.delete(projectPath);
         }),
     };
   }),

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { writeFile, mkdir } from 'fs/promises';
 import { dirname, relative, resolve } from 'path';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
-import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const writeFileTool: ToolDefinition = {
   name: 'write_file',
@@ -14,7 +13,7 @@ export const writeFileTool: ToolDefinition = {
   }),
   execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { path, content } = args as any;
-    const base = ctx?.projectPath ?? getWorkspaceCwd();
+    const base = ctx?.projectPath ?? process.cwd();
     const filePath = resolve(base, path);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, content);

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { readFile, writeFile } from 'fs/promises';
 import { resolve } from 'path';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
-import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const editFileTool: ToolDefinition = {
   name: 'edit_file',
@@ -22,7 +21,7 @@ export const editFileTool: ToolDefinition = {
       old_string: string;
       new_string: string;
     };
-    const filePath = resolve(ctx?.projectPath ?? getWorkspaceCwd(), path);
+    const filePath = resolve(ctx?.projectPath ?? process.cwd(), path);
     const content = await readFile(filePath, 'utf-8');
 
     let idx = 0;

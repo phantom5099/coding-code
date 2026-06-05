@@ -78,7 +78,7 @@ describe('RunReActDeps hooks type', () => {
       maxSteps: 1,
       maxStopContinuations: 2,
       executor: null as any,
-      toolRegistry: mockToolRegistry as any,
+      runtime: { listAgentProfiles: () => [] } as any,
       toolSearch: mockToolSearch as any,
       agentService: mockAgentService as any,
       ctx: mockCtx as any,

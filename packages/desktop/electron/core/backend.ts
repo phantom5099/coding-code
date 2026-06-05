@@ -9,14 +9,10 @@ function getInstallRoot(): string {
 
 export async function initBackend(): Promise<void> {
   if (_ready) return;
-  const { initWorkspace, loadConfig, ensureUserConfig, bootstrapApplication, AppLayer } =
+  const { initWorkspace, loadConfig, ensureUserConfig, AppLayer } =
     await import('@codingcode/core');
-  const { Effect } = await import('effect');
   ensureUserConfig();
   const config = loadConfig();
   initWorkspace({ installRoot: getInstallRoot(), config });
-  await Effect.runPromise(
-    (bootstrapApplication(process.cwd()) as any).pipe(Effect.provide(AppLayer))
-  );
   _ready = true;
 }

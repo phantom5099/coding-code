@@ -1,6 +1,6 @@
 import type { PermissionMode } from '../../approval/types.js';
 import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
-import type { SubagentProfile } from '../../subagent/registry.js';
+import type { AgentProfile } from '../../subagent/registry.js';
 import type { UserHookConfig } from '../../hooks/config.js';
 import type { createRequestHelpers } from './request.js';
 
@@ -25,8 +25,8 @@ export interface SettingsClient {
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(name: string, enabled: boolean): Promise<void>;
   listAgents(input: { cwd: string }): Promise<any[]>;
-  createAgent(input: { cwd: string; profile: SubagentProfile }): Promise<void>;
-  updateAgent(input: { cwd: string; name: string; profile: SubagentProfile }): Promise<void>;
+  createAgent(input: { cwd: string; profile: AgentProfile }): Promise<void>;
+  updateAgent(input: { cwd: string; name: string; profile: AgentProfile }): Promise<void>;
   deleteAgent(input: { cwd: string; name: string }): Promise<void>;
   setAgentDisabled(name: string, disabled: boolean): Promise<void>;
   listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;

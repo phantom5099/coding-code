@@ -3,7 +3,6 @@ import { globby } from 'globby';
 import { readFile } from 'fs/promises';
 import { relative, resolve } from 'path';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
-import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const searchTool: ToolDefinition = {
   name: 'search_code',
@@ -25,7 +24,7 @@ export const searchTool: ToolDefinition = {
   }),
   execute: async (args: unknown, ctx?: ToolExecCtx) => {
     const { pattern, glob, max_results } = args as any;
-    const base = ctx?.projectPath ?? getWorkspaceCwd();
+    const base = ctx?.projectPath ?? process.cwd();
     const files = await globby(glob, {
       cwd: base,
       gitignore: true,

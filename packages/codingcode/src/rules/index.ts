@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { spawn } from 'node:child_process';
-import { getWorkspaceCwd } from '../core/workspace.js';
 
 // ── Paths ──
 
@@ -12,44 +11,63 @@ function getGlobalRulesPath(): string {
 }
 
 /** 项目规则文件路径 */
-function getProjectRulesPath(): string {
-  return path.join(getWorkspaceCwd(), 'AGENTS.md');
+function getProjectRulesPath(projectPath?: string): string {
+  return path.join(projectPath ?? process.cwd(), 'AGENTS.md');
 }
 
-// ── Read ──
+// ── Read (cached internally, use getAllRules as public API) ──
 
-/** 读取全局规则，不存在返回空字符串 */
-export function getGlobalRules(): string {
+let _globalRules: string | null = null;
+
+function getGlobalRules(): string {
+  if (_globalRules !== null) return _globalRules;
   try {
-    return fs.readFileSync(getGlobalRulesPath(), 'utf-8').trim();
+    _globalRules = fs.readFileSync(getGlobalRulesPath(), 'utf-8').trim();
   } catch {
-    return '';
+    _globalRules = '';
   }
+  return _globalRules;
 }
 
-/** 读取项目规则，不存在返回空字符串 */
-export function getProjectRules(): string {
+const _projectRulesCache = new Map<string, string>();
+
+function getProjectRules(projectPath?: string): string {
+  const key = projectPath ?? process.cwd();
+  if (_projectRulesCache.has(key)) return _projectRulesCache.get(key)!;
+  let content = '';
   try {
-    return fs.readFileSync(getProjectRulesPath(), 'utf-8').trim();
+    content = fs.readFileSync(getProjectRulesPath(projectPath), 'utf-8').trim();
   } catch {
-    return '';
+    // not found
   }
+  _projectRulesCache.set(key, content);
+  return content;
 }
+
+const _allRulesCache = new Map<string, string>();
 
 /** 获取所有规则（全局 + 项目），已格式化好 */
-export function getAllRules(): string {
+export function getAllRules(projectPath?: string): string {
+  const key = projectPath ?? process.cwd();
+  const cached = _allRulesCache.get(key);
+  if (cached !== undefined) return cached;
+  const result = buildAllRules(projectPath);
+  _allRulesCache.set(key, result);
+  return result;
+}
+
+function buildAllRules(projectPath?: string): string {
   const parts: string[] = [];
   const global = getGlobalRules();
-  const project = getProjectRules();
-
-  if (global) {
-    parts.push(`## Global Rules\n\n${global}`);
-  }
-  if (project) {
-    parts.push(`## Project-level Rules\n\n${project}`);
-  }
-
+  const project = getProjectRules(projectPath);
+  if (global) parts.push(`## Global Rules\n\n${global}`);
+  if (project) parts.push(`## Project-level Rules\n\n${project}`);
   return parts.join('\n\n');
+}
+
+export function evictProjectRules(projectPath: string): void {
+  _projectRulesCache.delete(projectPath);
+  _allRulesCache.delete(projectPath);
 }
 
 // ── Clear ──
@@ -64,9 +82,9 @@ export function clearGlobalRules(): void {
 }
 
 /** 清除项目规则 */
-export function clearProjectRules(): void {
+export function clearProjectRules(projectPath?: string): void {
   try {
-    fs.unlinkSync(getProjectRulesPath());
+    fs.unlinkSync(getProjectRulesPath(projectPath));
   } catch {
     // file may not exist
   }
@@ -112,8 +130,8 @@ export function editGlobalRules(): boolean {
 }
 
 /** 编辑项目规则 */
-export function editProjectRules(): boolean {
-  const p = getProjectRulesPath();
+export function editProjectRules(projectPath?: string): boolean {
+  const p = getProjectRulesPath(projectPath);
   if (!fs.existsSync(p)) {
     fs.writeFileSync(p, '', 'utf-8');
   }

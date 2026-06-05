@@ -1,14 +1,16 @@
 import { Effect } from 'effect';
+import type { UserHookConfig } from '../hooks/config.js';
 
-export interface SubagentProfile {
+export interface AgentProfile {
   name: string;
   description: string;
-  systemPrompt: string;
+  systemPrompt?: string;
   tools?: string[];
   mcpServers?: string[];
   readonly?: boolean;
   maxSteps?: number;
   model?: string;
+  hooks?: UserHookConfig[];
 }
 
 let _globalSubagentEnabled = true;
@@ -30,19 +32,19 @@ export function isAgentDisabledState(name: string): boolean {
 
 export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('SubagentRegistry', {
   effect: Effect.gen(function* () {
-    const map = new Map<string, SubagentProfile>();
+    const map = new Map<string, AgentProfile>();
     const disabledAgents = new Set<string>();
 
     return {
-      register: (profile: SubagentProfile): void => {
+      register: (profile: AgentProfile): void => {
         map.set(profile.name, profile);
       },
 
-      get: (name: string): SubagentProfile | undefined => {
+      get: (name: string): AgentProfile | undefined => {
         return map.get(name);
       },
 
-      list: (): SubagentProfile[] => {
+      list: (): AgentProfile[] => {
         return Array.from(map.values());
       },
 
@@ -72,7 +74,7 @@ export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('Subage
   }),
 }) {}
 
-export const EXPLORE_PROFILE: SubagentProfile = {
+export const EXPLORE_PROFILE: AgentProfile = {
   name: 'explore',
   description:
     'Read-only code exploration: searching files, reading symbols, understanding structure. No writes.',

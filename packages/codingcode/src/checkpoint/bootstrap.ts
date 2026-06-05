@@ -5,7 +5,7 @@ import { join, resolve } from 'path';
 import { homedir } from 'os';
 import type { HookService } from '../hooks/registry.js';
 import { encodeProjectPath } from '../core/path.js';
-import { getWorkspaceCwd } from '../core/workspace.js';
+
 import { Ledger } from './ledger.js';
 
 /** Cache ledger instances by checkpoint directory path. */
@@ -46,7 +46,7 @@ export function bootstrapCheckpoint(hooks: HookService): void {
         const rawPath = args?.path as string | undefined;
         if (!rawPath) return;
 
-        const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
+        const base = (payload.projectPath as string | undefined) || process.cwd();
         const resolvedPath = resolve(base, rawPath);
         const callId = payload.callId as string;
         if (callId) {
@@ -75,7 +75,7 @@ export function bootstrapCheckpoint(hooks: HookService): void {
         const args = payload.args as Record<string, unknown> | undefined;
         const rawPath = args?.path as string | undefined;
         if (!rawPath) return;
-        const base = (payload.projectPath as string | undefined) || getWorkspaceCwd();
+        const base = (payload.projectPath as string | undefined) || process.cwd();
         const resolvedPath = resolve(base, rawPath);
 
         const callId = payload.callId as string;

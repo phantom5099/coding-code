@@ -92,9 +92,13 @@ describe('tools/domains/fs projectPath isolation', () => {
     expect(result).not.toContain('g.ts');
   });
 
-  it('falls back to workspaceCwd when ctx.projectPath is absent', async () => {
-    writeFileSync(join(globalDir, 'h.txt'), 'fallback', 'utf8');
-    const result = await readFileTool.execute({ path: 'h.txt', offset: 1, limit: 200 }, undefined);
+  it('falls back to process.cwd() when ctx.projectPath is absent', async () => {
+    const cwd = process.cwd();
+    writeFileSync(join(cwd, 'h-test.txt'), 'fallback', 'utf8');
+    const result = await readFileTool.execute(
+      { path: 'h-test.txt', offset: 1, limit: 200 },
+      undefined
+    );
     expect(result).toContain('fallback');
   });
 });

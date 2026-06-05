@@ -17,6 +17,20 @@ export type ErrorCode =
   | 'STOP_LOOP'
   | 'SESSION_IO_ERROR';
 
+export class AlreadyExistsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AlreadyExistsError';
+  }
+}
+
+export class NotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotFoundError';
+  }
+}
+
 export class AgentError extends Error {
   constructor(
     public readonly code: ErrorCode,

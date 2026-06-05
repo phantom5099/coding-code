@@ -1,37 +1,31 @@
-import { z } from 'zod';
-import type { ToolDescription } from '../core/types';
-import type { ToolService } from '../tools/registry';
+import type { ToolDescription } from '../tools/types';
+import type { AgentProfile } from '../subagent/registry';
+import type { ToolVisibilityPolicy } from '../tools/visibility';
 import type { ToolSearchService } from '../tools/tool-search-service';
 
 export function buildToolsForAgent(
-  registry: ToolService,
-  toolSearch: ToolSearchService,
-  sessionId: string,
-  coreAllowlist?: ReadonlySet<string>
+  resolveTools: (input: {
+    projectPath: string;
+    sessionId: string;
+    profile: AgentProfile;
+    policy: ToolVisibilityPolicy;
+  }) => ToolDescription[],
+  params: {
+    projectPath: string;
+    sessionId: string;
+    profile: AgentProfile;
+    policy: ToolVisibilityPolicy;
+  }
 ): ToolDescription[] {
-  let core = registry.allCore();
-  if (coreAllowlist) {
-    core = core.filter((t) => coreAllowlist.has(t.name));
-  }
-  const loadedDeferred = registry
-    .allDeferred()
-    .filter((t) => toolSearch.isLoaded(sessionId, t.name));
-  let deferred = loadedDeferred;
-  if (coreAllowlist) {
-    deferred = deferred.filter((t) => coreAllowlist.has(t.name));
-  }
-  return [...core, ...deferred].map((t) => ({
-    name: t.name,
-    description: t.description,
-    parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
-  }));
+  return resolveTools(params);
 }
 
 export function buildDeferredCatalogContent(
   toolSearch: ToolSearchService,
-  sessionId: string
+  sessionId: string,
+  policy?: ToolVisibilityPolicy
 ): string | null {
-  const unloaded = toolSearch.listUnloadedDeferred(sessionId);
+  const unloaded = toolSearch.listUnloadedDeferred(sessionId, policy);
   if (unloaded.length === 0) return null;
   const lines = unloaded.map(
     (t) => `- ${t.name}: ${t.shortDescription ?? t.description.slice(0, 80)}`

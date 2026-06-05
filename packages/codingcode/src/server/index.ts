@@ -6,8 +6,7 @@ import { modelsRouter } from './routes/models.js';
 import { approvalRouter } from './routes/approval.js';
 import { agentRouter } from './routes/agent.js';
 import { settingsRouter } from './routes/settings.js';
-import { AgentError } from '../core/error.js';
-import { AlreadyExistsError, NotFoundError } from '../settings/service.js';
+import { AgentError, AlreadyExistsError, NotFoundError } from '../core/error.js';
 
 export async function createServer(): Promise<Hono> {
   const app = new Hono();

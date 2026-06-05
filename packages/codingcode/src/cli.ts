@@ -5,7 +5,6 @@ import { createServer } from './server/index.js';
 import { AppLayer } from './layer.js';
 import { loadConfig, ensureUserConfig } from '../../infra/src/config.js';
 import { getWorkspaceCwd, initWorkspace, parseWorkspaceArgs } from './core/workspace.js';
-import { bootstrapApplication } from './orchestration/bootstrap.js';
 import { findAvailablePort } from './server/port-discovery.js';
 import { AgentError } from './core/error.js';
 
@@ -23,8 +22,6 @@ async function main() {
   const basePort = config.server.port;
 
   const program = Effect.gen(function* () {
-    yield* bootstrapApplication(getWorkspaceCwd());
-
     const port = yield* Effect.tryPromise(() => findAvailablePort(basePort));
 
     if (tuiOnly) {

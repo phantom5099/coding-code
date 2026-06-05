@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { globby } from 'globby';
 import { relative, resolve } from 'path';
 import type { ToolDefinition, ToolExecCtx } from '../../types';
-import { getWorkspaceCwd } from '../../../core/workspace.js';
 
 export const globTool: ToolDefinition = {
   name: 'search_files',
@@ -28,7 +27,7 @@ export const globTool: ToolDefinition = {
       path: string;
       max_results: number;
     };
-    const base = ctx?.projectPath ?? getWorkspaceCwd();
+    const base = ctx?.projectPath ?? process.cwd();
     const basePath = resolve(base, path);
 
     const files = await globby(pattern, {
