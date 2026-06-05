@@ -255,9 +255,9 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
               handler:
                 hc.type === 'observer'
                   ? (payload: Record<string, unknown>) =>
-                      executeHookCommand({ ...hc, enabled: true, env: {} }, payload)
+                      executeHookCommand({ command: hc.command, args: hc.args, env: {} }, payload)
                   : (payload: Record<string, unknown>) =>
-                      executeDecisionHookCommand({ ...hc, enabled: true, env: {} }, payload),
+                      executeDecisionHookCommand({ command: hc.command, args: hc.args, env: {} }, payload),
               priority: hc.priority ?? 0,
               source: 'user',
               type: hc.type,

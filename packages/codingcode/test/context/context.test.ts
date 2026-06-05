@@ -158,6 +158,7 @@ describe('ContextService', () => {
         disableSkill: () => Effect.succeed(undefined),
         enableSkill: () => Effect.succeed(undefined),
         listWithStatus: () => Effect.succeed([]),
+        evictProject: () => Effect.void,
       })
     );
 
@@ -172,6 +173,7 @@ describe('ContextService', () => {
         listUnloadedDeferred: () => [],
         search: () => [],
         reset: () => {},
+        disposeSession: () => {},
       })
     );
 

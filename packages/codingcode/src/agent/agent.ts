@@ -16,7 +16,7 @@ import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
 import { ToolSearchService } from '../tools/tool-search-service.js';
 import { sharedTodoStore } from '../self/todo.js';
-import { buildToolsForAgent, buildDeferredCatalogContent } from './build-tools.js';
+import { buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
 import { SkillService } from '../skills/index.js';
 import { McpService } from '../mcp/index.js';
@@ -242,7 +242,7 @@ export async function* runReActLoop(
   const model = state.sessionMeta?.model ?? 'unknown';
   const maxSteps = opts.maxStepsOverride ?? deps.maxSteps;
 
-  const { executor, toolRegistry, toolSearch, ctx, session, checkpoint, hooks } = deps;
+  const { executor, toolSearch, ctx, session, checkpoint, hooks } = deps;
 
   // For stop hook continue logic
   let stopContinuations = 0;

@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch';
 import { EXPLORE_PROFILE } from '../../src/subagent/registry';
 import type { AgentProfile } from '../../src/subagent/registry';
+import type { ProjectRuntimeService } from '../../src/runtime/project-runtime';
 
 const mockMcp = {
   connectServers: (_p: string, _s: string, _n: string[]) => Effect.void,
@@ -81,7 +82,8 @@ const mockSession = {
     }),
 };
 
-const mockRuntime = {
+const mockRuntime: ProjectRuntimeService = {
+  _tag: 'ProjectRuntime' as const,
   prepareProject: (_p: string) => Effect.void,
   resolveMainAgentProfile: (_p: string, _s: string) => EXPLORE_PROFILE,
   resolveSubagentProfile: (_p: string, name: string) => {

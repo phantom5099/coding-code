@@ -211,6 +211,7 @@ const MockToolSearchLayer = Layer.succeed(
     listUnloadedDeferred: () => [],
     search: () => [],
     reset: () => {},
+    disposeSession: () => {},
   })
 );
 
