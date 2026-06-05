@@ -116,7 +116,6 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
         state: childState,
         llm,
         systemOverride: profile.systemPrompt,
-        agentProfile: profile,
         toolPolicy: childPolicy,
         abortSignal: ctx?.signal,
         parentSessionId: ctx?.sessionId,

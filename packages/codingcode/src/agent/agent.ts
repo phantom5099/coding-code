@@ -26,6 +26,7 @@ import type { AgentProfile } from '../subagent/registry';
 import type { ToolVisibilityPolicy } from '../tools/visibility';
 import { ProjectRuntimeService } from '../runtime/project-runtime';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
+import { findModel, createClient } from '../llm/factory.js';
 import { STATIC_BUILTIN_TOOLS } from '../tools/providers.js';
 import { normalizePath } from '../core/path.js';
 
@@ -69,6 +70,28 @@ export const sendMessage = (
       mcp,
     });
 
+    // Apply main agent profile: model override, maxSteps, readonly, hooks, MCP
+    let activeLlm = llm;
+    if (profile.model) {
+      const entry = findModel(profile.model);
+      if (entry) {
+        const clientResult = yield* Effect.promise(() => createClient(entry));
+        if (clientResult.ok) activeLlm = clientResult.value;
+      }
+    }
+    const effectiveMaxSteps = profile.maxSteps;
+    const effectiveApproval: any = profile.readonly
+      ? { permissionMode: 'bypass' }
+      : options?.approvalOverride;
+
+    if (profile.hooks?.length) {
+      yield* hooks.attachSessionHooks(sid, profile.hooks);
+    }
+
+    if (profile.mcpServers?.length) {
+      yield* mcp.connectServers(normalizedCwd, sid, profile.mcpServers);
+    }
+
     const turnId = session.incrementTurn(state);
     const [matchedSkill, actualInput] = yield* skill.extractSkill(state.cwd, input);
 
@@ -79,13 +102,13 @@ export const sendMessage = (
 
     const stream = agent.runStream({
       state,
-      llm,
-      agentProfile: profile,
+      llm: activeLlm,
       toolPolicy: policy,
+      maxStepsOverride: effectiveMaxSteps,
+      approvalOverride: effectiveApproval,
       dispatchTool,
       skillInstruction: matchedSkill?.instruction,
       abortSignal: options?.signal,
-      approvalOverride: options?.approvalOverride,
     });
 
     return { stream, sessionId: sid };
@@ -150,7 +173,6 @@ export interface RunStreamOptions {
   systemPromptVariant?: SystemPromptVariant;
   systemOverride?: string;
   coreAllowlist?: ReadonlySet<string>;
-  agentProfile?: AgentProfile;
   toolPolicy?: ToolVisibilityPolicy;
   dispatchTool?: ToolDefinition;
   abortSignal?: AbortSignal;
