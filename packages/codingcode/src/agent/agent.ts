@@ -289,11 +289,9 @@ export async function* runReActLoop(
       let allToolDefs: ToolDefinition[] = [...STATIC_BUILTIN_TOOLS];
       if (opts.dispatchTool) allToolDefs = [...allToolDefs, opts.dispatchTool];
 
-      // Apply profile and policy filters
-      const allowedByProfile = opts.agentProfile?.tools ? new Set(opts.agentProfile.tools) : null;
+      // Apply policy filter (derived from AgentProfile.tools via getToolPolicy)
       const allowedByPolicy = opts.toolPolicy?.allowedTools;
       let filteredDefs = allToolDefs;
-      if (allowedByProfile) filteredDefs = filteredDefs.filter((t) => allowedByProfile.has(t.name));
       if (allowedByPolicy) filteredDefs = filteredDefs.filter((t) => allowedByPolicy.has(t.name));
 
       // Convert to ToolDescription for LLM

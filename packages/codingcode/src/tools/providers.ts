@@ -12,8 +12,6 @@ import { webFetchTool } from './domains/web/fetch.js';
 import { webSearchTool } from './domains/web/search.js';
 import { todoWriteTool } from './domains/self/todo-write.js';
 import { todoReadTool } from './domains/self/todo-read.js';
-import { createToolSearchTool } from './domains/self/tool-search.js';
-import { createDispatchAgentTool } from './domains/subagent/dispatch.js';
 
 export interface ToolBuildContext {
   projectPath: string;
@@ -37,8 +35,6 @@ export interface SessionToolResolver {
   }): ToolDescription[];
 }
 
-// ---- Static built-in tools (without context-dependent tools) ----
-
 export const STATIC_BUILTIN_TOOLS: ToolDefinition[] = [
   readFileTool,
   writeFileTool,
@@ -52,7 +48,7 @@ export const STATIC_BUILTIN_TOOLS: ToolDefinition[] = [
   todoReadTool,
 ];
 
-// ---- BuiltinToolProvider implementation ----
+// ---- Implementation factories ----
 
 export function createBuiltinToolProvider(): BuiltinToolProvider {
   return {
@@ -61,8 +57,6 @@ export function createBuiltinToolProvider(): BuiltinToolProvider {
     },
   };
 }
-
-// ---- ProjectToolProvider implementation ----
 
 export function createProjectToolProvider(
   listProjectMcpTools: (projectPath: string) => ToolDefinition[]
@@ -73,8 +67,6 @@ export function createProjectToolProvider(
     },
   };
 }
-
-// ---- SessionToolResolver implementation ----
 
 export function createSessionToolResolver(
   builtinProvider: BuiltinToolProvider,
@@ -94,23 +86,19 @@ export function createSessionToolResolver(
         sessionId: input.sessionId,
       };
 
-      // Collect all tools from providers
       let tools: ToolDefinition[] = [
         ...builtinProvider.listBuiltinTools(ctx),
         ...projectProvider.listProjectTools(input.projectPath, ctx),
       ];
 
-      // Add context-dependent tools (tool_search, dispatch_agent)
       tools.push(createToolSearch());
       tools.push(createDispatchAgent());
 
-      // Filter by profile tools whitelist
       if (input.profile.tools) {
         const allowed = new Set(input.profile.tools);
         tools = tools.filter((t) => allowed.has(t.name));
       }
 
-      // Filter by policy allowedTools
       if (input.policy.allowedTools) {
         tools = tools.filter((t) => input.policy.allowedTools!.has(t.name));
       }

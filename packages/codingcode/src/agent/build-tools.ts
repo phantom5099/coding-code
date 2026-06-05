@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import type { ToolDescription } from '../tools/types';
 import type { AgentProfile } from '../subagent/registry';
 import type { ToolVisibilityPolicy } from '../tools/visibility';
