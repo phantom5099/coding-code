@@ -7,7 +7,7 @@ import {
   TODO_MAX_ITEMS,
   TODO_MAX_STEP_LEN,
   type Todo,
-} from '../../../self/todo';
+} from '../../../agent/todo';
 
 const todoSchema = z.object({
   plan: z

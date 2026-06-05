@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AgentError } from '../../../core/error';
 import type { ToolDefinition } from '../../types';
-import { sharedTodoStore } from '../../../self/todo';
+import { sharedTodoStore } from '../../../agent/todo';
 
 export const todoReadTool: ToolDefinition = {
   name: 'todo_read',

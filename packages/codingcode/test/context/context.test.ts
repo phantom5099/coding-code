@@ -9,6 +9,8 @@ import { sendMessage } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
 import { ToolSearchService } from '../../src/tools/tool-search-service.js';
+import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
+import { ApprovalService } from '../../src/approval/index.js';
 
 const mockState = {
   sessionId: 'test-session',
@@ -186,6 +188,10 @@ describe('ContextService', () => {
       status: () => Effect.succeed([]),
     } as any);
 
+    const MockApprovalLayer = Layer.succeed(ApprovalService, {
+      evaluate: () => Effect.succeed({ type: 'allow' as const, level: 0 }),
+    } as any);
+
     const AllDeps = Layer.mergeAll(
       MockToolExecutorLayer,
       MockContextLayer,
@@ -194,10 +200,17 @@ describe('ContextService', () => {
       MockSkillLayer,
       HookLayer,
       MockToolSearchLayer,
-      MockMcpLayer
+      MockMcpLayer,
+      MockApprovalLayer
     );
 
-    const fullLayer = Layer.mergeAll(AgentService.Default.pipe(Layer.provide(AllDeps)), AllDeps);
+    const projectRuntimeLayer = ProjectRuntimeService.Default.pipe(
+      Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer))
+    );
+    const agentWithDeps = AgentService.Default.pipe(
+      Layer.provide(Layer.mergeAll(AllDeps, projectRuntimeLayer))
+    );
+    const fullLayer = Layer.mergeAll(AllDeps, projectRuntimeLayer, agentWithDeps);
 
     let sid1: string = '';
     // Step 1: send message in one Effect scope
