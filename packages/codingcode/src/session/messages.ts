@@ -2,6 +2,7 @@ import { join } from 'path';
 import type { Message } from '../core/types.js';
 import type { SessionEvent, AssistantEvent, TokenUsage } from './types.js';
 import { readHistory, resolveSessionDir } from './io.js';
+import { getContextConfig } from '../context/config.js';
 
 const COMPACTIBLE_TOOLS = new Set([
   'read_file',
@@ -13,8 +14,6 @@ const COMPACTIBLE_TOOLS = new Set([
   'write_file',
   'edit_file',
 ]);
-
-const MIN_CHARS_FOR_COMPACT = 50;
 
 export interface VisibilityResult {
   hidden: Set<string>;
@@ -106,7 +105,7 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
         if (
           compactedTurnIds.has(event.turnId) &&
           COMPACTIBLE_TOOLS.has(event.toolName.toLowerCase()) &&
-          event.output.length > MIN_CHARS_FOR_COMPACT
+          event.output.length > getContextConfig().microCompactMinChars
         ) {
           output = `[Earlier: used ${event.toolName}]`;
         }
