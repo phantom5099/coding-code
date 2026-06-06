@@ -31,7 +31,6 @@ describe('L5 Compaction', () => {
           ].join('\n'),
         },
       ],
-      method: 'auto-compact' as const,
       createdAt: new Date().toISOString(),
     };
 

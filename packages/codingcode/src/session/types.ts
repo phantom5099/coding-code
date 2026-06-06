@@ -47,7 +47,6 @@ export interface SummaryEvent {
   replaces: string[];
   summaryText: string;
   lastSummarizedTurnId: number;
-  method: 'prune' | 'collapse-llm' | 'auto-compact' | 'context-collapse';
   timestamp: string;
 }
 

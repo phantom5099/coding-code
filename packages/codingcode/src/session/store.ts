@@ -210,7 +210,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         state: SessionStoreState,
         replaces: string[],
         summaryText: string,
-        method: SummaryEvent['method'],
         lastSummarizedTurnId: number = 0
       ): Effect.Effect<SummaryEvent, AgentError> =>
         Effect.try({
@@ -221,7 +220,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
               replaces,
               summaryText,
               lastSummarizedTurnId,
-              method,
               timestamp: new Date().toISOString(),
             };
             appendLine(state.transcriptPath, event);

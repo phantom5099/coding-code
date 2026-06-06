@@ -171,7 +171,6 @@ async function tryCompaction(
     replaces: replacedUuids,
     summaryText: summary,
     lastSummarizedTurnId: lastTurnId,
-    method: 'auto-compact',
     timestamp: new Date().toISOString(),
   };
   appendSummaryToSession(sessionId, event);

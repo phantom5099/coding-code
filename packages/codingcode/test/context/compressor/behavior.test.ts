@@ -147,10 +147,9 @@ describe('compressor behavior', () => {
         const llm = makeMockLLM(summary);
         await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
-        const compactionSummaries = summaries.filter((s) => s.method === 'auto-compact');
-        expect(compactionSummaries.length).toBe(1);
-        expect(compactionSummaries[0]!.summaryText).toContain('### Goal');
-        expect(compactionSummaries[0]!.replaces.length).toBeGreaterThan(0);
+        expect(summaries.length).toBe(1);
+        expect(summaries[0]!.summaryText).toContain('### Goal');
+        expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
       }
@@ -182,7 +181,6 @@ describe('compressor behavior', () => {
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
-        expect(summaries[0]!.method).toBe('auto-compact');
         expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
