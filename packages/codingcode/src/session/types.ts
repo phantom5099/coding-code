@@ -89,7 +89,6 @@ export interface CompactEvent {
   uuid: string;
   startTurnId: number;
   endTurnId: number;
-  method: 'old-turn';
   timestamp: string;
 }
 

@@ -117,7 +117,6 @@ function applyOldTurnCompaction(
     uuid: randomUUID(),
     startTurnId,
     endTurnId,
-    method: 'old-turn',
     timestamp: new Date().toISOString(),
   };
   appendLine(jsonlPath, compactEvent);
