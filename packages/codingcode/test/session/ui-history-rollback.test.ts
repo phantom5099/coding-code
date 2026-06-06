@@ -149,7 +149,7 @@ describe('applyVisibilityEvents', () => {
           timestamp: new Date().toISOString(),
         },
       ];
-      const hidden = applyVisibilityEvents(events);
+      const { hidden } = applyVisibilityEvents(events);
       expect(hidden.has('u2')).toBe(true);
       expect(hidden.has('a2')).toBe(true);
       expect(hidden.has('u1')).toBe(true);
@@ -216,7 +216,7 @@ describe('applyVisibilityEvents', () => {
         timestamp: new Date().toISOString(),
       },
     ];
-    const hidden = applyVisibilityEvents(events);
+    const { hidden } = applyVisibilityEvents(events);
     expect(hidden.has('u2')).toBe(false);
     expect(hidden.has('a2')).toBe(false);
   });
@@ -256,7 +256,7 @@ describe('applyVisibilityEvents', () => {
         timestamp: new Date().toISOString(),
       },
     ];
-    const hidden = applyVisibilityEvents(events);
+    const { hidden } = applyVisibilityEvents(events);
     expect(hidden.has('u1')).toBe(true);
     expect(hidden.has('a1')).toBe(false);
   });

@@ -9,16 +9,22 @@ const { mockCompactWithLLM, mockLLM } = vi.hoisted(() => ({
         value: { content: '<summary>compacted</summary>' },
       })
     ),
+    completeStream: () => ({
+      stream: (async function* () {})(),
+      response: Promise.resolve({
+        ok: true as const,
+        value: { content: '<summary>compacted</summary>' },
+      }),
+    }),
+    modelInfo: {
+      provider: 'mock',
+      model: 'mock',
+      maxTokens: 100000,
+      supportsToolCalling: false,
+      supportsStreaming: true,
+    },
   },
 }));
-
-vi.mock('../../../src/context/compressor/index.js', async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...(actual as any),
-    compactWithLLM: mockCompactWithLLM,
-  };
-});
 
 vi.mock('../../../src/session/io.js', async (importOriginal) => {
   const actual = await importOriginal();
@@ -57,20 +63,12 @@ import { estimateTokens, estimateMessageTokens } from '../../../src/context/util
 
 function config(threshold: number, maxTokens = 10000) {
   return {
+    microCompactThreshold: 0.5,
+    microCompactMinChars: 120,
     compactionThreshold: threshold,
-    keepRecentTurns: 2,
-    minTurnsBetweenCompactions: 5,
+    keepRecentTurns: 1,
     compactionModel: '',
     reactiveCompactMaxRetries: 1,
-    reactiveCompactKeepTurns: 3,
-    tokenPruneThreshold: 0.8,
-    tokenPruneTurns: 2,
-    minTurnsBeforePrune: 5,
-    tokenPruneMinReleaseRatio: 0.5,
-    tokenPruneMaxExtraTurns: 2,
-    persistPreviewChars: 2000,
-    thresholdTokens: 2000,
-    toolResultBudgetThreshold: 50000,
   } as any;
 }
 
@@ -119,24 +117,19 @@ describe('compactIfNeeded', () => {
   });
 
   it('resets failure count after TTL expires', async () => {
-    // Force compactWithLLM to always return didCompress=false by setting currentTurnId too low
     (findSessionIndex as any).mockReturnValue({ currentTurnId: 0 });
 
-    // First 3 calls: compactWithLLM returns didCompress=false (insufficient turns)
     (estimateTokens as any).mockReturnValue(10000);
     await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
     await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
     await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
 
-    // 4th call blocked by failure tracker (failures >= 3)
     const blocked = await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
     expect(blocked.didCompress).toBe(false);
 
-    // Advance time past 24h TTL
     const originalNow = Date.now;
     vi.spyOn(Date, 'now').mockReturnValue(originalNow() + 25 * 60 * 60 * 1000);
 
-    // After TTL, failure count resets, compaction is attempted again (still fails due to turns)
     const afterTTL = await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
     expect(afterTTL.didCompress).toBe(false);
 

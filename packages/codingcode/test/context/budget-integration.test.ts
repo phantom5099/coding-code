@@ -1,33 +1,25 @@
 ﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { assemblePayload } from '../../src/context/organizer.js';
-import type { SessionEvent, ToolBudgetEvent } from '../../src/session/types.js';
+import type { SessionEvent } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
-function makeBudgetConfig() {
+function makeConfig() {
   return {
+    microCompactThreshold: 0.5,
+    microCompactMinChars: 120,
     compactionThreshold: 0.9,
-    keepRecentTurns: 3,
-    minTurnsBetweenCompactions: 5,
+    keepRecentTurns: 1,
     compactionModel: '',
     reactiveCompactMaxRetries: 3,
-    reactiveCompactKeepTurns: 3,
-    tokenPruneThreshold: 0.8,
-    tokenPruneTurns: 2,
-    minTurnsBeforePrune: 5,
-    tokenPruneMinReleaseRatio: 0.5,
-    tokenPruneMaxExtraTurns: 2,
-    persistPreviewChars: 2000,
-    thresholdTokens: 8000,
-    toolResultBudgetThreshold: 100, // low threshold for testing
-  } as any;
+  };
 }
 
-describe('applyToolResultBudget integration', () => {
+describe('assemblePayload integration', () => {
   const projectSlug = randomUUID();
   let sessionId: string;
   let sessionDir: string;
@@ -110,24 +102,19 @@ describe('applyToolResultBudget integration', () => {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
-  it('persists tool results when same-turn total exceeds budget', () => {
-    const config = makeBudgetConfig();
+  it('returns messages and compactedEvents', () => {
+    const config = makeConfig();
     const result = assemblePayload(sessionId, projectSlug, config);
 
-    // Check that at least one tool result was budgeted (replaced with persisted preview)
-    const toolMsgs = result.messages.filter((m: any) => m.role === 'tool');
-    expect(toolMsgs.length).toBe(2);
-    // Budget replaces from largest until under threshold; one of them should be replaced
-    const replacedCount = toolMsgs.filter((m: any) => m.content.includes('persisted at:')).length;
-    expect(replacedCount).toBeGreaterThanOrEqual(1);
-
-    // Check that newBudgets were returned for external persistence
-    expect(result.newBudgets.length).toBeGreaterThanOrEqual(1);
+    expect(result.messages.length).toBeGreaterThan(0);
+    expect(Array.isArray(result.compactedEvents)).toBe(true);
+    expect(result.currentTurnId).toBe(1);
+    expect(result.promptEstimate).toBeGreaterThan(0);
   });
 
-  it('returns newBudgets array', () => {
-    const config = makeBudgetConfig();
+  it('returns currentTurnId from session index', () => {
+    const config = makeConfig();
     const result = assemblePayload(sessionId, projectSlug, config);
-    expect(Array.isArray(result.newBudgets)).toBe(true);
+    expect(result.currentTurnId).toBe(1);
   });
 });

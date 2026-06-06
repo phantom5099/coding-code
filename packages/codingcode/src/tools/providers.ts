@@ -11,7 +11,6 @@ import { globTool } from './domains/fs/glob.js';
 import { webFetchTool } from './domains/web/fetch.js';
 import { webSearchTool } from './domains/web/search.js';
 import { todoWriteTool } from './domains/self/todo-write.js';
-import { todoReadTool } from './domains/self/todo-read.js';
 
 export interface ToolBuildContext {
   projectPath: string;
@@ -45,7 +44,6 @@ export const STATIC_BUILTIN_TOOLS: ToolDefinition[] = [
   webFetchTool,
   webSearchTool,
   todoWriteTool,
-  todoReadTool,
 ];
 
 // ---- Implementation factories ----

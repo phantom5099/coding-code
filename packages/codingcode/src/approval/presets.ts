@@ -91,7 +91,6 @@ export const READONLY_TOOL_NAMES: string[] = [
   'fetch_url',
   'web_search',
   'tool_search',
-  'todo_read',
   'todo_write',
 ];
 

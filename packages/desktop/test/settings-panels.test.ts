@@ -195,7 +195,6 @@ const AVAILABLE_TOOLS = [
   'search_files',
   'fetch_url',
   'web_search',
-  'todo_read',
   'todo_write',
   'tool_search',
   'dispatch_agent',

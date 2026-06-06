@@ -196,7 +196,9 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should respect spawn.before deny decision', async () => {
-    const emitDecisionFn = vi.fn().mockReturnValue(Effect.succeed({ decision: 'deny', reason: 'Not allowed' }));
+    const emitDecisionFn = vi
+      .fn()
+      .mockReturnValue(Effect.succeed({ decision: 'deny', reason: 'Not allowed' }));
     const tool = createDispatchAgentTool({
       session: mockSession as any,
       approval: mockApproval as any,
