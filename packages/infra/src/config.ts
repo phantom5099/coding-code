@@ -52,7 +52,7 @@ export interface AppConfig {
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
-  microCompactThreshold: 0.5,
+  microCompactThreshold: 0.25,
   microCompactMinChars: 120,
   compactionThreshold: 0.9,
   keepRecentTurns: 1,
