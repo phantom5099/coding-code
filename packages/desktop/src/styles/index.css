@@ -21,11 +21,11 @@
   /* 文字层级 */
   --text-primary: #ccc;
   --text-title: #ddd;
-  --text-secondary: #aaa;
-  --text-tertiary: #888;
-  --text-muted: #666;
-  --text-placeholder: #555;
-  --text-disabled: #444;
+  --text-secondary: #bbb;
+  --text-tertiary: #999;
+  --text-muted: #777;
+  --text-placeholder: #777;
+  --text-disabled: #666;
   --text-inverse: #111;
   --text-white: #fff;
 
@@ -67,14 +67,14 @@
   --diff-hunk-header: #888;
 
   /* 语义标签 */
-  --tag-decision-bg: #2a1a10;
-  --tag-decision-text: #ce9178;
-  --tag-action-bg: #1a2a1a;
-  --tag-action-text: #6a9955;
-  --tag-info-bg: #1a1a3a;
-  --tag-info-text: var(--accent-primary);
-  --tag-mcp-bg: #2a1a2a;
-  --tag-mcp-text: #c586c0;
+  --tag-decision-bg: #3a2010;
+  --tag-decision-text: #ff9f6b;
+  --tag-action-bg: #1a3a1a;
+  --tag-action-text: #7ee787;
+  --tag-info-bg: #1a2a4a;
+  --tag-info-text: #4fc3f7;
+  --tag-mcp-bg: #3a1a3a;
+  --tag-mcp-text: #f48fb1;
 
   /* 遮罩层 */
   --overlay-bg: rgba(0, 0, 0, 0.5);
@@ -108,8 +108,8 @@
   --text-secondary: #444;
   --text-tertiary: #666;
   --text-muted: #888;
-  --text-placeholder: #aaa;
-  --text-disabled: #bbb;
+  --text-placeholder: #888;
+  --text-disabled: #777;
   --text-inverse: #fff;
   --text-white: #fff;
 
@@ -149,13 +149,13 @@
 
   /* 语义标签 */
   --tag-decision-bg: #fff3e0;
-  --tag-decision-text: #e65100;
+  --tag-decision-text: #ea580c;
   --tag-action-bg: #e8f5e9;
-  --tag-action-text: #2e7d32;
+  --tag-action-text: #16a34a;
   --tag-info-bg: #e3f2fd;
-  --tag-info-text: var(--accent-primary);
+  --tag-info-text: #0284c7;
   --tag-mcp-bg: #f3e5f5;
-  --tag-mcp-text: #7b1fa2;
+  --tag-mcp-text: #9333ea;
 
   /* 遮罩层 */
   --overlay-bg: rgba(0, 0, 0, 0.35);
@@ -189,8 +189,8 @@
   --text-secondary: #4a4840;
   --text-tertiary: #5c5a55;
   --text-muted: #7a7872;
-  --text-placeholder: #999790;
-  --text-disabled: #b5b3ad;
+  --text-placeholder: #8a8880;
+  --text-disabled: #6a6860;
   --text-inverse: #fff;
   --text-white: #fff;
 
@@ -230,13 +230,13 @@
 
   /* 语义标签 */
   --tag-decision-bg: #f0e6d8;
-  --tag-decision-text: #8b4513;
+  --tag-decision-text: #c2410c;
   --tag-action-bg: #e0ece3;
-  --tag-action-text: #2d6a3d;
+  --tag-action-text: #15803d;
   --tag-info-bg: #d4e6f1;
-  --tag-info-text: var(--accent-primary);
+  --tag-info-text: #0369a1;
   --tag-mcp-bg: #e8dde8;
-  --tag-mcp-text: #6a1b6a;
+  --tag-mcp-text: #7c3aed;
 
   /* 遮罩层 */
   --overlay-bg: rgba(0, 0, 0, 0.35);

@@ -203,7 +203,7 @@ export default function HooksPanel() {
   const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
   const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
   const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
-  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] hover:bg-[var(--border-hover)]';
+  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
 
   if (loading) {
     return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
@@ -298,7 +298,7 @@ export default function HooksPanel() {
                       {h.point}
                     </span>
                     {!h.enabled && (
-                      <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--border-card)] text-[var(--text-placeholder)]">
+                      <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-decision-bg)] text-[var(--tag-decision-text)]">
                         已禁用
                       </span>
                     )}
@@ -463,7 +463,7 @@ function FormCard({
               className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
                 form.type === 'observer'
                   ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]'
-                  : 'bg-[var(--border-card)] text-[var(--text-tertiary)]'
+                  : 'bg-[var(--border-card)] text-[var(--text-secondary)] border border-[var(--border-hover)]'
               }`}
             >
               observer
@@ -473,7 +473,7 @@ function FormCard({
               className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
                 form.type === 'decision'
                   ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]'
-                  : 'bg-[var(--border-card)] text-[var(--text-tertiary)]'
+                  : 'bg-[var(--border-card)] text-[var(--text-secondary)] border border-[var(--border-hover)]'
               }`}
             >
               decision

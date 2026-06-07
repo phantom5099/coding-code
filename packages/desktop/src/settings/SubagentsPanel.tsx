@@ -178,7 +178,7 @@ export default function SubagentsPanel() {
   const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
   const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
   const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
-  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] hover:bg-[var(--border-hover)]';
+  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
 
   if (loading) {
     return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
@@ -283,7 +283,7 @@ export default function SubagentsPanel() {
                         </span>
                       )}
                       {isBuiltIn && (
-                        <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--border-card)] text-[var(--text-placeholder)]">
+                        <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-info-bg)] text-[var(--tag-info-text)]">
                           内置
                         </span>
                       )}
@@ -294,7 +294,7 @@ export default function SubagentsPanel() {
                         {a.tools.map((t) => (
                           <span
                             key={t}
-                            className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--border-default)] text-[var(--text-muted)] font-mono"
+                            className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--tag-decision-bg)] text-[var(--tag-decision-text)] font-mono"
                           >
                             {t}
                           </span>
@@ -306,7 +306,7 @@ export default function SubagentsPanel() {
                         {a.mcpServers.map((s) => (
                           <span
                             key={s}
-                            className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--tag-action-bg)] text-[var(--accent-success)] font-mono"
+                            className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--tag-mcp-bg)] text-[var(--tag-mcp-text)] font-mono"
                           >
                             {s}
                           </span>
