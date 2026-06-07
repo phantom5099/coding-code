@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { ChevronLeft, ChevronRight, Plus, Search, Zap, Settings } from 'lucide-react';
 import { useGlobalStore } from '../stores/global.store';
 import { api } from '../lib/api';
 
@@ -75,7 +76,7 @@ export default function AgentSidebar() {
           title="展开侧边栏"
           className="w-7 h-7 flex items-center justify-center text-[#555] hover:text-[#ccc] hover:bg-[#252525] rounded transition-colors"
         >
-          ›
+          <ChevronRight size={16} strokeWidth={1.5} />
         </button>
       </div>
     );
@@ -92,9 +93,9 @@ export default function AgentSidebar() {
           type="button"
           onClick={toggleSidebar}
           title="收起侧边栏"
-          className="w-7 h-7 flex items-center justify-center text-[#555] hover:text-[#ccc] hover:bg-[#252525] rounded transition-colors text-base"
+          className="w-7 h-7 flex items-center justify-center text-[#555] hover:text-[#ccc] hover:bg-[#252525] rounded transition-colors"
         >
-          ‹
+          <ChevronLeft size={16} strokeWidth={1.5} />
         </button>
       </div>
 
@@ -105,15 +106,15 @@ export default function AgentSidebar() {
           onClick={() => setCurrentThread(null)}
           className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-[14px] text-[#bbb] hover:text-white hover:bg-[#252525] transition-colors border border-[#2a2a2a] hover:border-[#3a3a3a]"
         >
-          <span className="text-base leading-none">+</span>
+          <Plus size={16} strokeWidth={1.5} />
           <span>新对话</span>
         </button>
       </div>
 
       {/* 功能导航 */}
       <nav className="px-2 pt-1 pb-3 space-y-0.5">
-        <NavItem icon="🔍" label="搜索" shortcut="Ctrl+G" />
-        <NavItem icon="⚡" label="自动化" />
+        <NavItem icon={<Search size={16} strokeWidth={1.5} />} label="搜索" shortcut="Ctrl+G" />
+        <NavItem icon={<Zap size={16} strokeWidth={1.5} />} label="自动化" />
       </nav>
 
       <div className="mx-3 border-t border-[#222]" />
@@ -195,7 +196,7 @@ export default function AgentSidebar() {
           onClick={() => useGlobalStore.getState().setView('settings')}
           className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#555] hover:text-[#ccc] hover:bg-[#252525] rounded-lg transition-colors"
         >
-          <span>⚙</span>
+          <Settings size={16} strokeWidth={1.5} />
           <span>设置</span>
         </button>
       </div>
@@ -203,13 +204,13 @@ export default function AgentSidebar() {
   );
 }
 
-function NavItem({ icon, label, shortcut }: { icon: string; label: string; shortcut?: string }) {
+function NavItem({ icon, label, shortcut }: { icon: React.ReactNode; label: string; shortcut?: string }) {
   return (
     <button
       type="button"
       className="w-full flex items-center gap-2.5 px-4 py-2 rounded-lg text-[14px] text-[#666] hover:text-[#ccc] hover:bg-[#1e1e1e] transition-colors"
     >
-      <span className="w-4 text-center shrink-0">{icon}</span>
+      <span className="w-4 flex items-center justify-center shrink-0">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
       {shortcut && <span className="text-[11px] text-[#333]">{shortcut}</span>}
     </button>
