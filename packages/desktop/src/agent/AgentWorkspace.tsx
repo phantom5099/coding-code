@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Send, Square, ShieldAlert, ShieldCheck, Shield, Eye } from 'lucide-react';
 import { useGlobalStore } from '../stores/global.store';
 import { API_BASE, api } from '../lib/api';
 import { setSessionPermissionMode } from '../lib/core-api';
@@ -250,6 +251,12 @@ function InputBox({
     'full-allow': 'read-only',
     'read-only': 'ask-all',
   };
+  const POLICY_ICONS: Record<string, React.ReactNode> = {
+    'ask-all': <ShieldAlert size={14} strokeWidth={1.5} />,
+    'smart-allow': <ShieldCheck size={14} strokeWidth={1.5} />,
+    'full-allow': <Shield size={14} strokeWidth={1.5} />,
+    'read-only': <Eye size={14} strokeWidth={1.5} />,
+  };
 
   return (
     <div className={centered ? 'w-full max-w-[740px]' : 'px-5 pb-5 pt-2'}>
@@ -276,18 +283,18 @@ function InputBox({
             <button
               type="button"
               onClick={() => abort()}
-              className="w-9 h-9 shrink-0 flex items-center justify-center bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#ccc] rounded-full transition-colors text-sm"
+              className="w-9 h-9 shrink-0 flex items-center justify-center bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#ccc] rounded-full transition-colors"
             >
-              ■
+              <Square size={14} strokeWidth={2} fill="currentColor" />
             </button>
           ) : (
             <button
               type="button"
               onClick={handleSend}
               disabled={!text.trim()}
-              className="w-9 h-9 shrink-0 flex items-center justify-center bg-white disabled:bg-[#2a2a2a] disabled:text-[#444] text-[#111] rounded-full transition-colors font-bold text-base"
+              className="w-9 h-9 shrink-0 flex items-center justify-center bg-white disabled:bg-[#2a2a2a] disabled:text-[#444] text-[#111] rounded-full transition-colors"
             >
-              ↑
+              <Send size={18} strokeWidth={2} />
             </button>
           )}
         </div>
@@ -315,7 +322,7 @@ function InputBox({
             }}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors"
           >
-            <span className="text-[#569cd6] text-[10px]">⊙</span>
+            <span className="text-[#569cd6]">{POLICY_ICONS[approvalPolicy]}</span>
             <span>{POLICY_LABELS[approvalPolicy] ?? '全部询问'}</span>
             <span className="text-[#3c3c3c] text-[10px]">▾</span>
           </button>
