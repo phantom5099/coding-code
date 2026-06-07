@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@codingcode/core": "workspace:*",
+    "@tanstack/react-virtual": "^3.12.6",
     "immer": "^10.1.1",
     "lucide-react": "^1.17.0",
     "prismjs": "^1.30.0",
@@ -20,7 +21,6 @@
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.7",
-    "@tanstack/react-virtual": "^3.12.6",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "simple-git": "^3.27.0",
@@ -28,6 +28,8 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.8",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
@@ -35,6 +37,7 @@
     "electron": "^35.5.0",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.1.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.1.8",
     "typescript": "^5.8.3"
   }

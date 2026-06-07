@@ -1,9 +1,11 @@
 import { useState, useRef, useLayoutEffect, memo } from 'react';
+import { Copy, Check } from 'lucide-react';
 import type { Item } from '@shared/types';
 import ToolCallCard from './ToolCallCard';
 import DiffBlock from './DiffBlock';
 import ToolSummary from './ToolSummary';
 import MarkdownRenderer from './MarkdownRenderer';
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 
 interface MessageItemProps {
   item: Item;
@@ -34,9 +36,12 @@ const MessageItem = memo(function MessageItem({
   const rollbackBtnRef = useRef<HTMLButtonElement>(null);
   const rollbackMenuRef = useRef<HTMLDivElement>(null);
   const [menuFlip, setMenuFlip] = useState<{ vertical?: boolean; horizontal?: boolean }>({});
+  const { copiedId, copy } = useCopyToClipboard();
 
   const messageContent = item.type === 'message' ? item.content : null;
   const isAssistant = item.type === 'message' && item.role === 'assistant';
+
+  const isCopied = copiedId === `msg-${item.id}`;
 
   // Dynamically flip menu if it would overflow the viewport
   useLayoutEffect(() => {
@@ -62,8 +67,8 @@ const MessageItem = memo(function MessageItem({
 
     if (isUser) {
       return (
-        <div className="flex justify-end mb-4 mt-4">
-          <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[var(--border-card)] text-[var(--text-title)] text-[15px] leading-relaxed whitespace-pre-wrap break-words group">
+        <div className="flex flex-col items-end mb-4 mt-4 group">
+          <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[var(--border-card)] text-[var(--text-title)] text-[15px] leading-relaxed whitespace-pre-wrap break-words">
             {content}
             {hasRollback && (
               <div className="absolute -right-1 -bottom-1">
@@ -114,12 +119,31 @@ const MessageItem = memo(function MessageItem({
               </div>
             )}
           </div>
+          <div className="mt-1.5 mr-1 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                copy(content, `msg-${item.id}`);
+              }}
+              aria-label="复制消息"
+              title="复制"
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-colors ${
+                isCopied
+                  ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+              }`}
+            >
+              {isCopied ? <Check size={12} /> : <Copy size={12} />}
+              {isCopied ? '已复制' : '复制'}
+            </button>
+          </div>
         </div>
       );
     }
 
     return (
-      <div className="flex justify-start mb-1 pl-8">
+      <div className="flex flex-col items-start mb-1 pl-8 group">
         <div className="max-w-[80%] text-[15px] text-[var(--text-primary)] leading-relaxed">
           {isAssistant && messageContent != null && (
             <MarkdownRenderer content={messageContent} />
@@ -128,6 +152,27 @@ const MessageItem = memo(function MessageItem({
             <span className="inline-block w-1.5 h-[1.1em] bg-[var(--accent-primary)] animate-pulse ml-0.5 align-middle" />
           )}
         </div>
+        {isAssistant && !item.partial && messageContent != null && (
+          <div className="max-w-[80%] mt-1.5 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                copy(messageContent || '', `msg-${item.id}`);
+              }}
+              aria-label="复制消息"
+              title="复制"
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-colors ${
+                isCopied
+                  ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+              }`}
+            >
+              {isCopied ? <Check size={12} /> : <Copy size={12} />}
+              {isCopied ? '已复制' : '复制'}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
