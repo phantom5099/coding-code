@@ -1,9 +1,9 @@
-import { useState, useRef, useLayoutEffect, useMemo } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import type { Item } from '@shared/types';
-import CodeBlock from './CodeBlock';
 import ToolCallCard from './ToolCallCard';
 import DiffBlock from './DiffBlock';
 import ToolSummary from './ToolSummary';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface MessageItemProps {
   item: Item;
@@ -16,37 +16,7 @@ interface MessageItemProps {
   toolResult?: Item & { type: 'tool_result' };
 }
 
-function parseMarkdown(text: string): React.ReactNode {
-  const blocks: React.ReactNode[] = [];
-  let remaining = text;
-  let key = 0;
 
-  while (remaining.length > 0) {
-    const codeMatch = remaining.match(/```(\w*)\n?([\s\S]*?)```/);
-    if (codeMatch && codeMatch.index !== undefined) {
-      if (codeMatch.index > 0) {
-        blocks.push(
-          <span key={key++} className="whitespace-pre-wrap">
-            {remaining.slice(0, codeMatch.index)}
-          </span>
-        );
-      }
-      blocks.push(
-        <CodeBlock key={key++} code={codeMatch[2] ?? ''} language={codeMatch[1] || undefined} />
-      );
-      remaining = remaining.slice(codeMatch.index + codeMatch[0].length);
-    } else {
-      blocks.push(
-        <span key={key++} className="whitespace-pre-wrap">
-          {remaining}
-        </span>
-      );
-      break;
-    }
-  }
-
-  return <>{blocks}</>;
-}
 
 export default function MessageItem({
   item,
@@ -65,13 +35,8 @@ export default function MessageItem({
   const rollbackMenuRef = useRef<HTMLDivElement>(null);
   const [menuFlip, setMenuFlip] = useState<{ vertical?: boolean; horizontal?: boolean }>({});
 
-  // Cache markdown parsing — only re-parses when content changes
   const messageContent = item.type === 'message' ? item.content : null;
   const isAssistant = item.type === 'message' && item.role === 'assistant';
-  const parsedContent = useMemo(
-    () => (isAssistant && messageContent != null ? parseMarkdown(messageContent) : null),
-    [isAssistant, messageContent]
-  );
 
   // Dynamically flip menu if it would overflow the viewport
   useLayoutEffect(() => {
@@ -156,7 +121,9 @@ export default function MessageItem({
     return (
       <div className="flex justify-start mb-4">
         <div className="max-w-[88%] text-[15px] text-[#d4d4d4] leading-relaxed">
-          {parsedContent}
+          {isAssistant && messageContent != null && (
+            <MarkdownRenderer content={messageContent} />
+          )}
           {item.partial && (
             <span className="inline-block w-1.5 h-[1.1em] bg-[#569cd6] animate-pulse ml-0.5 align-middle" />
           )}

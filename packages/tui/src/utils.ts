@@ -56,47 +56,4 @@ export function historyToUIMessages(history: SessionEvent[]): UIMessage[] {
   return messages;
 }
 
-export interface ParsedBlock {
-  type: 'text' | 'code';
-  content: string;
-  language?: string;
-}
 
-export function parseCodeBlocks(text: string): ParsedBlock[] {
-  const blocks: ParsedBlock[] = [];
-  const lines = text.split('\n');
-  let currentText = '';
-  let inCode = false;
-  let codeContent = '';
-  let codeLang = 'text';
-
-  for (const line of lines) {
-    if (line.startsWith('```')) {
-      if (inCode) {
-        blocks.push({ type: 'code', content: codeContent.trimEnd(), language: codeLang });
-        inCode = false;
-        codeContent = '';
-      } else {
-        if (currentText) {
-          blocks.push({ type: 'text', content: currentText.trimEnd() });
-          currentText = '';
-        }
-        codeLang = line.replace('```', '').trim() || 'text';
-        inCode = true;
-      }
-    } else if (inCode) {
-      codeContent += line + '\n';
-    } else {
-      currentText += line + '\n';
-    }
-  }
-
-  if (currentText) {
-    blocks.push({ type: 'text', content: currentText.trimEnd() });
-  }
-  if (inCode && codeContent) {
-    blocks.push({ type: 'code', content: codeContent.trimEnd(), language: codeLang });
-  }
-
-  return blocks;
-}
