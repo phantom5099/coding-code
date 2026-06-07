@@ -119,7 +119,7 @@ export default function MessageItem({
     }
 
     return (
-      <div className="flex justify-start mb-4 pl-8">
+      <div className="flex justify-start mb-1 pl-8">
         <div className="max-w-[80%] text-[15px] text-[var(--text-primary)] leading-relaxed">
           {isAssistant && messageContent != null && (
             <MarkdownRenderer content={messageContent} />
@@ -134,7 +134,7 @@ export default function MessageItem({
 
   if (item.type === 'reasoning') {
     return (
-      <div className="mb-3">
+      <div className="mb-1.5 pl-8">
         <button
           type="button"
           onClick={() => setReasoningOpen((v) => !v)}
@@ -162,7 +162,7 @@ export default function MessageItem({
       const cmd = typeof a.command === 'string' ? a.command : '';
       const label = path || cmd || item.name;
       return (
-        <div className="mb-2 flex items-center gap-1.5 text-[13px] text-[var(--text-tertiary)]">
+        <div className="mb-1 flex items-center gap-1.5 text-[13px] text-[var(--text-tertiary)] pl-8">
           <span className="font-mono text-[var(--text-primary)]">{label}</span>
           <span className="text-[var(--text-muted)]">等待审批</span>
         </div>
@@ -175,7 +175,7 @@ export default function MessageItem({
 
     const isRejected = item.status === 'rejected';
     return (
-      <div className="mb-2 flex items-center gap-1.5 text-[13px]">
+      <div className="mb-1 flex items-center gap-1.5 text-[13px] pl-8">
         <span className={`font-mono ${isRejected ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}>
           {item.name}
         </span>
@@ -195,7 +195,7 @@ export default function MessageItem({
 
   if (item.type === 'error') {
     return (
-      <div className="mb-3 px-4 py-3 rounded-lg bg-[var(--accent-danger-bg)] border border-[var(--accent-danger-border)] text-[var(--accent-danger)] text-[14px] leading-relaxed">
+      <div className="mb-1.5 px-4 py-3 pl-8 rounded-lg bg-[var(--accent-danger-bg)] border border-[var(--accent-danger-border)] text-[var(--accent-danger)] text-[14px] leading-relaxed">
         {item.message}
       </div>
     );

@@ -106,7 +106,7 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
   const hasContent = !!(toolResult?.diff || toolResult?.output);
 
   return (
-    <div className="mb-3">
+    <div className="mb-1.5 pl-8">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
