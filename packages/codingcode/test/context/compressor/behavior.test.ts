@@ -107,20 +107,12 @@ function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
 
 function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
   return {
+    microCompactThreshold: 0.5,
+    microCompactMinChars: 120,
     compactionThreshold: 0.5,
     keepRecentTurns: 2,
-    minTurnsBetweenCompactions: 3,
     compactionModel: '',
     reactiveCompactMaxRetries: 1,
-    reactiveCompactKeepTurns: 3,
-    tokenPruneThreshold: 0.8,
-    tokenPruneTurns: 2,
-    minTurnsBeforePrune: 5,
-    tokenPruneMinReleaseRatio: 0.5,
-    tokenPruneMaxExtraTurns: 2,
-    persistPreviewChars: 2000,
-    thresholdTokens: 2000,
-    toolResultBudgetThreshold: 50000,
     ...overrides,
   };
 }
@@ -149,30 +141,15 @@ describe('compressor behavior', () => {
     it('writes summary event with five-section system summary', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
+        const cfg = tinyConfig({ keepRecentTurns: 2 });
         const summary =
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
         await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
-        const compactionSummaries = summaries.filter((s) => s.method === 'auto-compact');
-        expect(compactionSummaries.length).toBe(1);
-        expect(compactionSummaries[0]!.summaryText).toContain('### Goal');
-        expect(compactionSummaries[0]!.replaces.length).toBeGreaterThan(0);
-      } finally {
-        cleanup(fx.slug);
-      }
-    });
-
-    it('skips L5 when not enough turns to satisfy minTurnsBetweenCompactions', async () => {
-      const fx = makeFixture({ numTurns: 3 });
-      try {
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 5, keepRecentTurns: 1 });
-        const llm = makeMockLLM('summary');
-        const result = await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
-        expect(result.didCompress).toBe(false);
-        const summaries = readSummaryEvents(fx.transcriptPath);
-        expect(summaries).toHaveLength(0);
+        expect(summaries.length).toBe(1);
+        expect(summaries[0]!.summaryText).toContain('### Goal');
+        expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
       }
@@ -181,7 +158,7 @@ describe('compressor behavior', () => {
     it('returns no-op when no LLM available', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
+        const cfg = tinyConfig({ keepRecentTurns: 2 });
         const result = await compactWithLLM(fx.sessionId, fx.slug, cfg, null);
         expect(result.didCompress).toBe(false);
         const summaries = readSummaryEvents(fx.transcriptPath);
@@ -196,7 +173,7 @@ describe('compressor behavior', () => {
     it('appends summary event directly to JSONL after L5', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
+        const cfg = tinyConfig({ keepRecentTurns: 2 });
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
@@ -204,7 +181,6 @@ describe('compressor behavior', () => {
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
-        expect(summaries[0]!.method).toBe('auto-compact');
         expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
@@ -217,7 +193,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
         const before = estimateTokens(buildMessages(fx.transcriptPath));
-        const cfg = tinyConfig({ minTurnsBetweenCompactions: 3, keepRecentTurns: 2 });
+        const cfg = tinyConfig({ keepRecentTurns: 2 });
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );

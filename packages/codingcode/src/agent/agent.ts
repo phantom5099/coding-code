@@ -271,14 +271,9 @@ export async function* runReActLoop(
   const maxStopContinuations = opts.maxStopContinuations ?? deps.maxStopContinuations;
 
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
-    const { messages, newBudgets } = Effect.runSync(
+    const { messages } = Effect.runSync(
       ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens)
     );
-    if (newBudgets.length > 0) {
-      for (const ev of newBudgets) {
-        appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');
-      }
-    }
     let lastResult: Result<string, AgentError> | null = null;
     let overflow = false;
 
@@ -354,11 +349,6 @@ export async function* runReActLoop(
         const rebuilt = Effect.runSync(
           ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens)
         );
-        if (rebuilt.newBudgets.length > 0) {
-          for (const ev of rebuilt.newBudgets) {
-            appendFileSync(state.transcriptPath, JSON.stringify(ev) + '\n', 'utf8');
-          }
-        }
         messages.length = 0;
         messages.push(...rebuilt.messages);
         state.usage = undefined;
@@ -389,7 +379,6 @@ export async function* runReActLoop(
       const llmResult = await respPromise;
       if (!llmResult.ok) {
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
-          const aggressiveConfig = { ...config, keepRecentTurns: config.reactiveCompactKeepTurns };
           const compressResult = await Effect.runPromise(
             ctx.compress(
               state.sessionId,
@@ -397,7 +386,7 @@ export async function* runReActLoop(
               null,
               undefined,
               llm.modelInfo.maxTokens,
-              aggressiveConfig
+              config
             )
           );
           yield {
@@ -540,7 +529,7 @@ export async function* runReActLoop(
               : (r.output ?? '');
           messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
         }
-        if (!todoPrinted && (r.name === 'todo_write' || r.name === 'todo_read')) {
+        if (!todoPrinted && r.name === 'todo_write') {
           yield { _tag: 'TodoUpdate', items: sharedTodoStore.read(sessionId) };
           todoPrinted = true;
         }

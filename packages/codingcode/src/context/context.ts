@@ -37,6 +37,8 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
             encodedProjectPath,
             cfg,
             llm,
+            undefined,
+            undefined,
             usage,
             modelMaxTokens
           );
@@ -47,7 +49,9 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         llm: LLMClient | null,
         messages: import('../core/types.js').Message[],
         modelMaxTokens: number,
-        config?: ContextConfig
+        config?: ContextConfig,
+        compactedEvents?: import('../session/types.js').SessionEvent[],
+        currentTurnId?: number
       ): Effect.Effect<CompressResult> =>
         Effect.promise(async () => {
           const cfg = config ?? getContextConfig();
@@ -57,7 +61,9 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
             messages,
             modelMaxTokens,
             cfg,
-            llm
+            llm,
+            compactedEvents,
+            currentTurnId
           );
         }),
     };

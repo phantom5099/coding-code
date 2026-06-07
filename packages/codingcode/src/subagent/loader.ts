@@ -272,7 +272,6 @@ export const DEFAULT_MAIN_PROFILE: AgentProfile = {
     'search_code',
     'search_files',
     'todo_write',
-    'todo_read',
     'dispatch_agent',
     'tool_search',
   ],

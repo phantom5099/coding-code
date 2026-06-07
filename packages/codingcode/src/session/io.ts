@@ -249,18 +249,3 @@ export function enqueueWrite(sessionId: string, path: string, data: unknown): vo
     });
   writeQueues.set(sessionId, task);
 }
-
-export function persistToolResult(
-  encodedProjectPath: string,
-  sessionId: string,
-  toolCallId: string,
-  content: string
-): { path: string; bytes: number } {
-  const dir = join(PROJECT_BASE, encodedProjectPath, 'tool-results', sessionId);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const file = join(dir, `${toolCallId}.txt`);
-  if (!existsSync(file)) {
-    writeFileSync(file, content, 'utf8');
-  }
-  return { path: file.replace(/\\/g, '/'), bytes: Buffer.byteLength(content, 'utf8') };
-}

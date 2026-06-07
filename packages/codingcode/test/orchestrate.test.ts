@@ -102,7 +102,6 @@ const MockSessionLayer = Layer.succeed(
         uuid: 's1',
         replaces: [],
         summaryText: '',
-        method: 'prune' as const,
         timestamp: new Date().toISOString(),
       }),
     hideMessage: () =>

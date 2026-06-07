@@ -73,15 +73,10 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       // Create subagent transcript nested under parent session
       const childUuid = randomUUID();
 
-      const createEffect = deps.session.create(
-        projectPath,
-        ctx?.model ?? 'subagent',
-        childUuid,
-        {
-          parentSessionId: ctx?.sessionId,
-          agentName: agentName,
-        }
-      );
+      const createEffect = deps.session.create(projectPath, ctx?.model ?? 'subagent', childUuid, {
+        parentSessionId: ctx?.sessionId,
+        agentName: agentName,
+      });
 
       const childState = await Effect.runPromise(createEffect);
       deps.session.incrementTurn(childState);

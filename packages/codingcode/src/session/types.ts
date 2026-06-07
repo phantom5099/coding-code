@@ -46,7 +46,7 @@ export interface SummaryEvent {
   uuid: string;
   replaces: string[];
   summaryText: string;
-  method: 'prune' | 'collapse-llm' | 'auto-compact' | 'context-collapse';
+  lastSummarizedTurnId: number;
   timestamp: string;
 }
 
@@ -84,13 +84,11 @@ export interface TitleEvent {
   timestamp: string;
 }
 
-export interface ToolBudgetEvent {
-  type: 'tool_budget';
+export interface CompactEvent {
+  type: 'compact';
   uuid: string;
-  toolCallId: string;
-  path: string;
-  preview: string;
-  bytes: number;
+  startTurnId: number;
+  endTurnId: number;
   timestamp: string;
 }
 
@@ -103,7 +101,7 @@ export type SessionEvent =
   | HideEvent
   | UnhideEvent
   | TitleEvent
-  | ToolBudgetEvent;
+  | CompactEvent;
 
 export interface TokenUsage {
   prompt: number;

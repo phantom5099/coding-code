@@ -22,7 +22,6 @@ import {
   estimateTokensForContent,
   estimateMessageTokens,
 } from '../context/utils/tokens.js';
-import { getContextConfig } from '../context/config.js';
 import {
   projectSessionsDir,
   ensureDirs,
@@ -33,7 +32,6 @@ import {
   setPermissionMode,
   getPermissionMode,
   enqueueWrite,
-  persistToolResult,
   readCurrentIndex,
   countNonMetaEvents,
   makeTitle,
@@ -182,28 +180,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       ): Effect.Effect<ToolResultEvent, AgentError> =>
         Effect.try({
           try: () => {
-            const cfg = getContextConfig();
             const tokenCount = estimateTokensForContent(output);
-
-            let finalOutput = output;
-            let finalTokenCount = tokenCount;
-
-            if (
-              tokenCount > cfg.thresholdTokens &&
-              toolName !== 'read' &&
-              toolName !== 'read_file'
-            ) {
-              const { path } = persistToolResult(
-                state.projectPath,
-                state.sessionId,
-                toolCallId,
-                output
-              );
-              const preview = output.slice(0, cfg.persistPreviewChars);
-              finalOutput = `${preview}\n\n[…full output persisted at: ${path}. Use Read tool to access if needed.]`;
-              finalTokenCount = estimateTokensForContent(finalOutput);
-            }
-
             const event: ToolResultEvent = {
               type: 'tool_result',
               turnId: state.currentTurnId,
@@ -211,16 +188,16 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
               parentUuid,
               toolName,
               toolCallId,
-              output: finalOutput,
+              output,
               timestamp: new Date().toISOString(),
-              tokenCount: finalTokenCount,
+              tokenCount,
             };
             appendLine(state.transcriptPath, event);
             state.messageCount++;
             updateIndex(state);
             state.promptEstimate += estimateMessageTokens({
               role: 'tool',
-              content: finalOutput,
+              content: output,
               tool_call_id: toolCallId,
               tool_name: toolName,
             });
@@ -233,7 +210,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         state: SessionStoreState,
         replaces: string[],
         summaryText: string,
-        method: SummaryEvent['method']
+        lastSummarizedTurnId: number = 0
       ): Effect.Effect<SummaryEvent, AgentError> =>
         Effect.try({
           try: () => {
@@ -242,7 +219,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
               uuid: randomUUID(),
               replaces,
               summaryText,
-              method,
+              lastSummarizedTurnId,
               timestamp: new Date().toISOString(),
             };
             appendLine(state.transcriptPath, event);

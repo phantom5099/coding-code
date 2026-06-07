@@ -1,6 +1,11 @@
 import { randomUUID } from 'crypto';
-import { findSessionIndex, readHistory, resolveSessionDir } from '../../session/io.js';
-import { estimateTokens, estimateMessageTokens } from '../utils/tokens.js';
+import { resolveSessionDir } from '../../session/io.js';
+import {
+  estimateTokens,
+  estimateMessageTokens,
+  estimateTokensForContent,
+} from '../utils/tokens.js';
+import { applyVisibilityEvents } from '../../session/messages.js';
 import { resolveCompactionLLM } from './llm-resolver.js';
 import { COMPACTION_SYSTEM_PROMPT } from './prompt.js';
 import type { ContextConfig } from '../config.js';
@@ -15,16 +20,6 @@ export interface CompressResult {
   didCompress: boolean;
   released: number;
   promptEstimate: number;
-}
-
-interface CompressContext {
-  sessionId: string;
-  encodedProjectPath: string;
-  config: ContextConfig;
-  llm: LLMClient | null;
-  currentTurnId: number;
-  events: SessionEvent[];
-  hiddenUuids: Set<string>;
 }
 
 const compactFailureTracker = new Map<string, { count: number; lastAttempt: number }>();
@@ -43,10 +38,12 @@ function getFailures(sessionId: string): number {
 export async function compactIfNeeded(
   sessionId: string,
   encodedProjectPath: string,
-  messages: import('../../core/types.js').Message[],
+  messages: Message[],
   modelMaxTokens: number,
   config: ContextConfig,
-  llm: LLMClient | null
+  llm: LLMClient | null,
+  compactedEvents?: SessionEvent[],
+  currentTurnId?: number
 ): Promise<CompressResult> {
   const promptEstimate = estimateTokens(messages);
   const failures = getFailures(sessionId);
@@ -64,6 +61,8 @@ export async function compactIfNeeded(
     encodedProjectPath,
     config,
     llm,
+    compactedEvents,
+    currentTurnId,
     promptEstimate,
     modelMaxTokens
   );
@@ -82,91 +81,33 @@ export async function compactWithLLM(
   encodedProjectPath: string,
   config: ContextConfig,
   llm: LLMClient | null,
+  compactedEvents?: SessionEvent[],
+  currentTurnId?: number,
   usage?: number,
   modelMaxTokens?: number
 ): Promise<CompressResult> {
-  const idx = findSessionIndex(sessionId);
-  const currentTurnId = idx?.currentTurnId ?? 0;
-  const ctx = buildContext(sessionId, encodedProjectPath, config, llm, currentTurnId);
+  if (!compactedEvents || currentTurnId === undefined) {
+    const payload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
+    compactedEvents = payload.compactedEvents;
+    currentTurnId = payload.currentTurnId;
+  }
 
   let released = 0;
 
   const threshold = modelMaxTokens ? modelMaxTokens * config.compactionThreshold : Infinity;
   if (usage === undefined || usage - released > threshold) {
-    released += await tryL5Compaction(ctx);
+    released += await tryCompaction(sessionId, config, llm, compactedEvents, currentTurnId);
   }
 
   const payload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
-  const promptEstimate = estimateTokens(payload.messages);
-
-  return { didCompress: released > 0, released, promptEstimate };
-}
-
-// ---------- Context building ----------
-
-function buildContext(
-  sessionId: string,
-  encodedProjectPath: string,
-  config: ContextConfig,
-  llm: LLMClient | null,
-  currentTurnId: number
-): CompressContext {
-  const dir = resolveSessionDir(sessionId);
-  if (!dir) throw new Error(`Session ${sessionId} not found`);
-  const jsonlPath = join(dir, `${sessionId}.jsonl`);
-  const events = readHistory(jsonlPath);
-
-  // Compute which event uuids are already hidden by prior summary/hide events
-  const { hidden } = buildFilteredView(events);
-
   return {
-    sessionId,
-    encodedProjectPath,
-    config,
-    llm,
-    currentTurnId,
-    events,
-    hiddenUuids: hidden,
+    didCompress: released > 0,
+    released,
+    promptEstimate: estimateTokens(payload.messages),
   };
 }
 
-function buildFilteredView(events: SessionEvent[]): { hidden: Set<string> } {
-  const hidden = new Set<string>();
-  const hideEffects = new Map<string, Set<string>>();
-
-  for (const ev of events) {
-    switch (ev.type) {
-      case 'hide': {
-        let effect: Set<string>;
-        if (ev.kind === 'message') {
-          effect = new Set([ev.targetUuid]);
-        } else {
-          effect = new Set<string>();
-          for (const prior of events) {
-            if (prior === ev) break;
-            if ('turnId' in prior && prior.turnId >= ev.throughTurnId && 'uuid' in prior) {
-              effect.add(prior.uuid);
-            }
-          }
-        }
-        hideEffects.set(ev.uuid, effect);
-        for (const u of effect) hidden.add(u);
-        break;
-      }
-      case 'unhide': {
-        const effect = hideEffects.get(ev.targetHideUuid);
-        if (effect) for (const u of effect) hidden.delete(u);
-        break;
-      }
-      case 'summary': {
-        for (const u of ev.replaces) hidden.add(u);
-        break;
-      }
-    }
-  }
-
-  return { hidden };
-}
+// ---------- Summary persistence ----------
 
 function appendSummaryToSession(sessionId: string, event: SummaryEvent): void {
   const dir = resolveSessionDir(sessionId);
@@ -177,30 +118,82 @@ function appendSummaryToSession(sessionId: string, event: SummaryEvent): void {
 
 // ---------- LLM Compaction ----------
 
-async function tryL5Compaction(ctx: CompressContext): Promise<number> {
-  const { sessionId, config, currentTurnId, events, hiddenUuids } = ctx;
+const ESTIMATED_SUMMARY_TOKENS = 5000;
+const MAX_TOOL_RESULT_TOKENS = 30000;
 
-  const startTurn = 1;
-  const endTurn = currentTurnId - config.keepRecentTurns;
-  if (endTurn < startTurn) return 0;
-  const turnsInRange = endTurn - startTurn + 1;
-  if (turnsInRange < config.minTurnsBetweenCompactions) return 0;
+async function tryCompaction(
+  sessionId: string,
+  config: ContextConfig,
+  llm: LLMClient | null,
+  compactedEvents: SessionEvent[],
+  currentTurnId: number
+): Promise<number> {
+  const endTurn = currentTurnId - config.keepRecentTurns - 1;
+  if (endTurn < 1) return 0;
 
-  // Collect visible messages in the range for LLM transcript
-  const inRange = events.filter((ev) => {
+  const { hidden } = applyVisibilityEvents(compactedEvents);
+
+  const inRange = compactedEvents.filter((ev) => {
     if (ev.type === 'session_meta') return false;
-    if ('uuid' in ev && hiddenUuids.has((ev as any).uuid)) return false;
-    if ('turnId' in ev && (ev as any).turnId >= startTurn && (ev as any).turnId <= endTurn)
-      return true;
+    if ('uuid' in ev && hidden.has((ev as any).uuid)) return false;
+    if ('turnId' in ev && (ev as any).turnId >= 1 && (ev as any).turnId <= endTurn) return true;
     return false;
   });
-
   if (inRange.length === 0) return 0;
 
-  const transcript: Message[] = [];
+  const targetEvents = getIncrementalEvents(inRange);
+  if (targetEvents.length === 0) return 0;
+
+  const totalTokens = targetEvents.reduce((sum, e) => sum + estimateEventTokens(e), 0);
+
+  let compactionLlm = await resolveCompactionLLM(config, llm);
+  if (compactionLlm && compactionLlm.modelInfo.maxTokens < totalTokens + 25000) {
+    compactionLlm = llm;
+  }
+
+  const transcript = buildTranscript(targetEvents);
+  const summary = await callLLMForCompaction(transcript, compactionLlm, config);
+  if (!summary) return 0;
+
   const replacedUuids: string[] = [];
-  for (const ev of inRange) {
-    if ('uuid' in ev) replacedUuids.push((ev as any).uuid);
+  for (const ev of targetEvents) {
+    if ('uuid' in (ev as any)) replacedUuids.push((ev as any).uuid);
+  }
+
+  const lastTurnId = Math.max(
+    ...targetEvents.filter((e) => 'turnId' in e).map((e) => (e as any).turnId),
+    0
+  );
+
+  const event: SummaryEvent = {
+    type: 'summary',
+    uuid: randomUUID(),
+    replaces: replacedUuids,
+    summaryText: summary,
+    lastSummarizedTurnId: lastTurnId,
+    timestamp: new Date().toISOString(),
+  };
+  appendSummaryToSession(sessionId, event);
+  for (const u of replacedUuids) hidden.add(u);
+
+  const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
+  return Math.max(0, totalTokens - estimateMessageTokens(summaryMsg));
+}
+
+function getIncrementalEvents(inRange: SessionEvent[]): SessionEvent[] {
+  const existingSummary = [...inRange]
+    .reverse()
+    .find((e): e is SummaryEvent => e.type === 'summary');
+
+  if (!existingSummary) return inRange;
+
+  const lastTurn = existingSummary.lastSummarizedTurnId ?? 0;
+  return inRange.filter((e) => 'turnId' in e && (e as any).turnId > lastTurn);
+}
+
+function buildTranscript(events: SessionEvent[]): Message[] {
+  const transcript: Message[] = [];
+  for (const ev of events) {
     switch (ev.type) {
       case 'user':
         transcript.push({ role: 'user', content: ev.content });
@@ -208,38 +201,52 @@ async function tryL5Compaction(ctx: CompressContext): Promise<number> {
       case 'assistant':
         transcript.push({ role: 'assistant', content: ev.content });
         break;
-      case 'tool_result':
+      case 'tool_result': {
+        let content = ev.output;
+        const tokens = estimateTokensForContent(content);
+        if (tokens > MAX_TOOL_RESULT_TOKENS) {
+          const ratio = MAX_TOOL_RESULT_TOKENS / tokens;
+          const keepChars = Math.floor(content.length * ratio);
+          content =
+            content.slice(0, keepChars) +
+            `\n\n[...truncated: ${tokens} tokens total, showing first ${MAX_TOOL_RESULT_TOKENS}]`;
+        }
         transcript.push({
           role: 'tool',
-          content: ev.output,
+          content,
           tool_call_id: ev.toolCallId,
           tool_name: ev.toolName,
         } as any);
         break;
+      }
       case 'summary':
         transcript.push({ role: 'system', name: 'compacted_history', content: ev.summaryText });
         break;
     }
   }
+  return transcript;
+}
 
-  const summary = await callLLMForCompaction(transcript, ctx.llm, config);
-  if (!summary) return 0;
-
-  const event: SummaryEvent = {
-    type: 'summary',
-    uuid: randomUUID(),
-    replaces: replacedUuids,
-    summaryText: summary,
-    method: 'auto-compact',
-    timestamp: new Date().toISOString(),
-  };
-  appendSummaryToSession(sessionId, event);
-  for (const u of replacedUuids) hiddenUuids.add(u);
-
-  const replacedTokens = transcript.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
-  const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
-  const summaryTokens = estimateMessageTokens(summaryMsg);
-  return Math.max(0, replacedTokens - summaryTokens);
+function estimateEventTokens(e: SessionEvent): number {
+  if (e.type === 'user') return estimateMessageTokens({ role: 'user', content: e.content });
+  if (e.type === 'assistant')
+    return estimateMessageTokens({ role: 'assistant', content: e.content });
+  if (e.type === 'tool_result') {
+    return estimateMessageTokens({
+      role: 'tool',
+      content: e.output,
+      tool_call_id: e.toolCallId,
+      tool_name: e.toolName,
+    } as any);
+  }
+  if (e.type === 'summary') {
+    return estimateMessageTokens({
+      role: 'system',
+      name: 'compacted_history',
+      content: e.summaryText,
+    });
+  }
+  return 0;
 }
 
 async function callLLMForCompaction(
@@ -274,5 +281,3 @@ function extractSummary(raw: string): string {
   const m = raw.match(/<summary>([\s\S]*?)<\/summary>/);
   return (m?.[1] ?? raw).trim();
 }
-
-// ---------- Helpers ----------

@@ -2,13 +2,27 @@ import { join } from 'path';
 import type { Message } from '../core/types.js';
 import type { SessionEvent, AssistantEvent, TokenUsage } from './types.js';
 import { readHistory, resolveSessionDir } from './io.js';
+import { getContextConfig } from '../context/config.js';
 
-/**
- * Compute hidden UUID set from hide/unhide/summary events.
- * Reused by buildMessagesFromEvents and readUIHistory for consistent filtering.
- */
-export function applyVisibilityEvents(events: SessionEvent[]): Set<string> {
+const COMPACTIBLE_TOOLS = new Set([
+  'read_file',
+  'execute_command',
+  'search_code',
+  'search_files',
+  'web_search',
+  'fetch_url',
+  'write_file',
+  'edit_file',
+]);
+
+export interface VisibilityResult {
+  hidden: Set<string>;
+  compactedTurnIds: Set<number>;
+}
+
+export function applyVisibilityEvents(events: SessionEvent[]): VisibilityResult {
   const hidden = new Set<string>();
+  const compactedTurnIds = new Set<number>();
   const hideEffects = new Map<string, Set<string>>();
 
   for (const ev of events) {
@@ -41,24 +55,31 @@ export function applyVisibilityEvents(events: SessionEvent[]): Set<string> {
         for (const u of ev.replaces) hidden.add(u);
         break;
       }
+      case 'compact': {
+        if (!hidden.has(ev.uuid)) {
+          for (let t = ev.startTurnId; t <= ev.endTurnId; t++) {
+            compactedTurnIds.add(t);
+          }
+        }
+        break;
+      }
     }
   }
 
-  return hidden;
+  return { hidden, compactedTurnIds };
 }
 
 export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
-  const hidden = applyVisibilityEvents(events);
+  const { hidden, compactedTurnIds } = applyVisibilityEvents(events);
 
-  // Collect visible events
   const visible: SessionEvent[] = [];
   for (const ev of events) {
     if (ev.type === 'hide' || ev.type === 'unhide') continue;
+    if (ev.type === 'compact') continue;
     if ('uuid' in ev && hidden.has((ev as any).uuid)) continue;
     visible.push(ev);
   }
 
-  // Convert visible events to Message[]
   const messages: Message[] = [];
   for (const event of visible) {
     switch (event.type) {
@@ -79,27 +100,34 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
         messages.push(msg);
         break;
       }
-      case 'tool_result':
+      case 'tool_result': {
+        let output = event.output;
+        if (
+          compactedTurnIds.has(event.turnId) &&
+          COMPACTIBLE_TOOLS.has(event.toolName.toLowerCase()) &&
+          event.output.length > getContextConfig().microCompactMinChars
+        ) {
+          output = `[Earlier: used ${event.toolName}]`;
+        }
         messages.push({
           role: 'tool',
-          content: event.output,
+          content: output,
           tool_call_id: event.toolCallId,
           tool_name: event.toolName,
         } as any);
         break;
+      }
       case 'summary':
         messages.push({ role: 'system', name: 'compacted_history', content: event.summaryText });
         break;
     }
   }
 
-  // Collect all resolved tool_call_ids
   const resolvedIds = new Set<string>();
   for (const m of messages) {
     if (m.role === 'tool') resolvedIds.add((m as any).tool_call_id);
   }
 
-  // Identify which assistant messages have all their tool_calls resolved
   const validAssistantIds = new Set<string>();
   for (const m of messages) {
     if (m.role !== 'assistant') continue;
@@ -110,7 +138,6 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
     }
   }
 
-  // Remove assistant messages with unresolved tool_calls, and orphaned tool results
   const filtered = messages.filter((m) => {
     if (m.role === 'assistant') {
       const tcs = (m as any).tool_calls as Array<{ id: string }> | undefined;
@@ -123,9 +150,6 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
     return true;
   });
 
-  // Merge adjacent messages with the same non-system role to keep a valid LLM sequence.
-  // Tool messages must not be merged (each needs its own tool_call_id).
-  // Assistant messages with tool_calls must also not be merged.
   for (let i = filtered.length - 1; i > 0; i--) {
     const curr = filtered[i]!;
     const prev = filtered[i - 1]!;
@@ -140,18 +164,11 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
   return filtered;
 }
 
-/**
- * View assembly: read events → apply summary/hide filtering → produce Message[].
- */
 export function buildMessages(path: string): Message[] {
   const events = readHistory(path);
   return buildMessagesFromEvents(events);
 }
 
-/**
- * Find the usage of the last visible assistant event in the session history.
- * Used to restore the precise token anchor after rollback/fork.
- */
 export function findLastVisibleAssistantUsage(path: string): TokenUsage | undefined {
   const events = readHistory(path);
   const messages = buildMessagesFromEvents(events);
@@ -175,7 +192,7 @@ export function sessionEventsToTurns(
       event.type === 'hide' ||
       event.type === 'unhide' ||
       event.type === 'title' ||
-      event.type === 'tool_budget'
+      event.type === 'compact'
     )
       continue;
     let turn = turnsMap.get(event.turnId);
@@ -230,7 +247,7 @@ export function readUIHistory(
   if (!dir) return [];
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
   const events = readHistory(jsonlPath);
-  const hidden = applyVisibilityEvents(events);
+  const { hidden } = applyVisibilityEvents(events);
   const visibleEvents = events.filter((ev) => {
     if (ev.type === 'hide' || ev.type === 'unhide') return false;
     if ('uuid' in ev && hidden.has((ev as any).uuid)) return false;
