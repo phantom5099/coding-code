@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useGlobalStore } from '../stores/global.store';
 import MessageItem from '../shared/MessageItem';
 import UnifiedDiffView from '../shared/UnifiedDiffView';
@@ -11,17 +11,12 @@ interface MessageStreamProps {
   threadId: string;
 }
 
-// ---- Top-level TurnDiffPanel (avoids unmount/remount on parent re-render) ----
-
 const EMPTY_MAPPING: Record<number, string> = {};
 
 interface TurnDiffPanelProps {
   uiTurnId: string;
   isInterrupted?: boolean;
   threadId: string;
-  checkpointDiffs: Record<string, CheckpointDiff>;
-  turnCheckpointMapping: Record<number, string>;
-  revertedFilesByTurnId: Record<string, string[]>;
   onRevertFile: (uiTurnId: string, file: string, isReverted: boolean) => void;
   onRevertScope: (uiTurnId: string, scope: 'agent' | 'all', isReverted: boolean) => void;
 }
@@ -55,12 +50,23 @@ function TurnDiffPanel({
   uiTurnId,
   isInterrupted,
   threadId,
-  checkpointDiffs,
-  turnCheckpointMapping,
-  revertedFilesByTurnId,
   onRevertFile,
   onRevertScope,
 }: TurnDiffPanelProps) {
+  const rawCheckpointDiffByTurnId = useGlobalStore((s) => s.rollback.checkpointDiffByTurnId);
+  const rawTurnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping);
+  const revertedFilesByTurnId = useGlobalStore((s) => s.rollback.revertedFilesByTurnId);
+
+  const checkpointDiffs = useMemo(() => {
+    const prefix = `${threadId}:`;
+    const result: Record<string, CheckpointDiff> = {};
+    for (const [k, v] of Object.entries(rawCheckpointDiffByTurnId)) {
+      if (k.startsWith(prefix)) result[k] = v;
+    }
+    return result;
+  }, [threadId, rawCheckpointDiffByTurnId]);
+
+  const turnCheckpointMapping = rawTurnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
   const ckKey = getCheckpointKey(threadId, uiTurnId, checkpointDiffs, turnCheckpointMapping);
   const diff = ckKey ? checkpointDiffs[ckKey] : null;
   const revertedFiles = revertedFilesByTurnId[`${threadId}:${uiTurnId}`] ?? [];
@@ -77,7 +83,6 @@ function TurnDiffPanel({
 
   return (
     <div className="mt-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-card)] overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded bg-[var(--bg-hover)] flex items-center justify-center">
@@ -127,8 +132,6 @@ function TurnDiffPanel({
           </button>
         </div>
       </div>
-
-      {/* File list */}
       <div className="border-t border-[var(--border-card)]">
         {diff.files.map((f: any) => {
           const isExpanded = expandedFile === f.path;
@@ -198,10 +201,7 @@ function TurnDiffPanel({
   );
 }
 
-// ---- Main component ----
-
 export default function MessageStream({ threadId }: MessageStreamProps) {
-  // Fine-grained subscriptions: only subscribe to what we actually use
   const turns = useGlobalStore((s) => s.agent.threads[threadId]?.turns ?? []);
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
   const { approveTool, rejectTool } = useAgentApproval();
@@ -211,41 +211,22 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     revertAgentFiles,
     revertAllFiles,
     previewRollback,
-    rollbackCode,
     rollbackCtx,
     rollbackBoth,
     undoCodeRollback,
     forkThread,
     revertedFilesByTurnId,
   } = useAgentRollback();
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
-
-  // Subscribe to raw store data (stable references), derive with useMemo below
-  const rawCheckpointDiffByTurnId = useGlobalStore((s) => s.rollback.checkpointDiffByTurnId);
-  const rawTurnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping);
+  const parentRef = useRef<HTMLDivElement>(null);
   const markScopeRestored = useGlobalStore((s) => s.markScopeRestored);
   const markFileRestored = useGlobalStore((s) => s.markFileRestored);
   const setPendingInput = useGlobalStore((s) => s.setPendingInput);
 
-  // Derive thread-scoped data with useMemo for stable references
-  const checkpointDiffs = useMemo(() => {
-    const prefix = `${threadId}:`;
-    const result: Record<string, CheckpointDiff> = {};
-    for (const [k, v] of Object.entries(rawCheckpointDiffByTurnId)) {
-      if (k.startsWith(prefix)) result[k] = v;
-    }
-    return result;
-  }, [threadId, rawCheckpointDiffByTurnId]);
-
-  const turnCheckpointMapping = rawTurnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
-
-  // Rollback modal state
   const [showRollbackPanel, setShowRollbackPanel] = useState<{
     turnId: string;
     preview: any;
   } | null>(null);
 
-  // ---- Structure signature: only changes when turns structure changes (not content) ----
   const turnsStructureKey = useMemo(
     () =>
       turns
@@ -257,14 +238,12 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     [turns]
   );
 
-  // ---- Memoized rendering data ----
-  // Depends on turnsStructureKey instead of thread, so content updates don't trigger rebuild
-
   const { renderEntries, callIdToToolName, entryCountByTurnId, turnById } = useMemo(() => {
     const entries: Array<{
       item: Item;
       turnId: string;
       toolResult?: Item & { type: 'tool_result' };
+      key: string;
     }> = [];
     const toolResultByCallId: Record<string, Item & { type: 'tool_result' }> = {};
     const nameMap: Record<string, string> = {};
@@ -285,9 +264,9 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       for (const item of turn.items) {
         if (item.type === 'tool_result') continue;
         if (item.type === 'tool_call') {
-          entries.push({ item, turnId: turn.id, toolResult: toolResultByCallId[item.id] });
+          entries.push({ item, turnId: turn.id, toolResult: toolResultByCallId[item.id], key: item.id });
         } else {
-          entries.push({ item, turnId: turn.id });
+          entries.push({ item, turnId: turn.id, key: item.id });
         }
         countMap.set(turn.id, (countMap.get(turn.id) ?? 0) + 1);
       }
@@ -345,7 +324,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     }
     return { turnEndIndices: endIndices, turnRollbackCallbacks: rollbackCbs };
   }, [
-    turns,
+    turnsStructureKey,
     entryCountByTurnId,
     threadId,
     previewRollback,
@@ -354,12 +333,19 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     setPendingInput,
   ]);
 
-  const totalCount = renderEntries.length;
+  const virtualizer = useVirtualizer({
+    count: renderEntries.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 60,
+    getItemKey: (index: number) => renderEntries[index]?.key ?? `empty-${index}`,
+    overscan: 5,
+    anchorTo: 'end',
+    followOnAppend: 'smooth',
+    scrollEndThreshold: 80,
+  });
 
-  // Memoized turnStatusKey for auto-load diff effect
   const turnStatusKey = useMemo(() => turns.map((t) => `${t.id}:${t.status}`).join(','), [turns]);
 
-  // Auto-load diff when a turn completes or errors
   const handleLoadDiff = useCallback(
     async (uiTurnId: string) => {
       const diff = await loadCheckpointDiff(threadId);
@@ -377,14 +363,17 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   useEffect(() => {
     for (const turn of turns) {
       if (turn.status !== 'completed' && turn.status !== 'error') continue;
-      const ckKey = getCheckpointKey(threadId, turn.id, checkpointDiffs, turnCheckpointMapping);
-      if (!ckKey || !checkpointDiffs[ckKey]) {
+      const ckKey = getCheckpointKey(
+        threadId,
+        turn.id,
+        useGlobalStore.getState().rollback.checkpointDiffByTurnId,
+        useGlobalStore.getState().rollback.turnCheckpointMapping[threadId] ?? EMPTY_MAPPING
+      );
+      if (!ckKey) {
         handleLoadDiff(turn.id);
       }
     }
-  }, [turnStatusKey]);
-
-  // ---- Handlers ----
+  }, [turnStatusKey, threadId, handleLoadDiff]);
 
   const handleRevertFile = useCallback(
     async (uiTurnId: string, file: string, isReverted: boolean) => {
@@ -415,76 +404,6 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     },
     [threadId, revertAgentFiles, revertAllFiles, undoCodeRollback, markScopeRestored]
   );
-
-  // ---- Render single item (with optional turn-end diff panel) ----
-
-  const renderItem = useCallback(
-    (index: number) => {
-      const entry = renderEntries[index];
-      if (!entry) return null;
-      const isLastInTurn = turnEndIndices.has(index);
-      const cbs = turnRollbackCallbacks.get(entry.turnId);
-      const isUserMsg = entry.item.type === 'message' && entry.item.role === 'user';
-      const turn = turnById.get(entry.turnId);
-      const isInterrupted = turn?.status === 'error';
-
-      return (
-        <div>
-          <div className="px-10 py-1">
-            <MessageItem
-              item={entry.item}
-              threadId={threadId}
-              onApprove={approveTool}
-              onReject={rejectTool}
-              callIdToToolName={callIdToToolName}
-              onRollbackHere={isUserMsg && cbs ? cbs.onRollbackHere : undefined}
-              onForkFromHere={isUserMsg && cbs ? cbs.onForkFromHere : undefined}
-              toolResult={entry.toolResult}
-            />
-          </div>
-          {isLastInTurn && (
-            <div className="px-6 pb-2">
-              <TurnDiffPanel
-                uiTurnId={entry.turnId}
-                isInterrupted={isInterrupted}
-                threadId={threadId}
-                checkpointDiffs={checkpointDiffs}
-                turnCheckpointMapping={turnCheckpointMapping}
-                revertedFilesByTurnId={revertedFilesByTurnId}
-                onRevertFile={handleRevertFile}
-                onRevertScope={handleRevertScope}
-              />
-            </div>
-          )}
-        </div>
-      );
-    },
-    [
-      renderEntries,
-      turnEndIndices,
-      turnRollbackCallbacks,
-      turnById,
-      threadId,
-      approveTool,
-      rejectTool,
-      callIdToToolName,
-      checkpointDiffs,
-      turnCheckpointMapping,
-      revertedFilesByTurnId,
-      handleRevertFile,
-      handleRevertScope,
-    ]
-  );
-
-  // ---- Empty state ----
-
-  if (turns.length === 0 || renderEntries.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[var(--text-placeholder)] text-[15px]">
-        发送消息开始对话
-      </div>
-    );
-  }
 
   const rollbackModal = showRollbackPanel && (
     <div className="fixed inset-0 bg-[var(--overlay-bg)] flex items-center justify-center z-50">
@@ -530,18 +449,76 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     </div>
   );
 
-  // ---- Unified Virtuoso path ----
-
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <Virtuoso
-        ref={virtuosoRef}
+      <div
+        ref={parentRef}
         className="flex-1 select-text"
-        totalCount={totalCount}
-        itemContent={renderItem}
-        followOutput={(isAtBottom: boolean) => (isAtBottom ? 'smooth' : false)}
-        style={{ flex: 1 }}
-      />
+        style={{ overflowY: 'auto', contain: 'strict', overflowAnchor: 'none' }}
+      >
+        {renderEntries.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-[var(--text-placeholder)] text-[15px]">
+            发送消息开始对话
+          </div>
+        ) : (
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const entry = renderEntries[virtualRow.index];
+              if (!entry) return null;
+              const isLastInTurn = turnEndIndices.has(virtualRow.index);
+              const cbs = turnRollbackCallbacks.get(entry.turnId);
+              const isUserMsg = entry.item.type === 'message' && entry.item.role === 'user';
+              const turn = turnById.get(entry.turnId);
+              const isInterrupted = turn?.status === 'error';
+
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <div className="px-10 py-1">
+                    <MessageItem
+                      item={entry.item}
+                      threadId={threadId}
+                      onApprove={approveTool}
+                      onReject={rejectTool}
+                      callIdToToolName={callIdToToolName}
+                      onRollbackHere={isUserMsg && cbs ? cbs.onRollbackHere : undefined}
+                      onForkFromHere={isUserMsg && cbs ? cbs.onForkFromHere : undefined}
+                      toolResult={entry.toolResult}
+                    />
+                  </div>
+                  {isLastInTurn && (
+                    <div className="px-6 pb-2">
+                      <TurnDiffPanel
+                        uiTurnId={entry.turnId}
+                        isInterrupted={isInterrupted}
+                        threadId={threadId}
+                        onRevertFile={handleRevertFile}
+                        onRevertScope={handleRevertScope}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
       {rollbackModal}
     </div>
   );

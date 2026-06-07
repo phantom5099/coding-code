@@ -26,6 +26,7 @@ function ContextIndicator({ threadId }: { threadId: string }) {
       <button
         type="button"
         disabled
+        aria-label="正在压缩上下文"
         className="w-5 h-5 flex items-center justify-center animate-pulse cursor-default"
       >
         <svg width="18" height="18" viewBox="0 0 18 18">
@@ -283,6 +284,8 @@ function InputBox({
             <button
               type="button"
               onClick={() => abort()}
+              aria-label="停止生成"
+              title="停止生成"
               className="w-9 h-9 shrink-0 flex items-center justify-center bg-[var(--border-hover)] hover:bg-[var(--border-strong)] text-[var(--text-primary)] rounded-full transition-colors"
             >
               <Square size={14} strokeWidth={2} fill="currentColor" />
@@ -292,6 +295,8 @@ function InputBox({
               type="button"
               onClick={handleSend}
               disabled={!text.trim()}
+              aria-label="发送消息"
+              title="发送消息"
               className="w-9 h-9 shrink-0 flex items-center justify-center bg-[var(--btn-send-bg)] disabled:bg-[var(--bg-card)] disabled:text-[var(--text-disabled)] text-[var(--text-inverse)] rounded-full transition-colors"
             >
               <Send size={18} strokeWidth={2} />
@@ -365,7 +370,7 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[var(--bg-panel)]">
-      <MessageStream key={currentThreadId} threadId={currentThreadId} />
+      <MessageStream threadId={currentThreadId} />
       <ApprovalPanel threadId={currentThreadId} />
       <TodoPanel threadId={currentThreadId} />
       {isCompressing && (

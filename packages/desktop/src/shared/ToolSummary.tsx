@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import type { Item } from '@shared/types';
+import { buildToolDiff } from '../lib/diff-compute';
 import CodeBlock from './CodeBlock';
 import DiffBlock from './DiffBlock';
 
@@ -96,7 +97,15 @@ export function buildToolSummaryTitle(
 export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) {
   const [open, setOpen] = useState(false);
   const isFileTool = toolCall.name === 'write_file' || toolCall.name === 'edit_file';
-  const { title, isError, isRejected } = buildToolSummaryTitle(toolCall, toolResult);
+
+  const computedResult = useMemo(() => {
+    if (!toolResult || !isFileTool) return toolResult;
+    if ((toolResult as any).diff) return toolResult;
+    return buildToolDiff(toolResult as any, toolCall as any) as any;
+  }, [toolResult, toolCall, isFileTool]);
+
+  const effectiveResult = computedResult ?? toolResult;
+  const { title, isError, isRejected } = buildToolSummaryTitle(toolCall, effectiveResult);
 
   const titleColor = isRejected
     ? 'text-[var(--text-muted)] line-through'
@@ -104,7 +113,7 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
       ? 'text-[var(--accent-danger)]'
       : 'text-[var(--syntax-function)]';
 
-  const hasContent = !!(toolResult?.diff || toolResult?.output);
+  const hasContent = !!(effectiveResult?.diff || effectiveResult?.output);
 
   return (
     <div className="pb-1.5 pl-8">
@@ -119,19 +128,19 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
           <ChevronRight className={`w-3.5 h-3.5 ${titleColor}`} />
         )}
         <span className={`font-mono ${titleColor}`}>{title}</span>
-        {isFileTool && toolResult && (toolResult.insertions || toolResult.deletions) && (
+        {isFileTool && effectiveResult && (effectiveResult.insertions || effectiveResult.deletions) && (
           <span className="text-[var(--text-muted)] text-xs">
-            {toolResult.insertions ? `+${toolResult.insertions}` : ''}
-            {toolResult.deletions ? ` -${toolResult.deletions}` : ''}
+            {effectiveResult.insertions ? `+${effectiveResult.insertions}` : ''}
+            {effectiveResult.deletions ? ` -${effectiveResult.deletions}` : ''}
           </span>
         )}
       </button>
       {open && hasContent && (
         <div className="pt-1.5">
-          {isFileTool && toolResult?.diff ? (
-            <DiffBlock diff={toolResult.diff} />
-          ) : toolResult?.output ? (
-            <CodeBlock code={toolResult.output.slice(0, 4000)} />
+          {isFileTool && effectiveResult?.diff ? (
+            <DiffBlock diff={effectiveResult.diff} />
+          ) : effectiveResult?.output ? (
+            <CodeBlock code={effectiveResult.output.slice(0, 4000)} />
           ) : null}
         </div>
       )}

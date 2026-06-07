@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect } from 'react';
+import { useState, useRef, useLayoutEffect, memo } from 'react';
 import type { Item } from '@shared/types';
 import ToolCallCard from './ToolCallCard';
 import DiffBlock from './DiffBlock';
@@ -18,7 +18,7 @@ interface MessageItemProps {
 
 
 
-export default function MessageItem({
+const MessageItem = memo(function MessageItem({
   item,
   threadId,
   onApprove,
@@ -202,4 +202,6 @@ export default function MessageItem({
   }
 
   return null;
-}
+});
+
+export default MessageItem;
