@@ -1,8 +1,8 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { UIMessage } from '../types.js';
-import { CodeBlock } from './CodeBlock.js';
-import { parseCodeBlocks, formatTime } from '../utils.js';
+import { MarkdownText } from './MarkdownText.js';
+import { formatTime } from '../utils.js';
 
 /** Render a single todo step line with colored status icon and step text */
 function TodoStep({ line }: { line: string }) {
@@ -141,9 +141,6 @@ export function MessageItem({
     );
   }
 
-  // assistant
-  const blocks = parseCodeBlocks(message.content);
-
   if (interactive && !expanded) {
     const preview = message.content.slice(0, 80).replace(/\n/g, ' ');
     return (
@@ -187,15 +184,7 @@ export function MessageItem({
         )}
       </Box>
       <Box paddingLeft={indent} flexDirection="column">
-        {blocks.map((block, i) => (
-          <Box key={i} flexDirection="column">
-            {block.type === 'text' ? (
-              <Text wrap="wrap">{block.content}</Text>
-            ) : (
-              <CodeBlock code={block.content} language={block.language || 'text'} />
-            )}
-          </Box>
-        ))}
+        <MarkdownText content={message.content} width={width - indent} />
       </Box>
     </Box>
   );
