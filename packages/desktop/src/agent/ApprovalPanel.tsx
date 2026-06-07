@@ -43,7 +43,7 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#1e1e1e] border border-[#3c3c3c] text-[#ccc] text-[13px] shadow-lg hover:bg-[#252525] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[var(--bg-panel)] border border-[var(--border-card)] text-[var(--text-primary)] text-[13px] shadow-lg hover:bg-[var(--bg-hover)] transition-colors"
         >
           <span>🔧</span>
           <span>{pendingItems.length} 个工具等待审批</span>
@@ -54,18 +54,18 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
 
   return (
     <div className="fixed top-20 right-5 w-[320px] max-h-[70vh] z-40 flex flex-col">
-      <div className="rounded-lg bg-[#1e1e1e] border border-[#3c3c3c] shadow-xl overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 bg-[#252526] border-b border-[#3c3c3c]">
+      <div className="rounded-lg bg-[var(--bg-panel)] border border-[var(--border-card)] shadow-xl overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 bg-[var(--bg-code-header)] border-b border-[var(--border-card)]">
           <div className="flex items-center gap-2">
             <span>🔧</span>
-            <span className="text-[13px] text-[#ccc] font-medium">
+            <span className="text-[13px] text-[var(--text-primary)] font-medium">
               工具审批 ({pendingItems.length})
             </span>
           </div>
           <button
             type="button"
             onClick={() => setCollapsed(true)}
-            className="text-[#666] hover:text-[#ccc] text-[16px] leading-none transition-colors"
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[16px] leading-none transition-colors"
           >
             −
           </button>

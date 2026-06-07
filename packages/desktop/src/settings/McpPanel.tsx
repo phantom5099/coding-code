@@ -186,14 +186,14 @@ export default function McpPanel() {
   };
 
   const inputCls =
-    'w-full bg-[#252525] border border-[#3a3a3a] text-[#ddd] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#569cd6]';
-  const labelCls = 'text-[12px] text-[#555] mb-1';
-  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[#1a3a5c] text-[#569cd6] hover:bg-[#1a4a6c]';
-  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[#3a1a1a] text-[#d16969] hover:bg-[#4a1a1a]';
-  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[#2a2a2a] text-[#888] hover:bg-[#3a3a3a]';
+    'w-full bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
+  const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
+  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
+  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
+  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] hover:bg-[var(--border-hover)]';
 
   if (loading) {
-    return <div className="px-6 py-8 text-[14px] text-[#444]">加载中…</div>;
+    return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
   }
 
   return (
@@ -218,10 +218,10 @@ export default function McpPanel() {
       )}
 
       {servers.length === 0 && !isCreating ? (
-        <div className="text-[14px] text-[#444] py-8 text-center leading-loose">
+        <div className="text-[14px] text-[var(--text-disabled)] py-8 text-center leading-loose">
           未找到 MCP 服务器配置
           <br />
-          <span className="text-[13px] text-[#333]">点击上方按钮添加服务器</span>
+          <span className="text-[13px] text-[var(--text-disabled)]">点击上方按钮添加服务器</span>
         </div>
       ) : (
         <div className="space-y-3">
@@ -245,9 +245,9 @@ export default function McpPanel() {
               return (
                 <div
                   key={s.name}
-                  className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#3a1a1a]"
+                  className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--btn-danger-bg)]"
                 >
-                  <span className="text-[14px] text-[#d16969]">删除服务器 {s.name}？</span>
+                  <span className="text-[14px] text-[var(--accent-danger)]">删除服务器 {s.name}？</span>
                   <div className="flex gap-2">
                     <button onClick={confirmDelete} className={btnDanger}>
                       确认
@@ -262,27 +262,27 @@ export default function McpPanel() {
             return (
               <div
                 key={s.name}
-                className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] group"
+                className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] group"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-[15px] text-[#ddd] truncate">{s.name}</span>
+                    <span className="text-[15px] text-[var(--text-title)] truncate">{s.name}</span>
                     <span
                       className={`text-[11px] px-2 py-0.5 rounded font-mono ${
                         s.transport === 'http'
-                          ? 'bg-[#1a3a5c] text-[#569cd6]'
-                          : 'bg-[#2a1a2a] text-[#c586c0]'
+                          ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]'
+                          : 'bg-[var(--tag-mcp-bg)] text-[var(--tag-mcp-text)]'
                       }`}
                     >
                       {s.transport}
                     </span>
                   </div>
-                  <div className="text-[13px] text-[#444] mt-1 font-mono">{s.toolCount} 个工具</div>
+                  <div className="text-[13px] text-[var(--text-disabled)] mt-1 font-mono">{s.toolCount} 个工具</div>
                 </div>
                 <button
                   title="编辑"
                   onClick={() => startEdit(s)}
-                  className="text-[#444] hover:text-[#888] transition-colors shrink-0"
+                  className="text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] transition-colors shrink-0"
                 >
                   <svg
                     width="14"
@@ -298,7 +298,7 @@ export default function McpPanel() {
                 <button
                   title="删除"
                   onClick={() => setDeletingName(s.name)}
-                  className="text-[#444] hover:text-[#d16969] transition-colors shrink-0"
+                  className="text-[var(--text-disabled)] hover:text-[var(--accent-danger)] transition-colors shrink-0"
                 >
                   <svg
                     width="14"
@@ -341,7 +341,7 @@ function FormCard({
   btnCancel: string;
 }) {
   return (
-    <div className="px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#569cd6]/30 space-y-3">
+    <div className="px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-primary)]/30 space-y-3">
       <div>
         <div className={labelCls}>名称</div>
         <input
@@ -358,8 +358,8 @@ function FormCard({
             onClick={() => setForm({ ...form, transport: 'stdio' })}
             className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
               form.transport === 'stdio'
-                ? 'bg-[#1a3a5c] text-[#569cd6]'
-                : 'bg-[#2a2a2a] text-[#888]'
+                ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]'
+                : 'bg-[var(--border-card)] text-[var(--text-tertiary)]'
             }`}
           >
             stdio
@@ -367,7 +367,7 @@ function FormCard({
           <button
             onClick={() => setForm({ ...form, transport: 'http' })}
             className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
-              form.transport === 'http' ? 'bg-[#1a3a5c] text-[#569cd6]' : 'bg-[#2a2a2a] text-[#888]'
+              form.transport === 'http' ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]' : 'bg-[var(--border-card)] text-[var(--text-tertiary)]'
             }`}
           >
             http
@@ -439,12 +439,12 @@ function FormCard({
           />
         </div>
         <div className="flex items-end pb-1">
-          <label className="flex items-center gap-2 text-[13px] text-[#888] cursor-pointer">
+          <label className="flex items-center gap-2 text-[13px] text-[var(--text-tertiary)] cursor-pointer">
             <input
               type="checkbox"
               checked={form.autoReconnect}
               onChange={(e) => setForm({ ...form, autoReconnect: e.target.checked })}
-              className="accent-[#569cd6]"
+              className="accent-[var(--accent-primary)]"
             />
             自动重连
           </label>

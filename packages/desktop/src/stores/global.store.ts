@@ -47,6 +47,7 @@ interface UIState {
   rightPanelWidth: number;
   bottomPanelHeight: number;
   ideSidebarView: 'explorer' | 'search' | 'git' | 'extensions';
+  theme: 'dark' | 'light' | 'paper';
 }
 
 interface WorkspaceState {
@@ -114,6 +115,7 @@ interface GlobalActions {
   setRightPanelWidth: (w: number) => void;
   setBottomPanelHeight: (h: number) => void;
   setIdeSidebarView: (view: UIState['ideSidebarView']) => void;
+  setTheme: (theme: UIState['theme']) => void;
   setWorkspace: (rootPath: string, name: string) => void;
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (id: string) => void;
@@ -208,6 +210,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         rightPanelWidth: 320,
         bottomPanelHeight: 200,
         ideSidebarView: 'explorer',
+        theme: 'dark',
       },
       workspace: {
         rootPath: '',
@@ -274,6 +277,10 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setIdeSidebarView: (view) =>
         set((s) => {
           s.ui.ideSidebarView = view;
+        }),
+      setTheme: (theme) =>
+        set((s) => {
+          s.ui.theme = theme;
         }),
       setWorkspace: (rootPath, name) =>
         set((s) => {

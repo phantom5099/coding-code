@@ -86,6 +86,28 @@ app.whenReady().then(async () => {
     currentWorkspaceCwd = cwd;
   });
 
+  // Theme sync: update window background and title bar overlay
+  const themeColors = {
+    dark: { bg: '#1e1e1e', overlay: '#1a1a1a', symbol: '#858585' },
+    light: { bg: '#ffffff', overlay: '#f5f5f5', symbol: '#666666' },
+    paper: { bg: '#f5f0e8', overlay: '#ede8de', symbol: '#7a7872' },
+  };
+
+  ipcMain.on('theme:change', (_e, theme: string) => {
+    if (!mainWindow) return;
+    const c = themeColors[theme as keyof typeof themeColors];
+    if (!c) return;
+
+    mainWindow.setBackgroundColor(c.bg);
+
+    if (process.platform === 'win32') {
+      mainWindow.setTitleBarOverlay({
+        color: c.overlay,
+        symbolColor: c.symbol,
+      });
+    }
+  });
+
   registerFsHandlers();
   registerGitHandlers();
 

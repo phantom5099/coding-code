@@ -7,6 +7,7 @@ import ErrorBoundary from './shared/ErrorBoundary';
 
 export default function App() {
   const mode = useGlobalStore((s) => s.ui.mode);
+  const theme = useGlobalStore((s) => s.ui.theme);
   const setMode = useGlobalStore((s) => s.setMode);
   const rootPath = useGlobalStore((s) => s.workspace.rootPath);
 
@@ -16,6 +17,12 @@ export default function App() {
       window.electronAPI?.setWorkspaceCwd?.(rootPath);
     }
   }, [rootPath]);
+
+  // Sync theme to document and main process
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.electronAPI?.setTheme?.(theme);
+  }, [theme]);
 
   useEffect(() => {
     const off = window.electronAPI?.onFsChange?.(() => {});
@@ -31,7 +38,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="h-screen flex flex-col bg-[#1e1e1e] text-[#cccccc] overflow-hidden">
+      <div className="h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)] overflow-hidden">
         <TitleBar />
         {/* Both layouts stay mounted; visibility toggled via display to preserve Monaco + PTY state */}
         <div className={`${mode === 'agent' ? 'flex' : 'hidden'} flex-1 flex-col overflow-hidden`}>

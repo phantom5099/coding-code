@@ -63,7 +63,7 @@ export default function MessageItem({
     if (isUser) {
       return (
         <div className="flex justify-end mb-4">
-          <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[#2a2a2a] text-[#e8e8e8] text-[15px] leading-relaxed whitespace-pre-wrap break-words group">
+          <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[var(--border-card)] text-[var(--text-title)] text-[15px] leading-relaxed whitespace-pre-wrap break-words group">
             {content}
             {hasRollback && (
               <div className="absolute -right-1 -bottom-1">
@@ -73,7 +73,7 @@ export default function MessageItem({
                     e.stopPropagation();
                     setRollbackMenuOpen(!rollbackMenuOpen);
                   }}
-                  className="w-5 h-5 rounded-full bg-[#444] text-[#aaa] hover:bg-[#555] hover:text-[#ccc] flex items-center justify-center text-[11px] leading-none transition-opacity"
+                  className="w-5 h-5 rounded-full bg-[var(--text-disabled)] text-[var(--text-secondary)] hover:bg-[var(--text-placeholder)] hover:text-[var(--text-primary)] flex items-center justify-center text-[11px] leading-none transition-opacity"
                   title="回退到此"
                 >
                   ↩
@@ -81,7 +81,7 @@ export default function MessageItem({
                 {rollbackMenuOpen && (
                   <div
                     ref={rollbackMenuRef}
-                    className={`absolute bg-[#1e1e1e] border border-[#444] rounded-md shadow-lg py-1 z-50 min-w-[130px] ${
+                    className={`absolute bg-[var(--bg-base)] border border-[var(--text-disabled)] rounded-md shadow-lg py-1 z-50 min-w-[130px] ${
                       menuFlip.vertical ? 'top-6' : 'bottom-6'
                     } ${menuFlip.horizontal ? 'right-0' : 'right-0'}`}
                   >
@@ -92,7 +92,7 @@ export default function MessageItem({
                           setRollbackMenuOpen(false);
                           onRollbackHere();
                         }}
-                        className="block w-full text-left px-3 py-1.5 text-[12px] text-[#ccc] hover:bg-[#333]"
+                        className="block w-full text-left px-3 py-1.5 text-[12px] text-[var(--text-primary)] hover:bg-[var(--border-strong)]"
                       >
                         回退到这里
                       </button>
@@ -104,7 +104,7 @@ export default function MessageItem({
                           setRollbackMenuOpen(false);
                           onForkFromHere();
                         }}
-                        className="block w-full text-left px-3 py-1.5 text-[12px] text-[#ccc] hover:bg-[#333]"
+                        className="block w-full text-left px-3 py-1.5 text-[12px] text-[var(--text-primary)] hover:bg-[var(--border-strong)]"
                       >
                         Fork from here
                       </button>
@@ -120,12 +120,12 @@ export default function MessageItem({
 
     return (
       <div className="flex justify-start mb-4">
-        <div className="max-w-[88%] text-[15px] text-[#d4d4d4] leading-relaxed">
+        <div className="max-w-[88%] text-[15px] text-[var(--text-primary)] leading-relaxed">
           {isAssistant && messageContent != null && (
             <MarkdownRenderer content={messageContent} />
           )}
           {item.partial && (
-            <span className="inline-block w-1.5 h-[1.1em] bg-[#569cd6] animate-pulse ml-0.5 align-middle" />
+            <span className="inline-block w-1.5 h-[1.1em] bg-[var(--accent-primary)] animate-pulse ml-0.5 align-middle" />
           )}
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function MessageItem({
         <button
           type="button"
           onClick={() => setReasoningOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-[13px] text-[#555] hover:text-[#888] transition-colors"
+          className="flex items-center gap-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-tertiary)] transition-colors"
         >
           <span className={`transition-transform text-[10px] ${reasoningOpen ? 'rotate-90' : ''}`}>
             ▶
@@ -146,7 +146,7 @@ export default function MessageItem({
           思考过程
         </button>
         {reasoningOpen && (
-          <div className="mt-2 pl-3 border-l-2 border-[#2a2a2a] text-[13px] text-[#777] whitespace-pre-wrap leading-relaxed">
+          <div className="mt-2 pl-3 border-l-2 border-[var(--border-card)] text-[13px] text-[var(--text-tertiary)] whitespace-pre-wrap leading-relaxed">
             {item.content}
           </div>
         )}
@@ -162,9 +162,9 @@ export default function MessageItem({
       const cmd = typeof a.command === 'string' ? a.command : '';
       const label = path || cmd || item.name;
       return (
-        <div className="mb-2 flex items-center gap-1.5 text-[13px] text-[#777]">
-          <span className="font-mono text-[#dcdcaa]">{label}</span>
-          <span className="text-[#666]">等待审批</span>
+        <div className="mb-2 flex items-center gap-1.5 text-[13px] text-[var(--text-tertiary)]">
+          <span className="font-mono text-[var(--text-primary)]">{label}</span>
+          <span className="text-[var(--text-muted)]">等待审批</span>
         </div>
       );
     }
@@ -176,15 +176,15 @@ export default function MessageItem({
     const isRejected = item.status === 'rejected';
     return (
       <div className="mb-2 flex items-center gap-1.5 text-[13px]">
-        <span className={`font-mono ${isRejected ? 'text-[#666] line-through' : 'text-[#dcdcaa]'}`}>
+        <span className={`font-mono ${isRejected ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}>
           {item.name}
         </span>
         {item.status === 'running' && (
-          <span className="text-[#569cd6] flex items-center gap-1">
+          <span className="text-[var(--accent-primary)] flex items-center gap-1">
             <span className="inline-block animate-spin">⟳</span> 执行中
           </span>
         )}
-        {isRejected && <span className="text-[#666]">✗ 已拒绝</span>}
+        {isRejected && <span className="text-[var(--text-muted)]">✗ 已拒绝</span>}
       </div>
     );
   }
@@ -195,7 +195,7 @@ export default function MessageItem({
 
   if (item.type === 'error') {
     return (
-      <div className="mb-3 px-4 py-3 rounded-lg bg-[#2a1515] border border-[#5a2020] text-[#f47777] text-[14px] leading-relaxed">
+      <div className="mb-3 px-4 py-3 rounded-lg bg-[var(--accent-danger-bg)] border border-[var(--accent-danger-border)] text-[var(--accent-danger)] text-[14px] leading-relaxed">
         {item.message}
       </div>
     );

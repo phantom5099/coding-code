@@ -34,16 +34,16 @@ export default function SkillPanel() {
   };
 
   if (loading) {
-    return <div className="px-6 py-8 text-[14px] text-[#444]">加载中…</div>;
+    return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
   }
 
   return (
     <div className="px-6 py-5">
       {skills.length === 0 ? (
-        <div className="text-[14px] text-[#444] py-8 text-center leading-loose">
+        <div className="text-[14px] text-[var(--text-disabled)] py-8 text-center leading-loose">
           未找到 Skill
           <br />
-          <span className="text-[13px] text-[#333]">
+          <span className="text-[13px] text-[var(--text-disabled)]">
             在 .codingcode/skills/ 目录下创建 skill 文件夹以添加
           </span>
         </div>
@@ -52,12 +52,12 @@ export default function SkillPanel() {
           {skills.map((s) => (
             <div
               key={s.name}
-              className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a]"
+              className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)]"
             >
               <div className="flex-1 min-w-0">
-                <span className="text-[15px] text-[#ddd] truncate block">{s.name}</span>
+                <span className="text-[15px] text-[var(--text-title)] truncate block">{s.name}</span>
                 {s.description && (
-                  <div className="text-[13px] text-[#555] mt-1 truncate">{s.description}</div>
+                  <div className="text-[13px] text-[var(--text-placeholder)] mt-1 truncate">{s.description}</div>
                 )}
               </div>
               <Toggle checked={!s.disabled} onChange={(v) => toggle(s.name, !v)} />

@@ -98,10 +98,10 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
   const { title, isError, isRejected } = buildToolSummaryTitle(toolCall, toolResult);
 
   const titleColor = isRejected
-    ? 'text-[#666] line-through'
+    ? 'text-[var(--text-muted)] line-through'
     : isError
-      ? 'text-[#f44747]'
-      : 'text-[#dcdcaa]';
+      ? 'text-[var(--accent-danger)]'
+      : 'text-[var(--syntax-function)]';
 
   const hasContent = !!(toolResult?.diff || toolResult?.output);
 
@@ -112,12 +112,12 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity"
       >
-        <span className={`transition-transform text-[10px] text-[#555] ${open ? 'rotate-90' : ''}`}>
+        <span className={`transition-transform text-[10px] text-[var(--text-muted)] ${open ? 'rotate-90' : ''}`}>
           ▶
         </span>
         <span className={`font-mono ${titleColor}`}>{title}</span>
         {isFileTool && toolResult && (toolResult.insertions || toolResult.deletions) && (
-          <span className="text-[#555] text-xs">
+          <span className="text-[var(--text-muted)] text-xs">
             {toolResult.insertions ? `+${toolResult.insertions}` : ''}
             {toolResult.deletions ? ` -${toolResult.deletions}` : ''}
           </span>

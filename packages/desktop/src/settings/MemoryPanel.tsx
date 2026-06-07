@@ -110,28 +110,28 @@ export default function MemoryPanel() {
   };
 
   const inputCls =
-    'w-full bg-[#252525] border border-[#3a3a3a] text-[#ddd] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#569cd6]';
-  const labelCls = 'text-[12px] text-[#555] mb-1';
-  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[#1a3a5c] text-[#569cd6] hover:bg-[#1a4a6c]';
-  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[#3a1a1a] text-[#d16969] hover:bg-[#4a1a1a]';
-  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[#2a2a2a] text-[#888] hover:bg-[#3a3a3a]';
+    'w-full bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
+  const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
+  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
+  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
+  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] hover:bg-[var(--border-hover)]';
 
   if (loading) {
-    return <div className="px-6 py-8 text-[14px] text-[#444]">加载中…</div>;
+    return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
   }
 
   return (
     <div className="px-6 py-5">
-      <div className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] mb-5">
+      <div className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] mb-5">
         <div>
-          <div className="text-[14px] text-[#ddd]">记忆模式</div>
-          <div className="text-[12px] text-[#555] mt-0.5">启用后自动从会话中提取长期记忆</div>
+          <div className="text-[14px] text-[var(--text-title)]">记忆模式</div>
+          <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">启用后自动从会话中提取长期记忆</div>
         </div>
         <Toggle checked={config.enabled} onChange={toggleEnabled} />
       </div>
 
       <div className="flex items-center gap-2 mb-3">
-        <div className="text-[11px] font-medium text-[#444] uppercase tracking-wider">记忆类型</div>
+        <div className="text-[11px] font-medium text-[var(--text-disabled)] uppercase tracking-wider">记忆类型</div>
         {config.enabled && (
           <button onClick={startCreate} className={btnPrimary}>
             + 添加类型
@@ -140,7 +140,7 @@ export default function MemoryPanel() {
       </div>
 
       {isCreating && (
-        <div className="px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#569cd6]/30 space-y-3 mb-2">
+        <div className="px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-primary)]/30 space-y-3 mb-2">
           <div>
             <div className={labelCls}>名称</div>
             <input
@@ -171,16 +171,16 @@ export default function MemoryPanel() {
       )}
 
       {!config.enabled ? (
-        <div className="text-[14px] text-[#444] py-8 text-center leading-loose">
+        <div className="text-[14px] text-[var(--text-disabled)] py-8 text-center leading-loose">
           记忆模式已关闭
           <br />
-          <span className="text-[13px] text-[#333]">启用后可配置记忆类型</span>
+          <span className="text-[13px] text-[var(--text-disabled)]">启用后可配置记忆类型</span>
         </div>
       ) : config.types.length === 0 && !isCreating ? (
-        <div className="text-[14px] text-[#444] py-8 text-center leading-loose">
+        <div className="text-[14px] text-[var(--text-disabled)] py-8 text-center leading-loose">
           未配置记忆类型
           <br />
-          <span className="text-[13px] text-[#333]">点击上方按钮添加自定义类型</span>
+          <span className="text-[13px] text-[var(--text-disabled)]">点击上方按钮添加自定义类型</span>
         </div>
       ) : (
         <div className="space-y-2">
@@ -189,7 +189,7 @@ export default function MemoryPanel() {
               return (
                 <div
                   key={t.name}
-                  className="px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#569cd6]/30 space-y-3 mb-2"
+                  className="px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-primary)]/30 space-y-3 mb-2"
                 >
                   <div>
                     <div className={labelCls}>名称</div>
@@ -224,9 +224,9 @@ export default function MemoryPanel() {
               return (
                 <div
                   key={t.name}
-                  className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#3a1a1a]"
+                  className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--btn-danger-bg)]"
                 >
-                  <span className="text-[14px] text-[#d16969]">删除类型 {t.name}？</span>
+                  <span className="text-[14px] text-[var(--accent-danger)]">删除类型 {t.name}？</span>
                   <div className="flex gap-2">
                     <button onClick={confirmDelete} className={btnDanger}>
                       确认
@@ -241,24 +241,24 @@ export default function MemoryPanel() {
             return (
               <div
                 key={t.name}
-                className="px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] group"
+                className="px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] group"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[14px] text-[#ddd]">{t.name}</span>
+                      <span className="text-[14px] text-[var(--text-title)]">{t.name}</span>
                       {t.isBuiltIn && (
-                        <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[#2a2a2a] text-[#555]">
+                        <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--border-card)] text-[var(--text-placeholder)]">
                           内置
                         </span>
                       )}
                       {!t.isBuiltIn && (
-                        <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[#1a2a1a] text-[#6a9955]">
+                        <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-action-bg)] text-[var(--tag-action-text)]">
                           自定义
                         </span>
                       )}
                     </div>
-                    <div className="text-[12px] text-[#555] mt-1">{t.description}</div>
+                    <div className="text-[12px] text-[var(--text-placeholder)] mt-1">{t.description}</div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {!t.isBuiltIn && (
@@ -266,7 +266,7 @@ export default function MemoryPanel() {
                         <button
                           title="编辑"
                           onClick={() => startEdit(t)}
-                          className="text-[#444] hover:text-[#888] transition-colors"
+                          className="text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] transition-colors"
                         >
                           <svg
                             width="14"
@@ -282,7 +282,7 @@ export default function MemoryPanel() {
                         <button
                           title="删除"
                           onClick={() => setDeletingName(t.name)}
-                          className="text-[#444] hover:text-[#d16969] transition-colors"
+                          className="text-[var(--text-disabled)] hover:text-[var(--accent-danger)] transition-colors"
                         >
                           <svg
                             width="14"

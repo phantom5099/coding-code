@@ -32,9 +32,9 @@ export default function CodeBlock({ code, language }: CodeBlockProps) {
   const lang = language && Prism.languages[language] ? language : 'text';
 
   return (
-    <div className="relative group my-1 rounded overflow-hidden bg-[#1a1a1a] border border-[#333]">
+    <div className="relative group my-1 rounded overflow-hidden bg-[var(--bg-card)] border border-[var(--border-strong)]">
       {language && (
-        <div className="px-3 py-1 text-xs text-[#666] bg-[#222] border-b border-[#333] font-mono">
+        <div className="px-3 py-1 text-xs text-[var(--text-muted)] bg-[var(--border-default)] border-b border-[var(--border-strong)] font-mono">
           {language}
         </div>
       )}

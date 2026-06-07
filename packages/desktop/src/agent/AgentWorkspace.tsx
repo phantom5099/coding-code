@@ -29,13 +29,13 @@ function ContextIndicator({ threadId }: { threadId: string }) {
         className="w-5 h-5 flex items-center justify-center animate-pulse cursor-default"
       >
         <svg width="18" height="18" viewBox="0 0 18 18">
-          <circle cx="9" cy="9" r={r} fill="none" stroke="#2a2a2a" strokeWidth="2.5" />
+          <circle cx="9" cy="9" r={r} fill="none" stroke="var(--border-card)" strokeWidth="2.5" />
           <circle
             cx="9"
             cy="9"
             r={r}
             fill="none"
-            stroke="#555"
+            stroke="var(--text-placeholder)"
             strokeWidth="2.5"
             strokeDasharray={circ}
             strokeDashoffset={circ * 0.6}
@@ -88,7 +88,7 @@ function ContextIndicator({ threadId }: { threadId: string }) {
       className="w-5 h-5 flex items-center justify-center hover:opacity-70 transition-opacity"
     >
       <svg width="18" height="18" viewBox="0 0 18 18">
-        <circle cx="9" cy="9" r={r} fill="none" stroke="#2a2a2a" strokeWidth="2.5" />
+        <circle cx="9" cy="9" r={r} fill="none" stroke="var(--border-card)" strokeWidth="2.5" />
         <circle
           cx="9"
           cy="9"
@@ -139,10 +139,10 @@ function ModelSelector() {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
       >
         <span className="max-w-[160px] truncate">{displayName || '选择模型'}</span>
-        <span className="text-[#3c3c3c] text-[10px]">▾</span>
+        <span className="text-[var(--text-disabled)] text-[10px]">▾</span>
       </button>
       {open &&
         createPortal(
@@ -150,11 +150,11 @@ function ModelSelector() {
             <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
             <div
               ref={dropdownRef}
-              className="fixed bg-[#1e1e1e] border border-[#333] rounded-xl shadow-2xl min-w-[260px] z-50 py-1.5 max-h-[400px] overflow-y-auto"
+              className="fixed bg-[var(--bg-tooltip)] border border-[var(--border-strong)] rounded-xl shadow-2xl min-w-[260px] z-50 py-1.5 max-h-[400px] overflow-y-auto"
             >
               {Object.entries(groups).map(([provider, providerModels]) => (
                 <div key={provider}>
-                  <div className="px-3 py-1.5 text-[11px] font-semibold text-[#444] uppercase tracking-wider">
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-[var(--text-disabled)] uppercase tracking-wider">
                     {provider}
                   </div>
                   {providerModels.map((m) => (
@@ -172,13 +172,13 @@ function ModelSelector() {
                           console.error('Failed to switch model:', e);
                         });
                       }}
-                      className={`w-full text-left px-3 py-2 text-[14px] hover:bg-[#094771] transition-colors flex items-center gap-2 ${m.id === model ? 'text-[#4ec9b0]' : 'text-[#ccc]'}`}
+                      className={`w-full text-left px-3 py-2 text-[14px] hover:bg-[var(--bg-selected-hover)] transition-colors flex items-center gap-2 ${m.id === model ? 'text-[var(--accent-success)]' : 'text-[var(--text-primary)]'}`}
                     >
                       <span className="w-4 shrink-0 text-center text-[12px]">
                         {m.id === model ? '✓' : ''}
                       </span>
                       <span className="flex-1">{m.name}</span>
-                      <span className="text-[#3c3c3c] text-[12px] shrink-0">
+                      <span className="text-[var(--text-disabled)] text-[12px] shrink-0">
                         {(m.context_window / 1000).toFixed(0)}k
                       </span>
                     </button>
@@ -186,7 +186,7 @@ function ModelSelector() {
                 </div>
               ))}
               {models.length === 0 && (
-                <div className="px-3 py-3 text-[14px] text-[#444]">无可用模型</div>
+                <div className="px-3 py-3 text-[14px] text-[var(--text-disabled)]">无可用模型</div>
               )}
             </div>
           </>,
@@ -260,7 +260,7 @@ function InputBox({
 
   return (
     <div className={centered ? 'w-full max-w-[740px]' : 'px-5 pb-5 pt-2'}>
-      <div className="rounded-2xl border border-[#2d2d2d] bg-[#1c1c1c] hover:border-[#3a3a3a] focus-within:border-[#3a5a7a] transition-colors shadow-xl overflow-hidden">
+      <div className="rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] hover:border-[var(--border-hover)] focus-within:border-[var(--accent-primary)] transition-colors shadow-xl overflow-hidden">
         {/* Row 1: textarea + send button side by side */}
         <div className="flex items-center gap-2 pr-3">
           <textarea
@@ -276,14 +276,14 @@ function InputBox({
             placeholder="可向 AI 询问任何事"
             disabled={isStreaming}
             rows={3}
-            className="flex-1 bg-transparent px-5 pt-4 pb-3 text-[15px] text-[#d4d4d4] placeholder-[#333] resize-none outline-none leading-relaxed disabled:opacity-50"
+            className="flex-1 bg-transparent px-5 pt-4 pb-3 text-[15px] text-[var(--text-primary)] placeholder-[var(--text-disabled)] resize-none outline-none leading-relaxed disabled:opacity-50"
           />
           {/* Send / Stop — vertically centered to the right of textarea */}
           {isStreaming ? (
             <button
               type="button"
               onClick={() => abort()}
-              className="w-9 h-9 shrink-0 flex items-center justify-center bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#ccc] rounded-full transition-colors"
+              className="w-9 h-9 shrink-0 flex items-center justify-center bg-[var(--border-hover)] hover:bg-[var(--border-strong)] text-[var(--text-primary)] rounded-full transition-colors"
             >
               <Square size={14} strokeWidth={2} fill="currentColor" />
             </button>
@@ -292,7 +292,7 @@ function InputBox({
               type="button"
               onClick={handleSend}
               disabled={!text.trim()}
-              className="w-9 h-9 shrink-0 flex items-center justify-center bg-white disabled:bg-[#2a2a2a] disabled:text-[#444] text-[#111] rounded-full transition-colors"
+              className="w-9 h-9 shrink-0 flex items-center justify-center bg-[var(--btn-send-bg)] disabled:bg-[var(--bg-card)] disabled:text-[var(--text-disabled)] text-[var(--text-inverse)] rounded-full transition-colors"
             >
               <Send size={18} strokeWidth={2} />
             </button>
@@ -320,11 +320,11 @@ function InputBox({
                 });
               }
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[#555] hover:text-[#aaa] hover:bg-[#252525] rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
           >
-            <span className="text-[#569cd6]">{POLICY_ICONS[approvalPolicy]}</span>
+            <span className="text-[var(--accent-primary)]">{POLICY_ICONS[approvalPolicy]}</span>
             <span>{POLICY_LABELS[approvalPolicy] ?? '全部询问'}</span>
-            <span className="text-[#3c3c3c] text-[10px]">▾</span>
+            <span className="text-[var(--text-disabled)] text-[10px]">▾</span>
           </button>
           <div className="ml-auto flex items-center gap-2">
             {currentThreadId && <ContextIndicator threadId={currentThreadId} />}
@@ -350,10 +350,10 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
 
   if (!currentThreadId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-[#111] overflow-hidden px-6">
-        <h2 className="text-[22px] font-medium text-[#ccc] tracking-tight">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-[var(--bg-panel)] overflow-hidden px-6">
+        <h2 className="text-[22px] font-medium text-[var(--text-primary)] tracking-tight">
           在{' '}
-          <span className="text-white font-semibold">
+          <span className="text-[var(--accent-primary)] font-semibold">
             {workspace.name || workspace.rootPath.split(/[\\/]/).pop() || '当前目录'}
           </span>{' '}
           中构建什么？
@@ -364,13 +364,13 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#111]">
+    <div className="flex-1 flex flex-col overflow-hidden bg-[var(--bg-panel)]">
       <MessageStream key={currentThreadId} threadId={currentThreadId} />
       <ApprovalPanel threadId={currentThreadId} />
       <TodoPanel threadId={currentThreadId} />
       {isCompressing && (
-        <div className="shrink-0 px-5 py-1.5 bg-[#1a1a1a] border-t border-[#2d2d2d] flex items-center gap-2 text-[13px] text-[#888]">
-          <span className="w-3 h-3 border-2 border-[#555] border-t-transparent rounded-full animate-spin" />
+        <div className="shrink-0 px-5 py-1.5 bg-[var(--bg-card)] border-t border-[var(--border-card)] flex items-center gap-2 text-[13px] text-[var(--text-tertiary)]">
+          <span className="w-3 h-3 border-2 border-[var(--text-placeholder)] border-t-transparent rounded-full animate-spin" />
           <span>正在压缩上下文...</span>
         </div>
       )}

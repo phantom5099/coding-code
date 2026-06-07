@@ -76,11 +76,11 @@ function TurnDiffPanel({
   const totalDeletions = diff.files.reduce((sum: number, f: any) => sum + (f.deletions ?? 0), 0);
 
   return (
-    <div className="mt-2 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden">
+    <div className="mt-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-card)] overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded bg-[#2a2a2a] flex items-center justify-center">
+          <div className="w-7 h-7 rounded bg-[var(--bg-hover)] flex items-center justify-center">
             <svg
               width="14"
               height="14"
@@ -88,18 +88,18 @@ function TurnDiffPanel({
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
-              <path d="M8 1v14M1 8h14" stroke="#888" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M8 1v14M1 8h14" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
           <div>
-            <span className="text-[13px] text-[#ccc]">已编辑 {diff.files.length} 个文件</span>
-            {isInterrupted && <span className="ml-2 text-[11px] text-[#c88]">（对话中断）</span>}
+            <span className="text-[13px] text-[var(--text-primary)]">已编辑 {diff.files.length} 个文件</span>
+            {isInterrupted && <span className="ml-2 text-[11px] text-[var(--accent-danger)]">（对话中断）</span>}
             <div className="flex items-center gap-2 mt-0.5">
               {totalInsertions > 0 && (
-                <span className="text-[12px] text-[#4a4]">+{totalInsertions}</span>
+                <span className="text-[12px] text-[var(--accent-success)]">+{totalInsertions}</span>
               )}
               {totalDeletions > 0 && (
-                <span className="text-[12px] text-[#c44]">-{totalDeletions}</span>
+                <span className="text-[12px] text-[var(--accent-danger)]">-{totalDeletions}</span>
               )}
             </div>
           </div>
@@ -109,8 +109,8 @@ function TurnDiffPanel({
             onClick={() => onRevertScope(uiTurnId, 'all', isAllReverted)}
             className={`text-[12px] px-3 py-1 rounded ${
               isAllReverted
-                ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
-                : 'bg-[#333] text-[#aaa] hover:bg-[#444] border border-[#444]'
+                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
+                : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--bg-active)] border border-[var(--border-strong)]'
             }`}
           >
             {isAllReverted ? '撤销回退本轮全部修改' : '回退本轮全部修改'}
@@ -119,8 +119,8 @@ function TurnDiffPanel({
             onClick={() => onRevertScope(uiTurnId, 'agent', isAgentReverted)}
             className={`text-[12px] px-3 py-1 rounded ${
               isAgentReverted
-                ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
-                : 'bg-[#333] text-[#aaa] hover:bg-[#444] border border-[#444]'
+                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
+                : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--bg-active)] border border-[var(--border-strong)]'
             }`}
           >
             {isAgentReverted ? '撤销回退 Agent 修改' : '只回退 Agent 修改'}
@@ -129,7 +129,7 @@ function TurnDiffPanel({
       </div>
 
       {/* File list */}
-      <div className="border-t border-[#2a2a2a]">
+      <div className="border-t border-[var(--border-card)]">
         {diff.files.map((f: any) => {
           const isExpanded = expandedFile === f.path;
           const isFileIndividuallyReverted = revertedFiles.includes(f.path);
@@ -138,22 +138,22 @@ function TurnDiffPanel({
           return (
             <div key={f.path}>
               <div
-                className="flex items-center justify-between px-4 py-2 hover:bg-[#222] cursor-pointer"
+                className="flex items-center justify-between px-4 py-2 hover:bg-[var(--bg-hover)] cursor-pointer"
                 onClick={() => setExpandedFile(isExpanded ? null : f.path)}
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <span className="text-[12px] text-[#ccc] truncate">
+                  <span className="text-[12px] text-[var(--text-primary)] truncate">
                     {f.path.replace(/\\/g, '/')}
                   </span>
-                  <span className="text-[10px] text-[#666] shrink-0">
+                  <span className="text-[10px] text-[var(--text-muted)] shrink-0">
                     {f.source === 'agent' ? 'Agent' : '未知'}
                   </span>
-                  {isReverted && <span className="text-[10px] text-[#c88] shrink-0">已回退</span>}
+                  {isReverted && <span className="text-[10px] text-[var(--accent-danger)] shrink-0">已回退</span>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0 ml-3">
                   <div className="flex items-center gap-1.5 text-[12px]">
-                    {f.insertions > 0 && <span className="text-[#4a4]">+{f.insertions}</span>}
-                    {f.deletions > 0 && <span className="text-[#c44]">-{f.deletions}</span>}
+                    {f.insertions > 0 && <span className="text-[var(--accent-success)]">+{f.insertions}</span>}
+                    {f.deletions > 0 && <span className="text-[var(--accent-danger)]">-{f.deletions}</span>}
                   </div>
                   <button
                     onClick={(e) => {
@@ -162,8 +162,8 @@ function TurnDiffPanel({
                     }}
                     className={`text-[11px] px-2 py-0.5 rounded ${
                       isReverted
-                        ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
-                        : 'bg-[#333] text-[#888] hover:bg-[#444]'
+                        ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
+                        : 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:bg-[var(--bg-active)]'
                     }`}
                   >
                     {isReverted ? '撤销' : '回退'}
@@ -177,7 +177,7 @@ function TurnDiffPanel({
                   >
                     <path
                       d="M3 4.5L6 7.5L9 4.5"
-                      stroke="#666"
+                      stroke="var(--text-muted)"
                       strokeWidth="1.2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -480,20 +480,20 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
 
   if (turns.length === 0 || renderEntries.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[#444] text-[15px]">
+      <div className="flex-1 flex items-center justify-center text-[var(--text-placeholder)] text-[15px]">
         发送消息开始对话
       </div>
     );
   }
 
   const rollbackModal = showRollbackPanel && (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#1e1e1e] border border-[#444] rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <h3 className="text-[15px] text-[#ccc] mb-4">将回退到 Turn {showRollbackPanel.turnId}</h3>
+    <div className="fixed inset-0 bg-[var(--overlay-bg)] flex items-center justify-center z-50">
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-strong)] rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <h3 className="text-[15px] text-[var(--text-primary)] mb-4">将回退到 Turn {showRollbackPanel.turnId}</h3>
         {showRollbackPanel.preview && (
           <div className="mb-4">
-            <div className="text-[12px] text-[#888] mb-2">回退前 / 回退后差异：</div>
-            <pre className="text-[11px] bg-[#111] p-3 rounded text-[#aaa] max-h-[300px] overflow-auto whitespace-pre-wrap">
+            <div className="text-[12px] text-[var(--text-secondary)] mb-2">回退前 / 回退后差异：</div>
+            <pre className="text-[11px] bg-[var(--bg-code)] p-3 rounded text-[var(--text-secondary)] max-h-[300px] overflow-auto whitespace-pre-wrap">
               {showRollbackPanel.preview.diff || '无差异'}
             </pre>
           </div>
@@ -505,7 +505,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
               await rollbackCtx(threadId, parseInt(showRollbackPanel.turnId, 10));
               setShowRollbackPanel(null);
             }}
-            className="text-[12px] px-3 py-1.5 rounded bg-[#555] text-[#ccc] hover:bg-[#666]"
+            className="text-[12px] px-3 py-1.5 rounded bg-[var(--bg-hover)] text-[var(--text-primary)] hover:bg-[var(--bg-active)]"
           >
             只回退上下文
           </button>
@@ -515,13 +515,13 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
               await rollbackBoth(threadId, parseInt(showRollbackPanel.turnId, 10));
               setShowRollbackPanel(null);
             }}
-            className="text-[12px] px-3 py-1.5 rounded bg-[#c44] text-white hover:bg-[#d55]"
+            className="text-[12px] px-3 py-1.5 rounded bg-[var(--accent-danger)] text-[var(--text-inverse)] hover:bg-[var(--accent-danger)]/80"
           >
             上下文和代码都回退
           </button>
           <button
             onClick={() => setShowRollbackPanel(null)}
-            className="text-[12px] px-3 py-1.5 rounded bg-[#333] text-[#888] hover:bg-[#444]"
+            className="text-[12px] px-3 py-1.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] hover:bg-[var(--bg-active)]"
           >
             取消
           </button>
