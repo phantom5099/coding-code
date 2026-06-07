@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import type { Item } from '@shared/types';
 import CodeBlock from './CodeBlock';
 import DiffBlock from './DiffBlock';
@@ -106,15 +107,17 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
   const hasContent = !!(toolResult?.diff || toolResult?.output);
 
   return (
-    <div className="mb-1.5 pl-8">
+    <div className="pb-1.5 pl-8">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-[13px] hover:opacity-80 transition-opacity"
+        className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[var(--border-card)] hover:bg-[var(--border-hover)] transition-colors text-[13px]"
       >
-        <span className={`transition-transform text-[10px] text-[var(--text-muted)] ${open ? 'rotate-90' : ''}`}>
-          ▶
-        </span>
+        {open ? (
+          <ChevronDown className={`w-3.5 h-3.5 ${titleColor}`} />
+        ) : (
+          <ChevronRight className={`w-3.5 h-3.5 ${titleColor}`} />
+        )}
         <span className={`font-mono ${titleColor}`}>{title}</span>
         {isFileTool && toolResult && (toolResult.insertions || toolResult.deletions) && (
           <span className="text-[var(--text-muted)] text-xs">
@@ -124,7 +127,7 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
         )}
       </button>
       {open && hasContent && (
-        <div className="mt-1.5">
+        <div className="pt-1.5">
           {isFileTool && toolResult?.diff ? (
             <DiffBlock diff={toolResult.diff} />
           ) : toolResult?.output ? (
