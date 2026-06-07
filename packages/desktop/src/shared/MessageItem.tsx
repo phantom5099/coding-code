@@ -62,7 +62,7 @@ export default function MessageItem({
 
     if (isUser) {
       return (
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end mb-4 mt-4">
           <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[var(--border-card)] text-[var(--text-title)] text-[15px] leading-relaxed whitespace-pre-wrap break-words group">
             {content}
             {hasRollback && (
@@ -119,8 +119,8 @@ export default function MessageItem({
     }
 
     return (
-      <div className="flex justify-start mb-4">
-        <div className="max-w-[88%] text-[15px] text-[var(--text-primary)] leading-relaxed">
+      <div className="flex justify-start mb-4 pl-8">
+        <div className="max-w-[80%] text-[15px] text-[var(--text-primary)] leading-relaxed">
           {isAssistant && messageContent != null && (
             <MarkdownRenderer content={messageContent} />
           )}

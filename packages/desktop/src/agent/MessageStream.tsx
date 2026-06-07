@@ -430,7 +430,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
 
       return (
         <div>
-          <div className="px-6 py-0.5">
+          <div className="px-10 py-4">
             <MessageItem
               item={entry.item}
               threadId={threadId}
