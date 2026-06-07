@@ -199,20 +199,20 @@ export default function HooksPanel() {
   };
 
   const inputCls =
-    'w-full bg-[#252525] border border-[#3a3a3a] text-[#ddd] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#569cd6]';
-  const labelCls = 'text-[12px] text-[#555] mb-1';
-  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[#1a3a5c] text-[#569cd6] hover:bg-[#1a4a6c]';
-  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[#3a1a1a] text-[#d16969] hover:bg-[#4a1a1a]';
-  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[#2a2a2a] text-[#888] hover:bg-[#3a3a3a]';
+    'w-full bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
+  const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
+  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
+  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
+  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
 
   if (loading) {
-    return <div className="px-6 py-8 text-[14px] text-[#444]">加载中…</div>;
+    return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
   }
 
   return (
     <div className="px-6 py-5">
       <div className="flex items-center gap-2 mb-3">
-        <div className="text-[11px] font-medium text-[#444] uppercase tracking-wider">
+        <div className="text-[11px] font-medium text-[var(--text-disabled)] uppercase tracking-wider">
           用户自定义钩子
         </div>
         <button onClick={startCreate} className={btnPrimary}>
@@ -235,10 +235,10 @@ export default function HooksPanel() {
       )}
 
       {hooks.length === 0 && !isCreating ? (
-        <div className="text-[14px] text-[#444] py-6 text-center leading-loose">
+        <div className="text-[14px] text-[var(--text-disabled)] py-6 text-center leading-loose">
           未找到用户自定义钩子
           <br />
-          <span className="text-[13px] text-[#333]">点击上方按钮添加</span>
+          <span className="text-[13px] text-[var(--text-disabled)]">点击上方按钮添加</span>
         </div>
       ) : (
         <div className="space-y-2 mb-8">
@@ -263,9 +263,9 @@ export default function HooksPanel() {
               return (
                 <div
                   key={h.name}
-                  className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#3a1a1a]"
+                  className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--btn-danger-bg)]"
                 >
-                  <span className="text-[14px] text-[#d16969]">删除钩子 {h.name}？</span>
+                  <span className="text-[14px] text-[var(--accent-danger)]">删除钩子 {h.name}？</span>
                   <div className="flex gap-2">
                     <button onClick={confirmDelete} className={btnDanger}>
                       确认
@@ -280,39 +280,39 @@ export default function HooksPanel() {
             return (
               <div
                 key={h.name}
-                className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] group"
+                className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] group"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[14px] text-[#ddd]">{h.name}</span>
+                    <span className="text-[14px] text-[var(--text-title)]">{h.name}</span>
                     <span
                       className={`text-[11px] px-2 py-0.5 rounded font-mono ${
                         h.type === 'decision'
-                          ? 'bg-[#2a1a10] text-[#ce9178]'
-                          : 'bg-[#1a2a1a] text-[#6a9955]'
+                          ? 'bg-[var(--tag-decision-bg)] text-[var(--tag-decision-text)]'
+                          : 'bg-[var(--tag-action-bg)] text-[var(--tag-action-text)]'
                       }`}
                     >
                       {h.type}
                     </span>
-                    <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[#1a1a3a] text-[#569cd6]">
+                    <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-info-bg)] text-[var(--tag-info-text)]">
                       {h.point}
                     </span>
                     {!h.enabled && (
-                      <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[#2a2a2a] text-[#555]">
+                      <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-decision-bg)] text-[var(--tag-decision-text)]">
                         已禁用
                       </span>
                     )}
                   </div>
                   {h.description && (
-                    <div className="text-[12px] text-[#555] mt-1">{h.description}</div>
+                    <div className="text-[12px] text-[var(--text-placeholder)] mt-1">{h.description}</div>
                   )}
-                  <div className="text-[12px] text-[#444] mt-1 font-mono">{h.command}</div>
+                  <div className="text-[12px] text-[var(--text-disabled)] mt-1 font-mono">{h.command}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     title="编辑"
                     onClick={() => startEdit(h)}
-                    className="text-[#444] hover:text-[#888] transition-colors"
+                    className="text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] transition-colors"
                   >
                     <svg
                       width="14"
@@ -328,7 +328,7 @@ export default function HooksPanel() {
                   <button
                     title="删除"
                     onClick={() => setDeletingName(h.name)}
-                    className="text-[#444] hover:text-[#d16969] transition-colors"
+                    className="text-[var(--text-disabled)] hover:text-[var(--accent-danger)] transition-colors"
                   >
                     <svg
                       width="14"
@@ -359,31 +359,31 @@ export default function HooksPanel() {
         </div>
       )}
 
-      <div className="text-[11px] font-medium text-[#444] uppercase tracking-wider mb-3 px-1">
+      <div className="text-[11px] font-medium text-[var(--text-disabled)] uppercase tracking-wider mb-3 px-1">
         可用挂载点 (18 个内置)
       </div>
 
       <div className="space-y-6">
         {HOOK_GROUPS.map((group) => (
           <div key={group.label}>
-            <div className="text-[11px] font-medium text-[#444] uppercase tracking-wider mb-2 px-1">
+            <div className="text-[11px] font-medium text-[var(--text-disabled)] uppercase tracking-wider mb-2 px-1">
               {group.label}
             </div>
             <div className="space-y-1">
               {group.points.map((point) => (
                 <div
                   key={point.name}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#1a1a1a] border border-[#222]"
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-default)]"
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="text-[13px] font-mono text-[#ddd]">{point.name}</span>
-                    <div className="text-[12px] text-[#555] mt-0.5">{point.description}</div>
+                    <span className="text-[13px] font-mono text-[var(--text-title)]">{point.name}</span>
+                    <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">{point.description}</div>
                   </div>
                   <span
                     className={`text-[11px] px-2 py-0.5 rounded font-mono shrink-0 ${
                       point.type === 'decision'
-                        ? 'bg-[#2a1a10] text-[#ce9178]'
-                        : 'bg-[#1a2a1a] text-[#6a9955]'
+                        ? 'bg-[var(--tag-decision-bg)] text-[var(--tag-decision-text)]'
+                        : 'bg-[var(--tag-action-bg)] text-[var(--tag-action-text)]'
                     }`}
                   >
                     {point.type}
@@ -420,7 +420,7 @@ function FormCard({
   btnCancel: string;
 }) {
   return (
-    <div className="px-4 py-3.5 rounded-xl bg-[#1a1a1a] border border-[#569cd6]/30 space-y-3 mb-2">
+    <div className="px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--accent-primary)]/30 space-y-3 mb-2">
       <div>
         <div className={labelCls}>名称</div>
         <input
@@ -462,8 +462,8 @@ function FormCard({
               onClick={() => setForm({ ...form, type: 'observer' })}
               className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
                 form.type === 'observer'
-                  ? 'bg-[#1a3a5c] text-[#569cd6]'
-                  : 'bg-[#2a2a2a] text-[#888]'
+                  ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]'
+                  : 'bg-[var(--border-card)] text-[var(--text-secondary)] border border-[var(--border-hover)]'
               }`}
             >
               observer
@@ -472,8 +472,8 @@ function FormCard({
               onClick={() => setForm({ ...form, type: 'decision' })}
               className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
                 form.type === 'decision'
-                  ? 'bg-[#1a3a5c] text-[#569cd6]'
-                  : 'bg-[#2a2a2a] text-[#888]'
+                  ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]'
+                  : 'bg-[var(--border-card)] text-[var(--text-secondary)] border border-[var(--border-hover)]'
               }`}
             >
               decision
@@ -520,12 +520,12 @@ function FormCard({
           />
         </div>
         <div className="pb-1">
-          <label className="flex items-center gap-2 text-[13px] text-[#888] cursor-pointer">
+          <label className="flex items-center gap-2 text-[13px] text-[var(--text-tertiary)] cursor-pointer">
             <input
               type="checkbox"
               checked={form.enabled}
               onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-              className="accent-[#569cd6]"
+              className="accent-[var(--accent-primary)]"
             />
             启用
           </label>

@@ -10,7 +10,7 @@ export default function TitleBar() {
 
   return (
     <div
-      className="shrink-0 flex items-center px-3 bg-[#1a1a1a] select-none"
+      className="shrink-0 flex items-center px-3 bg-[var(--bg-card)] select-none"
       style={
         {
           height: 'env(titlebar-area-height, 36px)',
@@ -18,7 +18,7 @@ export default function TitleBar() {
         } as React.CSSProperties
       }
     >
-      <span className="text-[#858585] text-xs font-medium">Coding Code</span>
+      <span className="text-[var(--text-tertiary)] text-xs font-medium">Coding Code</span>
       <div
         className="flex items-center gap-0.5 ml-4"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -27,8 +27,8 @@ export default function TitleBar() {
           onClick={() => setMode('agent')}
           className={`px-3 h-6 text-xs rounded transition-colors ${
             mode === 'agent'
-              ? 'bg-[#0e639c] text-white'
-              : 'text-[#858585] hover:text-[#cccccc] hover:bg-[#2d2d2d]'
+              ? 'bg-[var(--accent-primary)] text-[var(--text-inverse)]'
+              : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
           }`}
         >
           Agent
@@ -37,8 +37,8 @@ export default function TitleBar() {
           onClick={() => setMode('ide')}
           className={`px-3 h-6 text-xs rounded transition-colors ${
             mode === 'ide'
-              ? 'bg-[#0e639c] text-white'
-              : 'text-[#858585] hover:text-[#cccccc] hover:bg-[#2d2d2d]'
+              ? 'bg-[var(--accent-primary)] text-[var(--text-inverse)]'
+              : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
           }`}
         >
           IDE

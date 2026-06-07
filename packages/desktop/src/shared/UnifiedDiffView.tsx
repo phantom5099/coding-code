@@ -18,23 +18,23 @@ function DiffLineView({
 }) {
   const borderColor =
     type === 'add'
-      ? 'border-l-[#2a6a2a]'
+      ? 'border-l-[var(--diff-add-border)]'
       : type === 'remove'
-        ? 'border-l-[#6a2a2a]'
+        ? 'border-l-[var(--diff-remove-border)]'
         : 'border-l-transparent';
   const bgColor =
-    type === 'add' ? 'bg-[#1a2f1a]' : type === 'remove' ? 'bg-[#2f1a1a]' : 'bg-transparent';
+    type === 'add' ? 'bg-[var(--diff-add-bg)]' : type === 'remove' ? 'bg-[var(--diff-remove-bg)]' : 'bg-transparent';
   const textColor =
-    type === 'add' ? 'text-[#7ee787]' : type === 'remove' ? 'text-[#ffa198]' : 'text-[#aaa]';
+    type === 'add' ? 'text-[var(--diff-add-text)]' : type === 'remove' ? 'text-[var(--diff-remove-text)]' : 'text-[var(--text-secondary)]';
 
   return (
     <div
       className={`flex font-mono text-[12px] leading-[1.6] ${bgColor} border-l-[3px] ${borderColor}`}
     >
-      <div className="w-10 shrink-0 text-right pr-2 text-[#555] select-none tabular-nums">
+      <div className="w-10 shrink-0 text-right pr-2 text-[var(--diff-line-num)] select-none tabular-nums">
         {oldLineNum ?? ''}
       </div>
-      <div className="w-10 shrink-0 text-right pr-2 text-[#555] select-none tabular-nums border-r border-[#222]">
+      <div className="w-10 shrink-0 text-right pr-2 text-[var(--diff-line-num)] select-none tabular-nums border-r border-[var(--diff-line-num-border)]">
         {newLineNum ?? ''}
       </div>
       <div className={`flex-1 pl-3 whitespace-pre ${textColor} overflow-x-auto`}>
@@ -53,10 +53,10 @@ function DiffFileView({ file }: { file: import('../lib/diff-parser').ParsedDiffF
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-[#1e1e1e] hover:bg-[#252525] text-[12px] text-[#ccc] rounded-t border-b border-[#2a2a2a] text-left"
+        className="w-full flex items-center gap-2 px-3 py-2 bg-[var(--bg-code)] hover:bg-[var(--bg-hover)] text-[12px] text-[var(--text-primary)] rounded-t border-b border-[var(--border-card)] text-left"
       >
         <span
-          className={`transition-transform text-[10px] text-[#666] ${collapsed ? '' : 'rotate-90'}`}
+          className={`transition-transform text-[10px] text-[var(--text-muted)] ${collapsed ? '' : 'rotate-90'}`}
         >
           ▶
         </span>
@@ -64,16 +64,16 @@ function DiffFileView({ file }: { file: import('../lib/diff-parser').ParsedDiffF
       </button>
 
       {!collapsed && (
-        <div className="border border-[#2a2a2a] rounded-b overflow-hidden">
+        <div className="border border-[var(--border-card)] rounded-b overflow-hidden">
           {file.hunks.length === 0 && (
-            <div className="px-3 py-2 text-[12px] text-[#555]">无差异</div>
+            <div className="px-3 py-2 text-[12px] text-[var(--text-muted)]">无差异</div>
           )}
           {file.hunks.map((hunk, hi) => (
             <div key={hi}>
               {/* Hunk context line (@@ ...) */}
-              <div className="flex items-center gap-2 px-3 py-1 bg-[#1e1e1e] text-[#555] text-[11px] font-mono border-y border-[#222]">
+              <div className="flex items-center gap-2 px-3 py-1 bg-[var(--bg-code)] text-[var(--diff-line-num)] text-[11px] font-mono border-y border-[var(--diff-line-num-border)]">
                 <span>@@</span>
-                <span className="text-[#888]">
+                <span className="text-[var(--diff-hunk-header)]">
                   -{hunk.oldStart},{hunk.oldLen} +{hunk.newStart},{hunk.newLen}
                 </span>
                 <span>@@</span>
@@ -99,7 +99,7 @@ export default function UnifiedDiffView({ diff }: UnifiedDiffViewProps) {
   const parsed = useMemo(() => parseUnifiedDiff(diff), [diff]);
 
   if (parsed.length === 0) {
-    return <div className="text-[12px] text-[#555] px-3 py-2">无差异</div>;
+    return <div className="text-[12px] text-[var(--text-muted)] px-3 py-2">无差异</div>;
   }
 
   return (

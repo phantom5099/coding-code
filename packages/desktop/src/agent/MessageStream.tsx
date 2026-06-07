@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useGlobalStore } from '../stores/global.store';
 import MessageItem from '../shared/MessageItem';
 import UnifiedDiffView from '../shared/UnifiedDiffView';
@@ -11,17 +11,12 @@ interface MessageStreamProps {
   threadId: string;
 }
 
-// ---- Top-level TurnDiffPanel (avoids unmount/remount on parent re-render) ----
-
 const EMPTY_MAPPING: Record<number, string> = {};
 
 interface TurnDiffPanelProps {
   uiTurnId: string;
   isInterrupted?: boolean;
   threadId: string;
-  checkpointDiffs: Record<string, CheckpointDiff>;
-  turnCheckpointMapping: Record<number, string>;
-  revertedFilesByTurnId: Record<string, string[]>;
   onRevertFile: (uiTurnId: string, file: string, isReverted: boolean) => void;
   onRevertScope: (uiTurnId: string, scope: 'agent' | 'all', isReverted: boolean) => void;
 }
@@ -55,12 +50,23 @@ function TurnDiffPanel({
   uiTurnId,
   isInterrupted,
   threadId,
-  checkpointDiffs,
-  turnCheckpointMapping,
-  revertedFilesByTurnId,
   onRevertFile,
   onRevertScope,
 }: TurnDiffPanelProps) {
+  const rawCheckpointDiffByTurnId = useGlobalStore((s) => s.rollback.checkpointDiffByTurnId);
+  const rawTurnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping);
+  const revertedFilesByTurnId = useGlobalStore((s) => s.rollback.revertedFilesByTurnId);
+
+  const checkpointDiffs = useMemo(() => {
+    const prefix = `${threadId}:`;
+    const result: Record<string, CheckpointDiff> = {};
+    for (const [k, v] of Object.entries(rawCheckpointDiffByTurnId)) {
+      if (k.startsWith(prefix)) result[k] = v;
+    }
+    return result;
+  }, [threadId, rawCheckpointDiffByTurnId]);
+
+  const turnCheckpointMapping = rawTurnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
   const ckKey = getCheckpointKey(threadId, uiTurnId, checkpointDiffs, turnCheckpointMapping);
   const diff = ckKey ? checkpointDiffs[ckKey] : null;
   const revertedFiles = revertedFilesByTurnId[`${threadId}:${uiTurnId}`] ?? [];
@@ -76,11 +82,10 @@ function TurnDiffPanel({
   const totalDeletions = diff.files.reduce((sum: number, f: any) => sum + (f.deletions ?? 0), 0);
 
   return (
-    <div className="mt-2 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] overflow-hidden">
-      {/* Header */}
+    <div className="mt-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-card)] overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded bg-[#2a2a2a] flex items-center justify-center">
+          <div className="w-7 h-7 rounded bg-[var(--bg-hover)] flex items-center justify-center">
             <svg
               width="14"
               height="14"
@@ -88,18 +93,18 @@ function TurnDiffPanel({
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
-              <path d="M8 1v14M1 8h14" stroke="#888" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M8 1v14M1 8h14" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
           <div>
-            <span className="text-[13px] text-[#ccc]">已编辑 {diff.files.length} 个文件</span>
-            {isInterrupted && <span className="ml-2 text-[11px] text-[#c88]">（对话中断）</span>}
+            <span className="text-[13px] text-[var(--text-primary)]">已编辑 {diff.files.length} 个文件</span>
+            {isInterrupted && <span className="ml-2 text-[11px] text-[var(--accent-danger)]">（对话中断）</span>}
             <div className="flex items-center gap-2 mt-0.5">
               {totalInsertions > 0 && (
-                <span className="text-[12px] text-[#4a4]">+{totalInsertions}</span>
+                <span className="text-[12px] text-[var(--accent-success)]">+{totalInsertions}</span>
               )}
               {totalDeletions > 0 && (
-                <span className="text-[12px] text-[#c44]">-{totalDeletions}</span>
+                <span className="text-[12px] text-[var(--accent-danger)]">-{totalDeletions}</span>
               )}
             </div>
           </div>
@@ -109,8 +114,8 @@ function TurnDiffPanel({
             onClick={() => onRevertScope(uiTurnId, 'all', isAllReverted)}
             className={`text-[12px] px-3 py-1 rounded ${
               isAllReverted
-                ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
-                : 'bg-[#333] text-[#aaa] hover:bg-[#444] border border-[#444]'
+                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
+                : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--bg-active)] border border-[var(--border-strong)]'
             }`}
           >
             {isAllReverted ? '撤销回退本轮全部修改' : '回退本轮全部修改'}
@@ -119,17 +124,15 @@ function TurnDiffPanel({
             onClick={() => onRevertScope(uiTurnId, 'agent', isAgentReverted)}
             className={`text-[12px] px-3 py-1 rounded ${
               isAgentReverted
-                ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
-                : 'bg-[#333] text-[#aaa] hover:bg-[#444] border border-[#444]'
+                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
+                : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--bg-active)] border border-[var(--border-strong)]'
             }`}
           >
             {isAgentReverted ? '撤销回退 Agent 修改' : '只回退 Agent 修改'}
           </button>
         </div>
       </div>
-
-      {/* File list */}
-      <div className="border-t border-[#2a2a2a]">
+      <div className="border-t border-[var(--border-card)]">
         {diff.files.map((f: any) => {
           const isExpanded = expandedFile === f.path;
           const isFileIndividuallyReverted = revertedFiles.includes(f.path);
@@ -138,22 +141,22 @@ function TurnDiffPanel({
           return (
             <div key={f.path}>
               <div
-                className="flex items-center justify-between px-4 py-2 hover:bg-[#222] cursor-pointer"
+                className="flex items-center justify-between px-4 py-2 hover:bg-[var(--bg-hover)] cursor-pointer"
                 onClick={() => setExpandedFile(isExpanded ? null : f.path)}
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <span className="text-[12px] text-[#ccc] truncate">
+                  <span className="text-[12px] text-[var(--text-primary)] truncate">
                     {f.path.replace(/\\/g, '/')}
                   </span>
-                  <span className="text-[10px] text-[#666] shrink-0">
+                  <span className="text-[10px] text-[var(--text-muted)] shrink-0">
                     {f.source === 'agent' ? 'Agent' : '未知'}
                   </span>
-                  {isReverted && <span className="text-[10px] text-[#c88] shrink-0">已回退</span>}
+                  {isReverted && <span className="text-[10px] text-[var(--accent-danger)] shrink-0">已回退</span>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0 ml-3">
                   <div className="flex items-center gap-1.5 text-[12px]">
-                    {f.insertions > 0 && <span className="text-[#4a4]">+{f.insertions}</span>}
-                    {f.deletions > 0 && <span className="text-[#c44]">-{f.deletions}</span>}
+                    {f.insertions > 0 && <span className="text-[var(--accent-success)]">+{f.insertions}</span>}
+                    {f.deletions > 0 && <span className="text-[var(--accent-danger)]">-{f.deletions}</span>}
                   </div>
                   <button
                     onClick={(e) => {
@@ -162,8 +165,8 @@ function TurnDiffPanel({
                     }}
                     className={`text-[11px] px-2 py-0.5 rounded ${
                       isReverted
-                        ? 'bg-[#4a3] text-white hover:bg-[#5b4]'
-                        : 'bg-[#333] text-[#888] hover:bg-[#444]'
+                        ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
+                        : 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:bg-[var(--bg-active)]'
                     }`}
                   >
                     {isReverted ? '撤销' : '回退'}
@@ -177,7 +180,7 @@ function TurnDiffPanel({
                   >
                     <path
                       d="M3 4.5L6 7.5L9 4.5"
-                      stroke="#666"
+                      stroke="var(--text-muted)"
                       strokeWidth="1.2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -198,10 +201,7 @@ function TurnDiffPanel({
   );
 }
 
-// ---- Main component ----
-
 export default function MessageStream({ threadId }: MessageStreamProps) {
-  // Fine-grained subscriptions: only subscribe to what we actually use
   const turns = useGlobalStore((s) => s.agent.threads[threadId]?.turns ?? []);
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
   const { approveTool, rejectTool } = useAgentApproval();
@@ -211,41 +211,22 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     revertAgentFiles,
     revertAllFiles,
     previewRollback,
-    rollbackCode,
     rollbackCtx,
     rollbackBoth,
     undoCodeRollback,
     forkThread,
     revertedFilesByTurnId,
   } = useAgentRollback();
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
-
-  // Subscribe to raw store data (stable references), derive with useMemo below
-  const rawCheckpointDiffByTurnId = useGlobalStore((s) => s.rollback.checkpointDiffByTurnId);
-  const rawTurnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping);
+  const parentRef = useRef<HTMLDivElement>(null);
   const markScopeRestored = useGlobalStore((s) => s.markScopeRestored);
   const markFileRestored = useGlobalStore((s) => s.markFileRestored);
   const setPendingInput = useGlobalStore((s) => s.setPendingInput);
 
-  // Derive thread-scoped data with useMemo for stable references
-  const checkpointDiffs = useMemo(() => {
-    const prefix = `${threadId}:`;
-    const result: Record<string, CheckpointDiff> = {};
-    for (const [k, v] of Object.entries(rawCheckpointDiffByTurnId)) {
-      if (k.startsWith(prefix)) result[k] = v;
-    }
-    return result;
-  }, [threadId, rawCheckpointDiffByTurnId]);
-
-  const turnCheckpointMapping = rawTurnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
-
-  // Rollback modal state
   const [showRollbackPanel, setShowRollbackPanel] = useState<{
     turnId: string;
     preview: any;
   } | null>(null);
 
-  // ---- Structure signature: only changes when turns structure changes (not content) ----
   const turnsStructureKey = useMemo(
     () =>
       turns
@@ -257,14 +238,12 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     [turns]
   );
 
-  // ---- Memoized rendering data ----
-  // Depends on turnsStructureKey instead of thread, so content updates don't trigger rebuild
-
   const { renderEntries, callIdToToolName, entryCountByTurnId, turnById } = useMemo(() => {
     const entries: Array<{
       item: Item;
       turnId: string;
       toolResult?: Item & { type: 'tool_result' };
+      key: string;
     }> = [];
     const toolResultByCallId: Record<string, Item & { type: 'tool_result' }> = {};
     const nameMap: Record<string, string> = {};
@@ -285,9 +264,9 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       for (const item of turn.items) {
         if (item.type === 'tool_result') continue;
         if (item.type === 'tool_call') {
-          entries.push({ item, turnId: turn.id, toolResult: toolResultByCallId[item.id] });
+          entries.push({ item, turnId: turn.id, toolResult: toolResultByCallId[item.id], key: item.id });
         } else {
-          entries.push({ item, turnId: turn.id });
+          entries.push({ item, turnId: turn.id, key: item.id });
         }
         countMap.set(turn.id, (countMap.get(turn.id) ?? 0) + 1);
       }
@@ -345,7 +324,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     }
     return { turnEndIndices: endIndices, turnRollbackCallbacks: rollbackCbs };
   }, [
-    turns,
+    turnsStructureKey,
     entryCountByTurnId,
     threadId,
     previewRollback,
@@ -354,12 +333,19 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     setPendingInput,
   ]);
 
-  const totalCount = renderEntries.length;
+  const virtualizer = useVirtualizer({
+    count: renderEntries.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 60,
+    getItemKey: (index: number) => renderEntries[index]?.key ?? `empty-${index}`,
+    overscan: 5,
+    anchorTo: 'end',
+    followOnAppend: 'smooth',
+    scrollEndThreshold: 80,
+  });
 
-  // Memoized turnStatusKey for auto-load diff effect
   const turnStatusKey = useMemo(() => turns.map((t) => `${t.id}:${t.status}`).join(','), [turns]);
 
-  // Auto-load diff when a turn completes or errors
   const handleLoadDiff = useCallback(
     async (uiTurnId: string) => {
       const diff = await loadCheckpointDiff(threadId);
@@ -377,14 +363,17 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   useEffect(() => {
     for (const turn of turns) {
       if (turn.status !== 'completed' && turn.status !== 'error') continue;
-      const ckKey = getCheckpointKey(threadId, turn.id, checkpointDiffs, turnCheckpointMapping);
-      if (!ckKey || !checkpointDiffs[ckKey]) {
+      const ckKey = getCheckpointKey(
+        threadId,
+        turn.id,
+        useGlobalStore.getState().rollback.checkpointDiffByTurnId,
+        useGlobalStore.getState().rollback.turnCheckpointMapping[threadId] ?? EMPTY_MAPPING
+      );
+      if (!ckKey) {
         handleLoadDiff(turn.id);
       }
     }
-  }, [turnStatusKey]);
-
-  // ---- Handlers ----
+  }, [turnStatusKey, threadId, handleLoadDiff]);
 
   const handleRevertFile = useCallback(
     async (uiTurnId: string, file: string, isReverted: boolean) => {
@@ -416,84 +405,14 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     [threadId, revertAgentFiles, revertAllFiles, undoCodeRollback, markScopeRestored]
   );
 
-  // ---- Render single item (with optional turn-end diff panel) ----
-
-  const renderItem = useCallback(
-    (index: number) => {
-      const entry = renderEntries[index];
-      if (!entry) return null;
-      const isLastInTurn = turnEndIndices.has(index);
-      const cbs = turnRollbackCallbacks.get(entry.turnId);
-      const isUserMsg = entry.item.type === 'message' && entry.item.role === 'user';
-      const turn = turnById.get(entry.turnId);
-      const isInterrupted = turn?.status === 'error';
-
-      return (
-        <div>
-          <div className="px-6 py-0.5">
-            <MessageItem
-              item={entry.item}
-              threadId={threadId}
-              onApprove={approveTool}
-              onReject={rejectTool}
-              callIdToToolName={callIdToToolName}
-              onRollbackHere={isUserMsg && cbs ? cbs.onRollbackHere : undefined}
-              onForkFromHere={isUserMsg && cbs ? cbs.onForkFromHere : undefined}
-              toolResult={entry.toolResult}
-            />
-          </div>
-          {isLastInTurn && (
-            <div className="px-6 pb-2">
-              <TurnDiffPanel
-                uiTurnId={entry.turnId}
-                isInterrupted={isInterrupted}
-                threadId={threadId}
-                checkpointDiffs={checkpointDiffs}
-                turnCheckpointMapping={turnCheckpointMapping}
-                revertedFilesByTurnId={revertedFilesByTurnId}
-                onRevertFile={handleRevertFile}
-                onRevertScope={handleRevertScope}
-              />
-            </div>
-          )}
-        </div>
-      );
-    },
-    [
-      renderEntries,
-      turnEndIndices,
-      turnRollbackCallbacks,
-      turnById,
-      threadId,
-      approveTool,
-      rejectTool,
-      callIdToToolName,
-      checkpointDiffs,
-      turnCheckpointMapping,
-      revertedFilesByTurnId,
-      handleRevertFile,
-      handleRevertScope,
-    ]
-  );
-
-  // ---- Empty state ----
-
-  if (turns.length === 0 || renderEntries.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[#444] text-[15px]">
-        发送消息开始对话
-      </div>
-    );
-  }
-
   const rollbackModal = showRollbackPanel && (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#1e1e1e] border border-[#444] rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <h3 className="text-[15px] text-[#ccc] mb-4">将回退到 Turn {showRollbackPanel.turnId}</h3>
+    <div className="fixed inset-0 bg-[var(--overlay-bg)] flex items-center justify-center z-50">
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-strong)] rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <h3 className="text-[15px] text-[var(--text-primary)] mb-4">将回退到 Turn {showRollbackPanel.turnId}</h3>
         {showRollbackPanel.preview && (
           <div className="mb-4">
-            <div className="text-[12px] text-[#888] mb-2">回退前 / 回退后差异：</div>
-            <pre className="text-[11px] bg-[#111] p-3 rounded text-[#aaa] max-h-[300px] overflow-auto whitespace-pre-wrap">
+            <div className="text-[12px] text-[var(--text-secondary)] mb-2">回退前 / 回退后差异：</div>
+            <pre className="text-[11px] bg-[var(--bg-code)] p-3 rounded text-[var(--text-secondary)] max-h-[300px] overflow-auto whitespace-pre-wrap">
               {showRollbackPanel.preview.diff || '无差异'}
             </pre>
           </div>
@@ -505,7 +424,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
               await rollbackCtx(threadId, parseInt(showRollbackPanel.turnId, 10));
               setShowRollbackPanel(null);
             }}
-            className="text-[12px] px-3 py-1.5 rounded bg-[#555] text-[#ccc] hover:bg-[#666]"
+            className="text-[12px] px-3 py-1.5 rounded bg-[var(--bg-hover)] text-[var(--text-primary)] hover:bg-[var(--bg-active)]"
           >
             只回退上下文
           </button>
@@ -515,13 +434,13 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
               await rollbackBoth(threadId, parseInt(showRollbackPanel.turnId, 10));
               setShowRollbackPanel(null);
             }}
-            className="text-[12px] px-3 py-1.5 rounded bg-[#c44] text-white hover:bg-[#d55]"
+            className="text-[12px] px-3 py-1.5 rounded bg-[var(--accent-danger)] text-[var(--text-inverse)] hover:bg-[var(--accent-danger)]/80"
           >
             上下文和代码都回退
           </button>
           <button
             onClick={() => setShowRollbackPanel(null)}
-            className="text-[12px] px-3 py-1.5 rounded bg-[#333] text-[#888] hover:bg-[#444]"
+            className="text-[12px] px-3 py-1.5 rounded bg-[var(--bg-hover)] text-[var(--text-muted)] hover:bg-[var(--bg-active)]"
           >
             取消
           </button>
@@ -530,18 +449,76 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     </div>
   );
 
-  // ---- Unified Virtuoso path ----
-
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <Virtuoso
-        ref={virtuosoRef}
+      <div
+        ref={parentRef}
         className="flex-1 select-text"
-        totalCount={totalCount}
-        itemContent={renderItem}
-        followOutput={(isAtBottom: boolean) => (isAtBottom ? 'smooth' : false)}
-        style={{ flex: 1 }}
-      />
+        style={{ overflowY: 'auto', contain: 'strict', overflowAnchor: 'none' }}
+      >
+        {renderEntries.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-[var(--text-placeholder)] text-[15px]">
+            发送消息开始对话
+          </div>
+        ) : (
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const entry = renderEntries[virtualRow.index];
+              if (!entry) return null;
+              const isLastInTurn = turnEndIndices.has(virtualRow.index);
+              const cbs = turnRollbackCallbacks.get(entry.turnId);
+              const isUserMsg = entry.item.type === 'message' && entry.item.role === 'user';
+              const turn = turnById.get(entry.turnId);
+              const isInterrupted = turn?.status === 'error';
+
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <div className="px-10 py-1">
+                    <MessageItem
+                      item={entry.item}
+                      threadId={threadId}
+                      onApprove={approveTool}
+                      onReject={rejectTool}
+                      callIdToToolName={callIdToToolName}
+                      onRollbackHere={isUserMsg && cbs ? cbs.onRollbackHere : undefined}
+                      onForkFromHere={isUserMsg && cbs ? cbs.onForkFromHere : undefined}
+                      toolResult={entry.toolResult}
+                    />
+                  </div>
+                  {isLastInTurn && (
+                    <div className="px-6 pb-2">
+                      <TurnDiffPanel
+                        uiTurnId={entry.turnId}
+                        isInterrupted={isInterrupted}
+                        threadId={threadId}
+                        onRevertFile={handleRevertFile}
+                        onRevertScope={handleRevertScope}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
       {rollbackModal}
     </div>
   );

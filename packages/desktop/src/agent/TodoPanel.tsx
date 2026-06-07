@@ -3,9 +3,9 @@ import type { TodoItem } from '@shared/types';
 
 function TodoItemRow({ item }: { item: TodoItem }) {
   const statusColor = {
-    pending: 'text-[#777]',
-    in_progress: 'text-[#569cd6]',
-    completed: 'text-[#6a9955]',
+    pending: 'text-[var(--text-tertiary)]',
+    in_progress: 'text-[var(--accent-primary)]',
+    completed: 'text-[var(--accent-success)]',
   }[item.status];
 
   const statusIcon = {
@@ -17,7 +17,7 @@ function TodoItemRow({ item }: { item: TodoItem }) {
   return (
     <div className="flex items-start gap-2 text-[13px] leading-relaxed">
       <span className={`shrink-0 ${statusColor}`}>{statusIcon}</span>
-      <span className={item.status === 'completed' ? 'text-[#888] line-through' : 'text-[#ccc]'}>
+      <span className={item.status === 'completed' ? 'text-[var(--text-tertiary)] line-through' : 'text-[var(--text-primary)]'}>
         {item.step}
       </span>
     </div>
@@ -49,24 +49,24 @@ export default function TodoPanel({ threadId }: { threadId: string }) {
         .join(' · ') || 'Todo';
 
   return (
-    <div className="shrink-0 border-t border-[#2a2a2a] bg-[#1a1a1a]">
+    <div className="shrink-0 border-t border-[var(--border-card)] bg-[var(--bg-card)]">
       {/* Collapsed header — always visible when panel is shown */}
       <button
         type="button"
         onClick={() => toggleCollapsed(threadId)}
-        className="w-full flex items-center justify-between px-5 py-2 text-[13px] hover:bg-[#222] transition-colors"
+        className="w-full flex items-center justify-between px-5 py-2 text-[13px] hover:bg-[var(--border-default)] transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="font-medium text-[#ddd]">Todo</span>
-          <span className="text-[#777]">{summary}</span>
+          <span className="font-medium text-[var(--text-title)]">Todo</span>
+          <span className="text-[var(--text-tertiary)]">{summary}</span>
         </div>
-        <span className="text-[#555]">{collapsed ? '⌃' : '⌄'}</span>
+        <span className="text-[var(--text-placeholder)]">{collapsed ? '⌃' : '⌄'}</span>
       </button>
 
       {/* Expanded list */}
       {!collapsed && (
         <div className="px-5 pb-3 max-h-[220px] overflow-y-auto">
-          {allCompleted && <div className="text-[12px] text-[#6a9955] mb-2">全部完成</div>}
+          {allCompleted && <div className="text-[12px] text-[var(--accent-success)] mb-2">全部完成</div>}
           <div className="space-y-1.5">
             {items.map((item, index) => (
               <TodoItemRow key={index} item={item} />

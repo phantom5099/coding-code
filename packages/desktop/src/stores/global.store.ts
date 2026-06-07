@@ -19,18 +19,7 @@ function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`);
 }
 
-export function enrichTurnDiffs(turn: Turn): void {
-  for (let i = 0; i < turn.items.length; i++) {
-    const item = turn.items[i]!;
-    if (item.type !== 'tool_result') continue;
-    if ((item as any).diff) continue; // already computed by applyChunk
-    const callItem = turn.items.find(
-      (j) => j.type === 'tool_call' && j.id === (item as any).callId
-    ) as any;
-    if (!callItem) continue;
-    turn.items[i] = buildToolDiff(item as any, callItem) as any;
-  }
-}
+
 
 export interface ModelEntry {
   id: string;
@@ -47,6 +36,7 @@ interface UIState {
   rightPanelWidth: number;
   bottomPanelHeight: number;
   ideSidebarView: 'explorer' | 'search' | 'git' | 'extensions';
+  theme: 'dark' | 'light' | 'paper';
 }
 
 interface WorkspaceState {
@@ -114,6 +104,7 @@ interface GlobalActions {
   setRightPanelWidth: (w: number) => void;
   setBottomPanelHeight: (h: number) => void;
   setIdeSidebarView: (view: UIState['ideSidebarView']) => void;
+  setTheme: (theme: UIState['theme']) => void;
   setWorkspace: (rootPath: string, name: string) => void;
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (id: string) => void;
@@ -208,6 +199,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         rightPanelWidth: 320,
         bottomPanelHeight: 200,
         ideSidebarView: 'explorer',
+        theme: 'dark',
       },
       workspace: {
         rootPath: '',
@@ -274,6 +266,10 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setIdeSidebarView: (view) =>
         set((s) => {
           s.ui.ideSidebarView = view;
+        }),
+      setTheme: (theme) =>
+        set((s) => {
+          s.ui.theme = theme;
         }),
       setWorkspace: (rootPath, name) =>
         set((s) => {
@@ -370,7 +366,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         set((s) => {
           const thread = s.agent.threads[threadId];
           if (thread) {
-            for (const turn of turns) enrichTurnDiffs(turn);
             s.agent.threads[threadId] = { ...thread, turns };
           }
         }),
@@ -411,8 +406,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           const next: Record<string, Thread> = {};
           for (const t of threads) {
             const existing = s.agent.threads[t.id];
-            const targetTurns = existing ? existing.turns : t.turns;
-            for (const turn of targetTurns) enrichTurnDiffs(turn);
             next[t.id] = existing ? { ...t, turns: existing.turns } : t;
           }
           for (const [id, thread] of Object.entries(s.agent.threads)) {

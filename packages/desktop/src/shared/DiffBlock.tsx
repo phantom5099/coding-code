@@ -10,19 +10,19 @@ export default function DiffBlock({ diff }: DiffBlockProps) {
   const lines = parsed.flatMap((f) => f.hunks.flatMap((h) => h.lines));
 
   return (
-    <div className="rounded-md overflow-hidden border border-[#333]">
+    <div className="rounded-md overflow-hidden border border-[var(--border-strong)]">
       <pre className="text-[12px] leading-[1.5] font-mono overflow-x-auto">
         {lines.map((line, idx) => {
           const { type, text } = line;
-          let bgColor = 'bg-[#1e1e1e]';
-          let textColor = 'text-[#d4d4d4]';
+          let bgColor = 'bg-[var(--bg-code)]';
+          let textColor = 'text-[var(--text-primary)]';
 
           if (type === 'add') {
-            bgColor = 'bg-[#1a3a1a]';
-            textColor = 'text-[#4ec9b0]';
+            bgColor = 'bg-[var(--diff-add-bg)]';
+            textColor = 'text-[var(--diff-add-text)]';
           } else if (type === 'remove') {
-            bgColor = 'bg-[#3a1a1a]';
-            textColor = 'text-[#f44747]';
+            bgColor = 'bg-[var(--diff-remove-bg)]';
+            textColor = 'text-[var(--diff-remove-text)]';
           }
 
           return (

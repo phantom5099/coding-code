@@ -31,6 +31,9 @@ const api = {
   // Workspace cwd sync (renderer -> main)
   setWorkspaceCwd: (cwd: string): void => ipcRenderer.send('workspace:setCwd', cwd),
 
+  // Theme sync (renderer -> main)
+  setTheme: (theme: string): void => ipcRenderer.send('theme:change', theme),
+
   // Git (explicit cwd)
   gitStatus: (cwd: string): Promise<unknown> => ipcRenderer.invoke('git:status', cwd),
   gitBranches: (cwd: string): Promise<string[]> => ipcRenderer.invoke('git:branches', cwd),

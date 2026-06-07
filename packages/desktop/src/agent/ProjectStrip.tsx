@@ -52,9 +52,9 @@ function SessionListPopup({
   const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   return (
-    <div className="absolute left-full top-0 ml-1 w-60 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg shadow-2xl z-50">
-      <div className="px-3 py-2 border-b border-[#2a2a2a]">
-        <span className="text-[12px] font-semibold text-[#777] uppercase tracking-wider">
+    <div className="absolute left-full top-0 ml-1 w-60 bg-[var(--bg-card)] border border-[var(--border-card)] rounded-lg shadow-2xl z-50">
+      <div className="px-3 py-2 border-b border-[var(--border-card)]">
+        <span className="text-[12px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
           {project.name}
         </span>
       </div>
@@ -68,8 +68,8 @@ function SessionListPopup({
             onMouseLeave={() => setHoveredId(null)}
             className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
               currentThreadId === t.id
-                ? 'bg-[#0d2d4a] text-[#cde]'
-                : 'text-[#888] hover:bg-[#252525] hover:text-[#ccc]'
+                ? 'bg-[var(--bg-selected)] text-[var(--accent-primary)]'
+                : 'text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
             }`}
           >
             <span className="flex-1 text-[13px] truncate">{t.title || '未命名对话'}</span>
@@ -80,7 +80,7 @@ function SessionListPopup({
                   e.stopPropagation();
                   onDeleteThread(t.id);
                 }}
-                className="shrink-0 p-0.5 text-[#555] hover:text-red-400 transition-colors"
+                className="shrink-0 p-0.5 text-[var(--text-placeholder)] hover:text-red-400 transition-colors"
                 title="删除对话"
               >
                 <svg
@@ -101,15 +101,15 @@ function SessionListPopup({
                 </svg>
               </button>
             ) : (
-              <span className="text-[11px] text-[#444] shrink-0">{relativeTime(t.updatedAt)}</span>
+              <span className="text-[11px] text-[var(--text-disabled)] shrink-0">{relativeTime(t.updatedAt)}</span>
             )}
           </button>
         ))}
         {sorted.length === 0 && (
-          <div className="px-3 py-3 text-[13px] text-[#3a3a3a]">暂无对话</div>
+          <div className="px-3 py-3 text-[13px] text-[var(--text-disabled)]">暂无对话</div>
         )}
         {sorted.length > 12 && (
-          <div className="px-3 py-1 text-[12px] text-[#3a3a3a]">+{sorted.length - 12} 条更多</div>
+          <div className="px-3 py-1 text-[12px] text-[var(--text-disabled)]">+{sorted.length - 12} 条更多</div>
         )}
       </div>
     </div>
@@ -184,7 +184,7 @@ export default function ProjectStrip() {
   };
 
   return (
-    <div className="flex flex-col items-center w-12 shrink-0 bg-[#111] border-r border-[#222] pt-3 pb-2 gap-4 select-none">
+    <div className="flex flex-col items-center w-12 shrink-0 bg-[var(--bg-panel)] border-r border-[var(--border-default)] pt-3 pb-2 gap-4 select-none">
       {projects.map((p) => {
         const isActive = p.id === currentProjectId;
         const colorClass = colorForId(p.id);
@@ -199,8 +199,8 @@ export default function ProjectStrip() {
               type="button"
               onClick={() => handleSelectProject(p.id)}
               title={p.name}
-              className={`w-9 h-9 rounded-lg flex items-center justify-center text-[15px] font-semibold text-white transition-all shrink-0
-                ${colorClass} ${isActive ? 'ring-2 ring-white/60 ring-offset-1 ring-offset-[#111]' : 'opacity-70 hover:opacity-100'}`}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center text-[15px] font-semibold text-[var(--text-white)] transition-all shrink-0
+                ${colorClass} ${isActive ? 'ring-2 ring-white/60 ring-offset-1 ring-offset-[var(--bg-panel)]' : 'opacity-70 hover:opacity-100'}`}
             >
               {p.name.charAt(0).toUpperCase()}
             </button>
@@ -221,13 +221,13 @@ export default function ProjectStrip() {
       })}
 
       {/* Divider before add button */}
-      {projects.length > 0 && <div className="w-6 border-t border-[#2a2a2a] my-1" />}
+      {projects.length > 0 && <div className="w-6 border-t border-[var(--border-card)] my-1" />}
 
       <button
         type="button"
         onClick={handleAddProject}
         title="添加项目"
-        className="w-9 h-9 rounded-lg flex items-center justify-center text-[#555] hover:text-[#ccc] hover:bg-[#252525] transition-colors text-lg shrink-0"
+        className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-lg shrink-0"
       >
         +
       </button>

@@ -40,26 +40,26 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
           </a>
         );
       },
-      h1: (props) => <h1 className="md-h1" {...props} />,
-      h2: (props) => <h2 className="md-h2" {...props} />,
-      h3: (props) => <h3 className="md-h3" {...props} />,
-      h4: (props) => <h4 className="md-h4" {...props} />,
-      h5: (props) => <h5 className="md-h5" {...props} />,
-      h6: (props) => <h6 className="md-h6" {...props} />,
-      p: (props) => <p className="md-p" {...props} />,
-      ul: (props) => <ul className="md-ul" {...props} />,
-      ol: (props) => <ol className="md-ol" {...props} />,
-      li: (props) => <li className="md-li" {...props} />,
-      blockquote: (props) => <blockquote className="md-blockquote" {...props} />,
-      table: (props) => (
+      h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h1 className="md-h1" {...props} />,
+      h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h2 className="md-h2" {...props} />,
+      h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h3 className="md-h3" {...props} />,
+      h4: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h4 className="md-h4" {...props} />,
+      h5: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h5 className="md-h5" {...props} />,
+      h6: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h6 className="md-h6" {...props} />,
+      p: (props: React.HTMLAttributes<HTMLParagraphElement>) => <p className="md-p" {...props} />,
+      ul: (props: React.HTMLAttributes<HTMLUListElement>) => <ul className="md-ul" {...props} />,
+      ol: (props: React.HTMLAttributes<HTMLOListElement>) => <ol className="md-ol" {...props} />,
+      li: (props: React.HTMLAttributes<HTMLLIElement>) => <li className="md-li" {...props} />,
+      blockquote: (props: React.HTMLAttributes<HTMLQuoteElement>) => <blockquote className="md-blockquote" {...props} />,
+      table: (props: React.TableHTMLAttributes<HTMLTableElement>) => (
         <div className="md-table-wrapper">
           <table className="md-table" {...props} />
         </div>
       ),
       hr: () => <hr className="md-hr" />,
-      img: (props) => <img className="md-img" {...props} />,
-      strong: (props) => <strong className="md-strong" {...props} />,
-      em: (props) => <em className="md-em" {...props} />,
+      img: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img className="md-img" {...props} />,
+      strong: (props: React.HTMLAttributes<HTMLElement>) => <strong className="md-strong" {...props} />,
+      em: (props: React.HTMLAttributes<HTMLElement>) => <em className="md-em" {...props} />,
     }),
     []
   );

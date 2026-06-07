@@ -1,5 +1,5 @@
 export function getToggleThumbClassName(checked: boolean): string {
-  return `absolute left-0.5 top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+  return `absolute left-0.5 top-0.5 w-3 h-3 rounded-full bg-[var(--text-white)] transition-transform ${
     checked ? 'translate-x-4' : 'translate-x-0'
   }`;
 }
@@ -21,7 +21,7 @@ export default function Toggle({
       title={checked ? (enabledLabel ?? '已启用') : (disabledLabel ?? '已禁用')}
       onClick={() => onChange(!checked)}
       className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${
-        checked ? 'bg-[#569cd6]' : 'bg-[#3a3a3a]'
+        checked ? 'bg-[var(--accent-primary)]' : 'bg-[var(--text-disabled)]'
       }`}
     >
       <span className={getToggleThumbClassName(checked)} />

@@ -20,7 +20,7 @@
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.7",
-    "react-virtuoso": "^4.12.6",
+    "@tanstack/react-virtual": "^3.12.6",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "simple-git": "^3.27.0",
