@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ToolDefinition, ToolDescription } from './types';
 import type { AgentProfile } from '../subagent/registry';
 import type { ToolVisibilityPolicy } from './types';
+import { canonicalizeSchema } from './utils/canonicalize-schema.js';
 import { readFileTool } from './domains/fs/read.js';
 import { writeFileTool } from './domains/fs/write.js';
 import { editFileTool } from './domains/fs/edit.js';
@@ -104,7 +105,9 @@ export function createSessionToolResolver(
       return tools.map((t) => ({
         name: t.name,
         description: t.description,
-        parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
+        parameters:
+          t.jsonSchema ??
+          (canonicalizeSchema(z.toJSONSchema(t.parameters)) as Record<string, unknown>),
       }));
     },
   };
