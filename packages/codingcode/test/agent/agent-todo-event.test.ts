@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
@@ -107,7 +107,6 @@ describe('TodoUpdate event', () => {
         maxStopContinuations: 2,
         executor: mockExecutor as any,
         runtime: { listAgentProfiles: () => [] } as any,
-        toolSearch: mockToolSearch as any,
         agentService: mockAgentService as any,
         ctx: mockCtx as any,
         session: mockSession as any,
@@ -153,7 +152,6 @@ describe('TodoUpdate event', () => {
         maxStopContinuations: 2,
         executor: mockExecutor as any,
         runtime: { listAgentProfiles: () => [] } as any,
-        toolSearch: mockToolSearch as any,
         agentService: mockAgentService as any,
         ctx: mockCtx as any,
         session: mockSession as any,

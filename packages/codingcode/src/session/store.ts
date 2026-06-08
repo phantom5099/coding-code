@@ -38,6 +38,7 @@ import {
   findFirstUserContent,
 } from './io.js';
 import { buildMessages, findLastVisibleAssistantUsage } from './messages.js';
+import { loadMemoryForPrompt } from '../memory/index.js';
 
 export interface SessionStoreState {
   sessionId: string;
@@ -51,6 +52,7 @@ export interface SessionStoreState {
   currentTurnId: number;
   usage: TokenUsage | undefined;
   promptEstimate: number;
+  memorySnapshot: string;
 }
 
 function assertResumeWorkspace(cwd: string, sessionId: string): void {
@@ -104,6 +106,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             state.sessionMeta = meta;
             appendLine(state.transcriptPath, meta);
             state.messageCount++;
+            state.memorySnapshot = loadMemoryForPrompt(state.cwd);
             updateIndex(state);
             return state;
           },
@@ -367,12 +370,14 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
   let currentTurnId = 0;
   let usage: TokenUsage | undefined = undefined;
   let promptEstimate = 0;
+  let memorySnapshot = '';
   try {
     if (existsSync(indexPath)) {
       const idx = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
       currentTurnId = idx.currentTurnId ?? 0;
       usage = idx.usage ?? undefined;
       promptEstimate = idx.promptEstimate ?? 0;
+      memorySnapshot = idx.memorySnapshot ?? '';
     }
   } catch {
     /* ignore corrupt index */
@@ -396,6 +401,7 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
     currentTurnId,
     usage,
     promptEstimate,
+    memorySnapshot,
   };
 }
 
@@ -415,6 +421,7 @@ function updateIndex(state: SessionStoreState): void {
     usage: state.usage,
     promptEstimate: state.promptEstimate,
     permissionMode: current?.permissionMode ?? 'default',
+    memorySnapshot: state.memorySnapshot,
   };
   enqueueWrite(state.sessionId, state.indexPath, index);
 }

@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
@@ -76,7 +76,6 @@ function makeDeps(overrides?: Record<string, any>) {
     maxStopContinuations: 2,
     executor: null as any,
     runtime: { listAgentProfiles: () => [] } as any,
-    toolSearch: mockToolSearch as any,
     agentService: mockAgentService as any,
     ctx: mockCtx as any,
     session: mockSession as any,

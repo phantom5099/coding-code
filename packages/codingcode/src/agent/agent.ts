@@ -14,9 +14,7 @@ import { ApprovalService } from '../approval/index.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
-import { ToolSearchService } from '../tools/tool-search-service.js';
 import { sharedTodoStore } from './todo.js';
-import { buildDeferredCatalogContent } from './build-tools.js';
 import { HookService } from '../hooks/registry.js';
 import { SkillService } from '../skills/index.js';
 import { McpService } from '../mcp/index.js';
@@ -28,6 +26,7 @@ import { ProjectRuntimeService } from '../runtime/project-runtime';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { findModel, createClient } from '../llm/factory.js';
 import { STATIC_BUILTIN_TOOLS } from '../tools/providers.js';
+import { canonicalizeSchema } from '../tools/utils/canonicalize-schema.js';
 import { normalizePath } from '../core/path.js';
 
 const logger = createLogger();
@@ -187,7 +186,6 @@ interface RunReActDeps {
   maxSteps: number;
   maxStopContinuations: number;
   executor: ToolExecutorService;
-  toolSearch: ToolSearchService;
   runtime: ProjectRuntimeService;
   agentService: {
     runStream: (
@@ -203,7 +201,6 @@ interface RunReActDeps {
 export class AgentService extends Effect.Service<AgentService>()('Agent', {
   effect: Effect.gen(function* () {
     const executor = yield* ToolExecutorService;
-    const toolSearch = yield* ToolSearchService;
     const runtime = yield* ProjectRuntimeService;
     const ctx = yield* ContextService;
     const session = yield* SessionService;
@@ -221,7 +218,6 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
           maxSteps,
           maxStopContinuations,
           executor,
-          toolSearch,
           runtime,
           agentService: service,
           ctx,
@@ -256,7 +252,7 @@ export async function* runReActLoop(
       agentProfiles,
     });
 
-  const memoryBlock = loadMemoryForPrompt(projectPath);
+  const memoryBlock = state.memorySnapshot;
   const system = [basePrompt, memoryBlock].filter(Boolean).join('\n\n');
 
   const config = getContextConfig();
@@ -264,7 +260,7 @@ export async function* runReActLoop(
   const model = state.sessionMeta?.model ?? 'unknown';
   const maxSteps = opts.maxStepsOverride ?? deps.maxSteps;
 
-  const { executor, toolSearch, ctx, session, checkpoint, hooks } = deps;
+  const { executor, ctx, session, checkpoint, hooks } = deps;
 
   // For stop hook continue logic
   let stopContinuations = 0;
@@ -274,6 +270,16 @@ export async function* runReActLoop(
     const { messages } = Effect.runSync(
       ctx.build(state.sessionId, state.projectPath, llm.modelInfo.maxTokens)
     );
+
+    // Inject memory reminder if memory has been updated since session start
+    const currentMemory = loadMemoryForPrompt(projectPath);
+    if (currentMemory && currentMemory !== state.memorySnapshot) {
+      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+      if (lastUserMsg) {
+        lastUserMsg.content += `\n\n<system-reminder>Memory has been updated since the session started. Current memory:\n${currentMemory}</system-reminder>`;
+      }
+    }
+
     let lastResult: Result<string, AgentError> | null = null;
     let overflow = false;
 
@@ -315,13 +321,14 @@ export async function* runReActLoop(
       const tools: ToolDescription[] = filteredDefs.map((t) => ({
         name: t.name,
         description: t.description,
-        parameters: t.jsonSchema ?? (z.toJSONSchema(t.parameters) as Record<string, unknown>),
+        parameters:
+          t.jsonSchema ??
+          (canonicalizeSchema(z.toJSONSchema(t.parameters)) as Record<string, unknown>),
       }));
 
       // Build toolLookup for executor
       const toolLookup: ToolLookup = (name: string) => filteredDefs.find((t) => t.name === name);
-      const catalog = buildDeferredCatalogContent(toolSearch, sessionId, opts.toolPolicy);
-      const systemWithCatalog = catalog ? `${system}\n\n${catalog}` : system;
+      const systemWithCatalog = system;
 
       // Emit step.before hook and collect transient messages
       const stepBeforePayload = { sessionId, step: step + 1 };

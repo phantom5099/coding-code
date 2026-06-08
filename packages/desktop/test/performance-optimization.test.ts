@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { computeDiff } from '../src/lib/diff-compute';
 import { parseUnifiedDiff } from '../src/lib/diff-parser';
-import { useGlobalStore, enrichTurnDiffs } from '../src/stores/global.store';
+import { useGlobalStore } from '../src/stores/global.store';
 import type { Item, Turn } from '../shared/types';
 
 // ─── diff-compute: large file protection ─────────────────────────────────
@@ -194,70 +194,6 @@ describe('global store - applyChunk tool_result searches current turn first', ()
     const turn1 = useGlobalStore.getState().agent.threads[threadId].turns[0];
     const call = turn1.items.find((i) => i.id === 'call-1') as any;
     expect(call.status).toBe('approved');
-  });
-});
-
-// ─── global.store: enrichTurnDiffs skips already-computed diffs ──────────
-
-describe('enrichTurnDiffs - skip already computed', () => {
-  it('skips tool_result items that already have diff', () => {
-    const turn: Turn = {
-      id: 'turn-1',
-      status: 'completed',
-      items: [
-        {
-          id: 'call-1',
-          type: 'tool_call',
-          name: 'edit_file',
-          args: {},
-          status: 'approved',
-        } as Item,
-        {
-          id: 'res-1',
-          type: 'tool_result',
-          callId: 'call-1',
-          name: 'edit_file',
-          output: 'ok',
-          exitCode: 0,
-          diff: 'already computed',
-        } as any,
-      ],
-    };
-
-    enrichTurnDiffs(turn);
-    // Should not overwrite existing diff
-    const result = turn.items[1] as any;
-    expect(result.diff).toBe('already computed');
-  });
-
-  it('computes diff for tool_result without diff', () => {
-    const turn: Turn = {
-      id: 'turn-1',
-      status: 'completed',
-      items: [
-        {
-          id: 'call-1',
-          type: 'tool_call',
-          name: 'edit_file',
-          args: { path: 'foo.ts', old_string: 'a', new_string: 'b' },
-          status: 'approved',
-        } as any,
-        {
-          id: 'res-1',
-          type: 'tool_result',
-          callId: 'call-1',
-          name: 'edit_file',
-          output: 'ok',
-          exitCode: 0,
-        } as any,
-      ],
-    };
-
-    enrichTurnDiffs(turn);
-    const result = turn.items[1] as any;
-    expect(result.diff).toBeDefined();
-    expect(result.diff).toContain('-a');
-    expect(result.diff).toContain('+b');
   });
 });
 

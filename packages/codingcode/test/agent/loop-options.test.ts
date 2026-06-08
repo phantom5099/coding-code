@@ -1,4 +1,4 @@
-﻿import { expect, it, describe, vi } from 'vitest';
+import { expect, it, describe, vi } from 'vitest';
 import { Effect } from 'effect';
 import { runReActLoop } from '../../src/agent/agent';
 import { Result } from '../../src/core/result';
@@ -31,10 +31,6 @@ describe('runReActLoop 鈥?loop options', () => {
       maxStopContinuations: 2,
       executor: {} as any,
       runtime: { listAgentProfiles: () => [] } as any,
-      toolSearch: {
-        isLoaded: () => false,
-        listUnloadedDeferred: () => [],
-      } as any,
       agentIdResolver: { resolve: () => 'agent-id' } as any,
       agentService: { runStream: () => (async function* () {})() } as any,
       ctx: {

@@ -122,4 +122,5 @@ export interface SessionIndex {
   usage: TokenUsage | undefined;
   promptEstimate?: number;
   permissionMode: string;
+  memorySnapshot?: string;
 }

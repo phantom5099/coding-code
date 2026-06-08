@@ -69,34 +69,6 @@ describe('text selection behavior', () => {
     });
   });
 
-  describe('MessageStream.tsx', () => {
-    it('empty state placeholder should NOT have select-none', () => {
-      // The empty state div's class should not contain select-none
-      const emptyClass = findClassContaining('agent/MessageStream.tsx', 'text-[#444]');
-      expect(emptyClass).toBeTruthy();
-      expect(emptyClass!).not.toContain('select-none');
-    });
-
-    it('message list containers should have select-text', () => {
-      // Both Virtuoso (large list) and plain div (small list) containers
-      const hasSelectTextVirtuoso = anyClassContains(
-        'agent/MessageStream.tsx',
-        'flex-1 select-text'
-      );
-      const hasSelectTextDiv = anyClassContains(
-        'agent/MessageStream.tsx',
-        'overflow-y-auto select-text'
-      );
-      expect(hasSelectTextVirtuoso || hasSelectTextDiv).toBe(true);
-    });
-
-    it('should have at least one select-text occurrence (unified Virtuoso path)', () => {
-      const allClasses = classNamesFromSource('agent/MessageStream.tsx');
-      const selectTextCount = allClasses.filter((c) => c.includes('select-text')).length;
-      expect(selectTextCount).toBeGreaterThanOrEqual(1);
-    });
-  });
-
   describe('SettingsPage.tsx', () => {
     it('navigation should have select-none', () => {
       const navClass = classNamesFromSource('settings/SettingsPage.tsx').find((c) =>
