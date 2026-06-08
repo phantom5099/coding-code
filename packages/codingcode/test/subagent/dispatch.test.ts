@@ -1,4 +1,4 @@
-﻿import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
+import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
 import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch';
 import { EXPLORE_PROFILE } from '../../src/subagent/registry';
@@ -85,15 +85,15 @@ const mockSession = {
 const mockRuntime: ProjectRuntimeService = {
   _tag: 'ProjectRuntime' as const,
   prepareProject: (_p: string) => Effect.void,
-  resolveMainAgentProfile: (_p: string, _s: string) => EXPLORE_PROFILE,
+  resolveMainAgentProfile: (_p: string, _s: string): AgentProfile | undefined => EXPLORE_PROFILE,
   resolveSubagentProfile: (_p: string, name: string) => {
     if (name === 'explore') return EXPLORE_PROFILE;
     return undefined;
   },
   listAgentProfiles: (_p: string) => [EXPLORE_PROFILE],
-  getToolPolicy: (profile: AgentProfile) => ({
-    allowedTools: profile.tools ? new Set(profile.tools) : undefined,
-    allowedMcpServers: profile.mcpServers ? new Set(profile.mcpServers) : undefined,
+  getToolPolicy: (profile: AgentProfile | undefined) => ({
+    allowedTools: profile?.tools ? new Set(profile.tools) : undefined,
+    allowedMcpServers: profile?.mcpServers ? new Set(profile.mcpServers) : undefined,
     allowToolSearch: true,
     allowDeferredTools: false,
   }),

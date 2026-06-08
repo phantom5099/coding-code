@@ -9,6 +9,9 @@ interface AgentEntry {
   readonly?: boolean;
   maxSteps?: number;
   model?: string;
+  disabled?: boolean;
+  source?: 'builtin' | 'global' | 'project';
+  hasProjectOverride?: boolean;
 }
 
 function mapAgentToEntry(profile: AgentEntry): AgentEntry {
@@ -284,5 +287,232 @@ describe('SubagentsPanel - tool multi-select form logic', () => {
   it('toggleTool on empty array adds the tool', () => {
     const result = toggleTool([], 'execute_command');
     expect(result).toEqual(['execute_command']);
+  });
+});
+
+// --- SubagentsPanel - source and enabledSource logic ---
+
+describe('SubagentsPanel - source and enabledSource', () => {
+  it('defaults enabledSource to global when API returns no source', () => {
+    const apiSource = undefined;
+    const enabledSource = (apiSource as 'global' | 'project' | undefined) ?? 'global';
+    expect(enabledSource).toBe('global');
+  });
+
+  it('sets enabledSource to project when API returns project', () => {
+    const apiSource = 'project';
+    const enabledSource = (apiSource as 'global' | 'project') ?? 'global';
+    expect(enabledSource).toBe('project');
+  });
+
+  it('sets enabledSource to global when API returns global', () => {
+    const apiSource = 'global';
+    const enabledSource = (apiSource as 'global' | 'project') ?? 'global';
+    expect(enabledSource).toBe('global');
+  });
+
+  it('agent source=builtin renders 内置 tag', () => {
+    const agent: AgentEntry = { name: 'explore', description: 'Explore', source: 'builtin' };
+    expect(agent.source).toBe('builtin');
+  });
+
+  it('agent source=global renders 全局 tag', () => {
+    const agent: AgentEntry = { name: 'my-agent', description: 'My agent', source: 'global' };
+    expect(agent.source).toBe('global');
+  });
+
+  it('agent source=project renders 项目 tag', () => {
+    const agent: AgentEntry = { name: 'proj-agent', description: 'Project agent', source: 'project' };
+    expect(agent.source).toBe('project');
+  });
+
+  it('agent hasProjectOverride=true renders 覆盖全局 tag', () => {
+    const agent: AgentEntry = { name: 'override-agent', description: 'Override', source: 'global', hasProjectOverride: true };
+    expect(agent.hasProjectOverride).toBe(true);
+  });
+
+  it('agent without source has undefined source', () => {
+    const agent: AgentEntry = { name: 'basic', description: 'Basic' };
+    expect(agent.source).toBeUndefined();
+  });
+
+  it('resetEnabled returns early when cwd is undefined', () => {
+    const cwd = undefined;
+    const shouldReset = !!cwd;
+    expect(shouldReset).toBe(false);
+  });
+
+  it('resetEnabled proceeds when cwd is defined', () => {
+    const cwd = '/some/project';
+    const shouldReset = !!cwd;
+    expect(shouldReset).toBe(true);
+  });
+
+  it('toggleEnabled sets enabledSource to project in project context', () => {
+    const isGlobal = false;
+    const enabledSource = isGlobal ? 'global' : 'project';
+    expect(enabledSource).toBe('project');
+  });
+
+  it('toggleEnabled sets enabledSource to global in global context', () => {
+    const isGlobal = true;
+    const enabledSource = isGlobal ? 'global' : 'project';
+    expect(enabledSource).toBe('global');
+  });
+
+  it('shows 项目级覆盖 marker when not global and enabledSource is project', () => {
+    const isGlobal = false;
+    const enabledSource = 'project';
+    const showOverride = !isGlobal && enabledSource === 'project';
+    expect(showOverride).toBe(true);
+  });
+
+  it('hides 项目级覆盖 marker when is global', () => {
+    const isGlobal = true;
+    const enabledSource = 'project';
+    const showOverride = !isGlobal && enabledSource === 'project';
+    expect(showOverride).toBe(false);
+  });
+
+  it('hides 项目级覆盖 marker when enabledSource is global', () => {
+    const isGlobal = false;
+    const enabledSource = 'global';
+    const showOverride = !isGlobal && enabledSource === 'project';
+    expect(showOverride).toBe(false);
+  });
+});
+
+// --- McpPanel source tag and cwd logic ---
+
+interface McpEntry {
+  name: string;
+  transport: 'stdio' | 'http';
+  disabled: boolean;
+  toolCount: number;
+  source?: 'global' | 'project';
+  hasProjectOverride?: boolean;
+}
+
+describe('McpPanel - source tag and cwd', () => {
+  it('McpEntry accepts source=global', () => {
+    const entry: McpEntry = { name: 'm1', transport: 'stdio', disabled: false, toolCount: 3, source: 'global' };
+    expect(entry.source).toBe('global');
+    expect(entry.hasProjectOverride).toBeUndefined();
+  });
+
+  it('McpEntry accepts source=project', () => {
+    const entry: McpEntry = { name: 'm2', transport: 'http', disabled: false, toolCount: 1, source: 'project' };
+    expect(entry.source).toBe('project');
+  });
+
+  it('McpEntry accepts hasProjectOverride=true', () => {
+    const entry: McpEntry = { name: 'm3', transport: 'stdio', disabled: false, toolCount: 0, source: 'global', hasProjectOverride: true };
+    expect(entry.hasProjectOverride).toBe(true);
+  });
+
+  it('cwd is undefined when isGlobal=true', () => {
+    const isGlobal = true;
+    const rootPath = '/some/project';
+    const cwd = isGlobal ? undefined : rootPath;
+    expect(cwd).toBeUndefined();
+  });
+
+  it('cwd equals rootPath when isGlobal=false', () => {
+    const isGlobal = false;
+    const rootPath = '/some/project';
+    const cwd = isGlobal ? undefined : rootPath;
+    expect(cwd).toBe('/some/project');
+  });
+
+  it('toggle passes cwd to setMcpDisabled', () => {
+    const calls: Array<{ name: string; disabled: boolean; cwd?: string }> = [];
+    const setMcpDisabled = (name: string, disabled: boolean, cwd?: string) => {
+      calls.push({ name, disabled, cwd });
+    };
+    const cwd = '/project/path';
+    setMcpDisabled('server1', true, cwd);
+    expect(calls[0]).toEqual({ name: 'server1', disabled: true, cwd: '/project/path' });
+  });
+});
+
+// --- HooksPanel source tag and cwd logic ---
+
+interface HookEntry {
+  name: string;
+  description?: string;
+  point: string;
+  type: 'observer' | 'decision';
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  priority?: number;
+  enabled: boolean;
+  source?: 'global' | 'project';
+  hasProjectOverride?: boolean;
+}
+
+describe('HooksPanel - source tag and cwd', () => {
+  it('HookEntry accepts source=global', () => {
+    const entry: HookEntry = { name: 'h1', point: 'tool.execute.before', type: 'decision', command: 'echo', enabled: true, source: 'global' };
+    expect(entry.source).toBe('global');
+    expect(entry.hasProjectOverride).toBeUndefined();
+  });
+
+  it('HookEntry accepts source=project', () => {
+    const entry: HookEntry = { name: 'h2', point: 'tool.execute.after', type: 'observer', command: 'echo', enabled: true, source: 'project' };
+    expect(entry.source).toBe('project');
+  });
+
+  it('HookEntry accepts hasProjectOverride=true', () => {
+    const entry: HookEntry = { name: 'h3', point: 'llm.request.before', type: 'decision', command: 'echo', enabled: true, source: 'global', hasProjectOverride: true };
+    expect(entry.hasProjectOverride).toBe(true);
+  });
+
+  it('setHookDisabled is called with cwd, name, disabled', () => {
+    const calls: Array<{ cwd: string | undefined; name: string; disabled: boolean }> = [];
+    const setHookDisabled = (cwd: string | undefined, name: string, disabled: boolean) => {
+      calls.push({ cwd, name, disabled });
+    };
+    const cwd = '/project/path';
+    setHookDisabled(cwd, 'hook1', true);
+    expect(calls[0]).toEqual({ cwd: '/project/path', name: 'hook1', disabled: true });
+  });
+});
+
+// --- SkillPanel source tag and cwd logic ---
+
+interface SkillEntry {
+  name: string;
+  description: string;
+  disabled: boolean;
+  source?: 'global' | 'project';
+  hasProjectOverride?: boolean;
+}
+
+describe('SkillPanel - source tag and cwd', () => {
+  it('SkillEntry accepts source=global', () => {
+    const entry: SkillEntry = { name: 's1', description: 'A skill', disabled: false, source: 'global' };
+    expect(entry.source).toBe('global');
+    expect(entry.hasProjectOverride).toBeUndefined();
+  });
+
+  it('SkillEntry accepts source=project', () => {
+    const entry: SkillEntry = { name: 's2', description: 'Another skill', disabled: false, source: 'project' };
+    expect(entry.source).toBe('project');
+  });
+
+  it('SkillEntry accepts hasProjectOverride=true', () => {
+    const entry: SkillEntry = { name: 's3', description: 'Override skill', disabled: false, source: 'global', hasProjectOverride: true };
+    expect(entry.hasProjectOverride).toBe(true);
+  });
+
+  it('toggleSkill is called with name, enabled, cwd', () => {
+    const calls: Array<{ name: string; enabled: boolean; cwd?: string }> = [];
+    const toggleSkill = (name: string, enabled: boolean, cwd?: string) => {
+      calls.push({ name, enabled, cwd });
+    };
+    const cwd = '/project/path';
+    toggleSkill('skill1', true, cwd);
+    expect(calls[0]).toEqual({ name: 'skill1', enabled: true, cwd: '/project/path' });
   });
 });

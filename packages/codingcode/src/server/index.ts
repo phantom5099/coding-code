@@ -21,6 +21,7 @@ export async function createServer(): Promise<Hono> {
     if (err instanceof AlreadyExistsError) {
       return c.json({ error: { code: 'ALREADY_EXISTS', message: err.message } }, 409);
     }
+    console.error('[500 INTERNAL_ERROR]', err);
     return c.json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } }, 500);
   });
 

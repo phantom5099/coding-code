@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { McpService } from '../../src/mcp/index.js';
 import { HookService } from '../../src/hooks/registry.js';
@@ -35,7 +35,8 @@ vi.mock('../../src/mcp/client.js', () => {
 
 // Mock loadMcpConfig
 vi.mock('../../src/mcp/config.js', () => ({
-  loadMcpConfig: vi.fn(() => []),
+  resolveMcpConfig: vi.fn(() => []),
+  resolveMcpDisabled: vi.fn(() => false),
 }));
 
 function makeHookLayer() {
@@ -67,8 +68,8 @@ describe('McpService granular methods', () => {
 
   beforeEach(async () => {
     mockConfigs = [];
-    const { loadMcpConfig } = await import('../../src/mcp/config.js');
-    (loadMcpConfig as any).mockImplementation(() => mockConfigs);
+    const { resolveMcpConfig } = await import('../../src/mcp/config.js');
+    (resolveMcpConfig as any).mockImplementation(() => mockConfigs);
   });
 
   it('connectServers connects only specified servers', async () => {

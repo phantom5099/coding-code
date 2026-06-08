@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { ContextService } from '../../src/context/context.js';
 import { SessionService } from '../../src/session/store.js';
@@ -186,6 +186,7 @@ describe('ContextService', () => {
       getServerToolNames: () => [],
       disconnectAll: () => Effect.void,
       status: () => Effect.succeed([]),
+      listProjectMcpTools: () => [],
     } as any);
 
     const MockApprovalLayer = Layer.succeed(ApprovalService, {

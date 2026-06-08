@@ -51,12 +51,10 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
             cachedSubagentProfiles.set(norm, buildProfiles(norm));
           }),
 
-        resolveMainAgentProfile: (projectPath: string, sessionId: string): AgentProfile => {
+        resolveMainAgentProfile: (projectPath: string, sessionId: string): AgentProfile | undefined => {
           const sessionOverride = sessionAgentProfiles.get(sessionId);
           if (sessionOverride) return sessionOverride;
-          const fromFile = agentLoader.loadMainAgentProfile(projectPath);
-          if (fromFile) return fromFile;
-          return agentLoader.DEFAULT_MAIN_PROFILE;
+          return agentLoader.loadMainAgentProfile(projectPath);
         },
 
         resolveSubagentProfile: (projectPath: string, name: string): AgentProfile | undefined => {
@@ -72,9 +70,9 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           return cached ? [...cached] : buildProfiles(normalized);
         },
 
-        getToolPolicy: (profile: AgentProfile): ToolVisibilityPolicy => ({
-          allowedTools: profile.tools ? new Set(profile.tools) : undefined,
-          allowedMcpServers: profile.mcpServers ? new Set(profile.mcpServers) : undefined,
+        getToolPolicy: (profile: AgentProfile | undefined): ToolVisibilityPolicy => ({
+          allowedTools: profile?.tools ? new Set(profile.tools) : undefined,
+          allowedMcpServers: profile?.mcpServers ? new Set(profile.mcpServers) : undefined,
           allowToolSearch: true,
           allowDeferredTools: false,
         }),

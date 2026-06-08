@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Toggle from './Toggle';
 import { useGlobalStore } from '../stores/global.store';
-import { listHooks, createHook, updateHook, deleteHook, setHookDisabled } from '../lib/core-api';
+import { listHooks, createHook, updateHook, deleteHook, setHookDisabled, resetHookDisabled } from '../lib/core-api';
 
 interface HookEntry {
   name: string;
@@ -13,6 +13,8 @@ interface HookEntry {
   env?: Record<string, string>;
   priority?: number;
   enabled: boolean;
+  source?: 'global' | 'project';
+  hasProjectOverride?: boolean;
 }
 
 interface HookGroup {
@@ -92,7 +94,7 @@ const EMPTY_FORM: HookForm = {
   enabled: true,
 };
 
-export default function HooksPanel() {
+export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
   const [hooks, setHooks] = useState<HookEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -100,11 +102,12 @@ export default function HooksPanel() {
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [form, setForm] = useState<HookForm>(EMPTY_FORM);
   const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+  const cwd = isGlobal ? undefined : rootPath;
 
   const load = async () => {
     setLoading(true);
     try {
-      const data = await listHooks(rootPath ?? undefined);
+      const data = await listHooks(cwd);
       setHooks(data ?? []);
     } catch {
       setHooks([]);
@@ -176,9 +179,9 @@ export default function HooksPanel() {
 
     try {
       if (isCreating) {
-        await createHook(rootPath ?? undefined, hook);
+        await createHook(cwd, hook);
       } else if (editingName) {
-        await updateHook(rootPath ?? undefined, editingName, hook);
+        await updateHook(cwd, editingName, hook);
       }
       cancelForm();
       await load();
@@ -190,7 +193,7 @@ export default function HooksPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return;
     try {
-      await deleteHook(rootPath ?? undefined, deletingName);
+      await deleteHook(cwd, deletingName);
       setDeletingName(null);
       await load();
     } catch (e: any) {
@@ -297,6 +300,21 @@ export default function HooksPanel() {
                     <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-info-bg)] text-[var(--tag-info-text)]">
                       {h.point}
                     </span>
+                    {h.source === 'global' && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--tag-info-bg)] text-[var(--tag-info-text)]">
+                        全局
+                      </span>
+                    )}
+                    {h.source === 'project' && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--tag-action-bg)] text-[var(--tag-action-text)]">
+                        项目
+                      </span>
+                    )}
+                    {h.hasProjectOverride && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]">
+                        覆盖全局
+                      </span>
+                    )}
                     {!h.enabled && (
                       <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-decision-bg)] text-[var(--tag-decision-text)]">
                         已禁用
@@ -344,7 +362,7 @@ export default function HooksPanel() {
                   <Toggle
                     checked={h.enabled}
                     onChange={(v) => {
-                      setHookDisabled(rootPath ?? undefined, h.name, !v).catch((e) => {
+                      setHookDisabled(cwd, h.name, !v).catch((e) => {
                         console.error('Failed to set hook disabled:', e);
                       });
                       setHooks((prev) =>

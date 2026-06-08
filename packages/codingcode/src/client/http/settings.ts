@@ -15,25 +15,29 @@ export interface SettingsClient {
   addMemoryExtraType(type: { name: string; description: string }): Promise<void>;
   updateMemoryExtraType(name: string, type: { name: string; description: string }): Promise<void>;
   deleteMemoryExtraType(name: string): Promise<void>;
-  getSubagentEnabled(): Promise<boolean>;
-  setSubagentEnabled(enabled: boolean): Promise<void>;
+  getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
+  setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
+  resetSubagentEnabled(body: { cwd: string }): Promise<void>;
   getMcpStatus(): Promise<McpStatus[]>;
-  setMcpDisabled(name: string, disabled: boolean): Promise<void>;
+  setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
+  resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
   createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
   updateMcpServer(input: { cwd: string; name: string; server: McpServerConfig }): Promise<void>;
   deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
-  toggleSkill(name: string, enabled: boolean): Promise<void>;
+  toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
   listAgents(input: { cwd: string }): Promise<any[]>;
   createAgent(input: { cwd: string; profile: AgentProfile }): Promise<void>;
   updateAgent(input: { cwd: string; name: string; profile: AgentProfile }): Promise<void>;
   deleteAgent(input: { cwd: string; name: string }): Promise<void>;
-  setAgentDisabled(name: string, disabled: boolean): Promise<void>;
+  setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
+  resetAgentDisabled(body: { name: string; cwd: string }): Promise<void>;
   listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
   createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
   updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
   deleteHook(input: { cwd: string; name: string }): Promise<void>;
   setHookDisabled(input: { cwd: string; name: string; disabled: boolean }): Promise<void>;
+  resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;
   getGlobalPermissionMode(): Promise<PermissionMode>;
   setGlobalPermissionMode(mode: PermissionMode): Promise<void>;
 }
@@ -77,21 +81,28 @@ export function createHttpSettingsClient(
       await apiDelete(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`);
     },
 
-    async getSubagentEnabled() {
-      const data = await apiGet<{ enabled: boolean }>('/api/settings/subagent/enabled');
-      return data.enabled;
+    async getSubagentEnabled({ cwd }) {
+      return apiGet<{ enabled: boolean; source: string }>(`/api/settings/subagent/enabled${qsCwd(cwd)}`);
     },
 
-    async setSubagentEnabled(enabled) {
-      await apiPost('/api/settings/subagent/enabled', { enabled });
+    async setSubagentEnabled({ enabled, cwd }) {
+      await apiPost(`/api/settings/subagent/enabled${qsCwd(cwd)}`, { enabled });
+    },
+
+    async resetSubagentEnabled({ cwd }) {
+      await apiPost(`/api/settings/subagent/enabled/reset${qsCwd(cwd)}`, {});
     },
 
     async getMcpStatus() {
       return apiGet<McpStatus[]>('/api/settings/mcp');
     },
 
-    async setMcpDisabled(name, disabled) {
-      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled`, { disabled });
+    async setMcpDisabled({ name, disabled, cwd }) {
+      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, { disabled });
+    },
+
+    async resetMcpDisabled({ name, cwd }) {
+      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`, {});
     },
 
     async createMcpServer({ cwd, server }) {
@@ -110,8 +121,8 @@ export function createHttpSettingsClient(
       return apiGet('/api/settings/skills');
     },
 
-    async toggleSkill(name, enabled) {
-      await apiPost('/api/settings/skills', { name, enabled });
+    async toggleSkill({ name, enabled, cwd }) {
+      await apiPost(`/api/settings/skills${qsCwd(cwd)}`, { name, enabled });
     },
 
     async listAgents({ cwd }) {
@@ -130,8 +141,12 @@ export function createHttpSettingsClient(
       await apiDelete(`/api/settings/agents/${encodeURIComponent(name)}${qsCwd(cwd)}`);
     },
 
-    async setAgentDisabled(name, disabled) {
-      await apiPost(`/api/settings/agents/${encodeURIComponent(name)}/disabled`, { disabled });
+    async setAgentDisabled({ name, disabled, cwd }) {
+      await apiPost(`/api/settings/agents/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, { disabled });
+    },
+
+    async resetAgentDisabled({ name, cwd }) {
+      await apiPost(`/api/settings/agents/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`, {});
     },
 
     async listHooks({ cwd }) {
@@ -154,6 +169,10 @@ export function createHttpSettingsClient(
       await apiPost(`/api/settings/hooks/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, {
         disabled,
       });
+    },
+
+    async resetHookDisabled({ name, cwd }) {
+      await apiPost(`/api/settings/hooks/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`, {});
     },
 
     async getGlobalPermissionMode() {

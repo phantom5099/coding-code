@@ -6,6 +6,8 @@ import {
   getSubagentEnabled,
   setSubagentEnabled,
   setAgentDisabled,
+  resetSubagentEnabled,
+  resetAgentDisabled,
   createAgent,
   updateAgent,
   deleteAgent,
@@ -37,6 +39,8 @@ interface AgentEntry {
   maxSteps?: number;
   model?: string;
   disabled?: boolean;
+  source?: 'builtin' | 'global' | 'project';
+  hasProjectOverride?: boolean;
 }
 
 interface AgentForm {
@@ -63,9 +67,10 @@ const EMPTY_FORM: AgentForm = {
 
 const BUILT_IN = new Set(['explore', 'general']);
 
-export default function SubagentsPanel() {
+export default function SubagentsPanel({ global: isGlobal }: { global?: boolean }) {
   const [agents, setAgents] = useState<AgentEntry[]>([]);
   const [enabled, setEnabled] = useState(true);
+  const [enabledSource, setEnabledSource] = useState<'global' | 'project'>('global');
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [mcpList, setMcpList] = useState<string[]>([]);
@@ -74,18 +79,20 @@ export default function SubagentsPanel() {
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [form, setForm] = useState<AgentForm>(EMPTY_FORM);
   const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+  const cwd = isGlobal ? undefined : rootPath;
 
   const load = async () => {
     setLoading(true);
     try {
       const [agentsData, enabledData, modelData, mcpData] = await Promise.all([
-        listAgents(rootPath ?? undefined),
-        getSubagentEnabled(),
+        listAgents(cwd),
+        getSubagentEnabled(cwd),
         import('../lib/core-api').then((m) => m.listModels()),
         listMcpServers(),
       ]);
       setAgents(agentsData ?? []);
       setEnabled(enabledData.enabled ?? true);
+      setEnabledSource((enabledData.source as 'global' | 'project') ?? 'global');
       setModels((modelData.models ?? []) as ModelEntry[]);
       setMcpList((mcpData ?? []).map((s: { name: string }) => s.name));
     } catch {
@@ -100,12 +107,19 @@ export default function SubagentsPanel() {
   }, [rootPath]);
 
   const toggleEnabled = async (v: boolean) => {
-    await setSubagentEnabled(v);
+    await setSubagentEnabled(v, cwd);
     setEnabled(v);
+    setEnabledSource(isGlobal ? 'global' : 'project');
+  };
+
+  const resetEnabled = async () => {
+    if (!cwd) return;
+    await resetSubagentEnabled(cwd);
+    await load();
   };
 
   const toggleAgent = async (name: string, disabled: boolean) => {
-    await setAgentDisabled(name, disabled);
+    await setAgentDisabled(name, disabled, cwd);
     setAgents((prev) => prev.map((a) => (a.name === name ? { ...a, disabled } : a)));
   };
 
@@ -151,9 +165,9 @@ export default function SubagentsPanel() {
 
     try {
       if (isCreating) {
-        await createAgent(rootPath ?? undefined, profile);
+        await createAgent(cwd, profile);
       } else if (editingName) {
-        await updateAgent(rootPath ?? undefined, editingName, profile);
+        await updateAgent(cwd, editingName, profile);
       }
       cancelForm();
       await load();
@@ -165,7 +179,7 @@ export default function SubagentsPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return;
     try {
-      await deleteAgent(rootPath ?? undefined, deletingName);
+      await deleteAgent(cwd, deletingName);
       setDeletingName(null);
       await load();
     } catch (e: any) {
@@ -189,9 +203,21 @@ export default function SubagentsPanel() {
       <div className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] mb-5">
         <div>
           <div className="text-[14px] text-[var(--text-title)]">启用子智能体</div>
-          <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">允许 agent 派发子任务给子智能体</div>
+          <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">
+            允许 agent 派发子任务给子智能体{!isGlobal && enabledSource === 'project' ? '（项目级覆盖）' : ''}
+          </div>
         </div>
-        <Toggle checked={enabled} onChange={toggleEnabled} />
+        <div className="flex items-center gap-2">
+          {!isGlobal && enabledSource === 'project' && (
+            <button
+              onClick={resetEnabled}
+              className="text-[12px] px-2 py-1 rounded bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]"
+            >
+              重置
+            </button>
+          )}
+          <Toggle checked={enabled} onChange={toggleEnabled} />
+        </div>
       </div>
 
       <div className="flex items-center gap-2 mb-3">
@@ -282,9 +308,24 @@ export default function SubagentsPanel() {
                           {a.model}
                         </span>
                       )}
-                      {isBuiltIn && (
+                      {a.source === 'builtin' && (
                         <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-info-bg)] text-[var(--tag-info-text)]">
                           内置
+                        </span>
+                      )}
+                      {a.source === 'global' && (
+                        <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-info-bg)] text-[var(--tag-info-text)]">
+                          全局
+                        </span>
+                      )}
+                      {a.source === 'project' && (
+                        <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--tag-action-bg)] text-[var(--tag-action-text)]">
+                          项目
+                        </span>
+                      )}
+                      {a.hasProjectOverride && (
+                        <span className="text-[11px] px-2 py-0.5 rounded font-mono bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]">
+                          覆盖全局
                         </span>
                       )}
                     </div>

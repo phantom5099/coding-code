@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sendMessage } from '../src/agent/agent.js';
 import { SessionService } from '../src/session/store.js';
@@ -194,6 +194,7 @@ const { HookLayer } = await import('../src/layer.js');
 const MockMcpLayer = Layer.succeed(McpService, {
   syncConnections: (_: string) => Effect.void,
   status: (_: string) => Effect.succeed([]),
+  listProjectMcpTools: (_: string) => [],
 } as any);
 
 const { ProjectRuntimeService } = await import('../src/runtime/project-runtime.js');

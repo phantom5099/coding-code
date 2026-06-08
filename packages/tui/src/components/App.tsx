@@ -183,7 +183,7 @@ export function App({ client }: AppProps) {
           try {
             const arg = parsed.args.trim().toLowerCase();
             if (arg === 'on' || arg === 'off') {
-              await client.setSubagentEnabled(arg === 'on');
+              await client.setSubagentEnabled({ enabled: arg === 'on', cwd: '' });
               setStaticMessages((prev) => [
                 ...prev,
                 {
@@ -194,7 +194,8 @@ export function App({ client }: AppProps) {
                 },
               ]);
             } else {
-              const enabled = await client.getSubagentEnabled();
+              const result = await client.getSubagentEnabled({ cwd: '' });
+              const enabled = result.enabled;
               setStaticMessages((prev) => [
                 ...prev,
                 {
@@ -535,9 +536,9 @@ export function App({ client }: AppProps) {
             if (!server) return;
             try {
               if (server.disabled) {
-                await client.enableMcp(value);
+                await client.setMcpDisabled({ name: value, disabled: false, cwd: '' });
               } else {
-                await client.disableMcp(value);
+                await client.setMcpDisabled({ name: value, disabled: true, cwd: '' });
               }
               const updated = await client.getMcpStatus();
               setPanel({ type: 'mcp', servers: updated });
@@ -565,7 +566,7 @@ export function App({ client }: AppProps) {
             const skill = panel.skills.find((s) => s.name === value);
             if (!skill) return;
             try {
-              await client.toggleSkill(value, !skill.enabled);
+              await client.toggleSkill({ name: value, enabled: !skill.enabled, cwd: '' });
               const updated = await client.listSkills();
               setPanel({ type: 'skill', skills: updated });
             } catch {

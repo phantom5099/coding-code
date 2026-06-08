@@ -8,6 +8,7 @@ import type { ApprovalService } from '../../../approval/index.js';
 import type { HookService } from '../../../hooks/registry.js';
 import type { McpService } from '../../../mcp/index.js';
 import { findModel, createClient } from '../../../llm/factory.js';
+import { resolveSubagentEnabled, resolveAgentDisabled } from '../../../subagent/registry.js';
 
 interface DispatchAgentDeps {
   session: SessionService;
@@ -28,14 +29,25 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       prompt: z.string().min(1).describe('task description for the subagent'),
     }),
     execute: async (args: any, ctx: any) => {
-      const { agent: agentName, prompt } = args;
-      const projectPath = ctx?.projectPath || process.cwd();
+        const { agent: agentName, prompt } = args;
 
-      // Get profile
-      const profile = deps.runtime.resolveSubagentProfile(projectPath, agentName);
-      if (!profile) {
-        throw new Error(`Unknown subagent: ${agentName}`);
-      }
+        const projectPath = ctx?.projectPath || process.cwd();
+
+        // Check global subagent switch
+        if (!resolveSubagentEnabled(projectPath)) {
+          throw new Error('Subagent dispatch is disabled in global settings');
+        }
+
+        // Get profile
+        const profile = deps.runtime.resolveSubagentProfile(projectPath, agentName);
+        if (!profile) {
+          throw new Error(`Unknown subagent: ${agentName}`);
+        }
+
+        // Check individual agent disabled state
+        if (resolveAgentDisabled(projectPath, agentName)) {
+          throw new Error(`Subagent '${agentName}' is disabled`);
+        }
 
       if (!ctx?.agentRunner?.agentService || !ctx?.agentRunner?.llm) {
         throw new Error('dispatch_agent requires agentRunner context');
@@ -106,12 +118,16 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       // Build tool policy from profile
       const childPolicy = deps.runtime.getToolPolicy(profile);
 
+      // Get MCP tools for subagent
+      const mcpTools = deps.mcp.listProjectMcpTools(projectPath);
+
       // Run subagent
       const stream = agentService.runStream({
         state: childState,
         llm,
         systemOverride: profile.systemPrompt,
         toolPolicy: childPolicy,
+        mcpTools,
         abortSignal: ctx?.signal,
         parentSessionId: ctx?.sessionId,
         agentName: agentName,

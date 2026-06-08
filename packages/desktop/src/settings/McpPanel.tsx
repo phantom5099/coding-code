@@ -4,6 +4,7 @@ import { useGlobalStore } from '../stores/global.store';
 import {
   listMcpServers,
   setMcpDisabled,
+  resetMcpDisabled,
   createMcpServer,
   updateMcpServer,
   deleteMcpServer,
@@ -15,6 +16,8 @@ interface McpEntry {
   transport: 'stdio' | 'http';
   disabled: boolean;
   toolCount: number;
+  source?: 'global' | 'project';
+  hasProjectOverride?: boolean;
 }
 
 interface McpForm {
@@ -41,7 +44,7 @@ const EMPTY_FORM: McpForm = {
   autoReconnect: true,
 };
 
-export default function McpPanel() {
+export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
   const [servers, setServers] = useState<McpEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -49,11 +52,12 @@ export default function McpPanel() {
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [form, setForm] = useState<McpForm>(EMPTY_FORM);
   const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+  const cwd = isGlobal ? undefined : rootPath;
 
   const load = async () => {
     setLoading(true);
     try {
-      const data = await listMcpServers();
+      const data = await listMcpServers(cwd);
       setServers(data ?? []);
     } catch {
       setServers([]);
@@ -67,7 +71,7 @@ export default function McpPanel() {
   }, []);
 
   const toggle = async (name: string, disabled: boolean) => {
-    await setMcpDisabled(name, disabled);
+    await setMcpDisabled(name, disabled, cwd);
     setServers((prev) => prev.map((s) => (s.name === name ? { ...s, disabled } : s)));
   };
 
@@ -135,10 +139,10 @@ export default function McpPanel() {
 
     try {
       if (isCreating) {
-        await createMcpServer(rootPath ?? undefined, server);
+        await createMcpServer(cwd, server);
       } else if (editingName) {
         if (editingName !== form.name) {
-          const agents = await listAgents(rootPath ?? undefined);
+          const agents = await listAgents(cwd);
           const dependent = agents.filter((a: { mcpServers?: string[] }) =>
             a.mcpServers?.includes(editingName)
           );
@@ -152,7 +156,7 @@ export default function McpPanel() {
               return;
           }
         }
-        await updateMcpServer(rootPath ?? undefined, editingName, server);
+        await updateMcpServer(cwd, editingName, server);
       }
       cancelForm();
       await load();
@@ -164,7 +168,7 @@ export default function McpPanel() {
   const confirmDelete = async () => {
     if (!deletingName) return;
     try {
-      const agents = await listAgents(rootPath ?? undefined);
+      const agents = await listAgents(cwd);
       const dependent = agents.filter((a: { mcpServers?: string[] }) =>
         a.mcpServers?.includes(deletingName)
       );
@@ -177,7 +181,7 @@ export default function McpPanel() {
         )
           return;
       }
-      await deleteMcpServer(rootPath ?? undefined, deletingName);
+      await deleteMcpServer(cwd, deletingName);
       setDeletingName(null);
       await load();
     } catch (e: any) {
@@ -276,6 +280,21 @@ export default function McpPanel() {
                     >
                       {s.transport}
                     </span>
+                    {s.source === 'global' && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--tag-info-bg)] text-[var(--tag-info-text)]">
+                        全局
+                      </span>
+                    )}
+                    {s.source === 'project' && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--tag-action-bg)] text-[var(--tag-action-text)]">
+                        项目
+                      </span>
+                    )}
+                    {s.hasProjectOverride && (
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]">
+                        覆盖全局
+                      </span>
+                    )}
                   </div>
                   <div className="text-[13px] text-[var(--text-disabled)] mt-1 font-mono">{s.toolCount} 个工具</div>
                 </div>
