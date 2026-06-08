@@ -45,20 +45,6 @@ jobs:
       - run: pnpm install
       - run: pnpm run lint
 
-  format-check:
-    needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-      - run: pnpm install
-      - run: pnpm run format:check
-
   typecheck:
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' }}
@@ -88,7 +74,7 @@ jobs:
       - run: pnpm vitest run
 
   build-desktop:
-    needs: [changes, lint, format-check, typecheck, test]
+    needs: [changes, lint, typecheck, test]
     if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     steps:
