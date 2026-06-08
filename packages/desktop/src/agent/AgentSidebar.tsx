@@ -179,7 +179,15 @@ export default function AgentSidebar() {
   );
 }
 
-function NavItem({ icon, label, shortcut }: { icon: React.ReactNode; label: string; shortcut?: string }) {
+function NavItem({
+  icon,
+  label,
+  shortcut,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  shortcut?: string;
+}) {
   return (
     <button
       type="button"

@@ -190,9 +190,12 @@ export default function SubagentsPanel({ global: isGlobal }: { global?: boolean 
   const inputCls =
     'w-full bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
   const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
-  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
-  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
-  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
+  const btnPrimary =
+    'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
+  const btnDanger =
+    'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
+  const btnCancel =
+    'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
 
   if (loading) {
     return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
@@ -204,7 +207,8 @@ export default function SubagentsPanel({ global: isGlobal }: { global?: boolean 
         <div>
           <div className="text-[14px] text-[var(--text-title)]">启用子智能体</div>
           <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">
-            允许 agent 派发子任务给子智能体{!isGlobal && enabledSource === 'project' ? '（项目级覆盖）' : ''}
+            允许 agent 派发子任务给子智能体
+            {!isGlobal && enabledSource === 'project' ? '（项目级覆盖）' : ''}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -276,7 +280,9 @@ export default function SubagentsPanel({ global: isGlobal }: { global?: boolean 
                   key={a.name}
                   className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--btn-danger-bg)]"
                 >
-                  <span className="text-[14px] text-[var(--accent-danger)]">删除智能体 {a.name}？</span>
+                  <span className="text-[14px] text-[var(--accent-danger)]">
+                    删除智能体 {a.name}？
+                  </span>
                   <div className="flex gap-2">
                     <button onClick={confirmDelete} className={btnDanger}>
                       确认
@@ -329,7 +335,9 @@ export default function SubagentsPanel({ global: isGlobal }: { global?: boolean 
                         </span>
                       )}
                     </div>
-                    <div className="text-[12px] text-[var(--text-placeholder)] mt-1">{a.description}</div>
+                    <div className="text-[12px] text-[var(--text-placeholder)] mt-1">
+                      {a.description}
+                    </div>
                     {a.tools && a.tools.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {a.tools.map((t) => (
@@ -394,7 +402,9 @@ export default function SubagentsPanel({ global: isGlobal }: { global?: boolean 
                     )}
                     <Toggle checked={!a.disabled} onChange={(v) => toggleAgent(a.name, !v)} />
                     {a.maxSteps !== undefined && (
-                      <span className="text-[11px] text-[var(--text-disabled)]">{a.maxSteps} 步</span>
+                      <span className="text-[11px] text-[var(--text-disabled)]">
+                        {a.maxSteps} 步
+                      </span>
                     )}
                   </div>
                 </div>
@@ -528,7 +538,9 @@ function McpMultiSelect({
       {open && (
         <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded border border-[var(--border-hover)] bg-[var(--bg-base)] py-1 shadow-lg">
           {availableMcpServers.length === 0 ? (
-            <div className="px-3 py-2 text-[12px] text-[var(--text-placeholder)]">无已配置的 MCP 服务器</div>
+            <div className="px-3 py-2 text-[12px] text-[var(--text-placeholder)]">
+              无已配置的 MCP 服务器
+            </div>
           ) : (
             availableMcpServers.map((server) => (
               <label

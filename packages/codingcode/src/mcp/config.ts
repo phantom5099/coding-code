@@ -17,8 +17,15 @@ function resolveEnvVars(value: unknown): unknown {
   return value;
 }
 
-function getGlobalConfigDir(): string {
-  return join(homedir(), '.codingcode');
+let _globalConfigDirOverride: string | undefined;
+
+export function getGlobalConfigDir(): string {
+  return _globalConfigDirOverride ?? join(homedir(), '.codingcode');
+}
+
+/** @internal Test-only hook to override the global config directory */
+export function _setGlobalConfigDir(dir: string | undefined): void {
+  _globalConfigDirOverride = dir;
 }
 
 function mergeByName<T extends { name: string }>(global: T[], project: T[]): T[] {
@@ -55,10 +62,7 @@ export function writeMcpConfig(projectRoot: string, servers: McpServerConfig[]):
 }
 
 export function loadGlobalMcpConfig(): McpServerConfig[] {
-  const paths = [
-    join(getGlobalConfigDir(), 'mcp.yaml'),
-    join(getGlobalConfigDir(), 'mcp.yml'),
-  ];
+  const paths = [join(getGlobalConfigDir(), 'mcp.yaml'), join(getGlobalConfigDir(), 'mcp.yml')];
   for (const p of paths) {
     if (existsSync(p)) {
       const raw = readFileSync(p, 'utf8');
@@ -118,7 +122,10 @@ export function setGlobalMcpDisabledState(serverName: string, disabled: boolean)
 
 // ---- 项目级 MCP disabled 状态：持久化到 .codingcode/config.yaml ----
 
-export function getProjectMcpDisabledState(projectRoot: string, serverName: string): boolean | undefined {
+export function getProjectMcpDisabledState(
+  projectRoot: string,
+  serverName: string
+): boolean | undefined {
   const p = join(projectRoot, '.codingcode', 'config.yaml');
   if (!existsSync(p)) return undefined;
   try {
@@ -131,7 +138,11 @@ export function getProjectMcpDisabledState(projectRoot: string, serverName: stri
   }
 }
 
-export function setProjectMcpDisabledState(projectRoot: string, serverName: string, disabled: boolean): void {
+export function setProjectMcpDisabledState(
+  projectRoot: string,
+  serverName: string,
+  disabled: boolean
+): void {
   const dir = join(projectRoot, '.codingcode');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const p = join(dir, 'config.yaml');
@@ -149,7 +160,10 @@ export function setProjectMcpDisabledState(projectRoot: string, serverName: stri
 export function resetProjectMcpDisabledState(projectRoot: string, serverName: string): void {
   const p = join(projectRoot, '.codingcode', 'config.yaml');
   if (!existsSync(p)) return;
-  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>;
+  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<
+    string,
+    unknown
+  >;
   const mcp = (existing.mcp as Record<string, unknown>) ?? {};
   const disabledServers = mcp.disabledServers as Record<string, boolean>;
   if (disabledServers) {

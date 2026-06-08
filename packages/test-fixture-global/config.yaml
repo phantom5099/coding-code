@@ -1,0 +1,3 @@
+mcp:
+  disabledServers:
+    __test_mcp_server__: true

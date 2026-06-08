@@ -322,12 +322,21 @@ describe('SubagentsPanel - source and enabledSource', () => {
   });
 
   it('agent source=project renders 项目 tag', () => {
-    const agent: AgentEntry = { name: 'proj-agent', description: 'Project agent', source: 'project' };
+    const agent: AgentEntry = {
+      name: 'proj-agent',
+      description: 'Project agent',
+      source: 'project',
+    };
     expect(agent.source).toBe('project');
   });
 
   it('agent hasProjectOverride=true renders 覆盖全局 tag', () => {
-    const agent: AgentEntry = { name: 'override-agent', description: 'Override', source: 'global', hasProjectOverride: true };
+    const agent: AgentEntry = {
+      name: 'override-agent',
+      description: 'Override',
+      source: 'global',
+      hasProjectOverride: true,
+    };
     expect(agent.hasProjectOverride).toBe(true);
   });
 
@@ -395,18 +404,37 @@ interface McpEntry {
 
 describe('McpPanel - source tag and cwd', () => {
   it('McpEntry accepts source=global', () => {
-    const entry: McpEntry = { name: 'm1', transport: 'stdio', disabled: false, toolCount: 3, source: 'global' };
+    const entry: McpEntry = {
+      name: 'm1',
+      transport: 'stdio',
+      disabled: false,
+      toolCount: 3,
+      source: 'global',
+    };
     expect(entry.source).toBe('global');
     expect(entry.hasProjectOverride).toBeUndefined();
   });
 
   it('McpEntry accepts source=project', () => {
-    const entry: McpEntry = { name: 'm2', transport: 'http', disabled: false, toolCount: 1, source: 'project' };
+    const entry: McpEntry = {
+      name: 'm2',
+      transport: 'http',
+      disabled: false,
+      toolCount: 1,
+      source: 'project',
+    };
     expect(entry.source).toBe('project');
   });
 
   it('McpEntry accepts hasProjectOverride=true', () => {
-    const entry: McpEntry = { name: 'm3', transport: 'stdio', disabled: false, toolCount: 0, source: 'global', hasProjectOverride: true };
+    const entry: McpEntry = {
+      name: 'm3',
+      transport: 'stdio',
+      disabled: false,
+      toolCount: 0,
+      source: 'global',
+      hasProjectOverride: true,
+    };
     expect(entry.hasProjectOverride).toBe(true);
   });
 
@@ -453,18 +481,40 @@ interface HookEntry {
 
 describe('HooksPanel - source tag and cwd', () => {
   it('HookEntry accepts source=global', () => {
-    const entry: HookEntry = { name: 'h1', point: 'tool.execute.before', type: 'decision', command: 'echo', enabled: true, source: 'global' };
+    const entry: HookEntry = {
+      name: 'h1',
+      point: 'tool.execute.before',
+      type: 'decision',
+      command: 'echo',
+      enabled: true,
+      source: 'global',
+    };
     expect(entry.source).toBe('global');
     expect(entry.hasProjectOverride).toBeUndefined();
   });
 
   it('HookEntry accepts source=project', () => {
-    const entry: HookEntry = { name: 'h2', point: 'tool.execute.after', type: 'observer', command: 'echo', enabled: true, source: 'project' };
+    const entry: HookEntry = {
+      name: 'h2',
+      point: 'tool.execute.after',
+      type: 'observer',
+      command: 'echo',
+      enabled: true,
+      source: 'project',
+    };
     expect(entry.source).toBe('project');
   });
 
   it('HookEntry accepts hasProjectOverride=true', () => {
-    const entry: HookEntry = { name: 'h3', point: 'llm.request.before', type: 'decision', command: 'echo', enabled: true, source: 'global', hasProjectOverride: true };
+    const entry: HookEntry = {
+      name: 'h3',
+      point: 'llm.request.before',
+      type: 'decision',
+      command: 'echo',
+      enabled: true,
+      source: 'global',
+      hasProjectOverride: true,
+    };
     expect(entry.hasProjectOverride).toBe(true);
   });
 
@@ -491,18 +541,34 @@ interface SkillEntry {
 
 describe('SkillPanel - source tag and cwd', () => {
   it('SkillEntry accepts source=global', () => {
-    const entry: SkillEntry = { name: 's1', description: 'A skill', disabled: false, source: 'global' };
+    const entry: SkillEntry = {
+      name: 's1',
+      description: 'A skill',
+      disabled: false,
+      source: 'global',
+    };
     expect(entry.source).toBe('global');
     expect(entry.hasProjectOverride).toBeUndefined();
   });
 
   it('SkillEntry accepts source=project', () => {
-    const entry: SkillEntry = { name: 's2', description: 'Another skill', disabled: false, source: 'project' };
+    const entry: SkillEntry = {
+      name: 's2',
+      description: 'Another skill',
+      disabled: false,
+      source: 'project',
+    };
     expect(entry.source).toBe('project');
   });
 
   it('SkillEntry accepts hasProjectOverride=true', () => {
-    const entry: SkillEntry = { name: 's3', description: 'Override skill', disabled: false, source: 'global', hasProjectOverride: true };
+    const entry: SkillEntry = {
+      name: 's3',
+      description: 'Override skill',
+      disabled: false,
+      source: 'global',
+      hasProjectOverride: true,
+    };
     expect(entry.hasProjectOverride).toBe(true);
   });
 

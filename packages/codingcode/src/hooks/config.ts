@@ -16,8 +16,15 @@ export interface UserHookConfig {
   enabled: boolean;
 }
 
-function getGlobalConfigDir(): string {
-  return join(homedir(), '.codingcode');
+let _globalConfigDirOverride: string | undefined;
+
+export function getGlobalConfigDir(): string {
+  return _globalConfigDirOverride ?? join(homedir(), '.codingcode');
+}
+
+/** @internal Test-only hook to override the global config directory */
+export function _setGlobalConfigDir(dir: string | undefined): void {
+  _globalConfigDirOverride = dir;
 }
 
 function mergeByName<T extends { name: string }>(global: T[], project: T[]): T[] {
@@ -54,10 +61,7 @@ export function writeHookConfigs(projectRoot: string, hooks: UserHookConfig[]): 
 }
 
 export function loadGlobalHookConfigs(): UserHookConfig[] {
-  const paths = [
-    join(getGlobalConfigDir(), 'hooks.yaml'),
-    join(getGlobalConfigDir(), 'hooks.yml'),
-  ];
+  const paths = [join(getGlobalConfigDir(), 'hooks.yaml'), join(getGlobalConfigDir(), 'hooks.yml')];
   for (const p of paths) {
     if (existsSync(p)) {
       const raw = readFileSync(p, 'utf8');
@@ -117,7 +121,10 @@ export function setGlobalHookDisabledState(hookName: string, disabled: boolean):
 
 // ---- 项目级 Hook disabled 状态：持久化到 .codingcode/config.yaml ----
 
-export function getProjectHookDisabledState(projectRoot: string, hookName: string): boolean | undefined {
+export function getProjectHookDisabledState(
+  projectRoot: string,
+  hookName: string
+): boolean | undefined {
   const p = join(projectRoot, '.codingcode', 'config.yaml');
   if (!existsSync(p)) return undefined;
   try {
@@ -130,7 +137,11 @@ export function getProjectHookDisabledState(projectRoot: string, hookName: strin
   }
 }
 
-export function setProjectHookDisabledState(projectRoot: string, hookName: string, disabled: boolean): void {
+export function setProjectHookDisabledState(
+  projectRoot: string,
+  hookName: string,
+  disabled: boolean
+): void {
   const dir = join(projectRoot, '.codingcode');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const p = join(dir, 'config.yaml');
@@ -148,7 +159,10 @@ export function setProjectHookDisabledState(projectRoot: string, hookName: strin
 export function resetProjectHookDisabledState(projectRoot: string, hookName: string): void {
   const p = join(projectRoot, '.codingcode', 'config.yaml');
   if (!existsSync(p)) return;
-  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>;
+  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<
+    string,
+    unknown
+  >;
   const hooks = (existing.hooks as Record<string, unknown>) ?? {};
   const disabledHooks = hooks.disabledHooks as Record<string, boolean>;
   if (disabledHooks) {

@@ -18,6 +18,7 @@ describe('runReActLoop 鈥?loop options', () => {
     indexPath: '',
     messageCount: 0,
     promptEstimate: 0,
+    memorySnapshot: '',
   };
 
   const mockHooks = {

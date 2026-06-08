@@ -19,8 +19,6 @@ function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`);
 }
 
-
-
 export interface ModelEntry {
   id: string;
   name: string;

@@ -69,8 +69,9 @@ const MockContextLayer = Layer.succeed(
     build: () =>
       Effect.sync(() => ({
         messages: [{ role: 'user' as const, content: 'hi' }],
-        newBudgets: [],
+        compactedEvents: [],
         promptEstimate: 0,
+        currentTurnId: 0,
       })),
     compress: () => Effect.succeed({ didCompress: true, released: 0, promptEstimate: 0 }),
     compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),

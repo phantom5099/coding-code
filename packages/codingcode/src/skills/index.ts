@@ -49,7 +49,9 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
         matcher: (all: readonly Skill[], q: string) => Effect.Effect<string | undefined>
       ): Effect.Effect<Skill | undefined> =>
         Effect.gen(function* () {
-          const all = readAll(projectPath).filter((s) => !resolveSkillDisabled(projectPath, s.name));
+          const all = readAll(projectPath).filter(
+            (s) => !resolveSkillDisabled(projectPath, s.name)
+          );
           const name = yield* matcher(all, query);
           if (!name) return undefined;
           if (resolveSkillDisabled(projectPath, name)) return undefined;

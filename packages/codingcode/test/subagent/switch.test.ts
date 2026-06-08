@@ -53,7 +53,12 @@ describe('Subagent switch', () => {
         { name: 'disabled-agent', description: 'I am disabled', disabled: true },
       ];
 
-      const prompt = buildSystemPrompt({ agentProfiles: profiles });
+      const prompt = buildSystemPrompt({
+        cwd: '/tmp',
+        platform: 'linux',
+        shell: 'bash',
+        agentProfiles: profiles,
+      });
 
       expect(prompt).toContain('enabled-agent');
       expect(prompt).not.toContain('disabled-agent');
@@ -64,7 +69,12 @@ describe('Subagent switch', () => {
         { name: 'disabled-agent', description: 'I am disabled', disabled: true },
       ];
 
-      const prompt = buildSystemPrompt({ agentProfiles: profiles });
+      const prompt = buildSystemPrompt({
+        cwd: '/tmp',
+        platform: 'linux',
+        shell: 'bash',
+        agentProfiles: profiles,
+      });
 
       expect(prompt).not.toContain('Available Subagents');
     });
@@ -75,20 +85,30 @@ describe('Subagent switch', () => {
         { name: 'disabled-agent', description: 'I am disabled', disabled: true },
       ];
 
-      const prompt = buildSystemPrompt({ agentProfiles: profiles });
+      const prompt = buildSystemPrompt({
+        cwd: '/tmp',
+        platform: 'linux',
+        shell: 'bash',
+        agentProfiles: profiles,
+      });
 
       expect(prompt).toContain('Available Subagents');
     });
 
     it('should not inject Available Subagents when no profiles provided', () => {
-      const prompt = buildSystemPrompt({});
+      const prompt = buildSystemPrompt({ cwd: '/tmp', platform: 'linux', shell: 'bash' });
 
       expect(prompt).not.toContain('Available Subagents');
     });
 
     it('should not inject Available Subagents when subagent switch is off (empty profiles)', () => {
       // Simulates agent.ts logic: when resolveSubagentEnabled is false, agentProfiles = []
-      const prompt = buildSystemPrompt({ agentProfiles: [] });
+      const prompt = buildSystemPrompt({
+        cwd: '/tmp',
+        platform: 'linux',
+        shell: 'bash',
+        agentProfiles: [],
+      });
 
       expect(prompt).not.toContain('Available Subagents');
     });
@@ -102,7 +122,12 @@ describe('Subagent switch', () => {
       // Simulate agent-b being disabled via resolveAgentDisabled
       const filteredProfiles = allProfiles.filter((p) => p.name !== 'agent-b');
 
-      const prompt = buildSystemPrompt({ agentProfiles: filteredProfiles });
+      const prompt = buildSystemPrompt({
+        cwd: '/tmp',
+        platform: 'linux',
+        shell: 'bash',
+        agentProfiles: filteredProfiles,
+      });
 
       expect(prompt).toContain('agent-a');
       expect(prompt).not.toContain('agent-b');

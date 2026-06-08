@@ -133,7 +133,9 @@ describe('Memory snapshot stability', () => {
     const { llm, captured } = makeCapturingLlm();
     await runOnce(llm, '## Long-term Memory\n\nOriginal snapshot');
     expect(captured.system).toContain('Original snapshot');
-    const lastUserMsg = [...(captured.messages ?? [])].reverse().find((m: any) => m.role === 'user');
+    const lastUserMsg = [...(captured.messages ?? [])]
+      .reverse()
+      .find((m: any) => m.role === 'user');
     expect(lastUserMsg).toBeDefined();
     expect(lastUserMsg.content).toContain('<system-reminder>');
     expect(lastUserMsg.content).toContain('Updated on disk');
@@ -143,7 +145,9 @@ describe('Memory snapshot stability', () => {
     mockLoadMemoryForPrompt.mockReturnValue('## Long-term Memory\n\nSame');
     const { llm, captured } = makeCapturingLlm();
     await runOnce(llm, '## Long-term Memory\n\nSame');
-    const lastUserMsg = [...(captured.messages ?? [])].reverse().find((m: any) => m.role === 'user');
+    const lastUserMsg = [...(captured.messages ?? [])]
+      .reverse()
+      .find((m: any) => m.role === 'user');
     expect(lastUserMsg).toBeDefined();
     expect(lastUserMsg.content).not.toContain('<system-reminder>');
   });
@@ -152,7 +156,9 @@ describe('Memory snapshot stability', () => {
     mockLoadMemoryForPrompt.mockReturnValue('');
     const { llm, captured } = makeCapturingLlm();
     await runOnce(llm, '');
-    const lastUserMsg = [...(captured.messages ?? [])].reverse().find((m: any) => m.role === 'user');
+    const lastUserMsg = [...(captured.messages ?? [])]
+      .reverse()
+      .find((m: any) => m.role === 'user');
     expect(lastUserMsg).toBeDefined();
     expect(lastUserMsg.content).not.toContain('<system-reminder>');
   });

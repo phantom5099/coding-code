@@ -82,7 +82,9 @@ export function createHttpSettingsClient(
     },
 
     async getSubagentEnabled({ cwd }) {
-      return apiGet<{ enabled: boolean; source: string }>(`/api/settings/subagent/enabled${qsCwd(cwd)}`);
+      return apiGet<{ enabled: boolean; source: string }>(
+        `/api/settings/subagent/enabled${qsCwd(cwd)}`
+      );
     },
 
     async setSubagentEnabled({ enabled, cwd }) {
@@ -98,11 +100,16 @@ export function createHttpSettingsClient(
     },
 
     async setMcpDisabled({ name, disabled, cwd }) {
-      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, { disabled });
+      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, {
+        disabled,
+      });
     },
 
     async resetMcpDisabled({ name, cwd }) {
-      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`, {});
+      await apiPost(
+        `/api/settings/mcp/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`,
+        {}
+      );
     },
 
     async createMcpServer({ cwd, server }) {
@@ -142,11 +149,16 @@ export function createHttpSettingsClient(
     },
 
     async setAgentDisabled({ name, disabled, cwd }) {
-      await apiPost(`/api/settings/agents/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, { disabled });
+      await apiPost(`/api/settings/agents/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, {
+        disabled,
+      });
     },
 
     async resetAgentDisabled({ name, cwd }) {
-      await apiPost(`/api/settings/agents/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`, {});
+      await apiPost(
+        `/api/settings/agents/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`,
+        {}
+      );
     },
 
     async listHooks({ cwd }) {
@@ -172,7 +184,10 @@ export function createHttpSettingsClient(
     },
 
     async resetHookDisabled({ name, cwd }) {
-      await apiPost(`/api/settings/hooks/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`, {});
+      await apiPost(
+        `/api/settings/hooks/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`,
+        {}
+      );
     },
 
     async getGlobalPermissionMode() {

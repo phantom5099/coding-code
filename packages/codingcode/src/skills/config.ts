@@ -138,7 +138,10 @@ export function setGlobalSkillDisabledState(skillName: string, disabled: boolean
 
 // ---- 项目级 Skill disabled 状态：持久化到 .codingcode/config.yaml ----
 
-export function getProjectSkillDisabledState(projectRoot: string, skillName: string): boolean | undefined {
+export function getProjectSkillDisabledState(
+  projectRoot: string,
+  skillName: string
+): boolean | undefined {
   const p = join(projectRoot, '.codingcode', 'config.yaml');
   if (!existsSync(p)) return undefined;
   try {
@@ -151,7 +154,11 @@ export function getProjectSkillDisabledState(projectRoot: string, skillName: str
   }
 }
 
-export function setProjectSkillDisabledState(projectRoot: string, skillName: string, disabled: boolean): void {
+export function setProjectSkillDisabledState(
+  projectRoot: string,
+  skillName: string,
+  disabled: boolean
+): void {
   const dir = join(projectRoot, '.codingcode');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const p = join(dir, 'config.yaml');
@@ -169,7 +176,10 @@ export function setProjectSkillDisabledState(projectRoot: string, skillName: str
 export function resetProjectSkillDisabledState(projectRoot: string, skillName: string): void {
   const p = join(projectRoot, '.codingcode', 'config.yaml');
   if (!existsSync(p)) return;
-  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>;
+  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<
+    string,
+    unknown
+  >;
   const skills = (existing.skills as Record<string, unknown>) ?? {};
   const disabledSkills = skills.disabledSkills as Record<string, boolean>;
   if (disabledSkills) {

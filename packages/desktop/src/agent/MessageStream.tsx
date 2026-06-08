@@ -93,12 +93,21 @@ function TurnDiffPanel({
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
-              <path d="M8 1v14M1 8h14" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" />
+              <path
+                d="M8 1v14M1 8h14"
+                stroke="var(--text-muted)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
             </svg>
           </div>
           <div>
-            <span className="text-[13px] text-[var(--text-primary)]">已编辑 {diff.files.length} 个文件</span>
-            {isInterrupted && <span className="ml-2 text-[11px] text-[var(--accent-danger)]">（对话中断）</span>}
+            <span className="text-[13px] text-[var(--text-primary)]">
+              已编辑 {diff.files.length} 个文件
+            </span>
+            {isInterrupted && (
+              <span className="ml-2 text-[11px] text-[var(--accent-danger)]">（对话中断）</span>
+            )}
             <div className="flex items-center gap-2 mt-0.5">
               {totalInsertions > 0 && (
                 <span className="text-[12px] text-[var(--accent-success)]">+{totalInsertions}</span>
@@ -151,12 +160,18 @@ function TurnDiffPanel({
                   <span className="text-[10px] text-[var(--text-muted)] shrink-0">
                     {f.source === 'agent' ? 'Agent' : '未知'}
                   </span>
-                  {isReverted && <span className="text-[10px] text-[var(--accent-danger)] shrink-0">已回退</span>}
+                  {isReverted && (
+                    <span className="text-[10px] text-[var(--accent-danger)] shrink-0">已回退</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0 ml-3">
                   <div className="flex items-center gap-1.5 text-[12px]">
-                    {f.insertions > 0 && <span className="text-[var(--accent-success)]">+{f.insertions}</span>}
-                    {f.deletions > 0 && <span className="text-[var(--accent-danger)]">-{f.deletions}</span>}
+                    {f.insertions > 0 && (
+                      <span className="text-[var(--accent-success)]">+{f.insertions}</span>
+                    )}
+                    {f.deletions > 0 && (
+                      <span className="text-[var(--accent-danger)]">-{f.deletions}</span>
+                    )}
                   </div>
                   <button
                     onClick={(e) => {
@@ -264,7 +279,12 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       for (const item of turn.items) {
         if (item.type === 'tool_result') continue;
         if (item.type === 'tool_call') {
-          entries.push({ item, turnId: turn.id, toolResult: toolResultByCallId[item.id], key: item.id });
+          entries.push({
+            item,
+            turnId: turn.id,
+            toolResult: toolResultByCallId[item.id],
+            key: item.id,
+          });
         } else {
           entries.push({ item, turnId: turn.id, key: item.id });
         }
@@ -408,10 +428,14 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const rollbackModal = showRollbackPanel && (
     <div className="fixed inset-0 bg-[var(--overlay-bg)] flex items-center justify-center z-50">
       <div className="bg-[var(--bg-panel)] border border-[var(--border-strong)] rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <h3 className="text-[15px] text-[var(--text-primary)] mb-4">将回退到 Turn {showRollbackPanel.turnId}</h3>
+        <h3 className="text-[15px] text-[var(--text-primary)] mb-4">
+          将回退到 Turn {showRollbackPanel.turnId}
+        </h3>
         {showRollbackPanel.preview && (
           <div className="mb-4">
-            <div className="text-[12px] text-[var(--text-secondary)] mb-2">回退前 / 回退后差异：</div>
+            <div className="text-[12px] text-[var(--text-secondary)] mb-2">
+              回退前 / 回退后差异：
+            </div>
             <pre className="text-[11px] bg-[var(--bg-code)] p-3 rounded text-[var(--text-secondary)] max-h-[300px] overflow-auto whitespace-pre-wrap">
               {showRollbackPanel.preview.diff || '无差异'}
             </pre>

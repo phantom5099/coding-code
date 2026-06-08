@@ -112,9 +112,12 @@ export default function MemoryPanel() {
   const inputCls =
     'w-full bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
   const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
-  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
-  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
-  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
+  const btnPrimary =
+    'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
+  const btnDanger =
+    'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
+  const btnCancel =
+    'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
 
   if (loading) {
     return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
@@ -125,13 +128,17 @@ export default function MemoryPanel() {
       <div className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] mb-5">
         <div>
           <div className="text-[14px] text-[var(--text-title)]">记忆模式</div>
-          <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">启用后自动从会话中提取长期记忆</div>
+          <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">
+            启用后自动从会话中提取长期记忆
+          </div>
         </div>
         <Toggle checked={config.enabled} onChange={toggleEnabled} />
       </div>
 
       <div className="flex items-center gap-2 mb-3">
-        <div className="text-[11px] font-medium text-[var(--text-disabled)] uppercase tracking-wider">记忆类型</div>
+        <div className="text-[11px] font-medium text-[var(--text-disabled)] uppercase tracking-wider">
+          记忆类型
+        </div>
         {config.enabled && (
           <button onClick={startCreate} className={btnPrimary}>
             + 添加类型
@@ -180,7 +187,9 @@ export default function MemoryPanel() {
         <div className="text-[14px] text-[var(--text-disabled)] py-8 text-center leading-loose">
           未配置记忆类型
           <br />
-          <span className="text-[13px] text-[var(--text-disabled)]">点击上方按钮添加自定义类型</span>
+          <span className="text-[13px] text-[var(--text-disabled)]">
+            点击上方按钮添加自定义类型
+          </span>
         </div>
       ) : (
         <div className="space-y-2">
@@ -226,7 +235,9 @@ export default function MemoryPanel() {
                   key={t.name}
                   className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--btn-danger-bg)]"
                 >
-                  <span className="text-[14px] text-[var(--accent-danger)]">删除类型 {t.name}？</span>
+                  <span className="text-[14px] text-[var(--accent-danger)]">
+                    删除类型 {t.name}？
+                  </span>
                   <div className="flex gap-2">
                     <button onClick={confirmDelete} className={btnDanger}>
                       确认
@@ -258,7 +269,9 @@ export default function MemoryPanel() {
                         </span>
                       )}
                     </div>
-                    <div className="text-[12px] text-[var(--text-placeholder)] mt-1">{t.description}</div>
+                    <div className="text-[12px] text-[var(--text-placeholder)] mt-1">
+                      {t.description}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {!t.isBuiltIn && (

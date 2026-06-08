@@ -468,7 +468,11 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async setHookDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void> {
-      await clients.settings.setHookDisabled({ cwd: cwd(), name: body.name, disabled: body.disabled });
+      await clients.settings.setHookDisabled({
+        cwd: cwd(),
+        name: body.name,
+        disabled: body.disabled,
+      });
     },
 
     async resetHookDisabled(body: { name: string; cwd: string }): Promise<void> {

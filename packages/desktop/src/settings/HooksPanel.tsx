@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import Toggle from './Toggle';
 import { useGlobalStore } from '../stores/global.store';
-import { listHooks, createHook, updateHook, deleteHook, setHookDisabled, resetHookDisabled } from '../lib/core-api';
+import {
+  listHooks,
+  createHook,
+  updateHook,
+  deleteHook,
+  setHookDisabled,
+  resetHookDisabled,
+} from '../lib/core-api';
 
 interface HookEntry {
   name: string;
@@ -204,9 +211,12 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
   const inputCls =
     'w-full bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
   const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
-  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
-  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
-  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
+  const btnPrimary =
+    'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
+  const btnDanger =
+    'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
+  const btnCancel =
+    'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
 
   if (loading) {
     return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
@@ -268,7 +278,9 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
                   key={h.name}
                   className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--btn-danger-bg)]"
                 >
-                  <span className="text-[14px] text-[var(--accent-danger)]">删除钩子 {h.name}？</span>
+                  <span className="text-[14px] text-[var(--accent-danger)]">
+                    删除钩子 {h.name}？
+                  </span>
                   <div className="flex gap-2">
                     <button onClick={confirmDelete} className={btnDanger}>
                       确认
@@ -322,9 +334,13 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
                     )}
                   </div>
                   {h.description && (
-                    <div className="text-[12px] text-[var(--text-placeholder)] mt-1">{h.description}</div>
+                    <div className="text-[12px] text-[var(--text-placeholder)] mt-1">
+                      {h.description}
+                    </div>
                   )}
-                  <div className="text-[12px] text-[var(--text-disabled)] mt-1 font-mono">{h.command}</div>
+                  <div className="text-[12px] text-[var(--text-disabled)] mt-1 font-mono">
+                    {h.command}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
@@ -394,8 +410,12 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
                   className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-default)]"
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="text-[13px] font-mono text-[var(--text-title)]">{point.name}</span>
-                    <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">{point.description}</div>
+                    <span className="text-[13px] font-mono text-[var(--text-title)]">
+                      {point.name}
+                    </span>
+                    <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">
+                      {point.description}
+                    </div>
                   </div>
                   <span
                     className={`text-[11px] px-2 py-0.5 rounded font-mono shrink-0 ${

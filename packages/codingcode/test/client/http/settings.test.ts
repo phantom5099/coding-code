@@ -24,7 +24,7 @@ describe('createHttpSettingsClient - reset APIs', () => {
       await client.resetSubagentEnabled({ cwd: '/my-project' });
       expect(request.apiPost).toHaveBeenCalledWith(
         '/api/settings/subagent/enabled/reset?cwd=%2Fmy-project',
-        {},
+        {}
       );
     });
   });
@@ -34,7 +34,7 @@ describe('createHttpSettingsClient - reset APIs', () => {
       await client.resetAgentDisabled({ name: 'my-agent', cwd: '/my-project' });
       expect(request.apiPost).toHaveBeenCalledWith(
         '/api/settings/agents/my-agent/disabled/reset?cwd=%2Fmy-project',
-        {},
+        {}
       );
     });
 
@@ -42,7 +42,7 @@ describe('createHttpSettingsClient - reset APIs', () => {
       await client.resetAgentDisabled({ name: 'my agent', cwd: '/my-project' });
       expect(request.apiPost).toHaveBeenCalledWith(
         '/api/settings/agents/my%20agent/disabled/reset?cwd=%2Fmy-project',
-        {},
+        {}
       );
     });
   });
@@ -52,7 +52,7 @@ describe('createHttpSettingsClient - reset APIs', () => {
       await client.resetMcpDisabled({ name: 'my-server', cwd: '/my-project' });
       expect(request.apiPost).toHaveBeenCalledWith(
         '/api/settings/mcp/my-server/disabled/reset?cwd=%2Fmy-project',
-        {},
+        {}
       );
     });
   });
@@ -62,7 +62,7 @@ describe('createHttpSettingsClient - reset APIs', () => {
       await client.resetHookDisabled({ name: 'my-hook', cwd: '/my-project' });
       expect(request.apiPost).toHaveBeenCalledWith(
         '/api/settings/hooks/my-hook/disabled/reset?cwd=%2Fmy-project',
-        {},
+        {}
       );
     });
   });
@@ -82,7 +82,7 @@ describe('createHttpSettingsClient - updated signatures with cwd', () => {
       request.apiGet.mockResolvedValue({ enabled: true, source: 'global' });
       const result = await client.getSubagentEnabled({ cwd: '/my-project' });
       expect(request.apiGet).toHaveBeenCalledWith(
-        '/api/settings/subagent/enabled?cwd=%2Fmy-project',
+        '/api/settings/subagent/enabled?cwd=%2Fmy-project'
       );
       expect(result).toEqual({ enabled: true, source: 'global' });
     });
@@ -93,7 +93,7 @@ describe('createHttpSettingsClient - updated signatures with cwd', () => {
       await client.setSubagentEnabled({ enabled: false, cwd: '/my-project' });
       expect(request.apiPost).toHaveBeenCalledWith(
         '/api/settings/subagent/enabled?cwd=%2Fmy-project',
-        { enabled: false },
+        { enabled: false }
       );
     });
   });
@@ -103,7 +103,7 @@ describe('createHttpSettingsClient - updated signatures with cwd', () => {
       await client.setMcpDisabled({ name: 'my-server', disabled: true, cwd: '/my-project' });
       expect(request.apiPost).toHaveBeenCalledWith(
         '/api/settings/mcp/my-server/disabled?cwd=%2Fmy-project',
-        { disabled: true },
+        { disabled: true }
       );
     });
   });
@@ -113,7 +113,7 @@ describe('createHttpSettingsClient - updated signatures with cwd', () => {
       await client.setAgentDisabled({ name: 'my-agent', disabled: true, cwd: '/my-project' });
       expect(request.apiPost).toHaveBeenCalledWith(
         '/api/settings/agents/my-agent/disabled?cwd=%2Fmy-project',
-        { disabled: true },
+        { disabled: true }
       );
     });
   });
@@ -123,7 +123,7 @@ describe('createHttpSettingsClient - updated signatures with cwd', () => {
       await client.setHookDisabled({ cwd: '/my-project', name: 'my-hook', disabled: true });
       expect(request.apiPost).toHaveBeenCalledWith(
         '/api/settings/hooks/my-hook/disabled?cwd=%2Fmy-project',
-        { disabled: true },
+        { disabled: true }
       );
     });
   });
@@ -131,10 +131,10 @@ describe('createHttpSettingsClient - updated signatures with cwd', () => {
   describe('toggleSkill', () => {
     it('POSTs to /settings/skills with cwd query param', async () => {
       await client.toggleSkill({ name: 'my-skill', enabled: true, cwd: '/my-project' });
-      expect(request.apiPost).toHaveBeenCalledWith(
-        '/api/settings/skills?cwd=%2Fmy-project',
-        { name: 'my-skill', enabled: true },
-      );
+      expect(request.apiPost).toHaveBeenCalledWith('/api/settings/skills?cwd=%2Fmy-project', {
+        name: 'my-skill',
+        enabled: true,
+      });
     });
   });
 });

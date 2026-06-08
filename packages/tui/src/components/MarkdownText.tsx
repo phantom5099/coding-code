@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { marked } from 'marked';
+import { marked, Token, Tokens } from 'marked';
 import { CodeBlock } from './CodeBlock.js';
 
 interface MarkdownTextProps {
@@ -10,53 +10,66 @@ interface MarkdownTextProps {
 
 marked.setOptions({ gfm: true, breaks: true });
 
-function renderInlineTokens(tokens: marked.Token[] | undefined, width: number): React.ReactNode[] {
+function renderInlineTokens(tokens: Token[] | undefined, width: number): React.ReactNode[] {
   if (!tokens || tokens.length === 0) return [];
 
   const nodes: React.ReactNode[] = [];
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
+    const token = tokens[i]!;
     switch (token.type) {
-      case 'text':
-        nodes.push(<Text key={i}>{token.text}</Text>);
+      case 'text': {
+        const t = token as Tokens.Text;
+        nodes.push(<Text key={i}>{t.text}</Text>);
         break;
-      case 'strong':
+      }
+      case 'strong': {
+        const t = token as Tokens.Strong;
         nodes.push(
           <Text key={i} bold>
-            {renderInlineTokens(token.tokens, width)}
+            {renderInlineTokens(t.tokens, width)}
           </Text>
         );
         break;
-      case 'em':
+      }
+      case 'em': {
+        const t = token as Tokens.Em;
         nodes.push(
           <Text key={i} italic>
-            {renderInlineTokens(token.tokens, width)}
+            {renderInlineTokens(t.tokens, width)}
           </Text>
         );
         break;
-      case 'codespan':
+      }
+      case 'codespan': {
+        const t = token as Tokens.Codespan;
         nodes.push(
           <Text key={i} color="cyan" backgroundColor="#333">
-            {' '}{token.text}{' '}
+            {' '}
+            {t.text}{' '}
           </Text>
         );
         break;
-      case 'link':
+      }
+      case 'link': {
+        const t = token as Tokens.Link;
         nodes.push(
           <React.Fragment key={i}>
             <Text color="blue" underline>
-              {renderInlineTokens(token.tokens, width)}
+              {renderInlineTokens(t.tokens, width)}
             </Text>
-            <Text color="gray"> ({token.href})</Text>
+            <Text color="gray"> ({t.href})</Text>
           </React.Fragment>
         );
         break;
+      }
       case 'br':
         nodes.push(<Text key={i}>{'\n'}</Text>);
         break;
-      case 'escape':
-        nodes.push(<Text key={i}>{token.text}</Text>);
+      case 'escape': {
+        const t = token as Tokens.Escape;
+        nodes.push(<Text key={i}>{t.text}</Text>);
         break;
+      }
       default:
         if ('text' in token && typeof token.text === 'string') {
           nodes.push(<Text key={i}>{token.text}</Text>);
@@ -70,25 +83,25 @@ function renderInlineTokens(tokens: marked.Token[] | undefined, width: number): 
 }
 
 function renderList(
-  items: marked.Tokens.ListItem[],
+  items: Tokens.ListItem[],
   width: number,
   ordered: boolean,
-  start: number = 1
+  start: number | '' = 1
 ): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    const prefix = ordered ? `${start + i}. ` : '• ';
+    const item = items[i]!;
+    const prefix = ordered ? `${(Number(start) || 1) + i}. ` : '• ';
     const inlineNodes = renderInlineTokens(item.tokens, width);
 
     const subListNodes: React.ReactNode[] = [];
     if (item.tokens) {
       for (const subToken of item.tokens) {
         if (subToken.type === 'list') {
-          const subList = subToken as marked.Tokens.List;
+          const subList = subToken as Tokens.List;
           subListNodes.push(
             <Box key={`sub-${i}`} paddingLeft={2} flexDirection="column">
-              {renderList(subList.items, width, subList.ordered, subList.start ?? 1)}
+              {renderList(subList.items, width, subList.ordered, subList.start)}
             </Box>
           );
         }
@@ -108,19 +121,23 @@ function renderList(
   return nodes;
 }
 
-function renderTable(token: marked.Tokens.Table, width: number): React.ReactNode {
+function renderTable(token: Tokens.Table, width: number): React.ReactNode {
   const { header, rows } = token;
   const colCount = header.length;
 
   const colWidths = header.map((h, i) => {
     const headerLen = h.text.length;
     const maxRowLen = Math.max(...rows.map((r) => r[i]?.text.length ?? 0));
-    return Math.min(Math.max(headerLen, maxRowLen) + 1, Math.floor((width - colCount - 1) / colCount));
+    return Math.min(
+      Math.max(headerLen, maxRowLen) + 1,
+      Math.floor((width - colCount - 1) / colCount)
+    );
   });
 
-  const renderRow = (cells: marked.Tokens.TableCell[], isHeader: boolean) => {
+  const renderRow = (cells: Tokens.TableCell[], isHeader: boolean) => {
     const parts = cells.map((cell, i) => {
-      const text = cell.text.padEnd(colWidths[i]).slice(0, colWidths[i]);
+      const cw = colWidths[i] ?? 0;
+      const text = cell.text.padEnd(cw).slice(0, cw);
       return isHeader ? <Text bold>{text}</Text> : <Text>{text}</Text>;
     });
     const separator = <Text color="gray"> │ </Text>;
@@ -151,24 +168,25 @@ export function MarkdownText({ content, width }: MarkdownTextProps) {
 
   const nodes: React.ReactNode[] = [];
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
+    const token = tokens[i]!;
 
     switch (token.type) {
       case 'heading': {
-        const headingToken = token as marked.Tokens.Heading;
+        const headingToken = token as Tokens.Heading;
         const prefix = '#'.repeat(headingToken.depth) + ' ';
         const colors = ['yellow', 'yellow', 'green', 'cyan', 'gray', 'gray'] as const;
         nodes.push(
           <Box key={i} flexDirection="column" marginY={1}>
             <Text bold color={colors[headingToken.depth - 1] ?? 'gray'}>
-              {prefix}{renderInlineTokens(headingToken.tokens, width)}
+              {prefix}
+              {renderInlineTokens(headingToken.tokens, width)}
             </Text>
           </Box>
         );
         break;
       }
       case 'paragraph': {
-        const paraToken = token as marked.Tokens.Paragraph;
+        const paraToken = token as Tokens.Paragraph;
         nodes.push(
           <Box key={i} flexDirection="column">
             <Text wrap="wrap">{renderInlineTokens(paraToken.tokens, width)}</Text>
@@ -177,23 +195,21 @@ export function MarkdownText({ content, width }: MarkdownTextProps) {
         break;
       }
       case 'code': {
-        const codeToken = token as marked.Tokens.Code;
-        nodes.push(
-          <CodeBlock key={i} code={codeToken.text} language={codeToken.lang || 'text'} />
-        );
+        const codeToken = token as Tokens.Code;
+        nodes.push(<CodeBlock key={i} code={codeToken.text} language={codeToken.lang || 'text'} />);
         break;
       }
       case 'list': {
-        const listToken = token as marked.Tokens.List;
+        const listToken = token as Tokens.List;
         nodes.push(
           <Box key={i} flexDirection="column" paddingLeft={1}>
-            {renderList(listToken.items, width, listToken.ordered, listToken.start ?? 1)}
+            {renderList(listToken.items, width, listToken.ordered, listToken.start)}
           </Box>
         );
         break;
       }
       case 'blockquote': {
-        const bqToken = token as marked.Tokens.Blockquote;
+        const bqToken = token as Tokens.Blockquote;
         const innerText = bqToken.tokens
           .map((t) => {
             if ('text' in t) return t.text;
@@ -217,7 +233,7 @@ export function MarkdownText({ content, width }: MarkdownTextProps) {
         break;
       }
       case 'table': {
-        const tableToken = token as marked.Tokens.Table;
+        const tableToken = token as Tokens.Table;
         nodes.push(<React.Fragment key={i}>{renderTable(tableToken, width)}</React.Fragment>);
         break;
       }

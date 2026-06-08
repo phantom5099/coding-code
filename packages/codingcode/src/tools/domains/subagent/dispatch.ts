@@ -29,25 +29,25 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       prompt: z.string().min(1).describe('task description for the subagent'),
     }),
     execute: async (args: any, ctx: any) => {
-        const { agent: agentName, prompt } = args;
+      const { agent: agentName, prompt } = args;
 
-        const projectPath = ctx?.projectPath || process.cwd();
+      const projectPath = ctx?.projectPath || process.cwd();
 
-        // Check global subagent switch
-        if (!resolveSubagentEnabled(projectPath)) {
-          throw new Error('Subagent dispatch is disabled in global settings');
-        }
+      // Check global subagent switch
+      if (!resolveSubagentEnabled(projectPath)) {
+        throw new Error('Subagent dispatch is disabled in global settings');
+      }
 
-        // Get profile
-        const profile = deps.runtime.resolveSubagentProfile(projectPath, agentName);
-        if (!profile) {
-          throw new Error(`Unknown subagent: ${agentName}`);
-        }
+      // Get profile
+      const profile = deps.runtime.resolveSubagentProfile(projectPath, agentName);
+      if (!profile) {
+        throw new Error(`Unknown subagent: ${agentName}`);
+      }
 
-        // Check individual agent disabled state
-        if (resolveAgentDisabled(projectPath, agentName)) {
-          throw new Error(`Subagent '${agentName}' is disabled`);
-        }
+      // Check individual agent disabled state
+      if (resolveAgentDisabled(projectPath, agentName)) {
+        throw new Error(`Subagent '${agentName}' is disabled`);
+      }
 
       if (!ctx?.agentRunner?.agentService || !ctx?.agentRunner?.llm) {
         throw new Error('dispatch_agent requires agentRunner context');

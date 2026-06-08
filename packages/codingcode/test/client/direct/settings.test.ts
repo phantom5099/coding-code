@@ -31,7 +31,13 @@ vi.mock('../../../src/subagent/loader.js', () => ({
 }));
 
 vi.mock('../../../src/subagent/registry.js', () => ({
-  EXPLORE_PROFILE: { name: 'explore', description: 'Explore', tools: ['read_file'], readonly: true, maxSteps: 30 },
+  EXPLORE_PROFILE: {
+    name: 'explore',
+    description: 'Explore',
+    tools: ['read_file'],
+    readonly: true,
+    maxSteps: 30,
+  },
   setSubagentEnabledState: vi.fn(),
   resolveSubagentEnabled: vi.fn().mockReturnValue(true),
   getProjectSubagentEnabledState: vi.fn().mockReturnValue(undefined),
@@ -73,10 +79,16 @@ vi.mock('../../../src/memory/index.js', () => ({
 
 vi.mock('../../../src/core/error.js', () => ({
   AlreadyExistsError: class AlreadyExistsError extends Error {
-    constructor(msg: string) { super(msg); this.name = 'AlreadyExistsError'; }
+    constructor(msg: string) {
+      super(msg);
+      this.name = 'AlreadyExistsError';
+    }
   },
   NotFoundError: class NotFoundError extends Error {
-    constructor(msg: string) { super(msg); this.name = 'NotFoundError'; }
+    constructor(msg: string) {
+      super(msg);
+      this.name = 'NotFoundError';
+    }
   },
 }));
 
@@ -92,7 +104,8 @@ describe('createDirectSettingsClient - reset APIs', () => {
 
   describe('resetSubagentEnabled', () => {
     it('calls resetProjectSubagentEnabledState with cwd', async () => {
-      const { resetProjectSubagentEnabledState } = await import('../../../src/subagent/registry.js');
+      const { resetProjectSubagentEnabledState } =
+        await import('../../../src/subagent/registry.js');
       await client.resetSubagentEnabled({ cwd: '/my-project' });
       expect(resetProjectSubagentEnabledState).toHaveBeenCalledWith('/my-project');
     });
@@ -133,7 +146,8 @@ describe('createDirectSettingsClient - updated signatures with cwd', () => {
 
   describe('getSubagentEnabled', () => {
     it('returns enabled and source from resolveSubagentEnabled', async () => {
-      const { resolveSubagentEnabled, getProjectSubagentEnabledState } = await import('../../../src/subagent/registry.js');
+      const { resolveSubagentEnabled, getProjectSubagentEnabledState } =
+        await import('../../../src/subagent/registry.js');
       vi.mocked(resolveSubagentEnabled).mockReturnValue(true);
       vi.mocked(getProjectSubagentEnabledState).mockReturnValue(undefined);
       const result = await client.getSubagentEnabled({ cwd: '/my-project' });
@@ -142,7 +156,8 @@ describe('createDirectSettingsClient - updated signatures with cwd', () => {
     });
 
     it('returns source=project when project override exists', async () => {
-      const { resolveSubagentEnabled, getProjectSubagentEnabledState } = await import('../../../src/subagent/registry.js');
+      const { resolveSubagentEnabled, getProjectSubagentEnabledState } =
+        await import('../../../src/subagent/registry.js');
       vi.mocked(resolveSubagentEnabled).mockReturnValue(false);
       vi.mocked(getProjectSubagentEnabledState).mockReturnValue(false);
       const result = await client.getSubagentEnabled({ cwd: '/my-project' });

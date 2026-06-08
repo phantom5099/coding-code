@@ -19,37 +19,72 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEST_PROJECT_DIR = join(__dirname, '..', '..', '..', 'test-fixture-hooks-merge');
 const TEST_PROJECT_CODINGCODE = join(TEST_PROJECT_DIR, '.codingcode');
-const TEST_GLOBAL_DIR = join(__dirname, '..', '..', '..', 'test-fixture-global-hooks', '.codingcode');
+const TEST_GLOBAL_DIR = join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'test-fixture-global-hooks',
+  '.codingcode'
+);
 
 describe('Hooks config merge', () => {
   beforeEach(() => {
-    if (existsSync(TEST_PROJECT_DIR))
-      rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
+    if (existsSync(TEST_PROJECT_DIR)) rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
     mkdirSync(TEST_PROJECT_CODINGCODE, { recursive: true });
     if (existsSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks')))
-      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks'), { recursive: true, force: true });
+      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks'), {
+        recursive: true,
+        force: true,
+      });
     mkdirSync(TEST_GLOBAL_DIR, { recursive: true });
   });
 
   afterEach(() => {
-    if (existsSync(TEST_PROJECT_DIR))
-      rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
+    if (existsSync(TEST_PROJECT_DIR)) rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
     if (existsSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks')))
-      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks'), { recursive: true, force: true });
+      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks'), {
+        recursive: true,
+        force: true,
+      });
   });
 
   it('should merge global and project hooks, project overrides global', () => {
     // Write global hooks
     const globalHooks = [
-      { name: 'global-hook', point: 'tool.execute.before', type: 'observer' as const, command: 'global-cmd', enabled: true },
-      { name: 'shared-hook', point: 'tool.execute.after', type: 'observer' as const, command: 'global-shared-cmd', enabled: true },
+      {
+        name: 'global-hook',
+        point: 'tool.execute.before' as const,
+        type: 'observer' as const,
+        command: 'global-cmd',
+        enabled: true,
+      },
+      {
+        name: 'shared-hook',
+        point: 'tool.execute.after' as const,
+        type: 'observer' as const,
+        command: 'global-shared-cmd',
+        enabled: true,
+      },
     ];
     writeGlobalHookConfigs(globalHooks);
 
     // Write project hooks
     const projectHooks = [
-      { name: 'shared-hook', point: 'tool.execute.after', type: 'observer' as const, command: 'project-shared-cmd', enabled: true },
-      { name: 'project-hook', point: 'tool.execute.error', type: 'observer' as const, command: 'project-cmd', enabled: true },
+      {
+        name: 'shared-hook',
+        point: 'tool.execute.after' as const,
+        type: 'observer' as const,
+        command: 'project-shared-cmd',
+        enabled: true,
+      },
+      {
+        name: 'project-hook',
+        point: 'tool.execute.error' as const,
+        type: 'observer' as const,
+        command: 'project-cmd',
+        enabled: true,
+      },
     ];
     writeHookConfigs(TEST_PROJECT_DIR, projectHooks);
 

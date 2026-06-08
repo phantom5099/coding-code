@@ -79,7 +79,9 @@ export default function SkillPanel({ global: isGlobal }: { global?: boolean }) {
                   )}
                 </div>
                 {s.description && (
-                  <div className="text-[13px] text-[var(--text-placeholder)] mt-1 truncate">{s.description}</div>
+                  <div className="text-[13px] text-[var(--text-placeholder)] mt-1 truncate">
+                    {s.description}
+                  </div>
                 )}
               </div>
               <Toggle checked={!s.disabled} onChange={(v) => toggle(s.name, !v)} />

@@ -25,7 +25,13 @@ vi.mock('../../src/memory/index.js', () => {
 });
 
 vi.mock('../../src/subagent/registry.js', () => ({
-  EXPLORE_PROFILE: { name: 'explore', description: 'Explore', tools: ['read_file'], readonly: true, maxSteps: 30 },
+  EXPLORE_PROFILE: {
+    name: 'explore',
+    description: 'Explore',
+    tools: ['read_file'],
+    readonly: true,
+    maxSteps: 30,
+  },
   resolveSubagentEnabled: vi.fn().mockReturnValue(true),
   getProjectSubagentEnabledState: vi.fn().mockReturnValue(undefined),
   setProjectSubagentEnabledState: vi.fn(),
@@ -97,10 +103,16 @@ vi.mock('../../src/core/workspace.js', () => ({
 
 vi.mock('../../src/core/error.js', () => ({
   AlreadyExistsError: class AlreadyExistsError extends Error {
-    constructor(msg: string) { super(msg); this.name = 'AlreadyExistsError'; }
+    constructor(msg: string) {
+      super(msg);
+      this.name = 'AlreadyExistsError';
+    }
   },
   NotFoundError: class NotFoundError extends Error {
-    constructor(msg: string) { super(msg); this.name = 'NotFoundError'; }
+    constructor(msg: string) {
+      super(msg);
+      this.name = 'NotFoundError';
+    }
   },
 }));
 
@@ -190,8 +202,10 @@ describe('GET /agents', () => {
   });
 
   it('returns project agents with merged view', async () => {
-    const { loadGlobalAgentProfiles, loadAgentProfiles } = await import('../../src/subagent/loader.js');
-    const { getProjectAgentDisabledState, resolveAgentDisabled } = await import('../../src/subagent/registry.js');
+    const { loadGlobalAgentProfiles, loadAgentProfiles } =
+      await import('../../src/subagent/loader.js');
+    const { getProjectAgentDisabledState, resolveAgentDisabled } =
+      await import('../../src/subagent/registry.js');
     vi.mocked(loadGlobalAgentProfiles).mockReturnValue([
       { name: 'global-agent', description: 'Global', tools: ['read_file'] },
     ]);
@@ -267,7 +281,8 @@ describe('GET /subagent/enabled', () => {
   });
 
   it('returns project enabled state with source=project when project override exists', async () => {
-    const { getProjectSubagentEnabledState, resolveSubagentEnabled } = await import('../../src/subagent/registry.js');
+    const { getProjectSubagentEnabledState, resolveSubagentEnabled } =
+      await import('../../src/subagent/registry.js');
     vi.mocked(getProjectSubagentEnabledState).mockReturnValue(false);
     vi.mocked(resolveSubagentEnabled).mockReturnValue(false);
     const res = await settingsRouter.request('/subagent/enabled?cwd=/my-project');
@@ -278,7 +293,8 @@ describe('GET /subagent/enabled', () => {
   });
 
   it('returns source=global when no project override', async () => {
-    const { getProjectSubagentEnabledState, resolveSubagentEnabled } = await import('../../src/subagent/registry.js');
+    const { getProjectSubagentEnabledState, resolveSubagentEnabled } =
+      await import('../../src/subagent/registry.js');
     vi.mocked(getProjectSubagentEnabledState).mockReturnValue(undefined);
     vi.mocked(resolveSubagentEnabled).mockReturnValue(true);
     const res = await settingsRouter.request('/subagent/enabled?cwd=/my-project');
@@ -334,10 +350,9 @@ describe('GET /mcp', () => {
   });
 
   it('returns global MCP servers with source and disabled', async () => {
-    const { loadGlobalMcpConfig, getGlobalMcpDisabledState } = await import('../../src/mcp/config.js');
-    vi.mocked(loadGlobalMcpConfig).mockReturnValue([
-      { name: 'server1', command: 'npx' },
-    ]);
+    const { loadGlobalMcpConfig, getGlobalMcpDisabledState } =
+      await import('../../src/mcp/config.js');
+    vi.mocked(loadGlobalMcpConfig).mockReturnValue([{ name: 'server1', command: 'npx' }]);
     vi.mocked(getGlobalMcpDisabledState).mockReturnValue(false);
     const res = await settingsRouter.request('/mcp?cwd=global');
     expect(res.status).toBe(200);
@@ -348,13 +363,10 @@ describe('GET /mcp', () => {
   });
 
   it('returns project MCP servers with merged view', async () => {
-    const { loadGlobalMcpConfig, loadMcpConfig, resolveMcpConfig, resolveMcpDisabled } = await import('../../src/mcp/config.js');
-    vi.mocked(loadGlobalMcpConfig).mockReturnValue([
-      { name: 'global-srv', command: 'npx' },
-    ]);
-    vi.mocked(loadMcpConfig).mockReturnValue([
-      { name: 'project-srv', command: 'node' },
-    ]);
+    const { loadGlobalMcpConfig, loadMcpConfig, resolveMcpConfig, resolveMcpDisabled } =
+      await import('../../src/mcp/config.js');
+    vi.mocked(loadGlobalMcpConfig).mockReturnValue([{ name: 'global-srv', command: 'npx' }]);
+    vi.mocked(loadMcpConfig).mockReturnValue([{ name: 'project-srv', command: 'node' }]);
     vi.mocked(resolveMcpConfig).mockReturnValue([
       { name: 'global-srv', command: 'npx' },
       { name: 'project-srv', command: 'node' },
@@ -417,7 +429,13 @@ describe('GET /hooks', () => {
   it('returns global hooks with source field', async () => {
     const { loadGlobalHookConfigs } = await import('../../src/hooks/config.js');
     vi.mocked(loadGlobalHookConfigs).mockReturnValue([
-      { name: 'hook1', point: 'pre_tool_use', type: 'observer', command: 'echo', enabled: true },
+      {
+        name: 'hook1',
+        point: 'tool.execute.before',
+        type: 'observer',
+        command: 'echo',
+        enabled: true,
+      },
     ]);
     const res = await settingsRouter.request('/hooks?cwd=global');
     expect(res.status).toBe(200);
@@ -427,16 +445,41 @@ describe('GET /hooks', () => {
   });
 
   it('returns project hooks with merged view', async () => {
-    const { loadGlobalHookConfigs, loadHookConfigs, resolveHookConfigs, resolveHookDisabled } = await import('../../src/hooks/config.js');
+    const { loadGlobalHookConfigs, loadHookConfigs, resolveHookConfigs, resolveHookDisabled } =
+      await import('../../src/hooks/config.js');
     vi.mocked(loadGlobalHookConfigs).mockReturnValue([
-      { name: 'global-hook', point: 'pre_tool_use', type: 'observer', command: 'echo', enabled: true },
+      {
+        name: 'global-hook',
+        point: 'tool.execute.before',
+        type: 'observer',
+        command: 'echo',
+        enabled: true,
+      },
     ]);
     vi.mocked(loadHookConfigs).mockReturnValue([
-      { name: 'project-hook', point: 'post_tool_use', type: 'decision', command: 'sh', enabled: true },
+      {
+        name: 'project-hook',
+        point: 'tool.execute.after',
+        type: 'decision',
+        command: 'sh',
+        enabled: true,
+      },
     ]);
     vi.mocked(resolveHookConfigs).mockReturnValue([
-      { name: 'global-hook', point: 'pre_tool_use', type: 'observer', command: 'echo', enabled: true },
-      { name: 'project-hook', point: 'post_tool_use', type: 'decision', command: 'sh', enabled: true },
+      {
+        name: 'global-hook',
+        point: 'tool.execute.before',
+        type: 'observer',
+        command: 'echo',
+        enabled: true,
+      },
+      {
+        name: 'project-hook',
+        point: 'tool.execute.after',
+        type: 'decision',
+        command: 'sh',
+        enabled: true,
+      },
     ]);
     vi.mocked(resolveHookDisabled).mockReturnValue(false);
     const res = await settingsRouter.request('/hooks?cwd=/my-project');

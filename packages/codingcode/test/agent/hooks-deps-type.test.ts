@@ -55,6 +55,7 @@ const mockState = {
   title: 'type-test',
   usage: undefined,
   promptEstimate: 0,
+  memorySnapshot: '',
 };
 
 describe('RunReActDeps hooks type', () => {

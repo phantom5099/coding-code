@@ -102,7 +102,9 @@ function SessionListPopup({
                 </svg>
               </button>
             ) : (
-              <span className="text-[11px] text-[var(--text-disabled)] shrink-0">{relativeTime(t.updatedAt)}</span>
+              <span className="text-[11px] text-[var(--text-disabled)] shrink-0">
+                {relativeTime(t.updatedAt)}
+              </span>
             )}
           </button>
         ))}
@@ -110,7 +112,9 @@ function SessionListPopup({
           <div className="px-3 py-3 text-[13px] text-[var(--text-disabled)]">暂无对话</div>
         )}
         {sorted.length > 12 && (
-          <div className="px-3 py-1 text-[12px] text-[var(--text-disabled)]">+{sorted.length - 12} 条更多</div>
+          <div className="px-3 py-1 text-[12px] text-[var(--text-disabled)]">
+            +{sorted.length - 12} 条更多
+          </div>
         )}
       </div>
     </div>
@@ -255,9 +259,11 @@ export default function ProjectStrip() {
         title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
         className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors shrink-0"
       >
-        {sidebarCollapsed
-          ? <ChevronRight size={16} strokeWidth={1.5} />
-          : <ChevronLeft size={16} strokeWidth={1.5} />}
+        {sidebarCollapsed ? (
+          <ChevronRight size={16} strokeWidth={1.5} />
+        ) : (
+          <ChevronLeft size={16} strokeWidth={1.5} />
+        )}
       </button>
     </div>
   );

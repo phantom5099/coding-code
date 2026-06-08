@@ -56,7 +56,9 @@ describe('MarkdownRenderer', () => {
   });
 
   it('renders links with target=_blank', () => {
-    const html = render(createElement(MarkdownRenderer, { content: '[click](https://example.com)' }));
+    const html = render(
+      createElement(MarkdownRenderer, { content: '[click](https://example.com)' })
+    );
     expect(html).toContain('md-link');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('https://example.com');
@@ -76,14 +78,18 @@ describe('MarkdownRenderer', () => {
   });
 
   it('renders GFM table', () => {
-    const html = render(createElement(MarkdownRenderer, { content: '| A | B |\n|---|---|\n| 1 | 2 |' }));
+    const html = render(
+      createElement(MarkdownRenderer, { content: '| A | B |\n|---|---|\n| 1 | 2 |' })
+    );
     expect(html).toContain('md-table');
     expect(html).toContain('<th>');
     expect(html).toContain('<td>');
   });
 
   it('renders code block', () => {
-    const html = render(createElement(MarkdownRenderer, { content: '```js\nconsole.log(\'hi\')\n```' }));
+    const html = render(
+      createElement(MarkdownRenderer, { content: "```js\nconsole.log('hi')\n```" })
+    );
     expect(html).toContain('language-');
   });
 

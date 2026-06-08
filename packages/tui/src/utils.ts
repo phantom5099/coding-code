@@ -55,5 +55,3 @@ export function historyToUIMessages(history: SessionEvent[]): UIMessage[] {
   }
   return messages;
 }
-
-

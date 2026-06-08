@@ -75,8 +75,12 @@ export default function ToolCallCard({ item, threadId, onApprove, onReject }: To
               <span className="inline-block animate-spin">⟳</span> 执行中
             </span>
           )}
-          {item.status === 'approved' && <span className="text-xs text-[var(--accent-success)]">✓ 已完成</span>}
-          {item.status === 'rejected' && <span className="text-xs text-[var(--text-muted)]">✗ 已拒绝</span>}
+          {item.status === 'approved' && (
+            <span className="text-xs text-[var(--accent-success)]">✓ 已完成</span>
+          )}
+          {item.status === 'rejected' && (
+            <span className="text-xs text-[var(--text-muted)]">✗ 已拒绝</span>
+          )}
         </div>
       </div>
       {hasArgs && argsOpen && (

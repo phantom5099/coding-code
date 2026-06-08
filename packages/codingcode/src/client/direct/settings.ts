@@ -6,7 +6,14 @@ import { getGlobalPermissionMode, setGlobalPermissionMode } from '../../approval
 import type { PermissionMode } from '../../approval/types.js';
 import type { AgentProfile } from '../../subagent/registry.js';
 import type { UserHookConfig } from '../../hooks/config.js';
-import { loadMcpConfig, writeMcpConfig, resolveMcpDisabled, setGlobalMcpDisabledState, setProjectMcpDisabledState, resetProjectMcpDisabledState } from '../../mcp/config.js';
+import {
+  loadMcpConfig,
+  writeMcpConfig,
+  resolveMcpDisabled,
+  setGlobalMcpDisabledState,
+  setProjectMcpDisabledState,
+  resetProjectMcpDisabledState,
+} from '../../mcp/config.js';
 import {
   loadAgentProfiles,
   writeAgentProfile,
@@ -26,7 +33,14 @@ import {
   resolveAgentDisabled,
   getProjectAgentDisabledState,
 } from '../../subagent/registry.js';
-import { loadHookConfigs, writeHookConfigs, resolveHookDisabled, setGlobalHookDisabledState, setProjectHookDisabledState, resetProjectHookDisabledState } from '../../hooks/config.js';
+import {
+  loadHookConfigs,
+  writeHookConfigs,
+  resolveHookDisabled,
+  setGlobalHookDisabledState,
+  setProjectHookDisabledState,
+  resetProjectHookDisabledState,
+} from '../../hooks/config.js';
 import { setHookRuntimeEnabled } from '../../hooks/executor.js';
 import {
   getMemoryConfig,
@@ -300,7 +314,9 @@ export function createDirectSettingsClient(
         Effect.gen(function* () {
           const skill = yield* SkillService;
           const skillCwd = cwd || process.cwd();
-          return yield* enabled ? skill.enableSkill(skillCwd, name) : skill.disableSkill(skillCwd, name);
+          return yield* enabled
+            ? skill.enableSkill(skillCwd, name)
+            : skill.disableSkill(skillCwd, name);
         })
       );
     },

@@ -319,7 +319,8 @@ export async function* runReActLoop(
 
       // Build tools from static builtin + MCP + dispatch
       let allToolDefs: ToolDefinition[] = [...STATIC_BUILTIN_TOOLS, ...(opts.mcpTools ?? [])];
-      if (opts.dispatchTool && resolveSubagentEnabled(projectPath)) allToolDefs = [...allToolDefs, opts.dispatchTool];
+      if (opts.dispatchTool && resolveSubagentEnabled(projectPath))
+        allToolDefs = [...allToolDefs, opts.dispatchTool];
 
       // Apply policy filter (derived from AgentProfile.tools via getToolPolicy)
       const allowedByPolicy = opts.toolPolicy?.allowedTools;

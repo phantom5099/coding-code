@@ -91,8 +91,8 @@ export function deleteMemoryExtraType(name: string): Promise<void> {
 
 // ---- Settings: MCP ----
 
-export function listMcpServers(cwd?: string): Promise<any[]> {
-  return clients.settings.getMcpStatus({ cwd: cwd ?? '' });
+export function listMcpServers(_cwd?: string): Promise<any[]> {
+  return clients.settings.getMcpStatus();
 }
 
 export function setMcpDisabled(name: string, disabled: boolean, cwd?: string): Promise<void> {
@@ -157,7 +157,9 @@ export function deleteAgent(cwd: string | undefined, name: string): Promise<void
 
 // ---- Settings: Subagent enabled ----
 
-export async function getSubagentEnabled(cwd?: string): Promise<{ enabled: boolean; source: string }> {
+export async function getSubagentEnabled(
+  cwd?: string
+): Promise<{ enabled: boolean; source: string }> {
   return clients.settings.getSubagentEnabled({ cwd: cwd ?? '' });
 }
 
@@ -171,10 +173,10 @@ export function resetSubagentEnabled(cwd: string): Promise<void> {
 
 // ---- Settings: Skills ----
 
-export function listSkills(cwd?: string): Promise<
-  Array<{ name: string; description: string; disabled: boolean }>
-> {
-  return clients.settings.listSkills({ cwd: cwd ?? '' }) as any;
+export function listSkills(
+  _cwd?: string
+): Promise<Array<{ name: string; description: string; disabled: boolean }>> {
+  return clients.settings.listSkills() as any;
 }
 
 export function toggleSkill(name: string, enabled: boolean, cwd?: string): Promise<void> {

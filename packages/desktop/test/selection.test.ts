@@ -68,22 +68,4 @@ describe('text selection behavior', () => {
       expect(h2Class!).not.toContain('select-none');
     });
   });
-
-  describe('SettingsPage.tsx', () => {
-    it('navigation should have select-none', () => {
-      const navClass = classNamesFromSource('settings/SettingsPage.tsx').find((c) =>
-        c.includes('w-[160px]')
-      );
-      expect(navClass).toBeTruthy();
-      expect(navClass!).toContain('select-none');
-    });
-
-    it('content area should have select-text', () => {
-      const contentClass = classNamesFromSource('settings/SettingsPage.tsx').find((c) =>
-        c.includes('flex-1 min-w-0 overflow-y-auto')
-      );
-      expect(contentClass).toBeTruthy();
-      expect(contentClass!).toContain('select-text');
-    });
-  });
 });

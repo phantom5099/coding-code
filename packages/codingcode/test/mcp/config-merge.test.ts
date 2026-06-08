@@ -14,6 +14,7 @@ import {
   setProjectMcpDisabledState,
   resetProjectMcpDisabledState,
   resolveMcpDisabled,
+  _setGlobalConfigDir,
 } from '../../src/mcp/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -22,35 +23,66 @@ const TEST_PROJECT_CODINGCODE = join(TEST_PROJECT_DIR, '.codingcode');
 
 // 模拟全局目录
 const TEST_GLOBAL_DIR = join(__dirname, '..', '..', '..', 'test-fixture-global', '.codingcode');
+const TEST_GLOBAL_PARENT = join(__dirname, '..', '..', '..', 'test-fixture-global');
 
 describe('MCP config merge', () => {
   beforeEach(() => {
-    if (existsSync(TEST_PROJECT_DIR))
-      rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
+    _setGlobalConfigDir(TEST_GLOBAL_PARENT);
+    if (existsSync(TEST_PROJECT_DIR)) rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
     mkdirSync(TEST_PROJECT_CODINGCODE, { recursive: true });
     if (existsSync(join(__dirname, '..', '..', '..', 'test-fixture-global')))
-      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global'), { recursive: true, force: true });
+      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global'), {
+        recursive: true,
+        force: true,
+      });
     mkdirSync(TEST_GLOBAL_DIR, { recursive: true });
   });
 
   afterEach(() => {
-    if (existsSync(TEST_PROJECT_DIR))
-      rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
+    _setGlobalConfigDir(undefined);
+    if (existsSync(TEST_PROJECT_DIR)) rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
     if (existsSync(join(__dirname, '..', '..', '..', 'test-fixture-global')))
-      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global'), { recursive: true, force: true });
+      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global'), {
+        recursive: true,
+        force: true,
+      });
   });
 
   it('should merge global and project configs, project overrides global', () => {
     // Write global config
     writeGlobalMcpConfig([
-      { name: 'global-server', transport: 'stdio', command: 'global-cmd', disabled: false, toolCount: 0 } as any,
-      { name: 'shared-server', transport: 'stdio', command: 'global-shared-cmd', disabled: false, toolCount: 0 } as any,
+      {
+        name: 'global-server',
+        transport: 'stdio',
+        command: 'global-cmd',
+        disabled: false,
+        toolCount: 0,
+      } as any,
+      {
+        name: 'shared-server',
+        transport: 'stdio',
+        command: 'global-shared-cmd',
+        disabled: false,
+        toolCount: 0,
+      } as any,
     ]);
 
     // Write project config
     writeMcpConfig(TEST_PROJECT_DIR, [
-      { name: 'shared-server', transport: 'stdio', command: 'project-shared-cmd', disabled: false, toolCount: 0 } as any,
-      { name: 'project-server', transport: 'stdio', command: 'project-cmd', disabled: false, toolCount: 0 } as any,
+      {
+        name: 'shared-server',
+        transport: 'stdio',
+        command: 'project-shared-cmd',
+        disabled: false,
+        toolCount: 0,
+      } as any,
+      {
+        name: 'project-server',
+        transport: 'stdio',
+        command: 'project-cmd',
+        disabled: false,
+        toolCount: 0,
+      } as any,
     ]);
 
     const merged = resolveMcpConfig(TEST_PROJECT_DIR);
@@ -73,41 +105,50 @@ describe('MCP config merge', () => {
 
   it('should return only project config when no global config', () => {
     writeMcpConfig(TEST_PROJECT_DIR, [
-      { name: 'project-server', transport: 'stdio', command: 'project-cmd', disabled: false, toolCount: 0 } as any,
+      {
+        name: 'project-server',
+        transport: 'stdio',
+        command: 'project-cmd',
+        disabled: false,
+        toolCount: 0,
+      } as any,
     ]);
 
     const merged = resolveMcpConfig(TEST_PROJECT_DIR);
     expect(merged).toHaveLength(1);
-    expect(merged[0].name).toBe('project-server');
+    expect(merged[0]!.name).toBe('project-server');
   });
 
   it('should return only global config when no project config', () => {
     writeGlobalMcpConfig([
-      { name: 'global-server', transport: 'stdio', command: 'global-cmd', disabled: false, toolCount: 0 } as any,
+      {
+        name: 'global-server',
+        transport: 'stdio',
+        command: 'global-cmd',
+        disabled: false,
+        toolCount: 0,
+      } as any,
     ]);
 
     const merged = resolveMcpConfig(TEST_PROJECT_DIR);
     expect(merged).toHaveLength(1);
-    expect(merged[0].name).toBe('global-server');
+    expect(merged[0]!.name).toBe('global-server');
   });
 });
-
-// Helper to write global config to test directory
-function writeGlobalMcpConfig(servers: any[]): void {
-  // Override the global config dir by writing to the test fixture
-  const p = join(TEST_GLOBAL_DIR, 'mcp.yaml');
-  writeFileSync(p, `servers:\n${servers.map((s) => `  - name: ${s.name}\n    transport: ${s.transport}\n    command: ${s.command}\n`).join('')}`, 'utf8');
-}
 
 describe('MCP disabled state', () => {
   const testServer = '__test_mcp_server__';
 
   beforeEach(() => {
+    _setGlobalConfigDir(TEST_GLOBAL_PARENT);
     mkdirSync(TEST_PROJECT_CODINGCODE, { recursive: true });
+    if (existsSync(TEST_GLOBAL_DIR)) rmSync(TEST_GLOBAL_DIR, { recursive: true, force: true });
+    mkdirSync(TEST_GLOBAL_DIR, { recursive: true });
     setGlobalMcpDisabledState(testServer, false);
   });
 
   afterEach(() => {
+    _setGlobalConfigDir(undefined);
     rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
     setGlobalMcpDisabledState(testServer, false);
   });

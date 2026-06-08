@@ -295,17 +295,19 @@ settingsRouter.get('/agents', (c) => {
   const rawCwd = c.req.query('cwd');
   if (isGlobalCwd(rawCwd)) {
     const custom = loadGlobalAgentProfiles();
-    return c.json([EXPLORE_PROFILE, ...custom].map((a) => ({
-      name: a.name,
-      description: a.description,
-      tools: a.tools,
-      mcpServers: a.mcpServers,
-      readonly: a.readonly,
-      maxSteps: a.maxSteps,
-      model: a.model,
-      disabled: getGlobalAgentDisabledState(a.name),
-      source: a.name === EXPLORE_PROFILE.name ? 'builtin' : 'global',
-    })));
+    return c.json(
+      [EXPLORE_PROFILE, ...custom].map((a) => ({
+        name: a.name,
+        description: a.description,
+        tools: a.tools,
+        mcpServers: a.mcpServers,
+        readonly: a.readonly,
+        maxSteps: a.maxSteps,
+        model: a.model,
+        disabled: getGlobalAgentDisabledState(a.name),
+        source: a.name === EXPLORE_PROFILE.name ? 'builtin' : 'global',
+      }))
+    );
   }
   const cwd = resolveWorkspaceCwd(rawCwd);
   return c.json(agentsList(cwd));
@@ -383,10 +385,12 @@ settingsRouter.post('/agents/:name/disabled/reset', async (c) => {
 settingsRouter.get('/hooks', (c) => {
   const rawCwd = c.req.query('cwd');
   if (isGlobalCwd(rawCwd)) {
-    return c.json(loadGlobalHookConfigs().map((h) => ({
-      ...h,
-      source: 'global' as const,
-    })));
+    return c.json(
+      loadGlobalHookConfigs().map((h) => ({
+        ...h,
+        source: 'global' as const,
+      }))
+    );
   }
   const cwd = resolveWorkspaceCwd(rawCwd);
   const globalHooks = loadGlobalHookConfigs();
@@ -394,17 +398,19 @@ settingsRouter.get('/hooks', (c) => {
   const globalNames = new Set(globalHooks.map((h) => h.name));
   const projectNames = new Set(projectHooks.map((h) => h.name));
   const merged = resolveHookConfigs(cwd);
-  return c.json(merged.map((h) => {
-    const isFromProject = projectNames.has(h.name);
-    const isFromGlobal = globalNames.has(h.name);
-    const hasProjectOverride = isFromProject && isFromGlobal;
-    return {
-      ...h,
-      source: isFromProject ? (hasProjectOverride ? 'global' : 'project') : 'global',
-      hasProjectOverride,
-      disabled: resolveHookDisabled(cwd, h.name),
-    };
-  }));
+  return c.json(
+    merged.map((h) => {
+      const isFromProject = projectNames.has(h.name);
+      const isFromGlobal = globalNames.has(h.name);
+      const hasProjectOverride = isFromProject && isFromGlobal;
+      return {
+        ...h,
+        source: isFromProject ? (hasProjectOverride ? 'global' : 'project') : 'global',
+        hasProjectOverride,
+        disabled: resolveHookDisabled(cwd, h.name),
+      };
+    })
+  );
 });
 
 settingsRouter.post('/hooks', async (c) => {
@@ -503,11 +509,13 @@ settingsRouter.post('/hooks/:name/disabled/reset', async (c) => {
 settingsRouter.get('/mcp', async (c) => {
   const rawCwd = c.req.query('cwd');
   if (isGlobalCwd(rawCwd)) {
-    return c.json(loadGlobalMcpConfig().map((s) => ({
-      ...s,
-      disabled: getGlobalMcpDisabledState(s.name),
-      source: 'global' as const,
-    })));
+    return c.json(
+      loadGlobalMcpConfig().map((s) => ({
+        ...s,
+        disabled: getGlobalMcpDisabledState(s.name),
+        source: 'global' as const,
+      }))
+    );
   }
   const cwd = resolveWorkspaceCwd(rawCwd);
   const globalServers = loadGlobalMcpConfig();
@@ -515,17 +523,19 @@ settingsRouter.get('/mcp', async (c) => {
   const globalNames = new Set(globalServers.map((s) => s.name));
   const projectNames = new Set(projectServers.map((s) => s.name));
   const merged = resolveMcpConfig(cwd);
-  return c.json(merged.map((s) => {
-    const isFromProject = projectNames.has(s.name);
-    const isFromGlobal = globalNames.has(s.name);
-    const hasProjectOverride = isFromProject && isFromGlobal;
-    return {
-      ...s,
-      disabled: resolveMcpDisabled(cwd, s.name),
-      source: isFromProject ? (hasProjectOverride ? 'global' : 'project') : 'global',
-      hasProjectOverride,
-    };
-  }));
+  return c.json(
+    merged.map((s) => {
+      const isFromProject = projectNames.has(s.name);
+      const isFromGlobal = globalNames.has(s.name);
+      const hasProjectOverride = isFromProject && isFromGlobal;
+      return {
+        ...s,
+        disabled: resolveMcpDisabled(cwd, s.name),
+        source: isFromProject ? (hasProjectOverride ? 'global' : 'project') : 'global',
+        hasProjectOverride,
+      };
+    })
+  );
 });
 
 settingsRouter.post('/mcp', async (c) => {
@@ -619,10 +629,12 @@ settingsRouter.get('/skills', async (c) => {
       const { status, body } = errorResponse(result.error);
       return c.json(body, status as any);
     }
-    return c.json(result.value.map((s) => ({
-      ...s,
-      source: 'global' as const,
-    })));
+    return c.json(
+      result.value.map((s) => ({
+        ...s,
+        source: 'global' as const,
+      }))
+    );
   }
   const cwd = resolveWorkspaceCwd(rawCwd);
   const globalDirs = discoverGlobalSkillDirs();
@@ -639,16 +651,18 @@ settingsRouter.get('/skills', async (c) => {
     const { status, body } = errorResponse(result.error);
     return c.json(body, status as any);
   }
-  return c.json(result.value.map((s) => {
-    const isFromProject = projectNames.has(s.name);
-    const isFromGlobal = globalNames.has(s.name);
-    const hasProjectOverride = isFromProject && isFromGlobal;
-    return {
-      ...s,
-      source: isFromProject ? (hasProjectOverride ? 'global' : 'project') : 'global',
-      hasProjectOverride,
-    };
-  }));
+  return c.json(
+    result.value.map((s) => {
+      const isFromProject = projectNames.has(s.name);
+      const isFromGlobal = globalNames.has(s.name);
+      const hasProjectOverride = isFromProject && isFromGlobal;
+      return {
+        ...s,
+        source: isFromProject ? (hasProjectOverride ? 'global' : 'project') : 'global',
+        hasProjectOverride,
+      };
+    })
+  );
 });
 
 settingsRouter.post('/skills', async (c) => {

@@ -192,9 +192,12 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
   const inputCls =
     'w-full bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
   const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
-  const btnPrimary = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
-  const btnDanger = 'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
-  const btnCancel = 'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
+  const btnPrimary =
+    'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
+  const btnDanger =
+    'px-4 py-2 rounded text-[13px] bg-[var(--btn-danger-bg)] text-[var(--accent-danger)] hover:bg-[var(--btn-danger-hover)]';
+  const btnCancel =
+    'px-4 py-2 rounded text-[13px] bg-[var(--border-card)] text-[var(--text-tertiary)] border border-[var(--border-hover)] hover:bg-[var(--border-hover)] hover:border-[var(--border-strong)]';
 
   if (loading) {
     return <div className="px-6 py-8 text-[14px] text-[var(--text-disabled)]">加载中…</div>;
@@ -251,7 +254,9 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
                   key={s.name}
                   className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--btn-danger-bg)]"
                 >
-                  <span className="text-[14px] text-[var(--accent-danger)]">删除服务器 {s.name}？</span>
+                  <span className="text-[14px] text-[var(--accent-danger)]">
+                    删除服务器 {s.name}？
+                  </span>
                   <div className="flex gap-2">
                     <button onClick={confirmDelete} className={btnDanger}>
                       确认
@@ -296,7 +301,9 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
                       </span>
                     )}
                   </div>
-                  <div className="text-[13px] text-[var(--text-disabled)] mt-1 font-mono">{s.toolCount} 个工具</div>
+                  <div className="text-[13px] text-[var(--text-disabled)] mt-1 font-mono">
+                    {s.toolCount} 个工具
+                  </div>
                 </div>
                 <button
                   title="编辑"
@@ -386,7 +393,9 @@ function FormCard({
           <button
             onClick={() => setForm({ ...form, transport: 'http' })}
             className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
-              form.transport === 'http' ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]' : 'bg-[var(--border-card)] text-[var(--text-secondary)] border border-[var(--border-hover)]'
+              form.transport === 'http'
+                ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]'
+                : 'bg-[var(--border-card)] text-[var(--text-secondary)] border border-[var(--border-hover)]'
             }`}
           >
             http

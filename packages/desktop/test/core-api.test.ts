@@ -76,7 +76,10 @@ describe('setSubagentEnabled', () => {
   it('calls settings.setSubagentEnabled with provided cwd', async () => {
     mockSettings.setSubagentEnabled.mockResolvedValue(undefined);
     await setSubagentEnabled(false, '/project/dir');
-    expect(mockSettings.setSubagentEnabled).toHaveBeenCalledWith({ enabled: false, cwd: '/project/dir' });
+    expect(mockSettings.setSubagentEnabled).toHaveBeenCalledWith({
+      enabled: false,
+      cwd: '/project/dir',
+    });
   });
 });
 
@@ -96,13 +99,21 @@ describe('setAgentDisabled', () => {
   it('calls settings.setAgentDisabled with empty cwd when no cwd provided', async () => {
     mockSettings.setAgentDisabled.mockResolvedValue(undefined);
     await setAgentDisabled('explore', true);
-    expect(mockSettings.setAgentDisabled).toHaveBeenCalledWith({ name: 'explore', disabled: true, cwd: '' });
+    expect(mockSettings.setAgentDisabled).toHaveBeenCalledWith({
+      name: 'explore',
+      disabled: true,
+      cwd: '',
+    });
   });
 
   it('calls settings.setAgentDisabled with provided cwd', async () => {
     mockSettings.setAgentDisabled.mockResolvedValue(undefined);
     await setAgentDisabled('explore', false, '/project/dir');
-    expect(mockSettings.setAgentDisabled).toHaveBeenCalledWith({ name: 'explore', disabled: false, cwd: '/project/dir' });
+    expect(mockSettings.setAgentDisabled).toHaveBeenCalledWith({
+      name: 'explore',
+      disabled: false,
+      cwd: '/project/dir',
+    });
   });
 });
 
@@ -112,7 +123,10 @@ describe('resetAgentDisabled', () => {
   it('calls settings.resetAgentDisabled with name and cwd', async () => {
     mockSettings.resetAgentDisabled.mockResolvedValue(undefined);
     await resetAgentDisabled('explore', '/project/dir');
-    expect(mockSettings.resetAgentDisabled).toHaveBeenCalledWith({ name: 'explore', cwd: '/project/dir' });
+    expect(mockSettings.resetAgentDisabled).toHaveBeenCalledWith({
+      name: 'explore',
+      cwd: '/project/dir',
+    });
   });
 });
 
@@ -122,13 +136,21 @@ describe('setMcpDisabled', () => {
   it('calls settings.setMcpDisabled with empty cwd when no cwd provided', async () => {
     mockSettings.setMcpDisabled.mockResolvedValue(undefined);
     await setMcpDisabled('mcp-server', true);
-    expect(mockSettings.setMcpDisabled).toHaveBeenCalledWith({ name: 'mcp-server', disabled: true, cwd: '' });
+    expect(mockSettings.setMcpDisabled).toHaveBeenCalledWith({
+      name: 'mcp-server',
+      disabled: true,
+      cwd: '',
+    });
   });
 
   it('calls settings.setMcpDisabled with provided cwd', async () => {
     mockSettings.setMcpDisabled.mockResolvedValue(undefined);
     await setMcpDisabled('mcp-server', false, '/project/dir');
-    expect(mockSettings.setMcpDisabled).toHaveBeenCalledWith({ name: 'mcp-server', disabled: false, cwd: '/project/dir' });
+    expect(mockSettings.setMcpDisabled).toHaveBeenCalledWith({
+      name: 'mcp-server',
+      disabled: false,
+      cwd: '/project/dir',
+    });
   });
 });
 
@@ -138,7 +160,10 @@ describe('resetMcpDisabled', () => {
   it('calls settings.resetMcpDisabled with name and cwd', async () => {
     mockSettings.resetMcpDisabled.mockResolvedValue(undefined);
     await resetMcpDisabled('mcp-server', '/project/dir');
-    expect(mockSettings.resetMcpDisabled).toHaveBeenCalledWith({ name: 'mcp-server', cwd: '/project/dir' });
+    expect(mockSettings.resetMcpDisabled).toHaveBeenCalledWith({
+      name: 'mcp-server',
+      cwd: '/project/dir',
+    });
   });
 });
 
@@ -148,13 +173,21 @@ describe('setHookDisabled', () => {
   it('calls settings.setHookDisabled with provided cwd', async () => {
     mockSettings.setHookDisabled.mockResolvedValue(undefined);
     await setHookDisabled('/project/dir', 'my-hook', true);
-    expect(mockSettings.setHookDisabled).toHaveBeenCalledWith({ cwd: '/project/dir', name: 'my-hook', disabled: true });
+    expect(mockSettings.setHookDisabled).toHaveBeenCalledWith({
+      cwd: '/project/dir',
+      name: 'my-hook',
+      disabled: true,
+    });
   });
 
   it('calls settings.setHookDisabled with empty string when cwd is undefined', async () => {
     mockSettings.setHookDisabled.mockResolvedValue(undefined);
     await setHookDisabled(undefined, 'my-hook', false);
-    expect(mockSettings.setHookDisabled).toHaveBeenCalledWith({ cwd: '', name: 'my-hook', disabled: false });
+    expect(mockSettings.setHookDisabled).toHaveBeenCalledWith({
+      cwd: '',
+      name: 'my-hook',
+      disabled: false,
+    });
   });
 });
 
@@ -164,7 +197,10 @@ describe('resetHookDisabled', () => {
   it('calls settings.resetHookDisabled with name and cwd', async () => {
     mockSettings.resetHookDisabled.mockResolvedValue(undefined);
     await resetHookDisabled('my-hook', '/project/dir');
-    expect(mockSettings.resetHookDisabled).toHaveBeenCalledWith({ name: 'my-hook', cwd: '/project/dir' });
+    expect(mockSettings.resetHookDisabled).toHaveBeenCalledWith({
+      name: 'my-hook',
+      cwd: '/project/dir',
+    });
   });
 });
 
@@ -180,6 +216,8 @@ describe('toggleSkill', () => {
   it('calls settings.toggleSkill with provided cwd', async () => {
     mockSettings.toggleSkill.mockResolvedValue(undefined);
     await toggleSkill('my-skill', false, '/project/dir');
-    expect(mockSettings.toggleSkill).toHaveBeenCalledWith('my-skill', false, { cwd: '/project/dir' });
+    expect(mockSettings.toggleSkill).toHaveBeenCalledWith('my-skill', false, {
+      cwd: '/project/dir',
+    });
   });
 });

@@ -70,7 +70,10 @@ export function setProjectSubagentEnabledState(projectCwd: string, v: boolean): 
 export function resetProjectSubagentEnabledState(projectCwd: string): void {
   const p = join(projectCwd, '.codingcode', 'config.yaml');
   if (!existsSync(p)) return;
-  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>;
+  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<
+    string,
+    unknown
+  >;
   const subagent = (existing.subagent as Record<string, unknown>) ?? {};
   delete subagent.enabled;
   if (Object.keys(subagent).length === 0) {
@@ -117,7 +120,10 @@ export function setGlobalAgentDisabledState(agentName: string, disabled: boolean
 
 // ---- 项目级 agent disabled 状态：持久化到 .codingcode/config.yaml ----
 
-export function getProjectAgentDisabledState(projectCwd: string, agentName: string): boolean | undefined {
+export function getProjectAgentDisabledState(
+  projectCwd: string,
+  agentName: string
+): boolean | undefined {
   const p = join(projectCwd, '.codingcode', 'config.yaml');
   if (!existsSync(p)) return undefined;
   try {
@@ -130,7 +136,11 @@ export function getProjectAgentDisabledState(projectCwd: string, agentName: stri
   }
 }
 
-export function setProjectAgentDisabledState(projectCwd: string, agentName: string, disabled: boolean): void {
+export function setProjectAgentDisabledState(
+  projectCwd: string,
+  agentName: string,
+  disabled: boolean
+): void {
   const dir = join(projectCwd, '.codingcode');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const p = join(dir, 'config.yaml');
@@ -148,7 +158,10 @@ export function setProjectAgentDisabledState(projectCwd: string, agentName: stri
 export function resetProjectAgentDisabledState(projectCwd: string, agentName: string): void {
   const p = join(projectCwd, '.codingcode', 'config.yaml');
   if (!existsSync(p)) return;
-  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>;
+  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<
+    string,
+    unknown
+  >;
   const subagent = (existing.subagent as Record<string, unknown>) ?? {};
   const disabledAgents = subagent.disabledAgents as Record<string, boolean>;
   if (disabledAgents) {

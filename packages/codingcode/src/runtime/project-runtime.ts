@@ -51,7 +51,10 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
             cachedSubagentProfiles.set(norm, buildProfiles(norm));
           }),
 
-        resolveMainAgentProfile: (projectPath: string, sessionId: string): AgentProfile | undefined => {
+        resolveMainAgentProfile: (
+          projectPath: string,
+          sessionId: string
+        ): AgentProfile | undefined => {
           const sessionOverride = sessionAgentProfiles.get(sessionId);
           if (sessionOverride) return sessionOverride;
           return agentLoader.loadMainAgentProfile(projectPath);
