@@ -91,12 +91,16 @@ export function deleteMemoryExtraType(name: string): Promise<void> {
 
 // ---- Settings: MCP ----
 
-export function listMcpServers(cwd?: string): Promise<any[]> {
+export function listMcpServers(_cwd?: string): Promise<any[]> {
   return clients.settings.getMcpStatus();
 }
 
-export function setMcpDisabled(name: string, disabled: boolean): Promise<void> {
-  return clients.settings.setMcpDisabled(name, disabled);
+export function setMcpDisabled(name: string, disabled: boolean, cwd?: string): Promise<void> {
+  return clients.settings.setMcpDisabled({ name, disabled, cwd: cwd ?? '' });
+}
+
+export function resetMcpDisabled(name: string, cwd: string): Promise<void> {
+  return clients.settings.resetMcpDisabled({ name, cwd });
 }
 
 export function createMcpServer(
@@ -124,8 +128,12 @@ export function listAgents(cwd?: string): Promise<any[]> {
   return clients.settings.listAgents({ cwd: cwd ?? '' });
 }
 
-export function setAgentDisabled(name: string, disabled: boolean): Promise<void> {
-  return clients.settings.setAgentDisabled(name, disabled);
+export function setAgentDisabled(name: string, disabled: boolean, cwd?: string): Promise<void> {
+  return clients.settings.setAgentDisabled({ name, disabled, cwd: cwd ?? '' });
+}
+
+export function resetAgentDisabled(name: string, cwd: string): Promise<void> {
+  return clients.settings.resetAgentDisabled({ name, cwd });
 }
 
 export function createAgent(
@@ -149,25 +157,30 @@ export function deleteAgent(cwd: string | undefined, name: string): Promise<void
 
 // ---- Settings: Subagent enabled ----
 
-export async function getSubagentEnabled(): Promise<{ enabled: boolean }> {
-  const enabled = await clients.settings.getSubagentEnabled();
-  return { enabled };
+export async function getSubagentEnabled(
+  cwd?: string
+): Promise<{ enabled: boolean; source: string }> {
+  return clients.settings.getSubagentEnabled({ cwd: cwd ?? '' });
 }
 
-export function setSubagentEnabled(enabled: boolean): Promise<void> {
-  return clients.settings.setSubagentEnabled(enabled);
+export function setSubagentEnabled(enabled: boolean, cwd?: string): Promise<void> {
+  return clients.settings.setSubagentEnabled({ enabled, cwd: cwd ?? '' });
+}
+
+export function resetSubagentEnabled(cwd: string): Promise<void> {
+  return clients.settings.resetSubagentEnabled({ cwd });
 }
 
 // ---- Settings: Skills ----
 
-export function listSkills(): Promise<
-  Array<{ name: string; description: string; disabled: boolean }>
-> {
+export function listSkills(
+  _cwd?: string
+): Promise<Array<{ name: string; description: string; disabled: boolean }>> {
   return clients.settings.listSkills() as any;
 }
 
-export function toggleSkill(name: string, enabled: boolean): Promise<void> {
-  return clients.settings.toggleSkill(name, enabled);
+export function toggleSkill(name: string, enabled: boolean, cwd?: string): Promise<void> {
+  return clients.settings.toggleSkill({ name, enabled, cwd: cwd ?? '' });
 }
 
 // ---- Settings: Hooks ----
@@ -198,6 +211,10 @@ export function setHookDisabled(
   disabled: boolean
 ): Promise<void> {
   return clients.settings.setHookDisabled({ cwd: cwd ?? '', name, disabled });
+}
+
+export function resetHookDisabled(name: string, cwd: string): Promise<void> {
+  return clients.settings.resetHookDisabled({ name, cwd });
 }
 
 // ---- Rollback / Checkpoint ----

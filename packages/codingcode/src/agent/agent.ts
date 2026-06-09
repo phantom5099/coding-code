@@ -21,6 +21,7 @@ import { McpService } from '../mcp/index.js';
 import { loadMemoryForPrompt, flushSessionToMemory } from '../memory/index.js';
 import { createLogger } from '@codingcode/infra';
 import type { AgentProfile } from '../subagent/registry';
+import { resolveSubagentEnabled, resolveAgentDisabled } from '../subagent/registry.js';
 import type { ToolVisibilityPolicy } from '../tools/types';
 import { ProjectRuntimeService } from '../runtime/project-runtime';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
@@ -71,25 +72,28 @@ export const sendMessage = (
 
     // Apply main agent profile: model override, maxSteps, readonly, hooks, MCP
     let activeLlm = llm;
-    if (profile.model) {
+    if (profile?.model) {
       const entry = findModel(profile.model);
       if (entry) {
         const clientResult = yield* Effect.promise(() => createClient(entry));
         if (clientResult.ok) activeLlm = clientResult.value;
       }
     }
-    const effectiveMaxSteps = profile.maxSteps;
-    const effectiveApproval: any = profile.readonly
+    const effectiveMaxSteps = profile?.maxSteps;
+    const effectiveApproval: any = profile?.readonly
       ? { permissionMode: 'bypass' }
       : options?.approvalOverride;
 
-    if (profile.hooks?.length) {
+    if (profile?.hooks?.length) {
       yield* hooks.attachSessionHooks(sid, profile.hooks);
     }
 
-    if (profile.mcpServers?.length) {
+    if (profile?.mcpServers?.length) {
       yield* mcp.connectServers(normalizedCwd, sid, profile.mcpServers);
     }
+
+    // Get MCP tools for injection into ReAct loop
+    const mcpTools = mcp.listProjectMcpTools(normalizedCwd);
 
     const turnId = session.incrementTurn(state);
     const [matchedSkill, actualInput] = yield* skill.extractSkill(state.cwd, input);
@@ -106,6 +110,7 @@ export const sendMessage = (
       maxStepsOverride: effectiveMaxSteps,
       approvalOverride: effectiveApproval,
       dispatchTool,
+      mcpTools,
       skillInstruction: matchedSkill?.instruction,
       abortSignal: options?.signal,
     });
@@ -174,6 +179,7 @@ export interface RunStreamOptions {
   coreAllowlist?: ReadonlySet<string>;
   toolPolicy?: ToolVisibilityPolicy;
   dispatchTool?: ToolDefinition;
+  mcpTools?: ToolDefinition[];
   abortSignal?: AbortSignal;
   parentSessionId?: string;
   agentName?: string;
@@ -239,8 +245,11 @@ export async function* runReActLoop(
   const sessionId = state.sessionId;
   const projectPath = state.cwd;
 
-  // Build system prompt
-  const agentProfiles = deps.runtime.listAgentProfiles(projectPath);
+  // Build system prompt — filter agent profiles by global switch and per-agent disabled state
+  const allAgentProfiles = deps.runtime.listAgentProfiles(projectPath);
+  const agentProfiles = resolveSubagentEnabled(projectPath)
+    ? allAgentProfiles.filter((p) => !resolveAgentDisabled(projectPath, p.name))
+    : [];
   const basePrompt =
     opts.systemOverride ??
     buildSystemPrompt({
@@ -308,9 +317,10 @@ export async function* runReActLoop(
         return Result.err(new AgentError('AGENT_ABORTED', 'cancelled'));
       }
 
-      // Build tools from static builtin + dispatch
-      let allToolDefs: ToolDefinition[] = [...STATIC_BUILTIN_TOOLS];
-      if (opts.dispatchTool) allToolDefs = [...allToolDefs, opts.dispatchTool];
+      // Build tools from static builtin + MCP + dispatch
+      let allToolDefs: ToolDefinition[] = [...STATIC_BUILTIN_TOOLS, ...(opts.mcpTools ?? [])];
+      if (opts.dispatchTool && resolveSubagentEnabled(projectPath))
+        allToolDefs = [...allToolDefs, opts.dispatchTool];
 
       // Apply policy filter (derived from AgentProfile.tools via getToolPolicy)
       const allowedByPolicy = opts.toolPolicy?.allowedTools;

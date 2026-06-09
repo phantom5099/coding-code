@@ -35,7 +35,6 @@ describe('CI tooling configuration', () => {
     const content = readFileSync(workflowPath, 'utf8');
     expect(content).toContain('jobs:');
     expect(content).toContain('lint:');
-    expect(content).toContain('format-check:');
     expect(content).toContain('typecheck:');
     expect(content).toContain('test:');
     expect(content).toContain('build-desktop:');

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { loadMcpConfig } from './config.js';
+import { resolveMcpConfig, resolveMcpDisabled } from './config.js';
 import { McpClient, McpError } from './client.js';
 import type { McpServerConfig, McpStatus } from './types.js';
 import type { ToolDefinition, ToolExecCtx } from '../tools/types.js';
@@ -42,7 +42,7 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
     function getConfig(projectPath: string): McpServerConfig[] {
       const cached = configCache.get(projectPath);
       if (cached) return cached;
-      const configs = loadMcpConfig(projectPath);
+      const configs = resolveMcpConfig(projectPath);
       configCache.set(projectPath, configs);
       return configs;
     }
@@ -57,7 +57,7 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
     }
 
     function isDisabled(projectPath: string, serverName: string): boolean {
-      return disabledMcpByProject.get(projectPath)?.has(serverName) ?? false;
+      return resolveMcpDisabled(projectPath, serverName);
     }
 
     function doConnect(
@@ -186,7 +186,7 @@ export class McpService extends Effect.Service<McpService>()('Mcp', {
     return {
       syncConnections: (projectPath: string): Effect.Effect<void> =>
         Effect.gen(function* () {
-          const configs = loadMcpConfig(projectPath);
+          const configs = resolveMcpConfig(projectPath);
           configCache.set(projectPath, configs);
           const configNames = new Set(configs.map((c) => c.name));
 

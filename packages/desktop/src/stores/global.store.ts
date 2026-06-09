@@ -19,8 +19,6 @@ function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`);
 }
 
-
-
 export interface ModelEntry {
   id: string;
   name: string;
@@ -30,7 +28,7 @@ export interface ModelEntry {
 
 interface UIState {
   mode: 'agent' | 'ide';
-  view: 'agent' | 'settings';
+  view: 'agent' | 'global-settings' | 'project-settings';
   sidebarCollapsed: boolean;
   sidebarWidth: number;
   rightPanelWidth: number;
@@ -720,6 +718,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           rightPanelWidth: state.ui.rightPanelWidth,
           bottomPanelHeight: state.ui.bottomPanelHeight,
           ideSidebarView: state.ui.ideSidebarView,
+          theme: state.ui.theme,
         },
         workspace: {
           rootPath: state.workspace.rootPath,

@@ -50,15 +50,21 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
       ul: (props: React.HTMLAttributes<HTMLUListElement>) => <ul className="md-ul" {...props} />,
       ol: (props: React.HTMLAttributes<HTMLOListElement>) => <ol className="md-ol" {...props} />,
       li: (props: React.HTMLAttributes<HTMLLIElement>) => <li className="md-li" {...props} />,
-      blockquote: (props: React.HTMLAttributes<HTMLQuoteElement>) => <blockquote className="md-blockquote" {...props} />,
+      blockquote: (props: React.HTMLAttributes<HTMLQuoteElement>) => (
+        <blockquote className="md-blockquote" {...props} />
+      ),
       table: (props: React.TableHTMLAttributes<HTMLTableElement>) => (
         <div className="md-table-wrapper">
           <table className="md-table" {...props} />
         </div>
       ),
       hr: () => <hr className="md-hr" />,
-      img: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img className="md-img" {...props} />,
-      strong: (props: React.HTMLAttributes<HTMLElement>) => <strong className="md-strong" {...props} />,
+      img: (props: React.ImgHTMLAttributes<HTMLImageElement>) => (
+        <img className="md-img" {...props} />
+      ),
+      strong: (props: React.HTMLAttributes<HTMLElement>) => (
+        <strong className="md-strong" {...props} />
+      ),
       em: (props: React.HTMLAttributes<HTMLElement>) => <em className="md-em" {...props} />,
     }),
     []
@@ -66,7 +72,11 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
 
   return (
     <div className={`markdown-body ${className || ''}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        components={components}
+      >
         {content}
       </ReactMarkdown>
     </div>

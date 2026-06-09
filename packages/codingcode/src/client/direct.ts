@@ -396,23 +396,27 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async getSubagentEnabled() {
-      return clients.settings.getSubagentEnabled();
+      return clients.settings.getSubagentEnabled({ cwd: cwd() });
     },
 
-    async setSubagentEnabled(enabled: boolean) {
-      await clients.settings.setSubagentEnabled(enabled);
+    async setSubagentEnabled(body: { enabled: boolean; cwd: string }) {
+      await clients.settings.setSubagentEnabled(body);
+    },
+
+    async resetSubagentEnabled(body: { cwd: string }) {
+      await clients.settings.resetSubagentEnabled(body);
     },
 
     async getMcpStatus() {
       return clients.settings.getMcpStatus();
     },
 
-    async disableMcp(name: string) {
-      await clients.settings.setMcpDisabled(name, true);
+    async setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }) {
+      await clients.settings.setMcpDisabled(body);
     },
 
-    async enableMcp(name: string) {
-      await clients.settings.setMcpDisabled(name, false);
+    async resetMcpDisabled(body: { name: string; cwd: string }) {
+      await clients.settings.resetMcpDisabled(body);
     },
 
     async createMcpServer(server: any): Promise<void> {
@@ -431,8 +435,8 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       return clients.settings.listSkills();
     },
 
-    async toggleSkill(name: string, enabled: boolean) {
-      await clients.settings.toggleSkill(name, enabled);
+    async toggleSkill(body: { name: string; enabled: boolean; cwd: string }) {
+      await clients.settings.toggleSkill(body);
     },
 
     async listAgents() {
@@ -451,16 +455,28 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       await clients.settings.deleteAgent({ cwd: cwd(), name });
     },
 
-    async setAgentDisabled(name: string, disabled: boolean): Promise<void> {
-      await clients.settings.setAgentDisabled(name, disabled);
+    async setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void> {
+      await clients.settings.setAgentDisabled(body);
+    },
+
+    async resetAgentDisabled(body: { name: string; cwd: string }): Promise<void> {
+      await clients.settings.resetAgentDisabled(body);
     },
 
     async listHooks() {
       return clients.settings.listHooks({ cwd: cwd() });
     },
 
-    async setHookDisabled(name: string, disabled: boolean): Promise<void> {
-      await clients.settings.setHookDisabled({ cwd: cwd(), name, disabled });
+    async setHookDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void> {
+      await clients.settings.setHookDisabled({
+        cwd: cwd(),
+        name: body.name,
+        disabled: body.disabled,
+      });
+    },
+
+    async resetHookDisabled(body: { name: string; cwd: string }): Promise<void> {
+      await clients.settings.resetHookDisabled(body);
     },
 
     async createHook(hook: any): Promise<void> {

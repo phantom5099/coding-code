@@ -68,16 +68,17 @@ export interface AgentClient {
   addExtraType(type: { name: string; description: string }): Promise<void>;
   updateExtraType(name: string, type: { name: string; description: string }): Promise<void>;
   deleteExtraType(name: string): Promise<void>;
-  getSubagentEnabled(): Promise<boolean>;
-  setSubagentEnabled(enabled: boolean): Promise<void>;
+  getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
+  setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
+  resetSubagentEnabled(body: { cwd: string }): Promise<void>;
   getMcpStatus(): Promise<McpStatus[]>;
   createMcpServer(server: McpServerConfig): Promise<void>;
   updateMcpServer(name: string, server: McpServerConfig): Promise<void>;
   deleteMcpServer(name: string): Promise<void>;
-  disableMcp(name: string): Promise<void>;
-  enableMcp(name: string): Promise<void>;
+  setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
+  resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
-  toggleSkill(name: string, enabled: boolean): Promise<void>;
+  toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
   listAgents(): Promise<
     Array<{
       name: string;
@@ -93,9 +94,11 @@ export interface AgentClient {
   createAgent(profile: AgentProfile): Promise<void>;
   updateAgent(name: string, profile: AgentProfile): Promise<void>;
   deleteAgent(name: string): Promise<void>;
-  setAgentDisabled(name: string, disabled: boolean): Promise<void>;
+  setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
+  resetAgentDisabled(body: { name: string; cwd: string }): Promise<void>;
   listHooks(): Promise<UserHookConfig[]>;
-  setHookDisabled(name: string, disabled: boolean): Promise<void>;
+  setHookDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
+  resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;
   createHook(hook: UserHookConfig): Promise<void>;
   updateHook(name: string, hook: UserHookConfig): Promise<void>;
   deleteHook(name: string): Promise<void>;

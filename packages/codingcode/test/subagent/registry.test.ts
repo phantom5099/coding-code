@@ -1,4 +1,4 @@
-﻿import { expect, it, describe } from 'vitest';
+import { expect, it, describe } from 'vitest';
 import { Effect } from 'effect';
 import { SubagentRegistry, EXPLORE_PROFILE } from '../../src/subagent/registry';
 import { SubagentRegistryLayer } from '../../src/layer';
@@ -111,76 +111,5 @@ describe('SubagentRegistry', () => {
         expect(registry.get('temp')).toBeUndefined();
       })
     );
-  });
-
-  it('should default to enabled=true', async () => {
-    await Effect.runPromise(
-      testEffect((registry) => {
-        expect(registry.isEnabled()).toBe(true);
-      })
-    );
-  });
-
-  it('should allow disabling via setEnabled(false)', async () => {
-    await Effect.runPromise(
-      testEffect((registry) => {
-        registry.setEnabled(false);
-        expect(registry.isEnabled()).toBe(false);
-      })
-    );
-  });
-
-  it('should allow re-enabling via setEnabled(true)', async () => {
-    await Effect.runPromise(
-      testEffect((registry) => {
-        registry.setEnabled(false);
-        registry.setEnabled(true);
-        expect(registry.isEnabled()).toBe(true);
-      })
-    );
-  });
-
-  it('should restore enabled=true after reset()', async () => {
-    await Effect.runPromise(
-      testEffect((registry) => {
-        registry.setEnabled(false);
-        expect(registry.isEnabled()).toBe(false);
-        registry.reset();
-        expect(registry.isEnabled()).toBe(true);
-      })
-    );
-  });
-
-  describe('per-agent disable', () => {
-    it('should default to not disabled', async () => {
-      await Effect.runPromise(
-        testEffect((registry) => {
-          expect(registry.isAgentDisabled('any-agent')).toBe(false);
-        })
-      );
-    });
-
-    it('should disable and re-enable a specific agent', async () => {
-      await Effect.runPromise(
-        testEffect((registry) => {
-          registry.register({ name: 'test', description: 'Test', systemPrompt: 'You are test.' });
-          registry.disableAgent('test');
-          expect(registry.isAgentDisabled('test')).toBe(true);
-          registry.enableAgent('test');
-          expect(registry.isAgentDisabled('test')).toBe(false);
-        })
-      );
-    });
-
-    it('should clear disabled state on reset', async () => {
-      await Effect.runPromise(
-        testEffect((registry) => {
-          registry.register({ name: 'test', description: 'Test', systemPrompt: 'You are test.' });
-          registry.disableAgent('test');
-          registry.reset();
-          expect(registry.isAgentDisabled('test')).toBe(false);
-        })
-      );
-    });
   });
 });

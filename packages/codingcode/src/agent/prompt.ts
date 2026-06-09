@@ -56,12 +56,15 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   }
 
   if (opts.agentProfiles && opts.agentProfiles.length > 0) {
-    prompt += '\n\n## Available Subagents\n';
-    prompt += `You can dispatch subagents using the dispatch_agent tool. Available profiles:\n`;
-    for (const p of opts.agentProfiles) {
-      prompt += `\n### ${p.name}\n${p.description}`;
-      if (p.tools && p.tools.length > 0) {
-        prompt += `\nTools: ${p.tools.join(', ')}`;
+    const enabledProfiles = opts.agentProfiles.filter((p) => !p.disabled);
+    if (enabledProfiles.length > 0) {
+      prompt += '\n\n## Available Subagents\n';
+      prompt += `You can dispatch subagents using the dispatch_agent tool. Available profiles:\n`;
+      for (const p of enabledProfiles) {
+        prompt += `\n### ${p.name}\n${p.description}`;
+        if (p.tools && p.tools.length > 0) {
+          prompt += `\nTools: ${p.tools.join(', ')}`;
+        }
       }
     }
   }

@@ -3,23 +3,26 @@ import { useGlobalStore } from '../stores/global.store';
 import ProjectStrip from '../agent/ProjectStrip';
 import AgentSidebar from '../agent/AgentSidebar';
 import AgentWorkspace from '../agent/AgentWorkspace';
-import SettingsPage from '../settings/SettingsPage';
+import GlobalSettingsPage from '../settings/GlobalSettingsPage';
+import ProjectSettingsPage from '../settings/ProjectSettingsPage';
 
 export default function AgentLayout() {
   const { sendMessage, abort } = useAgentCore();
   const view = useGlobalStore((s) => s.ui.view);
 
+  if (view === 'global-settings') {
+    return <GlobalSettingsPage />;
+  }
+
+  if (view === 'project-settings') {
+    return <ProjectSettingsPage />;
+  }
+
   return (
-    <>
-      {view === 'settings' ? (
-        <SettingsPage />
-      ) : (
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          <ProjectStrip />
-          <AgentSidebar />
-          <AgentWorkspace sendMessage={sendMessage} abort={abort} />
-        </div>
-      )}
-    </>
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      <ProjectStrip />
+      <AgentSidebar />
+      <AgentWorkspace sendMessage={sendMessage} abort={abort} />
+    </div>
   );
 }

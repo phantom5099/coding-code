@@ -68,6 +68,7 @@ const mockState = {
   title: 'test',
   usage: undefined,
   promptEstimate: 0,
+  memorySnapshot: '',
 };
 
 function makeDeps(overrides?: Record<string, any>) {

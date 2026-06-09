@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Search, Zap, Settings } from 'lucide-react';
+import { Plus, Search, Zap, Settings } from 'lucide-react';
 import { useGlobalStore } from '../stores/global.store';
 import { api } from '../lib/api';
 
@@ -23,7 +23,7 @@ export default function AgentSidebar() {
   const rootPath = useGlobalStore((s) => s.workspace.rootPath);
   const workspace = useGlobalStore((s) => s.workspace);
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
-  const toggleSidebar = useGlobalStore((s) => s.toggleSidebar);
+  const setView = useGlobalStore((s) => s.setView);
 
   // Subscribe to raw threads, derive list with useMemo for stable reference
   const rawThreads = useGlobalStore((s) => s.agent.threads);
@@ -68,34 +68,23 @@ export default function AgentSidebar() {
   const projectName = currentProject?.name || workspace.name;
 
   if (sidebarCollapsed) {
-    return (
-      <div className="flex flex-col items-center w-10 shrink-0 bg-[var(--bg-sidebar)] border-r border-[var(--border-default)] pt-2 gap-1">
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          title="展开侧边栏"
-          className="w-7 h-7 flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors"
-        >
-          <ChevronRight size={16} strokeWidth={1.5} />
-        </button>
-      </div>
-    );
+    return null;
   }
 
   return (
     <div className="flex flex-col shrink-0 bg-[var(--bg-sidebar)] border-r border-[var(--border-default)] w-64 select-none">
-      {/* 顶部栏：项目名 + 收起按钮 */}
+      {/* 顶部栏：项目名 + 项目级设置按钮 */}
       <div className="flex items-center justify-between px-2 pt-2">
         <span className="text-[13px] font-semibold text-[var(--text-tertiary)] truncate ml-2">
           {projectName || '项目'}
         </span>
         <button
           type="button"
-          onClick={toggleSidebar}
-          title="收起侧边栏"
+          onClick={() => setView('project-settings')}
+          title="项目设置"
           className="w-7 h-7 flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors"
         >
-          <ChevronLeft size={16} strokeWidth={1.5} />
+          <Settings size={16} strokeWidth={1.5} />
         </button>
       </div>
 
@@ -186,25 +175,19 @@ export default function AgentSidebar() {
           <div className="px-3 py-4 text-[13px] text-[var(--text-disabled)]">暂无对话</div>
         )}
       </div>
-
-      <div className="mx-3 border-t border-[var(--border-default)]" />
-
-      {/* 底部 */}
-      <div className="px-2 py-2.5">
-        <button
-          type="button"
-          onClick={() => useGlobalStore.getState().setView('settings')}
-          className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
-        >
-          <Settings size={16} strokeWidth={1.5} />
-          <span>设置</span>
-        </button>
-      </div>
     </div>
   );
 }
 
-function NavItem({ icon, label, shortcut }: { icon: React.ReactNode; label: string; shortcut?: string }) {
+function NavItem({
+  icon,
+  label,
+  shortcut,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  shortcut?: string;
+}) {
   return (
     <button
       type="button"

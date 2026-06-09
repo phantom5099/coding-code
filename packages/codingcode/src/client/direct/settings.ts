@@ -6,7 +6,14 @@ import { getGlobalPermissionMode, setGlobalPermissionMode } from '../../approval
 import type { PermissionMode } from '../../approval/types.js';
 import type { AgentProfile } from '../../subagent/registry.js';
 import type { UserHookConfig } from '../../hooks/config.js';
-import { loadMcpConfig, writeMcpConfig } from '../../mcp/config.js';
+import {
+  loadMcpConfig,
+  writeMcpConfig,
+  resolveMcpDisabled,
+  setGlobalMcpDisabledState,
+  setProjectMcpDisabledState,
+  resetProjectMcpDisabledState,
+} from '../../mcp/config.js';
 import {
   loadAgentProfiles,
   writeAgentProfile,
@@ -15,12 +22,25 @@ import {
 } from '../../subagent/loader.js';
 import {
   EXPLORE_PROFILE,
-  isAgentDisabledState,
-  setAgentDisabledState,
-  getSubagentEnabledState,
   setSubagentEnabledState,
+  resolveSubagentEnabled,
+  getProjectSubagentEnabledState,
+  setProjectSubagentEnabledState,
+  resetProjectSubagentEnabledState,
+  setGlobalAgentDisabledState,
+  setProjectAgentDisabledState,
+  resetProjectAgentDisabledState,
+  resolveAgentDisabled,
+  getProjectAgentDisabledState,
 } from '../../subagent/registry.js';
-import { loadHookConfigs, writeHookConfigs } from '../../hooks/config.js';
+import {
+  loadHookConfigs,
+  writeHookConfigs,
+  resolveHookDisabled,
+  setGlobalHookDisabledState,
+  setProjectHookDisabledState,
+  resetProjectHookDisabledState,
+} from '../../hooks/config.js';
 import { setHookRuntimeEnabled } from '../../hooks/executor.js';
 import {
   getMemoryConfig,
@@ -44,25 +64,29 @@ export interface SettingsClient {
   addMemoryExtraType(type: { name: string; description: string }): Promise<void>;
   updateMemoryExtraType(name: string, type: { name: string; description: string }): Promise<void>;
   deleteMemoryExtraType(name: string): Promise<void>;
-  getSubagentEnabled(): Promise<boolean>;
-  setSubagentEnabled(enabled: boolean): Promise<void>;
+  getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
+  setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
+  resetSubagentEnabled(body: { cwd: string }): Promise<void>;
   getMcpStatus(): Promise<McpStatus[]>;
-  setMcpDisabled(name: string, disabled: boolean): Promise<void>;
+  setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
+  resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
   createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
   updateMcpServer(input: { cwd: string; name: string; server: McpServerConfig }): Promise<void>;
   deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
-  toggleSkill(name: string, enabled: boolean): Promise<void>;
+  toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
   listAgents(input: { cwd: string }): Promise<any[]>;
   createAgent(input: { cwd: string; profile: AgentProfile }): Promise<void>;
   updateAgent(input: { cwd: string; name: string; profile: AgentProfile }): Promise<void>;
   deleteAgent(input: { cwd: string; name: string }): Promise<void>;
-  setAgentDisabled(name: string, disabled: boolean): Promise<void>;
+  setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
+  resetAgentDisabled(body: { name: string; cwd: string }): Promise<void>;
   listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
   createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
   updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
   deleteHook(input: { cwd: string; name: string }): Promise<void>;
   setHookDisabled(input: { cwd: string; name: string; disabled: boolean }): Promise<void>;
+  resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;
   getGlobalPermissionMode(): Promise<PermissionMode>;
   setGlobalPermissionMode(mode: PermissionMode): Promise<void>;
 }
@@ -103,18 +127,27 @@ function agentsList(cwd: string): Array<{
   maxSteps?: number;
   model?: string;
   disabled: boolean;
+  source: 'builtin' | 'global' | 'project';
+  hasProjectOverride?: boolean;
+  projectDisabled?: boolean;
 }> {
   const custom = loadAgentProfiles(cwd);
-  return [EXPLORE_PROFILE, ...custom].map((a) => ({
-    name: a.name,
-    description: a.description,
-    tools: a.tools,
-    mcpServers: a.mcpServers,
-    readonly: a.readonly,
-    maxSteps: a.maxSteps,
-    model: a.model,
-    disabled: isAgentDisabledState(a.name),
-  }));
+  return [EXPLORE_PROFILE, ...custom].map((a) => {
+    const projectVal = getProjectAgentDisabledState(cwd, a.name);
+    return {
+      name: a.name,
+      description: a.description,
+      tools: a.tools,
+      mcpServers: a.mcpServers,
+      readonly: a.readonly,
+      maxSteps: a.maxSteps,
+      model: a.model,
+      disabled: resolveAgentDisabled(cwd, a.name),
+      source: a.name === EXPLORE_PROFILE.name ? ('builtin' as const) : ('project' as const),
+      hasProjectOverride: projectVal !== undefined,
+      projectDisabled: projectVal,
+    };
+  });
 }
 
 function agentsCreate(cwd: string, profile: AgentProfile): void {
@@ -206,12 +239,24 @@ export function createDirectSettingsClient(
       _deleteMemoryExtraType(name);
     },
 
-    async getSubagentEnabled() {
-      return getSubagentEnabledState();
+    async getSubagentEnabled({ cwd }) {
+      const projectVal = getProjectSubagentEnabledState(cwd);
+      return {
+        enabled: resolveSubagentEnabled(cwd),
+        source: projectVal !== undefined ? 'project' : 'global',
+      };
     },
 
-    async setSubagentEnabled(enabled) {
-      setSubagentEnabledState(enabled);
+    async setSubagentEnabled({ enabled, cwd }) {
+      if (!cwd || cwd === '' || cwd === 'global') {
+        setSubagentEnabledState(enabled);
+      } else {
+        setProjectSubagentEnabledState(cwd, enabled);
+      }
+    },
+
+    async resetSubagentEnabled({ cwd }) {
+      resetProjectSubagentEnabledState(cwd);
     },
 
     async getMcpStatus() {
@@ -223,15 +268,24 @@ export function createDirectSettingsClient(
       );
     },
 
-    async setMcpDisabled(name, disabled) {
+    async setMcpDisabled({ name, disabled, cwd }) {
+      if (!cwd || cwd === '' || cwd === 'global') {
+        setGlobalMcpDisabledState(name, disabled);
+      } else {
+        setProjectMcpDisabledState(cwd, name, disabled);
+      }
       await runWithLayer(
         Effect.gen(function* () {
           const mcp = yield* McpService;
           return yield* disabled
-            ? mcp.disable(process.cwd(), name)
-            : mcp.enable(process.cwd(), name);
+            ? mcp.disable(cwd || process.cwd(), name)
+            : mcp.enable(cwd || process.cwd(), name);
         })
       );
+    },
+
+    async resetMcpDisabled({ name, cwd }) {
+      resetProjectMcpDisabledState(cwd, name);
     },
 
     async createMcpServer({ cwd, server }) {
@@ -255,12 +309,14 @@ export function createDirectSettingsClient(
       );
     },
 
-    async toggleSkill(name, enabled) {
+    async toggleSkill({ name, enabled, cwd }) {
       await runWithLayer(
         Effect.gen(function* () {
           const skill = yield* SkillService;
-          const cwd = process.cwd();
-          return yield* enabled ? skill.enableSkill(cwd, name) : skill.disableSkill(cwd, name);
+          const skillCwd = cwd || process.cwd();
+          return yield* enabled
+            ? skill.enableSkill(skillCwd, name)
+            : skill.disableSkill(skillCwd, name);
         })
       );
     },
@@ -281,8 +337,16 @@ export function createDirectSettingsClient(
       deleteAgentProfile(cwd, name);
     },
 
-    async setAgentDisabled(name, disabled) {
-      setAgentDisabledState(name, disabled);
+    async setAgentDisabled({ name, disabled, cwd }) {
+      if (!cwd || cwd === '' || cwd === 'global') {
+        setGlobalAgentDisabledState(name, disabled);
+      } else {
+        setProjectAgentDisabledState(cwd, name, disabled);
+      }
+    },
+
+    async resetAgentDisabled({ name, cwd }) {
+      resetProjectAgentDisabledState(cwd, name);
     },
 
     async listHooks({ cwd }) {
@@ -302,7 +366,16 @@ export function createDirectSettingsClient(
     },
 
     async setHookDisabled({ cwd, name, disabled }) {
+      if (!cwd || cwd === '' || cwd === 'global') {
+        setGlobalHookDisabledState(name, disabled);
+      } else {
+        setProjectHookDisabledState(cwd, name, disabled);
+      }
       hooksSetDisabled(cwd, name, disabled);
+    },
+
+    async resetHookDisabled({ name, cwd }) {
+      resetProjectHookDisabledState(cwd, name);
     },
 
     async getGlobalPermissionMode() {

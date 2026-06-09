@@ -162,9 +162,7 @@ describe('useCopyToClipboard - integration with button UI', () => {
       const id = 'btn-1';
       const isCopied = copiedId === id;
       return (
-        <button onClick={() => copy('test content', id)}>
-          {isCopied ? '已复制' : '复制'}
-        </button>
+        <button onClick={() => copy('test content', id)}>{isCopied ? '已复制' : '复制'}</button>
       );
     }
 
@@ -186,11 +184,7 @@ describe('useCopyToClipboard - integration with button UI', () => {
       const { copiedId, copy } = useCopyToClipboard();
       const id = 'btn-2';
       const isCopied = copiedId === id;
-      return (
-        <button onClick={() => copy('content', id)}>
-          {isCopied ? '已复制' : '复制'}
-        </button>
-      );
+      return <button onClick={() => copy('content', id)}>{isCopied ? '已复制' : '复制'}</button>;
     }
 
     render(<TestButton />);

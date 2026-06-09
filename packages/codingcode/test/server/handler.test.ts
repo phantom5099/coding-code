@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { sseHandler } from '../../src/server/handler.js';
 import { sendMessage } from '../../src/agent/agent.js';
@@ -24,6 +24,7 @@ const mockState = {
   title: 'test-sess',
   usage: undefined,
   promptEstimate: 0,
+  memorySnapshot: '',
 };
 
 function createMockLlm(chunks?: string[], responseContent?: string) {
@@ -109,6 +110,7 @@ const MockSessionLayer = Layer.succeed(
         uuid: 's1',
         replaces: [],
         summaryText: '',
+        lastSummarizedTurnId: 0,
         timestamp: new Date().toISOString(),
       }),
     hideMessage: () =>
@@ -157,8 +159,9 @@ const MockContextLayer = Layer.succeed(
     build: () =>
       Effect.sync(() => ({
         messages: [{ role: 'user' as const, content: 'hi' }],
-        newBudgets: [],
+        compactedEvents: [],
         promptEstimate: 0,
+        currentTurnId: 0,
       })),
     compress: () => Effect.succeed({ didCompress: true, released: 0, promptEstimate: 0 }),
     compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
@@ -218,6 +221,7 @@ const MockMcpLayer = Layer.succeed(McpService, {
   getServerToolNames: () => [],
   disconnectAll: () => Effect.void,
   status: () => Effect.succeed([]),
+  listProjectMcpTools: () => [],
 } as any);
 
 const { ProjectRuntimeService } = await import('../../src/runtime/project-runtime.js');

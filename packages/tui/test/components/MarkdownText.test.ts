@@ -26,7 +26,7 @@ describe('MarkdownText', () => {
   });
 
   it('renders code block', () => {
-    const { lastFrame } = render(mk('```js\nconsole.log(\'hi\')\n```'));
+    const { lastFrame } = render(mk("```js\nconsole.log('hi')\n```"));
     expect(lastFrame()).toContain("console.log('hi')");
     expect(lastFrame()).toContain('js');
   });

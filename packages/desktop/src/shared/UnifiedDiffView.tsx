@@ -23,9 +23,17 @@ function DiffLineView({
         ? 'border-l-[var(--diff-remove-border)]'
         : 'border-l-transparent';
   const bgColor =
-    type === 'add' ? 'bg-[var(--diff-add-bg)]' : type === 'remove' ? 'bg-[var(--diff-remove-bg)]' : 'bg-transparent';
+    type === 'add'
+      ? 'bg-[var(--diff-add-bg)]'
+      : type === 'remove'
+        ? 'bg-[var(--diff-remove-bg)]'
+        : 'bg-transparent';
   const textColor =
-    type === 'add' ? 'text-[var(--diff-add-text)]' : type === 'remove' ? 'text-[var(--diff-remove-text)]' : 'text-[var(--text-secondary)]';
+    type === 'add'
+      ? 'text-[var(--diff-add-text)]'
+      : type === 'remove'
+        ? 'text-[var(--diff-remove-text)]'
+        : 'text-[var(--text-secondary)]';
 
   return (
     <div

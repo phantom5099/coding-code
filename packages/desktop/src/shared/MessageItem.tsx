@@ -18,8 +18,6 @@ interface MessageItemProps {
   toolResult?: Item & { type: 'tool_result' };
 }
 
-
-
 const MessageItem = memo(function MessageItem({
   item,
   threadId,
@@ -145,9 +143,7 @@ const MessageItem = memo(function MessageItem({
     return (
       <div className="flex flex-col items-start mb-1 pl-8 group">
         <div className="max-w-[80%] text-[15px] text-[var(--text-primary)] leading-relaxed">
-          {isAssistant && messageContent != null && (
-            <MarkdownRenderer content={messageContent} />
-          )}
+          {isAssistant && messageContent != null && <MarkdownRenderer content={messageContent} />}
           {item.partial && (
             <span className="inline-block w-1.5 h-[1.1em] bg-[var(--accent-primary)] animate-pulse ml-0.5 align-middle" />
           )}
@@ -221,7 +217,9 @@ const MessageItem = memo(function MessageItem({
     const isRejected = item.status === 'rejected';
     return (
       <div className="mb-1 flex items-center gap-1.5 text-[13px] pl-8">
-        <span className={`font-mono ${isRejected ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}>
+        <span
+          className={`font-mono ${isRejected ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}
+        >
           {item.name}
         </span>
         {item.status === 'running' && (

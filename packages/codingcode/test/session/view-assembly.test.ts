@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'crypto';
 import { buildMessagesFromEvents } from '../../src/session/messages.js';
 import type { SessionEvent } from '../../src/session/types.js';
@@ -96,6 +96,7 @@ describe('buildMessagesFromEvents', () => {
         uuid: 's1',
         replaces: ['t1'],
         summaryText: '[compacted]',
+        lastSummarizedTurnId: 1,
         timestamp: new Date().toISOString(),
       } as any,
     ]);
@@ -333,6 +334,7 @@ describe('buildMessagesFromEvents', () => {
         uuid: 's1',
         replaces: ['t1'],
         summaryText: '[compacted]',
+        lastSummarizedTurnId: 1,
         timestamp: new Date().toISOString(),
       },
       { type: 'user', turnId: 2, uuid: 'u2', content: 'next', timestamp: new Date().toISOString() },

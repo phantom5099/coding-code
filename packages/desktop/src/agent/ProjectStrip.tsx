@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useGlobalStore } from '../stores/global.store';
 import { API_BASE, api } from '../lib/api';
 import type { Project, Thread } from '@shared/types';
@@ -101,7 +102,9 @@ function SessionListPopup({
                 </svg>
               </button>
             ) : (
-              <span className="text-[11px] text-[var(--text-disabled)] shrink-0">{relativeTime(t.updatedAt)}</span>
+              <span className="text-[11px] text-[var(--text-disabled)] shrink-0">
+                {relativeTime(t.updatedAt)}
+              </span>
             )}
           </button>
         ))}
@@ -109,7 +112,9 @@ function SessionListPopup({
           <div className="px-3 py-3 text-[13px] text-[var(--text-disabled)]">暂无对话</div>
         )}
         {sorted.length > 12 && (
-          <div className="px-3 py-1 text-[12px] text-[var(--text-disabled)]">+{sorted.length - 12} 条更多</div>
+          <div className="px-3 py-1 text-[12px] text-[var(--text-disabled)]">
+            +{sorted.length - 12} 条更多
+          </div>
         )}
       </div>
     </div>
@@ -133,6 +138,8 @@ export default function ProjectStrip() {
   const switchProject = useGlobalStore((s) => s.switchProject);
   const addProject = useGlobalStore((s) => s.addProject);
   const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
+  const setView = useGlobalStore((s) => s.setView);
+  const toggleSidebar = useGlobalStore((s) => s.toggleSidebar);
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -230,6 +237,33 @@ export default function ProjectStrip() {
         className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-lg shrink-0"
       >
         +
+      </button>
+
+      {/* Spacer to push settings and collapse to bottom */}
+      <div className="flex-1" />
+
+      {/* Global settings button */}
+      <button
+        type="button"
+        onClick={() => setView('global-settings')}
+        title="全局设置"
+        className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors shrink-0"
+      >
+        <Settings size={18} strokeWidth={1.5} />
+      </button>
+
+      {/* Collapse/expand sidebar button */}
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+        className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors shrink-0"
+      >
+        {sidebarCollapsed ? (
+          <ChevronRight size={16} strokeWidth={1.5} />
+        ) : (
+          <ChevronLeft size={16} strokeWidth={1.5} />
+        )}
       </button>
     </div>
   );

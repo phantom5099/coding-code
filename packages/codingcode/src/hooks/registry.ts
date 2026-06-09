@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { loadHookConfigs } from './config';
+import { resolveHookConfigs, resolveHookDisabled } from './config';
 import { executeHookCommand, executeDecisionHookCommand, isHookRuntimeEnabled } from './executor';
 import { createLogger } from '@codingcode/infra';
 
@@ -110,7 +110,7 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
 
     function isHookDisabled(name: string, projectPath?: string, sessionId?: string): boolean {
       if (sessionId && disabledHooksBySession.get(sessionId)?.has(name)) return true;
-      if (projectPath && disabledHooksByProject.get(projectPath)?.has(name)) return true;
+      if (projectPath && resolveHookDisabled(projectPath, name)) return true;
       return false;
     }
 
@@ -210,8 +210,8 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
           }
           hooksByProject.delete(projectPath);
           const projectMap = new Map<HookPoint, HandlerEntry[]>();
-          for (const hc of loadHookConfigs(projectPath)) {
-            if (!hc.enabled) continue;
+          for (const hc of resolveHookConfigs(projectPath)) {
+            if (resolveHookDisabled(projectPath, hc.name)) continue;
             const hookName = hc.name;
             const entry: HandlerEntry = {
               id: `${hc.type === 'observer' ? 'obs' : 'dec'}-${++entryCounter}`,

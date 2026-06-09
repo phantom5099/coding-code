@@ -17,7 +17,13 @@ function TodoItemRow({ item }: { item: TodoItem }) {
   return (
     <div className="flex items-start gap-2 text-[13px] leading-relaxed">
       <span className={`shrink-0 ${statusColor}`}>{statusIcon}</span>
-      <span className={item.status === 'completed' ? 'text-[var(--text-tertiary)] line-through' : 'text-[var(--text-primary)]'}>
+      <span
+        className={
+          item.status === 'completed'
+            ? 'text-[var(--text-tertiary)] line-through'
+            : 'text-[var(--text-primary)]'
+        }
+      >
         {item.step}
       </span>
     </div>
@@ -66,7 +72,9 @@ export default function TodoPanel({ threadId }: { threadId: string }) {
       {/* Expanded list */}
       {!collapsed && (
         <div className="px-5 pb-3 max-h-[220px] overflow-y-auto">
-          {allCompleted && <div className="text-[12px] text-[var(--accent-success)] mb-2">全部完成</div>}
+          {allCompleted && (
+            <div className="text-[12px] text-[var(--accent-success)] mb-2">全部完成</div>
+          )}
           <div className="space-y-1.5">
             {items.map((item, index) => (
               <TodoItemRow key={index} item={item} />

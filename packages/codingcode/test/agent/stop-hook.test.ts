@@ -18,6 +18,7 @@ describe('runReActLoop 鈥?stop hook', () => {
     indexPath: '',
     messageCount: 0,
     promptEstimate: 0,
+    memorySnapshot: '',
   };
 
   function baseMockDeps(overrides: Record<string, any> = {}) {

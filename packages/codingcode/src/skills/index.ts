@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { discoverSkillDirs } from './config';
+import { discoverSkillDirs, resolveSkillDisabled, setProjectSkillDisabledState } from './config';
 import { loadSkill } from './loader';
 import type { Skill } from './types';
 
@@ -7,7 +7,6 @@ export type { Skill } from './types';
 
 export class SkillService extends Effect.Service<SkillService>()('Skill', {
   effect: Effect.gen(function* () {
-    const disabledByProject = new Map<string, Set<string>>();
     const cachedByProject = new Map<string, Skill[]>();
 
     function readAll(projectPath: string): Skill[] {
@@ -23,24 +22,15 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
       return skills;
     }
 
-    function getDisabled(projectPath: string): Set<string> {
-      let set = disabledByProject.get(projectPath);
-      if (!set) {
-        set = new Set();
-        disabledByProject.set(projectPath, set);
-      }
-      return set;
-    }
-
     return {
       getAll: (projectPath: string): Effect.Effect<readonly Skill[]> =>
         Effect.sync(() =>
-          readAll(projectPath).filter((s) => !getDisabled(projectPath).has(s.name))
+          readAll(projectPath).filter((s) => !resolveSkillDisabled(projectPath, s.name))
         ),
 
       findByName: (projectPath: string, name: string): Effect.Effect<Skill | undefined> =>
         Effect.sync(() => {
-          if (getDisabled(projectPath).has(name)) return undefined;
+          if (resolveSkillDisabled(projectPath, name)) return undefined;
           return readAll(projectPath).find((s) => s.name === name);
         }),
 
@@ -49,7 +39,7 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
           const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
           if (!match) return undefined;
           const name = match[1]!;
-          if (getDisabled(projectPath).has(name)) return undefined;
+          if (resolveSkillDisabled(projectPath, name)) return undefined;
           return readAll(projectPath).find((s) => s.name === name);
         }),
 
@@ -59,10 +49,12 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
         matcher: (all: readonly Skill[], q: string) => Effect.Effect<string | undefined>
       ): Effect.Effect<Skill | undefined> =>
         Effect.gen(function* () {
-          const all = readAll(projectPath).filter((s) => !getDisabled(projectPath).has(s.name));
+          const all = readAll(projectPath).filter(
+            (s) => !resolveSkillDisabled(projectPath, s.name)
+          );
           const name = yield* matcher(all, query);
           if (!name) return undefined;
-          if (getDisabled(projectPath).has(name)) return undefined;
+          if (resolveSkillDisabled(projectPath, name)) return undefined;
           return all.find((s) => s.name === name);
         }),
 
@@ -75,7 +67,7 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
             const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
             if (!match) return undefined;
             const name = match[1]!;
-            if (getDisabled(projectPath).has(name)) return undefined;
+            if (resolveSkillDisabled(projectPath, name)) return undefined;
             return readAll(projectPath).find((s) => s.name === name);
           });
           const actualQuery = query.replace(/^@[a-zA-Z0-9-]+\s*/, '');
@@ -84,12 +76,12 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
 
       disableSkill: (projectPath: string, name: string): Effect.Effect<void> =>
         Effect.sync(() => {
-          getDisabled(projectPath).add(name);
+          setProjectSkillDisabledState(projectPath, name, true);
         }),
 
       enableSkill: (projectPath: string, name: string): Effect.Effect<void> =>
         Effect.sync(() => {
-          getDisabled(projectPath).delete(name);
+          setProjectSkillDisabledState(projectPath, name, false);
         }),
 
       listWithStatus: (
@@ -99,7 +91,7 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
           readAll(projectPath).map((s) => ({
             name: s.name,
             description: s.description,
-            enabled: !getDisabled(projectPath).has(s.name),
+            enabled: !resolveSkillDisabled(projectPath, s.name),
           }))
         ),
 

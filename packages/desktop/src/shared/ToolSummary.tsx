@@ -128,12 +128,14 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
           <ChevronRight className={`w-3.5 h-3.5 ${titleColor}`} />
         )}
         <span className={`font-mono ${titleColor}`}>{title}</span>
-        {isFileTool && effectiveResult && (effectiveResult.insertions || effectiveResult.deletions) && (
-          <span className="text-[var(--text-muted)] text-xs">
-            {effectiveResult.insertions ? `+${effectiveResult.insertions}` : ''}
-            {effectiveResult.deletions ? ` -${effectiveResult.deletions}` : ''}
-          </span>
-        )}
+        {isFileTool &&
+          effectiveResult &&
+          (effectiveResult.insertions || effectiveResult.deletions) && (
+            <span className="text-[var(--text-muted)] text-xs">
+              {effectiveResult.insertions ? `+${effectiveResult.insertions}` : ''}
+              {effectiveResult.deletions ? ` -${effectiveResult.deletions}` : ''}
+            </span>
+          )}
       </button>
       {open && hasContent && (
         <div className="pt-1.5">
