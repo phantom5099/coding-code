@@ -30,6 +30,7 @@ import {
 } from '../../subagent/loader.js';
 import {
   EXPLORE_PROFILE,
+  PLAN_PROFILE,
   resolveSubagentEnabled,
   getProjectSubagentEnabledState,
   setProjectSubagentEnabledState,
@@ -153,6 +154,22 @@ function agentsList(cwd: string): Array<{
     source: 'builtin',
     hasProjectOverride: exploreProjectVal !== undefined,
     projectDisabled: exploreProjectVal,
+  });
+
+  // builtin: PLAN_PROFILE
+  const planProjectVal = getProjectAgentDisabledState(cwd, PLAN_PROFILE.name);
+  result.push({
+    name: PLAN_PROFILE.name,
+    description: PLAN_PROFILE.description,
+    tools: PLAN_PROFILE.tools,
+    mcpServers: PLAN_PROFILE.mcpServers,
+    readonly: PLAN_PROFILE.readonly,
+    maxSteps: PLAN_PROFILE.maxSteps,
+    model: PLAN_PROFILE.model,
+    disabled: resolveAgentDisabled(cwd, PLAN_PROFILE.name),
+    source: 'builtin',
+    hasProjectOverride: planProjectVal !== undefined,
+    projectDisabled: planProjectVal,
   });
 
   // global agents (not overridden by project)
@@ -296,7 +313,7 @@ settingsRouter.get('/agents', (c) => {
   if (isGlobalCwd(rawCwd)) {
     const custom = loadGlobalAgentProfiles();
     return c.json(
-      [EXPLORE_PROFILE, ...custom].map((a) => ({
+      [EXPLORE_PROFILE, PLAN_PROFILE, ...custom].map((a) => ({
         name: a.name,
         description: a.description,
         tools: a.tools,
@@ -305,7 +322,7 @@ settingsRouter.get('/agents', (c) => {
         maxSteps: a.maxSteps,
         model: a.model,
         disabled: getGlobalAgentDisabledState(a.name),
-        source: a.name === EXPLORE_PROFILE.name ? 'builtin' : 'global',
+        source: a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name ? 'builtin' : 'global',
       }))
     );
   }
