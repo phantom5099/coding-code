@@ -3,6 +3,7 @@ import { useGlobalStore } from '../stores/global.store';
 import ProjectStrip from '../agent/ProjectStrip';
 import AgentSidebar from '../agent/AgentSidebar';
 import AgentWorkspace from '../agent/AgentWorkspace';
+import { AutomationPanel } from '../agent/AutomationPanel';
 import GlobalSettingsPage from '../settings/GlobalSettingsPage';
 import ProjectSettingsPage from '../settings/ProjectSettingsPage';
 
@@ -16,6 +17,10 @@ export default function AgentLayout() {
 
   if (view === 'project-settings') {
     return <ProjectSettingsPage />;
+  }
+
+  if (view === 'automation') {
+    return <AutomationPanel />;
   }
 
   return (

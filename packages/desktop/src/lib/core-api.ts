@@ -373,3 +373,78 @@ export function forkSession(
 ): Promise<{ sessionId: string; turns: any[] }> {
   return clients.sessions.forkSession({ sessionId, cwd, atUuid });
 }
+
+// ---- Automations ----
+
+export interface Automation {
+  id: string;
+  name: string;
+  description: string;
+  cron: string;
+  timezone: string;
+  sandbox: 'readonly' | 'workspace-write';
+  enabled: boolean;
+  projectCwd: string;
+  runOnce: boolean;
+  createdAt: number;
+  updatedAt: number;
+  lastRunAt: number | null;
+  lastSessionId: string | null;
+}
+
+export interface CreateAutomationInput {
+  name: string;
+  description: string;
+  cron: string;
+  timezone?: string;
+  sandbox?: 'readonly' | 'workspace-write';
+  projectCwd: string;
+  runOnce?: boolean;
+}
+
+export interface UpdateAutomationInput {
+  name?: string;
+  description?: string;
+  cron?: string;
+  timezone?: string;
+  sandbox?: 'readonly' | 'workspace-write';
+  enabled?: boolean;
+  runOnce?: boolean;
+}
+
+export async function listAutomations(): Promise<Automation[]> {
+  const res = await fetch(`${API_BASE}/api/automations`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function createAutomation(data: CreateAutomationInput): Promise<Automation> {
+  const res = await fetch(`${API_BASE}/api/automations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function updateAutomation(id: string, data: UpdateAutomationInput): Promise<Automation> {
+  const res = await fetch(`${API_BASE}/api/automations/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function deleteAutomation(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/automations/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function runAutomationOnce(id: string): Promise<{ sessionId: string }> {
+  const res = await fetch(`${API_BASE}/api/automations/${id}/run`, { method: 'POST' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}

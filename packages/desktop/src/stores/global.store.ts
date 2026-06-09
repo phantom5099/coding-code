@@ -28,7 +28,7 @@ export interface ModelEntry {
 
 interface UIState {
   mode: 'agent' | 'ide';
-  view: 'agent' | 'global-settings' | 'project-settings';
+  view: 'agent' | 'global-settings' | 'project-settings' | 'automation';
   sidebarCollapsed: boolean;
   sidebarWidth: number;
   rightPanelWidth: number;
@@ -56,6 +56,22 @@ interface TodoPanelState {
   collapsed: boolean;
 }
 
+export interface Automation {
+  id: string;
+  name: string;
+  description: string;
+  cron: string;
+  timezone: string;
+  sandbox: 'readonly' | 'workspace-write';
+  enabled: boolean;
+  projectCwd: string;
+  runOnce: boolean;
+  createdAt: number;
+  updatedAt: number;
+  lastRunAt: number | null;
+  lastSessionId: string | null;
+}
+
 interface AgentState {
   currentThreadId: string | null;
   threads: Record<string, Thread>;
@@ -68,6 +84,7 @@ interface AgentState {
   usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>;
   isCompressing: boolean;
   hasRunningTurn: boolean;
+  automations: Automation[];
 }
 
 interface EditorState {
@@ -144,6 +161,7 @@ interface GlobalActions {
   clearRunningTurns: (threadId: string) => void;
   applyTodoUpdate: (threadId: string, items: TodoItem[]) => void;
   toggleTodoCollapsed: (threadId: string) => void;
+  setAutomations: (automations: Automation[]) => void;
   // Rollback state
   setRollbackState: (threadId: string, state: SessionRollbackState) => void;
   setCheckpointDiff: (threadId: string, turnId: string, diff: CheckpointDiff) => void;
@@ -224,6 +242,7 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         usageByThreadId: {},
         isCompressing: false,
         hasRunningTurn: false,
+        automations: [],
       },
       editor: {
         cursorLine: 1,
@@ -616,6 +635,11 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           const previous = s.agent.todoByThreadId[threadId];
           if (!previous) return;
           previous.collapsed = !previous.collapsed;
+        }),
+
+      setAutomations: (automations) =>
+        set((s) => {
+          s.agent.automations = automations;
         }),
 
       // Rollback actions

@@ -12,6 +12,7 @@ import { CheckpointService } from './checkpoint/checkpoint-service';
 import { ToolSearchService } from './tools/tool-search-service';
 import { SubagentRegistry } from './subagent/registry';
 import { ProjectRuntimeService } from './runtime/project-runtime';
+import { SchedulerService } from './scheduler/service';
 
 export const AgentLayer = AgentService.Default;
 export const SessionLayer = SessionService.Default;
@@ -41,6 +42,11 @@ export const CheckpointLayer = CheckpointService.Default.pipe(Layer.provide(Chec
 
 export const ToolSearchLayer = ToolSearchService.Default;
 
+/** Scheduler depends on SessionService. */
+export const SchedulerLayer = SchedulerService.Default.pipe(
+  Layer.provide(SessionLayer)
+);
+
 /** Agent depends on ToolExecutor + ContextService + SessionService + CheckpointService + ToolSearchService + HookLayer + ProjectRuntime. */
 const AgentDeps = Layer.mergeAll(
   ExecutorLayer,
@@ -67,5 +73,6 @@ export const AppLayer = Layer.mergeAll(
   CheckpointLayer,
   ToolSearchLayer,
   SubagentRegistryLayer,
-  ProjectRuntimeLayer
+  ProjectRuntimeLayer,
+  SchedulerLayer
 );

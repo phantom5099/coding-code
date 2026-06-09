@@ -103,7 +103,11 @@ export default function AgentSidebar() {
       {/* 功能导航 */}
       <nav className="px-2 pt-1 pb-3 space-y-0.5">
         <NavItem icon={<Search size={16} strokeWidth={1.5} />} label="搜索" shortcut="Ctrl+G" />
-        <NavItem icon={<Zap size={16} strokeWidth={1.5} />} label="自动化" />
+        <NavItem
+          icon={<Zap size={16} strokeWidth={1.5} />}
+          label="自动化"
+          onClick={() => setView('automation')}
+        />
       </nav>
 
       <div className="mx-3 border-t border-[var(--border-default)]" />
@@ -183,14 +187,17 @@ function NavItem({
   icon,
   label,
   shortcut,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   shortcut?: string;
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className="w-full flex items-center gap-2.5 px-4 py-2 rounded-lg text-[14px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-base)] transition-colors"
     >
       <span className="w-4 flex items-center justify-center shrink-0">{icon}</span>

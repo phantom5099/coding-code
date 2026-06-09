@@ -6,6 +6,7 @@ import { modelsRouter } from './routes/models.js';
 import { approvalRouter } from './routes/approval.js';
 import { agentRouter } from './routes/agent.js';
 import { settingsRouter } from './routes/settings.js';
+import { automationsRouter } from './routes/automations.js';
 import { AgentError, AlreadyExistsError, NotFoundError } from '../core/error.js';
 
 export async function createServer(): Promise<Hono> {
@@ -42,6 +43,7 @@ export async function createServer(): Promise<Hono> {
   app.route('/api', approvalRouter);
   app.route('/api/agent', agentRouter);
   app.route('/api/settings', settingsRouter);
+  app.route('/api/automations', automationsRouter);
 
   return app;
 }
