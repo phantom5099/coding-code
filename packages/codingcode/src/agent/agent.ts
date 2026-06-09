@@ -262,7 +262,10 @@ export async function* runReActLoop(
     });
 
   const memoryBlock = state.memorySnapshot;
-  const system = [basePrompt, memoryBlock].filter(Boolean).join('\n\n');
+  const memorySection = memoryBlock
+    ? `## Session Memory\n\n${memoryBlock}`
+    : '';
+  const system = [basePrompt, memorySection].filter(Boolean).join('\n\n');
 
   const config = getContextConfig();
   const maxOverflowRetries = config.reactiveCompactMaxRetries;
