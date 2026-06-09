@@ -7,8 +7,8 @@ describe('resolveConfig', () => {
     expect(cfg.maxStopContinuations).toBe(2);
   });
 
-  it('returns maxSteps defaulting to 50 when no config file is present', () => {
+  it('returns maxSteps defaulting to 200 when no config file is present', () => {
     const cfg = resolveConfig();
-    expect(cfg.maxSteps).toBe(50);
+    expect(cfg.maxSteps).toBe(200);
   });
 });

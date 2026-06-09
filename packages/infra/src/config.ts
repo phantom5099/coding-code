@@ -81,7 +81,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   server: {
     port: 8080,
   },
-  maxSteps: 50,
+  maxSteps: 200,
   maxStopContinuations: 2,
   context: DEFAULT_CONTEXT,
   memory: DEFAULT_MEMORY,

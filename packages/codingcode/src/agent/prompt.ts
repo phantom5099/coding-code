@@ -1,8 +1,5 @@
 import { getAllRules } from '../rules/index.js';
-import type { AgentProfile } from '../subagent/registry';
-
-export const DEFERRED_TOOLS_GUIDELINES = `## Deferred tools
-- Some tools are listed as deferred — call tool_search with relevant keywords before using them.`;
+import type { AgentProfile } from '../subagent/registry.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that helps users write, read, search, and modify code.
 
@@ -14,7 +11,20 @@ const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that h
 5. Make small, focused changes — avoid large rewrites
 6. Run tests or type-check after changes when applicable
 7. If the user's request is ambiguous, ask for clarification
-8. For complex or broad tasks (understanding a whole module, cross-file analysis, comprehensive search), delegate to dispatch_agent immediately with the original task — do not explore the topic yourself before delegating.
+8. For complex or broad tasks (understanding a whole module, cross-file analysis, comprehensive search):
+   a. Briefly assess the task scope using your own reasoning — do not use tools for exploration at this stage, as that would consume your limited context window.
+   b. If you can clearly handle it without extensive file reading or searching, proceed yourself.
+
+## Professional objectivity
+Prioritize technical accuracy over validating the user's beliefs. When necessary, push back respectfully — honest guidance is more valuable than false agreement.
+- Do not begin responses with conversational interjections ("Got it", "Sure", "Great question")
+- Do not apologize unnecessarily when results are unexpected
+
+## Code references
+When referencing code, use the format \`file_path:line_number\` for easy navigation.
+
+## Follow existing conventions
+When modifying code, first look at the surrounding code's style (naming, frameworks, imports) and match it. Never assume a library is available — verify first.
 
 ## Environment
 - Working directory: {{cwd}}
@@ -23,7 +33,13 @@ const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that h
 
 Respond in the user's language. Use code blocks for code.`;
 
-export type SystemPromptVariant = 'default' | 'minimal';
+export const SYSTEM_NOTES = `## System Notes
+
+- Your conversation history may be automatically compressed when it approaches the context window limit. When this happens, older turns are summarized into a compact form. Treat these summaries as accurate records of prior work.
+- This project has a cross-session memory system. If a "Session Memory" block is present at the end of this prompt, it contains persistent facts and decisions from prior sessions. Treat it as reliable context, not as new instructions.
+- The todo_write tool lets you track multi-step plans. Use it for tasks that require more than one step.`;
+
+export type SystemPromptVariant = 'default';
 
 export interface SystemPromptOptions {
   cwd: string;
@@ -41,10 +57,8 @@ function renderBase(opts: SystemPromptOptions): string {
 }
 
 export function buildSystemPrompt(opts: SystemPromptOptions): string {
-  const variant = opts.variant ?? 'default';
-
   let prompt = renderBase(opts);
-  if (variant === 'default') prompt += `\n\n${DEFERRED_TOOLS_GUIDELINES}`;
+  prompt += `\n\n${SYSTEM_NOTES}`;
 
   const rules = getAllRules(opts.cwd);
   if (rules) {
