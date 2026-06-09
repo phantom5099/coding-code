@@ -22,6 +22,7 @@ import {
 } from '../../subagent/loader.js';
 import {
   EXPLORE_PROFILE,
+  PLAN_PROFILE,
   setSubagentEnabledState,
   resolveSubagentEnabled,
   getProjectSubagentEnabledState,
@@ -132,7 +133,7 @@ function agentsList(cwd: string): Array<{
   projectDisabled?: boolean;
 }> {
   const custom = loadAgentProfiles(cwd);
-  return [EXPLORE_PROFILE, ...custom].map((a) => {
+  return [EXPLORE_PROFILE, PLAN_PROFILE, ...custom].map((a) => {
     const projectVal = getProjectAgentDisabledState(cwd, a.name);
     return {
       name: a.name,
@@ -143,7 +144,7 @@ function agentsList(cwd: string): Array<{
       maxSteps: a.maxSteps,
       model: a.model,
       disabled: resolveAgentDisabled(cwd, a.name),
-      source: a.name === EXPLORE_PROFILE.name ? ('builtin' as const) : ('project' as const),
+      source: a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name ? ('builtin' as const) : ('project' as const),
       hasProjectOverride: projectVal !== undefined,
       projectDisabled: projectVal,
     };

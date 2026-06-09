@@ -65,6 +65,7 @@ export type { SystemPromptVariant, SystemPromptOptions } from './agent/prompt.js
 export {
   SubagentRegistry,
   EXPLORE_PROFILE,
+  PLAN_PROFILE,
   getSubagentEnabledState,
   setSubagentEnabledState,
 } from './subagent/registry.js';

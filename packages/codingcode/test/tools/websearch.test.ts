@@ -56,9 +56,9 @@ describe('parseBingHtml', () => {
 
     const results = parseBingHtml(html, 10);
     expect(results).toHaveLength(2);
-    expect(results[0].title).toBe('Example Title 1');
-    expect(results[0].url).toBe('https://example.com/page1');
-    expect(results[0].snippet).toBe('Snippet text 1');
+    expect(results[0]!.title).toBe('Example Title 1');
+    expect(results[0]!.url).toBe('https://example.com/page1');
+    expect(results[0]!.snippet).toBe('Snippet text 1');
   });
 
   it('should respect maxResults limit', () => {
@@ -87,8 +87,8 @@ describe('parseBingHtml', () => {
     `;
 
     const results = parseBingHtml(html, 10);
-    expect(results[0].title).toBe('Bold Title');
-    expect(results[0].snippet).toBe('Text with emphasis');
+    expect(results[0]!.title).toBe('Bold Title');
+    expect(results[0]!.snippet).toBe('Text with emphasis');
   });
 });
 

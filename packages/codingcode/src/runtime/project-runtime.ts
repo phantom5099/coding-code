@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { AgentProfile } from '../subagent/registry';
-import { EXPLORE_PROFILE } from '../subagent/registry';
+import { EXPLORE_PROFILE, PLAN_PROFILE } from '../subagent/registry';
 import * as agentLoader from '../subagent/loader';
 import type { ToolVisibilityPolicy } from '../tools/types';
 import { HookService } from '../hooks/registry';
@@ -22,6 +22,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
       function buildProfiles(projectPath: string): AgentProfile[] {
         const profiles: AgentProfile[] = [];
         profiles.push(EXPLORE_PROFILE);
+        profiles.push(PLAN_PROFILE);
 
         for (const p of agentLoader.loadGlobalAgentProfiles()) {
           if (!profiles.find((existing) => existing.name === p.name)) {
