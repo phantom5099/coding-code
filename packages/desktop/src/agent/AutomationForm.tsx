@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useGlobalStore, type Automation } from '../stores/global.store';
-import { createAutomation, updateAutomation, listAutomations } from '../lib/core-api';
+import { createAutomation, updateAutomation } from '../lib/core-api';
 
 interface AutomationFormProps {
   automationId: string | null;
@@ -32,7 +32,12 @@ const WEEKDAYS = [
   { value: '0', label: '周日' },
 ];
 
-export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSaved }: AutomationFormProps) {
+export function AutomationForm({
+  automationId,
+  defaultProjectCwd,
+  onClose,
+  onSaved,
+}: AutomationFormProps) {
   const automations = useGlobalStore((s) => s.agent.automations);
   const existing = automationId ? automations.find((a: Automation) => a.id === automationId) : null;
 
@@ -46,7 +51,9 @@ export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSav
   const [intervalUnit, setIntervalUnit] = useState<'hours' | 'minutes'>('hours');
   const [customCron, setCustomCron] = useState(existing?.cron ?? '');
   const [timezone, setTimezone] = useState(existing?.timezone ?? 'Asia/Shanghai');
-  const [sandbox, setSandbox] = useState<'readonly' | 'workspace-write'>(existing?.sandbox ?? 'workspace-write');
+  const [sandbox, setSandbox] = useState<'readonly' | 'workspace-write'>(
+    existing?.sandbox ?? 'workspace-write'
+  );
   const [projectCwd, setProjectCwd] = useState(existing?.projectCwd ?? defaultProjectCwd);
   const [runOnce, setRunOnce] = useState(existing?.runOnce ?? false);
   const [saving, setSaving] = useState(false);
@@ -161,49 +168,62 @@ export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSav
     }
   }
 
+  const inputClass =
+    'w-full px-3 py-2 bg-[var(--bg-base)] border border-[var(--border-card)] rounded-lg text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors';
+  const selectClass =
+    'w-full px-3 py-2 bg-[var(--bg-base)] border border-[var(--border-card)] rounded-lg text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] transition-colors';
+  const labelClass = 'block text-[12px] text-[var(--text-muted)] mb-1.5';
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#252525] rounded-lg border border-[#333] w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#333]">
-          <h3 className="text-sm font-medium">{automationId ? '编辑自动化任务' : '新建自动化任务'}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-[#333] rounded transition-colors">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-[var(--bg-panel)] rounded-xl border border-[var(--border-default)] w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-default)]">
+          <h3 className="text-[14px] font-medium text-[var(--text-title)]">
+            {automationId ? '编辑自动化任务' : '新建自动化任务'}
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition-colors"
+          >
             <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && (
-            <div className="text-xs text-red-400 bg-red-900/20 px-3 py-2 rounded">{error}</div>
+            <div className="text-[12px] text-red-500 bg-red-500/10 px-3 py-2 rounded-lg">
+              {error}
+            </div>
           )}
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">名称</label>
+            <label className={labelClass}>名称</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+              className={inputClass}
               placeholder="每日报告"
             />
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">任务描述 (发送给 Agent)</label>
+            <label className={labelClass}>任务描述 (发送给 Agent)</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500 resize-none"
+              className={`${inputClass} resize-none`}
               placeholder="请检查项目状态并生成日报"
             />
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">触发频率</label>
+            <label className={labelClass}>触发频率</label>
             <select
               value={frequency}
               onChange={(e) => setFrequency(e.target.value as FrequencyType)}
-              className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+              className={selectClass}
             >
               <option value="daily">每天</option>
               <option value="weekly">每周</option>
@@ -214,27 +234,27 @@ export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSav
           </div>
 
           {frequency === 'daily' && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <div className="flex-1">
-                <label className="block text-xs text-gray-400 mb-1">小时</label>
+                <label className={labelClass}>小时</label>
                 <input
                   type="number"
                   min="0"
                   max="23"
                   value={hour}
                   onChange={(e) => setHour(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+                  className={inputClass}
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-gray-400 mb-1">分钟</label>
+                <label className={labelClass}>分钟</label>
                 <input
                   type="number"
                   min="0"
                   max="59"
                   value={minute}
                   onChange={(e) => setMinute(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+                  className={inputClass}
                 />
               </div>
             </div>
@@ -243,38 +263,40 @@ export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSav
           {frequency === 'weekly' && (
             <>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">星期</label>
+                <label className={labelClass}>星期</label>
                 <select
                   value={weekday}
                   onChange={(e) => setWeekday(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+                  className={selectClass}
                 >
                   {WEEKDAYS.map((d) => (
-                    <option key={d.value} value={d.value}>{d.label}</option>
+                    <option key={d.value} value={d.value}>
+                      {d.label}
+                    </option>
                   ))}
                 </select>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs text-gray-400 mb-1">小时</label>
+                  <label className={labelClass}>小时</label>
                   <input
                     type="number"
                     min="0"
                     max="23"
                     value={hour}
                     onChange={(e) => setHour(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+                    className={inputClass}
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs text-gray-400 mb-1">分钟</label>
+                  <label className={labelClass}>分钟</label>
                   <input
                     type="number"
                     min="0"
                     max="59"
                     value={minute}
                     onChange={(e) => setMinute(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+                    className={inputClass}
                   />
                 </div>
               </div>
@@ -282,23 +304,23 @@ export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSav
           )}
 
           {frequency === 'interval' && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <div className="flex-1">
-                <label className="block text-xs text-gray-400 mb-1">间隔</label>
+                <label className={labelClass}>间隔</label>
                 <input
                   type="number"
                   min="1"
                   value={intervalValue}
                   onChange={(e) => setIntervalValue(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+                  className={inputClass}
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-gray-400 mb-1">单位</label>
+                <label className={labelClass}>单位</label>
                 <select
                   value={intervalUnit}
                   onChange={(e) => setIntervalUnit(e.target.value as 'hours' | 'minutes')}
-                  className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+                  className={selectClass}
                 >
                   <option value="hours">小时</option>
                   <option value="minutes">分钟</option>
@@ -308,27 +330,27 @@ export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSav
           )}
 
           {frequency === 'once' && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <div className="flex-1">
-                <label className="block text-xs text-gray-400 mb-1">小时</label>
+                <label className={labelClass}>小时</label>
                 <input
                   type="number"
                   min="0"
                   max="23"
                   value={hour}
                   onChange={(e) => setHour(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+                  className={inputClass}
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-gray-400 mb-1">分钟</label>
+                <label className={labelClass}>分钟</label>
                 <input
                   type="number"
                   min="0"
                   max="59"
                   value={minute}
                   onChange={(e) => setMinute(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+                  className={inputClass}
                 />
               </div>
             </div>
@@ -336,37 +358,41 @@ export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSav
 
           {frequency === 'custom' && (
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Cron 表达式</label>
+              <label className={labelClass}>Cron 表达式</label>
               <input
                 type="text"
                 value={customCron}
                 onChange={(e) => setCustomCron(e.target.value)}
-                className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500 font-mono"
+                className={`${inputClass} font-mono`}
                 placeholder="0 9 * * *"
               />
-              <p className="text-xs text-gray-500 mt-1">格式: 分 时 日 月 周</p>
+              <p className="text-[11px] text-[var(--text-disabled)] mt-1.5">
+                格式: 分 时 日 月 周
+              </p>
             </div>
           )}
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">时区</label>
+            <label className={labelClass}>时区</label>
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+              className={selectClass}
             >
               {TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>{tz}</option>
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">沙箱模式</label>
+            <label className={labelClass}>沙箱模式</label>
             <select
               value={sandbox}
               onChange={(e) => setSandbox(e.target.value as 'readonly' | 'workspace-write')}
-              className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500"
+              className={selectClass}
             >
               <option value="workspace-write">workspace-write (可读写)</option>
               <option value="readonly">readonly (只读)</option>
@@ -375,12 +401,12 @@ export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSav
 
           {!automationId && (
             <div>
-              <label className="block text-xs text-gray-400 mb-1">项目路径</label>
+              <label className={labelClass}>项目路径</label>
               <input
                 type="text"
                 value={projectCwd}
                 onChange={(e) => setProjectCwd(e.target.value)}
-                className="w-full px-3 py-2 bg-[#1a1a1a] border border-[#333] rounded text-sm focus:outline-none focus:border-blue-500 font-mono"
+                className={`${inputClass} font-mono`}
                 placeholder="/home/user/project"
               />
             </div>
@@ -392,25 +418,25 @@ export function AutomationForm({ automationId, defaultProjectCwd, onClose, onSav
               id="runOnce"
               checked={runOnce}
               onChange={(e) => setRunOnce(e.target.checked)}
-              className="rounded border-[#333]"
+              className="rounded border-[var(--border-card)]"
             />
-            <label htmlFor="runOnce" className="text-xs text-gray-400">
+            <label htmlFor="runOnce" className="text-[12px] text-[var(--text-muted)]">
               执行一次后自动删除
             </label>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 pt-3 border-t border-[var(--border-default)]">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm bg-[#333] hover:bg-[#444] rounded transition-colors"
+              className="px-4 py-2 text-[13px] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors border border-[var(--border-card)]"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 rounded transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-[13px] bg-[var(--accent-primary)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {saving ? '保存中...' : '保存'}
             </button>
