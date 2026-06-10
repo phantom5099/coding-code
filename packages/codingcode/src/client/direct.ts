@@ -47,7 +47,7 @@ export async function* agentEventToStreamChunk(
         yield { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
         break;
       case 'Error':
-        yield { type: 'error', message: event.error.message ?? String(event.error) };
+        yield { type: 'error', message: event.error.message ?? String(event.error), code: event.error.code };
         break;
       case 'Done':
         yield { type: 'done' };

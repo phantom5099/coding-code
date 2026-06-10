@@ -182,7 +182,7 @@ export function useAgentCore() {
             status: 'rejected',
           };
         case 'error':
-          return { id: randomId(), type: 'error', message: event.message };
+          return { id: randomId(), type: 'error', message: event.message, code: event.code };
         case 'todo_update':
           applyTodoUpdate(threadId, event.items as any);
           return null;
@@ -257,8 +257,13 @@ export function useAgentCore() {
           signal: controller.signal,
         });
 
+        let hasError = false;
         for await (const event of stream) {
           if (event.type === 'session_id') continue;
+
+          if (event.type === 'error') {
+            hasError = true;
+          }
 
           const item = streamChunkToItem(event, threadId, assistantMessageId, turnId);
           if (item) {
@@ -274,7 +279,7 @@ export function useAgentCore() {
           }
         }
 
-        completeTurn(threadId, turnId, 'completed');
+        completeTurn(threadId, turnId, hasError ? 'error' : 'completed');
       } catch (err: any) {
         const msg = err instanceof ApiError ? (err.body?.message ?? err.message) : String(err);
         applyChunk(threadId, turnId, { id: randomId(), type: 'error', message: msg });

@@ -20,8 +20,6 @@ function createWindow(apiPort: number): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
-    minWidth: 900,
-    minHeight: 600,
     backgroundColor: '#1e1e1e',
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 12, y: 12 },

@@ -1,19 +1,16 @@
 import { Effect } from 'effect';
 import type { ApprovalDecision, PermissionMode, PermissionRule, ToolCallRequest } from './types.js';
 import type { RuleEngine } from './rule-engine.js';
-import { userConfirm, userConfirmAsync } from './confirmation.js';
+import { userConfirmAsync } from './confirmation.js';
 import type { ApprovalWaitService } from './async-confirm.js';
+import type { HookDecision } from '../hooks/registry.js';
 
 export interface PipelineHooks {
   /** Emit decision from PreToolUse hooks (Layer 4). Returns first non-null HookDecision or null. */
   emitPreToolUseDecision: (payload: {
     toolName: string;
     args: Record<string, unknown>;
-  }) => Effect.Effect<{
-    decision?: 'allow' | 'deny' | 'ask';
-    reason?: string;
-    modifiedInput?: Record<string, unknown>;
-  } | null>;
+  }) => Effect.Effect<HookDecision | null>;
   /** Record audit log for the final decision (Layer 6). */
   recordAudit: (entry: {
     tool: string;
@@ -29,8 +26,6 @@ export interface PipelineOptions {
   destructiveTools: Set<string>;
   permissionMode: PermissionMode;
   hooks: PipelineHooks;
-  /** Whether TTY is available for interactive confirmation. */
-  interactive: boolean;
   /** Use async SSE-based confirmation instead of blocking readline. */
   asyncConfirm?: boolean;
   /** Service for async confirmation (injected to keep R clean). */
@@ -132,19 +127,23 @@ export function runPipeline(
     // Layer 5: User Confirmation
     {
       layers.push(LAYER_NAMES[4]);
-      const confirmResult = yield* opts.asyncConfirm && opts.asyncConfirmService
-        ? userConfirmAsync(
-            request.tool,
-            request.input,
-            opts.asyncConfirmService,
-            opts.sessionId,
-            opts.callId
-          )
-        : userConfirm(
-            request.tool,
-            request.input,
-            opts.interactive ? 'interactive' : 'default-deny'
-          );
+      if (!opts.asyncConfirm || !opts.asyncConfirmService) {
+        const result: ApprovalDecision = {
+          type: 'deny',
+          reason: 'Approval required but no UI available',
+          source: 'system',
+        };
+        const final = yield* layer6Audit(request, result, layers, opts);
+        return final;
+      }
+
+      const confirmResult = yield* userConfirmAsync(
+        request.tool,
+        request.input,
+        opts.asyncConfirmService,
+        opts.sessionId,
+        opts.callId
+      );
 
       let result: ApprovalDecision;
       switch (confirmResult.type) {

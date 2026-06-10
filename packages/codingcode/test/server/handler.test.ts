@@ -11,6 +11,7 @@ import { McpService } from '../../src/mcp/index.js';
 import { Result } from '../../src/core/result.js';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
 import { ToolSearchService } from '../../src/tools/tool-search-service.js';
+import { AgentError } from '../../src/core/error.js';
 
 const mockState = {
   sessionId: 'test-session',
@@ -361,16 +362,34 @@ describe('sseHandler + sendMessage integration', () => {
     expect(textEvent!.text).toContain('[Using:');
   });
 
-  it('should send error event when factory throws', async () => {
+  it('should preserve AgentError code in catch', async () => {
     const handler = sseHandler(
       async function* () {
-        throw new Error('boom');
+        throw AgentError.toolNotFound('myTool');
       },
       { sessionId: 'test' }
     );
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
-    expect(events.some((e: any) => e.type === 'error')).toBe(true);
+    const errorEvent = events.find((e: any) => e.type === 'error');
+    expect(errorEvent).toBeDefined();
+    expect(errorEvent.code).toBe('TOOL_NOT_FOUND');
+    expect(errorEvent.message).toContain('myTool');
+  });
+
+  it('should not include code for plain Error in catch', async () => {
+    const handler = sseHandler(
+      async function* () {
+        throw new Error('plain error');
+      },
+      { sessionId: 'test' }
+    );
+    const response = await handler({} as any);
+    const { events } = await readSSEStream(response);
+
+    const errorEvent = events.find((e: any) => e.type === 'error');
+    expect(errorEvent).toBeDefined();
+    expect(errorEvent.code).toBeUndefined();
   });
 });

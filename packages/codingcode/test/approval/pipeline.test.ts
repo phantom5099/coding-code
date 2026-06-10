@@ -26,7 +26,6 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(),
           permissionMode: 'default',
           hooks: mockHooks,
-          interactive: false,
           sessionId: 'test',
         }
       )
@@ -45,7 +44,6 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(),
           permissionMode: 'default',
           hooks: mockHooks,
-          interactive: false,
           sessionId: 'test',
         }
       )
@@ -64,7 +62,6 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash']),
           permissionMode: 'plan',
           hooks: mockHooks,
-          interactive: false,
           sessionId: 'test',
         }
       )
@@ -83,7 +80,6 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(),
           permissionMode: 'plan',
           hooks: mockHooks,
-          interactive: false,
           sessionId: 'test',
         }
       )
@@ -101,7 +97,6 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash']),
           permissionMode: 'bypass',
           hooks: mockHooks,
-          interactive: false,
           sessionId: 'test',
         }
       )
@@ -120,7 +115,6 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash', 'execute_command']),
           permissionMode: 'acceptEdits',
           hooks: mockHooks,
-          interactive: false,
           sessionId: 'test',
         }
       )
@@ -138,14 +132,13 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash', 'execute_command']),
           permissionMode: 'acceptEdits',
           hooks: mockHooks,
-          interactive: false,
           sessionId: 'test',
         }
       )
     );
-    // Should continue to user confirmation layer (which returns deny in non-interactive mode)
+    // Destructive tool in acceptEdits mode with no UI available → system deny
     expect(decision.type).toBe('deny');
-    expect((decision as any).source).toBe('user-confirm');
+    expect((decision as any).source).toBe('system');
   });
 
   it('Layer 4: PreToolUse hook can deny (non-readonly tool)', async () => {
@@ -163,7 +156,6 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash']),
           permissionMode: 'default',
           hooks: hooksWithDeny,
-          interactive: false,
           sessionId: 'test',
         }
       )
@@ -186,7 +178,6 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash']),
           permissionMode: 'default',
           hooks: hooksWithAllow,
-          interactive: false,
           sessionId: 'test',
         }
       )
@@ -213,7 +204,6 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(),
           permissionMode: 'default',
           hooks: hooksWithAudit,
-          interactive: false,
           sessionId: 'test',
         }
       )

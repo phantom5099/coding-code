@@ -91,21 +91,21 @@ describe('createHttpAgentClient.sendMessage', () => {
     fetchSpy.mockRestore();
   });
 
-  it('throws on error event', async () => {
+  it('yields error event instead of throwing', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(
-        createSseResponse([JSON.stringify({ type: 'error', message: 'something broke' })])
+        createSseResponse([JSON.stringify({ type: 'error', message: 'something broke', code: 'LLM_FAILED' })])
       );
 
     const request = createRequestHelpers('http://localhost:8080');
     const client = createHttpAgentClient('http://localhost:8080', request);
 
-    await expect(async () => {
-      for await (const _ of client.sendMessage('hi', { sessionId: 's', cwd: '/tmp' })) {
-        // consume
-      }
-    }).rejects.toThrow('something broke');
+    const chunks: Array<{ type: string }> = [];
+    for await (const c of client.sendMessage('hi', { sessionId: 's', cwd: '/tmp' })) {
+      chunks.push(c);
+    }
+    expect(chunks).toEqual([{ type: 'error', message: 'something broke', code: 'LLM_FAILED' }]);
 
     fetchSpy.mockRestore();
   });

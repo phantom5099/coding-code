@@ -90,7 +90,7 @@ export const READONLY_TOOL_NAMES: string[] = [
   'search_files',
   'fetch_url',
   'web_search',
-  'tool_search',
+  'dispatch_agent',
   'todo_write',
 ];
 
