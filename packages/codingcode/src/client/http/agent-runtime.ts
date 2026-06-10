@@ -108,7 +108,8 @@ export function createHttpAgentClient(
             };
             break;
           case 'error':
-            throw new Error(data.message as string);
+            yield { type: 'error', message: data.message as string, code: data.code as string };
+            return;
           case 'done':
             break;
           case 'complete':

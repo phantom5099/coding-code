@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import { registerEmitter, unregisterEmitter } from '../approval/async-confirm.js';
 import type { SseEvent } from './adapter.js';
+import { AgentError } from '../core/error.js';
 
 export function sseHandler(
   createGenerator: () => AsyncGenerator<SseEvent, void, unknown>,
@@ -34,6 +35,7 @@ export function sseHandler(
           enqueue({
             type: 'error',
             message: e instanceof Error ? e.message : String(e),
+            ...(e instanceof AgentError ? { code: e.code } : {}),
           });
         } finally {
           unregisterEmitter(sessionId);

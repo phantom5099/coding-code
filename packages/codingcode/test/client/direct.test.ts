@@ -1,6 +1,7 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
 import { createDirectClient, agentEventToStreamChunk } from '../../src/client/direct.js';
 import { registerEmitter, unregisterEmitter } from '../../src/approval/async-confirm.js';
+import { AgentError } from '../../src/core/error.js';
 
 const noopLlm = {
   completeStream: () => ({
@@ -97,6 +98,27 @@ describe('agentEventToStreamChunk - approval interleaving', () => {
     expect(chunks).toEqual([
       { type: 'message', id: 1, content: 'ok', partial: false },
       { type: 'usage', prompt: 1000, completion: 500, total: 1500 },
+    ]);
+  });
+
+  it('yields error chunk with code from AgentError', async () => {
+    async function* source() {
+      yield { _tag: 'Error' as const, error: AgentError.toolExecutionFailed('bash', 'EACCES') };
+      yield { _tag: 'Done' as const, content: '' };
+    }
+
+    const chunks: any[] = [];
+    for await (const chunk of agentEventToStreamChunk(source())) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      {
+        type: 'error',
+        message: expect.stringContaining('bash'),
+        code: 'TOOL_EXECUTION_FAILED',
+      },
+      { type: 'done' },
     ]);
   });
 });

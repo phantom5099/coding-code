@@ -22,7 +22,7 @@ export type Item =
       insertions?: number;
       deletions?: number;
     }
-  | { id: string; type: 'error'; message: string };
+  | { id: string; type: 'error'; message: string; code?: string };
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed';
 

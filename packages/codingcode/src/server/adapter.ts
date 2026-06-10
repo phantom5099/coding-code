@@ -23,7 +23,7 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
     case 'ToolDenied':
       return { type: 'tool_denied', id: event.id, name: event.name, reason: event.reason };
     case 'Error':
-      return { type: 'error', message: event.error.message ?? String(event.error) };
+      return { type: 'error', message: event.error.message ?? String(event.error), code: event.error.code };
     case 'Done':
       return { type: 'done' };
     case 'TodoUpdate':

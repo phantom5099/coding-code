@@ -119,7 +119,7 @@ export function useAgentRunner(runner: (input: string) => AsyncGenerator<StreamC
                 id: generateId(),
                 timestamp: Date.now(),
                 role: 'system',
-                content: `[Error] ${chunk.message}`,
+                content: `[Error${chunk.code ? ` ${chunk.code}` : ''}] ${chunk.message}`,
               },
             ]);
           }

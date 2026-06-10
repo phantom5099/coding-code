@@ -54,6 +54,7 @@ describe('agentEventToSseEvent', () => {
     expect(agentEventToSseEvent({ _tag: 'Error', error: err })).toEqual({
       type: 'error',
       message: err.message,
+      code: 'LLM_FAILED',
     });
   });
 

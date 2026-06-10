@@ -18,7 +18,7 @@ export type StreamChunk =
   | { type: 'tool_start'; id: string; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean }
   | { type: 'tool_denied'; id: string; name: string; reason: string }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; code: string }
   | { type: 'done' }
   | { type: 'todo_update'; items: ReadonlyArray<{ step: string; status: string }> }
   | { type: 'usage'; prompt: number; completion: number; total: number }
