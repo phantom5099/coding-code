@@ -3,8 +3,6 @@ import { discoverSkillDirs, resolveSkillDisabled, setProjectSkillDisabledState }
 import { loadSkill } from './loader.js';
 import type { Skill } from './types.js';
 
-export type { Skill } from './types.js';
-
 export class SkillService extends Effect.Service<SkillService>()('Skill', {
   effect: Effect.gen(function* () {
     const cachedByProject = new Map<string, Skill[]>();

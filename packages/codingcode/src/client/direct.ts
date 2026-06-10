@@ -10,8 +10,6 @@ import type { PermissionMode } from '../approval/types.js';
 import type { StreamChunk, AgentClient } from './types.js';
 import { createDirectClients } from './direct/index.js';
 
-export type { StreamChunk, AgentClient } from './types.js';
-
 export async function* agentEventToStreamChunk(
   source: AsyncGenerator<AgentEvent, any, unknown>
 ): AsyncGenerator<StreamChunk, void, unknown> {

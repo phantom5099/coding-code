@@ -12,8 +12,6 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
 
-export { normalizePath } from '../core/path.js';
-
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 const NULL_DEVICE = process.platform === 'win32' ? 'NUL' : '/dev/null';
 
@@ -75,14 +73,9 @@ export class ShadowGit {
 
   commit(message: string): string {
     this.init();
-    // Add all tracked & untracked files (respecting exclude rules)
-    const lsResult = this.run('ls-files', '-m', '-o', '--exclude-standard');
-    const files = lsResult.stdout.trim().split(/\r?\n/).filter(Boolean);
-    if (files.length > 0) {
-      const addResult = this.run('add', ...files);
-      if (addResult.status !== 0) {
-        throw new Error(`ShadowGit add failed: ${addResult.stderr}`);
-      }
+    const addResult = this.run('add', '-A');
+    if (addResult.status !== 0) {
+      throw new Error(`ShadowGit add failed: ${addResult.stderr}`);
     }
     const result = this.run('commit', '--allow-empty', '-m', message);
     if (result.status !== 0) throw new Error(`ShadowGit commit failed: ${result.stderr}`);

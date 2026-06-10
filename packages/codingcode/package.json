@@ -4,6 +4,7 @@
   "type": "module",
   "main": "./src/layer.ts",
   "exports": {
+    ".": "./src/layer.ts",
     "./agent/agent": "./src/agent/agent.ts",
     "./agent/todo": "./src/agent/todo.ts",
     "./agent/prompt": "./src/agent/prompt.ts",

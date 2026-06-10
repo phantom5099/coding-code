@@ -9,8 +9,9 @@ function getInstallRoot(): string {
 
 export async function initBackend(): Promise<void> {
   if (_ready) return;
-  const { initWorkspace, loadConfig, ensureUserConfig, AppLayer } =
-    await import('@codingcode/core');
+  const { initWorkspace } = await import('@codingcode/core/core/workspace');
+  const { loadConfig, ensureUserConfig } = await import('@codingcode/infra/config');
+  const { AppLayer } = await import('@codingcode/core/layer');
   ensureUserConfig();
   const config = loadConfig();
   initWorkspace({ installRoot: getInstallRoot(), config });

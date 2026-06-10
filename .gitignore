@@ -31,6 +31,8 @@ packages/desktop/electron.vite.config.*.mjs
 test-output*.txt
 client-tests.txt
 desktop-test.txt
+h-test.txt
+test-fallback.txt
 
 # Compiled JS artifacts leaked into src directories
 packages/infra/src/*.js

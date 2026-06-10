@@ -2,16 +2,6 @@ import type { AgentClient, StreamChunk } from './types.js';
 import { parseSseStream } from './sse.js';
 import { createHttpClients } from './http/index.js';
 
-export type { AgentClient, StreamChunk } from './types.js';
-export { createHttpClients } from './http/index.js';
-export type {
-  HttpClients,
-  AgentRuntimeClient,
-  SessionClient,
-  ModelClient,
-  SettingsClient,
-} from './http/index.js';
-
 export async function createHttpClient(serverUrl: string): Promise<AgentClient> {
   let currentSessionId: string | undefined;
   const clients = createHttpClients(serverUrl);

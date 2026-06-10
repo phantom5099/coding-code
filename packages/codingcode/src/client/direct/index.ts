@@ -3,8 +3,6 @@ import { createDirectSessionClient, type SessionClient } from './sessions.js';
 import { createDirectModelClient, type ModelClient } from './models.js';
 import { createDirectSettingsClient, type SettingsClient } from './settings.js';
 
-export type { AgentRuntimeClient, SessionClient, ModelClient, SettingsClient };
-
 export interface DirectClients {
   agent: AgentRuntimeClient;
   sessions: SessionClient;
