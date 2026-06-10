@@ -9,6 +9,7 @@ import type { HookService } from '../../../hooks/registry.js';
 import type { McpService } from '../../../mcp/index.js';
 import { findModel, createClient } from '../../../llm/factory.js';
 import { resolveSubagentEnabled, resolveAgentDisabled } from '../../../subagent/registry.js';
+import { getAllRules } from '../../../rules/index.js';
 
 interface DispatchAgentDeps {
   session: SessionService;
@@ -122,10 +123,11 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       const mcpTools = deps.mcp.listProjectMcpTools(projectPath);
 
       // Run subagent
+      const systemOverride = buildSubagentPrompt(profile, projectPath);
       const stream = agentService.runStream({
         state: childState,
         llm,
-        systemOverride: profile.systemPrompt,
+        systemOverride,
         toolPolicy: childPolicy,
         mcpTools,
         abortSignal: ctx?.signal,
@@ -179,4 +181,24 @@ export function createDispatchAgentTool(deps: DispatchAgentDeps): ToolDefinition
       return finalContent || '(subagent completed without output)';
     },
   };
+}
+
+function buildSubagentPrompt(profile: { systemPrompt?: string }, projectPath: string): string {
+  const parts: string[] = [];
+
+  if (profile.systemPrompt) {
+    parts.push(profile.systemPrompt);
+  }
+
+  parts.push(`## Environment
+- Working directory: ${projectPath}
+- Operating system: ${process.platform}
+- Shell: ${process.env.SHELL || process.env.ComSpec || 'bash'}`);
+
+  const rules = getAllRules(projectPath);
+  if (rules) {
+    parts.push(`## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`);
+  }
+
+  return parts.filter(Boolean).join('\n\n');
 }
