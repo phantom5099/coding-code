@@ -186,7 +186,7 @@ const MockSkillLayer = Layer.succeed(
 );
 
 const { AgentService } = await import('../../src/agent/agent.js');
-const { HookLayer } = await import('../../src/layer.js');
+const { HookLayer, SubagentRegistryLayer } = await import('../../src/layer.js');
 
 const MockCheckpointLayer = Layer.succeed(
   CheckpointService,
@@ -227,7 +227,7 @@ const MockMcpLayer = Layer.succeed(McpService, {
 
 const { ProjectRuntimeService } = await import('../../src/runtime/project-runtime.js');
 const MockProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer))
+  Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer, SubagentRegistryLayer))
 );
 
 const { ApprovalWaitService } = await import('../../src/approval/async-confirm.js');

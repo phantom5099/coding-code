@@ -13,7 +13,7 @@ async function main() {
   const { workspaceCwd, args } = parseWorkspaceArgs(process.argv.slice(2));
   ensureUserConfig();
   const config = loadConfig();
-  initWorkspace({ installRoot, workspaceCwd, config });
+  initWorkspace({ processRoot: installRoot, workspaceCwd, config });
   if (workspaceCwd) {
     console.log(`Workspace: ${getWorkspaceCwd()}`);
   }

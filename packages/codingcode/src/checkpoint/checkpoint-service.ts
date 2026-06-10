@@ -1,12 +1,22 @@
 import { Effect } from 'effect';
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { join, dirname, resolve } from 'path';
+import { createHash } from 'crypto';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
 import { ShadowGit } from './shadow-git.js';
 import { normalizePath } from '../core/path.js';
 import { Ledger } from './ledger.js';
-import { registerCheckpointHooks } from './bootstrap.js';
+import { registerCheckpointHooks } from './hook-recorder.js';
 import { HookService } from '../hooks/registry.js';
-import { createHash } from 'crypto';
+import { shortSid, commitMsg } from './commit-naming.js';
+import { readRestoreEntry, writeRestoreEntry } from './restore-store.js';
+import { classifyDiff, parseDiffStats } from './classification.js';
+import {
+  getCompletedTurnsFor,
+  getTurnRestorePlan,
+  getRollbackToTurnPlan,
+  type RestorePlan,
+} from './restore-planning.js';
+import { emptyRollbackResult, executeRollback } from './rollback-engine.js';
 
 // ---- Exported types ----
 
@@ -63,57 +73,7 @@ export interface CodeRestoreEntry {
   timestamp: string;
 }
 
-// ---- Module-level helpers ----
-
-function emptyRollbackResult(turnId: number, baseTurnId: number | null = null): CodeRollbackResult {
-  return {
-    reverted: false,
-    throughTurnId: turnId,
-    baseTurnId,
-    affectedTurns: [],
-    selectedFiles: [],
-    restoreEntry: null,
-  };
-}
-
-function shortSid(sessionId: string): string {
-  return createHash('sha256').update(sessionId).digest('hex').slice(0, 8);
-}
-
-function commitMsg(sessionId: string, turnId: number, suffix: string): string {
-  return `turn-${shortSid(sessionId)}-${turnId}-${suffix}`;
-}
-
-function restorePath(gitDir: string, sessionId: string): string {
-  return join(dirname(gitDir), `last-restore-${shortSid(sessionId)}.json`);
-}
-
-function readRestoreEntry(gitDir: string, sessionId: string): CodeRestoreEntry | null {
-  const path = restorePath(gitDir, sessionId);
-  if (!existsSync(path)) return null;
-  try {
-    return JSON.parse(readFileSync(path, 'utf8')) as CodeRestoreEntry;
-  } catch {
-    return null;
-  }
-}
-
-function writeRestoreEntry(
-  gitDir: string,
-  sessionId: string,
-  entry: CodeRestoreEntry | null
-): void {
-  const path = restorePath(gitDir, sessionId);
-  if (!entry) {
-    try {
-      unlinkSync(path);
-    } catch {
-      /* ignore */
-    }
-  } else {
-    writeFileSync(path, JSON.stringify(entry, null, 2), 'utf8');
-  }
-}
+// ---- Path utilities ----
 
 export function toGitPath(projectPath: string, file: string): string {
   const normalized = normalizePath(file);
@@ -132,169 +92,6 @@ export function hashWorkspaceFile(projectPath: string, file: string): string | n
     return createHash('sha256').update(content).digest('hex');
   } catch {
     return null;
-  }
-}
-
-function classifySafe(
-  projectPath: string,
-  sessionId: string,
-  turnId: number,
-  sg: ShadowGit,
-  ledgerInstance: Ledger
-): { agentModified: string[]; unknownSource: string[] } | null {
-  const baseline = sg.findCommitByMessage(commitMsg(sessionId, turnId, 'baseline'));
-  const final = sg.findCommitByMessage(commitMsg(sessionId, turnId, 'final'));
-  if (!baseline || !final) return null;
-
-  const allChanges = sg.diffFiles(baseline, final);
-  const rawAllFiles = allChanges.map((c) => normalizePath(resolve(projectPath, c.file)));
-  const allFiles = [...new Set(rawAllFiles)];
-  const agentFiles = new Set(
-    ledgerInstance.getAgentFiles(turnId, sessionId).map((p) => normalizePath(p).toLowerCase())
-  );
-
-  return {
-    agentModified: allFiles.filter((f) => agentFiles.has(f.toLowerCase())),
-    unknownSource: allFiles.filter((f) => !agentFiles.has(f.toLowerCase())),
-  };
-}
-
-/** Parse insertions/deletions from a unified diff string. */
-function parseDiffStats(diffText: string): { insertions: number; deletions: number } {
-  let insertions = 0;
-  let deletions = 0;
-  for (const line of diffText.split('\n')) {
-    if (line.startsWith('+') && !line.startsWith('+++')) insertions++;
-    else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
-  }
-  return { insertions, deletions };
-}
-
-function getCompletedTurnsFor(sg: ShadowGit, sessionId: string): number[] {
-  const short = shortSid(sessionId);
-  const result = sg.git('log', '--all', '--format=%s');
-  const ids = new Set<number>();
-  const re = new RegExp(`^turn-${short}-(\\d+)-final$`);
-  for (const line of result.stdout.trim().split('\n')) {
-    const m = line.match(re);
-    if (m) ids.add(Number(m[1]));
-  }
-  return [...ids].sort((a, b) => a - b);
-}
-
-interface RestorePlan {
-  throughTurnId: number;
-  baseTurnId: number;
-  affectedTurns: number[];
-  baseline: string;
-}
-
-function getTurnRestorePlan(sg: ShadowGit, sessionId: string, turnId: number): RestorePlan | null {
-  const baseline = sg.findCommitByMessage(commitMsg(sessionId, turnId, 'baseline'));
-  const final = sg.findCommitByMessage(commitMsg(sessionId, turnId, 'final'));
-  if (!baseline || !final) return null;
-  return {
-    throughTurnId: turnId,
-    baseTurnId: turnId,
-    affectedTurns: [],
-    baseline,
-  };
-}
-
-function getRollbackToTurnPlan(
-  sg: ShadowGit,
-  sessionId: string,
-  throughTurnId: number
-): RestorePlan | null {
-  const completedTurns = getCompletedTurnsFor(sg, sessionId);
-  const affectedTurns = completedTurns.filter((id) => id >= throughTurnId);
-  if (affectedTurns.length === 0) return null;
-
-  const baseline = sg.findCommitByMessage(commitMsg(sessionId, throughTurnId, 'baseline'));
-  if (!baseline) return null;
-
-  return {
-    throughTurnId,
-    baseTurnId: throughTurnId,
-    affectedTurns,
-    baseline,
-  };
-}
-
-function revertFilesImpl(
-  projectPath: string,
-  sessionId: string,
-  plan: RestorePlan,
-  selectedFiles: string[],
-  action: CodeRestoreEntry['action'],
-  sg: ShadowGit
-): CodeRollbackResult {
-  if (selectedFiles.length === 0) {
-    return {
-      reverted: false,
-      throughTurnId: plan.throughTurnId,
-      baseTurnId: plan.baseTurnId,
-      affectedTurns: plan.affectedTurns,
-      selectedFiles: [],
-      restoreEntry: null,
-    };
-  }
-
-  sg.lock();
-  try {
-    let safetyCommit: string;
-    const existingEntry = readRestoreEntry(sg.gitDir, sessionId);
-
-    if (
-      existingEntry &&
-      existingEntry.throughTurnId === plan.throughTurnId &&
-      existingEntry.safetyCommit
-    ) {
-      safetyCommit = existingEntry.safetyCommit;
-    } else {
-      safetyCommit = sg.commit(commitMsg(sessionId, plan.throughTurnId, 'revert-safety'));
-    }
-
-    sg.checkoutFiles(plan.baseline, selectedFiles);
-
-    const combinedFiles =
-      existingEntry && existingEntry.throughTurnId === plan.throughTurnId
-        ? [
-            ...new Map(
-              [...existingEntry.selectedFiles, ...selectedFiles].map((f) => [
-                normalizePath(f).toLowerCase(),
-                f,
-              ])
-            ).values(),
-          ]
-        : selectedFiles;
-
-    const entry: CodeRestoreEntry = {
-      id: createHash('sha256')
-        .update(`${sessionId}-${plan.throughTurnId}-${Date.now()}`)
-        .digest('hex')
-        .slice(0, 12),
-      sessionId,
-      action,
-      throughTurnId: plan.throughTurnId,
-      baseTurnId: plan.baseTurnId,
-      affectedTurns: plan.affectedTurns,
-      selectedFiles: combinedFiles,
-      safetyCommit,
-      timestamp: new Date().toISOString(),
-    };
-    writeRestoreEntry(sg.gitDir, sessionId, entry);
-
-    return {
-      reverted: true,
-      throughTurnId: plan.throughTurnId,
-      baseTurnId: plan.baseTurnId,
-      affectedTurns: plan.affectedTurns,
-      selectedFiles: combinedFiles,
-      restoreEntry: entry,
-    };
-  } finally {
-    sg.unlock();
   }
 }
 
@@ -331,7 +128,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     }
 
     return {
-      // ---- Snapshot methods (unchanged) ----
+      // ---- Snapshot ----
 
       snapshotBaseline: (
         projectPath: string,
@@ -361,6 +158,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         }
       },
 
+      // ---- Classification ----
+
       classifyChanges: (
         projectPath: string,
         sessionId: string,
@@ -368,8 +167,10 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       ): { agentModified: string[]; unknownSource: string[] } | null => {
         const sg = ensure(projectPath);
         const l = ledger(sg);
-        return classifySafe(projectPath, sessionId, turnId, sg, l);
+        return classifyDiff(projectPath, sessionId, turnId, sg, l);
       },
+
+      // ---- Query ----
 
       getCompletedTurns: (projectPath: string, sessionId: string): number[] => {
         const sg = ensure(projectPath);
@@ -386,28 +187,18 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         unknownSource: string[];
       }> => {
         const sg = ensure(projectPath);
+        const l = ledger(sg);
         const prefix = `turn-${shortSid(sessionId)}-`;
-        const result: Array<{
-          turnId: number;
-          title: string;
-          agentModified: string[];
-          unknownSource: string[];
-        }> = [];
-        for (let i = 1; i <= 10000; i++) {
+        const completedTurns = getCompletedTurnsFor(sg, sessionId);
+        const result: ReturnType<typeof this.getCheckpoints> = [];
+
+        for (const i of completedTurns) {
           const bCommit = sg.findCommitByMessage(`${prefix}${i}-baseline`);
+          if (!bCommit) continue;
           const fCommit = sg.findCommitByMessage(`${prefix}${i}-final`);
-          if (!bCommit || !fCommit) {
-            if (result.length === 0 && i === 1) continue;
-            else break;
-          }
-          const msgResult = sg.git(
-            'log',
-            '--all',
-            '--grep',
-            `${prefix}${i}-baseline`,
-            '--format=%s',
-            '-1'
-          );
+          if (!fCommit) continue;
+
+          const msgResult = sg.git('log', '--all', '--grep', `${prefix}${i}-baseline`, '--format=%s', '-1');
           const fullMsg = msgResult.stdout.trim();
           const title = fullMsg.includes(' ') ? fullMsg.split(' ').slice(1).join(' ') : '';
 
@@ -415,9 +206,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           const rawAllFiles = allChanges.map((c) => normalizePath(resolve(projectPath, c.file)));
           const allFiles = [...new Set(rawAllFiles)];
           const agentFiles = new Set(
-            ledger(sg)
-              .getAgentFiles(i, sessionId)
-              .map((p) => normalizePath(p).toLowerCase())
+            l.getAgentFiles(i, sessionId).map((p) => normalizePath(p).toLowerCase())
           );
 
           result.push({
@@ -429,8 +218,6 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         }
         return result;
       },
-
-      // ---- B1: getCheckpointDiff ----
 
       getCheckpointDiff: (
         projectPath: string,
@@ -481,7 +268,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         return { turnId: latestTurnId, files };
       },
 
-      // ---- B2: revertCheckpointFile / revertCheckpointFiles ----
+      // ---- Revert ----
 
       revertCheckpointFile: (
         projectPath: string,
@@ -494,7 +281,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId, turnId);
         }
-        return revertFilesImpl(projectPath, sessionId, plan, [file], 'checkpoint-file', sg);
+        return executeRollback(projectPath, sessionId, plan, [file], 'checkpoint-file', sg);
+      },
 
       revertCheckpointFiles: (
         projectPath: string,
@@ -507,10 +295,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId, turnId);
         }
-        return revertFilesImpl(projectPath, sessionId, plan, files, 'checkpoint-files', sg);
+        return executeRollback(projectPath, sessionId, plan, files, 'checkpoint-files', sg);
       },
-
-      // ---- B3: revertCheckpointAgentFiles / revertCheckpointAllFiles ----
 
       revertCheckpointAgentFiles: (
         projectPath: string,
@@ -519,7 +305,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
         const l = ledger(sg);
-        const changes = classifySafe(projectPath, sessionId, turnId, sg, l);
+        const changes = classifyDiff(projectPath, sessionId, turnId, sg, l);
         if (!changes) {
           return emptyRollbackResult(turnId);
         }
@@ -530,14 +316,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId);
         }
-        return revertFilesImpl(
-          projectPath,
-          sessionId,
-          plan,
-          changes.agentModified,
-          'checkpoint-agent',
-          sg
-        );
+        return executeRollback(projectPath, sessionId, plan, changes.agentModified, 'checkpoint-agent', sg);
       },
 
       revertCheckpointAllFiles: (
@@ -547,7 +326,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
         const l = ledger(sg);
-        const changes = classifySafe(projectPath, sessionId, turnId, sg, l);
+        const changes = classifyDiff(projectPath, sessionId, turnId, sg, l);
         if (!changes) {
           return emptyRollbackResult(turnId);
         }
@@ -559,10 +338,10 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId);
         }
-        return revertFilesImpl(projectPath, sessionId, plan, all, 'checkpoint-all', sg);
+        return executeRollback(projectPath, sessionId, plan, all, 'checkpoint-all', sg);
       },
 
-      // ---- B4: previewRollbackDiff ----
+      // ---- Rollback ----
 
       previewRollbackDiff: (
         projectPath: string,
@@ -583,8 +362,6 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           diff: result.stdout,
         };
       },
-
-      // ---- B5: rollbackCodeToTurn ----
 
       rollbackCodeToTurn: (
         projectPath: string,
@@ -615,10 +392,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           };
         }
 
-        return revertFilesImpl(projectPath, sessionId, plan, selectedFiles, 'rollback-to-turn', sg);
+        return executeRollback(projectPath, sessionId, plan, selectedFiles, 'rollback-to-turn', sg);
       },
-
-      // ---- B6: undoLastCodeRollback ----
 
       undoLastCodeRollback: (
         projectPath: string,
@@ -657,8 +432,6 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           };
         }
 
-        // Conflict detection: compare current workspace files against baseline commit.
-        // After revert, files should equal baseline. Any divergence = conflict.
         const baselineCommit = sg.findCommitByMessage(
           commitMsg(sessionId, entry.baseTurnId, 'baseline')
         );
@@ -717,8 +490,6 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           sg.unlock();
         }
       },
-
-      // ---- getLatestRestoreEntry ----
 
       getLatestRestoreEntry: (projectPath: string, sessionId: string): CodeRestoreEntry | null => {
         const sg = ensure(projectPath);

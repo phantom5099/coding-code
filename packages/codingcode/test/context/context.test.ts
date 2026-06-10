@@ -165,7 +165,7 @@ describe('ContextService', () => {
       })
     );
 
-    const { HookLayer } = await import('../../src/layer.js');
+    const { HookLayer, SubagentRegistryLayer } = await import('../../src/layer.js');
 
     const MockToolSearchLayer = Layer.succeed(
       ToolSearchService,
@@ -207,7 +207,7 @@ describe('ContextService', () => {
     );
 
     const projectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-      Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer))
+      Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer, SubagentRegistryLayer))
     );
     const agentWithDeps = AgentService.Default.pipe(
       Layer.provide(Layer.mergeAll(AllDeps, projectRuntimeLayer))

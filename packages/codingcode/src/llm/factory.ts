@@ -36,7 +36,6 @@ export interface SelectableModel {
   base_url: string;
   api_key_env: string;
   context_window: number;
-  streamSupportsTools?: boolean;
 }
 
 function modelsFile(): string {

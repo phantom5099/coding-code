@@ -73,7 +73,7 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(testLayer) as any));
 }
 
-describe('checkpoint/bootstrap projectPath isolation', () => {
+describe('checkpoint/hook-recorder projectPath isolation', () => {
   let globalDir: string;
   let projectDir: string;
 
@@ -113,9 +113,9 @@ describe('checkpoint/bootstrap projectPath isolation', () => {
     );
   }
 
-  it('bootstrap checkpoint records correct file path via payload.projectPath', async () => {
+  it('hook-recorder records correct file path via payload.projectPath', async () => {
     const hooks = await getHooks();
-    const { registerCheckpointHooks } = await import('../../src/checkpoint/bootstrap.js');
+    const { registerCheckpointHooks } = await import('../../src/checkpoint/hook-recorder.js');
     registerCheckpointHooks(hooks);
 
     writeFileSync(join(projectDir, 'c.txt'), 'initial', 'utf8');

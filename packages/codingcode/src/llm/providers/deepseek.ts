@@ -64,10 +64,6 @@ export class DeepSeekProvider implements LLMClient {
       for await (const part of result.fullStream) {
         if (part.type === 'text-delta') {
           yield part.text;
-        } else if (part.type === 'tool-call') {
-          yield `\n[Using: ${part.toolName}]\n`;
-        } else if (part.type === 'error') {
-          yield `\n[Error: ${String(part.error)}]\n`;
         }
       }
     })();

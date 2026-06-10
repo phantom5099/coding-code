@@ -51,7 +51,7 @@ export class OpenAIProvider implements LLMClient {
   }
 
   completeStream(req: LLMRequest, signal?: AbortSignal): import('../client.js').StreamResult {
-    if (this.entry.streamSupportsTools === false && req.tools && req.tools.length > 0) {
+    if (this.entry.provider === 'sansen' && req.tools && req.tools.length > 0) {
       const response = this.complete(req, signal);
       const stream = (async function* () {
         const result = await response;
@@ -76,10 +76,6 @@ export class OpenAIProvider implements LLMClient {
       for await (const part of result.fullStream) {
         if (part.type === 'text-delta') {
           yield part.text;
-        } else if (part.type === 'tool-call') {
-          yield `\n[Using: ${part.toolName}]\n`;
-        } else if (part.type === 'error') {
-          yield `\n[Error: ${String(part.error)}]\n`;
         }
       }
     })();

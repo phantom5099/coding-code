@@ -26,7 +26,6 @@ function getLedger(projectPath: string): Ledger {
  * Idempotent — safe to call multiple times with the same HookService.
  */
 export function registerCheckpointHooks(hooks: HookService): void {
-  // Pre-execution: record file hash before modification
   Effect.runSync(
     hooks.register(
       'tool.execute.before',
@@ -49,7 +48,6 @@ export function registerCheckpointHooks(hooks: HookService): void {
     )
   );
 
-  // Post-execution: record the full entry
   Effect.runSync(
     hooks.register(
       'tool.execute.after',

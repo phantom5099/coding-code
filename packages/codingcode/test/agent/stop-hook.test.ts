@@ -134,7 +134,7 @@ describe('runReActLoop 鈥?stop hook', () => {
 
     const errorEvent = events.find((e: any) => e._tag === 'Error');
     expect(errorEvent).toBeDefined();
-    expect((errorEvent as any)?.error?.code).toBe('STOP_LOOP');
+    expect((errorEvent as any)?.error?.code).toBe('AGENT_LOOP_DETECTED');
   });
 
   it('should use default maxStopContinuations of 2', async () => {

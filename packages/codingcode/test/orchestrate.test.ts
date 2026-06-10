@@ -201,8 +201,9 @@ const MockMcpLayer = Layer.succeed(McpService, {
 } as any);
 
 const { ProjectRuntimeService } = await import('../src/runtime/project-runtime.js');
+const { SubagentRegistryLayer } = await import('../src/layer.js');
 const MockProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer))
+  Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer, SubagentRegistryLayer))
 );
 
 const MockToolSearchLayer = Layer.succeed(

@@ -20,7 +20,7 @@ async function collect(stream: AsyncIterable<string>): Promise<string[]> {
   return chunks;
 }
 
-function entry(provider: string, opts?: { streamSupportsTools?: boolean }) {
+function entry(provider: string) {
   return {
     id: `model@${provider}`,
     provider,
@@ -30,7 +30,6 @@ function entry(provider: string, opts?: { streamSupportsTools?: boolean }) {
     base_url: 'https://example.com/v1',
     api_key_env: 'API_KEY',
     context_window: 128000,
-    streamSupportsTools: opts?.streamSupportsTools,
   };
 }
 
@@ -66,7 +65,7 @@ describe('OpenAIProvider completeStream', () => {
 
   it('uses non-streaming completion for sansen requests with tools', async () => {
     const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
-    const provider = new OpenAIProvider({} as any, entry('sansen', { streamSupportsTools: false }));
+    const provider = new OpenAIProvider({} as any, entry('sansen'));
 
     const result = provider.completeStream(request(true) as any);
     await expect(result.response).resolves.toMatchObject({ ok: true, value: { content: 'done' } });
@@ -78,7 +77,7 @@ describe('OpenAIProvider completeStream', () => {
 
   it('keeps streaming for sansen requests without tools', async () => {
     const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
-    const provider = new OpenAIProvider({} as any, entry('sansen', { streamSupportsTools: false }));
+    const provider = new OpenAIProvider({} as any, entry('sansen'));
 
     const result = provider.completeStream(request(false) as any);
     await expect(collect(result.stream)).resolves.toEqual(['streamed']);
