@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { Copy, Check } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useGlobalStore } from '../stores/global.store';
 import MessageItem from '../shared/MessageItem';
@@ -6,6 +7,7 @@ import UnifiedDiffView from '../shared/UnifiedDiffView';
 import type { Item } from '@shared/types';
 import type { CheckpointDiff } from '../lib/core-api';
 import { useAgentApproval, useAgentRollback } from '../hooks/useAgent';
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 
 interface MessageStreamProps {
   threadId: string;
@@ -232,6 +234,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     forkThread,
     revertedFilesByTurnId,
   } = useAgentRollback();
+  const { copiedId, copy } = useCopyToClipboard();
   const parentRef = useRef<HTMLDivElement>(null);
   const markScopeRestored = useGlobalStore((s) => s.markScopeRestored);
   const markFileRestored = useGlobalStore((s) => s.markFileRestored);
@@ -253,7 +256,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     [turns]
   );
 
-  const { renderEntries, callIdToToolName, entryCountByTurnId, turnById } = useMemo(() => {
+  const { renderEntries, callIdToToolName, entryCountByTurnId, turnById, assistantContentByTurnId } = useMemo(() => {
     const entries: Array<{
       item: Item;
       turnId: string;
@@ -264,15 +267,22 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     const nameMap: Record<string, string> = {};
     const countMap = new Map<string, number>();
     const turnMap = new Map<string, (typeof turns)[number]>();
+    const contentMap = new Map<string, string>();
 
     for (const turn of turns) {
       turnMap.set(turn.id, turn);
+      const assistantParts: string[] = [];
       for (const item of turn.items) {
         if (item.type === 'tool_result') {
           toolResultByCallId[item.callId] = item as any;
         } else if (item.type === 'tool_call') {
           nameMap[item.id] = item.name;
+        } else if (item.type === 'message' && item.role === 'assistant' && item.content) {
+          assistantParts.push(item.content);
         }
+      }
+      if (assistantParts.length > 0) {
+        contentMap.set(turn.id, assistantParts.join('\n\n'));
       }
     }
     for (const turn of turns) {
@@ -297,6 +307,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       callIdToToolName: nameMap,
       entryCountByTurnId: countMap,
       turnById: turnMap,
+      assistantContentByTurnId: contentMap,
     };
   }, [turnsStructureKey]);
 
@@ -526,6 +537,35 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                       toolResult={entry.toolResult}
                     />
                   </div>
+                  {isLastInTurn && (() => {
+                    const assistantContent = assistantContentByTurnId.get(entry.turnId);
+                    const isTurnDone = turn?.status === 'completed' || turn?.status === 'error';
+                    if (!assistantContent || !isTurnDone) return null;
+                    const isCopied = copiedId === `turn-${entry.turnId}`;
+                    return (
+                      <div className="px-10 pb-1 group/turnCopy">
+                        <div className="pl-8 flex items-center gap-1.5 opacity-0 group-hover/turnCopy:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              copy(assistantContent, `turn-${entry.turnId}`);
+                            }}
+                            aria-label="复制助手消息"
+                            title="复制"
+                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-colors ${
+                              isCopied
+                                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
+                                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                            }`}
+                          >
+                            {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                            {isCopied ? '已复制' : '复制'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {isLastInTurn && (
                     <div className="px-6 pb-2">
                       <TurnDiffPanel
