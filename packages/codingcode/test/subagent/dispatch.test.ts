@@ -241,7 +241,7 @@ describe('dispatch_agent tool', () => {
     );
   });
 
-  it('should pass systemPrompt from profile', async () => {
+  it('should pass systemOverride with profile prompt, environment info, and user rules', async () => {
     const tool = makeTool();
     let capturedSystemOverride: string | undefined;
     const runStream = async function* (opts: any) {
@@ -254,7 +254,12 @@ describe('dispatch_agent tool', () => {
       { projectPath: '/test', sessionId: 'parent-1', agentRunner }
     );
     expect(capturedSystemOverride).toBeTruthy();
+    // Should contain the profile's system prompt content
     expect(capturedSystemOverride).toContain('read-only');
+    // Should contain inherited environment info
+    expect(capturedSystemOverride).toContain('Working directory');
+    expect(capturedSystemOverride).toContain('/test');
+    expect(capturedSystemOverride).toContain('Operating system');
   });
 
   it('should handle subagent error', async () => {

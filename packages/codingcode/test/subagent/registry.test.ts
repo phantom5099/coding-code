@@ -1,6 +1,6 @@
 import { expect, it, describe } from 'vitest';
 import { Effect } from 'effect';
-import { SubagentRegistry, EXPLORE_PROFILE } from '../../src/subagent/registry';
+import { SubagentRegistry, EXPLORE_PROFILE, PLAN_PROFILE } from '../../src/subagent/registry';
 import { SubagentRegistryLayer } from '../../src/layer';
 
 describe('SubagentRegistry', () => {
@@ -62,15 +62,41 @@ describe('SubagentRegistry', () => {
     );
   });
 
-  it('should support built-in profiles', () => {
+  it('should support built-in explore profile', () => {
     expect(EXPLORE_PROFILE.name).toBe('explore');
     expect(EXPLORE_PROFILE.readonly).toBe(true);
-    expect(EXPLORE_PROFILE.maxSteps).toBe(30);
+    expect(EXPLORE_PROFILE.maxSteps).toBe(180);
     expect(EXPLORE_PROFILE.tools).toContain('read_file');
     expect(EXPLORE_PROFILE.tools).toContain('search_files');
+    expect(EXPLORE_PROFILE.tools).toContain('search_code');
     expect(EXPLORE_PROFILE.tools).toContain('fetch_url');
-    expect(EXPLORE_PROFILE.tools).not.toContain('glob');
-    expect(EXPLORE_PROFILE.tools).not.toContain('web_fetch');
+    expect(EXPLORE_PROFILE.tools).toContain('tool_search');
+  });
+
+  it('explore profile systemPrompt includes guidelines', () => {
+    expect(EXPLORE_PROFILE.systemPrompt).toContain('Start broad, then narrow down');
+    expect(EXPLORE_PROFILE.systemPrompt).toContain('Call multiple tools in parallel');
+    expect(EXPLORE_PROFILE.systemPrompt).toContain('file_path:line_number');
+  });
+
+  it('should support built-in plan profile', () => {
+    expect(PLAN_PROFILE.name).toBe('plan');
+    expect(PLAN_PROFILE.readonly).toBe(true);
+    expect(PLAN_PROFILE.maxSteps).toBe(180);
+    expect(PLAN_PROFILE.tools).toContain('read_file');
+    expect(PLAN_PROFILE.tools).toContain('search_files');
+    expect(PLAN_PROFILE.tools).toContain('search_code');
+    expect(PLAN_PROFILE.tools).toContain('execute_command');
+    expect(PLAN_PROFILE.tools).toContain('fetch_url');
+    expect(PLAN_PROFILE.tools).toContain('tool_search');
+  });
+
+  it('plan profile systemPrompt includes research process and output format', () => {
+    expect(PLAN_PROFILE.systemPrompt).toContain('Research process');
+    expect(PLAN_PROFILE.systemPrompt).toContain('Output format');
+    expect(PLAN_PROFILE.systemPrompt).toContain('Current state');
+    expect(PLAN_PROFILE.systemPrompt).toContain('Key files');
+    expect(PLAN_PROFILE.systemPrompt).toContain('Recommended approach');
   });
 
   it('should support profile with custom tools and maxSteps', async () => {
