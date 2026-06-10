@@ -34,7 +34,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
             if (result && result.decision === 'continue') {
               return null;
             }
-            return result as any;
+            return result;
           }),
 
         recordAudit: (entry) =>
@@ -71,7 +71,6 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
                 destructiveTools: destTools,
                 permissionMode: currentPermMode,
                 hooks: buildPipelineHooks(),
-                interactive: process.stdin.isTTY ?? false,
                 asyncConfirm: hasEmitter(request.sessionId),
                 asyncConfirmService: approvalWait,
                 onAlways: (rule) => engine.addRule(rule),
@@ -142,7 +141,6 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               destructiveTools,
               permissionMode: _globalPermissionMode,
               hooks: buildPipelineHooks(),
-              interactive: process.stdin.isTTY ?? false,
               asyncConfirm: hasEmitter(request.sessionId),
               asyncConfirmService: approvalWait,
               onAlways: (rule) => ruleEngine.addRule(rule),
