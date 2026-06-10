@@ -1,4 +1,5 @@
-import { createServer, findAvailablePort } from '@codingcode/core';
+import { createServer } from '@codingcode/core/server/create';
+import { findAvailablePort } from '@codingcode/core/server/port-discovery';
 
 export async function startHttpServer(): Promise<number> {
   const port = await findAvailablePort(8080);

@@ -1,9 +1,7 @@
 import { Effect } from 'effect';
-import { discoverSkillDirs, resolveSkillDisabled, setProjectSkillDisabledState } from './config';
-import { loadSkill } from './loader';
-import type { Skill } from './types';
-
-export type { Skill } from './types';
+import { discoverSkillDirs, resolveSkillDisabled, setProjectSkillDisabledState } from './config.js';
+import { loadSkill } from './loader.js';
+import type { Skill } from './types.js';
 
 export class SkillService extends Effect.Service<SkillService>()('Skill', {
   effect: Effect.gen(function* () {

@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { SkillService } from '../../src/skills/index.js';
+import { SkillService } from '../../src/skills/service.js';
 import { AppLayer } from '../../src/layer.js';
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {

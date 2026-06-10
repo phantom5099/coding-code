@@ -40,10 +40,4 @@ describe('AgentEvent type', () => {
         break;
     }
   });
-
-  it('should be importable from the public index', async () => {
-    const mod = await import('../src/index.js');
-    // The type is erased at runtime, but we verify the module loads without error
-    expect(mod).toBeDefined();
-  }, 30000);
 });

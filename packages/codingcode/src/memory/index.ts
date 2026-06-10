@@ -13,7 +13,8 @@ import {
   stripMarkersForPrompt,
 } from './storage.js';
 import { resolveMemoryLLM } from './llm-resolver.js';
-import { getMemoryConfig, getEffectiveTypes, updateMemoryEnabled } from './config.js';
+import { getMemoryConfig, getEffectiveTypes } from './config.js';
+import { updateMemoryEnabled } from '@codingcode/infra/config';
 import { extractMemory, type StructuredTranscript } from './extractor.js';
 let _runtimeEnabled: boolean | null = null;
 

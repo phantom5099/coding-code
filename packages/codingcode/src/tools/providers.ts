@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import type { ToolDefinition, ToolDescription } from './types';
-import type { AgentProfile } from '../subagent/registry';
-import type { ToolVisibilityPolicy } from './types';
+import type { ToolDefinition, ToolDescription } from './types.js';
+import type { AgentProfile } from '../subagent/registry.js';
+import type { ToolVisibilityPolicy } from './types.js';
 import { canonicalizeSchema } from './utils/canonicalize-schema.js';
 import { readFileTool } from './domains/fs/read.js';
 import { writeFileTool } from './domains/fs/write.js';

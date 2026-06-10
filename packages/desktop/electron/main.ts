@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import { join } from 'path';
-import { createMenu } from './menu';
 import { registerFsHandlers } from './ipc/fs.handler';
 import { registerGitHandlers } from './ipc/git.handler';
 import { startPolling, stopPolling } from './core/git.service';
@@ -71,8 +70,6 @@ app.whenReady().then(async () => {
   const apiPort = await startHttpServer();
 
   mainWindow = createWindow(apiPort);
-
-  createMenu(mainWindow);
 
   ipcMain.handle('ping', () => 'pong');
 

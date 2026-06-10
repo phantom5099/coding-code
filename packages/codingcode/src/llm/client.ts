@@ -1,6 +1,6 @@
-import type { Result } from '../core/result';
-import type { AgentError } from '../core/error';
-import type { LLMRequest, LLMResponse, ModelInfo } from './types';
+import type { Result } from '../core/result.js';
+import type { AgentError } from '../core/error.js';
+import type { LLMRequest, LLMResponse, ModelInfo } from './types.js';
 
 export interface StreamResult {
   stream: AsyncIterable<string>;

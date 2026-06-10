@@ -1,7 +1,7 @@
 ﻿import { describe, it, expect, vi, afterEach } from 'vitest';
 import { resolveMemoryLLM } from '../../src/memory/llm-resolver.js';
 import type { LLMClient } from '../../src/llm/client.js';
-import type { MemoryConfig } from '@codingcode/infra';
+import type { MemoryConfig } from '@codingcode/infra/config';
 
 vi.mock('../../src/llm/factory.js', () => ({
   listModels: vi.fn(() => ({

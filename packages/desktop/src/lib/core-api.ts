@@ -1,9 +1,9 @@
 import { API_BASE } from './api';
-import { createHttpClients } from '@codingcode/core/client/http';
+import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client/http-clients';
 
 const clients = createHttpClients(API_BASE);
 
-export const agentClient = clients.agent;
+export const agentClient: AgentRuntimeClient = clients.agent;
 
 // ---- Models ----
 

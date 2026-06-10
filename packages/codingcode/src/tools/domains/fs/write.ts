@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { writeFile, mkdir } from 'fs/promises';
 import { dirname, relative, resolve } from 'path';
-import type { ToolDefinition, ToolExecCtx } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 export const writeFileTool: ToolDefinition = {
   name: 'write_file',

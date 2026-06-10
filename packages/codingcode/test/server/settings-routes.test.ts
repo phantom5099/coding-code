@@ -32,6 +32,13 @@ vi.mock('../../src/subagent/registry.js', () => ({
     readonly: true,
     maxSteps: 30,
   },
+  PLAN_PROFILE: {
+    name: 'plan',
+    description: 'Plan',
+    tools: ['read_file'],
+    readonly: true,
+    maxSteps: 30,
+  },
   resolveSubagentEnabled: vi.fn().mockReturnValue(true),
   getProjectSubagentEnabledState: vi.fn().mockReturnValue(undefined),
   setProjectSubagentEnabledState: vi.fn(),
@@ -190,15 +197,19 @@ describe('GET /agents', () => {
     const res = await settingsRouter.request('/agents?cwd=global');
     expect(res.status).toBe(200);
     const body = (await res.json()) as any[];
-    expect(body).toHaveLength(2); // EXPLORE + my-agent
+    expect(body).toHaveLength(3); // EXPLORE + PLAN + my-agent
     // EXPLORE is builtin
     expect(body[0].name).toBe('explore');
     expect(body[0].source).toBe('builtin');
     expect(body[0].disabled).toBe(false);
-    // my-agent is global
-    expect(body[1].name).toBe('my-agent');
-    expect(body[1].source).toBe('global');
+    // PLAN is builtin
+    expect(body[1].name).toBe('plan');
+    expect(body[1].source).toBe('builtin');
     expect(body[1].disabled).toBe(false);
+    // my-agent is global
+    expect(body[2].name).toBe('my-agent');
+    expect(body[2].source).toBe('global');
+    expect(body[2].disabled).toBe(false);
   });
 
   it('returns project agents with merged view', async () => {
@@ -217,11 +228,12 @@ describe('GET /agents', () => {
     const res = await settingsRouter.request('/agents?cwd=/my-project');
     expect(res.status).toBe(200);
     const body = (await res.json()) as any[];
-    // EXPLORE + global-agent + project-agent
-    expect(body).toHaveLength(3);
+    // EXPLORE + PLAN + global-agent + project-agent
+    expect(body).toHaveLength(4);
     expect(body[0].source).toBe('builtin');
-    expect(body[1].source).toBe('global');
-    expect(body[2].source).toBe('project');
+    expect(body[1].source).toBe('builtin');
+    expect(body[2].source).toBe('global');
+    expect(body[3].source).toBe('project');
   });
 });
 

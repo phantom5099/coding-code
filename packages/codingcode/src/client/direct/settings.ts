@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { McpService } from '../../mcp/index.js';
 import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
-import { SkillService } from '../../skills/index.js';
+import { SkillService } from '../../skills/service.js';
 import { getGlobalPermissionMode, setGlobalPermissionMode } from '../../approval/index.js';
 import type { PermissionMode } from '../../approval/types.js';
 import type { AgentProfile } from '../../subagent/registry.js';

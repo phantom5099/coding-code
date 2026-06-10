@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
-import type { AgentProfile } from '../subagent/registry';
-import { EXPLORE_PROFILE, PLAN_PROFILE } from '../subagent/registry';
-import * as agentLoader from '../subagent/loader';
-import type { ToolVisibilityPolicy } from '../tools/types';
-import { HookService } from '../hooks/registry';
-import { McpService } from '../mcp/index';
-import { evictProjectRules } from '../rules/index';
-import { normalizePath } from '../core/path';
+import type { AgentProfile } from '../subagent/registry.js';
+import { EXPLORE_PROFILE, PLAN_PROFILE } from '../subagent/registry.js';
+import * as agentLoader from '../subagent/loader.js';
+import type { ToolVisibilityPolicy } from '../tools/types.js';
+import { HookService } from '../hooks/registry.js';
+import { McpService } from '../mcp/index.js';
+import { evictProjectRules } from '../rules/index.js';
+import { normalizePath } from '../core/path.js';
 
 export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>()(
   'ProjectRuntime',

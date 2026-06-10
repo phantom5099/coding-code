@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { globby } from 'globby';
 import { relative, resolve } from 'path';
-import type { ToolDefinition, ToolExecCtx } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 export const globTool: ToolDefinition = {
   name: 'search_files',

@@ -1,11 +1,11 @@
 import { generateText, streamText, stepCountIs, jsonSchema, type ModelMessage } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
-import { Result } from '../../core/result';
-import { AgentError } from '../../core/error';
+import { Result } from '../../core/result.js';
+import { AgentError } from '../../core/error.js';
 import { mapLlmError } from '../errors.js';
-import type { LLMClient } from '../client';
-import type { LLMRequest, LLMResponse } from '../types';
-import type { SelectableModel } from '../factory';
+import type { LLMClient } from '../client.js';
+import type { LLMRequest, LLMResponse } from '../types.js';
+import type { SelectableModel } from '../factory.js';
 
 function convertMessages(
   messages: Array<{ role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string }>
@@ -127,7 +127,7 @@ export class DeepSeekProvider implements LLMClient {
     }
   }
 
-  completeStream(req: LLMRequest, signal?: AbortSignal): import('../client').StreamResult {
+  completeStream(req: LLMRequest, signal?: AbortSignal): import('../client.js').StreamResult {
     const result = streamText({
       model: this.model,
       system: req.system,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
-import type { ToolDefinition, ToolExecCtx } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 export const readFileTool: ToolDefinition = {
   name: 'read_file',

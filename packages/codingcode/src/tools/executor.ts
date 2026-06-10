@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
-import { AgentError } from '../core/error';
-import { HookService } from '../hooks/registry';
-import { ApprovalService } from '../approval/index';
-import type { ToolDefinition } from './types';
-import type { ToolCall } from '../core/types';
+import { AgentError } from '../core/error.js';
+import { HookService } from '../hooks/registry.js';
+import { ApprovalService } from '../approval/index.js';
+import type { ToolDefinition } from './types.js';
+import type { ToolCall } from '../core/types.js';
 
 export type ToolResultUnion =
   | { type: 'ok'; id: string; name: string; output: string }

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolDefinition, ToolExecCtx } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 interface SearchResult {
   title: string;

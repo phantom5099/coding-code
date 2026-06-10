@@ -1,7 +1,7 @@
-import type { ToolDescription } from '../tools/types';
-import type { AgentProfile } from '../subagent/registry';
-import type { ToolVisibilityPolicy } from '../tools/types';
-import type { ToolSearchService } from '../tools/tool-search-service';
+import type { ToolDescription } from '../tools/types.js';
+import type { AgentProfile } from '../subagent/registry.js';
+import type { ToolVisibilityPolicy } from '../tools/types.js';
+import type { ToolSearchService } from '../tools/tool-search-service.js';
 
 export function buildToolsForAgent(
   resolveTools: (input: {

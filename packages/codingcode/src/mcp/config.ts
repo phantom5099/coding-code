@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { McpServerConfig } from './types';
+import type { McpServerConfig } from './types.js';
 
 function resolveEnvVars(value: unknown): unknown {
   if (typeof value === 'string') {

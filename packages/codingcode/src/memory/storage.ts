@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import type { MemoryConfig } from '@codingcode/infra';
+import type { MemoryConfig } from '@codingcode/infra/config';
 
 // ── Path Resolution ──
 

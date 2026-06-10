@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { CronJob } from 'cron';
 import { randomUUID } from 'crypto';
-import { createLogger } from '@codingcode/infra';
+import { createLogger } from '@codingcode/infra/logger';
 import type { Automation, CreateAutomationInput, UpdateAutomationInput } from './types.js';
 import { readAutomations, writeAutomations } from './store.js';
 import { SessionService } from '../session/store.js';

@@ -3,7 +3,7 @@ import { join, basename } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import type { AgentProfile } from './registry.js';
-import { createLogger } from '@codingcode/infra';
+import { createLogger } from '@codingcode/infra/logger';
 
 const logger = createLogger();
 

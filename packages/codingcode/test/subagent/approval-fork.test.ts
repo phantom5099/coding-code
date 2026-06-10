@@ -1,6 +1,6 @@
 import { expect, it, describe } from 'vitest';
 import { Effect } from 'effect';
-import { ApprovalService } from '../../src/approval/index';
+import { ApprovalService } from '../../src/approval/index.js';
 import { ApprovalLayer } from '../../src/layer';
 
 describe('ApprovalService.fork', () => {

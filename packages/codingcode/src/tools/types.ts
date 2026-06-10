@@ -1,5 +1,5 @@
 import { z } from 'zod';
-export type { ToolDescription } from '../core/types';
+export type { ToolDescription } from '../core/types.js';
 
 export interface ToolExecCtx {
   signal?: AbortSignal;

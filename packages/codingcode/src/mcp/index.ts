@@ -4,12 +4,9 @@ import { resolveMcpConfig, resolveMcpDisabled } from './config.js';
 import { McpClient, McpError } from './client.js';
 import type { McpServerConfig, McpStatus } from './types.js';
 import type { ToolDefinition, ToolExecCtx } from '../tools/types.js';
-import { createLogger } from '@codingcode/infra';
+import { createLogger } from '@codingcode/infra/logger';
 
 const logger = createLogger();
-
-export { McpError, McpClient };
-export type { McpStatus };
 
 interface McpRawTool {
   name: string;

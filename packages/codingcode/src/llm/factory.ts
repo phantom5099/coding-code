@@ -1,12 +1,12 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
-import { AgentError } from '../core/error';
+import { AgentError } from '../core/error.js';
 import { getInstallRoot, getConfig } from '../core/workspace.js';
-import { Result } from '../core/result';
-import type { LLMClient } from './client';
-import { OpenAIProvider } from './providers/openai';
-import { DeepSeekProvider } from './providers/deepseek';
-import { updateActiveModel } from '@codingcode/infra';
+import { Result } from '../core/result.js';
+import type { LLMClient } from './client.js';
+import { OpenAIProvider } from './providers/openai.js';
+import { DeepSeekProvider } from './providers/deepseek.js';
+import { updateActiveModel } from '@codingcode/infra/config';
 
 export interface ModelDescriptor {
   id: string;

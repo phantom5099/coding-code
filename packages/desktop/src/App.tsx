@@ -8,7 +8,6 @@ import ErrorBoundary from './shared/ErrorBoundary';
 export default function App() {
   const mode = useGlobalStore((s) => s.ui.mode);
   const theme = useGlobalStore((s) => s.ui.theme);
-  const setMode = useGlobalStore((s) => s.setMode);
   const rootPath = useGlobalStore((s) => s.workspace.rootPath);
 
   // Sync workspace cwd to main process for git polling
@@ -26,15 +25,10 @@ export default function App() {
 
   useEffect(() => {
     const off = window.electronAPI?.onFsChange?.(() => {});
-    const handler = ((e: CustomEvent<'agent' | 'ide'>) => {
-      setMode(e.detail);
-    }) as EventListener;
-    window.addEventListener('menu:switchMode', handler);
     return () => {
       off?.();
-      window.removeEventListener('menu:switchMode', handler);
     };
-  }, [setMode]);
+  }, []);
 
   return (
     <ErrorBoundary>

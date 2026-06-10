@@ -5,11 +5,8 @@ import {
   updateMemoryEnabled,
   updateMemoryDisabledTypes,
   updateMemoryExtraTypes,
-} from '@codingcode/infra';
+} from '@codingcode/infra/config';
 import { getConfig } from '../core/workspace.js';
-
-export type { MemoryConfig, MemoryTypeConfig };
-export { updateMemoryEnabled };
 
 export function getMemoryConfig(): MemoryConfig {
   return getConfig().memory;

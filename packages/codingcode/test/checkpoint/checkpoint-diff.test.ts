@@ -205,7 +205,7 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     }
   }, 15000);
 
-  it('throws when add fails instead of silently creating empty commit', async () => {
+  it('throws when git add -A fails', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
 
     const projectPath = setupTempRepo().projectPath;
@@ -216,24 +216,16 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
       const sg = new ShadowGit(projectPath);
       sg.init();
 
-      // First commit should succeed
-      sg.commit('turn-ok-1-baseline');
-
-      // Modify file so ls-files detects a change and triggers add
-      writeFile(projectPath, 'normal.md', 'modified');
-
-      // Simulate a scenario where add would fail by creating a file with a name
-      // that contains a leading slash when unescaped (this forces add to fail)
-      // We patch run() temporarily to inject a failing add
+      // Patch run() to simulate a failing add
       const originalRun = (sg as any).run.bind(sg);
       (sg as any).run = function (...args: string[]) {
-        if (args[0] === 'add') {
-          return { stdout: '', stderr: 'fatal: pathspec does not exist', status: 128 };
+        if (args[0] === 'add' && args[1] === '-A') {
+          return { stdout: '', stderr: 'fatal: unable to add files', status: 128 };
         }
         return originalRun(...args);
       };
 
-      expect(() => sg.commit('turn-ok-1-final')).toThrow('ShadowGit add failed');
+      expect(() => sg.commit('turn-fail-1-baseline')).toThrow('ShadowGit add failed');
     } finally {
       cleanupTempRepo(projectPath);
     }

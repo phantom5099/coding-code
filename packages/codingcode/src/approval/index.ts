@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
-import { HookService } from '../hooks/registry';
-import type { PermissionMode, PermissionRule, ApprovalDecision } from './types';
-import { createRuleEngine, type RuleEngine } from './rule-engine';
-import { DEFAULT_DENY_RULES, READONLY_TOOL_NAMES, DESTRUCTIVE_TOOL_NAMES } from './presets';
-import { runPipeline, type PipelineHooks } from './pipeline';
-import { ApprovalWaitService, hasEmitter } from './async-confirm';
+import { HookService } from '../hooks/registry.js';
+import type { PermissionMode, PermissionRule, ApprovalDecision } from './types.js';
+import { createRuleEngine, type RuleEngine } from './rule-engine.js';
+import { DEFAULT_DENY_RULES, READONLY_TOOL_NAMES, DESTRUCTIVE_TOOL_NAMES } from './presets.js';
+import { runPipeline, type PipelineHooks } from './pipeline.js';
+import { ApprovalWaitService, hasEmitter } from './async-confirm.js';
 
 // Module-level singleton so all callers (HTTP routes, direct client, service) share the same state.
 let _globalPermissionMode: PermissionMode = 'default';

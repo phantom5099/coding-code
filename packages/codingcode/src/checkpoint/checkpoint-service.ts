@@ -1,7 +1,8 @@
 import { Effect } from 'effect';
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
-import { ShadowGit, normalizePath } from './shadow-git.js';
+import { ShadowGit } from './shadow-git.js';
+import { normalizePath } from '../core/path.js';
 import { Ledger } from './ledger.js';
 import { bootstrapCheckpoint } from './bootstrap.js';
 import { HookService } from '../hooks/registry.js';
