@@ -37,7 +37,6 @@ const MessageItem = memo(function MessageItem({
   const { copiedId, copy } = useCopyToClipboard();
 
   const messageContent = item.type === 'message' ? item.content : null;
-  const isAssistant = item.type === 'message' && item.role === 'assistant';
 
   const isCopied = copiedId === `msg-${item.id}`;
 
@@ -142,31 +141,12 @@ const MessageItem = memo(function MessageItem({
 
     return (
       <div className="flex flex-col items-start mb-1 pl-8 group">
-        <div className="max-w-[80%] text-[15px] text-[var(--text-primary)] leading-relaxed">
-          {isAssistant && messageContent != null && <MarkdownRenderer content={messageContent} />}
-          {item.partial && (
-            <span className="inline-block w-1.5 h-[1.1em] bg-[var(--accent-primary)] animate-pulse ml-0.5 align-middle" />
-          )}
-        </div>
-        {isAssistant && !item.partial && messageContent != null && (
-          <div className="max-w-[80%] mt-1.5 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                copy(messageContent || '', `msg-${item.id}`);
-              }}
-              aria-label="复制消息"
-              title="复制"
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-colors ${
-                isCopied
-                  ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-              }`}
-            >
-              {isCopied ? <Check size={12} /> : <Copy size={12} />}
-              {isCopied ? '已复制' : '复制'}
-            </button>
+        {messageContent != null && (
+          <div className="max-w-[80%] text-[15px] text-[var(--text-primary)] leading-relaxed">
+            <MarkdownRenderer content={messageContent} />
+            {item.partial && (
+              <span className="inline-block w-1.5 h-[1.1em] bg-[var(--accent-primary)] animate-pulse ml-0.5 align-middle" />
+            )}
           </div>
         )}
       </div>
