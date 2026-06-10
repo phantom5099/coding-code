@@ -7,6 +7,7 @@ describe('createToolSearchTool', () => {
       search: (_sessionId: string, _query: string) => [
         { name: 'todo_write', shortDescription: 'Write tasks' },
       ],
+      markLoaded: () => {},
     });
 
     const result = await tool.execute({ query: 'todo' }, { sessionId: 'test-agent' });
@@ -17,6 +18,7 @@ describe('createToolSearchTool', () => {
   it('returns no-match message when no hits', async () => {
     const tool = createToolSearchTool({
       search: () => [],
+      markLoaded: () => {},
     });
 
     const result = await tool.execute({ query: 'zzznonexistent' }, { sessionId: 'test-agent' });
@@ -24,7 +26,7 @@ describe('createToolSearchTool', () => {
   });
 
   it('throws if sessionId is missing', async () => {
-    const tool = createToolSearchTool({ search: () => [] });
+    const tool = createToolSearchTool({ search: () => [], markLoaded: () => {} });
     await expect(tool.execute({ query: 'anything' }, {})).rejects.toThrow(
       'tool_search requires sessionId'
     );
@@ -33,9 +35,11 @@ describe('createToolSearchTool', () => {
   it('each tool instance uses its own svc closure', async () => {
     const tool1 = createToolSearchTool({
       search: () => [{ name: 'tool_a' }],
+      markLoaded: () => {},
     });
     const tool2 = createToolSearchTool({
       search: () => [{ name: 'tool_b' }],
+      markLoaded: () => {},
     });
 
     const r1 = await tool1.execute({ query: 'x' }, { sessionId: 'a' });

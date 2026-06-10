@@ -4,14 +4,14 @@ import { AgentError } from './error.js';
 import { encodeProjectPath } from './path.js';
 import { type AppConfig, DEFAULT_CONFIG } from '@codingcode/infra/config';
 
-let installRoot = process.cwd();
+let processRoot = process.cwd();
 let workspaceCwd = process.cwd();
 let _config: AppConfig = DEFAULT_CONFIG;
 
 export interface WorkspaceInit {
   /** Directory where config/models.json lives (default: cwd at process start). */
-  installRoot?: string;
-  /** Agent working directory (default: installRoot). Set via --cwd. */
+  processRoot?: string;
+  /** Agent working directory (default: processRoot). Set via --cwd. */
   workspaceCwd?: string;
   /** Pre-loaded app config. Hosts must load config before calling initWorkspace. */
   config?: AppConfig;
@@ -40,8 +40,8 @@ export function parseWorkspaceArgs(argv: string[]): { workspaceCwd?: string; arg
 }
 
 export function initWorkspace(opts: WorkspaceInit = {}): void {
-  installRoot = resolve(opts.installRoot ?? process.cwd());
-  const raw = opts.workspaceCwd ?? installRoot;
+  processRoot = resolve(opts.processRoot ?? process.cwd());
+  const raw = opts.workspaceCwd ?? processRoot;
   workspaceCwd = resolve(raw);
   if (!existsSync(workspaceCwd)) {
     throw new AgentError('CONFIG_INVALID', `Workspace directory does not exist: ${workspaceCwd}`);
@@ -53,8 +53,8 @@ export function initWorkspace(opts: WorkspaceInit = {}): void {
 }
 
 /** Config / models.json root (where `npm start` was run). */
-export function getInstallRoot(): string {
-  return installRoot;
+export function getProcessRoot(): string {
+  return processRoot;
 }
 
 /** Agent working directory for tools, sessions, checkpoints, AGENTS.md. */

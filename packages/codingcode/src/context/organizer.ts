@@ -7,7 +7,7 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import type { SessionEvent, ToolResultEvent, CompactEvent } from '../session/types.js';
 
-const COMPACTIBLE_TOOLS = new Set([
+const COMPACTABLE_TOOLS = new Set([
   'read_file',
   'execute_command',
   'search_code',
@@ -101,7 +101,7 @@ function applyOldTurnCompaction(
     if (ev.type !== 'tool_result') continue;
     if (ev.turnId >= currentTurnId - 1) continue;
     if (compactedTurnIds.has(ev.turnId)) continue;
-    if (!COMPACTIBLE_TOOLS.has(ev.toolName.toLowerCase())) continue;
+    if (!COMPACTABLE_TOOLS.has(ev.toolName.toLowerCase())) continue;
     if (ev.output.length <= config.microCompactMinChars) continue;
     oldResults.push(ev);
   }

@@ -128,7 +128,7 @@ export class ShadowGit {
     return this.run(...args);
   }
 
-  shouldFallback(): boolean {
+  isTooLargeForSnapshot(): boolean {
     const result = this.run('ls-files', '-m', '-o', '--exclude-standard');
     const files = result.stdout.trim().split('\n').filter(Boolean);
     if (files.length > FILE_COUNT_CAP) return true;

@@ -61,29 +61,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         let finalArgs: Record<string, unknown> =
           decision.type === 'modified' ? decision.input : (args as Record<string, unknown>);
 
-        // 2. Hook PreToolUse
-        const hookDecision = yield* hooks.emitDecision('tool.approval.pre', {
-          toolName: name,
-          args: finalArgs,
-        });
-
-        if (hookDecision?.decision === 'deny') {
-          yield* hooks.emit('tool.execute.denied', {
-            toolName: name,
-            args: finalArgs,
-            reason: hookDecision.reason ?? 'denied by hook',
-            source: 'hook',
-          });
-          return yield* Effect.fail(
-            new AgentError('TOOL_NOT_ALLOWED', hookDecision.reason ?? 'denied by hook')
-          );
-        }
-
-        if (hookDecision?.modifiedInput) {
-          finalArgs = hookDecision.modifiedInput;
-        }
-
-        // 3. Notification hook — use callId for consistent pairing
+        // 2. Notification hook — use callId for consistent pairing
         const callId = opts?.callId;
         yield* hooks.emit('tool.execute.before', {
           toolName: name,

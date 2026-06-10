@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { AgentError } from '../core/error.js';
-import { getInstallRoot, getConfig } from '../core/workspace.js';
+import { getProcessRoot, getConfig } from '../core/workspace.js';
 import { Result } from '../core/result.js';
 import type { LLMClient } from './client.js';
 import { OpenAIProvider } from './providers/openai.js';
@@ -36,10 +36,11 @@ export interface SelectableModel {
   base_url: string;
   api_key_env: string;
   context_window: number;
+  streamSupportsTools?: boolean;
 }
 
 function modelsFile(): string {
-  return resolve(getInstallRoot(), 'config/models.json');
+  return resolve(getProcessRoot(), 'config/models.json');
 }
 
 let catalog: ProviderCatalog | null = null;

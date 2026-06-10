@@ -8,24 +8,16 @@ import { encodeProjectPath } from '../core/path.js';
 
 import { Ledger } from './ledger.js';
 
-/** Cache ledger instances by checkpoint directory path. */
-const ledgerCache = new Map<string, Ledger>();
-
 /**
  * Carry file hash from tool.execute.before to tool.execute.after.
  * Keyed by execId (unique per tool execution) to avoid parallel race conditions.
  */
-const pendingHash = new Map<string, string>();
+const hashBeforeEdit = new Map<string, string>();
 
 function getLedger(projectPath: string): Ledger {
   const encoded = encodeProjectPath(projectPath);
   const checkpointDir = join(homedir(), '.codingcode', 'project', encoded, 'checkpoint');
-  let ledger = ledgerCache.get(checkpointDir);
-  if (!ledger) {
-    ledger = new Ledger(checkpointDir);
-    ledgerCache.set(checkpointDir, ledger);
-  }
-  return ledger;
+  return new Ledger(checkpointDir);
 }
 
 /**
@@ -33,7 +25,7 @@ function getLedger(projectPath: string): Ledger {
  * Uses source: 'system' so these hooks survive reloadUserHooks() calls.
  * Idempotent — safe to call multiple times with the same HookService.
  */
-export function bootstrapCheckpoint(hooks: HookService): void {
+export function registerCheckpointHooks(hooks: HookService): void {
   // Pre-execution: record file hash before modification
   Effect.runSync(
     hooks.register(
@@ -50,7 +42,7 @@ export function bootstrapCheckpoint(hooks: HookService): void {
         const resolvedPath = resolve(base, rawPath);
         const callId = payload.callId as string;
         if (callId) {
-          pendingHash.set(callId, fileHash(resolvedPath));
+          hashBeforeEdit.set(callId, sha256Truncated(resolvedPath));
         }
       },
       { source: 'system' }
@@ -79,12 +71,12 @@ export function bootstrapCheckpoint(hooks: HookService): void {
         const resolvedPath = resolve(base, rawPath);
 
         const callId = payload.callId as string;
-        const hashBefore = callId ? (pendingHash.get(callId) ?? '') : '';
+        const hashBefore = callId ? (hashBeforeEdit.get(callId) ?? '') : '';
         if (callId) {
-          pendingHash.delete(callId);
+          hashBeforeEdit.delete(callId);
         }
 
-        const hashAfter = fileHash(resolvedPath);
+        const hashAfter = sha256Truncated(resolvedPath);
 
         getLedger(projectPath).record({
           turnId,
@@ -101,7 +93,7 @@ export function bootstrapCheckpoint(hooks: HookService): void {
   );
 }
 
-function fileHash(filePath: string): string {
+function sha256Truncated(filePath: string): string {
   try {
     if (!existsSync(filePath)) return '';
     const content = readFileSync(filePath);

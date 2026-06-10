@@ -26,8 +26,8 @@ const logger = createLogger();
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const PROJECT_BASE = join(CODINGCODE_DIR, 'project');
 
-export function projectSessionsDir(encoded: string): string {
-  return join(PROJECT_BASE, encoded, 'sessions');
+export function projectSessionsDir(encodedProjectPath: string): string {
+  return join(PROJECT_BASE, encodedProjectPath, 'sessions');
 }
 
 export function resolveSessionDir(sessionId: string): string | null {
@@ -86,7 +86,7 @@ export function findFirstUserContent(history: SessionEvent[]): string | null {
   return null;
 }
 
-export function makeTitle(content: string): string {
+export function truncateTitle(content: string): string {
   const cleaned = content.replace(/\n/g, ' ').trim();
   if (cleaned.length <= 30) return cleaned;
   return cleaned.slice(0, 30) + '...';
@@ -106,7 +106,7 @@ function buildIndexFromMeta(meta: SessionMetaEvent, history: SessionEvent[]): Se
     createdAt: meta.createdAt,
     updatedAt: meta.createdAt,
     messageCount: countNonMetaEvents(history),
-    title: firstUser ? makeTitle(firstUser) : meta.sessionId.slice(0, 8),
+    title: firstUser ? truncateTitle(firstUser) : meta.sessionId.slice(0, 8),
     currentTurnId: 0,
     usage: undefined,
     promptEstimate: 0,

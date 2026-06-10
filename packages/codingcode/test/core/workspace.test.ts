@@ -7,7 +7,7 @@ import {
   parseWorkspaceArgs,
   initWorkspace,
   getWorkspaceCwd,
-  getInstallRoot,
+  getProcessRoot,
   resolveInWorkspace,
 } from '../../src/core/workspace.js';
 import { encodeProjectPath } from '../../src/core/path.js';
@@ -54,20 +54,20 @@ describe('core/workspace', () => {
   });
 
   it('initWorkspace separates install root and workspace cwd', () => {
-    initWorkspace({ installRoot, workspaceCwd: otherDir });
-    expect(getInstallRoot()).toBe(installRoot);
+    initWorkspace({ processRoot: installRoot, workspaceCwd: otherDir });
+    expect(getProcessRoot()).toBe(installRoot);
     expect(getWorkspaceCwd()).toBe(otherDir);
     expect(encodeProjectPath(getWorkspaceCwd())).toBe(encodeProjectPath(otherDir));
   });
 
   it('resolveInWorkspace resolves relative paths against workspace', () => {
-    initWorkspace({ installRoot, workspaceCwd: otherDir });
+    initWorkspace({ processRoot: installRoot, workspaceCwd: otherDir });
     expect(resolveInWorkspace('src/a.ts')).toBe(join(otherDir, 'src/a.ts'));
   });
 
   it('throws when --cwd path does not exist', () => {
     expect(() =>
-      initWorkspace({ installRoot, workspaceCwd: join(tmpdir(), 'missing-' + randomUUID()) })
+      initWorkspace({ processRoot: installRoot, workspaceCwd: join(tmpdir(), 'missing-' + randomUUID()) })
     ).toThrow(/does not exist/);
   });
 });

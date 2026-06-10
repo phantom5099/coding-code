@@ -88,7 +88,7 @@ describe('checkpoint/bootstrap projectPath isolation', () => {
       '{"active":"p","providers":[]}',
       'utf8'
     );
-    initWorkspace({ installRoot: globalDir, workspaceCwd: globalDir });
+    initWorkspace({ processRoot: globalDir, workspaceCwd: globalDir });
   });
 
   afterEach(() => {
@@ -115,8 +115,8 @@ describe('checkpoint/bootstrap projectPath isolation', () => {
 
   it('bootstrap checkpoint records correct file path via payload.projectPath', async () => {
     const hooks = await getHooks();
-    const { bootstrapCheckpoint } = await import('../../src/checkpoint/bootstrap.js');
-    bootstrapCheckpoint(hooks);
+    const { registerCheckpointHooks } = await import('../../src/checkpoint/bootstrap.js');
+    registerCheckpointHooks(hooks);
 
     writeFileSync(join(projectDir, 'c.txt'), 'initial', 'utf8');
 

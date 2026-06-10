@@ -1,6 +1,6 @@
 import type { AgentEvent } from '../agent/agent.js';
 
-export type SseEvent = Record<string, unknown>;
+export type SseEvent = { type: string; [k: string]: unknown };
 
 export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
   switch (event._tag) {

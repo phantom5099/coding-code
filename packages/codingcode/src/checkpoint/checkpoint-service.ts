@@ -4,7 +4,7 @@ import { join, dirname, resolve } from 'path';
 import { ShadowGit } from './shadow-git.js';
 import { normalizePath } from '../core/path.js';
 import { Ledger } from './ledger.js';
-import { bootstrapCheckpoint } from './bootstrap.js';
+import { registerCheckpointHooks } from './bootstrap.js';
 import { HookService } from '../hooks/registry.js';
 import { createHash } from 'crypto';
 
@@ -64,6 +64,17 @@ export interface CodeRestoreEntry {
 }
 
 // ---- Module-level helpers ----
+
+function emptyRollbackResult(turnId: number, baseTurnId: number | null = null): CodeRollbackResult {
+  return {
+    reverted: false,
+    throughTurnId: turnId,
+    baseTurnId,
+    affectedTurns: [],
+    selectedFiles: [],
+    restoreEntry: null,
+  };
+}
 
 function shortSid(sessionId: string): string {
   return createHash('sha256').update(sessionId).digest('hex').slice(0, 8);
@@ -160,15 +171,15 @@ function parseDiffStats(diffText: string): { insertions: number; deletions: numb
 }
 
 function getCompletedTurnsFor(sg: ShadowGit, sessionId: string): number[] {
-  const ids: number[] = [];
-  const prefix = `turn-${shortSid(sessionId)}-`;
-  for (let i = 1; i <= 10000; i++) {
-    const b = sg.findCommitByMessage(`${prefix}${i}-baseline`);
-    const f = sg.findCommitByMessage(`${prefix}${i}-final`);
-    if (b && f) ids.push(i);
-    if (!b && !f) break;
+  const short = shortSid(sessionId);
+  const result = sg.git('log', '--all', '--format=%s');
+  const ids = new Set<number>();
+  const re = new RegExp(`^turn-${short}-(\\d+)-final$`);
+  for (const line of result.stdout.trim().split('\n')) {
+    const m = line.match(re);
+    if (m) ids.add(Number(m[1]));
   }
-  return ids;
+  return [...ids].sort((a, b) => a - b);
 }
 
 interface RestorePlan {
@@ -292,7 +303,7 @@ function revertFilesImpl(
 export class CheckpointService extends Effect.Service<CheckpointService>()('Checkpoint', {
   effect: Effect.gen(function* () {
     const hooks = yield* HookService;
-    bootstrapCheckpoint(hooks);
+    registerCheckpointHooks(hooks);
 
     const shadowGitByProject = new Map<string, ShadowGit>();
     const ledgerByProject = new Map<string, { ledger: Ledger; gitDir: string }>();
@@ -480,17 +491,10 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
         const plan = getTurnRestorePlan(sg, sessionId, turnId);
-        if (!plan)
-          return {
-            reverted: false,
-            throughTurnId: turnId,
-            baseTurnId: turnId,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
+        if (!plan) {
+          return emptyRollbackResult(turnId, turnId);
+        }
         return revertFilesImpl(projectPath, sessionId, plan, [file], 'checkpoint-file', sg);
-      },
 
       revertCheckpointFiles: (
         projectPath: string,
@@ -500,15 +504,9 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       ): CodeRollbackResult => {
         const sg = ensure(projectPath);
         const plan = getTurnRestorePlan(sg, sessionId, turnId);
-        if (!plan)
-          return {
-            reverted: false,
-            throughTurnId: turnId,
-            baseTurnId: turnId,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
+        if (!plan) {
+          return emptyRollbackResult(turnId, turnId);
+        }
         return revertFilesImpl(projectPath, sessionId, plan, files, 'checkpoint-files', sg);
       },
 
@@ -522,34 +520,16 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         const sg = ensure(projectPath);
         const l = ledger(sg);
         const changes = classifySafe(projectPath, sessionId, turnId, sg, l);
-        if (!changes)
-          return {
-            reverted: false,
-            throughTurnId: turnId,
-            baseTurnId: null,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
-        if (changes.agentModified.length === 0)
-          return {
-            reverted: false,
-            throughTurnId: turnId,
-            baseTurnId: null,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
+        if (!changes) {
+          return emptyRollbackResult(turnId);
+        }
+        if (changes.agentModified.length === 0) {
+          return emptyRollbackResult(turnId);
+        }
         const plan = getTurnRestorePlan(sg, sessionId, turnId);
-        if (!plan)
-          return {
-            reverted: false,
-            throughTurnId: turnId,
-            baseTurnId: null,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
+        if (!plan) {
+          return emptyRollbackResult(turnId);
+        }
         return revertFilesImpl(
           projectPath,
           sessionId,
@@ -568,35 +548,17 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         const sg = ensure(projectPath);
         const l = ledger(sg);
         const changes = classifySafe(projectPath, sessionId, turnId, sg, l);
-        if (!changes)
-          return {
-            reverted: false,
-            throughTurnId: turnId,
-            baseTurnId: null,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
+        if (!changes) {
+          return emptyRollbackResult(turnId);
+        }
         const all = [...changes.agentModified, ...changes.unknownSource];
-        if (all.length === 0)
-          return {
-            reverted: false,
-            throughTurnId: turnId,
-            baseTurnId: null,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
+        if (all.length === 0) {
+          return emptyRollbackResult(turnId);
+        }
         const plan = getTurnRestorePlan(sg, sessionId, turnId);
-        if (!plan)
-          return {
-            reverted: false,
-            throughTurnId: turnId,
-            baseTurnId: null,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
+        if (!plan) {
+          return emptyRollbackResult(turnId);
+        }
         return revertFilesImpl(projectPath, sessionId, plan, all, 'checkpoint-all', sg);
       },
 
@@ -632,14 +594,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         const sg = ensure(projectPath);
         const plan = getRollbackToTurnPlan(sg, sessionId, throughTurnId);
         if (!plan) {
-          return {
-            reverted: false,
-            throughTurnId,
-            baseTurnId: null,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
+          return emptyRollbackResult(throughTurnId);
         }
 
         const diffResult = sg.git('diff', '--name-only', plan.baseline);
