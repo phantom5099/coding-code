@@ -7,7 +7,7 @@ import {
   updateMemoryExtraType,
   deleteMemoryExtraType,
 } from '../../src/memory/config.js';
-import type { MemoryConfig, MemoryTypeConfig } from '@codingcode/infra';
+import type { MemoryConfig, MemoryTypeConfig } from '@codingcode/infra/config';
 
 // mock the infra persistence functions (hoisted to top so vi.mock factory can access them)
 const { mockUpdateDisabledTypes, mockUpdateExtraTypes } = vi.hoisted(() => ({

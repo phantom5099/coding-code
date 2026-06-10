@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
-import type { ToolDefinition } from './types';
-import type { ToolVisibilityPolicy } from './types';
+import type { ToolDefinition } from './types.js';
+import type { ToolVisibilityPolicy } from './types.js';
 
 const loaded = new Map<string, Set<string>>();
 

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Effect } from 'effect';
-import { SkillService } from '../../skills/index.js';
+import { SkillService } from '../../skills/service.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
 import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
 import type { McpServerConfig } from '../../mcp/types.js';

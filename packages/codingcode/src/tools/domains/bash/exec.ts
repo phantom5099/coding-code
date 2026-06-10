@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { spawn } from 'child_process';
 import { Effect } from 'effect';
-import type { ToolDefinition, ToolExecCtx } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 import { AgentError } from '../../../core/error.js';
 

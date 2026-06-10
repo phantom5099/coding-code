@@ -1,6 +1,6 @@
 import { listModels, createClient } from '../llm/factory.js';
 import type { LLMClient } from '../llm/client.js';
-import type { MemoryConfig } from '@codingcode/infra';
+import type { MemoryConfig } from '@codingcode/infra/config';
 
 export async function resolveMemoryLLM(
   config: MemoryConfig,

@@ -3,7 +3,7 @@ import { Effect, Layer } from 'effect';
 import { sendMessage } from '../src/agent/agent.js';
 import { SessionService } from '../src/session/store.js';
 import { ContextService } from '../src/context/context.js';
-import { SkillService } from '../src/skills/index.js';
+import { SkillService } from '../src/skills/service.js';
 import { ToolExecutorService } from '../src/tools/executor.js';
 import { CheckpointService } from '../src/checkpoint/checkpoint-service.js';
 import { Result } from '../src/core/result.js';

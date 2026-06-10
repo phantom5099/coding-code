@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { Effect } from 'effect';
-import { ApprovalWaitService } from '../../approval/async-confirm';
-import { parseApprovalResponse } from '../../approval/response';
+import { ApprovalWaitService } from '../../approval/async-confirm.js';
+import { parseApprovalResponse } from '../../approval/response.js';
 import { runWithLayer, errorResponse } from '../util.js';
 
 const router = new Hono();

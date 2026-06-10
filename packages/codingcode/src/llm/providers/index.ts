@@ -1,2 +1,2 @@
-export { OpenAIProvider } from './openai';
-export { DeepSeekProvider } from './deepseek';
+export { OpenAIProvider } from './openai.js';
+export { DeepSeekProvider } from './deepseek.js';

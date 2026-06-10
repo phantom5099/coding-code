@@ -1,7 +1,7 @@
 ﻿import { describe, it, expect, vi } from 'vitest';
 import { extractMemory } from '../../src/memory/extractor.js';
 import type { StructuredTranscript } from '../../src/memory/extractor.js';
-import type { MemoryTypeConfig } from '@codingcode/infra';
+import type { MemoryTypeConfig } from '@codingcode/infra/config';
 
 describe('Memory Extractor', () => {
   const createMockLlm = (response: string) => ({

@@ -1,5 +1,5 @@
 import { Effect, Deferred } from 'effect';
-import type { ConfirmResult } from './confirmation';
+import type { ConfirmResult } from './confirmation.js';
 
 interface PendingEntry {
   deferred: Deferred.Deferred<ConfirmResult, never>;

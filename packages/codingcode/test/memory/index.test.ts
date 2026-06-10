@@ -8,7 +8,7 @@ import {
   getMemoryEnabled,
   setMemoryEnabled,
 } from '../../src/memory/index.js';
-import type { MemoryConfig } from '@codingcode/infra';
+import type { MemoryConfig } from '@codingcode/infra/config';
 
 const tmpDir = path.join(os.tmpdir(), 'memory-index-test');
 

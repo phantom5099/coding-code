@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
-import { resolveHookConfigs, resolveHookDisabled } from './config';
-import { executeHookCommand, executeDecisionHookCommand, isHookRuntimeEnabled } from './executor';
-import { createLogger } from '@codingcode/infra';
+import { resolveHookConfigs, resolveHookDisabled } from './config.js';
+import { executeHookCommand, executeDecisionHookCommand, isHookRuntimeEnabled } from './executor.js';
+import { createLogger } from '@codingcode/infra/logger';
 
 const logger = createLogger();
 

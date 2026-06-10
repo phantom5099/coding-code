@@ -1,4 +1,4 @@
-import type { PermissionRule } from './types';
+import type { PermissionRule } from './types.js';
 
 export const DEFAULT_DENY_RULES: PermissionRule[] = [
   {

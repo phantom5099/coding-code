@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { UserHookConfig } from '../hooks/config.js';
-import { loadConfig, getUserConfigPath } from '@codingcode/infra';
+import { loadConfig, getUserConfigPath } from '@codingcode/infra/config';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { dirname, join } from 'path';

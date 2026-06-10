@@ -10,8 +10,7 @@
     "rootDir": ".",
     "composite": true,
     "paths": {
-      "@shared/*": ["./shared/*"],
-      "@codingcode/core/*": ["../codingcode/src/*"]
+      "@shared/*": ["./shared/*"]
     }
   },
   "include": ["src/**/*", "shared/**/*"],

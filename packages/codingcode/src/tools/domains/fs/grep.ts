@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { globby } from 'globby';
 import { readFile } from 'fs/promises';
 import { relative, resolve } from 'path';
-import type { ToolDefinition, ToolExecCtx } from '../../types';
+import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 export const searchTool: ToolDefinition = {
   name: 'search_code',

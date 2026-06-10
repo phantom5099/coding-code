@@ -1,4 +1,4 @@
-import type { Message, ToolDescription } from '../core/types';
+import type { Message, ToolDescription } from '../core/types.js';
 
 export interface LLMRequest {
   messages: Message[];

@@ -16,7 +16,7 @@ import {
 } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
-import { createLogger } from '@codingcode/infra';
+import { createLogger } from '@codingcode/infra/logger';
 import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, SessionIndex, TokenUsage } from './types.js';

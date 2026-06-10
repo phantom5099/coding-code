@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
-import type { ApprovalDecision, PermissionMode, PermissionRule, ToolCallRequest } from './types';
-import type { RuleEngine } from './rule-engine';
-import { userConfirm, userConfirmAsync } from './confirmation';
-import type { ApprovalWaitService } from './async-confirm';
+import type { ApprovalDecision, PermissionMode, PermissionRule, ToolCallRequest } from './types.js';
+import type { RuleEngine } from './rule-engine.js';
+import { userConfirm, userConfirmAsync } from './confirmation.js';
+import type { ApprovalWaitService } from './async-confirm.js';
 
 export interface PipelineHooks {
   /** Emit decision from PreToolUse hooks (Layer 4). Returns first non-null HookDecision or null. */

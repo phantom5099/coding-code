@@ -1,5 +1,5 @@
 import type { LLMClient } from '../llm/client.js';
-import type { MemoryTypeConfig } from '@codingcode/infra';
+import type { MemoryTypeConfig } from '@codingcode/infra/config';
 
 export interface StructuredTranscript {
   userOnly: string;

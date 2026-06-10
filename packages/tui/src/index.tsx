@@ -1,8 +1,8 @@
 import React from 'react';
 import { render } from 'ink';
 import { App } from './components/App.js';
-import { createDirectClient } from '@codingcode/core';
-import type { AgentClient, StreamChunk } from '@codingcode/core';
+import { createDirectClient } from '@codingcode/core/client/direct';
+import type { AgentClient, StreamChunk } from '@codingcode/core/client/types';
 
 export type { AgentClient, StreamChunk };
 

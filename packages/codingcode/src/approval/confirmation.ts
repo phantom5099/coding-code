@@ -1,7 +1,7 @@
 import * as readline from 'node:readline';
 import { Effect } from 'effect';
-import type { PermissionRule } from './types';
-import { ApprovalWaitService } from './async-confirm';
+import type { PermissionRule } from './types.js';
+import { ApprovalWaitService } from './async-confirm.js';
 
 export type ConfirmResult =
   | { type: 'allow' }

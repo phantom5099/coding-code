@@ -2,9 +2,10 @@
   "name": "@codingcode/infra",
   "version": "0.1.0",
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./src/config.ts",
   "exports": {
-    ".": "./src/index.ts"
+    "./config": "./src/config.ts",
+    "./logger": "./src/logger.ts"
   },
   "dependencies": {
     "pino": "^9.6.0",
