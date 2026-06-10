@@ -35,3 +35,10 @@ desktop-test.txt
 # Compiled JS artifacts leaked into src directories
 packages/infra/src/*.js
 packages/infra/src/*.d.ts
+
+# TypeScript dist-test build artifacts
+dist-test/ 
+
+# Desktop sub-package residual workspace files
+packages/desktop/pnpm-lock.yaml  
+packages/desktop/pnpm-workspace.yaml 
