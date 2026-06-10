@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { normalizePath } from '../core/path.js';
 import type { ShadowGit } from './shadow-git.js';
+import type { ProjectLock } from './project-lock.js';
 import type { CodeRollbackResult, CodeRestoreEntry } from './checkpoint-service.js';
 import { commitMsg } from './commit-naming.js';
 import { readRestoreEntry, writeRestoreEntry } from './restore-store.js';
@@ -25,7 +26,8 @@ export function executeRollback(
   plan: { throughTurnId: number; baseTurnId: number; affectedTurns: number[]; baseline: string },
   selectedFiles: string[],
   action: CodeRestoreEntry['action'],
-  sg: ShadowGit
+  sg: ShadowGit,
+  lock: ProjectLock
 ): CodeRollbackResult {
   if (selectedFiles.length === 0) {
     return {
@@ -38,7 +40,7 @@ export function executeRollback(
     };
   }
 
-  sg.lock();
+  lock.lock();
   try {
     let safetyCommit: string;
     const existingEntry = readRestoreEntry(sg.gitDir, sessionId);
@@ -92,6 +94,6 @@ export function executeRollback(
       restoreEntry: entry,
     };
   } finally {
-    sg.unlock();
+    lock.unlock();
   }
 }

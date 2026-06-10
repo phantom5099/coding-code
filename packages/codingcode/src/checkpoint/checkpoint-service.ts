@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { ShadowGit } from './shadow-git.js';
+import { ProjectLock } from './project-lock.js';
 import { normalizePath } from '../core/path.js';
 import { Ledger } from './ledger.js';
 import { registerCheckpointHooks } from './hook-recorder.js';
@@ -103,6 +104,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     registerCheckpointHooks(hooks);
 
     const shadowGitByProject = new Map<string, ShadowGit>();
+    const lockByProject = new Map<string, ProjectLock>();
     const ledgerByProject = new Map<string, { ledger: Ledger; gitDir: string }>();
 
     function ensure(projectPath: string): ShadowGit {
@@ -114,6 +116,16 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         shadowGitByProject.set(normalized, sg);
       }
       return sg;
+    }
+
+    function lockFor(projectPath: string): ProjectLock {
+      const normalized = normalizePath(projectPath);
+      let lock = lockByProject.get(normalized);
+      if (!lock) {
+        lock = new ProjectLock(normalized);
+        lockByProject.set(normalized, lock);
+      }
+      return lock;
     }
 
     function ledger(sg: ShadowGit): Ledger {
@@ -137,24 +149,28 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         title?: string
       ): void => {
         const sg = ensure(projectPath);
+        if (sg.isTooLargeForSnapshot()) return;
+        const lock = lockFor(projectPath);
         const msg = title
           ? `${commitMsg(sessionId, turnId, 'baseline')} ${title}`
           : commitMsg(sessionId, turnId, 'baseline');
-        sg.lock();
+        lock.lock();
         try {
           sg.commit(msg);
         } finally {
-          sg.unlock();
+          lock.unlock();
         }
       },
 
       snapshotFinal: (projectPath: string, sessionId: string, turnId: number): void => {
         const sg = ensure(projectPath);
-        sg.lock();
+        if (sg.isTooLargeForSnapshot()) return;
+        const lock = lockFor(projectPath);
+        lock.lock();
         try {
           sg.commit(commitMsg(sessionId, turnId, 'final'));
         } finally {
-          sg.unlock();
+          lock.unlock();
         }
       },
 
@@ -190,7 +206,12 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         const l = ledger(sg);
         const prefix = `turn-${shortSid(sessionId)}-`;
         const completedTurns = getCompletedTurnsFor(sg, sessionId);
-        const result: ReturnType<typeof this.getCheckpoints> = [];
+        const result: Array<{
+          turnId: number;
+          title: string;
+          agentModified: string[];
+          unknownSource: string[];
+        }> = [];
 
         for (const i of completedTurns) {
           const bCommit = sg.findCommitByMessage(`${prefix}${i}-baseline`);
@@ -281,7 +302,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId, turnId);
         }
-        return executeRollback(projectPath, sessionId, plan, [file], 'checkpoint-file', sg);
+        return executeRollback(projectPath, sessionId, plan, [file], 'checkpoint-file', sg, lockFor(projectPath));
       },
 
       revertCheckpointFiles: (
@@ -295,7 +316,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId, turnId);
         }
-        return executeRollback(projectPath, sessionId, plan, files, 'checkpoint-files', sg);
+        return executeRollback(projectPath, sessionId, plan, files, 'checkpoint-files', sg, lockFor(projectPath));
       },
 
       revertCheckpointAgentFiles: (
@@ -316,7 +337,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId);
         }
-        return executeRollback(projectPath, sessionId, plan, changes.agentModified, 'checkpoint-agent', sg);
+        return executeRollback(projectPath, sessionId, plan, changes.agentModified, 'checkpoint-agent', sg, lockFor(projectPath));
       },
 
       revertCheckpointAllFiles: (
@@ -338,7 +359,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId);
         }
-        return executeRollback(projectPath, sessionId, plan, all, 'checkpoint-all', sg);
+        return executeRollback(projectPath, sessionId, plan, all, 'checkpoint-all', sg, lockFor(projectPath));
       },
 
       // ---- Rollback ----
@@ -392,7 +413,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           };
         }
 
-        return executeRollback(projectPath, sessionId, plan, selectedFiles, 'rollback-to-turn', sg);
+        return executeRollback(projectPath, sessionId, plan, selectedFiles, 'rollback-to-turn', sg, lockFor(projectPath));
       },
 
       undoLastCodeRollback: (
@@ -463,7 +484,8 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           };
         }
 
-        sg.lock();
+        const lock = lockFor(projectPath);
+        lock.lock();
         try {
           sg.checkoutFiles(entry.safetyCommit, filesToRestore);
 
@@ -487,7 +509,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
             remainingRolledBack: remainingFiles,
           };
         } finally {
-          sg.unlock();
+          lock.unlock();
         }
       },
 
