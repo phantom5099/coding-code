@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect } from 'vitest';
-import { resolveCompactionLLM } from '../../../src/context/compressor/llm-resolver.js';
+import { resolveCompactionLLM } from '../../../src/context/compaction-llm.js';
 import type { LLMClient } from '../../../src/llm/client.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 

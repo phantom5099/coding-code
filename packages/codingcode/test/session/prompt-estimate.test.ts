@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { forkSession, SessionService } from '../../src/session/store.js';
 import { findSessionIndex } from '../../src/session/io.js';
 import { findLastVisibleAssistantUsage, buildMessages } from '../../src/session/messages.js';
-import { estimateTokensForContent, estimateTokens } from '../../src/context/utils/tokens.js';
+import { estimateTokensForContent, estimateTokens } from '../../src/context/util.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 

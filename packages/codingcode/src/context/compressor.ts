@@ -1,18 +1,18 @@
 import { randomUUID } from 'crypto';
-import { resolveSessionDir } from '../../session/io.js';
+import { resolveSessionDir } from '../session/io.js';
 import {
   estimateTokens,
   estimateMessageTokens,
   estimateTokensForContent,
-} from '../utils/tokens.js';
-import { applyVisibilityEvents } from '../../session/messages.js';
-import { resolveCompactionLLM } from './llm-resolver.js';
-import { COMPACTION_SYSTEM_PROMPT } from './prompt.js';
-import type { ContextConfig } from '../config.js';
-import type { Message } from '../../core/types.js';
-import type { SessionEvent, SummaryEvent } from '../../session/types.js';
-import type { LLMClient } from '../../llm/client.js';
-import { assemblePayload } from '../organizer.js';
+} from './util.js';
+import { applyVisibilityEvents } from '../session/messages.js';
+import { resolveCompactionLLM } from './compaction-llm.js';
+import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
+import type { ContextConfig } from './config.js';
+import type { Message } from '../core/types.js';
+import type { SessionEvent, SummaryEvent } from '../session/types.js';
+import type { LLMClient } from '../llm/client.js';
+import { assemblePayload } from './organizer.js';
 import { join } from 'path';
 import { appendFileSync } from 'fs';
 

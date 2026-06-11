@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { estimateTokensForContent } from '../../src/context/utils/tokens.js';
+import { estimateTokensForContent } from '../../src/context/util.js';
 import { getContextConfig } from '../../src/context/config.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');

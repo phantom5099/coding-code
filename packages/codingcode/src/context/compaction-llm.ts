@@ -1,6 +1,6 @@
-import { findModel, createClient } from '../../llm/factory.js';
-import type { LLMClient } from '../../llm/client.js';
-import type { ContextConfig } from '../config.js';
+import { findModel, createClient } from '../llm/factory.js';
+import type { LLMClient } from '../llm/client.js';
+import type { ContextConfig } from './config.js';
 
 /**
  * Resolve which LLM client to use for compaction.

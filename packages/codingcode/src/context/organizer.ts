@@ -2,7 +2,7 @@ import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
 import { findSessionIndex, resolveSessionDir, readHistory, appendLine } from '../session/io.js';
 import { applyVisibilityEvents, buildMessagesFromEvents } from '../session/messages.js';
-import { estimateTokens } from './utils/tokens.js';
+import { estimateTokens } from './util.js';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import type { SessionEvent, ToolResultEvent, CompactEvent } from '../session/types.js';

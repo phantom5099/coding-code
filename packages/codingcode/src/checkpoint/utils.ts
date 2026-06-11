@@ -30,3 +30,20 @@ export function hashWorkspaceFile(projectPath: string, file: string): string | n
     return null;
   }
 }
+
+export class ProjectCache<T> {
+  private map = new Map<string, T>();
+  private order: string[] = [];
+  constructor(private max: number) {}
+  get(key: string, factory: () => T): T {
+    const hit = this.map.get(key);
+    if (hit) return hit;
+    const value = factory();
+    this.map.set(key, value);
+    this.order.push(key);
+    if (this.order.length > this.max) {
+      this.map.delete(this.order.shift()!);
+    }
+    return value;
+  }
+}

@@ -39,7 +39,7 @@ vi.mock('../../../src/session/io.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../src/context/compressor/llm-resolver.js', () => ({
+vi.mock('../../../src/context/compaction-llm.js', () => ({
   resolveCompactionLLM: vi.fn(() => Promise.resolve(mockLLM)),
 }));
 
@@ -51,15 +51,15 @@ vi.mock('fs', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../src/context/utils/tokens.js', () => ({
+vi.mock('../../../src/context/util.js', () => ({
   estimateTokens: vi.fn(),
   estimateMessageTokens: vi.fn(),
   estimateTokensForContent: vi.fn(),
 }));
 
-import { compactIfNeeded } from '../../../src/context/compressor/index.js';
+import { compactIfNeeded } from '../../../src/context/compressor.js';
 import { findSessionIndex } from '../../../src/session/io.js';
-import { estimateTokens, estimateMessageTokens } from '../../../src/context/utils/tokens.js';
+import { estimateTokens, estimateMessageTokens } from '../../../src/context/util.js';
 
 function config(threshold: number, maxTokens = 10000) {
   return {

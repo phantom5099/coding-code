@@ -4,7 +4,7 @@ import { resolve } from 'path';
 import { ShadowGit } from './shadow-git.js';
 import { ProjectLock } from './project-lock.js';
 import { normalizePath } from '../core/path.js';
-import { shortSid, commitMsg, toGitPath, hashWorkspaceFile } from './utils.js';
+import { shortSid, commitMsg, toGitPath, hashWorkspaceFile, ProjectCache } from './utils.js';
 import { readRestoreEntry, writeRestoreEntry } from './restore-store.js';
 import {
   getCompletedTurnsFor,
@@ -63,28 +63,21 @@ export interface CodeRestoreEntry {
 
 export class CheckpointService extends Effect.Service<CheckpointService>()('Checkpoint', {
   effect: Effect.gen(function* () {
-    const shadowGitByProject = new Map<string, ShadowGit>();
-    const lockByProject = new Map<string, ProjectLock>();
+    const shadowGitByProject = new ProjectCache<ShadowGit>(10);
+    const lockByProject = new ProjectCache<ProjectLock>(10);
 
     function ensure(projectPath: string): ShadowGit {
       const normalized = normalizePath(projectPath);
-      let sg = shadowGitByProject.get(normalized);
-      if (!sg || sg.projectPath !== normalized) {
-        sg = new ShadowGit(normalized);
+      return shadowGitByProject.get(normalized, () => {
+        const sg = new ShadowGit(normalized);
         sg.init();
-        shadowGitByProject.set(normalized, sg);
-      }
-      return sg;
+        return sg;
+      });
     }
 
     function lockFor(projectPath: string): ProjectLock {
       const normalized = normalizePath(projectPath);
-      let lock = lockByProject.get(normalized);
-      if (!lock) {
-        lock = new ProjectLock(normalized);
-        lockByProject.set(normalized, lock);
-      }
-      return lock;
+      return lockByProject.get(normalized, () => new ProjectLock(normalized));
     }
 
     function doSnapshotFinal(sg: ShadowGit, sessionId: string, turnId: number): void {

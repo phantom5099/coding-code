@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { getContextConfig, type ContextConfig } from './config.js';
-import { compactWithLLM, compactIfNeeded, type CompressResult } from './compressor/index.js';
+import { compactWithLLM, compactIfNeeded, type CompressResult } from './compressor.js';
 import { assemblePayload, type BuildResult } from './organizer.js';
 import type { LLMClient } from '../llm/client.js';
 
