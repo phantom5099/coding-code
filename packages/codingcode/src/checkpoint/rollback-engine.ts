@@ -7,13 +7,11 @@ import { commitMsg } from './commit-naming.js';
 import { readRestoreEntry, writeRestoreEntry } from './restore-store.js';
 
 export function emptyRollbackResult(
-  turnId: number,
-  baseTurnId: number | null = null
+  turnId: number
 ): CodeRollbackResult {
   return {
     reverted: false,
     throughTurnId: turnId,
-    baseTurnId,
     affectedTurns: [],
     selectedFiles: [],
     restoreEntry: null,
@@ -21,9 +19,8 @@ export function emptyRollbackResult(
 }
 
 export function executeRollback(
-  projectPath: string,
   sessionId: string,
-  plan: { throughTurnId: number; baseTurnId: number; affectedTurns: number[]; baseline: string },
+  plan: { throughTurnId: number; affectedTurns: number[]; baseline: string },
   selectedFiles: string[],
   action: CodeRestoreEntry['action'],
   sg: ShadowGit,
@@ -33,7 +30,6 @@ export function executeRollback(
     return {
       reverted: false,
       throughTurnId: plan.throughTurnId,
-      baseTurnId: plan.baseTurnId,
       affectedTurns: plan.affectedTurns,
       selectedFiles: [],
       restoreEntry: null,
@@ -77,7 +73,6 @@ export function executeRollback(
       sessionId,
       action,
       throughTurnId: plan.throughTurnId,
-      baseTurnId: plan.baseTurnId,
       affectedTurns: plan.affectedTurns,
       selectedFiles: combinedFiles,
       safetyCommit,
@@ -88,7 +83,6 @@ export function executeRollback(
     return {
       reverted: true,
       throughTurnId: plan.throughTurnId,
-      baseTurnId: plan.baseTurnId,
       affectedTurns: plan.affectedTurns,
       selectedFiles: combinedFiles,
       restoreEntry: entry,

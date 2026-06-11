@@ -36,7 +36,6 @@ export interface CheckpointDiff {
 export interface CodeRollbackResult {
   reverted: boolean;
   throughTurnId: number;
-  baseTurnId: number | null;
   affectedTurns: number[];
   selectedFiles: string[];
   restoreEntry: CodeRestoreEntry | null;
@@ -52,7 +51,6 @@ export interface CodeRollbackUndoResult {
 
 export interface RollbackPreviewDiff {
   throughTurnId: number;
-  baseTurnId: number | null;
   affectedTurns: number[];
   diff: string;
 }
@@ -67,7 +65,6 @@ export interface CodeRestoreEntry {
     | 'checkpoint-all'
     | 'rollback-to-turn';
   throughTurnId: number;
-  baseTurnId: number;
   affectedTurns: number[];
   selectedFiles: string[];
   safetyCommit: string;
@@ -302,7 +299,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId, turnId);
         }
-        return executeRollback(projectPath, sessionId, plan, [file], 'checkpoint-file', sg, lockFor(projectPath));
+        return executeRollback(sessionId, plan, [file], 'checkpoint-file', sg, lockFor(projectPath));
       },
 
       revertCheckpointFiles: (
@@ -316,7 +313,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId, turnId);
         }
-        return executeRollback(projectPath, sessionId, plan, files, 'checkpoint-files', sg, lockFor(projectPath));
+        return executeRollback(sessionId, plan, files, 'checkpoint-files', sg, lockFor(projectPath));
       },
 
       revertCheckpointAgentFiles: (
@@ -337,7 +334,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId);
         }
-        return executeRollback(projectPath, sessionId, plan, changes.agentModified, 'checkpoint-agent', sg, lockFor(projectPath));
+        return executeRollback(sessionId, plan, changes.agentModified, 'checkpoint-agent', sg, lockFor(projectPath));
       },
 
       revertCheckpointAllFiles: (
@@ -359,7 +356,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         if (!plan) {
           return emptyRollbackResult(turnId);
         }
-        return executeRollback(projectPath, sessionId, plan, all, 'checkpoint-all', sg, lockFor(projectPath));
+        return executeRollback(sessionId, plan, all, 'checkpoint-all', sg, lockFor(projectPath));
       },
 
       // ---- Rollback ----
@@ -372,13 +369,12 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         const sg = ensure(projectPath);
         const plan = getRollbackToTurnPlan(sg, sessionId, throughTurnId);
         if (!plan) {
-          return { throughTurnId, baseTurnId: null, affectedTurns: [], diff: '' };
+          return { throughTurnId, affectedTurns: [], diff: '' };
         }
 
         const result = sg.git('diff', plan.baseline);
         return {
           throughTurnId,
-          baseTurnId: plan.baseTurnId,
           affectedTurns: plan.affectedTurns,
           diff: result.stdout,
         };
@@ -406,14 +402,13 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           return {
             reverted: true,
             throughTurnId,
-            baseTurnId: plan.baseTurnId,
             affectedTurns: plan.affectedTurns,
             selectedFiles: [],
             restoreEntry: null,
           };
         }
 
-        return executeRollback(projectPath, sessionId, plan, selectedFiles, 'rollback-to-turn', sg, lockFor(projectPath));
+        return executeRollback(sessionId, plan, selectedFiles, 'rollback-to-turn', sg, lockFor(projectPath));
       },
 
       undoLastCodeRollback: (
@@ -454,7 +449,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         }
 
         const baselineCommit = sg.findCommitByMessage(
-          commitMsg(sessionId, entry.baseTurnId, 'baseline')
+          commitMsg(sessionId, entry.throughTurnId, 'baseline')
         );
         const conflictFiles: string[] = [];
 

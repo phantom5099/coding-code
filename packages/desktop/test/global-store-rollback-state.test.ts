@@ -59,7 +59,6 @@ describe('Rollback state in global store', () => {
   it('setRollbackPreview stores preview', () => {
     const preview = {
       throughTurnId: 2,
-      baseTurnId: 1,
       affectedTurns: [3, 4],
       diff: 'diff content',
     };
@@ -73,7 +72,6 @@ describe('Rollback state in global store', () => {
   it('clearRollbackPreview removes preview', () => {
     const preview = {
       throughTurnId: 2,
-      baseTurnId: 1,
       affectedTurns: [3, 4],
       diff: 'diff content',
     };

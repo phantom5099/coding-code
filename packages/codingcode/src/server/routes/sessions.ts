@@ -224,7 +224,6 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-file', async (c) => {
         return {
           reverted: false,
           throughTurnId: 0,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -254,7 +253,6 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-files', async (c) => {
         return {
           reverted: false,
           throughTurnId: 0,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -284,7 +282,6 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-agent', async (c) => {
         return {
           reverted: false,
           throughTurnId: 0,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -314,7 +311,6 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-all', async (c) => {
         return {
           reverted: false,
           throughTurnId: 0,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,

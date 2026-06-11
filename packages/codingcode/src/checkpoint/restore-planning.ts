@@ -3,7 +3,6 @@ import { shortSid, commitMsg } from './commit-naming.js';
 
 export interface RestorePlan {
   throughTurnId: number;
-  baseTurnId: number;
   affectedTurns: number[];
   baseline: string;
 }
@@ -30,7 +29,6 @@ export function getTurnRestorePlan(
   if (!baseline || !final) return null;
   return {
     throughTurnId: turnId,
-    baseTurnId: turnId,
     affectedTurns: [],
     baseline,
   };
@@ -50,7 +48,6 @@ export function getRollbackToTurnPlan(
 
   return {
     throughTurnId,
-    baseTurnId: throughTurnId,
     affectedTurns,
     baseline,
   };

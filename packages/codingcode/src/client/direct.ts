@@ -209,7 +209,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         return {
           reverted: false,
           throughTurnId: turnId,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -226,7 +225,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         return {
           reverted: false,
           throughTurnId: turnId,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -243,7 +241,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         return {
           reverted: false,
           throughTurnId: turnId,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -259,7 +256,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         return {
           reverted: false,
           throughTurnId: turnId,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -269,7 +265,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
 
     async previewRollbackDiff(throughTurnId: number) {
       if (!currentSessionId)
-        return { throughTurnId, baseTurnId: null, affectedTurns: [], diff: '' };
+        return { throughTurnId, affectedTurns: [], diff: '' };
       return clients.sessions.previewRollbackDiff({
         sessionId: currentSessionId,
         cwd: cwd(),
@@ -282,7 +278,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         return {
           reverted: false,
           throughTurnId,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -310,7 +305,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
           codeResult: {
             reverted: false,
             throughTurnId,
-            baseTurnId: null,
             affectedTurns: [],
             selectedFiles: [],
             restoreEntry: null,

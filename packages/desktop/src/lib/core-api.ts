@@ -234,7 +234,6 @@ export interface CheckpointDiff {
 export interface CodeRollbackResult {
   reverted: boolean;
   throughTurnId: number;
-  baseTurnId: number | null;
   affectedTurns: number[];
   selectedFiles: string[];
   restoreEntry: CodeRestoreEntry | null;
@@ -250,7 +249,6 @@ export interface CodeRollbackUndoResult {
 
 export interface RollbackPreviewDiff {
   throughTurnId: number;
-  baseTurnId: number | null;
   affectedTurns: number[];
   diff: string;
 }
@@ -260,7 +258,6 @@ export interface CodeRestoreEntry {
   sessionId: string;
   action: string;
   throughTurnId: number;
-  baseTurnId: number;
   affectedTurns: number[];
   selectedFiles: string[];
   safetyCommit: string;

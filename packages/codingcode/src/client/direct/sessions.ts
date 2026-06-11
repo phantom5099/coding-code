@@ -125,7 +125,6 @@ export function createDirectSessionClient(
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -135,7 +134,6 @@ export function createDirectSessionClient(
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -145,7 +143,6 @@ export function createDirectSessionClient(
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -155,20 +152,18 @@ export function createDirectSessionClient(
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
       };
     },
     async previewRollbackDiff() {
-      return { throughTurnId: 0, baseTurnId: null, affectedTurns: [], diff: '' };
+      return { throughTurnId: 0, affectedTurns: [], diff: '' };
     },
     async rollbackCodeToTurn() {
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -183,7 +178,6 @@ export function createDirectSessionClient(
         codeResult: {
           reverted: false,
           throughTurnId: 0,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,

@@ -146,7 +146,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -156,7 +155,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -166,7 +164,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -176,20 +173,18 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
       };
     },
     async previewRollbackDiff() {
-      return { throughTurnId: 0, baseTurnId: null, affectedTurns: [], diff: '' };
+      return { throughTurnId: 0, affectedTurns: [], diff: '' };
     },
     async rollbackCodeToTurn() {
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -204,7 +199,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
         codeResult: {
           reverted: false,
           throughTurnId: 0,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,

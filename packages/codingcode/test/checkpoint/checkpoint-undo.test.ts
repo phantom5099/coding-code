@@ -165,7 +165,6 @@ describe('undoLastCodeRollback end-to-end via ShadowGit', () => {
         sessionId,
         action: 'checkpoint-file',
         throughTurnId: 1,
-        baseTurnId: 1,
         affectedTurns: [],
         selectedFiles: [join(projectPath, 'src/main.ts')],
         safetyCommit: safetyHash,
@@ -226,7 +225,6 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
         }).pipe(Effect.provide(checkpointLayer))
       );
 
-      expect(preview.baseTurnId).toBe(1);
       expect(preview.affectedTurns).toEqual([1]);
       expect(preview.diff).toContain('articles/one.md');
     } finally {
@@ -258,7 +256,6 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
       );
 
       expect(result.reverted).toBe(true);
-      expect(result.baseTurnId).toBe(1);
       expect(result.affectedTurns).toEqual([1]);
       expect(
         result.selectedFiles.some((f) => f.replace(/\\/g, '/').endsWith('articles/one.md'))
@@ -302,7 +299,6 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
         }).pipe(Effect.provide(checkpointLayer))
       );
 
-      expect(preview.baseTurnId).toBe(2);
       expect(preview.affectedTurns).toEqual([2, 3]);
       expect(preview.diff).toContain('two.txt');
       expect(preview.diff).toContain('three.txt');
@@ -370,7 +366,6 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
         sessionId,
         action: 'checkpoint-file',
         throughTurnId: 1,
-        baseTurnId: 1,
         affectedTurns: [],
         selectedFiles: [join(projectPath, 'src/main.ts').toLowerCase()],
         safetyCommit: safetyHash,
