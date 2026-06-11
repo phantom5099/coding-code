@@ -28,10 +28,16 @@ const { mockCompactWithLLM, mockLLM } = vi.hoisted(() => ({
 
 vi.mock('../../../src/session/io.js', async (importOriginal) => {
   const actual = await importOriginal();
+  const mockResolveSessionDir = vi.fn(() => '/tmp/sessions');
   return {
     ...(actual as any),
     findSessionIndex: vi.fn(() => ({ currentTurnId: 10 })),
-    resolveSessionDir: vi.fn(() => '/tmp/sessions'),
+    resolveSessionDir: mockResolveSessionDir,
+    resolveSessionJsonlPath: vi.fn((sessionId: string) => {
+      const dir = mockResolveSessionDir(sessionId);
+      if (!dir) throw new Error(`Session ${sessionId} not found`);
+      return `${dir}/${sessionId}.jsonl`;
+    }),
     readHistory: vi.fn(() => [
       { type: 'user', content: 'a'.repeat(200), uuid: 'u1', turnId: 1 },
       { type: 'assistant', content: 'b'.repeat(200), uuid: 'a1', turnId: 1 },

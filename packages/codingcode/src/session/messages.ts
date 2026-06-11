@@ -69,8 +69,12 @@ export function applyVisibilityEvents(events: SessionEvent[]): VisibilityResult 
   return { hidden, compactedTurnIds };
 }
 
-export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
-  const { hidden, compactedTurnIds } = applyVisibilityEvents(events);
+export function buildMessagesFromEvents(
+  events: SessionEvent[],
+  externalCompactedTurnIds?: Set<number>,
+): Message[] {
+  const { hidden, compactedTurnIds: derivedIds } = applyVisibilityEvents(events);
+  const compactedTurnIds = externalCompactedTurnIds ?? derivedIds;
 
   const visible: SessionEvent[] = [];
   for (const ev of events) {

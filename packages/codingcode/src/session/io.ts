@@ -59,6 +59,12 @@ export function resolveSessionDir(sessionId: string): string | null {
   return null;
 }
 
+export function resolveSessionJsonlPath(sessionId: string): string {
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) throw new Error(`Session ${sessionId} not found`);
+  return join(dir, `${sessionId}.jsonl`);
+}
+
 export function ensureDirs(transcriptPath: string): void {
   if (!existsSync(CODINGCODE_DIR)) mkdirSync(CODINGCODE_DIR, { recursive: true });
   const dir = dirname(transcriptPath);

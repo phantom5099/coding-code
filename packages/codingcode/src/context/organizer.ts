@@ -1,9 +1,8 @@
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
-import { findSessionIndex, resolveSessionDir, readHistory, appendLine } from '../session/io.js';
+import { findSessionIndex, resolveSessionJsonlPath, readHistory, appendLine } from '../session/io.js';
 import { applyVisibilityEvents, buildMessagesFromEvents } from '../session/messages.js';
 import { estimateTokens } from './util.js';
-import { join } from 'path';
 import { randomUUID } from 'crypto';
 import type { SessionEvent, ToolResultEvent, CompactEvent } from '../session/types.js';
 
@@ -23,6 +22,7 @@ export interface BuildResult {
   compactedEvents: SessionEvent[];
   promptEstimate: number;
   currentTurnId: number;
+  compactedTurnIds: Set<number>;
 }
 
 export function assemblePayload(
@@ -31,16 +31,15 @@ export function assemblePayload(
   config: ContextConfig,
   contextWindow: number = 128000
 ): BuildResult {
-  const dir = resolveSessionDir(sessionId);
-  if (!dir) throw new Error(`Session ${sessionId} not found`);
-  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+  const jsonlPath = resolveSessionJsonlPath(sessionId);
   let events = readHistory(jsonlPath);
 
   const idx = findSessionIndex(sessionId);
   const currentTurnId = idx?.currentTurnId ?? 0;
 
-  const { hidden } = applyVisibilityEvents(events);
+  const { hidden, compactedTurnIds: initialCompactedTurnIds } = applyVisibilityEvents(events);
   let visible = filterVisible(events, hidden);
+  let compactedTurnIds = initialCompactedTurnIds;
 
   const preEstimate = estimateTokensFromEvents(visible);
 
@@ -57,6 +56,7 @@ export function assemblePayload(
     events = readHistory(jsonlPath);
     const updated = applyVisibilityEvents(events);
     visible = filterVisible(events, updated.hidden);
+    compactedTurnIds = updated.compactedTurnIds;
   }
 
   const messages = buildMessagesFromEvents(visible);
@@ -65,6 +65,7 @@ export function assemblePayload(
     compactedEvents: visible,
     promptEstimate: estimateTokens(messages),
     currentTurnId,
+    compactedTurnIds,
   };
 }
 
