@@ -12,7 +12,7 @@ import {
   writeMemoryFileAtomic,
   stripMarkersForPrompt,
 } from './storage.js';
-import { resolveMemoryLLM } from './llm-resolver.js';
+import { resolveLLM } from '../llm/llm-resolver.js';
 import { getMemoryConfig, getEffectiveTypes } from './config.js';
 import { updateMemoryEnabled } from '@codingcode/infra/config';
 import { extractMemory, type StructuredTranscript } from './extractor.js';
@@ -154,7 +154,7 @@ export async function flushSessionToMemory(
     const transcript = buildStructuredTranscript(events);
     const types = getEffectiveTypes(cfg);
 
-    const resolvedLlm = await resolveMemoryLLM(cfg, llm);
+    const resolvedLlm = await resolveLLM(cfg.model, llm);
     if (!resolvedLlm) {
       return { written: false, bytes: 0 };
     }

@@ -1,114 +1,73 @@
 ﻿import { describe, it, expect, vi, afterEach } from 'vitest';
-import { resolveMemoryLLM } from '../../src/memory/llm-resolver.js';
 import type { LLMClient } from '../../src/llm/client.js';
-import type { MemoryConfig } from '@codingcode/infra/config';
+import type { SelectableModel } from '../../src/llm/factory.js';
 
-vi.mock('../../src/llm/factory.js', () => ({
-  listModels: vi.fn(() => ({
-    ok: true,
-    value: [
-      {
-        id: 'claude-opus-4-7',
-        model: 'claude-opus-4-7',
-        name: 'Claude Opus 4.7',
-        provider: 'anthropic',
-      },
-      {
-        id: 'deepseek@deepseek',
-        model: 'deepseek-chat',
-        name: 'DeepSeek Chat',
-        provider: 'deepseek',
-      },
-    ],
-  })),
-  createClient: vi.fn(async (_modelInfo: any) => ({
-    ok: true,
-    value: {
-      complete: () => Promise.resolve({ ok: true, value: { content: '' } }),
-      completeStream: () => ({
-        stream: async function* () {},
-        response: Promise.resolve({ ok: true, value: { content: '' } }),
-      }),
-      modelInfo: {
-        provider: 'mock',
-        model: 'mock',
-        maxTokens: 4096,
-        supportsToolCalling: true,
-        supportsStreaming: true,
-      },
-    } as any,
-  })),
+const { mockFindModel, mockCreateClient } = vi.hoisted(() => ({
+  mockFindModel: vi.fn(() => null),
+  mockCreateClient: vi.fn(),
 }));
 
-describe('Memory LLM Resolver', () => {
+vi.mock('../../src/llm/factory.js', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    findModel: mockFindModel,
+    createClient: mockCreateClient,
+  };
+});
+
+import { resolveLLM } from '../../src/llm/llm-resolver.js';
+
+const fallbackClient = {} as LLMClient;
+
+describe('resolveLLM (memory)', () => {
   afterEach(() => {
     vi.resetAllMocks();
   });
 
-  const createCfg = (model: string): MemoryConfig => ({
-    enabled: true,
-    model,
-    projectFile: '',
-    userFile: '',
-    maxBytes: 16384,
-    promptMaxBytes: 8192,
-    extraTypes: [],
-    disabledTypes: [],
+  it('returns fallback when target is empty', async () => {
+    const result = await resolveLLM('', fallbackClient);
+    expect(result).toBe(fallbackClient);
   });
 
-  it('returns fallback when model is empty', async () => {
-    const cfg = createCfg('');
-    const fallback = {} as LLMClient;
-    const result = await resolveMemoryLLM(cfg, fallback);
-    expect(result).toBe(fallback);
-  });
-
-  it('returns fallback when listModels fails', async () => {
-    const { listModels } = await import('../../src/llm/factory.js');
-    vi.mocked(listModels).mockReturnValue({ ok: false, error: 'error' } as any);
-
-    const cfg = createCfg('claude-opus-4-7');
-    const fallback = {} as LLMClient;
-    const result = await resolveMemoryLLM(cfg, fallback);
-    expect(result).toBe(fallback);
+  it('returns fallback when target is whitespace-only', async () => {
+    const result = await resolveLLM('   ', fallbackClient);
+    expect(result).toBe(fallbackClient);
   });
 
   it('returns fallback when model not found', async () => {
-    const cfg = createCfg('nonexistent-model');
-    const fallback = {} as LLMClient;
-    const result = await resolveMemoryLLM(cfg, fallback);
-    expect(result).toBe(fallback);
+    mockFindModel.mockReturnValue(null);
+    const result = await resolveLLM('nonexistent-model', fallbackClient);
+    expect(result).toBe(fallbackClient);
   });
 
-  it('returns null fallback when create fails', async () => {
-    const { createClient } = await import('../../src/llm/factory.js');
-    vi.mocked(createClient).mockRejectedValue(new Error('creation failed'));
-
-    const cfg = createCfg('claude-opus-4-7');
-    const result = await resolveMemoryLLM(cfg, null);
-    expect(result).toBe(null);
+  it('returns null when fallback is null and create fails', async () => {
+    mockFindModel.mockReturnValue({ id: 'claude-opus-4-7' } as SelectableModel);
+    mockCreateClient.mockRejectedValue(new Error('creation failed'));
+    const result = await resolveLLM('claude-opus-4-7', null);
+    expect(result).toBeNull();
   });
 
-  it('returns null fallback when create returns error', async () => {
-    const { createClient } = await import('../../src/llm/factory.js');
-    vi.mocked(createClient).mockResolvedValue({ ok: false, error: 'error' } as any);
-
-    const cfg = createCfg('claude-opus-4-7');
-    const result = await resolveMemoryLLM(cfg, null);
-    expect(result).toBe(null);
+  it('returns null when fallback is null and create returns error', async () => {
+    mockFindModel.mockReturnValue({ id: 'claude-opus-4-7' } as SelectableModel);
+    mockCreateClient.mockResolvedValue({ ok: false, error: 'error' });
+    const result = await resolveLLM('claude-opus-4-7', null);
+    expect(result).toBeNull();
   });
 
   it('creates and returns client when model matches by id', async () => {
-    const cfg = createCfg('claude-opus-4-7');
-    const fallback = {} as LLMClient;
-    const result = await resolveMemoryLLM(cfg, fallback);
-    expect(result).not.toBe(fallback);
+    const client = { modelInfo: { maxTokens: 4096 } } as LLMClient;
+    mockFindModel.mockReturnValue({ id: 'claude-opus-4-7@ANTHROPIC_API_KEY' } as SelectableModel);
+    mockCreateClient.mockResolvedValue({ ok: true, value: client });
+    const result = await resolveLLM('claude-opus-4-7@ANTHROPIC_API_KEY', fallbackClient);
+    expect(result).toBe(client);
   });
 
-  it('creates and returns client when model matches by bare id', async () => {
-    const cfg = createCfg('deepseek-chat');
-    const fallback = {} as LLMClient;
-    const result = await resolveMemoryLLM(cfg, fallback);
-    expect(result).not.toBe(fallback);
+  it('creates and returns client when model matches by bare model id', async () => {
+    const client = { modelInfo: { maxTokens: 4096 } } as LLMClient;
+    mockFindModel.mockReturnValue({ id: 'deepseek-chat@DEEPSEEK_API_KEY', model: 'deepseek-chat' } as SelectableModel);
+    mockCreateClient.mockResolvedValue({ ok: true, value: client });
+    const result = await resolveLLM('deepseek-chat', fallbackClient);
+    expect(result).toBe(client);
   });
 });

@@ -1,7 +1,21 @@
-﻿import { describe, it, expect } from 'vitest';
-import { resolveCompactionLLM } from '../../../src/context/compaction-llm.js';
+﻿import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { LLMClient } from '../../../src/llm/client.js';
-import type { ContextConfig } from '../../../src/context/config.js';
+
+const { mockFindModel, mockCreateClient } = vi.hoisted(() => ({
+  mockFindModel: vi.fn(() => null),
+  mockCreateClient: vi.fn(),
+}));
+
+vi.mock('../../../src/llm/factory.js', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    findModel: mockFindModel,
+    createClient: mockCreateClient,
+  };
+});
+
+import { resolveLLM } from '../../../src/llm/llm-resolver.js';
 
 const fakeFallback: LLMClient = {
   complete: async () => ({ ok: true as const, value: { content: '', finishReason: 'stop' } }),
@@ -18,35 +32,61 @@ const fakeFallback: LLMClient = {
   },
 };
 
-function cfg(compactionModel: string): ContextConfig {
-  return {
-    microCompactThreshold: 0.5,
-    microCompactMinChars: 120,
-    compactionThreshold: 0.9,
-    keepRecentTurns: 1,
-    compactionModel,
-    reactiveCompactMaxRetries: 1,
-  };
-}
+describe('resolveLLM (compaction)', () => {
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
 
-describe('resolveCompactionLLM', () => {
-  it('returns fallback when compactionModel is empty', async () => {
-    const result = await resolveCompactionLLM(cfg(''), fakeFallback);
+  it('returns fallback when target is empty', async () => {
+    const result = await resolveLLM('', fakeFallback);
     expect(result).toBe(fakeFallback);
   });
 
-  it('returns fallback when compactionModel is whitespace-only', async () => {
-    const result = await resolveCompactionLLM(cfg('   '), fakeFallback);
+  it('returns fallback when target is whitespace-only', async () => {
+    const result = await resolveLLM('   ', fakeFallback);
     expect(result).toBe(fakeFallback);
   });
 
-  it('returns fallback when target model is not in models.json', async () => {
-    const result = await resolveCompactionLLM(cfg('definitely-not-a-real-model-xyz'), fakeFallback);
+  it('returns fallback when target is null', async () => {
+    const result = await resolveLLM(null, fakeFallback);
     expect(result).toBe(fakeFallback);
   });
 
-  it('returns null when compactionModel empty and no fallback given', async () => {
-    const result = await resolveCompactionLLM(cfg(''), null);
+  it('returns fallback when target is undefined', async () => {
+    const result = await resolveLLM(undefined, fakeFallback);
+    expect(result).toBe(fakeFallback);
+  });
+
+  it('returns null when target empty and fallback is null', async () => {
+    const result = await resolveLLM('', null);
     expect(result).toBeNull();
+  });
+
+  it('returns fallback when model not found', async () => {
+    mockFindModel.mockReturnValue(null);
+    const result = await resolveLLM('definitely-not-a-real-model-xyz', fakeFallback);
+    expect(result).toBe(fakeFallback);
+  });
+
+  it('returns fallback when createClient throws', async () => {
+    mockFindModel.mockReturnValue({ id: 'test-model' } as any);
+    mockCreateClient.mockRejectedValue(new Error('creation failed'));
+    const result = await resolveLLM('test-model', fakeFallback);
+    expect(result).toBe(fakeFallback);
+  });
+
+  it('returns fallback when createClient returns error', async () => {
+    mockFindModel.mockReturnValue({ id: 'test-model' } as any);
+    mockCreateClient.mockResolvedValue({ ok: false, error: 'error' });
+    const result = await resolveLLM('test-model', fakeFallback);
+    expect(result).toBe(fakeFallback);
+  });
+
+  it('returns created client on success', async () => {
+    const client = { modelInfo: { maxTokens: 100 } } as LLMClient;
+    mockFindModel.mockReturnValue({ id: 'test-model' } as any);
+    mockCreateClient.mockResolvedValue({ ok: true, value: client });
+    const result = await resolveLLM('test-model', fakeFallback);
+    expect(result).toBe(client);
   });
 });

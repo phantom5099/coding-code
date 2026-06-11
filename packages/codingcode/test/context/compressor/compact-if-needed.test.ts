@@ -39,9 +39,13 @@ vi.mock('../../../src/session/io.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../src/context/compaction-llm.js', () => ({
-  resolveCompactionLLM: vi.fn(() => Promise.resolve(mockLLM)),
-}));
+vi.mock('../../../src/llm/llm-resolver.js', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    resolveLLM: vi.fn(() => Promise.resolve(mockLLM)),
+  };
+});
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal();

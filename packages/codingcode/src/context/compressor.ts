@@ -6,7 +6,7 @@ import {
   estimateTokensForContent,
 } from './util.js';
 import { applyVisibilityEvents } from '../session/messages.js';
-import { resolveCompactionLLM } from './compaction-llm.js';
+import { resolveLLM } from '../llm/llm-resolver.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
 import type { ContextConfig } from './config.js';
 import type { Message } from '../core/types.js';
@@ -146,7 +146,7 @@ async function tryCompaction(
 
   const totalTokens = targetEvents.reduce((sum, e) => sum + estimateEventTokens(e), 0);
 
-  let compactionLlm = await resolveCompactionLLM(config, llm);
+  let compactionLlm = await resolveLLM(config.compactionModel, llm);
   if (compactionLlm && compactionLlm.modelInfo.maxTokens < totalTokens + 25000) {
     compactionLlm = llm;
   }
@@ -254,7 +254,7 @@ async function callLLMForCompaction(
   fallbackLlm: LLMClient | null,
   config: ContextConfig
 ): Promise<string | null> {
-  const llm = await resolveCompactionLLM(config, fallbackLlm);
+  const llm = await resolveLLM(config.compactionModel, fallbackLlm);
   if (!llm) return null;
 
   const transcriptText = transcript
