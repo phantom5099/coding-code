@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { HookService } from '../hooks/registry.js';
 import type { PermissionMode, PermissionRule, ApprovalDecision } from './types.js';
 import { createRuleEngine, type RuleEngine } from './rule-engine.js';
-import { DEFAULT_DENY_RULES, READONLY_TOOL_NAMES, DESTRUCTIVE_TOOL_NAMES } from './presets.js';
+import { DEFAULT_DENY_RULES, READONLY_TOOL_NAMES, DANGEROUS_TOOL_NAMES } from './presets.js';
 import { runPipeline, type PipelineHooks } from './pipeline.js';
 import { ApprovalWaitService, hasEmitter } from './async-confirm.js';
 
@@ -22,8 +22,8 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
     const hooks = yield* HookService;
     const approvalWait = yield* ApprovalWaitService;
     const ruleEngine: RuleEngine = createRuleEngine(DEFAULT_DENY_RULES);
+    const destructiveTools = new Set(DANGEROUS_TOOL_NAMES);
     const readonlyTools = new Set(READONLY_TOOL_NAMES);
-    const destructiveTools = new Set(DESTRUCTIVE_TOOL_NAMES);
 
     function buildPipelineHooks(): PipelineHooks {
       return {
@@ -100,7 +100,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               }
             }
             if (opts?.readonly) {
-              for (const toolName of DESTRUCTIVE_TOOL_NAMES) {
+              for (const toolName of DANGEROUS_TOOL_NAMES) {
                 nextEngine.addRule({
                   id: `readonly-${toolName}`,
                   action: 'deny' as const,
@@ -176,7 +176,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
             }
           }
           if (opts?.readonly) {
-            const denyRules: PermissionRule[] = DESTRUCTIVE_TOOL_NAMES.map((toolName) => ({
+            const denyRules: PermissionRule[] = DANGEROUS_TOOL_NAMES.map((toolName) => ({
               id: `readonly-${toolName}`,
               action: 'deny' as const,
               toolPattern: toolName,

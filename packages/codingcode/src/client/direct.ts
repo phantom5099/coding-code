@@ -175,16 +175,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       activeLlm = clientResult.value;
     },
 
-    async classifyLastCompletedChanges() {
-      return null;
-    },
-    async revertLastCompleted(_mode: 'agent' | 'all') {},
-    async revertCheckpoint(_turnId: number, _mode: 'agent' | 'all') {},
-    async forwardLastRevert() {},
-    async hasForwardStack() {
-      return false;
-    },
-
     async getCheckpoints() {
       if (!currentSessionId) return [];
       return runWithLayer(
@@ -204,29 +194,11 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       });
     },
 
-    async revertCheckpointFile(turnId: number, file: string) {
-      if (!currentSessionId)
-        return {
-          reverted: false,
-          throughTurnId: turnId,
-          baseTurnId: null,
-          affectedTurns: [],
-          selectedFiles: [],
-          restoreEntry: null,
-        };
-      return clients.sessions.revertCheckpointFile({
-        sessionId: currentSessionId,
-        cwd: cwd(),
-        file,
-      });
-    },
-
     async revertCheckpointFiles(turnId: number, files: string[]) {
       if (!currentSessionId)
         return {
           reverted: false,
           throughTurnId: turnId,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -238,38 +210,9 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       });
     },
 
-    async revertCheckpointAgentFiles(turnId: number) {
-      if (!currentSessionId)
-        return {
-          reverted: false,
-          throughTurnId: turnId,
-          baseTurnId: null,
-          affectedTurns: [],
-          selectedFiles: [],
-          restoreEntry: null,
-        };
-      return clients.sessions.revertCheckpointAgentFiles({
-        sessionId: currentSessionId,
-        cwd: cwd(),
-      });
-    },
-
-    async revertCheckpointAllFiles(turnId: number) {
-      if (!currentSessionId)
-        return {
-          reverted: false,
-          throughTurnId: turnId,
-          baseTurnId: null,
-          affectedTurns: [],
-          selectedFiles: [],
-          restoreEntry: null,
-        };
-      return clients.sessions.revertCheckpointAllFiles({ sessionId: currentSessionId, cwd: cwd() });
-    },
-
     async previewRollbackDiff(throughTurnId: number) {
       if (!currentSessionId)
-        return { throughTurnId, baseTurnId: null, affectedTurns: [], diff: '' };
+        return { throughTurnId, affectedTurns: [], diff: '' };
       return clients.sessions.previewRollbackDiff({
         sessionId: currentSessionId,
         cwd: cwd(),
@@ -282,7 +225,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         return {
           reverted: false,
           throughTurnId,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,
@@ -310,7 +252,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
           codeResult: {
             reverted: false,
             throughTurnId,
-            baseTurnId: null,
             affectedTurns: [],
             selectedFiles: [],
             restoreEntry: null,

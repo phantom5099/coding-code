@@ -17,10 +17,7 @@ export interface SessionClient {
   setSessionPermissionMode(input: { sessionId: string; mode: PermissionMode }): Promise<void>;
 
   getCheckpointDiff(input: { sessionId: string; cwd: string; turnId?: number }): Promise<any>;
-  revertCheckpointFile(input: { sessionId: string; cwd: string; file: string }): Promise<any>;
   revertCheckpointFiles(input: { sessionId: string; cwd: string; files: string[] }): Promise<any>;
-  revertCheckpointAgentFiles(input: { sessionId: string; cwd: string }): Promise<any>;
-  revertCheckpointAllFiles(input: { sessionId: string; cwd: string }): Promise<any>;
   previewRollbackDiff(input: {
     sessionId: string;
     cwd: string;
@@ -121,54 +118,22 @@ export function createDirectSessionClient(
     async getCheckpointDiff() {
       return { turnId: 0, files: [] };
     },
-    async revertCheckpointFile() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        baseTurnId: null,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
     async revertCheckpointFiles() {
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
-    async revertCheckpointAgentFiles() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        baseTurnId: null,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
-    async revertCheckpointAllFiles() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
       };
     },
     async previewRollbackDiff() {
-      return { throughTurnId: 0, baseTurnId: null, affectedTurns: [], diff: '' };
+      return { throughTurnId: 0, affectedTurns: [], diff: '' };
     },
     async rollbackCodeToTurn() {
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -183,7 +148,6 @@ export function createDirectSessionClient(
         codeResult: {
           reverted: false,
           throughTurnId: 0,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,

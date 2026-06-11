@@ -26,8 +26,8 @@ export const ApprovalLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
 );
 
-/** ProjectRuntime depends on HookService + McpService. */
-const ProjectRuntimeDeps = Layer.mergeAll(HookLayer, McpLayer);
+/** ProjectRuntime depends on HookService + McpService + SubagentRegistry. */
+const ProjectRuntimeDeps = Layer.mergeAll(HookLayer, McpLayer, SubagentRegistryLayer);
 export const ProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
   Layer.provide(ProjectRuntimeDeps)
 );

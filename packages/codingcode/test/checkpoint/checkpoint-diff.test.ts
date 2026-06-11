@@ -34,38 +34,24 @@ function writeFile(projectPath: string, filename: string, content: string) {
   writeFileSync(filePath, content, 'utf8');
 }
 
-describe('toGitPath and hashWorkspaceFile', () => {
-  it('toGitPath converts absolute to relative', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+describe('toGitPath', () => {
+  it('converts absolute to relative', async () => {
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
     const result = toGitPath('/tmp/project', '/tmp/project/src/file.ts');
     expect(result).toBe('src/file.ts');
   });
 
-  it('toGitPath returns normalized path when not under project', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+  it('returns normalized path when not under project', async () => {
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
     const result = toGitPath('/tmp/project', '/other/file.ts');
     expect(result).toContain('file.ts');
-  });
-
-  it('hashWorkspaceFile returns null for non-existent file', async () => {
-    const { hashWorkspaceFile } = await import('../../src/checkpoint/checkpoint-service.js');
-    const result = hashWorkspaceFile('/tmp/nonexistent', 'nonexistent.ts');
-    expect(result).toBeNull();
   });
 });
 
 describe('CodeRestoreEntry types', () => {
   it('CodeRestoreEntry type is exported', async () => {
     const mod = await import('../../src/checkpoint/checkpoint-service.js');
-    // Verify the service class is exported
     expect(typeof mod.CheckpointService).toBe('function');
-  });
-
-  it('toGitPath and hashWorkspaceFile are exported as functions', async () => {
-    const { toGitPath, hashWorkspaceFile } =
-      await import('../../src/checkpoint/checkpoint-service.js');
-    expect(typeof toGitPath).toBe('function');
-    expect(typeof hashWorkspaceFile).toBe('function');
   });
 });
 

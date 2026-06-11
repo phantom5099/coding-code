@@ -36,7 +36,6 @@
     "./client/direct-clients": "./src/client/direct/index.ts",
     "./checkpoint/checkpoint-service": "./src/checkpoint/checkpoint-service.ts",
     "./checkpoint/shadow-git": "./src/checkpoint/shadow-git.ts",
-    "./checkpoint/ledger": "./src/checkpoint/ledger.ts",
     "./checkpoint/bootstrap": "./src/checkpoint/bootstrap.ts",
     "./subagent/registry": "./src/subagent/registry.ts",
     "./subagent/loader": "./src/subagent/loader.ts",

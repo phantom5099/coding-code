@@ -61,8 +61,12 @@ export class ToolSearchService extends Effect.Service<ToolSearchService>()('Tool
           const haystack = `${t.name} ${t.shortDescription ?? ''} ${t.description}`.toLowerCase();
           return tokens.every((tok) => haystack.includes(tok));
         });
-        for (const t of hits) set.add(t.name);
         return hits.map((t) => ({ name: t.name, shortDescription: t.shortDescription }));
+      },
+
+      markLoaded: (sessionId: string, toolNames: string[]): void => {
+        const set = getSet(sessionId);
+        for (const name of toolNames) set.add(name);
       },
 
       reset: (): void => loaded.clear(),

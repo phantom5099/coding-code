@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { AgentProfile } from '../subagent/registry.js';
-import { EXPLORE_PROFILE, PLAN_PROFILE } from '../subagent/registry.js';
+import { EXPLORE_PROFILE, PLAN_PROFILE, SubagentRegistry } from '../subagent/registry.js';
 import * as agentLoader from '../subagent/loader.js';
 import type { ToolVisibilityPolicy } from '../tools/types.js';
 import { HookService } from '../hooks/registry.js';
@@ -14,9 +14,9 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
     effect: Effect.gen(function* () {
       const hooks = yield* HookService;
       const mcp = yield* McpService;
+      const subagentRegistry = yield* SubagentRegistry;
 
       const sessionAgentProfiles = new Map<string, AgentProfile>();
-      const cachedSubagentProfiles = new Map<string, AgentProfile[]>();
       const prepared = new Set<string>();
 
       function buildProfiles(projectPath: string): AgentProfile[] {
@@ -49,7 +49,9 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
             evictProjectRules(norm);
             yield* hooks.reloadUserHooks(norm).pipe(Effect.catchAll(() => Effect.void));
             yield* mcp.syncConnections(norm).pipe(Effect.catchAll(() => Effect.void));
-            cachedSubagentProfiles.set(norm, buildProfiles(norm));
+            const profiles = buildProfiles(norm);
+            subagentRegistry.reset();
+            subagentRegistry.registerAll(profiles);
           }),
 
         resolveMainAgentProfile: (
@@ -61,17 +63,27 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           return agentLoader.loadMainAgentProfile(projectPath);
         },
 
-        resolveSubagentProfile: (projectPath: string, name: string): AgentProfile | undefined => {
-          const norm = normalizePath(projectPath);
-          const cached = cachedSubagentProfiles.get(norm);
-          const profiles = cached ?? buildProfiles(norm);
-          return profiles.find((p) => p.name === name);
+        resolveSubagentProfile: (_projectPath: string, name: string): AgentProfile | undefined => {
+          // First check if not yet prepared (lazy init)
+          const cached = subagentRegistry.get(name);
+          if (cached) return cached;
+          // Lazy init: build profiles and register if not yet populated
+          const norm = normalizePath(_projectPath);
+          if (!prepared.has(norm)) {
+            const profiles = buildProfiles(norm);
+            subagentRegistry.registerAll(profiles);
+          }
+          return subagentRegistry.get(name);
         },
 
         listAgentProfiles: (projectPath: string): AgentProfile[] => {
           const normalized = normalizePath(projectPath);
-          const cached = cachedSubagentProfiles.get(normalized);
-          return cached ? [...cached] : buildProfiles(normalized);
+          if (!prepared.has(normalized)) {
+            const profiles = buildProfiles(normalized);
+            subagentRegistry.registerAll(profiles);
+            prepared.add(normalized);
+          }
+          return subagentRegistry.list();
         },
 
         getToolPolicy: (profile: AgentProfile | undefined): ToolVisibilityPolicy => ({
@@ -97,7 +109,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           Effect.sync(() => {
             const norm = normalizePath(projectPath);
             prepared.delete(norm);
-            cachedSubagentProfiles.delete(norm);
+            subagentRegistry.reset();
             evictProjectRules(norm);
           }),
       };

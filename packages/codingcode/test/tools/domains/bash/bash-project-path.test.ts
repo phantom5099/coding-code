@@ -21,7 +21,7 @@ describe('tools/domains/bash projectPath isolation', () => {
       '{"active":"p","providers":[]}',
       'utf8'
     );
-    initWorkspace({ installRoot: globalDir, workspaceCwd: globalDir });
+    initWorkspace({ processRoot: globalDir, workspaceCwd: globalDir });
   });
 
   afterEach(() => {

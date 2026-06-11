@@ -4,9 +4,6 @@ import {
   mkdirSync,
   statSync,
   writeFileSync,
-  unlinkSync,
-  openSync,
-  closeSync,
 } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -30,21 +27,17 @@ const IGNORE_RULES = [
   'Thumbs.db',
 ];
 
-const FILE_COUNT_CAP = 10_000;
 const SIZE_CAP_MB = 1_024;
 
 export class ShadowGit {
   readonly gitDir: string;
   readonly projectPath: string;
-  private readonly lockPath: string;
-  private lockFd: number | null = null;
 
   constructor(projectPath: string) {
     // Normalize path so same dir always produces same encoding (forward slash + lowercase drive)
     this.projectPath = normalizePath(projectPath);
     const encoded = encodeProjectPath(this.projectPath);
     this.gitDir = join(PROJECT_BASE, encoded, 'checkpoint', 'repo.git');
-    this.lockPath = join(PROJECT_BASE, encoded, 'checkpoint', 'repo.lock');
   }
 
   init(): void {
@@ -128,10 +121,9 @@ export class ShadowGit {
     return this.run(...args);
   }
 
-  shouldFallback(): boolean {
+  isTooLargeForSnapshot(): boolean {
     const result = this.run('ls-files', '-m', '-o', '--exclude-standard');
     const files = result.stdout.trim().split('\n').filter(Boolean);
-    if (files.length > FILE_COUNT_CAP) return true;
     let totalBytes = 0;
     for (const f of files) {
       try {
@@ -142,30 +134,6 @@ export class ShadowGit {
       if (totalBytes > SIZE_CAP_MB * 1024 * 1024) return true;
     }
     return false;
-  }
-
-  // ---- Lock ----
-  lock(): void {
-    for (let i = 0; ; i++) {
-      try {
-        this.lockFd = openSync(this.lockPath, 'wx');
-        closeSync(this.lockFd);
-        return;
-      } catch {
-        if (i > 500) throw new Error('ShadowGit lock timeout');
-      }
-    }
-  }
-
-  unlock(): void {
-    if (this.lockFd !== null) {
-      try {
-        unlinkSync(this.lockPath);
-      } catch {
-        /* ignore */
-      }
-      this.lockFd = null;
-    }
   }
 
   // ---- Private ----

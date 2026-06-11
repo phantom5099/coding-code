@@ -188,6 +188,10 @@ export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('Subage
         map.set(profile.name, profile);
       },
 
+      registerAll: (profiles: AgentProfile[]): void => {
+        for (const p of profiles) map.set(p.name, p);
+      },
+
       get: (name: string): AgentProfile | undefined => {
         return map.get(name);
       },

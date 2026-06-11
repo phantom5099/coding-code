@@ -5,7 +5,8 @@
   "main": "./src/config.ts",
   "exports": {
     "./config": "./src/config.ts",
-    "./logger": "./src/logger.ts"
+    "./logger": "./src/logger.ts",
+    "./disabled-store": "./src/disabled-store.ts"
   },
   "dependencies": {
     "pino": "^9.6.0",

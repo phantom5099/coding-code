@@ -61,7 +61,7 @@ export function runPipeline(
       const result = opts.ruleEngine.evaluate(request.tool, request.input);
       if (result) {
         layers.push(LAYER_NAMES[0]);
-        const final = yield* layer6Audit(request, result, layers, opts);
+        const final = yield* recordAuditAndReturn(request, result, layers, opts);
         return final;
       }
     }
@@ -74,7 +74,7 @@ export function runPipeline(
           source: 'readonly-whitelist',
         };
         layers.push(LAYER_NAMES[1]);
-        const final = yield* layer6Audit(request, result, layers, opts);
+        const final = yield* recordAuditAndReturn(request, result, layers, opts);
         return final;
       }
     }
@@ -89,7 +89,7 @@ export function runPipeline(
       );
       if (modeResult) {
         layers.push(LAYER_NAMES[2]);
-        const final = yield* layer6Audit(request, modeResult, layers, opts);
+        const final = yield* recordAuditAndReturn(request, modeResult, layers, opts);
         return final;
       }
     }
@@ -108,12 +108,12 @@ export function runPipeline(
             reason: hookResult.reason ?? 'Denied by PreToolUse hook',
             source: 'hook',
           };
-          const final = yield* layer6Audit(request, result, layers, opts);
+          const final = yield* recordAuditAndReturn(request, result, layers, opts);
           return final;
         }
         if (hookResult.decision === 'allow') {
           const result: ApprovalDecision = { type: 'allow', source: 'hook' };
-          const final = yield* layer6Audit(request, result, layers, opts);
+          const final = yield* recordAuditAndReturn(request, result, layers, opts);
           return final;
         }
         // 'ask' or no decision → continue to user confirmation
@@ -133,7 +133,7 @@ export function runPipeline(
           reason: 'Approval required but no UI available',
           source: 'system',
         };
-        const final = yield* layer6Audit(request, result, layers, opts);
+        const final = yield* recordAuditAndReturn(request, result, layers, opts);
         return final;
       }
 
@@ -163,7 +163,7 @@ export function runPipeline(
           break;
       }
 
-      const final = yield* layer6Audit(request, result, layers, opts);
+      const final = yield* recordAuditAndReturn(request, result, layers, opts);
       return final;
     }
   });
@@ -204,7 +204,7 @@ function applyPermissionMode(
   }
 }
 
-function layer6Audit(
+function recordAuditAndReturn(
   request: ToolCallRequest,
   decision: ApprovalDecision,
   passedLayers: string[],

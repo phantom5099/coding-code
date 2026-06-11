@@ -24,13 +24,6 @@ export interface PanelItem<T = string> {
   description?: string;
 }
 
-export interface CheckpointInfo {
-  turnId: number;
-  title: string;
-  agentModified: string[];
-  unknownSource: string[];
-}
-
 export interface McpServerStatus {
   name: string;
   connected: boolean;
@@ -51,8 +44,6 @@ export type PanelState =
   | { type: 'model'; items: PanelItem[]; activeValue: string }
   | { type: 'sessions'; items: PanelItem[] }
   | { type: 'approval'; id: string; tool: string; args: Record<string, unknown> }
-  | { type: 'checkpoint-list'; checkpoints: CheckpointInfo[] }
-  | { type: 'checkpoint-action'; cp: CheckpointInfo; hasForward: boolean }
   | { type: 'help' }
   | { type: 'mcp'; servers: McpServerStatus[] }
   | { type: 'skill'; skills: SkillStatus[] }

@@ -43,7 +43,7 @@ function writeFile(projectPath: string, filename: string, content: string) {
 
 describe('toGitPath case-insensitive matching', () => {
   it('handles Windows case-mismatched projectPath and file path', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
 
     // projectPath has mixed case (Users, Desktop), file path is all lowercase
     const projectPath = 'c:/Users/Alice/Desktop/MyProject';
@@ -54,7 +54,7 @@ describe('toGitPath case-insensitive matching', () => {
   });
 
   it('handles lowercase projectPath with uppercase file path', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
 
     const projectPath = 'c:/users/alice/desktop/myproject';
     const filePath = 'c:/Users/Alice/Desktop/MyProject/src/file.ts';
@@ -64,7 +64,7 @@ describe('toGitPath case-insensitive matching', () => {
   });
 
   it('still returns normalized absolute path when file is outside project', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
 
     const result = toGitPath('c:/Users/Alice/Desktop/MyProject', 'c:/other/file.ts');
 
@@ -163,9 +163,8 @@ describe('undoLastCodeRollback end-to-end via ShadowGit', () => {
       const entry = {
         id: 'test123',
         sessionId,
-        action: 'checkpoint-file',
+        action: 'checkpoint-files',
         throughTurnId: 1,
-        baseTurnId: 1,
         affectedTurns: [],
         selectedFiles: [join(projectPath, 'src/main.ts')],
         safetyCommit: safetyHash,
@@ -226,7 +225,6 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
         }).pipe(Effect.provide(checkpointLayer))
       );
 
-      expect(preview.baseTurnId).toBe(1);
       expect(preview.affectedTurns).toEqual([1]);
       expect(preview.diff).toContain('articles/one.md');
     } finally {
@@ -258,7 +256,6 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
       );
 
       expect(result.reverted).toBe(true);
-      expect(result.baseTurnId).toBe(1);
       expect(result.affectedTurns).toEqual([1]);
       expect(
         result.selectedFiles.some((f) => f.replace(/\\/g, '/').endsWith('articles/one.md'))
@@ -302,7 +299,6 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
         }).pipe(Effect.provide(checkpointLayer))
       );
 
-      expect(preview.baseTurnId).toBe(2);
       expect(preview.affectedTurns).toEqual([2, 3]);
       expect(preview.diff).toContain('two.txt');
       expect(preview.diff).toContain('three.txt');
@@ -314,7 +310,7 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
 
 describe('toGitPath preserves original casing for git paths', () => {
   it('returns relative path with original casing from git diff', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
 
     // Simulate a path that git returns with original casing
     const projectPath = 'c:/Users/Alice/Desktop/MyProject';
@@ -368,9 +364,8 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
       const entry = {
         id: 'test123',
         sessionId,
-        action: 'checkpoint-file',
+        action: 'checkpoint-files',
         throughTurnId: 1,
-        baseTurnId: 1,
         affectedTurns: [],
         selectedFiles: [join(projectPath, 'src/main.ts').toLowerCase()],
         safetyCommit: safetyHash,

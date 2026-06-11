@@ -223,7 +223,6 @@ export interface CheckpointDiff {
   turnId: number;
   files: Array<{
     path: string;
-    source: 'agent' | 'unknown';
     status: string;
     diff: string;
     insertions: number;
@@ -234,7 +233,6 @@ export interface CheckpointDiff {
 export interface CodeRollbackResult {
   reverted: boolean;
   throughTurnId: number;
-  baseTurnId: number | null;
   affectedTurns: number[];
   selectedFiles: string[];
   restoreEntry: CodeRestoreEntry | null;
@@ -250,7 +248,6 @@ export interface CodeRollbackUndoResult {
 
 export interface RollbackPreviewDiff {
   throughTurnId: number;
-  baseTurnId: number | null;
   affectedTurns: number[];
   diff: string;
 }
@@ -260,7 +257,6 @@ export interface CodeRestoreEntry {
   sessionId: string;
   action: string;
   throughTurnId: number;
-  baseTurnId: number;
   affectedTurns: number[];
   selectedFiles: string[];
   safetyCommit: string;
@@ -285,34 +281,12 @@ export function getCheckpointDiff(
   return clients.sessions.getCheckpointDiff({ sessionId, cwd, turnId }) as any;
 }
 
-export function revertCheckpointFile(
-  sessionId: string,
-  cwd: string,
-  file: string
-): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions.revertCheckpointFile({ sessionId, cwd, file }) as any;
-}
-
 export function revertCheckpointFiles(
   sessionId: string,
   cwd: string,
   files: string[]
 ): Promise<{ ok: boolean; result: CodeRollbackResult }> {
   return clients.sessions.revertCheckpointFiles({ sessionId, cwd, files }) as any;
-}
-
-export function revertCheckpointAgentFiles(
-  sessionId: string,
-  cwd: string
-): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions.revertCheckpointAgentFiles({ sessionId, cwd }) as any;
-}
-
-export function revertCheckpointAllFiles(
-  sessionId: string,
-  cwd: string
-): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions.revertCheckpointAllFiles({ sessionId, cwd }) as any;
 }
 
 export function previewRollbackDiff(

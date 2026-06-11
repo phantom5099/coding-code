@@ -4,7 +4,7 @@ import type { SessionEvent, AssistantEvent, TokenUsage } from './types.js';
 import { readHistory, resolveSessionDir } from './io.js';
 import { getContextConfig } from '../context/config.js';
 
-const COMPACTIBLE_TOOLS = new Set([
+const COMPACTABLE_TOOLS = new Set([
   'read_file',
   'execute_command',
   'search_code',
@@ -69,8 +69,12 @@ export function applyVisibilityEvents(events: SessionEvent[]): VisibilityResult 
   return { hidden, compactedTurnIds };
 }
 
-export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
-  const { hidden, compactedTurnIds } = applyVisibilityEvents(events);
+export function buildMessagesFromEvents(
+  events: SessionEvent[],
+  externalCompactedTurnIds?: Set<number>,
+): Message[] {
+  const { hidden, compactedTurnIds: derivedIds } = applyVisibilityEvents(events);
+  const compactedTurnIds = externalCompactedTurnIds ?? derivedIds;
 
   const visible: SessionEvent[] = [];
   for (const ev of events) {
@@ -104,7 +108,7 @@ export function buildMessagesFromEvents(events: SessionEvent[]): Message[] {
         let output = event.output;
         if (
           compactedTurnIds.has(event.turnId) &&
-          COMPACTIBLE_TOOLS.has(event.toolName.toLowerCase()) &&
+          COMPACTABLE_TOOLS.has(event.toolName.toLowerCase()) &&
           event.output.length > getContextConfig().microCompactMinChars
         ) {
           output = `[Earlier: used ${event.toolName}]`;

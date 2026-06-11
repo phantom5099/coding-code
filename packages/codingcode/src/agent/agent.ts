@@ -306,6 +306,7 @@ export async function* runReActLoop(
 
       // Check abort signal
       if (opts.abortSignal?.aborted) {
+        checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
         yield { _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') };
         await Effect.runPromise(
           hooks.emit('agent.turn.end', {
@@ -465,7 +466,7 @@ export async function* runReActLoop(
           if (stopContinuations >= maxStopContinuations) {
             yield {
               _tag: 'Error',
-              error: new AgentError('STOP_LOOP', 'max stop continuations exceeded'),
+              error: new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded'),
             };
             await Effect.runPromise(
               hooks.emit('agent.turn.end', {
@@ -477,7 +478,7 @@ export async function* runReActLoop(
             flushSessionToMemory(state.sessionId, llm).catch((e) =>
               logger.error('memory flush failed:', e)
             );
-            return Result.err(new AgentError('STOP_LOOP', 'max stop continuations exceeded'));
+            return Result.err(new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded'));
           }
           stopContinuations++;
           const injection = stopDecision.injection ?? '(continue)';
@@ -557,6 +558,7 @@ export async function* runReActLoop(
 
       // If abort fired during tool execution, terminate immediately
       if (opts.abortSignal?.aborted) {
+        checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
         yield { _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') };
         await Effect.runPromise(
           hooks.emit('agent.turn.end', {

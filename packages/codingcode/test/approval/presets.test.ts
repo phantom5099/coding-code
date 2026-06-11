@@ -3,7 +3,7 @@ import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import {
   DEFAULT_DENY_RULES,
   READONLY_TOOL_NAMES,
-  DESTRUCTIVE_TOOL_NAMES,
+  DANGEROUS_TOOL_NAMES,
 } from '../../src/approval/presets.js';
 
 describe('Presets', () => {
@@ -53,7 +53,7 @@ describe('Presets', () => {
   });
 
   it('should define destructive tools', () => {
-    expect(DESTRUCTIVE_TOOL_NAMES).toContain('execute_command');
-    expect(DESTRUCTIVE_TOOL_NAMES).not.toContain('Bash');
+    expect(DANGEROUS_TOOL_NAMES).toContain('execute_command');
+    expect(DANGEROUS_TOOL_NAMES).not.toContain('Bash');
   });
 });

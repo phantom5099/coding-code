@@ -127,69 +127,28 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       return currentSessionId ?? 'unknown';
     },
 
-    async classifyLastCompletedChanges() {
-      return null;
-    },
-    async revertLastCompleted(_mode: 'agent' | 'all') {},
-    async revertCheckpoint(_turnId: number, _mode: 'agent' | 'all') {},
-    async forwardLastRevert() {},
-    async hasForwardStack() {
-      return false;
-    },
     async getCheckpoints() {
       return [];
     },
     async getCheckpointDiff() {
       return { turnId: 0, files: [] };
     },
-    async revertCheckpointFile() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        baseTurnId: null,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
     async revertCheckpointFiles() {
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
-    async revertCheckpointAgentFiles() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        baseTurnId: null,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
-    async revertCheckpointAllFiles() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
       };
     },
     async previewRollbackDiff() {
-      return { throughTurnId: 0, baseTurnId: null, affectedTurns: [], diff: '' };
+      return { throughTurnId: 0, affectedTurns: [], diff: '' };
     },
     async rollbackCodeToTurn() {
       return {
         reverted: false,
         throughTurnId: 0,
-        baseTurnId: null,
         affectedTurns: [],
         selectedFiles: [],
         restoreEntry: null,
@@ -204,7 +163,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
         codeResult: {
           reverted: false,
           throughTurnId: 0,
-          baseTurnId: null,
           affectedTurns: [],
           selectedFiles: [],
           restoreEntry: null,

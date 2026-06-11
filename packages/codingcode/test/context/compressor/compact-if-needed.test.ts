@@ -28,10 +28,16 @@ const { mockCompactWithLLM, mockLLM } = vi.hoisted(() => ({
 
 vi.mock('../../../src/session/io.js', async (importOriginal) => {
   const actual = await importOriginal();
+  const mockResolveSessionDir = vi.fn(() => '/tmp/sessions');
   return {
     ...(actual as any),
     findSessionIndex: vi.fn(() => ({ currentTurnId: 10 })),
-    resolveSessionDir: vi.fn(() => '/tmp/sessions'),
+    resolveSessionDir: mockResolveSessionDir,
+    resolveSessionJsonlPath: vi.fn((sessionId: string) => {
+      const dir = mockResolveSessionDir(sessionId);
+      if (!dir) throw new Error(`Session ${sessionId} not found`);
+      return `${dir}/${sessionId}.jsonl`;
+    }),
     readHistory: vi.fn(() => [
       { type: 'user', content: 'a'.repeat(200), uuid: 'u1', turnId: 1 },
       { type: 'assistant', content: 'b'.repeat(200), uuid: 'a1', turnId: 1 },
@@ -39,9 +45,13 @@ vi.mock('../../../src/session/io.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../src/context/compressor/llm-resolver.js', () => ({
-  resolveCompactionLLM: vi.fn(() => Promise.resolve(mockLLM)),
-}));
+vi.mock('../../../src/llm/llm-resolver.js', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    resolveLLM: vi.fn(() => Promise.resolve(mockLLM)),
+  };
+});
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal();
@@ -51,15 +61,15 @@ vi.mock('fs', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../src/context/utils/tokens.js', () => ({
+vi.mock('../../../src/context/util.js', () => ({
   estimateTokens: vi.fn(),
   estimateMessageTokens: vi.fn(),
   estimateTokensForContent: vi.fn(),
 }));
 
-import { compactIfNeeded } from '../../../src/context/compressor/index.js';
+import { compactIfNeeded } from '../../../src/context/compressor.js';
 import { findSessionIndex } from '../../../src/session/io.js';
-import { estimateTokens, estimateMessageTokens } from '../../../src/context/utils/tokens.js';
+import { estimateTokens, estimateMessageTokens } from '../../../src/context/util.js';
 
 function config(threshold: number, maxTokens = 10000) {
   return {

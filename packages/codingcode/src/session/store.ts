@@ -21,7 +21,7 @@ import {
   estimateTokens,
   estimateTokensForContent,
   estimateMessageTokens,
-} from '../context/utils/tokens.js';
+} from '../context/util.js';
 import {
   projectSessionsDir,
   ensureDirs,
@@ -34,7 +34,7 @@ import {
   enqueueWrite,
   readCurrentIndex,
   countNonMetaEvents,
-  makeTitle,
+  truncateTitle,
   findFirstUserContent,
 } from './io.js';
 import { buildMessages, findLastVisibleAssistantUsage } from './messages.js';
@@ -88,7 +88,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
                 state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
               }
               const firstUser = findFirstUserContent(history);
-              if (firstUser) state.title = makeTitle(firstUser);
+              if (firstUser) state.title = truncateTitle(firstUser);
               return state;
             }
 
@@ -130,7 +130,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
               timestamp: new Date().toISOString(),
             };
             if (state.title === state.sessionId.slice(0, 8)) {
-              state.title = makeTitle(content);
+              state.title = truncateTitle(content);
             }
             appendLine(state.transcriptPath, event);
             state.messageCount++;

@@ -11,10 +11,7 @@ import {
   deleteSession,
   sendApprovalResponse,
   getCheckpointDiff,
-  revertCheckpointFile,
   revertCheckpointFiles,
-  revertCheckpointAgentFiles,
-  revertCheckpointAllFiles,
   previewRollbackDiff,
   rollbackCodeToTurn,
   rollbackContext,
@@ -362,7 +359,6 @@ export function useAgentRollback() {
   const setRollbackPreview = useGlobalStore((s) => s.setRollbackPreview);
   const markFileReverted = useGlobalStore((s) => s.markFileReverted);
   const markFileRestored = useGlobalStore((s) => s.markFileRestored);
-  const markScopeReverted = useGlobalStore((s) => s.markScopeReverted);
   const setTurnCheckpointMapping = useGlobalStore((s) => s.setTurnCheckpointMapping);
   const initRevertedFilesFromState = useGlobalStore((s) => s.initRevertedFilesFromState);
 
@@ -398,7 +394,7 @@ export function useAgentRollback() {
   const revertFile = useCallback(
     async (threadId: string, file: string) => {
       const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await revertCheckpointFile(threadId, cwd, file);
+      const { result } = await revertCheckpointFiles(threadId, cwd, [file]);
       if (result.reverted) {
         markFileReverted(threadId, resolveUITurnId(threadId, result.throughTurnId), file);
       }
@@ -420,30 +416,6 @@ export function useAgentRollback() {
       return result;
     },
     [workspace.rootPath, markFileReverted, resolveUITurnId]
-  );
-
-  const revertAgentFiles = useCallback(
-    async (threadId: string) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await revertCheckpointAgentFiles(threadId, cwd);
-      if (result.reverted) {
-        markScopeReverted(threadId, resolveUITurnId(threadId, result.throughTurnId), 'agent');
-      }
-      return result;
-    },
-    [workspace.rootPath, markScopeReverted, resolveUITurnId]
-  );
-
-  const revertAllFiles = useCallback(
-    async (threadId: string) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await revertCheckpointAllFiles(threadId, cwd);
-      if (result.reverted) {
-        markScopeReverted(threadId, resolveUITurnId(threadId, result.throughTurnId), 'all');
-      }
-      return result;
-    },
-    [workspace.rootPath, markScopeReverted, resolveUITurnId]
   );
 
   const previewRollback = useCallback(
@@ -585,8 +557,6 @@ export function useAgentRollback() {
     loadCheckpointDiff,
     revertFile,
     revertFiles,
-    revertAgentFiles,
-    revertAllFiles,
     previewRollback,
     rollbackCode,
     rollbackCtx,

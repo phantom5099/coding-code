@@ -14,12 +14,6 @@ export const COMMAND_REGISTRY = {
     usage: '/sessions',
     title: '恢复会话',
   },
-  checkpoint: {
-    name: 'checkpoint',
-    description: '管理文件快照，回退/前进',
-    usage: '/checkpoint',
-    title: '检查点',
-  },
   help: { name: 'help', description: '显示帮助', usage: '/help', title: '帮助' },
   clear: {
     name: 'clear',

@@ -22,6 +22,11 @@ export function errorResponse(err: unknown) {
   }
   return {
     status: 500,
-    body: { error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } },
+    body: {
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: err instanceof Error ? err.message : 'Internal server error',
+      },
+    },
   };
 }

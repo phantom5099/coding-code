@@ -14,6 +14,6 @@ export async function initBackend(): Promise<void> {
   const { AppLayer } = await import('@codingcode/core/layer');
   ensureUserConfig();
   const config = loadConfig();
-  initWorkspace({ installRoot: getInstallRoot(), config });
+  initWorkspace({ processRoot: getInstallRoot(), config });
   _ready = true;
 }

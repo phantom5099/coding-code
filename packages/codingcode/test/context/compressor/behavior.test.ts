@@ -3,13 +3,13 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { compactWithLLM } from '../../../src/context/compressor/index.js';
+import { compactWithLLM } from '../../../src/context/compressor.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 import { buildMessages } from '../../../src/session/messages.js';
-import { estimateTokens } from '../../../src/context/utils/tokens.js';
+import { estimateTokens } from '../../../src/context/util.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 

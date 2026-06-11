@@ -6,8 +6,8 @@ interface PendingEntry {
   sessionId: string;
 }
 
-const pending = new Map<string, PendingEntry>();
-const emitters = new Map<
+const pendingConfirmations = new Map<string, PendingEntry>();
+const approvalEmitters = new Map<
   string,
   (id: string, tool: string, args: Record<string, unknown>) => void
 >();
@@ -16,22 +16,22 @@ export function registerEmitter(
   sessionId: string,
   fn: (id: string, tool: string, args: Record<string, unknown>) => void
 ): void {
-  emitters.set(sessionId, fn);
+  approvalEmitters.set(sessionId, fn);
 }
 
 export function delegateEmitter(childSessionId: string, parentSessionId: string): void {
-  const parentFn = emitters.get(parentSessionId);
+  const parentFn = approvalEmitters.get(parentSessionId);
   if (parentFn) {
-    emitters.set(childSessionId, parentFn);
+    approvalEmitters.set(childSessionId, parentFn);
   }
 }
 
 export function unregisterEmitter(sessionId: string): void {
-  emitters.delete(sessionId);
+  approvalEmitters.delete(sessionId);
 }
 
 export function hasEmitter(sessionId: string): boolean {
-  return emitters.has(sessionId);
+  return approvalEmitters.has(sessionId);
 }
 
 export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('ApprovalWait', {
@@ -39,7 +39,7 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
     waitForConfirm: (id: string, sessionId: string): Effect.Effect<ConfirmResult> =>
       Effect.gen(function* () {
         const d = yield* Deferred.make<ConfirmResult, never>();
-        pending.set(id, { deferred: d, sessionId });
+        pendingConfirmations.set(id, { deferred: d, sessionId });
         return yield* Deferred.await(d);
       }),
 
@@ -49,9 +49,9 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
       result: ConfirmResult
     ): Effect.Effect<boolean> =>
       Effect.sync(() => {
-        const entry = pending.get(id);
+        const entry = pendingConfirmations.get(id);
         if (!entry) return false;
-        pending.delete(id);
+        pendingConfirmations.delete(id);
         Deferred.unsafeDone(entry.deferred, Effect.succeed(result));
         return true;
       }),
@@ -59,11 +59,11 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
     getPending: (sessionId?: string): Effect.Effect<string[]> =>
       Effect.sync(() => {
         if (sessionId) {
-          return Array.from(pending.entries())
+          return Array.from(pendingConfirmations.entries())
             .filter(([_, e]) => e.sessionId === sessionId)
             .map(([id]) => id);
         }
-        return Array.from(pending.keys());
+        return Array.from(pendingConfirmations.keys());
       }),
 
     emitApprovalRequest: (
@@ -73,7 +73,7 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
       args: Record<string, unknown>
     ): Effect.Effect<void> =>
       Effect.sync(() => {
-        emitters.get(sessionId)?.(id, tool, args);
+        approvalEmitters.get(sessionId)?.(id, tool, args);
       }),
   }),
 }) {}

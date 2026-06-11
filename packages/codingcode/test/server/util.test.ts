@@ -12,10 +12,18 @@ describe('server/util', () => {
       expect(resp.body.error.message).toBe('[SESSION_NOT_FOUND] Session "abc" not found');
     });
 
-    it('returns 500 for unknown errors', () => {
+    it('returns 500 for unknown errors with original message', () => {
       const resp = errorResponse(new Error('boom'));
       expect(resp.status).toBe(500);
       expect(resp.body.error.code).toBe('INTERNAL_ERROR');
+      expect(resp.body.error.message).toBe('boom');
+    });
+
+    it('returns 500 with fallback for non-Error throw', () => {
+      const resp = errorResponse('raw string');
+      expect(resp.status).toBe(500);
+      expect(resp.body.error.code).toBe('INTERNAL_ERROR');
+      expect(resp.body.error.message).toBe('Internal server error');
     });
 
     it('returns 400 for CONFIG_MISSING', () => {

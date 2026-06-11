@@ -94,4 +94,4 @@ export const READONLY_TOOL_NAMES: string[] = [
   'todo_write',
 ];
 
-export const DESTRUCTIVE_TOOL_NAMES: string[] = ['execute_command'];
+export const DANGEROUS_TOOL_NAMES: string[] = ['execute_command'];

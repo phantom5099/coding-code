@@ -1,20 +1,17 @@
 import { randomUUID } from 'crypto';
-import { resolveSessionDir } from '../../session/io.js';
+import { resolveSessionJsonlPath, appendLine } from '../session/io.js';
 import {
   estimateTokens,
   estimateMessageTokens,
-  estimateTokensForContent,
-} from '../utils/tokens.js';
-import { applyVisibilityEvents } from '../../session/messages.js';
-import { resolveCompactionLLM } from './llm-resolver.js';
-import { COMPACTION_SYSTEM_PROMPT } from './prompt.js';
-import type { ContextConfig } from '../config.js';
-import type { Message } from '../../core/types.js';
-import type { SessionEvent, SummaryEvent } from '../../session/types.js';
-import type { LLMClient } from '../../llm/client.js';
-import { assemblePayload } from '../organizer.js';
-import { join } from 'path';
-import { appendFileSync } from 'fs';
+} from './util.js';
+import { buildMessagesFromEvents } from '../session/messages.js';
+import { resolveLLM } from '../llm/llm-resolver.js';
+import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
+import type { ContextConfig } from './config.js';
+import type { Message } from '../core/types.js';
+import type { SessionEvent, SummaryEvent } from '../session/types.js';
+import type { LLMClient } from '../llm/client.js';
+import { assemblePayload } from './organizer.js';
 
 export interface CompressResult {
   didCompress: boolean;
@@ -86,8 +83,8 @@ export async function compactWithLLM(
   usage?: number,
   modelMaxTokens?: number
 ): Promise<CompressResult> {
+  const payload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
   if (!compactedEvents || currentTurnId === undefined) {
-    const payload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
     compactedEvents = payload.compactedEvents;
     currentTurnId = payload.currentTurnId;
   }
@@ -96,46 +93,33 @@ export async function compactWithLLM(
 
   const threshold = modelMaxTokens ? modelMaxTokens * config.compactionThreshold : Infinity;
   if (usage === undefined || usage - released > threshold) {
-    released += await tryCompaction(sessionId, config, llm, compactedEvents, currentTurnId);
+    released += await tryCompaction(sessionId, config, llm, compactedEvents, currentTurnId, payload.compactedTurnIds);
   }
 
-  const payload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
+  const postPayload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
   return {
     didCompress: released > 0,
     released,
-    promptEstimate: estimateTokens(payload.messages),
+    promptEstimate: estimateTokens(postPayload.messages),
   };
 }
 
-// ---------- Summary persistence ----------
-
-function appendSummaryToSession(sessionId: string, event: SummaryEvent): void {
-  const dir = resolveSessionDir(sessionId);
-  if (!dir) throw new Error(`Session ${sessionId} not found`);
-  const jsonlPath = join(dir, `${sessionId}.jsonl`);
-  appendFileSync(jsonlPath, JSON.stringify(event) + '\n', 'utf8');
-}
 
 // ---------- LLM Compaction ----------
-
-const ESTIMATED_SUMMARY_TOKENS = 5000;
-const MAX_TOOL_RESULT_TOKENS = 30000;
 
 async function tryCompaction(
   sessionId: string,
   config: ContextConfig,
   llm: LLMClient | null,
   compactedEvents: SessionEvent[],
-  currentTurnId: number
+  currentTurnId: number,
+  compactedTurnIds: Set<number>,
 ): Promise<number> {
   const endTurn = currentTurnId - config.keepRecentTurns - 1;
   if (endTurn < 1) return 0;
 
-  const { hidden } = applyVisibilityEvents(compactedEvents);
-
   const inRange = compactedEvents.filter((ev) => {
     if (ev.type === 'session_meta') return false;
-    if ('uuid' in ev && hidden.has((ev as any).uuid)) return false;
     if ('turnId' in ev && (ev as any).turnId >= 1 && (ev as any).turnId <= endTurn) return true;
     return false;
   });
@@ -144,15 +128,15 @@ async function tryCompaction(
   const targetEvents = getIncrementalEvents(inRange);
   if (targetEvents.length === 0) return 0;
 
-  const totalTokens = targetEvents.reduce((sum, e) => sum + estimateEventTokens(e), 0);
+  const msgs = buildMessagesFromEvents(targetEvents, compactedTurnIds);
+  const totalTokens = estimateTokens(msgs);
 
-  let compactionLlm = await resolveCompactionLLM(config, llm);
+  let compactionLlm = await resolveLLM(config.compactionModel, llm);
   if (compactionLlm && compactionLlm.modelInfo.maxTokens < totalTokens + 25000) {
     compactionLlm = llm;
   }
 
-  const transcript = buildTranscript(targetEvents);
-  const summary = await callLLMForCompaction(transcript, compactionLlm, config);
+  const summary = await callLLMForCompaction(msgs, compactionLlm, config);
   if (!summary) return 0;
 
   const replacedUuids: string[] = [];
@@ -173,8 +157,7 @@ async function tryCompaction(
     lastSummarizedTurnId: lastTurnId,
     timestamp: new Date().toISOString(),
   };
-  appendSummaryToSession(sessionId, event);
-  for (const u of replacedUuids) hidden.add(u);
+  appendLine(resolveSessionJsonlPath(sessionId), event);
 
   const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
   return Math.max(0, totalTokens - estimateMessageTokens(summaryMsg));
@@ -191,74 +174,16 @@ function getIncrementalEvents(inRange: SessionEvent[]): SessionEvent[] {
   return inRange.filter((e) => 'turnId' in e && (e as any).turnId > lastTurn);
 }
 
-function buildTranscript(events: SessionEvent[]): Message[] {
-  const transcript: Message[] = [];
-  for (const ev of events) {
-    switch (ev.type) {
-      case 'user':
-        transcript.push({ role: 'user', content: ev.content });
-        break;
-      case 'assistant':
-        transcript.push({ role: 'assistant', content: ev.content });
-        break;
-      case 'tool_result': {
-        let content = ev.output;
-        const tokens = estimateTokensForContent(content);
-        if (tokens > MAX_TOOL_RESULT_TOKENS) {
-          const ratio = MAX_TOOL_RESULT_TOKENS / tokens;
-          const keepChars = Math.floor(content.length * ratio);
-          content =
-            content.slice(0, keepChars) +
-            `\n\n[...truncated: ${tokens} tokens total, showing first ${MAX_TOOL_RESULT_TOKENS}]`;
-        }
-        transcript.push({
-          role: 'tool',
-          content,
-          tool_call_id: ev.toolCallId,
-          tool_name: ev.toolName,
-        } as any);
-        break;
-      }
-      case 'summary':
-        transcript.push({ role: 'system', name: 'compacted_history', content: ev.summaryText });
-        break;
-    }
-  }
-  return transcript;
-}
-
-function estimateEventTokens(e: SessionEvent): number {
-  if (e.type === 'user') return estimateMessageTokens({ role: 'user', content: e.content });
-  if (e.type === 'assistant')
-    return estimateMessageTokens({ role: 'assistant', content: e.content });
-  if (e.type === 'tool_result') {
-    return estimateMessageTokens({
-      role: 'tool',
-      content: e.output,
-      tool_call_id: e.toolCallId,
-      tool_name: e.toolName,
-    } as any);
-  }
-  if (e.type === 'summary') {
-    return estimateMessageTokens({
-      role: 'system',
-      name: 'compacted_history',
-      content: e.summaryText,
-    });
-  }
-  return 0;
-}
-
 async function callLLMForCompaction(
   transcript: Message[],
   fallbackLlm: LLMClient | null,
   config: ContextConfig
 ): Promise<string | null> {
-  const llm = await resolveCompactionLLM(config, fallbackLlm);
+  const llm = await resolveLLM(config.compactionModel, fallbackLlm);
   if (!llm) return null;
 
   const transcriptText = transcript
-    .map((m) => `[${m.role}${m.tool_name ? ':' + m.tool_name : ''}]\n${m.content}`)
+    .map((m) => `[${m.role}${(m as any).tool_name ? ':' + (m as any).tool_name : ''}]\n${m.content}`)
     .join('\n\n');
 
   const system = COMPACTION_SYSTEM_PROMPT;

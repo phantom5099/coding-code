@@ -9,6 +9,7 @@ export interface ToolSearchApi {
     query: string,
     policy?: ToolVisibilityPolicy
   ) => Array<{ name: string; shortDescription?: string }>;
+  markLoaded: (sessionId: string, toolNames: string[]) => void;
 }
 
 export function createToolSearchTool(
@@ -32,6 +33,7 @@ export function createToolSearchTool(
       const { query } = args as { query: string };
       const hits = svc.search(sessionId, query, policy);
       if (hits.length === 0) return `No deferred tools matched "${query}".`;
+      svc.markLoaded(sessionId, hits.map((h) => h.name));
       return [
         `Loaded ${hits.length} tool(s). Their full schemas are now available next turn:`,
         ...hits.map((h) => `- ${h.name}: ${h.shortDescription ?? ''}`),

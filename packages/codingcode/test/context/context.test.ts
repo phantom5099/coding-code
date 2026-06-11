@@ -84,11 +84,14 @@ const MockCheckpointLayer = Layer.succeed(
     _tag: 'Checkpoint' as const,
     snapshotBaseline: () => {},
     snapshotFinal: () => {},
-    classifyChanges: () => null,
     getCompletedTurns: () => [],
-    forward: () => null,
-    hasForwardStack: () => false,
     getCheckpoints: () => [],
+    getCheckpointDiff: () => ({ turnId: 0, files: [] }),
+    revertCheckpointFiles: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
+    previewRollbackDiff: () => ({ throughTurnId: 0, affectedTurns: [], diff: '' }),
+    rollbackCodeToTurn: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
+    undoLastCodeRollback: () => ({ restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] }),
+    getLatestRestoreEntry: () => null,
   } as any)
 );
 
@@ -165,7 +168,7 @@ describe('ContextService', () => {
       })
     );
 
-    const { HookLayer } = await import('../../src/layer.js');
+    const { HookLayer, SubagentRegistryLayer } = await import('../../src/layer.js');
 
     const MockToolSearchLayer = Layer.succeed(
       ToolSearchService,
@@ -207,7 +210,7 @@ describe('ContextService', () => {
     );
 
     const projectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-      Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer))
+      Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer, SubagentRegistryLayer))
     );
     const agentWithDeps = AgentService.Default.pipe(
       Layer.provide(Layer.mergeAll(AllDeps, projectRuntimeLayer))

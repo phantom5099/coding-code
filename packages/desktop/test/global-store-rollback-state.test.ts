@@ -38,7 +38,7 @@ describe('Rollback state in global store', () => {
       files: [
         {
           path: '/test/a.ts',
-          source: 'agent' as const,
+
           status: 'M',
           diff: '---\n+++\n',
           insertions: 2,
@@ -59,7 +59,6 @@ describe('Rollback state in global store', () => {
   it('setRollbackPreview stores preview', () => {
     const preview = {
       throughTurnId: 2,
-      baseTurnId: 1,
       affectedTurns: [3, 4],
       diff: 'diff content',
     };
@@ -73,7 +72,6 @@ describe('Rollback state in global store', () => {
   it('clearRollbackPreview removes preview', () => {
     const preview = {
       throughTurnId: 2,
-      baseTurnId: 1,
       affectedTurns: [3, 4],
       diff: 'diff content',
     };
@@ -104,35 +102,6 @@ describe('Rollback state in global store', () => {
 
     const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
     expect(reverted).toEqual(['/test/b.ts']);
-  });
-
-  it('markScopeReverted sets sentinel', () => {
-    useGlobalStore.getState().markScopeReverted('thread1', '3', 'agent');
-    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
-    expect(reverted).toContain('__scope_agent_reverted__');
-  });
-
-  it('markScopeReverted differentiates agent and all scopes', () => {
-    useGlobalStore.getState().markScopeReverted('thread1', '3', 'agent');
-    useGlobalStore.getState().markScopeReverted('thread1', '3', 'all');
-    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
-    expect(reverted).toContain('__scope_agent_reverted__');
-    expect(reverted).toContain('__scope_all_reverted__');
-  });
-
-  it('markScopeRestored removes correct sentinel', () => {
-    useGlobalStore.getState().markScopeReverted('thread1', '3', 'agent');
-    useGlobalStore.getState().markScopeReverted('thread1', '3', 'all');
-    useGlobalStore.getState().markScopeRestored('thread1', '3', 'agent');
-    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
-    expect(reverted).not.toContain('__scope_agent_reverted__');
-    expect(reverted).toContain('__scope_all_reverted__');
-  });
-
-  it('markScopeRestored removes entry when empty', () => {
-    useGlobalStore.getState().markScopeReverted('thread1', '3', 'agent');
-    useGlobalStore.getState().markScopeRestored('thread1', '3', 'agent');
-    expect(useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3']).toBeUndefined();
   });
 
   it('initRevertedFilesFromState populates from server state', () => {
@@ -167,7 +136,7 @@ describe('Rollback state in global store', () => {
       files: [
         {
           path: '/a.ts',
-          source: 'agent' as const,
+
           status: 'M',
           diff: '---\n+++\n',
           insertions: 1,
@@ -188,7 +157,7 @@ describe('Rollback state in global store', () => {
       files: [
         {
           path: '/b.ts',
-          source: 'agent' as const,
+
           status: 'M',
           diff: '---\n+++\n',
           insertions: 1,
