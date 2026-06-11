@@ -5,12 +5,12 @@ import { ShadowGit } from './shadow-git.js';
 import { ProjectLock } from './project-lock.js';
 import { normalizePath } from '../core/path.js';
 import { shortSid, commitMsg, toGitPath, hashWorkspaceFile, ProjectCache } from './utils.js';
-import { readRestoreEntry, writeRestoreEntry } from './restore-store.js';
+import { readRestoreEntry, writeRestoreEntry } from './undo-store.js';
 import {
   getCompletedTurnsFor,
   getTurnRestorePlan,
   getRollbackToTurnPlan,
-} from './restore-planning.js';
+} from './turn-query.js';
 import { emptyRollbackResult, executeRollback } from './rollback-engine.js';
 
 // ---- Exported types ----

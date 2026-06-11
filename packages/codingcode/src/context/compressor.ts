@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { resolveSessionDir } from '../session/io.js';
+import { resolveSessionDir, appendLine } from '../session/io.js';
 import {
   estimateTokens,
   estimateMessageTokens,
@@ -14,7 +14,6 @@ import type { SessionEvent, SummaryEvent } from '../session/types.js';
 import type { LLMClient } from '../llm/client.js';
 import { assemblePayload } from './organizer.js';
 import { join } from 'path';
-import { appendFileSync } from 'fs';
 
 export interface CompressResult {
   didCompress: boolean;
@@ -107,14 +106,6 @@ export async function compactWithLLM(
   };
 }
 
-// ---------- Summary persistence ----------
-
-function appendSummaryToSession(sessionId: string, event: SummaryEvent): void {
-  const dir = resolveSessionDir(sessionId);
-  if (!dir) throw new Error(`Session ${sessionId} not found`);
-  const jsonlPath = join(dir, `${sessionId}.jsonl`);
-  appendFileSync(jsonlPath, JSON.stringify(event) + '\n', 'utf8');
-}
 
 // ---------- LLM Compaction ----------
 
@@ -173,7 +164,9 @@ async function tryCompaction(
     lastSummarizedTurnId: lastTurnId,
     timestamp: new Date().toISOString(),
   };
-  appendSummaryToSession(sessionId, event);
+  const dir = resolveSessionDir(sessionId);
+  if (!dir) throw new Error(`Session ${sessionId} not found`);
+  appendLine(join(dir, `${sessionId}.jsonl`), event);
   for (const u of replacedUuids) hidden.add(u);
 
   const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
