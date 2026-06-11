@@ -17,7 +17,6 @@ export interface SessionClient {
   setSessionPermissionMode(input: { sessionId: string; mode: PermissionMode }): Promise<void>;
 
   getCheckpointDiff(input: { sessionId: string; cwd: string; turnId?: number }): Promise<any>;
-  revertCheckpointFile(input: { sessionId: string; cwd: string; file: string }): Promise<any>;
   revertCheckpointFiles(input: { sessionId: string; cwd: string; files: string[] }): Promise<any>;
   previewRollbackDiff(input: {
     sessionId: string;
@@ -118,15 +117,6 @@ export function createDirectSessionClient(
 
     async getCheckpointDiff() {
       return { turnId: 0, files: [] };
-    },
-    async revertCheckpointFile() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
     },
     async revertCheckpointFiles() {
       return {

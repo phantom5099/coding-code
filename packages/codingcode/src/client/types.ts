@@ -36,7 +36,6 @@ export interface AgentClient {
     Array<{ turnId: number; title: string; files: string[] }>
   >;
   getCheckpointDiff(turnId?: number): Promise<CheckpointDiff>;
-  revertCheckpointFile(turnId: number, file: string): Promise<CodeRollbackResult>;
   revertCheckpointFiles(turnId: number, files: string[]): Promise<CodeRollbackResult>;
   previewRollbackDiff(throughTurnId: number): Promise<RollbackPreviewDiff>;
   rollbackCodeToTurn(throughTurnId: number): Promise<CodeRollbackResult>;

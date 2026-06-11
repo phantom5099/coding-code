@@ -197,7 +197,6 @@ const MockCheckpointLayer = Layer.succeed(
     getCompletedTurns: () => [],
     getCheckpoints: () => [],
     getCheckpointDiff: () => ({ turnId: 0, files: [] }),
-    revertCheckpointFile: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
     revertCheckpointFiles: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
     previewRollbackDiff: () => ({ throughTurnId: 0, affectedTurns: [], diff: '' }),
     rollbackCodeToTurn: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),

@@ -163,7 +163,7 @@ describe('undoLastCodeRollback end-to-end via ShadowGit', () => {
       const entry = {
         id: 'test123',
         sessionId,
-        action: 'checkpoint-file',
+        action: 'checkpoint-files',
         throughTurnId: 1,
         affectedTurns: [],
         selectedFiles: [join(projectPath, 'src/main.ts')],
@@ -364,7 +364,7 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
       const entry = {
         id: 'test123',
         sessionId,
-        action: 'checkpoint-file',
+        action: 'checkpoint-files',
         throughTurnId: 1,
         affectedTurns: [],
         selectedFiles: [join(projectPath, 'src/main.ts').toLowerCase()],

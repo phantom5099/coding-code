@@ -229,7 +229,7 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-file', async (c) => {
           restoreEntry: null,
         };
       const latestTurnId = completedTurns[completedTurns.length - 1]!;
-      return checkpoint.revertCheckpointFile(cwd, sessionId, latestTurnId, body.file);
+      return checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, [body.file]);
     })
   );
   if (!result.ok) {

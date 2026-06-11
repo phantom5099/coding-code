@@ -194,22 +194,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       });
     },
 
-    async revertCheckpointFile(turnId: number, file: string) {
-      if (!currentSessionId)
-        return {
-          reverted: false,
-          throughTurnId: turnId,
-          affectedTurns: [],
-          selectedFiles: [],
-          restoreEntry: null,
-        };
-      return clients.sessions.revertCheckpointFile({
-        sessionId: currentSessionId,
-        cwd: cwd(),
-        file,
-      });
-    },
-
     async revertCheckpointFiles(turnId: number, files: string[]) {
       if (!currentSessionId)
         return {

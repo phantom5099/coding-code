@@ -133,15 +133,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     async getCheckpointDiff() {
       return { turnId: 0, files: [] };
     },
-    async revertCheckpointFile() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
     async revertCheckpointFiles() {
       return {
         reverted: false,

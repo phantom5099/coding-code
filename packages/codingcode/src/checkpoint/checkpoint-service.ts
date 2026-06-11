@@ -51,7 +51,7 @@ export interface RollbackPreviewDiff {
 export interface CodeRestoreEntry {
   id: string;
   sessionId: string;
-  action: 'checkpoint-file' | 'checkpoint-files' | 'rollback-to-turn';
+  action: 'checkpoint-files' | 'rollback-to-turn';
   throughTurnId: number;
   affectedTurns: number[];
   selectedFiles: string[];
@@ -224,20 +224,6 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       },
 
       // ---- Revert ----
-
-      revertCheckpointFile: (
-        projectPath: string,
-        sessionId: string,
-        turnId: number,
-        file: string
-      ): CodeRollbackResult => {
-        const sg = ensure(projectPath);
-        const plan = getTurnRestorePlan(sg, sessionId, turnId);
-        if (!plan) {
-          return emptyRollbackResult(turnId);
-        }
-        return executeRollback(sessionId, plan, [file], 'checkpoint-file', sg, lockFor(projectPath));
-      },
 
       revertCheckpointFiles: (
         projectPath: string,

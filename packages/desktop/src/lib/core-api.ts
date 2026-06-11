@@ -281,14 +281,6 @@ export function getCheckpointDiff(
   return clients.sessions.getCheckpointDiff({ sessionId, cwd, turnId }) as any;
 }
 
-export function revertCheckpointFile(
-  sessionId: string,
-  cwd: string,
-  file: string
-): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions.revertCheckpointFile({ sessionId, cwd, file }) as any;
-}
-
 export function revertCheckpointFiles(
   sessionId: string,
   cwd: string,

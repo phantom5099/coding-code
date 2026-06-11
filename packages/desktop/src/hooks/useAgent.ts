@@ -11,7 +11,6 @@ import {
   deleteSession,
   sendApprovalResponse,
   getCheckpointDiff,
-  revertCheckpointFile,
   revertCheckpointFiles,
   previewRollbackDiff,
   rollbackCodeToTurn,
@@ -395,7 +394,7 @@ export function useAgentRollback() {
   const revertFile = useCallback(
     async (threadId: string, file: string) => {
       const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await revertCheckpointFile(threadId, cwd, file);
+      const { result } = await revertCheckpointFiles(threadId, cwd, [file]);
       if (result.reverted) {
         markFileReverted(threadId, resolveUITurnId(threadId, result.throughTurnId), file);
       }
