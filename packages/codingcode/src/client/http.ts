@@ -127,15 +127,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       return currentSessionId ?? 'unknown';
     },
 
-    async classifyLastCompletedChanges() {
-      return null;
-    },
-    async revertLastCompleted(_mode: 'agent' | 'all') {},
-    async revertCheckpoint(_turnId: number, _mode: 'agent' | 'all') {},
-    async forwardLastRevert() {},
-    async hasForwardStack() {
-      return false;
-    },
     async getCheckpoints() {
       return [];
     },
@@ -152,24 +143,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       };
     },
     async revertCheckpointFiles() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
-    async revertCheckpointAgentFiles() {
-      return {
-        reverted: false,
-        throughTurnId: 0,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
-    async revertCheckpointAllFiles() {
       return {
         reverted: false,
         throughTurnId: 0,

@@ -183,11 +183,15 @@ const MockCheckpointLayer = Layer.succeed(
     _tag: 'Checkpoint' as const,
     snapshotBaseline: () => {},
     snapshotFinal: () => {},
-    classifyChanges: () => null,
     getCompletedTurns: () => [],
-    forward: () => null,
-    hasForwardStack: () => false,
     getCheckpoints: () => [],
+    getCheckpointDiff: () => ({ turnId: 0, files: [] }),
+    revertCheckpointFile: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
+    revertCheckpointFiles: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
+    previewRollbackDiff: () => ({ throughTurnId: 0, affectedTurns: [], diff: '' }),
+    rollbackCodeToTurn: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
+    undoLastCodeRollback: () => ({ restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] }),
+    getLatestRestoreEntry: () => null,
   } as any)
 );
 

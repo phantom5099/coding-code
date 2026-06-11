@@ -175,16 +175,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       activeLlm = clientResult.value;
     },
 
-    async classifyLastCompletedChanges() {
-      return null;
-    },
-    async revertLastCompleted(_mode: 'agent' | 'all') {},
-    async revertCheckpoint(_turnId: number, _mode: 'agent' | 'all') {},
-    async forwardLastRevert() {},
-    async hasForwardStack() {
-      return false;
-    },
-
     async getCheckpoints() {
       if (!currentSessionId) return [];
       return runWithLayer(
@@ -234,33 +224,6 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
         cwd: cwd(),
         files,
       });
-    },
-
-    async revertCheckpointAgentFiles(turnId: number) {
-      if (!currentSessionId)
-        return {
-          reverted: false,
-          throughTurnId: turnId,
-          affectedTurns: [],
-          selectedFiles: [],
-          restoreEntry: null,
-        };
-      return clients.sessions.revertCheckpointAgentFiles({
-        sessionId: currentSessionId,
-        cwd: cwd(),
-      });
-    },
-
-    async revertCheckpointAllFiles(turnId: number) {
-      if (!currentSessionId)
-        return {
-          reverted: false,
-          throughTurnId: turnId,
-          affectedTurns: [],
-          selectedFiles: [],
-          restoreEntry: null,
-        };
-      return clients.sessions.revertCheckpointAllFiles({ sessionId: currentSessionId, cwd: cwd() });
     },
 
     async previewRollbackDiff(throughTurnId: number) {

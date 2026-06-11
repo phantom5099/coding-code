@@ -20,7 +20,7 @@ interface TurnDiffPanelProps {
   isInterrupted?: boolean;
   threadId: string;
   onRevertFile: (uiTurnId: string, file: string, isReverted: boolean) => void;
-  onRevertScope: (uiTurnId: string, scope: 'agent' | 'all', isReverted: boolean) => void;
+  onRevertTurn: (uiTurnId: string, files: string[], isReverted: boolean) => void;
 }
 
 function getCheckpointKey(
@@ -53,7 +53,7 @@ function TurnDiffPanel({
   isInterrupted,
   threadId,
   onRevertFile,
-  onRevertScope,
+  onRevertTurn,
 }: TurnDiffPanelProps) {
   const rawCheckpointDiffByTurnId = useGlobalStore((s) => s.rollback.checkpointDiffByTurnId);
   const rawTurnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping);
@@ -72,8 +72,7 @@ function TurnDiffPanel({
   const ckKey = getCheckpointKey(threadId, uiTurnId, checkpointDiffs, turnCheckpointMapping);
   const diff = ckKey ? checkpointDiffs[ckKey] : null;
   const revertedFiles = revertedFilesByTurnId[`${threadId}:${uiTurnId}`] ?? [];
-  const isAgentReverted = revertedFiles.includes('__scope_agent_reverted__');
-  const isAllReverted = revertedFiles.includes('__scope_all_reverted__');
+  const isTurnReverted = revertedFiles.includes('__scope_reverted__');
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
 
   if (!diff || !diff.files || diff.files.length === 0) {
@@ -122,24 +121,14 @@ function TurnDiffPanel({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => onRevertScope(uiTurnId, 'all', isAllReverted)}
+            onClick={() => onRevertTurn(uiTurnId, diff.files.map((f: any) => f.path), isTurnReverted)}
             className={`text-[12px] px-3 py-1 rounded ${
-              isAllReverted
+              isTurnReverted
                 ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
                 : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--bg-active)] border border-[var(--border-strong)]'
             }`}
           >
-            {isAllReverted ? '撤销回退本轮全部修改' : '回退本轮全部修改'}
-          </button>
-          <button
-            onClick={() => onRevertScope(uiTurnId, 'agent', isAgentReverted)}
-            className={`text-[12px] px-3 py-1 rounded ${
-              isAgentReverted
-                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
-                : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--bg-active)] border border-[var(--border-strong)]'
-            }`}
-          >
-            {isAgentReverted ? '撤销回退 Agent 修改' : '只回退 Agent 修改'}
+            {isTurnReverted ? '撤销回退本轮修改' : '回退本轮修改'}
           </button>
         </div>
       </div>
@@ -147,8 +136,7 @@ function TurnDiffPanel({
         {diff.files.map((f: any) => {
           const isExpanded = expandedFile === f.path;
           const isFileIndividuallyReverted = revertedFiles.includes(f.path);
-          const isFileScopeReverted = isAllReverted || (isAgentReverted && f.source === 'agent');
-          const isReverted = isFileIndividuallyReverted || isFileScopeReverted;
+          const isReverted = isFileIndividuallyReverted || isTurnReverted;
           return (
             <div key={f.path}>
               <div
@@ -225,8 +213,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const {
     loadCheckpointDiff,
     revertFile,
-    revertAgentFiles,
-    revertAllFiles,
+    revertFiles,
     previewRollback,
     rollbackCtx,
     rollbackBoth,
@@ -236,7 +223,6 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   } = useAgentRollback();
   const { copiedId, copy } = useCopyToClipboard();
   const parentRef = useRef<HTMLDivElement>(null);
-  const markScopeRestored = useGlobalStore((s) => s.markScopeRestored);
   const markFileRestored = useGlobalStore((s) => s.markFileRestored);
   const setPendingInput = useGlobalStore((s) => s.setPendingInput);
 
@@ -420,20 +406,19 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     [threadId, revertFile, undoCodeRollback, markFileRestored]
   );
 
-  const handleRevertScope = useCallback(
-    async (uiTurnId: string, scope: 'agent' | 'all', isReverted: boolean) => {
+  const handleRevertTurn = useCallback(
+    async (uiTurnId: string, files: string[], isReverted: boolean) => {
       if (isReverted) {
         const result = await undoCodeRollback(threadId, uiTurnId, false);
         if (result.restored) {
-          markScopeRestored(threadId, uiTurnId, scope);
+          const key = `${threadId}:${uiTurnId}`;
+          delete useGlobalStore.getState().rollback.revertedFilesByTurnId[key];
         }
-      } else if (scope === 'agent') {
-        await revertAgentFiles(threadId);
       } else {
-        await revertAllFiles(threadId);
+        await revertFiles(threadId, files);
       }
     },
-    [threadId, revertAgentFiles, revertAllFiles, undoCodeRollback, markScopeRestored]
+    [threadId, revertFiles, undoCodeRollback]
   );
 
   const rollbackModal = showRollbackPanel && (
@@ -573,7 +558,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                         isInterrupted={isInterrupted}
                         threadId={threadId}
                         onRevertFile={handleRevertFile}
-                        onRevertScope={handleRevertScope}
+                        onRevertTurn={handleRevertTurn}
                       />
                     </div>
                   )}

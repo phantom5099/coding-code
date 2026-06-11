@@ -169,8 +169,6 @@ interface GlobalActions {
   clearRollbackPreview: (threadId: string) => void;
   markFileReverted: (threadId: string, turnId: string, file: string) => void;
   markFileRestored: (threadId: string, turnId: string, file: string) => void;
-  markScopeReverted: (threadId: string, turnId: string, scope: 'agent' | 'all') => void;
-  markScopeRestored: (threadId: string, turnId: string, scope: 'agent' | 'all') => void;
   initRevertedFilesFromState: (threadId: string) => void;
   setTurnCheckpointMapping: (threadId: string, checkpointId: number, uiTurnId: string) => void;
   startCompressing: () => void;
@@ -675,31 +673,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           const arr = s.rollback.revertedFilesByTurnId[key];
           if (arr) {
             s.rollback.revertedFilesByTurnId[key] = arr.filter((f) => f !== file);
-          }
-        }),
-      markScopeReverted: (threadId, turnId, scope) =>
-        set((s) => {
-          const key = `${threadId}:${turnId}`;
-          const sentinel =
-            scope === 'agent' ? '__scope_agent_reverted__' : '__scope_all_reverted__';
-          if (!s.rollback.revertedFilesByTurnId[key]) {
-            s.rollback.revertedFilesByTurnId[key] = [];
-          }
-          if (!s.rollback.revertedFilesByTurnId[key].includes(sentinel)) {
-            s.rollback.revertedFilesByTurnId[key].push(sentinel);
-          }
-        }),
-      markScopeRestored: (threadId, turnId, scope) =>
-        set((s) => {
-          const key = `${threadId}:${turnId}`;
-          const sentinel =
-            scope === 'agent' ? '__scope_agent_reverted__' : '__scope_all_reverted__';
-          const arr = s.rollback.revertedFilesByTurnId[key];
-          if (arr) {
-            s.rollback.revertedFilesByTurnId[key] = arr.filter((f) => f !== sentinel);
-            if (s.rollback.revertedFilesByTurnId[key].length === 0) {
-              delete s.rollback.revertedFilesByTurnId[key];
-            }
           }
         }),
       initRevertedFilesFromState: (threadId) =>

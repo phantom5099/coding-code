@@ -20,8 +20,6 @@ export interface SessionClient {
   }): Promise<{ turnId: number; files: any[] }>;
   revertCheckpointFile(input: { sessionId: string; cwd: string; file: string }): Promise<any>;
   revertCheckpointFiles(input: { sessionId: string; cwd: string; files: string[] }): Promise<any>;
-  revertCheckpointAgentFiles(input: { sessionId: string; cwd: string }): Promise<any>;
-  revertCheckpointAllFiles(input: { sessionId: string; cwd: string }): Promise<any>;
   previewRollbackDiff(input: {
     sessionId: string;
     cwd: string;
@@ -103,14 +101,6 @@ export function createHttpSessionClient(
 
     async revertCheckpointFiles({ sessionId, cwd, files }) {
       return apiPost(`/api/sessions/${sessionId}/checkpoints/latest/revert-files`, { cwd, files });
-    },
-
-    async revertCheckpointAgentFiles({ sessionId, cwd }) {
-      return apiPost(`/api/sessions/${sessionId}/checkpoints/latest/revert-agent`, { cwd });
-    },
-
-    async revertCheckpointAllFiles({ sessionId, cwd }) {
-      return apiPost(`/api/sessions/${sessionId}/checkpoints/latest/revert-all`, { cwd });
     },
 
     async previewRollbackDiff({ sessionId, cwd, throughTurnId }) {

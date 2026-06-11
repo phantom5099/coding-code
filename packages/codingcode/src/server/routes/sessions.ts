@@ -268,64 +268,6 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-files', async (c) => {
   return c.json({ ok: true, result: result.value });
 });
 
-// ---- C6: revert agent files ----
-
-sessionsRouter.post('/:id/checkpoints/latest/revert-agent', async (c) => {
-  const sessionId = c.req.param('id');
-  const body = (await c.req.json()) as { cwd: string };
-  const cwd = resolveWorkspaceCwd(body.cwd);
-  const result = await runWithLayer(
-    Effect.gen(function* () {
-      const checkpoint = yield* CheckpointService;
-      const completedTurns = checkpoint.getCompletedTurns(cwd, sessionId);
-      if (completedTurns.length === 0)
-        return {
-          reverted: false,
-          throughTurnId: 0,
-          affectedTurns: [],
-          selectedFiles: [],
-          restoreEntry: null,
-        };
-      const latestTurnId = completedTurns[completedTurns.length - 1]!;
-      return checkpoint.revertCheckpointAgentFiles(cwd, sessionId, latestTurnId);
-    })
-  );
-  if (!result.ok) {
-    const { status, body } = errorResponse(result.error);
-    return c.json(body, status as any);
-  }
-  return c.json({ ok: true, result: result.value });
-});
-
-// ---- C7: revert all files ----
-
-sessionsRouter.post('/:id/checkpoints/latest/revert-all', async (c) => {
-  const sessionId = c.req.param('id');
-  const body = (await c.req.json()) as { cwd: string };
-  const cwd = resolveWorkspaceCwd(body.cwd);
-  const result = await runWithLayer(
-    Effect.gen(function* () {
-      const checkpoint = yield* CheckpointService;
-      const completedTurns = checkpoint.getCompletedTurns(cwd, sessionId);
-      if (completedTurns.length === 0)
-        return {
-          reverted: false,
-          throughTurnId: 0,
-          affectedTurns: [],
-          selectedFiles: [],
-          restoreEntry: null,
-        };
-      const latestTurnId = completedTurns[completedTurns.length - 1]!;
-      return checkpoint.revertCheckpointAllFiles(cwd, sessionId, latestTurnId);
-    })
-  );
-  if (!result.ok) {
-    const { status, body } = errorResponse(result.error);
-    return c.json(body, status as any);
-  }
-  return c.json({ ok: true, result: result.value });
-});
-
 // ---- C8: rollback preview diff ----
 
 sessionsRouter.get('/:id/rollback-preview', async (c) => {

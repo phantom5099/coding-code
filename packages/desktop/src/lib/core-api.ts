@@ -223,7 +223,6 @@ export interface CheckpointDiff {
   turnId: number;
   files: Array<{
     path: string;
-    source: 'agent' | 'unknown';
     status: string;
     diff: string;
     insertions: number;
@@ -296,20 +295,6 @@ export function revertCheckpointFiles(
   files: string[]
 ): Promise<{ ok: boolean; result: CodeRollbackResult }> {
   return clients.sessions.revertCheckpointFiles({ sessionId, cwd, files }) as any;
-}
-
-export function revertCheckpointAgentFiles(
-  sessionId: string,
-  cwd: string
-): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions.revertCheckpointAgentFiles({ sessionId, cwd }) as any;
-}
-
-export function revertCheckpointAllFiles(
-  sessionId: string,
-  cwd: string
-): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions.revertCheckpointAllFiles({ sessionId, cwd }) as any;
 }
 
 export function previewRollbackDiff(

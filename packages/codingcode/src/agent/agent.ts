@@ -306,6 +306,7 @@ export async function* runReActLoop(
 
       // Check abort signal
       if (opts.abortSignal?.aborted) {
+        checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
         yield { _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') };
         await Effect.runPromise(
           hooks.emit('agent.turn.end', {
@@ -557,6 +558,7 @@ export async function* runReActLoop(
 
       // If abort fired during tool execution, terminate immediately
       if (opts.abortSignal?.aborted) {
+        checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
         yield { _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') };
         await Effect.runPromise(
           hooks.emit('agent.turn.end', {

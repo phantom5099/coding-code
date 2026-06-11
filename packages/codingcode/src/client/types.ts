@@ -32,22 +32,12 @@ export interface AgentClient {
   listModels(): Promise<any>;
   switchModel(id: string): Promise<void>;
   getSessionId(): string;
-  classifyLastCompletedChanges(): Promise<{
-    agentModified: string[];
-    unknownSource: string[];
-  } | null>;
-  revertLastCompleted(mode: 'agent' | 'all'): Promise<void>;
-  revertCheckpoint(turnId: number, mode: 'agent' | 'all'): Promise<void>;
-  forwardLastRevert(): Promise<void>;
-  hasForwardStack(): Promise<boolean>;
   getCheckpoints(): Promise<
-    Array<{ turnId: number; title: string; agentModified: string[]; unknownSource: string[] }>
+    Array<{ turnId: number; title: string; files: string[] }>
   >;
   getCheckpointDiff(turnId?: number): Promise<CheckpointDiff>;
   revertCheckpointFile(turnId: number, file: string): Promise<CodeRollbackResult>;
   revertCheckpointFiles(turnId: number, files: string[]): Promise<CodeRollbackResult>;
-  revertCheckpointAgentFiles(turnId: number): Promise<CodeRollbackResult>;
-  revertCheckpointAllFiles(turnId: number): Promise<CodeRollbackResult>;
   previewRollbackDiff(throughTurnId: number): Promise<RollbackPreviewDiff>;
   rollbackCodeToTurn(throughTurnId: number): Promise<CodeRollbackResult>;
   rollbackContext(throughTurnId: number): Promise<{ turns: any[]; rollbackState: any }>;

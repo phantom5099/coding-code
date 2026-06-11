@@ -51,8 +51,6 @@ export function executeRollback(
       safetyCommit = sg.commit(commitMsg(sessionId, plan.throughTurnId, 'revert-safety'));
     }
 
-    sg.checkoutFiles(plan.baseline, selectedFiles);
-
     const combinedFiles =
       existingEntry && existingEntry.throughTurnId === plan.throughTurnId
         ? [
@@ -79,6 +77,8 @@ export function executeRollback(
       timestamp: new Date().toISOString(),
     };
     writeRestoreEntry(sg.gitDir, sessionId, entry);
+
+    sg.checkoutFiles(plan.baseline, selectedFiles);
 
     return {
       reverted: true,
