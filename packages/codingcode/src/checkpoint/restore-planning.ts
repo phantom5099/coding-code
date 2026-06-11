@@ -1,5 +1,5 @@
 import type { ShadowGit } from './shadow-git.js';
-import { shortSid, commitMsg } from './commit-naming.js';
+import { shortSid, commitMsg } from './utils.js';
 
 export interface RestorePlan {
   throughTurnId: number;

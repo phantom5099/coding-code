@@ -1,11 +1,10 @@
 import { Effect } from 'effect';
 import { createHash } from 'crypto';
-import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { ShadowGit } from './shadow-git.js';
 import { ProjectLock } from './project-lock.js';
 import { normalizePath } from '../core/path.js';
-import { shortSid, commitMsg } from './commit-naming.js';
+import { shortSid, commitMsg, toGitPath, hashWorkspaceFile } from './utils.js';
 import { readRestoreEntry, writeRestoreEntry } from './restore-store.js';
 import {
   getCompletedTurnsFor,
@@ -60,28 +59,6 @@ export interface CodeRestoreEntry {
   timestamp: string;
 }
 
-// ---- Path utilities ----
-
-export function toGitPath(projectPath: string, file: string): string {
-  const normalized = normalizePath(file);
-  const base = normalizePath(projectPath);
-  if (normalized.toLowerCase().startsWith(base.toLowerCase())) {
-    let rel = normalized.slice(base.length);
-    if (rel.startsWith('/') || rel.startsWith('\\')) rel = rel.slice(1);
-    return rel;
-  }
-  return normalized;
-}
-
-export function hashWorkspaceFile(projectPath: string, file: string): string | null {
-  try {
-    const content = readFileSync(resolve(projectPath, toGitPath(projectPath, file)));
-    return createHash('sha256').update(content).digest('hex');
-  } catch {
-    return null;
-  }
-}
-
 // ---- Service ----
 
 export class CheckpointService extends Effect.Service<CheckpointService>()('Checkpoint', {
@@ -110,6 +87,16 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       return lock;
     }
 
+    function doSnapshotFinal(sg: ShadowGit, sessionId: string, turnId: number): void {
+      const lock = lockFor(sg.projectPath);
+      lock.lock();
+      try {
+        sg.commit(commitMsg(sessionId, turnId, 'final'));
+      } finally {
+        lock.unlock();
+      }
+    }
+
     function repairIncompleteTurn(sg: ShadowGit, sessionId: string): void {
       const completed = getCompletedTurnsFor(sg, sessionId);
       const candidate = completed.length > 0 ? completed[completed.length - 1]! + 1 : 1;
@@ -117,13 +104,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       if (!baseline) return;
       const final = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'final'));
       if (final) return;
-      const lock = lockFor(sg.projectPath);
-      lock.lock();
-      try {
-        sg.commit(commitMsg(sessionId, candidate, 'final'));
-      } finally {
-        lock.unlock();
-      }
+      doSnapshotFinal(sg, sessionId, candidate);
     }
 
     return {
@@ -153,13 +134,7 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
       snapshotFinal: (projectPath: string, sessionId: string, turnId: number): void => {
         const sg = ensure(projectPath);
         if (sg.isTooLargeForSnapshot()) return;
-        const lock = lockFor(projectPath);
-        lock.lock();
-        try {
-          sg.commit(commitMsg(sessionId, turnId, 'final'));
-        } finally {
-          lock.unlock();
-        }
+        doSnapshotFinal(sg, sessionId, turnId);
       },
 
       // ---- Query ----

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import type { CodeRestoreEntry } from './checkpoint-service.js';
-import { shortSid } from './commit-naming.js';
+import { shortSid } from './utils.js';
 
 function restorePath(gitDir: string, sessionId: string): string {
   return join(gitDir, '..', `last-restore-${shortSid(sessionId)}.json`);

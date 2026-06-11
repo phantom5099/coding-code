@@ -3,7 +3,7 @@ import { normalizePath } from '../core/path.js';
 import type { ShadowGit } from './shadow-git.js';
 import type { ProjectLock } from './project-lock.js';
 import type { CodeRollbackResult, CodeRestoreEntry } from './checkpoint-service.js';
-import { commitMsg } from './commit-naming.js';
+import { commitMsg } from './utils.js';
 import { readRestoreEntry, writeRestoreEntry } from './restore-store.js';
 
 export function emptyRollbackResult(

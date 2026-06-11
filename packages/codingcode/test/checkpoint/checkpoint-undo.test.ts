@@ -43,7 +43,7 @@ function writeFile(projectPath: string, filename: string, content: string) {
 
 describe('toGitPath case-insensitive matching', () => {
   it('handles Windows case-mismatched projectPath and file path', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
 
     // projectPath has mixed case (Users, Desktop), file path is all lowercase
     const projectPath = 'c:/Users/Alice/Desktop/MyProject';
@@ -54,7 +54,7 @@ describe('toGitPath case-insensitive matching', () => {
   });
 
   it('handles lowercase projectPath with uppercase file path', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
 
     const projectPath = 'c:/users/alice/desktop/myproject';
     const filePath = 'c:/Users/Alice/Desktop/MyProject/src/file.ts';
@@ -64,7 +64,7 @@ describe('toGitPath case-insensitive matching', () => {
   });
 
   it('still returns normalized absolute path when file is outside project', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
 
     const result = toGitPath('c:/Users/Alice/Desktop/MyProject', 'c:/other/file.ts');
 
@@ -310,7 +310,7 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
 
 describe('toGitPath preserves original casing for git paths', () => {
   it('returns relative path with original casing from git diff', async () => {
-    const { toGitPath } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { toGitPath } = await import('../../src/checkpoint/utils.js');
 
     // Simulate a path that git returns with original casing
     const projectPath = 'c:/Users/Alice/Desktop/MyProject';
