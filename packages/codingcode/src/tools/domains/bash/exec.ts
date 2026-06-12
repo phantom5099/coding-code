@@ -14,10 +14,10 @@ export const bashTool: ToolDefinition = {
     cwd: z.string().optional().describe('Working directory (defaults to project root)'),
     timeout_ms: z.number().int().default(30000).describe('Timeout in milliseconds'),
   }),
-  execute: async (args: unknown, ctx?: ToolExecCtx) => {
+  execute: (args: unknown, ctx?: ToolExecCtx) => {
     const { command, cwd, timeout_ms } = args as any;
     const workDir = cwd || ctx?.projectPath || process.cwd();
-    return new Promise<string>((resolve, reject) => {
+    return Effect.async<string, AgentError>((resume) => {
       const proc = spawn(command, {
         shell: true,
         cwd: workDir,
@@ -49,28 +49,30 @@ export const bashTool: ToolDefinition = {
 
       const timer = setTimeout(() => {
         proc.kill();
-        resolve(`Command timed out after ${timeout_ms}ms\nStdout:\n${stdout}\nStderr:\n${stderr}`);
+        resume(Effect.succeed(`Command timed out after ${timeout_ms}ms\nStdout:\n${stdout}\nStderr:\n${stderr}`));
       }, timeout_ms);
 
       proc.on('close', (code) => {
         clearTimeout(timer);
         ctx?.signal?.removeEventListener('abort', onAbort);
-        resolve(
-          [
-            `Exit code: ${code ?? 'null'}`,
-            stdout ? `Stdout:\n${stdout}` : '',
-            stderr ? `Stderr:\n${stderr}` : '',
-          ]
-            .filter(Boolean)
-            .join('\n') || '(no output)'
+        resume(
+          Effect.succeed(
+            [
+              `Exit code: ${code ?? 'null'}`,
+              stdout ? `Stdout:\n${stdout}` : '',
+              stderr ? `Stderr:\n${stderr}` : '',
+            ]
+              .filter(Boolean)
+              .join('\n') || '(no output)'
+          )
         );
       });
 
       proc.on('error', (err) => {
         clearTimeout(timer);
         ctx?.signal?.removeEventListener('abort', onAbort);
-        reject(
-          new AgentError('TOOL_EXECUTION_FAILED', `Command failed to start: ${err.message}`, err)
+        resume(
+          Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Command failed to start: ${err.message}`, err))
         );
       });
     });

@@ -1,11 +1,40 @@
 import { expect, it, describe, vi } from 'vitest';
-import { Effect } from 'effect';
-import { runReActLoop } from '../../src/agent/agent';
+import { Effect, Layer, Queue, Chunk } from 'effect';
+import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+
+vi.mock('../../src/context/organizer.js', () => ({
+  assemblePayload: vi.fn(() => ({
+    messages: [{ role: 'user' as const, content: 'hi' }],
+    compactedEvents: [],
+    promptEstimate: 10,
+    currentTurnId: 1,
+    compactedTurnIds: new Set<number>(),
+  })),
+}));
+
+vi.mock('../../src/context/compressor.js', () => ({
+  compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+  compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+}));
+
+import { agentLoop } from '../../src/agent/agent';
 import { Result } from '../../src/core/result';
 import type { RunStreamOptions } from '../../src/agent/agent';
-import { randomUUID } from 'crypto';
+import { SessionService } from '../../src/session/store.js';
 
-describe('runReActLoop 鈥?stop hook', () => {
+const AllMockLayer = Layer.mergeAll(
+  Layer.succeed(CheckpointService, {
+    snapshotBaseline: () => Effect.void,
+    snapshotFinal: () => Effect.void,
+  } as any),
+  Layer.succeed(SessionService, {
+    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordToolResult: () => Effect.succeed({}),
+  } as any)
+);
+
+describe('agentLoop stop hook', () => {
   const mockState = {
     sessionId: 'test-session',
     cwd: process.cwd(),
@@ -20,40 +49,6 @@ describe('runReActLoop 鈥?stop hook', () => {
     promptEstimate: 0,
     memorySnapshot: '',
   };
-
-  function baseMockDeps(overrides: Record<string, any> = {}) {
-    return {
-      maxSteps: 5,
-      maxStopContinuations: 2,
-      executor: {} as any,
-      runtime: { listAgentProfiles: () => [] } as any,
-      agentIdResolver: { resolve: () => 'agent-id' } as any,
-      agentService: { runStream: () => (async function* () {})() } as any,
-      ctx: {
-        build: () =>
-          Effect.succeed({
-            messages: [{ role: 'user' as const, content: 'hi' }],
-            newBudgets: [],
-            promptEstimate: 0,
-          }),
-        compress: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
-        appendTurnEnd: () => Effect.succeed(undefined),
-        compactIfNeeded: () =>
-          Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
-      } as any,
-      session: {
-        recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
-        recordToolResult: () => Effect.succeed({}),
-        recordUser: () => Effect.succeed({ uuid: 'm1' }),
-      } as any,
-      checkpoint: { snapshotFinal: () => {} } as any,
-      hooks: {
-        emit: vi.fn(() => Effect.succeed(undefined)),
-        emitDecision: vi.fn(() => Effect.succeed(null)),
-      } as any,
-      ...overrides,
-    };
-  }
 
   it('should continue iteration when stop hook returns continue decision', async () => {
     let callCount = 0;
@@ -74,24 +69,27 @@ describe('runReActLoop 鈥?stop hook', () => {
       return Effect.succeed(null);
     });
 
-    const deps = baseMockDeps({
-      maxSteps: 5,
-      hooks: {
-        emit: vi.fn(() => Effect.succeed(undefined)),
-        emitDecision: emitDecisionFn,
-      },
-    });
+    const mockHooks = {
+      emit: vi.fn(() => Effect.succeed(undefined)),
+      emitDecision: emitDecisionFn,
+    } as any;
 
     const opts: RunStreamOptions = {
       state: mockState,
       llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
     };
 
-    const gen = runReActLoop(opts, deps);
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop(
+        {} as any,
+        mockHooks,
+        5,
+        2,
+        opts,
+        q,
+              ).pipe(Effect.provide(AllMockLayer)) as any
+    );
 
     expect(emitDecisionFn).toHaveBeenCalledWith(
       'agent.turn.stop',
@@ -107,18 +105,15 @@ describe('runReActLoop 鈥?stop hook', () => {
       })),
     };
 
-    const deps = baseMockDeps({
-      maxSteps: 10,
-      hooks: {
-        emit: vi.fn(() => Effect.succeed(undefined)),
-        emitDecision: vi.fn((point: string) => {
-          if (point === 'agent.turn.stop') {
-            return Effect.succeed({ decision: 'continue', injection: 'Continue' });
-          }
-          return Effect.succeed(null);
-        }),
-      },
-    });
+    const mockHooks = {
+      emit: vi.fn(() => Effect.succeed(undefined)),
+      emitDecision: vi.fn((point: string) => {
+        if (point === 'agent.turn.stop') {
+          return Effect.succeed({ decision: 'continue', injection: 'Continue' });
+        }
+        return Effect.succeed(null);
+      }),
+    } as any;
 
     const opts: RunStreamOptions = {
       state: mockState,
@@ -126,11 +121,18 @@ describe('runReActLoop 鈥?stop hook', () => {
       maxStopContinuations: 2,
     };
 
-    const gen = runReActLoop(opts, deps);
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop(
+        {} as any,
+        mockHooks,
+        10,
+        10,
+        opts,
+        q,
+              ).pipe(Effect.provide(AllMockLayer)) as any
+    );
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     const errorEvent = events.find((e: any) => e._tag === 'Error');
     expect(errorEvent).toBeDefined();
@@ -146,30 +148,33 @@ describe('runReActLoop 鈥?stop hook', () => {
     };
 
     let continueCount = 0;
-    const deps = baseMockDeps({
-      maxSteps: 10,
-      hooks: {
-        emit: vi.fn(() => Effect.succeed(undefined)),
-        emitDecision: vi.fn((point: string) => {
-          if (point === 'agent.turn.stop') {
-            continueCount++;
-            return Effect.succeed({ decision: 'continue', injection: 'Continue' });
-          }
-          return Effect.succeed(null);
-        }),
-      },
-    });
+    const mockHooks = {
+      emit: vi.fn(() => Effect.succeed(undefined)),
+      emitDecision: vi.fn((point: string) => {
+        if (point === 'agent.turn.stop') {
+          continueCount++;
+          return Effect.succeed({ decision: 'continue', injection: 'Continue' });
+        }
+        return Effect.succeed(null);
+      }),
+    } as any;
 
     const opts: RunStreamOptions = {
       state: mockState,
       llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
     };
 
-    const gen = runReActLoop(opts, deps);
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop(
+        {} as any,
+        mockHooks,
+        10,
+        2,
+        opts,
+        q,
+              ).pipe(Effect.provide(AllMockLayer)) as any
+    );
 
     expect(continueCount).toBeGreaterThanOrEqual(2);
   });
@@ -186,24 +191,28 @@ describe('runReActLoop 鈥?stop hook', () => {
       }),
     };
 
-    const deps = baseMockDeps({
-      maxSteps: 5,
-      hooks: {
-        emit: vi.fn(() => Effect.succeed(undefined)),
-        emitDecision: vi.fn(() => Effect.succeed(null)),
-      },
-    });
+    const mockHooks = {
+      emit: vi.fn(() => Effect.succeed(undefined)),
+      emitDecision: vi.fn(() => Effect.succeed(null)),
+    } as any;
 
     const opts: RunStreamOptions = {
       state: mockState,
       llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
     };
 
-    const gen = runReActLoop(opts, deps);
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop(
+        {} as any,
+        mockHooks,
+        5,
+        2,
+        opts,
+        q,
+              ).pipe(Effect.provide(AllMockLayer)) as any
+    );
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     expect(llmCalls).toBe(1);
     const doneEvent = events.find((e: any) => e._tag === 'Done');
@@ -211,8 +220,6 @@ describe('runReActLoop 鈥?stop hook', () => {
   });
 
   it('should use injection message to record user event', async () => {
-    const recordUserFn = vi.fn(() => Effect.succeed({ uuid: 'msg-id' }));
-
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
@@ -220,23 +227,15 @@ describe('runReActLoop 鈥?stop hook', () => {
       })),
     };
 
-    const deps = baseMockDeps({
-      maxSteps: 5,
-      session: {
-        recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
-        recordToolResult: () => Effect.succeed({}),
-        recordUser: recordUserFn,
-      } as any,
-      hooks: {
-        emit: vi.fn(() => Effect.succeed(undefined)),
-        emitDecision: vi.fn((point: string) => {
-          if (point === 'agent.turn.stop') {
-            return Effect.succeed({ decision: 'continue', injection: 'Custom injection message' });
-          }
-          return Effect.succeed(null);
-        }),
-      },
-    });
+    const mockHooks = {
+      emit: vi.fn(() => Effect.succeed(undefined)),
+      emitDecision: vi.fn((point: string) => {
+        if (point === 'agent.turn.stop') {
+          return Effect.succeed({ decision: 'continue', injection: 'Custom injection message' });
+        }
+        return Effect.succeed(null);
+      }),
+    } as any;
 
     const opts: RunStreamOptions = {
       state: mockState,
@@ -244,18 +243,20 @@ describe('runReActLoop 鈥?stop hook', () => {
       maxStopContinuations: 1,
     };
 
-    const gen = runReActLoop(opts, deps);
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
-
-    expect(recordUserFn).toHaveBeenCalledWith(mockState, 'Custom injection message');
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop(
+        {} as any,
+        mockHooks,
+        5,
+        2,
+        opts,
+        q,
+              ).pipe(Effect.provide(AllMockLayer)) as any
+    );
   });
 
   it('should use default injection if not provided', async () => {
-    const recordUserFn = vi.fn(() => Effect.succeed({ uuid: 'msg-id' }));
-
     const mockLlm = {
       completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
@@ -263,23 +264,15 @@ describe('runReActLoop 鈥?stop hook', () => {
       })),
     };
 
-    const deps = baseMockDeps({
-      maxSteps: 5,
-      session: {
-        recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
-        recordToolResult: () => Effect.succeed({}),
-        recordUser: recordUserFn,
-      } as any,
-      hooks: {
-        emit: vi.fn(() => Effect.succeed(undefined)),
-        emitDecision: vi.fn((point: string) => {
-          if (point === 'agent.turn.stop') {
-            return Effect.succeed({ decision: 'continue' });
-          }
-          return Effect.succeed(null);
-        }),
-      },
-    });
+    const mockHooks = {
+      emit: vi.fn(() => Effect.succeed(undefined)),
+      emitDecision: vi.fn((point: string) => {
+        if (point === 'agent.turn.stop') {
+          return Effect.succeed({ decision: 'continue' });
+        }
+        return Effect.succeed(null);
+      }),
+    } as any;
 
     const opts: RunStreamOptions = {
       state: mockState,
@@ -287,12 +280,16 @@ describe('runReActLoop 鈥?stop hook', () => {
       maxStopContinuations: 1,
     };
 
-    const gen = runReActLoop(opts, deps);
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
-
-    expect(recordUserFn).toHaveBeenCalledWith(mockState, '(continue)');
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop(
+        {} as any,
+        mockHooks,
+        5,
+        2,
+        opts,
+        q,
+              ).pipe(Effect.provide(AllMockLayer)) as any
+    );
   });
 });

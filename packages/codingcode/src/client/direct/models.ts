@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import {
   getActiveEntry,
   getLLMClient,
@@ -13,18 +14,18 @@ export interface ModelClient {
 export function createDirectModelClient(): ModelClient {
   return {
     async listModels() {
-      const modelsResult = listModels();
-      if (!modelsResult.ok) throw modelsResult.error;
-      const activeResult = getActiveEntry();
+      const modelsResult = Effect.runSync(listModels().pipe(Effect.either));
+      if (modelsResult._tag === 'Left') throw modelsResult.left;
+      const activeResult = Effect.runSync(getActiveEntry().pipe(Effect.either));
       return {
-        models: modelsResult.value,
-        activeId: activeResult.ok ? activeResult.value.id : null,
+        models: modelsResult.right,
+        activeId: activeResult._tag === 'Right' ? activeResult.right.id : null,
       };
     },
 
     async switchModel({ id }) {
-      const switchResult = switchActiveModel(id);
-      if (!switchResult.ok) throw switchResult.error;
+      const switchResult = Effect.runSync(switchActiveModel(id).pipe(Effect.either));
+      if (switchResult._tag === 'Left') throw switchResult.left;
     },
   };
 }

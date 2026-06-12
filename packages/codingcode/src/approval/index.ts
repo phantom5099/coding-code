@@ -4,18 +4,7 @@ import type { PermissionMode, PermissionRule, ApprovalDecision } from './types.j
 import { createRuleEngine, type RuleEngine } from './rule-engine.js';
 import { DEFAULT_DENY_RULES, READONLY_TOOL_NAMES, DANGEROUS_TOOL_NAMES } from './presets.js';
 import { runPipeline, type PipelineHooks } from './pipeline.js';
-import { ApprovalWaitService, hasEmitter } from './async-confirm.js';
-
-// Module-level singleton so all callers (HTTP routes, direct client, service) share the same state.
-let _globalPermissionMode: PermissionMode = 'default';
-
-export function getGlobalPermissionMode(): PermissionMode {
-  return _globalPermissionMode;
-}
-
-export function setGlobalPermissionMode(mode: PermissionMode): void {
-  _globalPermissionMode = mode;
-}
+import { ApprovalWaitService } from './async-confirm.js';
 
 export class ApprovalService extends Effect.Service<ApprovalService>()('Approval', {
   effect: Effect.gen(function* () {
@@ -24,13 +13,13 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
     const ruleEngine: RuleEngine = createRuleEngine(DEFAULT_DENY_RULES);
     const destructiveTools = new Set(DANGEROUS_TOOL_NAMES);
     const readonlyTools = new Set(READONLY_TOOL_NAMES);
+    let _globalPermissionMode: PermissionMode = 'default';
 
     function buildPipelineHooks(): PipelineHooks {
       return {
         emitPreToolUseDecision: (payload) =>
           Effect.gen(function* () {
             const result = yield* hooks.emitDecision('tool.approval.pre', payload);
-            // Filter out 'continue' decision if present (used only by agent loop)
             if (result && result.decision === 'continue') {
               return null;
             }
@@ -71,7 +60,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
                 destructiveTools: destTools,
                 permissionMode: currentPermMode,
                 hooks: buildPipelineHooks(),
-                asyncConfirm: hasEmitter(request.sessionId),
+                asyncConfirm: Effect.runSync(approvalWait.hasEmitter(request.sessionId)),
                 asyncConfirmService: approvalWait,
                 onAlways: (rule) => engine.addRule(rule),
                 onNever: (rule) => engine.addRule(rule),
@@ -141,7 +130,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               destructiveTools,
               permissionMode: _globalPermissionMode,
               hooks: buildPipelineHooks(),
-              asyncConfirm: hasEmitter(request.sessionId),
+              asyncConfirm: Effect.runSync(approvalWait.hasEmitter(request.sessionId)),
               asyncConfirmService: approvalWait,
               onAlways: (rule) => ruleEngine.addRule(rule),
               onNever: (rule) => ruleEngine.addRule(rule),
@@ -158,10 +147,10 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
 
       setPermissionMode: (mode: PermissionMode): Effect.Effect<void> =>
         Effect.sync(() => {
-          setGlobalPermissionMode(mode);
+          _globalPermissionMode = mode;
         }),
 
-      getPermissionMode: (): PermissionMode => getGlobalPermissionMode(),
+      getPermissionMode: (): PermissionMode => _globalPermissionMode,
 
       fork: (opts?: {
         extraDenyRules?: PermissionRule[];

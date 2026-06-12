@@ -1,41 +1,42 @@
-import { describe, it, expect } from 'vitest';
-import { Effect } from 'effect';
-import { runReActLoop } from '../../src/agent/agent.js';
+import { describe, it, expect, vi } from 'vitest';
+import { Effect, Layer, Queue } from 'effect';
+import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+
+vi.mock('../../src/context/organizer.js', () => ({
+  assemblePayload: vi.fn(() => ({
+    messages: [{ role: 'user' as const, content: 'hi' }],
+    compactedEvents: [],
+    promptEstimate: 10,
+    currentTurnId: 1,
+    compactedTurnIds: new Set<number>(),
+  })),
+}));
+
+vi.mock('../../src/context/compressor.js', () => ({
+  compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+  compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+}));
+
+import { agentLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
-import { HookService } from '../../src/hooks/registry.js';
+import { SessionService } from '../../src/session/store.js';
 
-const mockAgentService = {
-  runStream: () => {
-    throw new Error('not implemented');
-  },
-};
+const AllMockLayer = Layer.mergeAll(
+  Layer.succeed(CheckpointService, {
+    snapshotBaseline: () => Effect.void,
+    snapshotFinal: () => Effect.void,
+  } as any),
+  Layer.succeed(SessionService, {
+    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordToolResult: () => Effect.succeed({}),
+  } as any)
+);
 
-const mockCtx = {
-  build: (_sessionId: string) =>
-    Effect.sync(() => ({
-      messages: [{ role: 'user' as const, content: 'hi' }],
-      newBudgets: [],
-      promptEstimate: 0,
-    })),
-  compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
-};
-
-const mockSession = {
-  recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
-    Effect.sync(() => ({ uuid: 'a1' })),
-  recordToolResult: (
-    _state: any,
-    _parentUuid: string,
-    _toolName: string,
-    _toolCallId: string,
-    _output: string
-  ) => Effect.sync(() => ({})),
-  recordUser: () => Effect.sync(() => ({})),
-};
-
-const mockCheckpoint = {
-  snapshotFinal: () => {},
-};
+const mockHooks = {
+  emit: () => Effect.succeed(undefined),
+  emitDecision: () => Effect.succeed(null),
+} as any;
 
 const mockState = {
   sessionId: 'cache-test-sid',
@@ -51,24 +52,6 @@ const mockState = {
   promptEstimate: 0,
   memorySnapshot: '',
 };
-
-function makeDeps(overrides?: Record<string, any>) {
-  return {
-    maxSteps: 1,
-    maxStopContinuations: 0,
-    executor: null as any,
-    runtime: { listAgentProfiles: () => [] } as any,
-    agentService: mockAgentService as any,
-    ctx: mockCtx as any,
-    session: mockSession as any,
-    checkpoint: mockCheckpoint as any,
-    hooks: {
-      emit: () => Effect.succeed(undefined),
-      emitDecision: () => Effect.succeed(null),
-    } as unknown as HookService,
-    ...overrides,
-  };
-}
 
 function makeCapturingLlm() {
   const captured: { system?: string } = {};
@@ -86,10 +69,17 @@ function makeCapturingLlm() {
 }
 
 async function runOnce(llm: any) {
-  const gen = runReActLoop({ state: mockState, llm }, makeDeps());
-  for await (const _event of gen) {
-    // drain
-  }
+  const q = Effect.runSync(Queue.unbounded<any>());
+  await Effect.runPromise(
+    agentLoop(
+      null as any,
+      mockHooks,
+      1,
+      0,
+      { state: mockState, llm },
+      q
+    ).pipe(Effect.provide(AllMockLayer)) as any
+  );
 }
 
 describe('LLM prompt cache stability', () => {
@@ -97,9 +87,6 @@ describe('LLM prompt cache stability', () => {
     const { llm, captured } = makeCapturingLlm();
     await runOnce(llm);
     expect(captured.system).toBeDefined();
-    // buildDeferredCatalogContent emits an <available-deferred-tools>...</available-deferred-tools>
-    // block with the list of unloaded deferred tools. Since we removed the call, this block must
-    // not appear in the system prompt.
     expect(captured.system).not.toContain('<available-deferred-tools>');
     expect(captured.system).not.toContain('</available-deferred-tools>');
   });

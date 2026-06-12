@@ -1,4 +1,5 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { Effect } from 'effect';
 import { globTool } from '../../src/tools/domains/fs/glob.js';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { resolve, join } from 'path';
@@ -27,11 +28,11 @@ describe('globTool', () => {
     try {
       // Override cwd just for this test 鈥?globTool resolves relative to cwd,
       // but path param is resolved within execute to absolute path
-      const result = await globTool.execute({
+      const result = await Effect.runPromise(globTool.execute({
         pattern: '*.ts',
         path: testDir,
         max_results: 50,
-      });
+      }));
       expect(result).toContain('a.ts');
       expect(result).toContain('b.ts');
       expect(result).toContain('c.test.ts');
@@ -45,11 +46,11 @@ describe('globTool', () => {
   it('should find files in subdirectories with **', async () => {
     await setup();
     try {
-      const result = await globTool.execute({
+      const result = await Effect.runPromise(globTool.execute({
         pattern: '**/*.ts',
         path: testDir,
         max_results: 50,
-      });
+      }));
       expect(result).toContain('e.ts');
     } finally {
       await cleanup();
@@ -59,11 +60,11 @@ describe('globTool', () => {
   it('should respect max_results', async () => {
     await setup();
     try {
-      const result = await globTool.execute({
+      const result = await Effect.runPromise(globTool.execute({
         pattern: '*.ts',
         path: testDir,
         max_results: 1,
-      });
+      }));
       expect(result).toContain('showing first 1');
     } finally {
       await cleanup();
@@ -73,11 +74,11 @@ describe('globTool', () => {
   it('should return no match message when nothing found', async () => {
     await setup();
     try {
-      const result = await globTool.execute({
+      const result = await Effect.runPromise(globTool.execute({
         pattern: '*.py',
         path: testDir,
         max_results: 50,
-      });
+      }));
       expect(result).toContain('No files matching');
     } finally {
       await cleanup();
@@ -85,11 +86,11 @@ describe('globTool', () => {
   });
 
   it('should fail on invalid path without crashing', async () => {
-    const result = await globTool.execute({
+    const result = await Effect.runPromise(globTool.execute({
       pattern: '*.ts',
       path: '/nonexistent/path/xyz123',
       max_results: 50,
-    });
+    }));
     // Should not throw 鈥?globby returns empty array for nonexistent dirs
     expect(typeof result).toBe('string');
   });

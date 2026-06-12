@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
@@ -63,237 +63,180 @@ function assertResumeWorkspace(cwd: string, sessionId: string): void {
   }
 }
 
+const _readHistory = readHistory;
+const _listSessions = listSessions;
+const _findSessionIndex = findSessionIndex;
+const _setPermissionMode = setPermissionMode;
+const _getPermissionMode = getPermissionMode;
+const _appendLine = appendLine;
+const _enqueueWrite = enqueueWrite;
+const _readCurrentIndex = readCurrentIndex;
+const _countNonMetaEvents = countNonMetaEvents;
+const _truncateTitle = truncateTitle;
+const _findFirstUserContent = findFirstUserContent;
+const _projectSessionsDir = projectSessionsDir;
+const _ensureDirs = ensureDirs;
+
 export class SessionService extends Effect.Service<SessionService>()('Session', {
   effect: Effect.gen(function* () {
-    return {
-      create: (
-        cwd: string,
-        model: string,
-        sessionId?: string,
-        opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }
-      ): Effect.Effect<SessionStoreState, AgentError> =>
-        Effect.try({
-          try: () => {
-            if (sessionId && !opts?.parentSessionId) assertResumeWorkspace(cwd, sessionId);
-            const state = initState(cwd, sessionId, opts?.parentSessionId);
-            ensureDirs(state.transcriptPath);
+    const create = (
+      cwd: string,
+      model: string,
+      sessionId?: string,
+      opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }
+    ): Effect.Effect<SessionStoreState, AgentError> =>
+      Effect.try({
+        try: () => {
+          if (sessionId && !opts?.parentSessionId) assertResumeWorkspace(cwd, sessionId);
+          const state = initState(cwd, sessionId, opts?.parentSessionId);
+          ensureDirs(state.transcriptPath);
 
-            if (existsSync(state.transcriptPath)) {
-              const history = readHistory(state.transcriptPath);
-              const meta = history.find((e) => e.type === 'session_meta') as
-                | SessionMetaEvent
-                | undefined;
-              if (meta) {
-                state.sessionMeta = meta;
-                state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
-              }
-              const firstUser = findFirstUserContent(history);
-              if (firstUser) state.title = truncateTitle(firstUser);
-              return state;
+          if (existsSync(state.transcriptPath)) {
+            const history = _readHistory(state.transcriptPath);
+            const meta = history.find((e) => e.type === 'session_meta') as
+              | SessionMetaEvent
+              | undefined;
+            if (meta) {
+              state.sessionMeta = meta;
+              state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
             }
-
-            const meta: SessionMetaEvent = {
-              type: 'session_meta',
-              sessionId: state.sessionId,
-              projectPath: state.projectPath,
-              cwd: state.cwd,
-              model,
-              createdAt: new Date().toISOString(),
-              ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
-              ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
-              ...(opts?.agentName && { agentName: opts.agentName }),
-            };
-            state.sessionMeta = meta;
-            appendLine(state.transcriptPath, meta);
-            state.messageCount++;
-            state.memorySnapshot = loadMemoryForPrompt(state.cwd);
-            updateIndex(state);
+            const firstUser = findFirstUserContent(history);
+            if (firstUser) state.title = truncateTitle(firstUser);
             return state;
-          },
-          catch: (e) =>
-            e instanceof AgentError
-              ? e
-              : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
-        }),
-
-      recordUser: (
-        state: SessionStoreState,
-        content: string
-      ): Effect.Effect<UserEvent, AgentError> =>
-        Effect.try({
-          try: () => {
-            const event: UserEvent = {
-              type: 'user',
-              turnId: state.currentTurnId,
-              uuid: randomUUID(),
-              content,
-              timestamp: new Date().toISOString(),
-            };
-            if (state.title === state.sessionId.slice(0, 8)) {
-              state.title = truncateTitle(content);
-            }
-            appendLine(state.transcriptPath, event);
-            state.messageCount++;
-            updateIndex(state);
-            state.promptEstimate += estimateMessageTokens({ role: 'user', content });
-            return event;
-          },
-          catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
-        }),
-
-      recordAssistant: (
-        state: SessionStoreState,
-        content: string,
-        toolCalls: AssistantEvent['toolCalls'],
-        model: string,
-        usage?: TokenUsage
-      ): Effect.Effect<AssistantEvent, AgentError> =>
-        Effect.try({
-          try: () => {
-            const event: AssistantEvent = {
-              type: 'assistant',
-              turnId: state.currentTurnId,
-              uuid: randomUUID(),
-              content,
-              toolCalls,
-              model,
-              timestamp: new Date().toISOString(),
-              usage,
-            };
-            appendLine(state.transcriptPath, event);
-            state.messageCount++;
-            updateIndex(state);
-            if (usage) {
-              state.usage = usage;
-              state.promptEstimate = usage.prompt;
-            } else {
-              state.promptEstimate += estimateMessageTokens({ role: 'assistant', content });
-            }
-            return event;
-          },
-          catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
-        }),
-
-      recordToolResult: (
-        state: SessionStoreState,
-        parentUuid: string,
-        toolName: string,
-        toolCallId: string,
-        output: string
-      ): Effect.Effect<ToolResultEvent, AgentError> =>
-        Effect.try({
-          try: () => {
-            const tokenCount = estimateTokensForContent(output);
-            const event: ToolResultEvent = {
-              type: 'tool_result',
-              turnId: state.currentTurnId,
-              uuid: randomUUID(),
-              parentUuid,
-              toolName,
-              toolCallId,
-              output,
-              timestamp: new Date().toISOString(),
-              tokenCount,
-            };
-            appendLine(state.transcriptPath, event);
-            state.messageCount++;
-            updateIndex(state);
-            state.promptEstimate += estimateMessageTokens({
-              role: 'tool',
-              content: output,
-              tool_call_id: toolCallId,
-              tool_name: toolName,
-            });
-            return event;
-          },
-          catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
-        }),
-
-      appendSummary: (
-        state: SessionStoreState,
-        replaces: string[],
-        summaryText: string,
-        lastSummarizedTurnId: number = 0
-      ): Effect.Effect<SummaryEvent, AgentError> =>
-        Effect.try({
-          try: () => {
-            const event: SummaryEvent = {
-              type: 'summary',
-              uuid: randomUUID(),
-              replaces,
-              summaryText,
-              lastSummarizedTurnId,
-              timestamp: new Date().toISOString(),
-            };
-            appendLine(state.transcriptPath, event);
-            state.messageCount++;
-            updateIndex(state);
-            state.usage = undefined;
-            state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
-            return event;
-          },
-          catch: (e) => new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
-        }),
-
-      hideMessage: (
-        state: SessionStoreState,
-        targetUuid: string,
-        reason: string
-      ): Effect.Effect<HideEvent> =>
-        Effect.sync(() => {
-          const event: HideEvent = {
-            type: 'hide',
-            uuid: randomUUID(),
-            kind: 'message',
-            targetUuid,
-            reason,
-            timestamp: new Date().toISOString(),
-          };
-          appendLine(state.transcriptPath, event);
-          state.messageCount++;
-          updateIndex(state);
-          state.usage = undefined;
-          state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
-          return event;
-        }),
-
-      rollbackToTurn: (
-        state: SessionStoreState,
-        throughTurnId: number,
-        reason: string
-      ): Effect.Effect<HideEvent> =>
-        Effect.sync(() => {
-          const event: HideEvent = {
-            type: 'hide',
-            uuid: randomUUID(),
-            kind: 'rollback',
-            throughTurnId,
-            reason,
-            timestamp: new Date().toISOString(),
-          };
-          appendLine(state.transcriptPath, event);
-          state.messageCount++;
-          updateIndex(state);
-          const lastUsage = findLastVisibleAssistantUsage(state.transcriptPath);
-          state.usage = lastUsage;
-          state.promptEstimate = lastUsage?.prompt ?? 0;
-          return event;
-        }),
-
-      undoLastHide: (state: SessionStoreState): Effect.Effect<UnhideEvent | null> =>
-        Effect.sync(() => {
-          const history = readHistory(state.transcriptPath);
-          let lastHideUuid: string | null = null;
-          const unhidTargets = new Set<string>();
-          for (const ev of history) {
-            if (ev.type === 'hide' && ev.kind === 'message') lastHideUuid = ev.uuid;
-            if (ev.type === 'unhide') unhidTargets.add(ev.targetHideUuid);
           }
-          if (!lastHideUuid || unhidTargets.has(lastHideUuid)) return null;
-          const event: UnhideEvent = {
-            type: 'unhide',
+
+          const meta: SessionMetaEvent = {
+            type: 'session_meta',
+            sessionId: state.sessionId,
+            projectPath: state.projectPath,
+            cwd: state.cwd,
+            model,
+            createdAt: new Date().toISOString(),
+            ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
+            ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
+            ...(opts?.agentName && { agentName: opts.agentName }),
+          };
+          state.sessionMeta = meta;
+          appendLine(state.transcriptPath, meta);
+          state.messageCount++;
+          state.memorySnapshot = loadMemoryForPrompt(state.cwd);
+          updateIndex(state);
+          return state;
+        },
+        catch: (e) =>
+          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
+
+    const recordUser = (
+      state: SessionStoreState,
+      content: string
+    ): Effect.Effect<UserEvent, AgentError> =>
+      Effect.try({
+        try: () => {
+          const event: UserEvent = {
+            type: 'user',
+            turnId: state.currentTurnId,
             uuid: randomUUID(),
-            targetHideUuid: lastHideUuid,
+            content,
+            timestamp: new Date().toISOString(),
+          };
+          if (state.title === state.sessionId.slice(0, 8)) {
+            state.title = truncateTitle(content);
+          }
+          appendLine(state.transcriptPath, event);
+          state.messageCount++;
+          updateIndex(state);
+          state.promptEstimate += estimateMessageTokens({ role: 'user', content });
+          return event;
+        },
+        catch: (e) =>
+          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
+
+    const recordAssistant = (
+      state: SessionStoreState,
+      content: string,
+      toolCalls: AssistantEvent['toolCalls'],
+      model: string,
+      usage?: TokenUsage
+    ): Effect.Effect<AssistantEvent, AgentError> =>
+      Effect.try({
+        try: () => {
+          const event: AssistantEvent = {
+            type: 'assistant',
+            turnId: state.currentTurnId,
+            uuid: randomUUID(),
+            content,
+            toolCalls,
+            model,
+            timestamp: new Date().toISOString(),
+            usage,
+          };
+          appendLine(state.transcriptPath, event);
+          state.messageCount++;
+          updateIndex(state);
+          if (usage) {
+            state.usage = usage;
+            state.promptEstimate = usage.prompt;
+          } else {
+            state.promptEstimate += estimateMessageTokens({ role: 'assistant', content });
+          }
+          return event;
+        },
+        catch: (e) =>
+          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
+
+    const recordToolResult = (
+      state: SessionStoreState,
+      parentUuid: string,
+      toolName: string,
+      toolCallId: string,
+      output: string
+    ): Effect.Effect<ToolResultEvent, AgentError> =>
+      Effect.try({
+        try: () => {
+          const tokenCount = estimateTokensForContent(output);
+          const event: ToolResultEvent = {
+            type: 'tool_result',
+            turnId: state.currentTurnId,
+            uuid: randomUUID(),
+            parentUuid,
+            toolName,
+            toolCallId,
+            output,
+            timestamp: new Date().toISOString(),
+            tokenCount,
+          };
+          appendLine(state.transcriptPath, event);
+          state.messageCount++;
+          updateIndex(state);
+          state.promptEstimate += estimateMessageTokens({
+            role: 'tool',
+            content: output,
+            tool_call_id: toolCallId,
+            tool_name: toolName,
+          });
+          return event;
+        },
+        catch: (e) =>
+          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
+
+    const appendSummary = (
+      state: SessionStoreState,
+      replaces: string[],
+      summaryText: string,
+      lastSummarizedTurnId: number = 0
+    ): Effect.Effect<SummaryEvent, AgentError> =>
+      Effect.try({
+        try: () => {
+          const event: SummaryEvent = {
+            type: 'summary',
+            uuid: randomUUID(),
+            replaces,
+            summaryText,
+            lastSummarizedTurnId,
             timestamp: new Date().toISOString(),
           };
           appendLine(state.transcriptPath, event);
@@ -302,58 +245,171 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           state.usage = undefined;
           state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
           return event;
-        }),
+        },
+        catch: (e) =>
+          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
 
-      forkSession: (state: SessionStoreState, atUuid: string): Effect.Effect<string> =>
-        Effect.sync(() => {
-          return forkSession(state.sessionId, state.transcriptPath, atUuid);
-        }),
-
-      renameSession: (state: SessionStoreState, text: string): Effect.Effect<TitleEvent> =>
-        Effect.sync(() => {
-          const event: TitleEvent = {
-            type: 'title',
-            uuid: randomUUID(),
-            text,
-            timestamp: new Date().toISOString(),
-          };
-          state.title = text;
-          appendLine(state.transcriptPath, event);
-          state.messageCount++;
-          updateIndex(state);
-          return event;
-        }),
-
-      readHistory: (state: SessionStoreState): Effect.Effect<import('./types.js').SessionEvent[]> =>
-        Effect.sync(() => readHistory(state.transcriptPath)),
-
-      readMessages: (state: SessionStoreState): Effect.Effect<Message[]> =>
-        Effect.sync(() => buildMessages(state.transcriptPath)),
-
-      listSessions: (cwd?: string): Effect.Effect<SessionIndex[]> =>
-        Effect.sync(() => listSessions(cwd ? encodeProjectPath(cwd) : undefined)),
-
-      findSessionIndex: (sessionId: string): Effect.Effect<SessionIndex | null> =>
-        Effect.sync(() => findSessionIndex(sessionId)),
-
-      getSessionId: (state: SessionStoreState): string => state.sessionId,
-      getMessageCount: (state: SessionStoreState): number => state.messageCount,
-
-      setPermissionMode: (state: SessionStoreState, mode: string): Effect.Effect<void> =>
-        Effect.sync(() => {
-          setPermissionMode(state.sessionId, state.indexPath, mode);
-        }),
-
-      getPermissionMode: (state: SessionStoreState): Effect.Effect<string> =>
-        Effect.sync(() => {
-          return getPermissionMode(state.indexPath);
-        }),
-
-      incrementTurn: (state: SessionStoreState): number => {
-        state.currentTurnId += 1;
+    const hideMessage = (
+      state: SessionStoreState,
+      targetUuid: string,
+      reason: string
+    ): Effect.Effect<HideEvent, AgentError> =>
+      Effect.sync(() => {
+        const event: HideEvent = {
+          type: 'hide',
+          uuid: randomUUID(),
+          kind: 'message',
+          targetUuid,
+          reason,
+          timestamp: new Date().toISOString(),
+        };
+        appendLine(state.transcriptPath, event);
+        state.messageCount++;
         updateIndex(state);
-        return state.currentTurnId;
-      },
+        state.usage = undefined;
+        state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
+        return event;
+      });
+
+    const rollbackToTurn = (
+      state: SessionStoreState,
+      throughTurnId: number,
+      reason: string
+    ): Effect.Effect<HideEvent, AgentError> =>
+      Effect.sync(() => {
+        const event: HideEvent = {
+          type: 'hide',
+          uuid: randomUUID(),
+          kind: 'rollback',
+          throughTurnId,
+          reason,
+          timestamp: new Date().toISOString(),
+        };
+        appendLine(state.transcriptPath, event);
+        state.messageCount++;
+        updateIndex(state);
+        const lastUsage = findLastVisibleAssistantUsage(state.transcriptPath);
+        state.usage = lastUsage;
+        state.promptEstimate = lastUsage?.prompt ?? 0;
+        return event;
+      });
+
+    const undoLastHide = (
+      state: SessionStoreState
+    ): Effect.Effect<UnhideEvent | null> =>
+      Effect.sync(() => {
+        const history = _readHistory(state.transcriptPath);
+        let lastHideUuid: string | null = null;
+        const unhidTargets = new Set<string>();
+        for (const ev of history) {
+          if (ev.type === 'hide' && ev.kind === 'message') lastHideUuid = ev.uuid;
+          if (ev.type === 'unhide') unhidTargets.add(ev.targetHideUuid);
+        }
+        if (!lastHideUuid || unhidTargets.has(lastHideUuid)) return null;
+        const event: UnhideEvent = {
+          type: 'unhide',
+          uuid: randomUUID(),
+          targetHideUuid: lastHideUuid,
+          timestamp: new Date().toISOString(),
+        };
+        appendLine(state.transcriptPath, event);
+        state.messageCount++;
+        updateIndex(state);
+        state.usage = undefined;
+        state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
+        return event;
+      });
+
+    const forkSession = (
+      state: SessionStoreState,
+      atUuid: string
+    ): Effect.Effect<string, AgentError> =>
+      Effect.sync(() => {
+        return forkSessionImpl(state.sessionId, state.transcriptPath, atUuid);
+      });
+
+    const renameSession = (
+      state: SessionStoreState,
+      text: string
+    ): Effect.Effect<TitleEvent, AgentError> =>
+      Effect.sync(() => {
+        const event: TitleEvent = {
+          type: 'title',
+          uuid: randomUUID(),
+          text,
+          timestamp: new Date().toISOString(),
+        };
+        state.title = text;
+        appendLine(state.transcriptPath, event);
+        state.messageCount++;
+        updateIndex(state);
+        return event;
+      });
+
+    const readHistory = (
+      state: SessionStoreState
+    ): Effect.Effect<import('./types.js').SessionEvent[]> =>
+      Effect.sync(() => _readHistory(state.transcriptPath));
+
+    const readMessages = (
+      state: SessionStoreState
+    ): Effect.Effect<Message[]> =>
+      Effect.sync(() => buildMessages(state.transcriptPath));
+
+    const listSessions = (
+      cwd?: string
+    ): Effect.Effect<SessionIndex[]> =>
+      Effect.sync(() => _listSessions(cwd ? encodeProjectPath(cwd) : undefined));
+
+    const findSessionIndex = (
+      sessionId: string
+    ): Effect.Effect<SessionIndex | null> =>
+      Effect.sync(() => _findSessionIndex(sessionId));
+
+    const getSessionId = (state: SessionStoreState): string => state.sessionId;
+
+    const getMessageCount = (state: SessionStoreState): number => state.messageCount;
+
+    const setPermissionMode = (
+      state: SessionStoreState,
+      mode: string
+    ): Effect.Effect<void> =>
+      Effect.sync(() => {
+        _setPermissionMode(state.sessionId, state.indexPath, mode);
+      });
+
+    const getPermissionMode = (
+      state: SessionStoreState
+    ): Effect.Effect<string> =>
+      Effect.sync(() => _getPermissionMode(state.indexPath));
+
+    const incrementTurn = (state: SessionStoreState): number => {
+      state.currentTurnId += 1;
+      updateIndex(state);
+      return state.currentTurnId;
+    };
+
+    return {
+      create,
+      recordUser,
+      recordAssistant,
+      recordToolResult,
+      appendSummary,
+      hideMessage,
+      rollbackToTurn,
+      undoLastHide,
+      forkSession,
+      renameSession,
+      readHistory,
+      readMessages,
+      listSessions,
+      findSessionIndex,
+      getSessionId,
+      getMessageCount,
+      setPermissionMode,
+      getPermissionMode,
+      incrementTurn,
     };
   }),
 }) {}
@@ -426,12 +482,12 @@ function updateIndex(state: SessionStoreState): void {
   enqueueWrite(state.sessionId, state.indexPath, index);
 }
 
-export function forkSession(
+function forkSessionImpl(
   sourceSessionId: string,
   sourceJsonlPath: string,
   atUuid: string
 ): string {
-  const events = readHistory(sourceJsonlPath);
+  const events = _readHistory(sourceJsonlPath);
   const atIdx = atUuid ? events.findIndex((e) => 'uuid' in e && (e as any).uuid === atUuid) : -1;
 
   const chain = atIdx >= 0 ? events.slice(0, atIdx + 1) : events;
@@ -509,3 +565,5 @@ export function forkSession(
 
   return newSessionId;
 }
+
+

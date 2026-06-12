@@ -20,12 +20,12 @@ messagesRouter.post('/sessions/:id/messages', async (c) => {
   const { input, cwd } = await c.req.json<{ input: string; cwd: string }>();
   const normalizedCwd = resolveWorkspaceCwd(cwd);
 
-  const llmResult = await getLLMClient();
-  if (!llmResult.ok) {
-    const { status, body } = errorResponse(llmResult.error);
+  const llmEither = await Effect.runPromise(getLLMClient().pipe(Effect.either));
+  if (llmEither._tag === 'Left') {
+    const { status, body } = errorResponse(llmEither.left);
     return c.json(body, status as any);
   }
-  const llm = llmResult.value;
+  const llm = llmEither.right;
 
   // Read session permissionMode if session exists
   let approvalOverride: any = undefined;

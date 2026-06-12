@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 
@@ -20,29 +20,30 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 describe('recordToolResult', () => {
   it('writes full output for all tool results', async () => {
     const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create('/tmp/persist-test', 'test-model')))
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.create('/tmp/persist-test', 'test-model');
+      })
     );
 
     const longOutput = 'x'.repeat(30000);
     const assistantEvent = await run(
-      SessionService.pipe(
-        Effect.flatMap((s) =>
-          s.recordAssistant(
-            state,
-            'use tool',
-            [{ id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } }],
-            'test-model'
-          )
-        )
-      )
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.recordAssistant(
+          state,
+          'use tool',
+          [{ id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } }],
+          'test-model'
+        );
+      })
     );
 
     const event = await run(
-      SessionService.pipe(
-        Effect.flatMap((s) =>
-          s.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', longOutput)
-        )
-      )
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', longOutput);
+      })
     );
 
     expect(event.output).toBe(longOutput);
@@ -51,29 +52,30 @@ describe('recordToolResult', () => {
 
   it('writes full output for small tool results', async () => {
     const state = await run(
-      SessionService.pipe(Effect.flatMap((s) => s.create('/tmp/persist-test-small', 'test-model')))
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.create('/tmp/persist-test-small', 'test-model');
+      })
     );
 
     const shortOutput = 'small result';
     const assistantEvent = await run(
-      SessionService.pipe(
-        Effect.flatMap((s) =>
-          s.recordAssistant(
-            state,
-            'use tool',
-            [{ id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } }],
-            'test-model'
-          )
-        )
-      )
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.recordAssistant(
+          state,
+          'use tool',
+          [{ id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } }],
+          'test-model'
+        );
+      })
     );
 
     const event = await run(
-      SessionService.pipe(
-        Effect.flatMap((s) =>
-          s.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', shortOutput)
-        )
-      )
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', shortOutput);
+      })
     );
 
     expect(event.output).toBe(shortOutput);

@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { McpService } from '../../mcp/index.js';
 import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
 import { SkillService } from '../../skills/service.js';
-import { getGlobalPermissionMode, setGlobalPermissionMode } from '../../approval/index.js';
+import { ApprovalService } from '../../approval/index.js';
 import type { PermissionMode } from '../../approval/types.js';
 import type { AgentProfile } from '../../subagent/registry.js';
 import type { UserHookConfig } from '../../hooks/config.js';
@@ -311,13 +311,15 @@ export function createDirectSettingsClient(
     },
 
     async toggleSkill({ name, enabled, cwd }) {
+      const skillCwd = cwd || process.cwd();
       await runWithLayer(
         Effect.gen(function* () {
           const skill = yield* SkillService;
-          const skillCwd = cwd || process.cwd();
-          return yield* enabled
-            ? skill.enableSkill(skillCwd, name)
-            : skill.disableSkill(skillCwd, name);
+          if (enabled) {
+            yield* skill.enableSkill(skillCwd, name);
+          } else {
+            yield* skill.disableSkill(skillCwd, name);
+          }
         })
       );
     },
@@ -380,11 +382,13 @@ export function createDirectSettingsClient(
     },
 
     async getGlobalPermissionMode() {
-      return getGlobalPermissionMode();
+      const approval: any = await runWithLayer(Effect.gen(function* () { return yield* ApprovalService; }));
+      return approval.getPermissionMode();
     },
 
     async setGlobalPermissionMode(mode) {
-      setGlobalPermissionMode(mode);
+      const approval: any = await runWithLayer(Effect.gen(function* () { return yield* ApprovalService; }));
+      await runWithLayer(approval.setPermissionMode(mode));
     },
   };
 }

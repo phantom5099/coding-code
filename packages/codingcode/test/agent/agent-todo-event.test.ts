@@ -1,58 +1,43 @@
-import { describe, it, expect } from 'vitest';
-import { Effect } from 'effect';
-import { runReActLoop } from '../../src/agent/agent.js';
+import { describe, it, expect, vi } from 'vitest';
+import { Effect, Layer, Queue, Chunk } from 'effect';
+import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+
+vi.mock('../../src/context/organizer.js', () => ({
+  assemblePayload: vi.fn(() => ({
+    messages: [{ role: 'user' as const, content: 'hi' }],
+    compactedEvents: [],
+    promptEstimate: 10,
+    currentTurnId: 1,
+    compactedTurnIds: new Set<number>(),
+  })),
+}));
+
+vi.mock('../../src/context/compressor.js', () => ({
+  compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+  compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+}));
+
+import { agentLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
 import { sharedTodoStore } from '../../src/agent/todo.js';
+import { SessionService } from '../../src/session/store.js';
 
-const mockToolRegistry = {
-  describeAll: () => [],
-  filter: () => [],
-  get: () => null,
-  register: () => Effect.succeed(undefined),
-  allCore: () => [],
-  allDeferred: () => [],
-  getDef: () => undefined,
-};
+const AllMockLayer = Layer.mergeAll(
+  Layer.succeed(CheckpointService, {
+    snapshotBaseline: () => Effect.void,
+    snapshotFinal: () => Effect.void,
+  } as any),
+  Layer.succeed(SessionService, {
+    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordToolResult: () => Effect.succeed({}),
+  } as any)
+);
 
-const mockToolSearch = {
-  isLoaded: () => false,
-  listLoaded: () => [],
-  listUnloadedDeferred: () => [],
-  search: () => [],
-  reset: () => {},
-};
-
-const mockAgentService = {
-  runStream: () => {
-    throw new Error('not implemented');
-  },
-};
-
-const mockCtx = {
-  build: (_sessionId: string) =>
-    Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] })),
-  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) =>
-    Effect.succeed({ didCompress: false, released: 0 }),
-  compress: (_sessionId: string, _llm?: any, _config?: any) =>
-    Effect.succeed({ didCompress: true, released: 1000 }),
-  compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
-};
-
-const mockSession = {
-  recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
-    Effect.sync(() => ({ uuid: 'a1' })),
-  recordToolResult: (
-    _state: any,
-    _parentUuid: string,
-    _toolName: string,
-    _toolCallId: string,
-    _output: string
-  ) => Effect.sync(() => ({})),
-};
-
-const mockCheckpoint = {
-  snapshotFinal: () => {},
-};
+const mockHooks = {
+  emit: () => Effect.succeed(undefined),
+  emitDecision: () => Effect.succeed(null),
+} as any;
 
 const mockState = {
   sessionId: 'test-todo-sid',
@@ -101,28 +86,18 @@ describe('TodoUpdate event', () => {
         ]),
     };
 
-    const gen = runReActLoop(
-      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
-      {
-        maxSteps: 1,
-        maxStopContinuations: 2,
-        executor: mockExecutor as any,
-        runtime: { listAgentProfiles: () => [] } as any,
-        agentService: mockAgentService as any,
-        ctx: mockCtx as any,
-        session: mockSession as any,
-        checkpoint: mockCheckpoint as any,
-        hooks: {
-          emit: () => Effect.succeed(undefined),
-          emitDecision: () => Effect.succeed(null),
-        } as any,
-      }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop(
+        mockExecutor as any,
+        mockHooks,
+        1,
+        2,
+        { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
+        q
+      ).pipe(Effect.provide(AllMockLayer)) as any
     );
-
-    const events: any[] = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     const todoUpdates = events.filter((e: any) => e._tag === 'TodoUpdate');
     expect(todoUpdates).toHaveLength(1);
@@ -133,7 +108,7 @@ describe('TodoUpdate event', () => {
   });
 
   it('should not yield TodoUpdate when non-todo tools are called', async () => {
-    sharedTodoStore.write('agent-non-todo', []);
+    sharedTodoStore.write('non-todo', []);
 
     const mockExecutor = {
       execute: () => Effect.succeed('done'),
@@ -143,31 +118,21 @@ describe('TodoUpdate event', () => {
         ]),
     };
 
-    const gen = runReActLoop(
-      {
-        state: { ...mockState, sessionId: 'non-todo' },
-        llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-      },
-      {
-        maxSteps: 1,
-        maxStopContinuations: 2,
-        executor: mockExecutor as any,
-        runtime: { listAgentProfiles: () => [] } as any,
-        agentService: mockAgentService as any,
-        ctx: mockCtx as any,
-        session: mockSession as any,
-        checkpoint: mockCheckpoint as any,
-        hooks: {
-          emit: () => Effect.succeed(undefined),
-          emitDecision: () => Effect.succeed(null),
-        } as any,
-      }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop(
+        mockExecutor as any,
+        mockHooks,
+        1,
+        2,
+        {
+          state: { ...mockState, sessionId: 'non-todo' },
+          llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
+        },
+        q
+      ).pipe(Effect.provide(AllMockLayer)) as any
     );
-
-    const events: any[] = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     const todoUpdates = events.filter((e: any) => e._tag === 'TodoUpdate');
     expect(todoUpdates).toHaveLength(0);

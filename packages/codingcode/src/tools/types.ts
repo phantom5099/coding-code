@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { Effect } from 'effect';
+import { AgentError } from '../core/error.js';
 export type { ToolDescription } from '../core/types.js';
 
 export interface ToolExecCtx {
@@ -20,7 +22,7 @@ export interface ToolDefinition {
   parameters: z.ZodTypeAny;
   /** Optional JSON Schema override. When absent, the schema is auto-generated from `parameters`. */
   jsonSchema?: Record<string, unknown>;
-  execute: (args: unknown, ctx?: ToolExecCtx) => Promise<string>;
+  execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError>;
 }
 
 export interface ToolVisibilityPolicy {

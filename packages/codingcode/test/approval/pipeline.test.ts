@@ -1,9 +1,10 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { runPipeline } from '../../src/approval/pipeline.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import type { PermissionRule, ApprovalDecision } from '../../src/approval/types.js';
 import { READONLY_TOOL_NAMES } from '../../src/approval/presets.js';
+import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
 
 const readonlyTools = new Set(READONLY_TOOL_NAMES);
 
@@ -11,6 +12,17 @@ const mockHooks = {
   emitPreToolUseDecision: () => Effect.succeed(null),
   recordAudit: () => Effect.void,
 };
+
+const mockAsyncConfirmService = ApprovalWaitService.make({
+  waitForConfirm: () => Effect.dieMessage('not implemented'),
+  resolveConfirm: () => Effect.succeed(false),
+  getPending: () => Effect.succeed([]),
+  emitApprovalRequest: () => Effect.void,
+  registerEmitter: () => Effect.void,
+  delegateEmitter: () => Effect.void,
+  unregisterEmitter: () => Effect.void,
+  hasEmitter: () => Effect.succeed(false),
+});
 
 describe('Approval Pipeline', () => {
   it('Layer 1: Rule Engine deny should short-circuit', async () => {
@@ -26,6 +38,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(),
           permissionMode: 'default',
           hooks: mockHooks,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )
@@ -44,6 +57,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(),
           permissionMode: 'default',
           hooks: mockHooks,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )
@@ -62,6 +76,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash']),
           permissionMode: 'plan',
           hooks: mockHooks,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )
@@ -80,6 +95,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(),
           permissionMode: 'plan',
           hooks: mockHooks,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )
@@ -97,6 +113,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash']),
           permissionMode: 'bypass',
           hooks: mockHooks,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )
@@ -115,6 +132,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash', 'execute_command']),
           permissionMode: 'acceptEdits',
           hooks: mockHooks,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )
@@ -132,6 +150,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash', 'execute_command']),
           permissionMode: 'acceptEdits',
           hooks: mockHooks,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )
@@ -156,6 +175,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash']),
           permissionMode: 'default',
           hooks: hooksWithDeny,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )
@@ -178,6 +198,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(['Bash']),
           permissionMode: 'default',
           hooks: hooksWithAllow,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )
@@ -204,6 +225,7 @@ describe('Approval Pipeline', () => {
           destructiveTools: new Set(),
           permissionMode: 'default',
           hooks: hooksWithAudit,
+          asyncConfirmService: mockAsyncConfirmService,
           sessionId: 'test',
         }
       )

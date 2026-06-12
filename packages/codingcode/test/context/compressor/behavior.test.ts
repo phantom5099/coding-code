@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -7,6 +7,7 @@ import { compactWithLLM } from '../../../src/context/compressor.js';
 import type { ContextConfig } from '../../../src/context/config.js';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
+import { Effect } from 'effect';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 import { buildMessages } from '../../../src/session/messages.js';
 import { estimateTokens } from '../../../src/context/util.js';
@@ -119,7 +120,7 @@ function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
 
 function makeMockLLM(content: string): LLMClient {
   return {
-    complete: async () => Result.ok({ content, finishReason: 'stop' as const }),
+    complete: () => Effect.succeed({ content, finishReason: 'stop' as const }),
     completeStream: () => ({
       stream: (async function* () {
         yield content;

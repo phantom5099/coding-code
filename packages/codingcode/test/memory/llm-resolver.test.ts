@@ -1,9 +1,9 @@
-﻿import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { LLMClient } from '../../src/llm/client.js';
 import type { SelectableModel } from '../../src/llm/factory.js';
 
 const { mockFindModel, mockCreateClient } = vi.hoisted(() => ({
-  mockFindModel: vi.fn(() => null),
+  mockFindModel: vi.fn<() => SelectableModel | null>(() => null),
   mockCreateClient: vi.fn(),
 }));
 

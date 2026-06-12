@@ -1,13 +1,11 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Effect } from 'effect';
 
 const { mockCompactWithLLM, mockLLM } = vi.hoisted(() => ({
   mockCompactWithLLM: vi.fn(),
   mockLLM: {
     complete: vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        value: { content: '<summary>compacted</summary>' },
-      })
+      Effect.succeed({ content: '<summary>compacted</summary>' })
     ),
     completeStream: () => ({
       stream: (async function* () {})(),
@@ -28,7 +26,7 @@ const { mockCompactWithLLM, mockLLM } = vi.hoisted(() => ({
 
 vi.mock('../../../src/session/io.js', async (importOriginal) => {
   const actual = await importOriginal();
-  const mockResolveSessionDir = vi.fn(() => '/tmp/sessions');
+  const mockResolveSessionDir = vi.fn((_sessionId: string) => '/tmp/sessions');
   return {
     ...(actual as any),
     findSessionIndex: vi.fn(() => ({ currentTurnId: 10 })),

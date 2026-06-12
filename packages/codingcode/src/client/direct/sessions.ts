@@ -52,42 +52,42 @@ export function createDirectSessionClient(
   runWithLayer: <T>(eff: any) => Promise<T>
 ): SessionClient {
   return {
-    async createSession({ cwd, initialPermissionMode: _initialPermissionMode }) {
+    async createSession({ cwd }) {
       return runWithLayer(
         Effect.gen(function* () {
-          const svc = yield* SessionService;
-          const state = yield* svc.create(cwd, 'unknown');
+          const session = yield* SessionService;
+          const state = yield* session.create(cwd, 'unknown');
           return { sessionId: state.sessionId };
-        })
+        }) as any
       );
     },
 
     async resumeSession({ sessionId, cwd }) {
       return runWithLayer(
         Effect.gen(function* () {
-          const svc = yield* SessionService;
-          const state = yield* svc.create(cwd, 'unknown', sessionId);
-          return yield* svc.readHistory(state);
-        })
+          const session = yield* SessionService;
+          const state = yield* session.create(cwd, 'unknown', sessionId);
+          return yield* session.readHistory(state);
+        }) as any
       );
     },
 
     async listSessions({ cwd }) {
       return runWithLayer(
         Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.listSessions(cwd);
-        })
+          const session = yield* SessionService;
+          return yield* session.listSessions(cwd);
+        }) as any
       );
     },
 
     async getSessionHistory({ sessionId }) {
       return runWithLayer(
         Effect.gen(function* () {
-          const svc = yield* SessionService;
-          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', sessionId);
-          return yield* svc.readHistory(state);
-        })
+          const session = yield* SessionService;
+          const state = yield* session.create(getWorkspaceCwd(), 'unknown', sessionId);
+          return yield* session.readHistory(state);
+        }) as any
       );
     },
 
@@ -98,20 +98,20 @@ export function createDirectSessionClient(
     async getSessionPermissionMode({ sessionId }) {
       return runWithLayer(
         Effect.gen(function* () {
-          const svc = yield* SessionService;
-          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', sessionId);
-          return yield* svc.getPermissionMode(state);
-        })
+          const session = yield* SessionService;
+          const state = yield* session.create(getWorkspaceCwd(), 'unknown', sessionId);
+          return yield* session.getPermissionMode(state);
+        }) as any
       );
     },
 
     async setSessionPermissionMode({ sessionId, mode }) {
       return runWithLayer(
         Effect.gen(function* () {
-          const svc = yield* SessionService;
-          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', sessionId);
-          return yield* svc.setPermissionMode(state, mode);
-        })
+          const session = yield* SessionService;
+          const state = yield* session.create(getWorkspaceCwd(), 'unknown', sessionId);
+          yield* session.setPermissionMode(state, mode);
+        }) as any
       );
     },
 
@@ -173,10 +173,10 @@ export function createDirectSessionClient(
     async forkSession({ sessionId, atUuid }) {
       return runWithLayer(
         Effect.gen(function* () {
-          const svc = yield* SessionService;
-          const state = yield* svc.create(getWorkspaceCwd(), 'unknown', sessionId);
-          return yield* svc.forkSession(state, atUuid ?? '');
-        })
+          const session = yield* SessionService;
+          const state = yield* session.create(getWorkspaceCwd(), 'unknown', sessionId);
+          return yield* session.forkSession(state, atUuid ?? '');
+        }) as any
       );
     },
   };

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { runReActLoop } from '../../src/agent/agent';
 import { Result } from '../../src/core/result';
 import { HookService } from '../../src/hooks/registry.js';
 import type { HookDecision } from '../../src/hooks/registry.js';

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { Effect } from 'effect';
+import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 interface SearchResult {
@@ -153,36 +155,48 @@ export const webSearchTool: ToolDefinition = {
       .default(8)
       .describe('Maximum number of results to return'),
   }),
-  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
-    const { query, max_results } = args as { query: string; max_results: number };
+  execute: (args: unknown, _ctx?: ToolExecCtx) =>
+    Effect.gen(function* () {
+      const { query, max_results } = args as { query: string; max_results: number };
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
 
-    try {
-      // 搜索引擎优先级：Bing(cn) → 百度
-      const engines = [searchBing, searchBaidu];
+      const result = yield* Effect.gen(function* () {
+        // 搜索引擎优先级：Bing(cn) → 百度
+        const engines = [searchBing, searchBaidu];
 
-      let lastError = '';
-      for (const engine of engines) {
-        try {
-          const results = await engine(query, max_results, controller.signal);
-          if (results.length > 0) {
-            return results
-              .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet || '(no snippet)'}`)
-              .join('\n\n');
+        let lastError = '';
+        for (const engine of engines) {
+          const engineResult = yield* Effect.either(
+            Effect.tryPromise({
+              try: () => engine(query, max_results, controller.signal),
+              catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+            }),
+          );
+
+          if (engineResult._tag === 'Right') {
+            const results = engineResult.right;
+            if (results.length > 0) {
+              return results
+                .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet || '(no snippet)'}`)
+                .join('\n\n');
+            }
+          } else {
+            const e = engineResult.left;
+            lastError = e.cause instanceof Error ? e.cause.message : String(e.cause);
           }
-        } catch (err: unknown) {
-          lastError = err instanceof Error ? err.message : String(err);
         }
-      }
 
-      return `No results found for "${query}".${lastError ? ` Last error: ${lastError}` : ''}`;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      return `Search error for "${query}": ${message}`;
-    } finally {
+        return `No results found for "${query}".${lastError ? ` Last error: ${lastError}` : ''}`;
+      }).pipe(
+        Effect.catchAll((e: AgentError) => {
+          const message = e.cause instanceof Error ? e.cause.message : String(e.cause);
+          return Effect.succeed(`Search error for "${query}": ${message}`);
+        }),
+      );
+
       clearTimeout(timer);
-    }
-  },
+      return result;
+    }),
 };

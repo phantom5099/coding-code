@@ -1,7 +1,20 @@
 import type { Context } from 'hono';
-import { registerEmitter, unregisterEmitter } from '../approval/async-confirm.js';
+import { Effect } from 'effect';
+import { ApprovalWaitService } from '../approval/async-confirm.js';
+import { AppLayer } from '../layer.js';
 import type { SseEvent } from './adapter.js';
 import { AgentError } from '../core/error.js';
+
+let _waitService: any = null;
+
+async function getWaitService() {
+  if (!_waitService) {
+    _waitService = await Effect.runPromise(
+      Effect.gen(function* () { return yield* ApprovalWaitService; }).pipe(Effect.provide(AppLayer) as any)
+    );
+  }
+  return _waitService;
+}
 
 export function sseHandler(
   createGenerator: () => AsyncGenerator<SseEvent, void, unknown>,
@@ -15,9 +28,10 @@ export function sseHandler(
           controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
-        registerEmitter(sessionId, (id, tool, args) => {
+        const waitService = await getWaitService();
+        Effect.runSync(waitService.registerEmitter(sessionId, (id: string, tool: string, args: Record<string, unknown>) => {
           enqueue({ type: 'approval_request', id, tool, args });
-        });
+        }));
 
         try {
           if (opts?.initialEvents) {
@@ -38,7 +52,7 @@ export function sseHandler(
             ...(e instanceof AgentError ? { code: e.code } : {}),
           });
         } finally {
-          unregisterEmitter(sessionId);
+          Effect.runSync(waitService.unregisterEmitter(sessionId));
           opts?.onDone?.();
         }
         controller.close();

@@ -1,65 +1,57 @@
-import { expect, it, describe } from 'vitest';
-import { Effect } from 'effect';
-import { SubagentRegistry, EXPLORE_PROFILE, PLAN_PROFILE } from '../../src/subagent/registry';
-import { SubagentRegistryLayer } from '../../src/layer';
+import { expect, it, describe, beforeEach } from 'vitest';
+import {
+  register,
+  registerAll,
+  get,
+  list,
+  reset,
+  SubagentRegistry,
+  EXPLORE_PROFILE,
+  PLAN_PROFILE,
+} from '../../src/subagent/registry';
 
 describe('SubagentRegistry', () => {
-  const testEffect = (testFn: (registry: SubagentRegistry) => void) => {
-    return Effect.gen(function* () {
-      const registry = yield* SubagentRegistry;
-      testFn(registry);
-    }).pipe(Effect.provide(SubagentRegistryLayer));
-  };
-
-  it('should register and retrieve profiles', async () => {
-    await Effect.runPromise(
-      testEffect((registry) => {
-        const profile = {
-          name: 'test-agent',
-          description: 'Test agent',
-          systemPrompt: 'You are a test agent',
-        };
-
-        registry.register(profile);
-        const retrieved = registry.get('test-agent');
-
-        expect(retrieved).toEqual(profile);
-      })
-    );
+  beforeEach(() => {
+    reset();
   });
 
-  it('should list all registered profiles', async () => {
-    await Effect.runPromise(
-      testEffect((registry) => {
-        const profile1 = {
-          name: 'agent1',
-          description: 'First agent',
-          systemPrompt: 'System 1',
-        };
-        const profile2 = {
-          name: 'agent2',
-          description: 'Second agent',
-          systemPrompt: 'System 2',
-        };
+  it('should register and retrieve profiles', () => {
+    const profile = {
+      name: 'test-agent',
+      description: 'Test agent',
+      systemPrompt: 'You are a test agent',
+    };
 
-        registry.register(profile1);
-        registry.register(profile2);
+    register(profile);
+    const retrieved = get('test-agent');
 
-        const all = registry.list();
-        expect(all.length).toBeGreaterThanOrEqual(2);
-        expect(all.some((p) => p.name === 'agent1')).toBe(true);
-        expect(all.some((p) => p.name === 'agent2')).toBe(true);
-      })
-    );
+    expect(retrieved).toEqual(profile);
   });
 
-  it('should return undefined for unknown profile', async () => {
-    await Effect.runPromise(
-      testEffect((registry) => {
-        const result = registry.get('unknown-agent');
-        expect(result).toBeUndefined();
-      })
-    );
+  it('should list all registered profiles', () => {
+    const profile1 = {
+      name: 'agent1',
+      description: 'First agent',
+      systemPrompt: 'System 1',
+    };
+    const profile2 = {
+      name: 'agent2',
+      description: 'Second agent',
+      systemPrompt: 'System 2',
+    };
+
+    register(profile1);
+    register(profile2);
+
+    const all = list();
+    expect(all.length).toBeGreaterThanOrEqual(2);
+    expect(all.some((p) => p.name === 'agent1')).toBe(true);
+    expect(all.some((p) => p.name === 'agent2')).toBe(true);
+  });
+
+  it('should return undefined for unknown profile', () => {
+    const result = get('unknown-agent');
+    expect(result).toBeUndefined();
   });
 
   it('should support built-in explore profile', () => {
@@ -99,43 +91,43 @@ describe('SubagentRegistry', () => {
     expect(PLAN_PROFILE.systemPrompt).toContain('Recommended approach');
   });
 
-  it('should support profile with custom tools and maxSteps', async () => {
-    await Effect.runPromise(
-      testEffect((registry) => {
-        const profile = {
-          name: 'custom',
-          description: 'Custom agent',
-          systemPrompt: 'Custom system',
-          tools: ['tool1', 'tool2'],
-          readonly: false,
-          maxSteps: 15,
-        };
+  it('should support profile with custom tools and maxSteps', () => {
+    const profile = {
+      name: 'custom',
+      description: 'Custom agent',
+      systemPrompt: 'Custom system',
+      tools: ['tool1', 'tool2'],
+      readonly: false,
+      maxSteps: 15,
+    };
 
-        registry.register(profile);
-        const retrieved = registry.get('custom');
+    register(profile);
+    const retrieved = get('custom');
 
-        expect(retrieved?.tools).toContain('tool1');
-        expect(retrieved?.maxSteps).toBe(15);
-        expect(retrieved?.readonly).toBe(false);
-      })
-    );
+    expect(retrieved?.tools).toContain('tool1');
+    expect(retrieved?.maxSteps).toBe(15);
+    expect(retrieved?.readonly).toBe(false);
   });
 
-  it('should reset the registry', async () => {
-    await Effect.runPromise(
-      testEffect((registry) => {
-        registry.register({
-          name: 'temp',
-          description: 'Temporary',
-          systemPrompt: 'Temp system',
-        });
+  it('should reset the registry', () => {
+    register({
+      name: 'temp',
+      description: 'Temporary',
+      systemPrompt: 'Temp system',
+    });
 
-        expect(registry.get('temp')).toBeDefined();
+    expect(get('temp')).toBeDefined();
 
-        registry.reset();
+    reset();
 
-        expect(registry.get('temp')).toBeUndefined();
-      })
-    );
+    expect(get('temp')).toBeUndefined();
+  });
+
+  it('static class methods delegate to module functions', () => {
+    SubagentRegistry.register({ name: 'via-static', description: 'via static' });
+    expect(SubagentRegistry.get('via-static')?.name).toBe('via-static');
+    expect(SubagentRegistry.list().length).toBe(1);
+    SubagentRegistry.reset();
+    expect(SubagentRegistry.list().length).toBe(0);
   });
 });

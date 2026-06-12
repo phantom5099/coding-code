@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 import type { ToolVisibilityPolicy } from '../../types.js';
@@ -26,18 +27,20 @@ export function createToolSearchTool(
         .min(1)
         .describe('Keywords to match against deferred tool names and descriptions.'),
     }),
-    execute: async (args, ctx) => {
+    execute: (args, ctx) => {
       const sessionId = ctx?.sessionId;
       if (!sessionId)
-        throw new AgentError('TOOL_EXECUTION_FAILED', 'tool_search requires sessionId');
+        return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'tool_search requires sessionId'));
       const { query } = args as { query: string };
-      const hits = svc.search(sessionId, query, policy);
-      if (hits.length === 0) return `No deferred tools matched "${query}".`;
-      svc.markLoaded(sessionId, hits.map((h) => h.name));
-      return [
-        `Loaded ${hits.length} tool(s). Their full schemas are now available next turn:`,
-        ...hits.map((h) => `- ${h.name}: ${h.shortDescription ?? ''}`),
-      ].join('\n');
+      return Effect.sync(() => {
+        const hits = svc.search(sessionId, query, policy);
+        if (hits.length === 0) return `No deferred tools matched "${query}".`;
+        svc.markLoaded(sessionId, hits.map((h) => h.name));
+        return [
+          `Loaded ${hits.length} tool(s). Their full schemas are now available next turn:`,
+          ...hits.map((h) => `- ${h.name}: ${h.shortDescription ?? ''}`),
+        ].join('\n');
+      });
     },
   };
 }

@@ -2,9 +2,10 @@ import { Effect } from 'effect';
 import { sendMessage } from '../../agent/agent.js';
 import { ApprovalWaitService } from '../../approval/async-confirm.js';
 import { parseApprovalResponse } from '../../approval/response.js';
-import { ContextService } from '../../context/context.js';
 import type { StreamChunk } from '../types.js';
 import { agentEventToStreamChunk } from '../direct.js';
+import { compactWithLLM } from '../../context/compressor.js';
+import { getContextConfig } from '../../context/config.js';
 
 export interface AgentRuntimeClient {
   sendMessage(
@@ -42,11 +43,12 @@ export function createDirectAgentClient(
             args: Record<string, unknown>;
           }) => void)
         | null = null;
-      const { registerEmitter, unregisterEmitter } =
-        await import('../../approval/async-confirm.js');
-      registerEmitter(resolvedSessionId, (id, tool, args) => {
+      const waitService: any = await runWithLayer(
+        Effect.gen(function* () { return yield* ApprovalWaitService; })
+      );
+      Effect.runSync(waitService.registerEmitter(resolvedSessionId, (id: string, tool: string, args: Record<string, unknown>) => {
         notify?.({ type: 'approval_request', id, tool, args });
-      });
+      }));
 
       try {
         const gen = agentEventToStreamChunk(agentGen);
@@ -83,7 +85,7 @@ export function createDirectAgentClient(
           }
         }
       } finally {
-        unregisterEmitter(resolvedSessionId);
+        Effect.runSync((waitService as any).unregisterEmitter(resolvedSessionId));
       }
     },
 
@@ -98,12 +100,7 @@ export function createDirectAgentClient(
     },
 
     async compact({ sessionId, cwd }) {
-      await runWithLayer(
-        Effect.gen(function* () {
-          const ctx = yield* ContextService;
-          return yield* ctx.compress(sessionId, cwd, null);
-        })
-      );
+      await compactWithLLM(sessionId, cwd, getContextConfig(), null);
     },
   };
 }

@@ -28,8 +28,8 @@ export interface PipelineOptions {
   hooks: PipelineHooks;
   /** Use async SSE-based confirmation instead of blocking readline. */
   asyncConfirm?: boolean;
-  /** Service for async confirmation (injected to keep R clean). */
-  asyncConfirmService?: ApprovalWaitService;
+  /** Service for async confirmation. */
+  asyncConfirmService: ApprovalWaitService;
   /** Called when user selects Always — allows caller to persist the rule. */
   onAlways?: (rule: PermissionRule) => void;
   /** Called when user selects Never — allows caller to persist the rule. */
@@ -127,7 +127,7 @@ export function runPipeline(
     // Layer 5: User Confirmation
     {
       layers.push(LAYER_NAMES[4]);
-      if (!opts.asyncConfirm || !opts.asyncConfirmService) {
+      if (!opts.asyncConfirm) {
         const result: ApprovalDecision = {
           type: 'deny',
           reason: 'Approval required but no UI available',
@@ -142,7 +142,7 @@ export function runPipeline(
         request.input,
         opts.asyncConfirmService,
         opts.sessionId,
-        opts.callId
+        opts.callId ?? ''
       );
 
       let result: ApprovalDecision;

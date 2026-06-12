@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -48,10 +48,10 @@ describe('toGitPath', () => {
   });
 });
 
-describe('CodeRestoreEntry types', () => {
-  it('CodeRestoreEntry type is exported', async () => {
+describe('CheckpointService class', () => {
+  it('CheckpointService class is exported', async () => {
     const mod = await import('../../src/checkpoint/checkpoint-service.js');
-    expect(typeof mod.CheckpointService).toBe('function');
+    expect(mod.CheckpointService).toBeDefined();
   });
 });
 
@@ -63,7 +63,6 @@ describe('CheckpointDiff type with insertions/deletions', () => {
       files: [
         {
           path: 'test.ts',
-          source: 'agent',
           status: 'M',
           diff: '--- a/test.ts\n+++ b/test.ts\n@@ -1 +1 @@\n-old\n+new',
           insertions: 1,
@@ -215,5 +214,13 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
+  });
+});
+
+describe('CheckpointService', () => {
+  it('should export a Default layer', async () => {
+    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
+    expect(CheckpointService).toBeDefined();
+    expect((CheckpointService as any).Default).toBeDefined();
   });
 });

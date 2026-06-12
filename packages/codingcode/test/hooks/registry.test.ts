@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { HookService } from '../../src/hooks/registry.js';
-import { AppLayer } from '../../src/layer.js';
+const AppLayer = HookService.Default;
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));

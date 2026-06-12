@@ -1,4 +1,5 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { Effect } from 'effect';
 import { mkdirSync, rmSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -46,7 +47,7 @@ describe('tools/domains/bash projectPath isolation', () => {
       ? `powershell -Command "'hello' | Out-File -Encoding utf8 test-bash.txt"`
       : `echo hello > test-bash.txt`;
 
-    const result = await bashTool.execute({ command: cmd, timeout_ms: 10000 }, ctx(projectDir));
+    await Effect.runPromise(bashTool.execute({ command: cmd, timeout_ms: 10000 }, ctx(projectDir)));
 
     // Verify the file was written to projectDir, not globalDir
     expect(() => readFileSync(join(projectDir, 'test-bash.txt'), 'utf8')).not.toThrow();
@@ -60,7 +61,7 @@ describe('tools/domains/bash projectPath isolation', () => {
       ? `powershell -Command "'fallback' | Out-File -Encoding utf8 test-fallback.txt"`
       : `echo fallback > test-fallback.txt`;
 
-    const result = await bashTool.execute({ command: cmd, timeout_ms: 10000 }, undefined);
+    await Effect.runPromise(bashTool.execute({ command: cmd, timeout_ms: 10000 }, undefined));
 
     const cwd = process.cwd();
     expect(() => readFileSync(join(cwd, 'test-fallback.txt'), 'utf8')).not.toThrow();
@@ -76,9 +77,11 @@ describe('tools/domains/bash projectPath isolation', () => {
         ? `powershell -Command "'other' | Out-File -Encoding utf8 test-other.txt"`
         : `echo other > test-other.txt`;
 
-      const result = await bashTool.execute(
-        { command: cmd, cwd: otherDir, timeout_ms: 10000 },
-        ctx(projectDir)
+      await Effect.runPromise(
+        bashTool.execute(
+          { command: cmd, cwd: otherDir, timeout_ms: 10000 },
+          ctx(projectDir)
+        )
       );
 
       expect(() => readFileSync(join(otherDir, 'test-other.txt'), 'utf8')).not.toThrow();

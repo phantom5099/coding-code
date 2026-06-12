@@ -7,6 +7,9 @@ export async function runWithLayer<A, E>(eff: Effect.Effect<A, E, any>): Promise
   const { AppLayer } = await import('../layer.js');
   return Effect.runPromise(
     eff.pipe(
+      Effect.catchAllDefect((defect) =>
+        Effect.fail(new AgentError('SESSION_IO_ERROR' as any, `Unexpected error: ${String(defect)}`, defect))
+      ),
       Effect.match({
         onSuccess: (a) => ({ ok: true as const, value: a }),
         onFailure: (e) => ({ ok: false as const, error: e }),

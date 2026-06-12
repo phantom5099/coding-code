@@ -1,4 +1,3 @@
-import { Effect } from 'effect';
 import type { UserHookConfig } from '../hooks/config.js';
 import { loadConfig, getUserConfigPath } from '@codingcode/infra/config';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
@@ -179,33 +178,38 @@ export function resolveAgentDisabled(projectCwd: string, agentName: string): boo
   return getGlobalAgentDisabledState(agentName);
 }
 
-export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('SubagentRegistry', {
-  effect: Effect.gen(function* () {
-    const map = new Map<string, AgentProfile>();
+// ---- Module-level registry state ----
 
-    return {
-      register: (profile: AgentProfile): void => {
-        map.set(profile.name, profile);
-      },
+const registryMap = new Map<string, AgentProfile>();
 
-      registerAll: (profiles: AgentProfile[]): void => {
-        for (const p of profiles) map.set(p.name, p);
-      },
+export function register(profile: AgentProfile): void {
+  registryMap.set(profile.name, profile);
+}
 
-      get: (name: string): AgentProfile | undefined => {
-        return map.get(name);
-      },
+export function registerAll(profiles: AgentProfile[]): void {
+  for (const p of profiles) registryMap.set(p.name, p);
+}
 
-      list: (): AgentProfile[] => {
-        return Array.from(map.values());
-      },
+export function get(name: string): AgentProfile | undefined {
+  return registryMap.get(name);
+}
 
-      reset: (): void => {
-        map.clear();
-      },
-    };
-  }),
-}) {}
+export function list(): AgentProfile[] {
+  return Array.from(registryMap.values());
+}
+
+export function reset(): void {
+  registryMap.clear();
+}
+
+/** Backward-compat class with static methods delegating to module-level functions. */
+export class SubagentRegistry {
+  static register = register;
+  static registerAll = registerAll;
+  static get = get;
+  static list = list;
+  static reset = reset;
+}
 
 export const EXPLORE_PROFILE: AgentProfile = {
   name: 'explore',

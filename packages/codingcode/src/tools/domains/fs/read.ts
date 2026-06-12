@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
+import { Effect } from 'effect';
+import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 export const readFileTool: ToolDefinition = {
@@ -17,16 +19,20 @@ export const readFileTool: ToolDefinition = {
       .default(200)
       .describe('Maximum number of lines to read'),
   }),
-  execute: async (args: unknown, ctx?: ToolExecCtx) => {
-    const { path, offset, limit } = args as any;
-    const filePath = resolve(ctx?.projectPath ?? process.cwd(), path);
-    const content = await readFile(filePath, 'utf-8');
-    const lines = content.split('\n');
-    const start = Math.max(0, offset - 1);
-    const slice = lines.slice(start, start + limit);
-    return (
-      slice.map((line, i) => `${String(start + i + 1).padStart(4, ' ')}| ${line}`).join('\n') ||
-      '(empty file)'
-    );
-  },
+  execute: (args: unknown, ctx?: ToolExecCtx) =>
+    Effect.gen(function* () {
+      const { path, offset, limit } = args as any;
+      const filePath = resolve(ctx?.projectPath ?? process.cwd(), path);
+      const content = yield* Effect.tryPromise({
+        try: () => readFile(filePath, 'utf-8'),
+        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+      });
+      const lines = content.split('\n');
+      const start = Math.max(0, offset - 1);
+      const slice = lines.slice(start, start + limit);
+      return (
+        slice.map((line, i) => `${String(start + i + 1).padStart(4, ' ')}| ${line}`).join('\n') ||
+        '(empty file)'
+      );
+    }),
 };

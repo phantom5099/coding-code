@@ -5,6 +5,7 @@ import { McpClient, McpError } from './client.js';
 import type { McpServerConfig, McpStatus } from './types.js';
 import type { ToolDefinition, ToolExecCtx } from '../tools/types.js';
 import { createLogger } from '@codingcode/infra/logger';
+import { AgentError } from '../core/error.js';
 
 const logger = createLogger();
 
@@ -335,12 +336,16 @@ function mcpToolToDefinition(
     description: `[MCP:${serverName}] ${mcpTool.description || mcpTool.name}`,
     parameters: z.object({}).passthrough(),
     jsonSchema: mcpTool.inputSchema,
-    execute: async (args: unknown, _ctx?: ToolExecCtx) => {
-      if (isDisabledFn()) throw new Error(`MCP server '${serverName}' is disabled`);
-      const result = await Effect.runPromise(
-        client.callTool(mcpTool.name, args as Record<string, unknown>)
-      );
-      return result;
+    execute: (args: unknown, _ctx?: ToolExecCtx) => {
+      if (isDisabledFn()) return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `MCP server '${serverName}' is disabled`));
+      return Effect.gen(function* () {
+        const result = yield* client.callTool(mcpTool.name, args as Record<string, unknown>).pipe(
+          Effect.catchAll((err) =>
+            Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `MCP tool '${mcpTool.name}' failed: ${String(err)}`, err))
+          )
+        );
+        return result;
+      });
     },
   };
 }

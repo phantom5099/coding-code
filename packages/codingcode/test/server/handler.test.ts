@@ -1,17 +1,41 @@
-import { describe, it, expect } from 'vitest';
-import { Effect, Layer } from 'effect';
-import { sseHandler } from '../../src/server/handler.js';
-import { sendMessage } from '../../src/agent/agent.js';
-import { toSseEvents } from '../../src/server/adapter.js';
+import { describe, it, expect, vi } from 'vitest';
+import { Context, Effect, Layer } from 'effect';
+import { HookService } from '../../src/hooks/registry.js';
 import { SessionService } from '../../src/session/store.js';
-import { ContextService } from '../../src/context/context.js';
 import { SkillService } from '../../src/skills/service.js';
-import { ToolExecutorService } from '../../src/tools/executor.js';
-import { McpService } from '../../src/mcp/index.js';
-import { Result } from '../../src/core/result.js';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { ToolSearchService } from '../../src/tools/tool-search-service.js';
-import { AgentError } from '../../src/core/error.js';
+
+vi.mock('../../src/context/organizer.js', () => ({
+  assemblePayload: vi.fn(() => ({
+    messages: [{ role: 'user' as const, content: 'hi' }],
+    compactedEvents: [],
+    promptEstimate: 0,
+    currentTurnId: 0,
+    compactedTurnIds: new Set<number>(),
+  })),
+}));
+
+vi.mock('../../src/context/compressor.js', () => ({
+  compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 })),
+  compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 })),
+}));
+
+vi.mock('../../src/checkpoint/checkpoint-service.js', () => {
+  const tag = Context.GenericTag<any>('Checkpoint');
+  return {
+    CheckpointService: tag,
+    snapshotBaseline: vi.fn(),
+    snapshotFinal: vi.fn(),
+    getCompletedTurns: vi.fn(() => []),
+    getCheckpoints: vi.fn(() => []),
+    getCheckpointDiff: vi.fn(() => ({ turnId: 0, files: [] })),
+    revertCheckpointFiles: vi.fn(() => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null })),
+    previewRollbackDiff: vi.fn(() => ({ throughTurnId: 0, affectedTurns: [], diff: '' })),
+    rollbackCodeToTurn: vi.fn(() => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null })),
+    undoLastCodeRollback: vi.fn(() => ({ restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] })),
+    getLatestRestoreEntry: vi.fn(() => null),
+  };
+});
 
 const mockState = {
   sessionId: 'test-session',
@@ -28,6 +52,15 @@ const mockState = {
   memorySnapshot: '',
 };
 
+import { sseHandler } from '../../src/server/handler.js';
+import { sendMessage, AgentService } from '../../src/agent/agent.js';
+import { toSseEvents } from '../../src/server/adapter.js';
+
+import { ToolExecutorService } from '../../src/tools/executor.js';
+import { McpService } from '../../src/mcp/index.js';
+import { Result } from '../../src/core/result.js';
+import { AgentError } from '../../src/core/error.js';
+
 function createMockLlm(chunks?: string[], responseContent?: string) {
   return {
     modelInfo: {
@@ -38,12 +71,10 @@ function createMockLlm(chunks?: string[], responseContent?: string) {
       supportsStreaming: true,
     },
     complete: () =>
-      Promise.resolve(
-        Result.ok({
-          content: responseContent ?? chunks?.join('') ?? '',
-          finishReason: 'stop' as const,
-        })
-      ),
+      Effect.succeed({
+        content: responseContent ?? chunks?.join('') ?? '',
+        finishReason: 'stop' as const,
+      }),
     completeStream: (_params: any) => ({
       stream: (async function* () {
         for (const c of chunks ?? []) yield c;
@@ -70,153 +101,32 @@ const MockToolExecutorLayer = Layer.succeed(
   })
 );
 
-const MockSessionLayer = Layer.succeed(
-  SessionService,
-  SessionService.of({
-    _tag: 'Session' as const,
-    create: () => Effect.succeed(mockState),
-    recordUser: () =>
-      Effect.succeed({
-        type: 'user' as const,
-        uuid: 'u1',
-        content: '',
-        turnId: 0,
-        timestamp: new Date().toISOString(),
-      }),
-    recordAssistant: () =>
-      Effect.succeed({
-        type: 'assistant' as const,
-        uuid: 'a1',
-        content: '',
-        toolCalls: [],
-        model: 'test',
-        turnId: 0,
-        timestamp: new Date().toISOString(),
-      }),
-    recordToolResult: () =>
-      Effect.succeed({
-        type: 'tool_result' as const,
-        uuid: 't1',
-        parentUuid: 'a1',
-        toolName: 'test',
-        toolCallId: 'tc1',
-        output: '',
-        turnId: 0,
-        timestamp: new Date().toISOString(),
-        tokenCount: 0,
-      }),
-    appendSummary: () =>
-      Effect.succeed({
-        type: 'summary' as const,
-        uuid: 's1',
-        replaces: [],
-        summaryText: '',
-        lastSummarizedTurnId: 0,
-        timestamp: new Date().toISOString(),
-      }),
-    hideMessage: () =>
-      Effect.succeed({
-        type: 'hide' as const,
-        uuid: 'h1',
-        kind: 'message' as const,
-        targetUuid: '',
-        reason: '',
-        timestamp: new Date().toISOString(),
-      }),
-    rollbackToTurn: () =>
-      Effect.succeed({
-        type: 'hide' as const,
-        uuid: 'h1',
-        kind: 'rollback' as const,
-        throughTurnId: 0,
-        reason: '',
-        timestamp: new Date().toISOString(),
-      }),
-    undoLastHide: () => Effect.succeed(null),
-    forkSession: () => Effect.succeed('fork-id'),
-    renameSession: () =>
-      Effect.succeed({
-        type: 'title' as const,
-        uuid: 't1',
-        text: 'renamed',
-        timestamp: new Date().toISOString(),
-      }),
-    readHistory: () => Effect.succeed([]),
-    readMessages: () => Effect.succeed([]),
-    listSessions: () => Effect.succeed([]),
-    getSessionId: () => 'test',
-    getMessageCount: () => 0,
-    setPermissionMode: () => Effect.succeed(undefined),
-    getPermissionMode: () => Effect.succeed('default'),
-    incrementTurn: () => 0,
-    findSessionIndex: () => Effect.succeed(null),
-  })
-);
+const MockCheckpointLayer = Layer.succeed(CheckpointService, {
+  _tag: 'Checkpoint' as const,
+  snapshotBaseline: vi.fn(() => Effect.void),
+  snapshotFinal: vi.fn(() => Effect.void),
+  getCompletedTurns: vi.fn(() => Effect.succeed([])),
+  getCheckpoints: vi.fn(() => Effect.succeed([])),
+  getCheckpointDiff: vi.fn(() => Effect.succeed({ turnId: 0, files: [] })),
+  revertCheckpointFiles: vi.fn(() => Effect.succeed({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null })),
+  previewRollbackDiff: vi.fn(() => Effect.succeed({ throughTurnId: 0, affectedTurns: [], diff: '' })),
+  rollbackCodeToTurn: vi.fn(() => Effect.succeed({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null })),
+  undoLastCodeRollback: vi.fn(() => Effect.succeed({ restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] })),
+  getLatestRestoreEntry: vi.fn(() => Effect.succeed(null)),
+} as any);
 
-const MockContextLayer = Layer.succeed(
-  ContextService,
-  ContextService.of({
-    _tag: 'Context' as any,
-    build: () =>
-      Effect.sync(() => ({
-        messages: [{ role: 'user' as const, content: 'hi' }],
-        compactedEvents: [],
-        promptEstimate: 0,
-        currentTurnId: 0,
-      })),
-    compress: () => Effect.succeed({ didCompress: true, released: 0, promptEstimate: 0 }),
-    compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
-  })
-);
-
-const MockSkillLayer = Layer.succeed(
-  SkillService,
-  SkillService.of({
-    _tag: 'Skill' as const,
-    getAll: () => Effect.succeed([]),
-    findByName: () => Effect.succeed(undefined),
-    select: () => Effect.succeed(undefined),
-    selectImplicit: () => Effect.succeed(undefined),
-    extractSkill: () => Effect.succeed([undefined, 'hi']),
-    disableSkill: () => Effect.succeed(undefined),
-    enableSkill: () => Effect.succeed(undefined),
-    listWithStatus: () => Effect.succeed([]),
-    evictProject: () => Effect.void,
-  })
-);
-
-const { AgentService } = await import('../../src/agent/agent.js');
-const { HookLayer, SubagentRegistryLayer } = await import('../../src/layer.js');
-
-const MockCheckpointLayer = Layer.succeed(
-  CheckpointService,
-  CheckpointService.of({
-    _tag: 'Checkpoint' as const,
-    snapshotBaseline: () => {},
-    snapshotFinal: () => {},
-    getCompletedTurns: () => [],
-    getCheckpoints: () => [],
-    getCheckpointDiff: () => ({ turnId: 0, files: [] }),
-    revertCheckpointFiles: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
-    previewRollbackDiff: () => ({ throughTurnId: 0, affectedTurns: [], diff: '' }),
-    rollbackCodeToTurn: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
-    undoLastCodeRollback: () => ({ restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] }),
-    getLatestRestoreEntry: () => null,
-  } as any)
-);
-
-const MockToolSearchLayer = Layer.succeed(
-  ToolSearchService,
-  ToolSearchService.of({
-    _tag: 'ToolSearchService' as const,
-    isLoaded: () => false,
-    listLoaded: () => [],
-    listUnloadedDeferred: () => [],
-    search: () => [],
-    reset: () => {},
-    disposeSession: () => {},
-  })
-);
+const MockSkillLayer = Layer.succeed(SkillService, {
+  _tag: 'Skill' as const,
+  getAll: vi.fn(() => Effect.succeed([])),
+  findByName: vi.fn(() => Effect.succeed(undefined)),
+  select: vi.fn(() => Effect.succeed(undefined)),
+  selectImplicit: vi.fn(() => Effect.succeed(undefined)),
+  extractSkill: vi.fn((_p: string, q: string) => Effect.sync(() => [undefined, q] as [undefined, string])),
+  disableSkill: vi.fn(() => Effect.void),
+  enableSkill: vi.fn(() => Effect.void),
+  listWithStatus: vi.fn(() => Effect.succeed([])),
+  evictProject: vi.fn(() => Effect.void),
+} as any);
 
 const MockMcpLayer = Layer.succeed(McpService, {
   syncConnections: () => Effect.void,
@@ -228,30 +138,76 @@ const MockMcpLayer = Layer.succeed(McpService, {
   listProjectMcpTools: () => [],
 } as any);
 
-const { ProjectRuntimeService } = await import('../../src/runtime/project-runtime.js');
-const MockProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer, SubagentRegistryLayer))
-);
+vi.mock('../../src/runtime/project-runtime.js', () => ({
+  prepareProject: vi.fn(() => Effect.void),
+  resolveMainAgentProfile: vi.fn((_p: string, _s: string) => undefined),
+  resolveSubagentProfile: vi.fn((_p: string, _n: string) => undefined),
+  listAgentProfiles: vi.fn((_p: string) => []),
+  getToolPolicy: vi.fn(() => ({
+    allowedTools: undefined,
+    allowedMcpServers: undefined,
+    allowToolSearch: true,
+    allowDeferredTools: false,
+  })),
+  setSessionProfile: vi.fn(),
+  getSessionProfile: vi.fn(() => undefined),
+  disposeSession: vi.fn(() => Effect.void),
+  disposeProject: vi.fn(() => Effect.void),
+}));
+
+const MockSessionLayer = Layer.succeed(SessionService, {
+  create: (_cwd: string, _model: string) =>
+    Effect.succeed({ ...mockState }),
+  recordUser: () =>
+    Effect.succeed({
+      type: 'user' as const,
+      uuid: 'u1',
+      content: '',
+      turnId: 0,
+      timestamp: new Date().toISOString(),
+    }),
+  recordAssistant: () =>
+    Effect.succeed({
+      type: 'assistant' as const,
+      uuid: 'a1',
+      content: '',
+      toolCalls: [],
+      model: 'test',
+      turnId: 0,
+      timestamp: new Date().toISOString(),
+    }),
+  recordToolResult: () =>
+    Effect.succeed({
+      type: 'tool_result' as const,
+      uuid: 't1',
+      parentUuid: 'a1',
+      toolName: 'test',
+      toolCallId: 'tc1',
+      output: '',
+      turnId: 0,
+      timestamp: new Date().toISOString(),
+      tokenCount: 0,
+    }),
+  incrementTurn: () => 0,
+} as any);
 
 const { ApprovalWaitService } = await import('../../src/approval/async-confirm.js');
 const { ApprovalService } = await import('../../src/approval/index.js');
 const MockApprovalWaitLayer = ApprovalWaitService.Default;
+const HookLayer = HookService.Default;
 const MockApprovalLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, MockApprovalWaitLayer))
 );
 
 const AllDeps = Layer.mergeAll(
   MockToolExecutorLayer,
-  MockContextLayer,
-  MockSessionLayer,
-  MockCheckpointLayer,
-  MockSkillLayer,
   HookLayer,
-  MockToolSearchLayer,
   MockMcpLayer,
-  MockProjectRuntimeLayer,
+  MockSessionLayer,
   MockApprovalLayer,
-  MockApprovalWaitLayer
+  MockApprovalWaitLayer,
+  MockCheckpointLayer,
+  MockSkillLayer
 );
 
 const TestLayer = Layer.mergeAll(AgentService.Default.pipe(Layer.provide(AllDeps)), AllDeps);
@@ -293,7 +249,7 @@ describe('sseHandler + sendMessage integration', () => {
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
-    expect(events).toHaveLength(8); // 1 turn_id + 1 step + 3 text + 1 message + 1 done + 1 complete
+    expect(events).toHaveLength(8);
     expect(events[0]).toEqual({ type: 'turn_id', turnId: 0 });
     expect(events[1]).toEqual({ type: 'step', step: 1 });
     expect(events[2]).toEqual({ type: 'text', text: 'Hello', messageId: 1 });
@@ -332,7 +288,7 @@ describe('sseHandler + sendMessage integration', () => {
         supportsStreaming: true,
       },
       complete: () =>
-        Promise.resolve(Result.ok({ content: '', finishReason: 'tool_calls' as const })),
+        Effect.succeed({ content: '', finishReason: 'tool_calls' as const }),
       completeStream: (_params: any) => ({
         stream: (async function* () {
           yield '\n[Using: readFile]\n';

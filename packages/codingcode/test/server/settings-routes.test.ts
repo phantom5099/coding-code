@@ -100,10 +100,6 @@ vi.mock('../../src/skills/config.js', () => ({
   discoverProjectSkillDirs: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock('../../src/skills/index.js', () => ({
-  SkillService: {} as any,
-}));
-
 vi.mock('../../src/core/workspace.js', () => ({
   resolveWorkspaceCwd: vi.fn((cwd?: string) => cwd ?? '/default'),
 }));

@@ -1,8 +1,27 @@
-import { describe, it, expect } from 'vitest';
-import { Effect } from 'effect';
-import { runReActLoop } from '../../src/agent/agent.js';
+import { describe, it, expect, vi } from 'vitest';
+import { Effect, Layer, Queue, Chunk } from 'effect';
+import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { SessionService } from '../../src/session/store.js';
+import { agentLoop, AgentEvent } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
 import { HookService } from '../../src/hooks/registry.js';
+import { ToolExecutorService } from '../../src/tools/executor.js';
+import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
+
+vi.mock('../../src/context/organizer.js', () => ({
+  assemblePayload: vi.fn(() => ({
+    messages: [{ role: 'user' as const, content: 'hi' }],
+    compactedEvents: [],
+    promptEstimate: 10,
+    currentTurnId: 1,
+    compactedTurnIds: new Set<number>(),
+  })),
+}));
+
+vi.mock('../../src/context/compressor.js', () => ({
+  compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+  compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+}));
 
 const mockToolRegistry = {
   describeAll: () => [],
@@ -28,30 +47,18 @@ const mockAgentService = {
   },
 };
 
-const mockCtx = {
-  build: (_sessionId: string) =>
-    Effect.sync(() => ({ messages: [{ role: 'user' as const, content: 'hi' }], newBudgets: [] })),
-  appendTurnEnd: (_sessionId: string, _llm?: any, _config?: any) =>
-    Effect.succeed({ didCompress: false, released: 0 }),
-  compress: (_sessionId: string, _llm?: any, _config?: any) =>
-    Effect.succeed({ didCompress: true, released: 1000 }),
-  compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0 }),
-};
-
 const mockSession = {
   recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
-    Effect.sync(() => ({ uuid: 'a1' })),
+    Effect.succeed({ uuid: 'a1' }),
   recordToolResult: (
     _state: any,
     _parentUuid: string,
     _toolName: string,
     _toolCallId: string,
     _output: string
-  ) => Effect.sync(() => ({})),
-};
-
-const mockCheckpoint = {
-  snapshotFinal: () => {},
+  ) => Effect.succeed({}),
+  recordUser: (_state: any, _content: string) =>
+    Effect.succeed({ uuid: 'm1' }),
 };
 
 const mockState = {
@@ -76,9 +83,6 @@ function makeDeps(overrides?: Record<string, any>) {
     executor: null as any,
     runtime: { listAgentProfiles: () => [] } as any,
     agentService: mockAgentService as any,
-    ctx: mockCtx as any,
-    session: mockSession as any,
-    checkpoint: mockCheckpoint as any,
     hooks: {
       emit: () => Effect.succeed(undefined),
       emitDecision: () => Effect.succeed(null),
@@ -90,7 +94,52 @@ function makeDeps(overrides?: Record<string, any>) {
   };
 }
 
-describe('runReActLoop', () => {
+const AllMockLayer = Layer.mergeAll(
+  Layer.succeed(CheckpointService, {
+    snapshotBaseline: () => Effect.void,
+    snapshotFinal: () => Effect.void,
+    getCompletedTurns: () => Effect.succeed([]),
+    getCheckpoints: () => Effect.succeed([]),
+    getCheckpointDiff: () => Effect.succeed({ turnId: 0, files: [] }),
+    revertCheckpointFiles: () => Effect.succeed({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
+    previewRollbackDiff: () => Effect.succeed({ throughTurnId: 0, affectedTurns: [], diff: '' }),
+    rollbackCodeToTurn: () => Effect.succeed({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
+    undoLastCodeRollback: () => Effect.succeed({ restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] }),
+    getLatestRestoreEntry: () => Effect.succeed(null),
+  } as any),
+  Layer.succeed(SessionService, {
+    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordToolResult: () => Effect.succeed({}),
+  } as any),
+  Layer.succeed(HookService, {
+    emit: () => Effect.succeed(undefined),
+    emitDecision: () => Effect.succeed(null),
+    register: () => Effect.succeed(() => {}),
+    registerDecision: () => Effect.succeed(() => {}),
+    reloadUserHooks: () => Effect.succeed(undefined),
+  } as any),
+  Layer.succeed(ToolExecutorService, {
+    execute: () => Effect.succeed(''),
+    executeBatch: (tcs: any[]) =>
+      Effect.succeed(
+        tcs.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: '' }))
+      ),
+  } as any),
+  Layer.succeed(ProjectRuntimeService, {
+    prepareProject: () => Effect.void,
+    resolveMainAgentProfile: () => undefined,
+    resolveSubagentProfile: () => undefined,
+    listAgentProfiles: () => [],
+    getToolPolicy: () => ({ allowedTools: undefined, allowedMcpServers: undefined, allowToolSearch: true, allowDeferredTools: false }),
+    setSessionProfile: () => {},
+    getSessionProfile: () => undefined,
+    disposeSession: () => Effect.void,
+    disposeProject: () => Effect.void,
+  } as any)
+);
+
+describe('agentLoop', () => {
   it('should yield text chunks from LLM stream', async () => {
     const mockLlm = {
       completeStream: (_params: any) => ({
@@ -103,15 +152,12 @@ describe('runReActLoop', () => {
       }),
     };
 
-    const gen = runReActLoop(
-      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
-      makeDeps()
-    );
-
-    const events: any[] = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const deps = makeDeps();
+    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
+    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
+    const effect = agentLoop(deps.executor, deps.hooks, deps.maxSteps, deps.maxStopContinuations, opts, q);
+    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
     expect(textEvents.map((e: any) => e.text)).toEqual(['Hello', ' ', 'world']);
@@ -125,15 +171,12 @@ describe('runReActLoop', () => {
       }),
     };
 
-    const gen = runReActLoop(
-      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
-      makeDeps()
-    );
-
-    const events: any[] = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const deps = makeDeps();
+    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
+    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
+    const effect = agentLoop(deps.executor, deps.hooks, deps.maxSteps, deps.maxStopContinuations, opts, q);
+    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
     expect(textEvents).toHaveLength(0);
@@ -181,24 +224,21 @@ describe('runReActLoop', () => {
         ),
     };
 
-    const gen = runReActLoop(
-      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
-      makeDeps({
-        maxSteps: 1,
-        runtime: { listAgentProfiles: () => [] } as any,
-        executor: mockExecutor as any,
-      })
-    );
+    const deps = makeDeps({
+      maxSteps: 1,
+      runtime: { listAgentProfiles: () => [] } as any,
+      executor: mockExecutor as any,
+    });
+    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
+    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
+    const effect = agentLoop(deps.executor, deps.hooks, deps.maxSteps, deps.maxStopContinuations, opts, q);
+    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
-    const events: any[] = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
-
-    const toolResults = events.filter((e: any) => e._tag === 'ToolResult');
+    const toolResults = events.filter((e: AgentEvent): e is Extract<AgentEvent, { _tag: 'ToolResult' }> => e._tag === 'ToolResult');
     expect(toolResults).toHaveLength(1);
-    expect(toolResults[0].output).toBe('On branch main\nnothing to commit');
-    expect(toolResults[0].ok).toBe(true);
+    expect(toolResults[0]!.output).toBe('On branch main\nnothing to commit');
+    expect(toolResults[0]!.ok).toBe(true);
   });
 
   it('should forward tool-call markers from LLM stream', async () => {
@@ -237,19 +277,16 @@ describe('runReActLoop', () => {
         ),
     };
 
-    const gen = runReActLoop(
-      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
-      makeDeps({
-        maxSteps: 1,
-        runtime: { listAgentProfiles: () => [] } as any,
-        executor: mockExecutor as any,
-      })
-    );
-
-    const events: any[] = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const deps = makeDeps({
+      maxSteps: 1,
+      runtime: { listAgentProfiles: () => [] } as any,
+      executor: mockExecutor as any,
+    });
+    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
+    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
+    const effect = agentLoop(deps.executor, deps.hooks, deps.maxSteps, deps.maxStopContinuations, opts, q);
+    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
     expect(textEvents.map((e: any) => e.text)).toEqual(['\n[Using: readFile]\n']);
@@ -267,17 +304,15 @@ describe('runReActLoop', () => {
       },
     };
 
-    const gen = runReActLoop(
-      {
-        state: mockState,
-        llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-        skillInstruction: 'Use strict TypeScript',
-      },
-      makeDeps()
-    );
-
-    for await (const _ of gen) {
-    }
+    const deps = makeDeps();
+    const opts = {
+      state: mockState,
+      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
+      skillInstruction: 'Use strict TypeScript',
+    };
+    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
+    const effect = agentLoop(deps.executor, deps.hooks, deps.maxSteps, deps.maxStopContinuations, opts, q);
+    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
 
     expect(capturedSystem).toContain('Use strict TypeScript');
   });
@@ -323,20 +358,17 @@ describe('runReActLoop', () => {
       reloadUserHooks: () => Effect.succeed(undefined),
     };
 
-    const gen = runReActLoop(
-      { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
-      makeDeps({
-        maxSteps: 1,
-        runtime: { listAgentProfiles: () => [] } as any,
-        executor: mockExecutor as any,
-        hooks: trackingHooks as unknown as HookService,
-      })
-    );
-
-    const events: any[] = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const deps = makeDeps({
+      maxSteps: 1,
+      runtime: { listAgentProfiles: () => [] } as any,
+      executor: mockExecutor as any,
+      hooks: trackingHooks as unknown as HookService,
+    });
+    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
+    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
+    const effect = agentLoop(deps.executor, deps.hooks, deps.maxSteps, deps.maxStopContinuations, opts, q);
+    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     const maxStepErrors = events.filter(
       (e: any) => e._tag === 'Error' && e.error?.code === 'MAX_STEPS_REACHED'

@@ -75,43 +75,34 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         const parsedArgs = yield* Effect.sync(() => tool.parameters.parse(finalArgs));
         const start = Date.now();
 
-        // Race tool execution against abort signal for immediate cancellation
-        const execWithAbort = (): Promise<string> => {
-          const execPromise = tool.execute(parsedArgs, {
-            signal: opts?.signal,
-            sessionId: opts?.sessionId,
-            turnId: opts?.turnId,
-            projectPath: opts?.projectPath,
-            agentRunner: opts?.agentRunner,
-          });
-          if (!opts?.signal) return execPromise;
-          if (opts.signal.aborted)
-            return Promise.reject(
-              Object.assign(new Error('Tool execution aborted'), { name: 'AbortError' })
-            );
-          return Promise.race([
-            execPromise,
-            new Promise<string>((_, reject) => {
-              opts.signal!.addEventListener(
-                'abort',
-                () =>
-                  reject(
-                    Object.assign(new Error('Tool execution aborted'), { name: 'AbortError' })
-                  ),
-                { once: true }
-              );
-            }),
-          ]);
+        // Execute tool — now returns Effect directly
+        const ctx = {
+          signal: opts?.signal,
+          sessionId: opts?.sessionId,
+          turnId: opts?.turnId,
+          projectPath: opts?.projectPath,
+          agentRunner: opts?.agentRunner,
         };
 
-        const result = yield* Effect.tryPromise({
-          try: () => execWithAbort(),
-          catch: (e) => {
-            if ((e as Error)?.name === 'AbortError')
-              return new AgentError('TOOL_NOT_ALLOWED', (e as Error).message);
-            return e instanceof AgentError ? e : AgentError.toolExecutionFailed(name, e);
-          },
-        });
+        // Race tool execution against abort signal for immediate cancellation
+        let toolEffect = tool.execute(parsedArgs, ctx);
+
+        if (opts?.signal) {
+          if (opts.signal.aborted) {
+            return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', 'Tool execution aborted'));
+          }
+          toolEffect = Effect.race(
+            toolEffect,
+            Effect.async<string, AgentError>((resume) => {
+              const onAbort = () =>
+                resume(Effect.fail(new AgentError('TOOL_NOT_ALLOWED', 'Tool execution aborted')));
+              opts.signal!.addEventListener('abort', onAbort, { once: true });
+              return Effect.sync(() => opts.signal!.removeEventListener('abort', onAbort));
+            })
+          );
+        }
+
+        const result = yield* toolEffect;
 
         yield* hooks.emit('tool.execute.after', {
           toolName: name,

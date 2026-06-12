@@ -59,56 +59,56 @@ export interface CodeRestoreEntry {
   timestamp: string;
 }
 
-// ---- Service ----
+// ---- Module-level state ----
+
+const shadowGitByProject = new ProjectCache<ShadowGit>(10);
+const lockByProject = new ProjectCache<ProjectLock>(10);
+
+function ensure(projectPath: string): ShadowGit {
+  const normalized = normalizePath(projectPath);
+  return shadowGitByProject.get(normalized, () => {
+    const sg = new ShadowGit(normalized);
+    sg.init();
+    return sg;
+  });
+}
+
+function lockFor(projectPath: string): ProjectLock {
+  const normalized = normalizePath(projectPath);
+  return lockByProject.get(normalized, () => new ProjectLock(normalized));
+}
+
+function doSnapshotFinal(sg: ShadowGit, sessionId: string, turnId: number): void {
+  const lock = lockFor(sg.projectPath);
+  lock.lock();
+  try {
+    sg.commit(commitMsg(sessionId, turnId, 'final'));
+  } finally {
+    lock.unlock();
+  }
+}
+
+function repairIncompleteTurn(sg: ShadowGit, sessionId: string): void {
+  const completed = getCompletedTurnsFor(sg, sessionId);
+  const candidate = completed.length > 0 ? completed[completed.length - 1]! + 1 : 1;
+  const baseline = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'baseline'));
+  if (!baseline) return;
+  const final = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'final'));
+  if (final) return;
+  doSnapshotFinal(sg, sessionId, candidate);
+}
+
+// ---- Effect Service ----
 
 export class CheckpointService extends Effect.Service<CheckpointService>()('Checkpoint', {
   effect: Effect.gen(function* () {
-    const shadowGitByProject = new ProjectCache<ShadowGit>(10);
-    const lockByProject = new ProjectCache<ProjectLock>(10);
-
-    function ensure(projectPath: string): ShadowGit {
-      const normalized = normalizePath(projectPath);
-      return shadowGitByProject.get(normalized, () => {
-        const sg = new ShadowGit(normalized);
-        sg.init();
-        return sg;
-      });
-    }
-
-    function lockFor(projectPath: string): ProjectLock {
-      const normalized = normalizePath(projectPath);
-      return lockByProject.get(normalized, () => new ProjectLock(normalized));
-    }
-
-    function doSnapshotFinal(sg: ShadowGit, sessionId: string, turnId: number): void {
-      const lock = lockFor(sg.projectPath);
-      lock.lock();
-      try {
-        sg.commit(commitMsg(sessionId, turnId, 'final'));
-      } finally {
-        lock.unlock();
-      }
-    }
-
-    function repairIncompleteTurn(sg: ShadowGit, sessionId: string): void {
-      const completed = getCompletedTurnsFor(sg, sessionId);
-      const candidate = completed.length > 0 ? completed[completed.length - 1]! + 1 : 1;
-      const baseline = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'baseline'));
-      if (!baseline) return;
-      const final = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'final'));
-      if (final) return;
-      doSnapshotFinal(sg, sessionId, candidate);
-    }
-
     return {
-      // ---- Snapshot ----
-
       snapshotBaseline: (
         projectPath: string,
         sessionId: string,
         turnId: number,
         title?: string
-      ): void => {
+      ) => Effect.sync(() => {
         const sg = ensure(projectPath);
         repairIncompleteTurn(sg, sessionId);
         if (sg.isTooLargeForSnapshot()) return;
@@ -122,180 +122,161 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         } finally {
           lock.unlock();
         }
-      },
+      }),
 
-      snapshotFinal: (projectPath: string, sessionId: string, turnId: number): void => {
-        const sg = ensure(projectPath);
-        if (sg.isTooLargeForSnapshot()) return;
-        doSnapshotFinal(sg, sessionId, turnId);
-      },
+      snapshotFinal: (projectPath: string, sessionId: string, turnId: number) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          if (sg.isTooLargeForSnapshot()) return;
+          doSnapshotFinal(sg, sessionId, turnId);
+        }),
 
-      // ---- Query ----
+      getCompletedTurns: (projectPath: string, sessionId: string) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          repairIncompleteTurn(sg, sessionId);
+          return getCompletedTurnsFor(sg, sessionId);
+        }),
 
-      getCompletedTurns: (projectPath: string, sessionId: string): number[] => {
-        const sg = ensure(projectPath);
-        repairIncompleteTurn(sg, sessionId);
-        return getCompletedTurnsFor(sg, sessionId);
-      },
+      getCheckpoints: (projectPath: string, sessionId: string) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          repairIncompleteTurn(sg, sessionId);
+          const prefix = `turn-${shortSid(sessionId)}-`;
+          const completedTurns = getCompletedTurnsFor(sg, sessionId);
+          const result: Array<{
+            turnId: number;
+            title: string;
+            files: string[];
+          }> = [];
 
-      getCheckpoints: (
-        projectPath: string,
-        sessionId: string
-      ): Array<{
-        turnId: number;
-        title: string;
-        files: string[];
-      }> => {
-        const sg = ensure(projectPath);
-        repairIncompleteTurn(sg, sessionId);
-        const prefix = `turn-${shortSid(sessionId)}-`;
-        const completedTurns = getCompletedTurnsFor(sg, sessionId);
-        const result: Array<{
-          turnId: number;
-          title: string;
-          files: string[];
-        }> = [];
+          for (const i of completedTurns) {
+            const bCommit = sg.findCommitByMessage(`${prefix}${i}-baseline`);
+            if (!bCommit) continue;
+            const fCommit = sg.findCommitByMessage(`${prefix}${i}-final`);
+            if (!fCommit) continue;
 
-        for (const i of completedTurns) {
-          const bCommit = sg.findCommitByMessage(`${prefix}${i}-baseline`);
-          if (!bCommit) continue;
-          const fCommit = sg.findCommitByMessage(`${prefix}${i}-final`);
-          if (!fCommit) continue;
+            const msgResult = sg.git('log', '--all', '--grep', `${prefix}${i}-baseline`, '--format=%s', '-1');
+            const fullMsg = msgResult.stdout.trim();
+            const title = fullMsg.includes(' ') ? fullMsg.split(' ').slice(1).join(' ') : '';
 
-          const msgResult = sg.git('log', '--all', '--grep', `${prefix}${i}-baseline`, '--format=%s', '-1');
-          const fullMsg = msgResult.stdout.trim();
-          const title = fullMsg.includes(' ') ? fullMsg.split(' ').slice(1).join(' ') : '';
+            const allChanges = sg.diffFiles(bCommit, fCommit);
+            const files = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file))))];
 
-          const allChanges = sg.diffFiles(bCommit, fCommit);
-          const files = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file))))];
-
-          result.push({ turnId: i, title, files });
-        }
-        return result;
-      },
-
-      getCheckpointDiff: (
-        projectPath: string,
-        sessionId: string,
-        turnId?: number
-      ): CheckpointDiff => {
-        const sg = ensure(projectPath);
-        repairIncompleteTurn(sg, sessionId);
-        const completedTurns = getCompletedTurnsFor(sg, sessionId);
-        const latestTurnId =
-          turnId ?? (completedTurns.length > 0 ? completedTurns[completedTurns.length - 1]! : 0);
-        if (latestTurnId === 0) {
-          return { turnId: 0, files: [] };
-        }
-
-        const baseline = sg.findCommitByMessage(commitMsg(sessionId, latestTurnId, 'baseline'));
-        const final = sg.findCommitByMessage(commitMsg(sessionId, latestTurnId, 'final'));
-        if (!baseline || !final) return { turnId: latestTurnId, files: [] };
-
-        const allChanges = sg.diffFiles(baseline, final);
-        const rawAllFiles = allChanges.map((c) => normalizePath(resolve(projectPath, c.file)));
-        const allFiles = [...new Set(rawAllFiles)];
-
-        const files = allFiles.map((f) => {
-          const relPath = toGitPath(projectPath, f);
-          const diffResult = sg.git('diff', baseline, final, '--', relPath);
-          const rawPath = normalizePath(resolve(projectPath, relPath));
-          let insertions = 0;
-          let deletions = 0;
-          for (const line of diffResult.stdout.split('\n')) {
-            if (line.startsWith('+') && !line.startsWith('+++')) insertions++;
-            else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+            result.push({ turnId: i, title, files });
           }
-          return {
-            path: f,
-            status:
-              allChanges.find(
-                (c) =>
-                  normalizePath(resolve(projectPath, c.file)).toLowerCase() ===
-                  rawPath.toLowerCase()
-              )?.status ?? 'M',
-            diff: diffResult.stdout,
-            insertions,
-            deletions,
-          };
-        });
+          return result;
+        }),
 
-        return { turnId: latestTurnId, files };
-      },
+      getCheckpointDiff: (projectPath: string, sessionId: string, turnId?: number) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          repairIncompleteTurn(sg, sessionId);
+          const completedTurns = getCompletedTurnsFor(sg, sessionId);
+          const latestTurnId =
+            turnId ?? (completedTurns.length > 0 ? completedTurns[completedTurns.length - 1]! : 0);
+          if (latestTurnId === 0) {
+            return { turnId: 0, files: [] };
+          }
 
-      // ---- Revert ----
+          const baseline = sg.findCommitByMessage(commitMsg(sessionId, latestTurnId, 'baseline'));
+          const final = sg.findCommitByMessage(commitMsg(sessionId, latestTurnId, 'final'));
+          if (!baseline || !final) return { turnId: latestTurnId, files: [] };
+
+          const allChanges = sg.diffFiles(baseline, final);
+          const rawAllFiles = allChanges.map((c) => normalizePath(resolve(projectPath, c.file)));
+          const allFiles = [...new Set(rawAllFiles)];
+
+          const files = allFiles.map((f) => {
+            const relPath = toGitPath(projectPath, f);
+            const diffResult = sg.git('diff', baseline, final, '--', relPath);
+            const rawPath = normalizePath(resolve(projectPath, relPath));
+            let insertions = 0;
+            let deletions = 0;
+            for (const line of diffResult.stdout.split('\n')) {
+              if (line.startsWith('+') && !line.startsWith('+++')) insertions++;
+              else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+            }
+            return {
+              path: f,
+              status:
+                allChanges.find(
+                  (c) =>
+                    normalizePath(resolve(projectPath, c.file)).toLowerCase() ===
+                    rawPath.toLowerCase()
+                )?.status ?? 'M',
+              diff: diffResult.stdout,
+              insertions,
+              deletions,
+            };
+          });
+
+          return { turnId: latestTurnId, files };
+        }),
 
       revertCheckpointFiles: (
         projectPath: string,
         sessionId: string,
         turnId: number,
         files: string[]
-      ): CodeRollbackResult => {
+      ) => Effect.sync(() => {
         const sg = ensure(projectPath);
         const plan = getTurnRestorePlan(sg, sessionId, turnId);
         if (!plan) {
           return emptyRollbackResult(turnId);
         }
         return executeRollback(sessionId, plan, files, 'checkpoint-files', sg, lockFor(projectPath));
-      },
+      }),
 
-      // ---- Rollback ----
+      previewRollbackDiff: (projectPath: string, sessionId: string, throughTurnId: number) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          const plan = getRollbackToTurnPlan(sg, sessionId, throughTurnId);
+          if (!plan) {
+            return { throughTurnId, affectedTurns: [], diff: '' };
+          }
 
-      previewRollbackDiff: (
-        projectPath: string,
-        sessionId: string,
-        throughTurnId: number
-      ): RollbackPreviewDiff => {
-        const sg = ensure(projectPath);
-        const plan = getRollbackToTurnPlan(sg, sessionId, throughTurnId);
-        if (!plan) {
-          return { throughTurnId, affectedTurns: [], diff: '' };
-        }
-
-        const result = sg.git('diff', plan.baseline);
-        return {
-          throughTurnId,
-          affectedTurns: plan.affectedTurns,
-          diff: result.stdout,
-        };
-      },
-
-      rollbackCodeToTurn: (
-        projectPath: string,
-        sessionId: string,
-        throughTurnId: number
-      ): CodeRollbackResult => {
-        const sg = ensure(projectPath);
-        const plan = getRollbackToTurnPlan(sg, sessionId, throughTurnId);
-        if (!plan) {
-          return emptyRollbackResult(throughTurnId);
-        }
-
-        const diffResult = sg.git('diff', '--name-only', plan.baseline);
-        const selectedFiles = diffResult.stdout
-          .trim()
-          .split('\n')
-          .filter(Boolean)
-          .map((f) => resolve(projectPath, f));
-
-        if (selectedFiles.length === 0) {
+          const result = sg.git('diff', plan.baseline);
           return {
-            reverted: true,
             throughTurnId,
             affectedTurns: plan.affectedTurns,
-            selectedFiles: [],
-            restoreEntry: null,
+            diff: result.stdout,
           };
-        }
+        }),
 
-        return executeRollback(sessionId, plan, selectedFiles, 'rollback-to-turn', sg, lockFor(projectPath));
-      },
+      rollbackCodeToTurn: (projectPath: string, sessionId: string, throughTurnId: number) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          const plan = getRollbackToTurnPlan(sg, sessionId, throughTurnId);
+          if (!plan) {
+            return emptyRollbackResult(throughTurnId);
+          }
+
+          const diffResult = sg.git('diff', '--name-only', plan.baseline);
+          const selectedFiles = diffResult.stdout
+            .trim()
+            .split('\n')
+            .filter(Boolean)
+            .map((f) => resolve(projectPath, f));
+
+          if (selectedFiles.length === 0) {
+            return {
+              reverted: true,
+              throughTurnId,
+              affectedTurns: plan.affectedTurns,
+              selectedFiles: [],
+              restoreEntry: null,
+            };
+          }
+
+          return executeRollback(sessionId, plan, selectedFiles, 'rollback-to-turn', sg, lockFor(projectPath));
+        }),
 
       undoLastCodeRollback: (
         projectPath: string,
         sessionId: string,
         opts?: { force?: boolean; files?: string[] }
-      ): CodeRollbackUndoResult => {
+      ) => Effect.sync(() => {
         const sg = ensure(projectPath);
         const entry = readRestoreEntry(sg.gitDir, sessionId);
         if (!entry) {
@@ -386,12 +367,13 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         } finally {
           lock.unlock();
         }
-      },
+      }),
 
-      getLatestRestoreEntry: (projectPath: string, sessionId: string): CodeRestoreEntry | null => {
-        const sg = ensure(projectPath);
-        return readRestoreEntry(sg.gitDir, sessionId);
-      },
+      getLatestRestoreEntry: (projectPath: string, sessionId: string) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          return readRestoreEntry(sg.gitDir, sessionId);
+        }),
     };
   }),
 }) {}

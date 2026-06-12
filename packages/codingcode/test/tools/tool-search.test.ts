@@ -1,4 +1,5 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { Effect } from 'effect';
 import { createToolSearchTool } from '../../src/tools/domains/self/tool-search.js';
 
 describe('createToolSearchTool', () => {
@@ -10,7 +11,7 @@ describe('createToolSearchTool', () => {
       markLoaded: () => {},
     });
 
-    const result = await tool.execute({ query: 'todo' }, { sessionId: 'test-agent' });
+    const result = await Effect.runPromise(tool.execute({ query: 'todo' }, { sessionId: 'test-agent' }));
     expect(result).toContain('Loaded 1 tool(s)');
     expect(result).toContain('todo_write');
   });
@@ -21,15 +22,14 @@ describe('createToolSearchTool', () => {
       markLoaded: () => {},
     });
 
-    const result = await tool.execute({ query: 'zzznonexistent' }, { sessionId: 'test-agent' });
+    const result = await Effect.runPromise(tool.execute({ query: 'zzznonexistent' }, { sessionId: 'test-agent' }));
     expect(result).toBe('No deferred tools matched "zzznonexistent".');
   });
 
-  it('throws if sessionId is missing', async () => {
+  it('fails with AgentError if sessionId is missing', async () => {
     const tool = createToolSearchTool({ search: () => [], markLoaded: () => {} });
-    await expect(tool.execute({ query: 'anything' }, {})).rejects.toThrow(
-      'tool_search requires sessionId'
-    );
+    const exit = await Effect.runPromiseExit(tool.execute({ query: 'anything' }, {}));
+    expect(exit._tag).toBe('Failure');
   });
 
   it('each tool instance uses its own svc closure', async () => {
@@ -42,8 +42,8 @@ describe('createToolSearchTool', () => {
       markLoaded: () => {},
     });
 
-    const r1 = await tool1.execute({ query: 'x' }, { sessionId: 'a' });
-    const r2 = await tool2.execute({ query: 'x' }, { sessionId: 'a' });
+    const r1 = await Effect.runPromise(tool1.execute({ query: 'x' }, { sessionId: 'a' }));
+    const r2 = await Effect.runPromise(tool2.execute({ query: 'x' }, { sessionId: 'a' }));
 
     expect(r1).toContain('tool_a');
     expect(r2).toContain('tool_b');

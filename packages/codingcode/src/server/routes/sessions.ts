@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { Effect } from 'effect';
 import { join } from 'path';
-import { SessionService } from '../../session/store.js';
+import { SessionService, type SessionStoreState } from '../../session/store.js';
 import {
   resolveSessionDir,
   getPermissionMode,
@@ -10,7 +10,8 @@ import {
   deleteSession,
 } from '../../session/io.js';
 import { readUIHistory } from '../../session/messages.js';
-import { ContextService } from '../../context/context.js';
+import { compactWithLLM } from '../../context/compressor.js';
+import { getContextConfig } from '../../context/config.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
 import { resolveWorkspaceCwd } from '../../core/workspace.js';
 import { runWithLayer, errorResponse } from '../util.js';
@@ -30,22 +31,18 @@ function findUserMessageForTurn(sessionId: string, turnId: number): string {
   return '';
 }
 
-// Active session ApprovalService forks, keyed by sessionId.
-// messages.ts registers/unregisters; this file's PUT route updates them.
 export const activeApprovalForks = new Map<
   string,
   { setPermissionMode: (mode: any) => Promise<void> | void }
 >();
 
-// ---- C0: Existing routes ----
-
 sessionsRouter.get('/', async (c) => {
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   const result = await runWithLayer(
     Effect.gen(function* () {
-      const svc = yield* SessionService;
-      return yield* svc.listSessions(cwd);
-    })
+      const session = yield* SessionService;
+      return yield* session.listSessions(cwd);
+    }) as any
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -59,15 +56,15 @@ sessionsRouter.post('/', async (c) => {
   const normalizedCwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
-      const svc = yield* SessionService;
-      return yield* svc.create(normalizedCwd, 'unknown');
-    })
+      const session = yield* SessionService;
+      return yield* session.create(normalizedCwd, 'unknown');
+    }) as any
   );
   if (!result.ok) {
     const { status, body: resp } = errorResponse(result.error);
     return c.json(resp, status as any);
   }
-  const state = result.value;
+  const state = result.value as SessionStoreState;
   if (body.initialPermissionMode) {
     const dir = resolveSessionDir(state.sessionId);
     if (dir) {
@@ -83,10 +80,10 @@ sessionsRouter.post('/:id/resume', async (c) => {
   const body = (await c.req.json()) as { cwd: string };
   const result = await runWithLayer(
     Effect.gen(function* () {
-      const svc = yield* SessionService;
-      const state = yield* svc.create(resolveWorkspaceCwd(body.cwd), 'unknown', sessionId);
-      return yield* svc.readHistory(state);
-    })
+      const session = yield* SessionService;
+      const state = yield* session.create(resolveWorkspaceCwd(body.cwd), 'unknown', sessionId);
+      return yield* session.readHistory(state);
+    }) as any
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -100,10 +97,11 @@ sessionsRouter.post('/:id/compact', async (c) => {
   const body = (await c.req.json()) as { cwd: string };
   const result = await runWithLayer(
     Effect.gen(function* () {
-      const svc = yield* SessionService;
-      const ctx = yield* ContextService;
-      const state = yield* svc.create(resolveWorkspaceCwd(body.cwd), 'unknown', sessionId);
-      return yield* ctx.compress(state.sessionId, state.projectPath, null);
+      const session = yield* SessionService;
+      const state = yield* session.create(resolveWorkspaceCwd(body.cwd), 'unknown', sessionId);
+      return yield* Effect.promise(() =>
+        compactWithLLM(state.sessionId, state.projectPath, getContextConfig(), null)
+      );
     })
   );
   if (!result.ok) {
@@ -119,7 +117,6 @@ sessionsRouter.delete('/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-// C1: history (now with visibility filtering applied via readUIHistory)
 sessionsRouter.get('/:id/history', async (c) => {
   const sessionId = c.req.param('id');
   const turns = readUIHistory(sessionId);
@@ -142,13 +139,10 @@ sessionsRouter.put('/:id/permission-mode', async (c) => {
   if (!dir) return c.json({ error: 'Session not found' }, 404);
   const idxPath = join(dir, `${sessionId}.index.json`);
   setPermissionMode(sessionId, idxPath, mode);
-  // Also update the in-memory ApprovalService fork if the session is active
   const handle = activeApprovalForks.get(sessionId);
   if (handle) handle.setPermissionMode(mode);
   return c.json({ ok: true });
 });
-
-// ---- C2: rollback state ----
 
 sessionsRouter.get('/:id/rollback-state', async (c) => {
   const sessionId = c.req.param('id');
@@ -156,7 +150,7 @@ sessionsRouter.get('/:id/rollback-state', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
-      const entry = checkpoint.getLatestRestoreEntry(cwd, sessionId);
+      const entry = yield* checkpoint.getLatestRestoreEntry(cwd, sessionId);
       return {
         context: { active: false, currentThroughTurnId: null },
         code: {
@@ -175,15 +169,13 @@ sessionsRouter.get('/:id/rollback-state', async (c) => {
   return c.json(result.value);
 });
 
-// ---- C3: checkpoint diff (latest or by turn) ----
-
 sessionsRouter.get('/:id/checkpoints/latest/diff', async (c) => {
   const sessionId = c.req.param('id');
   const cwd = resolveWorkspaceCwd(c.req.query('cwd'));
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
-      return checkpoint.getCheckpointDiff(cwd, sessionId);
+      return yield* checkpoint.getCheckpointDiff(cwd, sessionId);
     })
   );
   if (!result.ok) {
@@ -200,7 +192,7 @@ sessionsRouter.get('/:id/checkpoints/:turnId/diff', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
-      return checkpoint.getCheckpointDiff(cwd, sessionId, isNaN(turnId) ? undefined : turnId);
+      return yield* checkpoint.getCheckpointDiff(cwd, sessionId, isNaN(turnId) ? undefined : turnId);
     })
   );
   if (!result.ok) {
@@ -209,8 +201,6 @@ sessionsRouter.get('/:id/checkpoints/:turnId/diff', async (c) => {
   }
   return c.json(result.value);
 });
-
-// ---- C4: revert single file ----
 
 sessionsRouter.post('/:id/checkpoints/latest/revert-file', async (c) => {
   const sessionId = c.req.param('id');
@@ -219,7 +209,7 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-file', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
-      const completedTurns = checkpoint.getCompletedTurns(cwd, sessionId);
+      const completedTurns = yield* checkpoint.getCompletedTurns(cwd, sessionId);
       if (completedTurns.length === 0)
         return {
           reverted: false,
@@ -229,7 +219,7 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-file', async (c) => {
           restoreEntry: null,
         };
       const latestTurnId = completedTurns[completedTurns.length - 1]!;
-      return checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, [body.file]);
+      return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, [body.file]);
     })
   );
   if (!result.ok) {
@@ -238,8 +228,6 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-file', async (c) => {
   }
   return c.json({ ok: true, result: result.value });
 });
-
-// ---- C5: revert multiple files ----
 
 sessionsRouter.post('/:id/checkpoints/latest/revert-files', async (c) => {
   const sessionId = c.req.param('id');
@@ -248,7 +236,7 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-files', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
-      const completedTurns = checkpoint.getCompletedTurns(cwd, sessionId);
+      const completedTurns = yield* checkpoint.getCompletedTurns(cwd, sessionId);
       if (completedTurns.length === 0)
         return {
           reverted: false,
@@ -258,7 +246,7 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-files', async (c) => {
           restoreEntry: null,
         };
       const latestTurnId = completedTurns[completedTurns.length - 1]!;
-      return checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, body.files);
+      return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, body.files);
     })
   );
   if (!result.ok) {
@@ -267,8 +255,6 @@ sessionsRouter.post('/:id/checkpoints/latest/revert-files', async (c) => {
   }
   return c.json({ ok: true, result: result.value });
 });
-
-// ---- C8: rollback preview diff ----
 
 sessionsRouter.get('/:id/rollback-preview', async (c) => {
   const sessionId = c.req.param('id');
@@ -277,7 +263,7 @@ sessionsRouter.get('/:id/rollback-preview', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
-      return checkpoint.previewRollbackDiff(cwd, sessionId, throughTurnId);
+      return yield* checkpoint.previewRollbackDiff(cwd, sessionId, throughTurnId);
     })
   );
   if (!result.ok) {
@@ -287,8 +273,6 @@ sessionsRouter.get('/:id/rollback-preview', async (c) => {
   return c.json(result.value);
 });
 
-// ---- C9: rollback code to turn ----
-
 sessionsRouter.post('/:id/rollback-code-to-turn', async (c) => {
   const sessionId = c.req.param('id');
   const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
@@ -296,7 +280,7 @@ sessionsRouter.post('/:id/rollback-code-to-turn', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
-      return checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
+      return yield* checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
     })
   );
   if (!result.ok) {
@@ -306,21 +290,19 @@ sessionsRouter.post('/:id/rollback-code-to-turn', async (c) => {
   return c.json({ ok: true, result: result.value });
 });
 
-// ---- C10: rollback context ----
-
 sessionsRouter.post('/:id/rollback-context', async (c) => {
   const sessionId = c.req.param('id');
   const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
-      const svc = yield* SessionService;
-      const state = yield* svc.create(cwd, 'unknown', sessionId);
+      const session = yield* SessionService;
+      const state = yield* session.create(cwd, 'unknown', sessionId);
       const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId);
-      yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
+      yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
       return { ok: true, turns, rolledBackMessage, promptEstimate: state.promptEstimate };
-    })
+    }) as any
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -329,20 +311,18 @@ sessionsRouter.post('/:id/rollback-context', async (c) => {
   return c.json(result.value);
 });
 
-// ---- C11: rollback both ----
-
 sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
   const sessionId = c.req.param('id');
   const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
+      const session = yield* SessionService;
       const checkpoint = yield* CheckpointService;
-      const svc = yield* SessionService;
-      const codeResult = checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
-      const state = yield* svc.create(cwd, 'unknown', sessionId);
+      const codeResult = yield* checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
+      const state = yield* session.create(cwd, 'unknown', sessionId);
       const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId);
-      yield* svc.rollbackToTurn(state, body.throughTurnId, 'user rollback');
+      yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
       const turns = readUIHistory(sessionId);
       return {
         ok: true,
@@ -351,7 +331,7 @@ sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
         rolledBackMessage,
         promptEstimate: state.promptEstimate,
       };
-    })
+    }) as any
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);
@@ -360,8 +340,6 @@ sessionsRouter.post('/:id/rollback-both-to-turn', async (c) => {
   return c.json(result.value);
 });
 
-// ---- C12: undo code rollback ----
-
 sessionsRouter.post('/:id/undo-code-rollback', async (c) => {
   const sessionId = c.req.param('id');
   const body = (await c.req.json()) as { cwd: string; force?: boolean; files?: string[] };
@@ -369,7 +347,7 @@ sessionsRouter.post('/:id/undo-code-rollback', async (c) => {
   const result = await runWithLayer(
     Effect.gen(function* () {
       const checkpoint = yield* CheckpointService;
-      return checkpoint.undoLastCodeRollback(cwd, sessionId, {
+      return yield* checkpoint.undoLastCodeRollback(cwd, sessionId, {
         force: body.force,
         files: body.files,
       });
@@ -382,22 +360,18 @@ sessionsRouter.post('/:id/undo-code-rollback', async (c) => {
   return c.json({ ok: true, result: result.value });
 });
 
-// ---- C13: undo context rollback 鈥?intentionally NOT implemented ----
-
-// ---- C14: fork ----
-
 sessionsRouter.post('/:id/fork', async (c) => {
   const sessionId = c.req.param('id');
   const body = (await c.req.json()) as { cwd: string; atUuid?: string };
   const cwd = resolveWorkspaceCwd(body.cwd);
   const result = await runWithLayer(
     Effect.gen(function* () {
-      const svc = yield* SessionService;
-      const state = yield* svc.create(cwd, 'unknown', sessionId);
-      const newSessionId = yield* svc.forkSession(state, body.atUuid ?? '');
+      const session = yield* SessionService;
+      const state = yield* session.create(cwd, 'unknown', sessionId);
+      const newSessionId = yield* session.forkSession(state, body.atUuid ?? '');
       const turns = readUIHistory(newSessionId);
       return { sessionId: newSessionId, turns };
-    })
+    }) as any
   );
   if (!result.ok) {
     const { status, body } = errorResponse(result.error);

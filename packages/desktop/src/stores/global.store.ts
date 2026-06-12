@@ -512,6 +512,10 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           if (chunk.type === 'tool_call') {
             const existing = turn.items.findIndex((i) => i.id === chunk.id);
             if (existing >= 0) {
+              const existingItem = turn.items[existing] as Item & { status?: string };
+              if (existingItem.status === 'pending' && chunk.status === 'running') {
+                return;
+              }
               turn.items[existing] = chunk;
             } else {
               turn.items.push(chunk);

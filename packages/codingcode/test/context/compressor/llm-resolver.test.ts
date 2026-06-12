@@ -1,4 +1,5 @@
-﻿import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { Effect } from 'effect';
 import type { LLMClient } from '../../../src/llm/client.js';
 
 const { mockFindModel, mockCreateClient } = vi.hoisted(() => ({
@@ -18,7 +19,7 @@ vi.mock('../../../src/llm/factory.js', async (importOriginal) => {
 import { resolveLLM } from '../../../src/llm/llm-resolver.js';
 
 const fakeFallback: LLMClient = {
-  complete: async () => ({ ok: true as const, value: { content: '', finishReason: 'stop' } }),
+  complete: () => Effect.succeed({ content: '', finishReason: 'stop' }),
   completeStream: () => ({
     stream: (async function* () {})(),
     response: Promise.resolve({ ok: true as const, value: { content: '', finishReason: 'stop' } }),
@@ -70,14 +71,14 @@ describe('resolveLLM (compaction)', () => {
 
   it('returns fallback when createClient throws', async () => {
     mockFindModel.mockReturnValue({ id: 'test-model' } as any);
-    mockCreateClient.mockRejectedValue(new Error('creation failed'));
+    mockCreateClient.mockReturnValue(Effect.fail(new Error('creation failed')));
     const result = await resolveLLM('test-model', fakeFallback);
     expect(result).toBe(fakeFallback);
   });
 
   it('returns fallback when createClient returns error', async () => {
     mockFindModel.mockReturnValue({ id: 'test-model' } as any);
-    mockCreateClient.mockResolvedValue({ ok: false, error: 'error' });
+    mockCreateClient.mockReturnValue(Effect.fail(new Error('error')));
     const result = await resolveLLM('test-model', fakeFallback);
     expect(result).toBe(fakeFallback);
   });
@@ -85,7 +86,7 @@ describe('resolveLLM (compaction)', () => {
   it('returns created client on success', async () => {
     const client = { modelInfo: { maxTokens: 100 } } as LLMClient;
     mockFindModel.mockReturnValue({ id: 'test-model' } as any);
-    mockCreateClient.mockResolvedValue({ ok: true, value: client });
+    mockCreateClient.mockReturnValue(Effect.succeed(client));
     const result = await resolveLLM('test-model', fakeFallback);
     expect(result).toBe(client);
   });

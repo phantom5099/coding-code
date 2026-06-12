@@ -1,9 +1,12 @@
 import { expect, it, describe, vi, beforeEach, afterEach } from 'vitest';
-import { Effect } from 'effect';
-import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch';
-import { EXPLORE_PROFILE } from '../../src/subagent/registry';
-import type { AgentProfile } from '../../src/subagent/registry';
-import type { ProjectRuntimeService } from '../../src/runtime/project-runtime';
+import { Effect, Layer } from 'effect';
+import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch.js';
+import { SessionService } from '../../src/session/store.js';
+import { ApprovalService } from '../../src/approval/index.js';
+import { HookService } from '../../src/hooks/registry.js';
+import { McpService } from '../../src/mcp/index.js';
+import { EXPLORE_PROFILE } from '../../src/subagent/registry.js';
+import type { ToolDefinition } from '../../src/tools/types.js';
 
 const mockMcp = {
   connectServers: (_p: string, _s: string, _n: string[]) => Effect.void,
@@ -54,6 +57,7 @@ const mockSession = {
       title: 'child',
       usage: undefined,
       promptEstimate: 0,
+      memorySnapshot: '',
     }),
   incrementTurn: () => 0,
   recordUser: () =>
@@ -80,28 +84,26 @@ const mockSession = {
       timestamp: '',
       tokenCount: 0,
     }),
+  hideMessage: () => Effect.succeed({ type: 'hide', uuid: 'h1', kind: 'message', targetUuid: '', reason: '', timestamp: '' }),
+  rollbackToTurn: () => Effect.succeed({ type: 'hide', uuid: 'h1', kind: 'rollback', throughTurnId: 0, reason: '', timestamp: '' }),
+  forkSession: () => Effect.succeed('forked-session-id'),
+  renameSession: () => Effect.succeed({ type: 'title', uuid: 't1', text: '', timestamp: '' }),
+  readHistory: () => Effect.succeed([]),
+  readMessages: () => Effect.succeed([]),
+  listSessions: () => Effect.succeed([]),
+  findSessionIndex: () => Effect.succeed(null),
+  getSessionId: () => 'test-session',
+  getMessageCount: () => 0,
+  setPermissionMode: () => Effect.void,
+  getPermissionMode: () => Effect.succeed('default'),
 };
 
-const mockRuntime: ProjectRuntimeService = {
-  _tag: 'ProjectRuntime' as const,
-  prepareProject: (_p: string) => Effect.void,
-  resolveMainAgentProfile: (_p: string, _s: string): AgentProfile | undefined => EXPLORE_PROFILE,
-  resolveSubagentProfile: (_p: string, name: string) => {
-    if (name === 'explore') return EXPLORE_PROFILE;
-    return undefined;
-  },
-  listAgentProfiles: (_p: string) => [EXPLORE_PROFILE],
-  getToolPolicy: (profile: AgentProfile | undefined) => ({
-    allowedTools: profile?.tools ? new Set(profile.tools) : undefined,
-    allowedMcpServers: profile?.mcpServers ? new Set(profile.mcpServers) : undefined,
-    allowToolSearch: true,
-    allowDeferredTools: false,
-  }),
-  setSessionProfile: (_s: string, _p: AgentProfile) => {},
-  getSessionProfile: (_s: string) => undefined,
-  disposeSession: (_s: string) => Effect.void,
-  disposeProject: (_p: string) => Effect.void,
-};
+const MockSessionLayer = Layer.succeed(SessionService, SessionService.make(mockSession as any));
+const MockApprovalLayer = Layer.succeed(ApprovalService, ApprovalService.make(mockApproval as any));
+const MockHooksLayer = Layer.succeed(HookService, HookService.make(mockHooks as any));
+const MockMcpLayer = Layer.succeed(McpService, McpService.make(mockMcp as any));
+
+const MockLayer = Layer.merge(MockSessionLayer, Layer.merge(MockApprovalLayer, Layer.merge(MockHooksLayer, MockMcpLayer)));
 
 const mockModelEntry = {
   id: 'fast-model@API_KEY_B',
@@ -124,33 +126,28 @@ vi.mock('../../src/llm/factory.js', () => ({
   createClient: vi.fn(async () => ({ ok: true, value: mockSubagentLlm })),
 }));
 
-function makeTool() {
-  return createDispatchAgentTool({
-    session: mockSession as any,
-    approval: mockApproval as any,
-    hooks: mockHooks as any,
-    runtime: mockRuntime,
-    mcp: mockMcp as any,
-  });
+async function makeTool(): Promise<ToolDefinition> {
+  const result = await Effect.runPromise((createDispatchAgentTool() as any).pipe(Effect.provide(MockLayer as any)));
+  return result as ToolDefinition;
 }
 
 describe('dispatch_agent tool', () => {
   beforeEach(() => {});
 
-  it('should create dispatch tool with description mentioning profiles', () => {
-    const tool = makeTool();
+  it('should create dispatch tool with description mentioning profiles', async () => {
+    const tool = await makeTool();
     expect(tool.name).toBe('dispatch_agent');
     expect(tool.description).toContain('Spawn');
     expect(tool.description).toContain('subagent');
   });
 
-  it('should be a core tool (not deferred)', () => {
-    const tool = makeTool();
+  it('should be a core tool (not deferred)', async () => {
+    const tool = await makeTool();
     expect(tool.deferred).toBeUndefined();
   });
 
   it('should validate agent profile exists', async () => {
-    const tool = makeTool();
+    const tool = await makeTool();
     try {
       await tool.execute(
         { agent: 'nonexistent', prompt: 'do something' },
@@ -163,7 +160,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should require agentRunner context', async () => {
-    const tool = makeTool();
+    const tool = await makeTool();
     try {
       await tool.execute({ agent: 'explore', prompt: 'do something' }, { projectPath: '/test' });
       expect.fail('Should have thrown error');
@@ -174,13 +171,11 @@ describe('dispatch_agent tool', () => {
 
   it('should emit spawn.before hook', async () => {
     const emitDecisionFn = vi.fn().mockReturnValue(Effect.succeed(null));
-    const tool = createDispatchAgentTool({
-      session: mockSession as any,
-      approval: mockApproval as any,
-      hooks: { ...mockHooks, emitDecision: emitDecisionFn } as any,
-      runtime: mockRuntime,
-      mcp: mockMcp as any,
-    });
+    const customHooks = { ...mockHooks, emitDecision: emitDecisionFn };
+    const customHooksLayer = Layer.succeed(HookService, HookService.make(customHooks as any));
+    const customLayer = Layer.merge(MockSessionLayer, Layer.merge(MockApprovalLayer, Layer.merge(customHooksLayer, MockMcpLayer)));
+
+    const tool = await Effect.runPromise((createDispatchAgentTool() as any).pipe(Effect.provide(customLayer as any))) as ToolDefinition;
     const runStream = async function* () {
       yield { _tag: 'Done' as const, content: 'done' };
     };
@@ -199,13 +194,11 @@ describe('dispatch_agent tool', () => {
     const emitDecisionFn = vi
       .fn()
       .mockReturnValue(Effect.succeed({ decision: 'deny', reason: 'Not allowed' }));
-    const tool = createDispatchAgentTool({
-      session: mockSession as any,
-      approval: mockApproval as any,
-      hooks: { ...mockHooks, emitDecision: emitDecisionFn } as any,
-      runtime: mockRuntime,
-      mcp: mockMcp as any,
-    });
+    const customHooks = { ...mockHooks, emitDecision: emitDecisionFn };
+    const customHooksLayer = Layer.succeed(HookService, HookService.make(customHooks as any));
+    const customLayer = Layer.merge(MockSessionLayer, Layer.merge(MockApprovalLayer, Layer.merge(customHooksLayer, MockMcpLayer)));
+
+    const tool = await Effect.runPromise((createDispatchAgentTool() as any).pipe(Effect.provide(customLayer as any))) as ToolDefinition;
     const agentRunner = { agentService: { runStream: async function* () {} }, llm: {} };
     try {
       await tool.execute(
@@ -220,13 +213,11 @@ describe('dispatch_agent tool', () => {
 
   it('should emit completion hook', async () => {
     const emitFn = vi.fn().mockReturnValue(Effect.void);
-    const tool = createDispatchAgentTool({
-      session: mockSession as any,
-      approval: mockApproval as any,
-      hooks: { ...mockHooks, emit: emitFn } as any,
-      runtime: mockRuntime,
-      mcp: mockMcp as any,
-    });
+    const customHooks = { ...mockHooks, emit: emitFn };
+    const customHooksLayer = Layer.succeed(HookService, HookService.make(customHooks as any));
+    const customLayer = Layer.merge(MockSessionLayer, Layer.merge(MockApprovalLayer, Layer.merge(customHooksLayer, MockMcpLayer)));
+
+    const tool = await Effect.runPromise((createDispatchAgentTool() as any).pipe(Effect.provide(customLayer as any))) as ToolDefinition;
     const runStream = async function* () {
       yield { _tag: 'Done' as const, content: 'completed' };
     };
@@ -242,7 +233,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should pass systemOverride with profile prompt, environment info, and user rules', async () => {
-    const tool = makeTool();
+    const tool = await makeTool();
     let capturedSystemOverride: string | undefined;
     const runStream = async function* (opts: any) {
       capturedSystemOverride = opts.systemOverride;
@@ -263,7 +254,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should handle subagent error', async () => {
-    const tool = makeTool();
+    const tool = await makeTool();
     const runStream = async function* () {
       yield { _tag: 'Error' as const, error: { message: 'Something went wrong' } };
     };
@@ -280,7 +271,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should use parent llm when profile has no model field', async () => {
-    const tool = makeTool();
+    const tool = await makeTool();
     const parentLlm = { _tag: 'parent-llm' };
     let capturedLlm: any;
     const runStream = async function* (opts: any) {
@@ -296,27 +287,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should create a new llm client when profile specifies a model', async () => {
-    const profileWithModel: AgentProfile = {
-      name: 'custom-model-agent',
-      description: 'Agent with custom model',
-      systemPrompt: 'Custom model agent',
-      model: 'fast-model@API_KEY_B',
-      tools: ['read_file'],
-    };
-    const runtimeWithProfile = {
-      ...mockRuntime,
-      resolveSubagentProfile: (_p: string, name: string) => {
-        if (name === 'custom-model-agent') return profileWithModel;
-        return undefined;
-      },
-    };
-    const tool = createDispatchAgentTool({
-      session: mockSession as any,
-      approval: mockApproval as any,
-      hooks: mockHooks as any,
-      runtime: runtimeWithProfile,
-      mcp: mockMcp as any,
-    });
+    const tool = await makeTool();
     const { createClient } = await import('../../src/llm/factory.js');
     let capturedLlm: any;
     const runStream = async function* (opts: any) {
@@ -333,27 +304,7 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should throw when profile model is not found in catalog', async () => {
-    const profileWithBadModel: AgentProfile = {
-      name: 'bad-model-agent',
-      description: 'Agent with unknown model',
-      systemPrompt: 'Bad model',
-      model: 'nonexistent-model@unknown',
-      tools: ['read_file'],
-    };
-    const runtimeWithBadProfile = {
-      ...mockRuntime,
-      resolveSubagentProfile: (_p: string, name: string) => {
-        if (name === 'bad-model-agent') return profileWithBadModel;
-        return undefined;
-      },
-    };
-    const tool = createDispatchAgentTool({
-      session: mockSession as any,
-      approval: mockApproval as any,
-      hooks: mockHooks as any,
-      runtime: runtimeWithBadProfile,
-      mcp: mockMcp as any,
-    });
+    const tool = await makeTool();
     const agentRunner = { agentService: { runStream: async function* () {} }, llm: {} };
     try {
       await tool.execute(
@@ -380,15 +331,14 @@ describe('dispatch_agent tool', () => {
         title: 'child',
         usage: undefined,
         promptEstimate: 0,
+        memorySnapshot: '',
       })
     );
-    const tool = createDispatchAgentTool({
-      session: { ...mockSession, create: createFn } as any,
-      approval: mockApproval as any,
-      hooks: mockHooks as any,
-      runtime: mockRuntime,
-      mcp: mockMcp as any,
-    });
+    const customSession = { ...mockSession, create: createFn };
+    const customSessionLayer = Layer.succeed(SessionService, SessionService.make(customSession as any));
+    const customLayer = Layer.merge(customSessionLayer, Layer.merge(MockApprovalLayer, Layer.merge(MockHooksLayer, MockMcpLayer)));
+
+    const tool = await Effect.runPromise((createDispatchAgentTool() as any).pipe(Effect.provide(customLayer as any))) as ToolDefinition;
     const runStream = async function* () {
       yield { _tag: 'Done' as const, content: 'done' };
     };
@@ -411,13 +361,7 @@ describe('dispatch_agent tool', () => {
       capturedState = opts.state;
       yield { _tag: 'Done' as const, content: 'done' };
     };
-    const tool = createDispatchAgentTool({
-      session: mockSession as any,
-      approval: mockApproval as any,
-      hooks: mockHooks as any,
-      runtime: mockRuntime,
-      mcp: mockMcp as any,
-    });
+    const tool = await makeTool();
     const agentRunner = { agentService: { runStream }, llm: {} };
     await tool.execute(
       { agent: 'explore', prompt: 'test' },

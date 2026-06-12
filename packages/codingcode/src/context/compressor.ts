@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { Effect } from 'effect';
 import { resolveSessionJsonlPath, appendLine } from '../session/io.js';
 import {
   estimateTokens,
@@ -194,9 +195,11 @@ async function callLLMForCompaction(
   };
 
   try {
-    const result = await llm.complete({ messages: [userMsg], system });
-    if (!result.ok) return null;
-    return extractSummary(result.value.content.trim());
+    const result = await Effect.runPromise(
+      llm.complete({ messages: [userMsg], system }).pipe(Effect.either)
+    );
+    if (result._tag === 'Left') return null;
+    return extractSummary(result.right.content.trim());
   } catch {
     return null;
   }

@@ -636,18 +636,16 @@ settingsRouter.post('/mcp/:name/disabled/reset', async (c) => {
 settingsRouter.get('/skills', async (c) => {
   const rawCwd = c.req.query('cwd');
   if (isGlobalCwd(rawCwd)) {
+    const cwd = resolveWorkspaceCwd(rawCwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const skill = yield* SkillService;
-        return yield* skill.listWithStatus(resolveWorkspaceCwd(rawCwd));
+        return yield* skill.listWithStatus(cwd);
       })
     );
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
+    const skills = result.ok ? result.value : [];
     return c.json(
-      result.value.map((s) => ({
+      skills.map((s) => ({
         ...s,
         source: 'global' as const,
       }))
@@ -664,12 +662,9 @@ settingsRouter.get('/skills', async (c) => {
       return yield* skill.listWithStatus(cwd);
     })
   );
-  if (!result.ok) {
-    const { status, body } = errorResponse(result.error);
-    return c.json(body, status as any);
-  }
+  const skills = result.ok ? result.value : [];
   return c.json(
-    result.value.map((s) => {
+    skills.map((s) => {
       const isFromProject = projectNames.has(s.name);
       const isFromGlobal = globalNames.has(s.name);
       const hasProjectOverride = isFromProject && isFromGlobal;

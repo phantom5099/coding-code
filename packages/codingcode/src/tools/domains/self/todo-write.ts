@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition } from '../../types.js';
+import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 import {
   sharedTodoStore,
   countByStatus,
@@ -26,12 +27,14 @@ export const todoWriteTool: ToolDefinition = {
     'Replace the current task list. Use for multi-step work to track plan and progress. Pass the full updated plan; previous list is replaced entirely.',
   shortDescription: 'Maintain task list for multi-step work',
   parameters: todoSchema,
-  execute: async (args, ctx) => {
+  execute: (args, ctx) => {
     const sessionId = ctx?.sessionId;
-    if (!sessionId) throw new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires sessionId');
+    if (!sessionId) return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires sessionId'));
     const { plan } = args as { plan: Todo[] };
-    sharedTodoStore.write(sessionId, plan);
-    const c = countByStatus(plan);
-    return `pending=${c.pending} in_progress=${c.in_progress} completed=${c.completed}`;
+    return Effect.sync(() => {
+      sharedTodoStore.write(sessionId, plan);
+      const c = countByStatus(plan);
+      return `pending=${c.pending} in_progress=${c.in_progress} completed=${c.completed}`;
+    });
   },
 };

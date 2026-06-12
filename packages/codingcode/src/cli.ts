@@ -27,12 +27,8 @@ async function main() {
     if (tuiOnly) {
       const tuiPath = '../../tui/src/index.js';
       const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
-      const llmResult = yield* Effect.tryPromise(() => getLLMClient());
-      if (!llmResult.ok) {
-        console.error(`Failed to initialize LLM client: ${llmResult.error.message}`);
-        process.exit(1);
-      }
-      runTui({ llm: llmResult.value });
+      const llm = yield* getLLMClient();
+      runTui({ llm });
       return;
     }
 
@@ -42,12 +38,8 @@ async function main() {
     if (!serveOnly) {
       const tuiPath = '../../tui/src/index.js';
       const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
-      const llmResult = yield* Effect.tryPromise(() => getLLMClient());
-      if (!llmResult.ok) {
-        console.error(`Failed to initialize LLM client: ${llmResult.error.message}`);
-        process.exit(1);
-      }
-      runTui({ llm: llmResult.value });
+      const llm = yield* getLLMClient();
+      runTui({ llm });
     }
   });
 

@@ -1,7 +1,9 @@
-﻿import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { Effect } from 'effect';
 import { z } from 'zod';
 import { sharedTodoStore } from '../../src/agent/todo.js';
 import { todoWriteTool } from '../../src/tools/domains/self/todo-write.js';
+import { AgentError } from '../../src/core/error.js';
 
 beforeEach(() => {
   sharedTodoStore.reset();
@@ -13,15 +15,17 @@ describe('todo_write tool', () => {
   });
 
   it('returns pending/in_progress/completed counts', async () => {
-    const result = await todoWriteTool.execute(
-      {
-        plan: [
-          { step: 'first', status: 'pending' },
-          { step: 'second', status: 'in_progress' },
-          { step: 'third', status: 'completed' },
-        ],
-      },
-      { sessionId: 'test-agent' }
+    const result = await Effect.runPromise(
+      todoWriteTool.execute(
+        {
+          plan: [
+            { step: 'first', status: 'pending' },
+            { step: 'second', status: 'in_progress' },
+            { step: 'third', status: 'completed' },
+          ],
+        },
+        { sessionId: 'test-agent' }
+      )
     );
     expect(result).toBe('pending=1 in_progress=1 completed=1');
   });
@@ -58,9 +62,10 @@ describe('todo_write tool', () => {
     ).rejects.toThrow();
   });
 
-  it('throws if sessionId is missing', async () => {
-    await expect(
+  it('fails with AgentError if sessionId is missing', async () => {
+    const exit = await Effect.runPromiseExit(
       todoWriteTool.execute({ plan: [{ step: 'x', status: 'pending' }] }, {})
-    ).rejects.toThrow('todo_write requires sessionId');
+    );
+    expect(exit._tag).toBe('Failure');
   });
 });

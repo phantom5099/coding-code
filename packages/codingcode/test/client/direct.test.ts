@@ -1,7 +1,17 @@
-﻿import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { Effect } from 'effect';
+
+vi.mock('../../src/layer.js', () => ({
+  AppLayer: {},
+}));
+
 import { createDirectClient, agentEventToStreamChunk } from '../../src/client/direct.js';
-import { registerEmitter, unregisterEmitter } from '../../src/approval/async-confirm.js';
+import {
+  ApprovalWaitService,
+} from '../../src/approval/async-confirm.js';
 import { AgentError } from '../../src/core/error.js';
+
+const TestLayer = ApprovalWaitService.Default;
 
 const noopLlm = {
   completeStream: () => ({
@@ -120,5 +130,185 @@ describe('agentEventToStreamChunk - approval interleaving', () => {
       },
       { type: 'done' },
     ]);
+  });
+});
+
+describe('approval buffering - race condition fix', () => {
+  const run = <T>(eff: Effect.Effect<T, any, any>): Promise<T> =>
+    Effect.runPromise(eff.pipe(Effect.provide(TestLayer) as any));
+
+  it('buffers approval request when notify is null', async () => {
+    const sessionId = 'buffer-' + Math.random().toString(36).slice(2);
+    let notify: ((req: any) => void) | null = null;
+    let bufferedApproval: any = null;
+    const delivered: any[] = [];
+
+    await run(
+      Effect.gen(function* () {
+        const svc = yield* ApprovalWaitService;
+        yield* svc.registerEmitter(sessionId, (id: string, tool: string, args: Record<string, unknown>) => {
+          const req = { type: 'approval_request' as const, id, tool, args };
+          if (notify) {
+            const cb = notify;
+            notify = null;
+            cb(req);
+          } else {
+            bufferedApproval = req;
+          }
+        });
+      })
+    );
+
+    try {
+      // Simulate the race loop: chunk arrives, notify set to null
+      notify = null;
+
+      // Fire approval request while notify is null
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalWaitService;
+          yield* svc.emitApprovalRequest(sessionId, 'apr-1', 'bash', { command: 'ls' });
+        })
+      );
+
+      // Should have been buffered
+      expect(bufferedApproval).not.toBeNull();
+      expect(bufferedApproval.id).toBe('apr-1');
+      expect(bufferedApproval.tool).toBe('bash');
+
+      // Consume buffer
+      const req = bufferedApproval;
+      bufferedApproval = null;
+      delivered.push(req);
+
+      // Now set notify and fire another request
+      notify = (r) => delivered.push(r);
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalWaitService;
+          yield* svc.emitApprovalRequest(sessionId, 'apr-2', 'bash', { command: 'pwd' });
+        })
+      );
+
+      // notify should have been consumed (set to null by callback)
+      expect(delivered).toHaveLength(2);
+      expect(delivered[0].id).toBe('apr-1');
+      expect(delivered[1].id).toBe('apr-2');
+      expect(bufferedApproval).toBeNull();
+      expect(notify).toBeNull();
+    } finally {
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalWaitService;
+          yield* svc.unregisterEmitter(sessionId);
+        })
+      );
+    }
+  });
+
+  it('delivers approval immediately when notify is active (no buffering)', async () => {
+    const sessionId = 'direct-' + Math.random().toString(36).slice(2);
+    let notify: ((req: any) => void) | null = null;
+    let bufferedApproval: any = null;
+    const delivered: any[] = [];
+
+    await run(
+      Effect.gen(function* () {
+        const svc = yield* ApprovalWaitService;
+        yield* svc.registerEmitter(sessionId, (id: string, tool: string, args: Record<string, unknown>) => {
+          const req = { type: 'approval_request' as const, id, tool, args };
+          if (notify) {
+            const cb = notify;
+            notify = null;
+            cb(req);
+          } else {
+            bufferedApproval = req;
+          }
+        });
+      })
+    );
+
+    try {
+      notify = (r) => delivered.push(r);
+
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalWaitService;
+          yield* svc.emitApprovalRequest(sessionId, 'apr-1', 'bash', { command: 'ls' });
+        })
+      );
+
+      expect(delivered).toHaveLength(1);
+      expect(delivered[0].id).toBe('apr-1');
+      expect(notify).toBeNull(); // callback consumed notify
+      expect(bufferedApproval).toBeNull();
+    } finally {
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalWaitService;
+          yield* svc.unregisterEmitter(sessionId);
+        })
+      );
+    }
+  });
+
+  it('handles multiple approval requests arriving while notify is null', async () => {
+    const sessionId = 'multi-' + Math.random().toString(36).slice(2);
+    let notify: ((req: any) => void) | null = null;
+    let bufferedApproval: any = null;
+
+    await run(
+      Effect.gen(function* () {
+        const svc = yield* ApprovalWaitService;
+        yield* svc.registerEmitter(sessionId, (id: string, tool: string, args: Record<string, unknown>) => {
+          const req = { type: 'approval_request' as const, id, tool, args };
+          if (notify) {
+            const cb = notify;
+            notify = null;
+            cb(req);
+          } else {
+            bufferedApproval = req;
+          }
+        });
+      })
+    );
+
+    try {
+      notify = null;
+
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalWaitService;
+          yield* svc.emitApprovalRequest(sessionId, 'apr-1', 'bash', { command: 'a' });
+        })
+      );
+
+      expect(bufferedApproval).not.toBeNull();
+      expect(bufferedApproval.id).toBe('apr-1');
+
+      // Second request also arrives while notify is still null
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalWaitService;
+          yield* svc.emitApprovalRequest(sessionId, 'apr-2', 'write_file', { path: 'f.txt' });
+        })
+      );
+
+      // Second request overwrites the buffer (only one slot)
+      expect(bufferedApproval.id).toBe('apr-2');
+
+      // Consume apr-2
+      bufferedApproval = null;
+
+      // apr-1 is lost (single buffer) — this is acceptable because
+      // in practice, the agent loop blocks on each approval sequentially
+    } finally {
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalWaitService;
+          yield* svc.unregisterEmitter(sessionId);
+        })
+      );
+    }
   });
 });

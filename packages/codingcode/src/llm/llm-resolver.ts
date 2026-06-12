@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { findModel, createClient } from './factory.js';
 import type { LLMClient } from './client.js';
 
@@ -10,8 +11,8 @@ export async function resolveLLM(
   const found = findModel(trimmed);
   if (!found) return fallback;
   try {
-    const created = await createClient(found);
-    return created.ok ? created.value : fallback;
+    const result = await Effect.runPromise(createClient(found).pipe(Effect.either));
+    return result._tag === 'Right' ? result.right : fallback;
   } catch {
     return fallback;
   }

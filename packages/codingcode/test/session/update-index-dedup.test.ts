@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Effect } from 'effect';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
+import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 import * as io from '../../src/session/io.js';
@@ -24,11 +24,19 @@ describe('updateIndex deduplication after removing appendEvent', () => {
 
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'test-model');
+        })
       );
       spy.mockClear();
 
-      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))));
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.recordUser(state, 'hello world');
+        })
+      );
 
       expect(spy).toHaveBeenCalledTimes(1);
     } finally {
@@ -47,14 +55,18 @@ describe('updateIndex deduplication after removing appendEvent', () => {
 
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'test-model');
+        })
       );
       spy.mockClear();
 
       await run(
-        SessionService.pipe(
-          Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model'))
-        )
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.recordAssistant(state, 'reply', [], 'test-model');
+        })
       );
 
       expect(spy).toHaveBeenCalledTimes(1);
@@ -74,12 +86,18 @@ describe('updateIndex deduplication after removing appendEvent', () => {
 
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'test-model');
+        })
       );
       spy.mockClear();
 
       await run(
-        SessionService.pipe(Effect.flatMap((s) => s.hideMessage(state, 'dummy-uuid', 'test')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.hideMessage(state, 'dummy-uuid', 'test');
+        })
       );
 
       expect(spy).toHaveBeenCalledTimes(1);

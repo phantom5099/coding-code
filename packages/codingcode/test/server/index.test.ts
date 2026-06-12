@@ -1,4 +1,9 @@
-﻿import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('../../src/layer.js', () => ({
+  AppLayer: {},
+}));
+
 import { createServer } from '../../src/server/index.js';
 
 describe('createServer', () => {
