@@ -4,8 +4,8 @@ import { SkillService } from '../../skills/service.js';
 import { WorkspaceService } from '../../core/workspace.js';
 import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
 import type { McpServerConfig } from '../../mcp/types.js';
-import type { AgentProfile } from '../../subagent/registry.js';
-import type { UserHookConfig } from '../../hooks/config.js';
+import type { AgentProfile } from '../../subagent/types.js';
+import type { UserHookConfig } from '../../hooks/types.js';
 import {
   loadMcpConfig,
   writeMcpConfig,

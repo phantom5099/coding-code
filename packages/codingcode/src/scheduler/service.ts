@@ -4,7 +4,8 @@ import { randomUUID } from 'crypto';
 import { createLogger } from '@codingcode/infra/logger';
 import type { Automation, CreateAutomationInput, UpdateAutomationInput } from './types.js';
 import { readAutomations, writeAutomations } from './store.js';
-import { sendMessage, type AgentEvent } from '../agent/agent.js';
+import { sendMessage } from '../agent/agent.js';
+import type { AgentEvent } from '../agent/types.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { AgentError } from '../core/error.js';
 

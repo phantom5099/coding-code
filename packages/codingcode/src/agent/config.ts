@@ -1,9 +1,5 @@
 import { loadConfig, type AppConfig } from '@codingcode/infra/config';
-
-export interface ResolvedConfig {
-  maxSteps: number;
-  maxStopContinuations: number;
-}
+import type { ResolvedConfig } from './types.js';
 
 export function resolveConfig(): ResolvedConfig {
   const cfg = loadConfig();

@@ -1,5 +1,5 @@
 import { Effect, ManagedRuntime } from 'effect';
-import type { AgentEvent } from '../agent/agent.js';
+import type { AgentEvent } from '../agent/types.js';
 import { sendMessage } from '../agent/agent.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
 import { LLMFactoryService } from '../llm/factory.js';

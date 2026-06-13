@@ -4,8 +4,8 @@ import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
 import { SkillService } from '../../skills/service.js';
 import { ApprovalService } from '../../approval/index.js';
 import type { PermissionMode } from '../../approval/types.js';
-import type { AgentProfile } from '../../subagent/registry.js';
-import type { UserHookConfig } from '../../hooks/config.js';
+import type { AgentProfile } from '../../subagent/types.js';
+import type { UserHookConfig } from '../../hooks/types.js';
 import {
   loadMcpConfig,
   writeMcpConfig,

@@ -1,6 +1,5 @@
-import type { AgentEvent } from '../agent/agent.js';
-
-export type SseEvent = { type: string; [k: string]: unknown };
+import type { AgentEvent } from '../agent/types.js';
+import type { SseEvent } from './types.js';
 
 export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
   switch (event._tag) {

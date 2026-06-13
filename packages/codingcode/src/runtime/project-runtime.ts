@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import type { AgentProfile } from '../subagent/registry.js';
+import type { AgentProfile } from '../subagent/types.js';
 import { EXPLORE_PROFILE, PLAN_PROFILE, SubagentService } from '../subagent/registry.js';
 import * as agentLoader from '../subagent/loader.js';
 import type { ToolVisibilityPolicy } from '../tools/types.js';

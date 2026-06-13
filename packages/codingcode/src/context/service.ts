@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
-import type { ContextConfig } from './config.js';
+import type { ContextConfig } from '@codingcode/infra/config';
 import type { Message } from '../core/types.js';
 import { SessionService } from '../session/store.js';
 import { applyVisibilityEvents, buildMessagesFromEvents } from '../session/messages.js';
@@ -11,6 +11,7 @@ import { LLMFactoryService } from '../llm/factory.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
 import type { SessionEvent, ToolResultEvent, CompactEvent, SummaryEvent } from '../session/types.js';
 import type { LLMClient } from '../llm/client.js';
+import type { BuildResult, CompressResult } from './types.js';
 
 const COMPACTABLE_TOOLS = new Set([
   'read_file',
@@ -22,20 +23,6 @@ const COMPACTABLE_TOOLS = new Set([
   'write_file',
   'edit_file',
 ]);
-
-export interface BuildResult {
-  messages: Message[];
-  compactedEvents: SessionEvent[];
-  promptEstimate: number;
-  currentTurnId: number;
-  compactedTurnIds: Set<number>;
-}
-
-export interface CompressResult {
-  didCompress: boolean;
-  released: number;
-  promptEstimate: number;
-}
 
 export class ContextService extends Effect.Service<ContextService>()('Context', {
   effect: Effect.gen(function* () {

@@ -1,20 +1,8 @@
 import { Effect } from 'effect';
-
-export type TodoStatus = 'pending' | 'in_progress' | 'completed';
-
-export interface Todo {
-  step: string;
-  status: TodoStatus;
-}
+import type { TodoStatus, Todo, TodoCounts } from './types.js';
 
 export const TODO_MAX_ITEMS = 20;
 export const TODO_MAX_STEP_LEN = 60;
-
-export interface TodoCounts {
-  pending: number;
-  in_progress: number;
-  completed: number;
-}
 
 export function countByStatus(plan: Todo[]): TodoCounts {
   const c: TodoCounts = { pending: 0, in_progress: 0, completed: 0 };

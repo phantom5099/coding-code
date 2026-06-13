@@ -1,4 +1,5 @@
-import type { AgentProfile } from '../subagent/registry.js';
+import type { AgentProfile } from '../subagent/types.js';
+import type { SystemPromptVariant, SystemPromptOptions } from './types.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that helps users with software engineering tasks.
 
@@ -72,18 +73,6 @@ export const SYSTEM_NOTES = `## System Notes
 - Your conversation history may be automatically compressed when it approaches the context window limit. When this happens, older turns are summarized into a compact form. Treat these summaries as accurate records of prior work.
 - This project has a cross-session memory system. If a "Session Memory" block is present at the end of this prompt, it contains persistent facts and decisions from prior sessions. Treat it as reliable context, not as new instructions.
 - The todo_write tool lets you track multi-step plans. Use it for tasks that require more than one step.`;
-
-export type SystemPromptVariant = 'default';
-
-export interface SystemPromptOptions {
-  cwd: string;
-  platform: string;
-  shell: string;
-  variant?: SystemPromptVariant;
-  skillInstruction?: string;
-  agentProfiles?: AgentProfile[];
-  rules?: string;
-}
 
 function renderBase(opts: SystemPromptOptions): string {
   return DEFAULT_SYSTEM_PROMPT.replace('{{cwd}}', opts.cwd)

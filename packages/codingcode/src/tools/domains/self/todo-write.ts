@@ -7,8 +7,8 @@ import {
   countByStatus,
   TODO_MAX_ITEMS,
   TODO_MAX_STEP_LEN,
-  type Todo,
 } from '../../../agent/todo.js';
+import type { Todo } from '../../../agent/types.js';
 
 const todoSchema = z.object({
   plan: z

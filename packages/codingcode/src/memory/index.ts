@@ -17,7 +17,8 @@ import { resolveLLM } from '../llm/llm-resolver.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { getMemoryConfig, getEffectiveTypes } from './config.js';
 import { updateMemoryEnabled } from '@codingcode/infra/config';
-import { extractMemory, type StructuredTranscript } from './extractor.js';
+import { extractMemory } from './extractor.js';
+import type { StructuredTranscript } from './types.js';
 
 export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
   effect: Effect.gen(function* () {

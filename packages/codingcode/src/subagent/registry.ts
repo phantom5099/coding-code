@@ -1,22 +1,9 @@
-import type { UserHookConfig } from '../hooks/config.js';
+import type { AgentProfile } from './types.js';
 import { loadConfig, getUserConfigPath } from '@codingcode/infra/config';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { dirname, join } from 'path';
 import { Effect } from 'effect';
-
-export interface AgentProfile {
-  name: string;
-  description: string;
-  systemPrompt?: string;
-  tools?: string[];
-  mcpServers?: string[];
-  readonly?: boolean;
-  maxSteps?: number;
-  model?: string;
-  hooks?: UserHookConfig[];
-  disabled?: boolean;
-}
 
 // ---- 全局级子智能体开关 ----
 

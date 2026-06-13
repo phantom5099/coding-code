@@ -1,7 +1,7 @@
 import type { PermissionMode } from '../../approval/types.js';
 import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
-import type { AgentProfile } from '../../subagent/registry.js';
-import type { UserHookConfig } from '../../hooks/config.js';
+import type { AgentProfile } from '../../subagent/types.js';
+import type { UserHookConfig } from '../../hooks/types.js';
 import type { createRequestHelpers } from './request.js';
 
 export interface SettingsClient {

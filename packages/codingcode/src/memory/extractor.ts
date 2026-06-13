@@ -1,11 +1,6 @@
 import type { LLMClient } from '../llm/client.js';
 import type { MemoryTypeConfig } from '@codingcode/infra/config';
-
-export interface StructuredTranscript {
-  userOnly: string;
-  userAndAssistant: string;
-  userAndTools: string;
-}
+import type { StructuredTranscript } from './types.js';
 
 export async function extractMemory(opts: {
   currentAuto: string;

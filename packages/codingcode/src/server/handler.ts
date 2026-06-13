@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalWaitService } from '../approval/async-confirm.js';
-import type { SseEvent } from './adapter.js';
+import type { SseEvent } from './types.js';
 import { AgentError } from '../core/error.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;

@@ -1,11 +1,6 @@
 import type { ShadowGit } from './shadow-git.js';
+import type { RestorePlan } from './types.js';
 import { shortSid, commitMsg } from './utils.js';
-
-export interface RestorePlan {
-  throughTurnId: number;
-  affectedTurns: number[];
-  baseline: string;
-}
 
 export function getCompletedTurnsFor(sg: ShadowGit, sessionId: string): number[] {
   const short = shortSid(sessionId);

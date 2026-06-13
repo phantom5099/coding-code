@@ -2,53 +2,9 @@ import { Effect } from 'effect';
 import { resolveHookConfigs, resolveHookDisabled } from './config.js';
 import { executeHookCommand, executeDecisionHookCommand, isHookRuntimeEnabled } from './executor.js';
 import { createLogger } from '@codingcode/infra/logger';
+import type { HookPoint, HookDecision, ObserverHandler, DecisionHandler, HandlerEntry, ProjectPath, SessionId, HookName } from './types.js';
 
 const logger = createLogger();
-
-export type HookPoint =
-  | 'tool.execute.before'
-  | 'tool.execute.after'
-  | 'tool.execute.error'
-  | 'tool.execute.denied'
-  | 'tool.approval.pre'
-  | 'tool.approval.post'
-  | 'llm.request.before'
-  | 'llm.response.after'
-  | 'llm.response.error'
-  | 'session.save.before'
-  | 'session.save.after'
-  | 'agent.turn.start'
-  | 'agent.step.before'
-  | 'agent.turn.stop'
-  | 'agent.turn.end'
-  | 'agent.subagent.spawn.before'
-  | 'agent.subagent.spawn.after'
-  | 'agent.subagent.complete';
-
-export interface HookDecision {
-  decision?: 'allow' | 'deny' | 'ask' | 'continue';
-  reason?: string;
-  injection?: string;
-  modifiedInput?: Record<string, unknown>;
-  modifiedOutput?: unknown;
-}
-
-type ObserverHandler = (payload: Record<string, unknown>) => void | Promise<void>;
-type DecisionHandler = (
-  payload: Record<string, unknown>
-) => HookDecision | null | Promise<HookDecision | null>;
-
-interface HandlerEntry {
-  id: string;
-  handler: ObserverHandler | DecisionHandler;
-  priority: number;
-  source: 'system' | 'user';
-  type: 'observer' | 'decision';
-}
-
-type ProjectPath = string;
-type SessionId = string;
-type HookName = string;
 
 export class HookService extends Effect.Service<HookService>()('HookService', {
   effect: Effect.gen(function* () {
