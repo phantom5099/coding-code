@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import type { TodoStatus, Todo, TodoCounts } from './types.js';
+import type { Todo, TodoCounts } from './types.js';
 
 export const TODO_MAX_ITEMS = 20;
 export const TODO_MAX_STEP_LEN = 60;

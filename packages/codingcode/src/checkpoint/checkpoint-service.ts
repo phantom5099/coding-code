@@ -12,7 +12,6 @@ import {
   getRollbackToTurnPlan,
 } from './turn-query.js';
 import { emptyRollbackResult, executeRollback } from './rollback-engine.js';
-import type { CheckpointDiff, CodeRollbackResult, CodeRollbackUndoResult, RollbackPreviewDiff, CodeRestoreEntry } from './types.js';
 
 // ---- Effect Service ----
 

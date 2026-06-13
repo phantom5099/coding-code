@@ -1,5 +1,4 @@
-import type { AgentProfile } from '../subagent/types.js';
-import type { SystemPromptVariant, SystemPromptOptions } from './types.js';
+import type { SystemPromptOptions } from './types.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that helps users with software engineering tasks.
 
