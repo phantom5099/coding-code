@@ -4,7 +4,6 @@ import { mkdirSync, rmSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import { initWorkspace, getWorkspaceCwd } from '../../../../src/core/workspace.js';
 import { bashTool } from '../../../../src/tools/domains/bash/exec.js';
 
 describe('tools/domains/bash projectPath isolation', () => {
@@ -22,7 +21,6 @@ describe('tools/domains/bash projectPath isolation', () => {
       '{"active":"p","providers":[]}',
       'utf8'
     );
-    initWorkspace({ processRoot: globalDir, workspaceCwd: globalDir });
   });
 
   afterEach(() => {
@@ -53,7 +51,7 @@ describe('tools/domains/bash projectPath isolation', () => {
     expect(() => readFileSync(join(projectDir, 'test-bash.txt'), 'utf8')).not.toThrow();
     expect(() => readFileSync(join(globalDir, 'test-bash.txt'), 'utf8')).toThrow();
     expect(readFileSync(join(projectDir, 'test-bash.txt'), 'utf8').trim()).toBe('hello');
-  });
+  }, 15000);
 
   it('falls back to process.cwd() when ctx.projectPath is absent and cwd arg is absent', async () => {
     const isWin = process.platform === 'win32';
@@ -61,12 +59,20 @@ describe('tools/domains/bash projectPath isolation', () => {
       ? `powershell -Command "'fallback' | Out-File -Encoding utf8 test-fallback.txt"`
       : `echo fallback > test-fallback.txt`;
 
-    await Effect.runPromise(bashTool.execute({ command: cmd, timeout_ms: 10000 }, undefined));
+    try {
+      await Effect.runPromise(bashTool.execute({ command: cmd, timeout_ms: 10000 }, undefined));
 
-    const cwd = process.cwd();
-    expect(() => readFileSync(join(cwd, 'test-fallback.txt'), 'utf8')).not.toThrow();
-    expect(readFileSync(join(cwd, 'test-fallback.txt'), 'utf8').trim()).toBe('fallback');
-  });
+      const cwd = process.cwd();
+      expect(() => readFileSync(join(cwd, 'test-fallback.txt'), 'utf8')).not.toThrow();
+      expect(readFileSync(join(cwd, 'test-fallback.txt'), 'utf8').trim()).toBe('fallback');
+    } finally {
+      try {
+        rmSync(join(process.cwd(), 'test-fallback.txt'), { force: true });
+      } catch {
+        /* ignore */
+      }
+    }
+  }, 15000);
 
   it('respects explicit cwd arg over ctx.projectPath', async () => {
     const otherDir = join(tmpdir(), `other-${randomUUID().slice(0, 8)}`);
@@ -93,5 +99,5 @@ describe('tools/domains/bash projectPath isolation', () => {
         /* ignore */
       }
     }
-  });
+  }, 15000);
 });

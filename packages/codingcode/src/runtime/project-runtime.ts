@@ -1,40 +1,40 @@
 import { Effect } from 'effect';
 import type { AgentProfile } from '../subagent/registry.js';
-import { EXPLORE_PROFILE, PLAN_PROFILE, registerAll, reset, get, list } from '../subagent/registry.js';
+import { EXPLORE_PROFILE, PLAN_PROFILE, SubagentService } from '../subagent/registry.js';
 import * as agentLoader from '../subagent/loader.js';
 import type { ToolVisibilityPolicy } from '../tools/types.js';
 import { HookService } from '../hooks/registry.js';
 import { McpService } from '../mcp/index.js';
-import { evictProjectRules } from '../rules/index.js';
+import { RulesService } from '../rules/index.js';
 import { normalizePath } from '../core/path.js';
 
-function buildProfiles(projectPath: string): AgentProfile[] {
-  const profiles: AgentProfile[] = [];
-  profiles.push(EXPLORE_PROFILE);
-  profiles.push(PLAN_PROFILE);
-
+/** 构建全局 profile：内置 + ~/.codingcode/agents/ */
+function buildGlobalProfiles(): AgentProfile[] {
+  const profiles: AgentProfile[] = [EXPLORE_PROFILE, PLAN_PROFILE];
   for (const p of agentLoader.loadGlobalAgentProfiles()) {
     if (!profiles.find((existing) => existing.name === p.name)) {
-      profiles.push(p);
-    }
-  }
-  for (const p of agentLoader.loadAgentProfiles(projectPath)) {
-    const idx = profiles.findIndex((existing) => existing.name === p.name);
-    if (idx >= 0) {
-      profiles[idx] = p;
-    } else {
       profiles.push(p);
     }
   }
   return profiles;
 }
 
+/** 构建项目级 profile：<project>/.codingcode/agents/ */
+function buildProjectProfiles(projectPath: string): AgentProfile[] {
+  return agentLoader.loadAgentProfiles(projectPath);
+}
+
 export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>()('ProjectRuntime', {
   effect: Effect.gen(function* () {
     const hooks = yield* HookService;
     const mcp = yield* McpService;
+    const subagent = yield* SubagentService;
+    const rules = yield* RulesService;
     const sessionAgentProfiles = new Map<string, AgentProfile>();
     const prepared = new Set<string>();
+
+    // 启动时注册全局 profile（内置 + ~/.codingcode/agents/），只做一次
+    subagent.registerGlobal(buildGlobalProfiles());
 
     return {
       prepareProject: (projectPath: string): Effect.Effect<void> =>
@@ -42,12 +42,10 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           const norm = normalizePath(projectPath);
           if (prepared.has(norm)) return;
           prepared.add(norm);
-          evictProjectRules(norm);
+          rules.evictProjectRules(norm);
           yield* hooks.reloadUserHooks(norm).pipe(Effect.catchAll(() => Effect.void));
           yield* mcp.syncConnections(norm).pipe(Effect.catchAll(() => Effect.void));
-          const profiles = buildProfiles(norm);
-          reset();
-          registerAll(profiles);
+          subagent.registerProject(norm, buildProjectProfiles(norm));
         }),
 
       resolveMainAgentProfile: (projectPath: string, sessionId: string): AgentProfile | undefined => {
@@ -56,25 +54,22 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
         return agentLoader.loadMainAgentProfile(projectPath);
       },
 
-      resolveSubagentProfile: (_projectPath: string, name: string): AgentProfile | undefined => {
-        const cached = get(name);
-        if (cached) return cached;
-        const norm = normalizePath(_projectPath);
+      resolveSubagentProfile: (projectPath: string, name: string): AgentProfile | undefined => {
+        const norm = normalizePath(projectPath);
         if (!prepared.has(norm)) {
-          const profiles = buildProfiles(norm);
-          registerAll(profiles);
+          subagent.registerProject(norm, buildProjectProfiles(norm));
+          prepared.add(norm);
         }
-        return get(name);
+        return subagent.get(norm, name);
       },
 
       listAgentProfiles: (projectPath: string): AgentProfile[] => {
         const normalized = normalizePath(projectPath);
         if (!prepared.has(normalized)) {
-          const profiles = buildProfiles(normalized);
-          registerAll(profiles);
+          subagent.registerProject(normalized, buildProjectProfiles(normalized));
           prepared.add(normalized);
         }
-        return list();
+        return subagent.list(normalized);
       },
 
       getToolPolicy: (profile: AgentProfile | undefined): ToolVisibilityPolicy => ({
@@ -98,8 +93,8 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
         Effect.sync(() => {
           const norm = normalizePath(projectPath);
           prepared.delete(norm);
-          reset();
-          evictProjectRules(norm);
+          subagent.resetProject(norm);
+          rules.evictProjectRules(norm);
         }),
     };
   }),

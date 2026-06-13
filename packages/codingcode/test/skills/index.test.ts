@@ -1,17 +1,32 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { SkillService } from '../../src/skills/service.js';
 
 const TEST_ROOT = process.cwd();
 const TEST_CODINGCODE_DIR = join(TEST_ROOT, '.codingcode');
 
+const SkillTestLayer = SkillService.Default;
+
 const runWithSkill = <A>(f: (skill: SkillService) => Effect.Effect<A>): A =>
   Effect.runSync(Effect.gen(function* () {
     const skill = yield* SkillService;
     return yield* f(skill);
-  }).pipe(Effect.provide(SkillService.Default)));
+  }).pipe(Effect.provide(SkillTestLayer)));
+
+/** Run multiple operations against the same SkillService instance (shared cache). */
+const runWithSharedSkill = <A>(...ops: Array<(skill: SkillService) => Effect.Effect<unknown>>): A[] =>
+  Effect.runSync(
+    Effect.gen(function* () {
+      const skill = yield* SkillService;
+      const results: A[] = [];
+      for (const op of ops) {
+        results.push(yield* op(skill) as A);
+      }
+      return results;
+    }).pipe(Effect.provide(SkillTestLayer))
+  );
 
 describe('SkillService', () => {
   beforeEach(() => {
@@ -54,21 +69,25 @@ Test the skill system.
   });
 
   it('should cache skills per session (added files not visible without new session)', () => {
-    const before = runWithSkill((s) => s.getAll(TEST_ROOT));
-
-    const dir = join(TEST_CODINGCODE_DIR, 'skills', 'dynamic-skill');
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(
-      join(dir, 'SKILL.md'),
-      `---
+    const [before, after] = runWithSharedSkill(
+      (s) => s.getAll(TEST_ROOT),
+      (s) => {
+        // Add a new skill file after the first read
+        const dir = join(TEST_CODINGCODE_DIR, 'skills', 'dynamic-skill');
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(
+          join(dir, 'SKILL.md'),
+          `---
 name: dynamic-skill
 description: "Added at runtime"
 ---
 Dynamic skill body.
 `
+        );
+        return s.getAll(TEST_ROOT);
+      }
     );
 
-    const after = runWithSkill((s) => s.getAll(TEST_ROOT));
     expect(after.length).toBe(before.length);
   });
 

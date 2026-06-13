@@ -1,7 +1,7 @@
 import { join } from 'path';
 import type { Message } from '../core/types.js';
 import type { SessionEvent, AssistantEvent, TokenUsage } from './types.js';
-import { readHistory, resolveSessionDir } from './io.js';
+import { readHistory, resolveSessionDir } from './file-ops.js';
 import { getContextConfig } from '../context/config.js';
 
 const COMPACTABLE_TOOLS = new Set([

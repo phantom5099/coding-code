@@ -22,7 +22,7 @@ export interface ToolDefinition {
   parameters: z.ZodTypeAny;
   /** Optional JSON Schema override. When absent, the schema is auto-generated from `parameters`. */
   jsonSchema?: Record<string, unknown>;
-  execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError>;
+  execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, any>;
 }
 
 export interface ToolVisibilityPolicy {

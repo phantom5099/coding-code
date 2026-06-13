@@ -3,7 +3,7 @@ import { HookService } from '../hooks/registry.js';
 import type { PermissionMode, PermissionRule, ApprovalDecision } from './types.js';
 import { createRuleEngine, type RuleEngine } from './rule-engine.js';
 import { DEFAULT_DENY_RULES, READONLY_TOOL_NAMES, DANGEROUS_TOOL_NAMES } from './presets.js';
-import { runPipeline, type PipelineHooks } from './pipeline.js';
+import { runPipeline } from './pipeline.js';
 import { ApprovalWaitService } from './async-confirm.js';
 
 export class ApprovalService extends Effect.Service<ApprovalService>()('Approval', {
@@ -14,22 +14,6 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
     const destructiveTools = new Set(DANGEROUS_TOOL_NAMES);
     const readonlyTools = new Set(READONLY_TOOL_NAMES);
     let _globalPermissionMode: PermissionMode = 'default';
-
-    function buildPipelineHooks(): PipelineHooks {
-      return {
-        emitPreToolUseDecision: (payload) =>
-          Effect.gen(function* () {
-            const result = yield* hooks.emitDecision('tool.approval.pre', payload);
-            if (result && result.decision === 'continue') {
-              return null;
-            }
-            return result;
-          }),
-
-        recordAudit: (entry) =>
-          hooks.emit('tool.approval.post', entry as unknown as Record<string, unknown>),
-      };
-    }
 
     function makeForkedService(
       engine: RuleEngine,
@@ -46,29 +30,27 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
           callId?: string;
           sessionId: string;
         }): Effect.Effect<ApprovalDecision> =>
-          Effect.gen(function* () {
-            return yield* runPipeline(
-              {
-                tool: request.tool,
-                input: request.input,
-                context: request.context,
-                callId: request.callId,
-              },
-              {
-                ruleEngine: engine,
-                readonlyTools: roTools,
-                destructiveTools: destTools,
-                permissionMode: currentPermMode,
-                hooks: buildPipelineHooks(),
-                asyncConfirm: Effect.runSync(approvalWait.hasEmitter(request.sessionId)),
-                asyncConfirmService: approvalWait,
-                onAlways: (rule) => engine.addRule(rule),
-                onNever: (rule) => engine.addRule(rule),
-                sessionId: request.sessionId,
-                callId: request.callId,
-              }
-            );
-          }),
+          runPipeline(
+            {
+              tool: request.tool,
+              input: request.input,
+              context: request.context,
+              callId: request.callId,
+            },
+            {
+              ruleEngine: engine,
+              readonlyTools: roTools,
+              destructiveTools: destTools,
+              permissionMode: currentPermMode,
+              onAlways: (rule) => engine.addRule(rule),
+              onNever: (rule) => engine.addRule(rule),
+              sessionId: request.sessionId,
+              callId: request.callId,
+            }
+          ).pipe(
+            Effect.provideService(HookService, hooks),
+            Effect.provideService(ApprovalWaitService, approvalWait)
+          ),
         addRule: (rule: PermissionRule): Effect.Effect<void> =>
           Effect.sync(() => engine.addRule(rule)),
         removeRule: (id: string): Effect.Effect<void> => Effect.sync(() => engine.removeRule(id)),
@@ -116,29 +98,27 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
         callId?: string;
         sessionId: string;
       }): Effect.Effect<ApprovalDecision> =>
-        Effect.gen(function* () {
-          return yield* runPipeline(
-            {
-              tool: request.tool,
-              input: request.input,
-              context: request.context,
-              callId: request.callId,
-            },
-            {
-              ruleEngine,
-              readonlyTools,
-              destructiveTools,
-              permissionMode: _globalPermissionMode,
-              hooks: buildPipelineHooks(),
-              asyncConfirm: Effect.runSync(approvalWait.hasEmitter(request.sessionId)),
-              asyncConfirmService: approvalWait,
-              onAlways: (rule) => ruleEngine.addRule(rule),
-              onNever: (rule) => ruleEngine.addRule(rule),
-              sessionId: request.sessionId,
-              callId: request.callId,
-            }
-          );
-        }),
+        runPipeline(
+          {
+            tool: request.tool,
+            input: request.input,
+            context: request.context,
+            callId: request.callId,
+          },
+          {
+            ruleEngine,
+            readonlyTools,
+            destructiveTools,
+            permissionMode: _globalPermissionMode,
+            onAlways: (rule) => ruleEngine.addRule(rule),
+            onNever: (rule) => ruleEngine.addRule(rule),
+            sessionId: request.sessionId,
+            callId: request.callId,
+          }
+        ).pipe(
+          Effect.provideService(HookService, hooks),
+          Effect.provideService(ApprovalWaitService, approvalWait)
+        ),
 
       addRule: (rule: PermissionRule): Effect.Effect<void> =>
         Effect.sync(() => ruleEngine.addRule(rule)),

@@ -5,9 +5,9 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
-import { findSessionIndex } from '../../src/session/io.js';
+import { findSessionIndex } from '../../src/session/file-ops.js';
 import { findLastVisibleAssistantUsage, buildMessages } from '../../src/session/messages.js';
-import { estimateTokensForContent, estimateTokens } from '../../src/context/util.js';
+import { estimateTokensForContent, estimateTokens } from '../../src/core/util.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 

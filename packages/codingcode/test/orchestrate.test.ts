@@ -4,6 +4,12 @@ import { HookService } from '../src/hooks/registry.js';
 import { SessionService } from '../src/session/store.js';
 import { SkillService } from '../src/skills/service.js';
 import { CheckpointService } from '../src/checkpoint/checkpoint-service.js';
+import { ProjectRuntimeService } from '../src/runtime/project-runtime.js';
+import { TodoService } from '../src/agent/todo.js';
+import { ContextService } from '../src/context/service.js';
+import { MemoryService } from '../src/memory/index.js';
+import { RulesService } from '../src/rules/index.js';
+import { LLMFactoryService } from '../src/llm/factory.js';
 
 vi.mock('../src/context/organizer.js', () => ({
   assemblePayload: vi.fn(() => ({
@@ -150,6 +156,7 @@ const MockMcpLayer = Layer.succeed(McpService, {
 } as any);
 
 vi.mock('../src/runtime/project-runtime.js', () => ({
+  ProjectRuntimeService: Context.GenericTag<any>('ProjectRuntime'),
   prepareProject: vi.fn(() => Effect.void),
   resolveMainAgentProfile: vi.fn((_p: string, _s: string) => undefined),
   resolveSubagentProfile: vi.fn((_p: string, _n: string) => undefined),
@@ -210,6 +217,56 @@ const MockApprovalLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, MockApprovalWaitLayer))
 );
 
+const MockProjectRuntimeLayer = Layer.succeed(ProjectRuntimeService, {
+  prepareProject: () => Effect.void,
+  resolveMainAgentProfile: () => undefined,
+  resolveSubagentProfile: () => undefined,
+  listAgentProfiles: () => [],
+  getToolPolicy: () => ({ allowedTools: undefined, allowedMcpServers: undefined, allowToolSearch: true, allowDeferredTools: false }),
+  setSessionProfile: () => {},
+  getSessionProfile: () => undefined,
+  disposeSession: () => Effect.void,
+  disposeProject: () => Effect.void,
+} as any);
+
+const MockTodoLayer = Layer.succeed(TodoService, {
+  read: () => [],
+  write: () => {},
+  reset: () => {},
+} as any);
+
+const MockContextLayer = Layer.succeed(ContextService, {
+  assemblePayload: () => ({
+    messages: [{ role: 'user' as const, content: 'hi' }],
+    compactedEvents: [],
+    promptEstimate: 0,
+    currentTurnId: 0,
+    compactedTurnIds: new Set<number>(),
+  }),
+  compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 }),
+  compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 }),
+} as any);
+
+const MockMemoryLayer = Layer.succeed(MemoryService, {
+  getMemoryEnabled: () => false,
+  setMemoryEnabled: () => {},
+  loadMemoryForPrompt: () => '',
+  flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+} as any);
+
+const MockRulesLayer = Layer.succeed(RulesService, {
+  getAllRules: () => '',
+  evictProjectRules: () => {},
+} as any);
+
+const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
+  listModels: () => Effect.succeed([]),
+  findModel: () => Effect.succeed(null),
+  getActiveEntry: () => Effect.fail(new Error('no active model')),
+  setActiveEntry: () => Effect.void,
+  createClient: () => Effect.fail(new Error('no factory')),
+} as any);
+
 const AllDeps = Layer.mergeAll(
   MockToolExecutorLayer,
   HookLayer,
@@ -218,7 +275,13 @@ const AllDeps = Layer.mergeAll(
   MockApprovalLayer,
   MockApprovalWaitLayer,
   MockCheckpointLayer,
-  MockSkillLayer
+  MockSkillLayer,
+  MockProjectRuntimeLayer,
+  MockTodoLayer,
+  MockContextLayer,
+  MockMemoryLayer,
+  MockRulesLayer,
+  MockLLMFactoryLayer
 );
 
 const TestLayer = Layer.mergeAll(AgentLayer, AllDeps);

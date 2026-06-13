@@ -7,6 +7,24 @@ import { Result } from '../../src/core/result.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { ToolExecutorService } from '../../src/tools/executor.js';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
+import { TodoService } from '../../src/agent/todo.js';
+import { ContextService } from '../../src/context/service.js';
+import { MemoryService } from '../../src/memory/index.js';
+
+vi.mock('@codingcode/infra/config', () => ({
+  loadConfig: () => ({
+    context: {
+      microCompactThreshold: 0.7,
+      microCompactMinChars: 200,
+      compactionThreshold: 0.8,
+      keepRecentTurns: 10,
+      compactionModel: '',
+      reactiveCompactMaxRetries: 1,
+    },
+    memory: { enabled: false, model: '', projectFile: '', userFile: '', maxBytes: 16384, promptMaxBytes: 8192, extraTypes: [], disabledTypes: [] },
+    server: { port: 8080 },
+  }),
+}));
 
 vi.mock('../../src/context/organizer.js', () => ({
   assemblePayload: vi.fn(() => ({
@@ -136,6 +154,28 @@ const AllMockLayer = Layer.mergeAll(
     getSessionProfile: () => undefined,
     disposeSession: () => Effect.void,
     disposeProject: () => Effect.void,
+  } as any),
+  Layer.succeed(TodoService, {
+    read: () => [],
+    write: () => {},
+    reset: () => {},
+  } as any),
+  Layer.succeed(ContextService, {
+    assemblePayload: () => ({
+      messages: [{ role: 'user' as const, content: 'hi' }],
+      compactedEvents: [],
+      promptEstimate: 10,
+      currentTurnId: 1,
+      compactedTurnIds: new Set<number>(),
+    }),
+    compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
+    compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
+  } as any),
+  Layer.succeed(MemoryService, {
+    getMemoryEnabled: () => false,
+    setMemoryEnabled: () => {},
+    loadMemoryForPrompt: () => '',
+    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
   } as any)
 );
 

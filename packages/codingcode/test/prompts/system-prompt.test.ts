@@ -97,8 +97,14 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes user-defined rules section when rules exist', () => {
-    const prompt = buildSystemPrompt(baseOpts);
+    const prompt = buildSystemPrompt({ ...baseOpts, rules: 'Always use TypeScript strict mode' });
     expect(prompt).toContain('User-defined Rules');
+    expect(prompt).toContain('Always use TypeScript strict mode');
+  });
+
+  it('omits user-defined rules section when rules is undefined', () => {
+    const prompt = buildSystemPrompt(baseOpts);
+    expect(prompt).not.toContain('User-defined Rules');
   });
 
   it('includes available subagents section when profiles are provided', () => {

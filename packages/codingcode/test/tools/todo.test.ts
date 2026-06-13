@@ -1,13 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { z } from 'zod';
-import { sharedTodoStore } from '../../src/agent/todo.js';
+import { TodoService } from '../../src/agent/todo.js';
 import { todoWriteTool } from '../../src/tools/domains/self/todo-write.js';
-import { AgentError } from '../../src/core/error.js';
-
-beforeEach(() => {
-  sharedTodoStore.reset();
-});
 
 describe('todo_write tool', () => {
   it('is a core tool (not deferred)', () => {
@@ -25,7 +19,7 @@ describe('todo_write tool', () => {
           ],
         },
         { sessionId: 'test-agent' }
-      )
+      ).pipe(Effect.provide(TodoService.Default))
     );
     expect(result).toBe('pending=1 in_progress=1 completed=1');
   });
@@ -64,7 +58,9 @@ describe('todo_write tool', () => {
 
   it('fails with AgentError if sessionId is missing', async () => {
     const exit = await Effect.runPromiseExit(
-      todoWriteTool.execute({ plan: [{ step: 'x', status: 'pending' }] }, {})
+      todoWriteTool.execute({ plan: [{ step: 'x', status: 'pending' }] }, {}).pipe(
+        Effect.provide(TodoService.Default)
+      )
     );
     expect(exit._tag).toBe('Failure');
   });

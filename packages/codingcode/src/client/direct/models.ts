@@ -1,31 +1,38 @@
-import { Effect } from 'effect';
-import {
-  getActiveEntry,
-  getLLMClient,
-  listModels,
-  switchModel as switchActiveModel,
-} from '../../llm/factory.js';
+import { Effect, ManagedRuntime } from 'effect';
+import { LLMFactoryService } from '../../llm/factory.js';
+
+type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export interface ModelClient {
   listModels(): Promise<any>;
   switchModel(input: { id: string }): Promise<void>;
 }
 
-export function createDirectModelClient(): ModelClient {
+export function createDirectModelClient(rt: ManagedRt): ModelClient {
   return {
     async listModels() {
-      const modelsResult = Effect.runSync(listModels().pipe(Effect.either));
-      if (modelsResult._tag === 'Left') throw modelsResult.left;
-      const activeResult = Effect.runSync(getActiveEntry().pipe(Effect.either));
-      return {
-        models: modelsResult.right,
-        activeId: activeResult._tag === 'Right' ? activeResult.right.id : null,
-      };
+      return rt.runPromise(
+        Effect.gen(function* () {
+          const factory = yield* LLMFactoryService;
+          const modelsResult = yield* Effect.either(factory.listModels());
+          if (modelsResult._tag === 'Left') throw modelsResult.left;
+          const activeResult = yield* Effect.either(factory.getActiveEntry());
+          return {
+            models: modelsResult.right,
+            activeId: activeResult._tag === 'Right' ? activeResult.right.id : null,
+          };
+        })
+      );
     },
 
     async switchModel({ id }) {
-      const switchResult = Effect.runSync(switchActiveModel(id).pipe(Effect.either));
-      if (switchResult._tag === 'Left') throw switchResult.left;
+      return rt.runPromise(
+        Effect.gen(function* () {
+          const factory = yield* LLMFactoryService;
+          const switchResult = yield* Effect.either(factory.switchModel(id));
+          if (switchResult._tag === 'Left') throw switchResult.left;
+        })
+      );
     },
   };
 }

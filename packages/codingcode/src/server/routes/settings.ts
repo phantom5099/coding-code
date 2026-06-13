@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { Effect } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 import { SkillService } from '../../skills/service.js';
-import { resolveWorkspaceCwd } from '../../core/workspace.js';
+import { WorkspaceService } from '../../core/workspace.js';
 import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
 import type { McpServerConfig } from '../../mcp/types.js';
 import type { AgentProfile } from '../../subagent/registry.js';
@@ -70,10 +70,16 @@ import {
   updateMemoryExtraType as _updateMemoryExtraType,
   deleteMemoryExtraType as _deleteMemoryExtraType,
 } from '../../memory/config.js';
-import { getMemoryEnabled, setMemoryEnabled } from '../../memory/index.js';
-import { runWithLayer, errorResponse } from '../util.js';
+import { MemoryService } from '../../memory/index.js';
+import { createRunWithLayer, errorResponse } from '../util.js';
 
-export const settingsRouter = new Hono();
+type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
+
+export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
+  const settingsRouter = new Hono();
+  const runWithLayer = createRunWithLayer(rt);
+  const ws = await rt.runPromise(Effect.gen(function* () { return yield* WorkspaceService; }));
+  const resolveWorkspaceCwd = (override?: string) => ws.resolveWorkspaceCwd(override);
 
 // ---- Helpers for global vs project ----
 
@@ -262,8 +268,9 @@ settingsRouter.get('/memory/config', (c) => {
 
 settingsRouter.post('/memory/enabled', async (c) => {
   const body = (await c.req.json()) as { enabled: boolean };
-  setMemoryEnabled(body.enabled);
-  return c.json({ enabled: getMemoryEnabled() });
+  await rt.runPromise(Effect.gen(function* () { const m = yield* MemoryService; m.setMemoryEnabled(body.enabled); }));
+  const enabled = await rt.runPromise(Effect.gen(function* () { const m = yield* MemoryService; return m.getMemoryEnabled(); }));
+  return c.json({ enabled });
 });
 
 settingsRouter.post('/memory/type-disabled', async (c) => {
@@ -719,3 +726,6 @@ settingsRouter.post('/subagent/enabled/reset', async (c) => {
   resetProjectSubagentEnabledState(resolveWorkspaceCwd(rawCwd));
   return c.json({ ok: true });
 });
+
+  return settingsRouter;
+}

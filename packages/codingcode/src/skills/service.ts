@@ -3,27 +3,27 @@ import { discoverSkillDirs, resolveSkillDisabled, setProjectSkillDisabledState }
 import { loadSkill } from './loader.js';
 import type { Skill } from './types.js';
 
-const cachedByProject = new Map<string, Skill[]>();
-
-function readAll(projectPath: string): Skill[] {
-  const cached = cachedByProject.get(projectPath);
-  if (cached) return cached;
-  const dirs = discoverSkillDirs(projectPath);
-  const skills: Skill[] = [];
-  for (const { dirPath } of dirs) {
-    const skill = loadSkill(dirPath);
-    if (skill) skills.push(skill);
-  }
-  cachedByProject.set(projectPath, skills);
-  return skills;
-}
-
 function filterEnabled(projectPath: string, skills: Skill[]): Skill[] {
   return skills.filter((s) => !resolveSkillDisabled(projectPath, s.name));
 }
 
 export class SkillService extends Effect.Service<SkillService>()('Skill', {
   effect: Effect.gen(function* () {
+    const cachedByProject = new Map<string, Skill[]>();
+
+    function readAll(projectPath: string): Skill[] {
+      const cached = cachedByProject.get(projectPath);
+      if (cached) return cached;
+      const dirs = discoverSkillDirs(projectPath);
+      const skills: Skill[] = [];
+      for (const { dirPath } of dirs) {
+        const skill = loadSkill(dirPath);
+        if (skill) skills.push(skill);
+      }
+      cachedByProject.set(projectPath, skills);
+      return skills;
+    }
+
     return {
       getAll: (projectPath: string) => Effect.sync(() => filterEnabled(projectPath, readAll(projectPath))),
 

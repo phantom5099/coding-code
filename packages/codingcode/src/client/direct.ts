@@ -1,15 +1,16 @@
-import { Effect } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 import type { AgentEvent } from '../agent/agent.js';
 import { sendMessage } from '../agent/agent.js';
-import { AppLayer } from '../layer.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
-import { getLLMClient } from '../llm/factory.js';
-import { getWorkspaceCwd } from '../core/workspace.js';
+import { LLMFactoryService } from '../llm/factory.js';
+import { WorkspaceService } from '../core/workspace.js';
 import { ApprovalService } from '../approval/index.js';
 import { ApprovalWaitService } from '../approval/async-confirm.js';
 import type { PermissionMode } from '../approval/types.js';
 import type { StreamChunk, AgentClient } from './types.js';
 import { createDirectClients } from './direct/index.js';
+
+type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export async function* agentEventToStreamChunk(
   source: AsyncGenerator<AgentEvent, any, unknown>
@@ -75,15 +76,15 @@ export async function* agentEventToStreamChunk(
   }
 }
 
-export async function createDirectClient(llm: any): Promise<AgentClient> {
+export async function createDirectClient(llm: any, rt: ManagedRt): Promise<AgentClient> {
   let currentSessionId = '';
   let activeLlm = llm;
 
-  const runWithLayer = <T>(eff: any): Promise<T> =>
-    Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
+  const runWithLayer = <T>(eff: any): Promise<T> => rt.runPromise(eff);
 
-  const clients = createDirectClients(activeLlm, runWithLayer);
-  const cwd = () => getWorkspaceCwd();
+  const clients = createDirectClients(activeLlm, rt);
+  const cwdValue = await rt.runPromise(Effect.gen(function* () { const ws = yield* WorkspaceService; return ws.getWorkspaceCwd(); }));
+  const cwd = () => cwdValue;
 
   return {
     getSessionId() {
@@ -91,8 +92,8 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
-      const waitService: any = await Effect.runPromise(
-        Effect.gen(function* () { return yield* ApprovalWaitService; }).pipe(Effect.provide(AppLayer) as any)
+      const waitService: any = await rt.runPromise(
+        Effect.gen(function* () { return yield* ApprovalWaitService; })
       );
       const program = sendMessage(currentSessionId || undefined, input, cwd(), activeLlm);
       const { stream: agentGen, sessionId } = (await runWithLayer(program)) as any;
@@ -173,7 +174,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
 
     async switchModel(id: string) {
       await clients.models.switchModel({ id });
-      activeLlm = await Effect.runPromise(getLLMClient());
+      activeLlm = await rt.runPromise(Effect.gen(function* () { const factory = yield* LLMFactoryService; return yield* factory.getLLMClient(); }));
     },
 
     async getCheckpoints() {
@@ -432,13 +433,13 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async getPermissionMode(): Promise<PermissionMode> {
-      const approval: any = await Effect.runPromise(Effect.gen(function* () { return yield* ApprovalService; }).pipe(Effect.provide(AppLayer) as any));
+      const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
       return approval.getPermissionMode();
     },
 
     async setPermissionMode(mode: PermissionMode): Promise<void> {
-      const approval: any = await Effect.runPromise(Effect.gen(function* () { return yield* ApprovalService; }).pipe(Effect.provide(AppLayer) as any));
-      await Effect.runPromise(approval.setPermissionMode(mode));
+      const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
+      await rt.runPromise(approval.setPermissionMode(mode));
     },
   };
 }

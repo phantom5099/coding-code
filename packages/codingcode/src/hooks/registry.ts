@@ -50,10 +50,9 @@ type ProjectPath = string;
 type SessionId = string;
 type HookName = string;
 
-let entryCounter = 0;
-
 export class HookService extends Effect.Service<HookService>()('HookService', {
   effect: Effect.gen(function* () {
+    let entryCounter = 0;
     const globalHooks = new Map<HookPoint, HandlerEntry[]>();
     const hooksByProject = new Map<ProjectPath, Map<HookPoint, HandlerEntry[]>>();
     const hooksBySession = new Map<SessionId, Map<HookPoint, HandlerEntry[]>>();

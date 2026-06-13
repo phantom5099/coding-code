@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
+import { ContextService } from '../../../src/context/service.js';
+import { SessionService } from '../../../src/session/store.js';
+import { LLMFactoryService } from '../../../src/llm/factory.js';
 
-const { mockCompactWithLLM, mockLLM } = vi.hoisted(() => ({
-  mockCompactWithLLM: vi.fn(),
+const { mockLLM } = vi.hoisted(() => ({
   mockLLM: {
     complete: vi.fn(() =>
       Effect.succeed({ content: '<summary>compacted</summary>' })
@@ -24,7 +26,7 @@ const { mockCompactWithLLM, mockLLM } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../../../src/session/io.js', async (importOriginal) => {
+vi.mock('../../../src/session/file-ops.js', async (importOriginal) => {
   const actual = await importOriginal();
   const mockResolveSessionDir = vi.fn((_sessionId: string) => '/tmp/sessions');
   return {
@@ -47,7 +49,7 @@ vi.mock('../../../src/llm/llm-resolver.js', async (importOriginal) => {
   const actual: any = await importOriginal();
   return {
     ...actual,
-    resolveLLM: vi.fn(() => Promise.resolve(mockLLM)),
+    resolveLLM: vi.fn(() => Effect.succeed(mockLLM)),
   };
 });
 
@@ -59,15 +61,34 @@ vi.mock('fs', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../src/context/util.js', () => ({
+vi.mock('../../../src/core/util.js', () => ({
   estimateTokens: vi.fn(),
   estimateMessageTokens: vi.fn(),
   estimateTokensForContent: vi.fn(),
 }));
 
-import { compactIfNeeded } from '../../../src/context/compressor.js';
-import { findSessionIndex } from '../../../src/session/io.js';
-import { estimateTokens, estimateMessageTokens } from '../../../src/context/util.js';
+import { findSessionIndex } from '../../../src/session/file-ops.js';
+import { estimateTokens, estimateMessageTokens } from '../../../src/core/util.js';
+
+const TestLayer = Layer.merge(
+  SessionService.Default,
+  Layer.succeed(LLMFactoryService, {
+    listModels: () => Effect.succeed([]),
+    findModel: () => Effect.succeed(null),
+    getActiveEntry: () => Effect.fail(new Error('no active model')),
+    switchModel: () => Effect.fail(new Error('no models')),
+    createClient: () => Effect.fail(new Error('no client')),
+    getLLMClient: () => Effect.fail(new Error('no client')),
+  } as any)
+);
+
+async function getCtxService(): Promise<ContextService> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      return yield* ContextService;
+    }).pipe(Effect.provide(ContextService.Default), Effect.provide(TestLayer))
+  );
+}
 
 function config(threshold: number, maxTokens = 10000) {
   return {
@@ -82,37 +103,32 @@ function config(threshold: number, maxTokens = 10000) {
 
 describe('compactIfNeeded', () => {
   beforeEach(() => {
-    mockCompactWithLLM.mockClear();
     (findSessionIndex as any).mockReturnValue({ currentTurnId: 10 });
     (estimateTokens as any).mockReturnValue(0);
     (estimateMessageTokens as any).mockReturnValue(50);
-    mockCompactWithLLM.mockResolvedValue({
-      didCompress: true,
-      released: 1000,
-      promptEstimate: 5000,
-    });
   });
 
   it('returns didCompress=false when promptEstimate is below threshold', async () => {
     (estimateTokens as any).mockReturnValue(100);
-    const result = await compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
+    const ctx = await getCtxService();
+    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
     expect(result.promptEstimate).toBe(100);
-    expect(mockCompactWithLLM).not.toHaveBeenCalled();
   });
 
   it('returns didCompress=false when promptEstimate equals threshold', async () => {
     (estimateTokens as any).mockReturnValue(5000);
-    const result = await compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
+    const ctx = await getCtxService();
+    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
-    expect(mockCompactWithLLM).not.toHaveBeenCalled();
   });
 
   it('returns didCompress=true when promptEstimate exceeds threshold', async () => {
     (estimateTokens as any).mockReturnValue(10000);
-    const result = await compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
+    const ctx = await getCtxService();
+    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
     expect(result.didCompress).toBe(true);
     expect(result.released).toBeGreaterThan(0);
     expect(result.promptEstimate).toBeGreaterThanOrEqual(0);
@@ -120,7 +136,8 @@ describe('compactIfNeeded', () => {
 
   it('does not return restoredFiles field (removed)', async () => {
     (estimateTokens as any).mockReturnValue(10000);
-    const result = await compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
+    const ctx = await getCtxService();
+    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
     expect('restoredFiles' in result).toBe(false);
   });
 
@@ -128,17 +145,18 @@ describe('compactIfNeeded', () => {
     (findSessionIndex as any).mockReturnValue({ currentTurnId: 0 });
 
     (estimateTokens as any).mockReturnValue(10000);
-    await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
-    await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
-    await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
+    const ctx = await getCtxService();
+    await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
+    await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
+    await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
 
-    const blocked = await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
+    const blocked = await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
     expect(blocked.didCompress).toBe(false);
 
     const originalNow = Date.now;
     vi.spyOn(Date, 'now').mockReturnValue(originalNow() + 25 * 60 * 60 * 1000);
 
-    const afterTTL = await compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
+    const afterTTL = await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
     expect(afterTTL.didCompress).toBe(false);
 
     vi.restoreAllMocks();

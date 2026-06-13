@@ -1,5 +1,18 @@
-﻿import { describe, it, expect } from 'vitest';
-import { agentRouter } from '../../src/server/routes/agent.js';
+﻿﻿import { describe, it, expect, vi } from 'vitest';
+import { Effect, Layer, ManagedRuntime } from 'effect';
+import { createAgentRouter } from '../../src/server/routes/agent.js';
+import { ApprovalService } from '../../src/approval/index.js';
+import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { HookService } from '../../src/hooks/registry.js';
+
+const MockApprovalLayer = ApprovalService.Default.pipe(
+  Layer.provide(Layer.mergeAll(HookService.Default, ApprovalWaitService.Default))
+);
+
+const TestLayer = Layer.mergeAll(MockApprovalLayer, HookService.Default, ApprovalWaitService.Default);
+
+const rt = ManagedRuntime.make(TestLayer);
+const agentRouter = createAgentRouter(rt);
 
 describe('GET /permission-mode', () => {
   it('returns 200 with current permission mode', async () => {

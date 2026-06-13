@@ -7,15 +7,15 @@ import { SessionService } from '../../../session/store.js';
 import { ApprovalService } from '../../../approval/index.js';
 import { HookService } from '../../../hooks/registry.js';
 import { McpService } from '../../../mcp/index.js';
-import { findModel, createClient } from '../../../llm/factory.js';
+import { LLMFactoryService } from '../../../llm/factory.js';
 import { resolveSubagentEnabled, resolveAgentDisabled } from '../../../subagent/registry.js';
-import { getAllRules } from '../../../rules/index.js';
+import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 
 export function createDispatchAgentTool(): Effect.Effect<
   ToolDefinition,
   never,
-  SessionService | ApprovalService | HookService | McpService | ProjectRuntimeService
+  SessionService | ApprovalService | HookService | McpService | ProjectRuntimeService | LLMFactoryService | RulesService
 > {
   return Effect.gen(function* () {
     const session = yield* SessionService;
@@ -23,6 +23,8 @@ export function createDispatchAgentTool(): Effect.Effect<
     const hooks = yield* HookService;
     const mcp = yield* McpService;
     const runtime = yield* ProjectRuntimeService;
+    const factory = yield* LLMFactoryService;
+    const rulesService = yield* RulesService;
 
     return {
       name: 'dispatch_agent',
@@ -63,11 +65,11 @@ export function createDispatchAgentTool(): Effect.Effect<
 
           let llm = parentLlm;
           if (profile.model) {
-            const entry = findModel(profile.model);
+            const entry = yield* factory.findModel(profile.model);
             if (!entry) {
               return yield* Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Subagent profile "${agentName}" specifies unknown model: ${profile.model}`));
             }
-            llm = yield* createClient(entry);
+            llm = yield* factory.createClient(entry);
           }
 
           // Emit spawn.before hook (decision hook, can deny)
@@ -114,7 +116,8 @@ export function createDispatchAgentTool(): Effect.Effect<
           const mcpTools = mcp.listProjectMcpTools(projectPath);
 
           // Run subagent
-          const systemOverride = buildSubagentPrompt(profile, projectPath);
+          const rulesText = rulesService.getAllRules(projectPath);
+          const systemOverride = buildSubagentPrompt(profile, projectPath, rulesText);
           const stream = agentService.runStream({
             state: childState,
             llm,
@@ -178,7 +181,7 @@ export function createDispatchAgentTool(): Effect.Effect<
   });
 }
 
-function buildSubagentPrompt(profile: { systemPrompt?: string }, projectPath: string): string {
+function buildSubagentPrompt(profile: { systemPrompt?: string }, projectPath: string, rules?: string): string {
   const parts: string[] = [];
 
   if (profile.systemPrompt) {
@@ -190,7 +193,6 @@ function buildSubagentPrompt(profile: { systemPrompt?: string }, projectPath: st
 - Operating system: ${process.platform}
 - Shell: ${process.env.SHELL || process.env.ComSpec || 'bash'}`);
 
-  const rules = getAllRules(projectPath);
   if (rules) {
     parts.push(`## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`);
   }

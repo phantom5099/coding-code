@@ -1,17 +1,36 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Effect } from 'effect';
-
-vi.mock('../../src/layer.js', () => ({
-  AppLayer: {},
-}));
+import { Effect, Layer, ManagedRuntime } from 'effect';
 
 import { createDirectClient, agentEventToStreamChunk } from '../../src/client/direct.js';
 import {
   ApprovalWaitService,
 } from '../../src/approval/async-confirm.js';
 import { AgentError } from '../../src/core/error.js';
+import { WorkspaceService } from '../../src/core/workspace.js';
+import { LLMFactoryService } from '../../src/llm/factory.js';
 
-const TestLayer = ApprovalWaitService.Default;
+const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
+  getWorkspaceCwd: () => '/tmp/test',
+} as any);
+
+const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
+  getLLMClient: () => Effect.succeed(null),
+  listModels: () => Effect.succeed([
+    { id: 'test-model@TEST_KEY', provider: 'test', driver: 'openai', name: 'Test Model', model: 'test-model', base_url: 'http://localhost', api_key_env: 'TEST_KEY', context_window: 128000 },
+  ]),
+  switchModel: (id: string) => Effect.fail(new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /model to list.`)),
+  findModel: () => Effect.succeed(null),
+  getActiveEntry: () => Effect.fail(new AgentError('CONFIG_INVALID', 'No active model configured')),
+  createClient: () => Effect.succeed(null),
+} as any);
+
+const TestLayer = Layer.mergeAll(
+  ApprovalWaitService.Default,
+  MockWorkspaceLayer,
+  MockLLMFactoryLayer
+);
+
+const rt = ManagedRuntime.make(TestLayer);
 
 const noopLlm = {
   completeStream: () => ({
@@ -23,7 +42,7 @@ const noopLlm = {
 describe('createDirectClient model operations', () => {
   it('lists models from the local model catalog without HTTP', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    const client = await createDirectClient(noopLlm);
+    const client = await createDirectClient(noopLlm, rt);
 
     const result = await client.listModels();
 
@@ -37,7 +56,7 @@ describe('createDirectClient model operations', () => {
 
   it('rejects unknown model switches without contacting server', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    const client = await createDirectClient(noopLlm);
+    const client = await createDirectClient(noopLlm, rt);
 
     await expect(client.switchModel('missing-model@MISSING_KEY')).rejects.toThrow('not found');
 
@@ -135,7 +154,7 @@ describe('agentEventToStreamChunk - approval interleaving', () => {
 
 describe('approval buffering - race condition fix', () => {
   const run = <T>(eff: Effect.Effect<T, any, any>): Promise<T> =>
-    Effect.runPromise(eff.pipe(Effect.provide(TestLayer) as any));
+    rt.runPromise(eff);
 
   it('buffers approval request when notify is null', async () => {
     const sessionId = 'buffer-' + Math.random().toString(36).slice(2);

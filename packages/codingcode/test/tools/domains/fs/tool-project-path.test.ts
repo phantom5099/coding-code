@@ -4,7 +4,6 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import { initWorkspace, getWorkspaceCwd } from '../../../../src/core/workspace.js';
 import { readFileTool } from '../../../../src/tools/domains/fs/read.js';
 import { writeFileTool } from '../../../../src/tools/domains/fs/write.js';
 import { editFileTool } from '../../../../src/tools/domains/fs/edit.js';
@@ -26,7 +25,6 @@ describe('tools/domains/fs projectPath isolation', () => {
       '{"active":"p","providers":[]}',
       'utf8'
     );
-    initWorkspace({ processRoot: globalDir, workspaceCwd: globalDir });
   });
 
   afterEach(() => {

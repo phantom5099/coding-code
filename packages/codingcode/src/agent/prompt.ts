@@ -1,4 +1,3 @@
-import { getAllRules } from '../rules/index.js';
 import type { AgentProfile } from '../subagent/registry.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that helps users with software engineering tasks.
@@ -83,6 +82,7 @@ export interface SystemPromptOptions {
   variant?: SystemPromptVariant;
   skillInstruction?: string;
   agentProfiles?: AgentProfile[];
+  rules?: string;
 }
 
 function renderBase(opts: SystemPromptOptions): string {
@@ -95,7 +95,7 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   let prompt = renderBase(opts);
   prompt += `\n\n${SYSTEM_NOTES}`;
 
-  const rules = getAllRules(opts.cwd);
+  const rules = opts.rules;
   if (rules) {
     prompt += `\n\n## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`;
   }

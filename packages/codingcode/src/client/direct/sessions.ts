@@ -1,8 +1,10 @@
-﻿import { Effect } from 'effect';
+﻿﻿import { Effect, ManagedRuntime } from 'effect';
 import { SessionService } from '../../session/store.js';
-import { deleteSession } from '../../session/io.js';
-import { getWorkspaceCwd } from '../../core/workspace.js';
+import { WorkspaceService } from '../../core/workspace.js';
+import { deleteSession } from '../../session/file-ops.js';
 import type { PermissionMode } from '../../approval/types.js';
+
+type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export interface SessionClient {
   createSession(input: {
@@ -48,46 +50,56 @@ export interface SessionClient {
   }): Promise<{ sessionId: string; turns: any[] }>;
 }
 
+function getWorkspaceCwd(rt: ManagedRt): Promise<string> {
+  return rt.runPromise(
+    Effect.gen(function* () {
+      const ws = yield* WorkspaceService;
+      return ws.getWorkspaceCwd();
+    })
+  );
+}
+
 export function createDirectSessionClient(
-  runWithLayer: <T>(eff: any) => Promise<T>
+  rt: ManagedRt
 ): SessionClient {
   return {
     async createSession({ cwd }) {
-      return runWithLayer(
+      return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
           const state = yield* session.create(cwd, 'unknown');
           return { sessionId: state.sessionId };
-        }) as any
+        })
       );
     },
 
     async resumeSession({ sessionId, cwd }) {
-      return runWithLayer(
+      return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
           const state = yield* session.create(cwd, 'unknown', sessionId);
           return yield* session.readHistory(state);
-        }) as any
+        })
       );
     },
 
     async listSessions({ cwd }) {
-      return runWithLayer(
+      return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
           return yield* session.listSessions(cwd);
-        }) as any
+        })
       );
     },
 
     async getSessionHistory({ sessionId }) {
-      return runWithLayer(
+      const cwd = await getWorkspaceCwd(rt);
+      return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(getWorkspaceCwd(), 'unknown', sessionId);
+          const state = yield* session.create(cwd, 'unknown', sessionId);
           return yield* session.readHistory(state);
-        }) as any
+        })
       );
     },
 
@@ -95,23 +107,26 @@ export function createDirectSessionClient(
       deleteSession(sessionId);
     },
 
-    async getSessionPermissionMode({ sessionId }) {
-      return runWithLayer(
+    async getSessionPermissionMode({ sessionId }): Promise<PermissionMode> {
+      const cwd = await getWorkspaceCwd(rt);
+      const mode = await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(getWorkspaceCwd(), 'unknown', sessionId);
+          const state = yield* session.create(cwd, 'unknown', sessionId);
           return yield* session.getPermissionMode(state);
-        }) as any
+        })
       );
+      return mode as PermissionMode;
     },
 
     async setSessionPermissionMode({ sessionId, mode }) {
-      return runWithLayer(
+      const cwd = await getWorkspaceCwd(rt);
+      return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(getWorkspaceCwd(), 'unknown', sessionId);
+          const state = yield* session.create(cwd, 'unknown', sessionId);
           yield* session.setPermissionMode(state, mode);
-        }) as any
+        })
       );
     },
 
@@ -171,13 +186,15 @@ export function createDirectSessionClient(
       };
     },
     async forkSession({ sessionId, atUuid }) {
-      return runWithLayer(
+      const cwd = await getWorkspaceCwd(rt);
+      const newSessionId = await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(getWorkspaceCwd(), 'unknown', sessionId);
+          const state = yield* session.create(cwd, 'unknown', sessionId);
           return yield* session.forkSession(state, atUuid ?? '');
-        }) as any
+        })
       );
+      return { sessionId: newSessionId, turns: [] };
     },
   };
 }

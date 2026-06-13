@@ -1,6 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect, Layer, Queue } from 'effect';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
+import { TodoService } from '../../src/agent/todo.js';
+import { ContextService } from '../../src/context/service.js';
+import { MemoryService } from '../../src/memory/index.js';
+
+vi.mock('@codingcode/infra/config', () => ({
+  loadConfig: () => ({
+    context: {
+      microCompactThreshold: 0.7,
+      microCompactMinChars: 200,
+      compactionThreshold: 0.8,
+      keepRecentTurns: 10,
+      compactionModel: '',
+      reactiveCompactMaxRetries: 1,
+    },
+    memory: { enabled: false, model: '', projectFile: '', userFile: '', maxBytes: 16384, promptMaxBytes: 8192, extraTypes: [], disabledTypes: [] },
+    server: { port: 8080 },
+  }),
+}));
 
 vi.mock('../../src/context/organizer.js', () => ({
   assemblePayload: vi.fn(() => ({
@@ -16,18 +35,23 @@ vi.mock('../../src/context/compressor.js', () => ({
   compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
   compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
 }));
+
 import { Result } from '../../src/core/result.js';
 
-vi.mock('../../src/memory/index.js', () => ({
-  loadMemoryForPrompt: vi.fn(),
-  flushSessionToMemory: vi.fn().mockResolvedValue({ written: false, bytes: 0 }),
-}));
-
 import { agentLoop } from '../../src/agent/agent.js';
-import { loadMemoryForPrompt } from '../../src/memory/index.js';
 import { SessionService } from '../../src/session/store.js';
 
-const AllMockLayer = Layer.mergeAll(
+/** Create a MemoryService mock layer with a controllable loadMemoryForPrompt. */
+function makeMemoryLayer(loadMemoryForPromptFn: (cwd: string) => string) {
+  return Layer.succeed(MemoryService, {
+    getMemoryEnabled: () => false,
+    setMemoryEnabled: () => {},
+    loadMemoryForPrompt: loadMemoryForPromptFn,
+    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+  } as any);
+}
+
+const BaseMockLayer = Layer.mergeAll(
   Layer.succeed(CheckpointService, {
     snapshotBaseline: () => Effect.void,
     snapshotFinal: () => Effect.void,
@@ -36,10 +60,35 @@ const AllMockLayer = Layer.mergeAll(
     recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
     recordUser: () => Effect.succeed({ uuid: 'u1' }),
     recordToolResult: () => Effect.succeed({}),
+  } as any),
+  Layer.succeed(ProjectRuntimeService, {
+    prepareProject: () => Effect.void,
+    resolveMainAgentProfile: () => undefined,
+    resolveSubagentProfile: () => undefined,
+    listAgentProfiles: () => [],
+    getToolPolicy: () => ({ allowedTools: undefined, allowedMcpServers: undefined, allowToolSearch: true, allowDeferredTools: false }),
+    setSessionProfile: () => {},
+    getSessionProfile: () => undefined,
+    disposeSession: () => Effect.void,
+    disposeProject: () => Effect.void,
+  } as any),
+  Layer.succeed(TodoService, {
+    read: () => [],
+    write: () => {},
+    reset: () => {},
+  } as any),
+  Layer.succeed(ContextService, {
+    assemblePayload: () => ({
+      messages: [{ role: 'user' as const, content: 'hi' }],
+      compactedEvents: [],
+      promptEstimate: 10,
+      currentTurnId: 1,
+      compactedTurnIds: new Set<number>(),
+    }),
+    compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
+    compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
   } as any)
 );
-
-const mockLoadMemoryForPrompt = vi.mocked(loadMemoryForPrompt);
 
 const mockHooks = {
   emit: () => Effect.succeed(undefined),
@@ -79,9 +128,11 @@ function makeCapturingLlm() {
   return { llm, captured };
 }
 
-async function runOnce(llm: any, memorySnapshot: string = '') {
+async function runOnce(llm: any, memorySnapshot: string = '', diskMemory: string = '') {
   const state = makeState(memorySnapshot);
   const q = Effect.runSync(Queue.unbounded<any>());
+  const memoryLayer = makeMemoryLayer(() => diskMemory);
+  const fullLayer = Layer.mergeAll(BaseMockLayer, memoryLayer);
   await Effect.runPromise(
     agentLoop(
       null as any,
@@ -90,34 +141,32 @@ async function runOnce(llm: any, memorySnapshot: string = '') {
       0,
       { state, llm },
       q
-    ).pipe(Effect.provide(AllMockLayer)) as any
+    ).pipe(Effect.provide(fullLayer)) as any
   );
 }
 
 describe('Memory snapshot stability', () => {
+
   it('system prompt uses state.memorySnapshot instead of loadMemoryForPrompt', async () => {
-    mockLoadMemoryForPrompt.mockReturnValue('## Long-term Memory\n\nNew content from disk');
     const { llm, captured } = makeCapturingLlm();
-    await runOnce(llm, '## Long-term Memory\n\nOriginal snapshot');
+    await runOnce(llm, '## Long-term Memory\n\nOriginal snapshot', '## Long-term Memory\n\nNew content from disk');
     expect(captured.system).toContain('Original snapshot');
     expect(captured.system).not.toContain('New content from disk');
   });
 
   it('system prompt is byte-identical across consecutive turns with same snapshot', async () => {
-    mockLoadMemoryForPrompt.mockReturnValue('## Long-term Memory\n\nSame content');
     const { llm, captured } = makeCapturingLlm();
-    await runOnce(llm, '## Long-term Memory\n\nFrozen');
+    await runOnce(llm, '## Long-term Memory\n\nFrozen', '## Long-term Memory\n\nSame content');
     const first = captured.system;
     expect(first).toBeDefined();
-    await runOnce(llm, '## Long-term Memory\n\nFrozen');
+    await runOnce(llm, '## Long-term Memory\n\nFrozen', '## Long-term Memory\n\nSame content');
     const second = captured.system;
     expect(second).toBe(first);
   });
 
   it('injects <system-reminder> when memory changed since snapshot', async () => {
-    mockLoadMemoryForPrompt.mockReturnValue('## Long-term Memory\n\nUpdated on disk');
     const { llm, captured } = makeCapturingLlm();
-    await runOnce(llm, '## Long-term Memory\n\nOriginal snapshot');
+    await runOnce(llm, '## Long-term Memory\n\nOriginal snapshot', '## Long-term Memory\n\nUpdated on disk');
     expect(captured.system).toContain('Original snapshot');
     const lastUserMsg = [...(captured.messages ?? [])]
       .reverse()
@@ -128,9 +177,8 @@ describe('Memory snapshot stability', () => {
   });
 
   it('does not inject <system-reminder> when memory matches snapshot', async () => {
-    mockLoadMemoryForPrompt.mockReturnValue('## Long-term Memory\n\nSame');
     const { llm, captured } = makeCapturingLlm();
-    await runOnce(llm, '## Long-term Memory\n\nSame');
+    await runOnce(llm, '## Long-term Memory\n\nSame', '## Long-term Memory\n\nSame');
     const lastUserMsg = [...(captured.messages ?? [])]
       .reverse()
       .find((m: any) => m.role === 'user');
@@ -139,9 +187,8 @@ describe('Memory snapshot stability', () => {
   });
 
   it('does not inject <system-reminder> when both snapshot and current are empty', async () => {
-    mockLoadMemoryForPrompt.mockReturnValue('');
     const { llm, captured } = makeCapturingLlm();
-    await runOnce(llm, '');
+    await runOnce(llm, '', '');
     const lastUserMsg = [...(captured.messages ?? [])]
       .reverse()
       .find((m: any) => m.role === 'user');

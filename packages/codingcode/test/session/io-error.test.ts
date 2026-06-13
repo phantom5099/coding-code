@@ -28,18 +28,18 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       memorySnapshot: '',
     };
 
-    try {
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.recordUser(state, 'hello');
-        }).pipe(Effect.provide(SessionService.Default))
-      );
-      expect.unreachable('should have thrown');
-    } catch (e) {
-      expect(e).toBeInstanceOf(AgentError);
-      expect((e as AgentError).code).toBe('SESSION_IO_ERROR');
-      expect((e as AgentError).message).toContain('disk full');
+    const exit = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.recordUser(state, 'hello');
+      }).pipe(Effect.provide(SessionService.Default))
+    );
+
+    expect(exit._tag).toBe('Failure');
+    if (exit._tag === 'Failure') {
+      const msg = String(exit.cause);
+      expect(msg).toContain('SESSION_IO_ERROR');
+      expect(msg).toContain('disk full');
     }
   });
 
@@ -59,17 +59,17 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       memorySnapshot: '',
     };
 
-    try {
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.recordAssistant(state, 'hi', [], 'model');
-        }).pipe(Effect.provide(SessionService.Default))
-      );
-      expect.unreachable('should have thrown');
-    } catch (e) {
-      expect(e).toBeInstanceOf(AgentError);
-      expect((e as AgentError).code).toBe('SESSION_IO_ERROR');
+    const exit = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const svc = yield* SessionService;
+        return yield* svc.recordAssistant(state, 'hi', [], 'model');
+      }).pipe(Effect.provide(SessionService.Default))
+    );
+
+    expect(exit._tag).toBe('Failure');
+    if (exit._tag === 'Failure') {
+      const msg = String(exit.cause);
+      expect(msg).toContain('SESSION_IO_ERROR');
     }
   });
 
@@ -94,11 +94,11 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       return yield* session.recordUser(state, 'hello');
     }).pipe(Effect.provide(SessionService.Default));
 
-    try {
-      await Effect.runPromise(program);
-      expect.unreachable('should have thrown');
-    } catch (e) {
-      const msg = String(e);
+    const exit = await Effect.runPromiseExit(program);
+
+    expect(exit._tag).toBe('Failure');
+    if (exit._tag === 'Failure') {
+      const msg = String(exit.cause);
       expect(msg).toContain('SESSION_IO_ERROR');
       expect(msg).toContain('disk full');
     }

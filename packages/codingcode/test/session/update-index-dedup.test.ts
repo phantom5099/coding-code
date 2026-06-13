@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 import { encodeProjectPath } from '../../src/core/path.js';
-import * as io from '../../src/session/io.js';
+import * as fileOps from '../../src/session/file-ops.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
@@ -15,12 +15,12 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 }
 
 describe('updateIndex deduplication after removing appendEvent', () => {
-  it('recordUser calls enqueueWrite exactly once', async () => {
+  it('recordUser calls readCurrentIndex exactly once', async () => {
     const slug = randomUUID();
     const dir = join(PROJECT_BASE, slug);
     mkdirSync(dir, { recursive: true });
 
-    const spy = vi.spyOn(io, 'enqueueWrite');
+    const spy = vi.spyOn(fileOps, 'readCurrentIndex');
 
     try {
       const state = await run(
@@ -46,12 +46,12 @@ describe('updateIndex deduplication after removing appendEvent', () => {
     }
   });
 
-  it('recordAssistant calls enqueueWrite exactly once', async () => {
+  it('recordAssistant calls readCurrentIndex exactly once', async () => {
     const slug = randomUUID();
     const dir = join(PROJECT_BASE, slug);
     mkdirSync(dir, { recursive: true });
 
-    const spy = vi.spyOn(io, 'enqueueWrite');
+    const spy = vi.spyOn(fileOps, 'readCurrentIndex');
 
     try {
       const state = await run(
@@ -77,12 +77,12 @@ describe('updateIndex deduplication after removing appendEvent', () => {
     }
   });
 
-  it('hideMessage calls enqueueWrite exactly once', async () => {
+  it('hideMessage calls readCurrentIndex exactly once', async () => {
     const slug = randomUUID();
     const dir = join(PROJECT_BASE, slug);
     mkdirSync(dir, { recursive: true });
 
-    const spy = vi.spyOn(io, 'enqueueWrite');
+    const spy = vi.spyOn(fileOps, 'readCurrentIndex');
 
     try {
       const state = await run(

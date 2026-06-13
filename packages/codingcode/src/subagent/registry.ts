@@ -3,6 +3,7 @@ import { loadConfig, getUserConfigPath } from '@codingcode/infra/config';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { dirname, join } from 'path';
+import { Effect } from 'effect';
 
 export interface AgentProfile {
   name: string;
@@ -178,38 +179,60 @@ export function resolveAgentDisabled(projectCwd: string, agentName: string): boo
   return getGlobalAgentDisabledState(agentName);
 }
 
-// ---- Module-level registry state ----
+// ---- SubagentService: Effect.Service with global + project-level registries ----
 
-const registryMap = new Map<string, AgentProfile>();
+export class SubagentService extends Effect.Service<SubagentService>()('Subagent', {
+  sync: () => {
+    // 全局层：内置 profile + 全局 ~/.codingcode/agents/ profile
+    const globalRegistry = new Map<string, AgentProfile>();
+    // 项目层：按 projectPath 隔离，项目 profile 覆盖同名全局 profile
+    const projectRegistries = new Map<string, Map<string, AgentProfile>>();
 
-export function register(profile: AgentProfile): void {
-  registryMap.set(profile.name, profile);
-}
+    return {
+      /** 注册全局 profile（内置 + ~/.codingcode/agents/），只在启动时调用一次 */
+      registerGlobal(profiles: AgentProfile[]): void {
+        for (const p of profiles) globalRegistry.set(p.name, p);
+      },
 
-export function registerAll(profiles: AgentProfile[]): void {
-  for (const p of profiles) registryMap.set(p.name, p);
-}
+      /** 注册项目级 profile，覆盖同名全局 profile */
+      registerProject(projectPath: string, profiles: AgentProfile[]): void {
+        let projectMap = projectRegistries.get(projectPath);
+        if (!projectMap) {
+          projectMap = new Map();
+          projectRegistries.set(projectPath, projectMap);
+        }
+        for (const p of profiles) projectMap.set(p.name, p);
+      },
 
-export function get(name: string): AgentProfile | undefined {
-  return registryMap.get(name);
-}
+      /** 查找 profile：项目级优先，回退到全局级 */
+      get(projectPath: string, name: string): AgentProfile | undefined {
+        const projectMap = projectRegistries.get(projectPath);
+        if (projectMap) {
+          const fromProject = projectMap.get(name);
+          if (fromProject) return fromProject;
+        }
+        return globalRegistry.get(name);
+      },
 
-export function list(): AgentProfile[] {
-  return Array.from(registryMap.values());
-}
+      /** 列出某项目的全部 profile：项目级覆盖同名全局级 */
+      list(projectPath: string): AgentProfile[] {
+        const result = new Map<string, AgentProfile>(globalRegistry);
+        const projectMap = projectRegistries.get(projectPath);
+        if (projectMap) {
+          for (const [name, profile] of projectMap) {
+            result.set(name, profile);
+          }
+        }
+        return Array.from(result.values());
+      },
 
-export function reset(): void {
-  registryMap.clear();
-}
-
-/** Backward-compat class with static methods delegating to module-level functions. */
-export class SubagentRegistry {
-  static register = register;
-  static registerAll = registerAll;
-  static get = get;
-  static list = list;
-  static reset = reset;
-}
+      /** 清除某项目的注册，不影响其他项目 */
+      resetProject(projectPath: string): void {
+        projectRegistries.delete(projectPath);
+      },
+    };
+  },
+}) {}
 
 export const EXPLORE_PROFILE: AgentProfile = {
   name: 'explore',

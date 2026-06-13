@@ -13,22 +13,22 @@ import { ApprovalWaitService } from '../approval/async-confirm.js';
 import { buildSystemPrompt, type SystemPromptVariant } from './prompt.js';
 import { resolveConfig } from './config.js';
 import { getContextConfig } from '../context/config.js';
-import { sharedTodoStore } from './todo.js';
+import { TodoService } from './todo.js';
 import { HookService } from '../hooks/registry.js';
 import { SkillService } from '../skills/service.js';
 import { McpService } from '../mcp/index.js';
-import { assemblePayload } from '../context/organizer.js';
-import { compactIfNeeded, compactWithLLM } from '../context/compressor.js';
-import { loadMemoryForPrompt, flushSessionToMemory } from '../memory/index.js';
+import { ContextService } from '../context/service.js';
+import { MemoryService } from '../memory/index.js';
 import { createLogger } from '@codingcode/infra/logger';
 import { resolveSubagentEnabled, resolveAgentDisabled } from '../subagent/registry.js';
 import type { ToolVisibilityPolicy } from '../tools/types.js';
 import { ProjectRuntimeService } from '../runtime/project-runtime.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
-import { findModel, createClient } from '../llm/factory.js';
+import { LLMFactoryService } from '../llm/factory.js';
 import { STATIC_BUILTIN_TOOLS } from '../tools/providers.js';
 import { canonicalizeSchema } from '../tools/utils/canonicalize-schema.js';
 import { normalizePath } from '../core/path.js';
+import { RulesService } from '../rules/index.js';
 
 const logger = createLogger();
 
@@ -41,6 +41,9 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
     const session = yield* SessionService;
     const checkpoint = yield* CheckpointService;
     const runtime = yield* ProjectRuntimeService;
+    const todo = yield* TodoService;
+    const context = yield* ContextService;
+    const memory = yield* MemoryService;
     const { maxSteps, maxStopContinuations } = resolveConfig();
 
     const runStream = (opts: RunStreamOptions): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> => {
@@ -59,7 +62,10 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
           Effect.provideService(ApprovalWaitService, approvalWait),
           Effect.provideService(SessionService, session),
           Effect.provideService(CheckpointService, checkpoint),
-          Effect.provideService(ProjectRuntimeService, runtime)
+          Effect.provideService(ProjectRuntimeService, runtime),
+          Effect.provideService(TodoService, todo),
+          Effect.provideService(ContextService, context),
+          Effect.provideService(MemoryService, memory)
         )
       );
 
@@ -118,12 +124,18 @@ export const sendMessage = (
     const approval = yield* ApprovalService;
     const skills = yield* SkillService;
     const runtime = yield* ProjectRuntimeService;
+    const todo = yield* TodoService;
+    const rules = yield* RulesService;
+    const context = yield* ContextService;
+    const memory = yield* MemoryService;
+    const factory = yield* LLMFactoryService;
 
     const normalizedCwd = normalizePath(cwd);
     yield* runtime.prepareProject(normalizedCwd);
     yield* skills.evictProject(normalizedCwd);
 
     const state = yield* session.create(normalizedCwd, llm.modelInfo.model, sessionId);
+    state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
     const sid = state.sessionId;
 
     const profile = runtime.resolveMainAgentProfile(normalizedCwd, state.sessionId);
@@ -133,9 +145,9 @@ export const sendMessage = (
 
     let activeLlm = llm;
     if (profile?.model) {
-      const entry = findModel(profile.model);
+      const entry = yield* factory.findModel(profile.model);
       if (entry) {
-        activeLlm = yield* createClient(entry);
+        activeLlm = yield* factory.createClient(entry);
       }
     }
     const effectiveMaxSteps = profile?.maxSteps;
@@ -161,6 +173,8 @@ export const sendMessage = (
     const turnTitle = actualInput.trim().slice(0, 5) || '(empty)';
     yield* checkpoint.snapshotBaseline(state.cwd, sid, turnId, turnTitle);
 
+    const rulesText = rules.getAllRules(state.cwd);
+
     const stream = agent.runStream({
       state,
       llm: activeLlm,
@@ -171,6 +185,7 @@ export const sendMessage = (
       mcpTools,
       skillInstruction: matchedSkill?.instruction,
       abortSignal: options?.signal,
+      rulesText,
     });
 
     return { stream, sessionId: sid };
@@ -244,6 +259,7 @@ export interface RunStreamOptions {
   maxStepsOverride?: number;
   maxStopContinuations?: number;
   approvalOverride?: any;
+  rulesText?: string;
 }
 
 export function agentLoop(
@@ -253,7 +269,7 @@ export function agentLoop(
   maxStopContinuations: number,
   opts: RunStreamOptions,
   q: Queue.Queue<AgentEvent>,
-): Effect.Effect<Result<string, AgentError>, AgentError, HookService | ToolExecutorService | CheckpointService | SessionService | ProjectRuntimeService> {
+): Effect.Effect<Result<string, AgentError>, AgentError, HookService | ToolExecutorService | CheckpointService | SessionService | ProjectRuntimeService | TodoService | ContextService | MemoryService> {
   const state = opts.state;
   const llm = opts.llm;
   const sessionId = state.sessionId;
@@ -263,7 +279,10 @@ export function agentLoop(
   const checkpoint = yield* CheckpointService;
   const session = yield* SessionService;
   const runtime = yield* ProjectRuntimeService;
-  const { skillInstruction, systemPromptVariant } = opts;
+  const todo = yield* TodoService;
+  const context = yield* ContextService;
+  const memory = yield* MemoryService;
+  const { skillInstruction, systemPromptVariant, rulesText } = opts;
 
   const allAgentProfiles = runtime.listAgentProfiles(projectPath);
   const agentProfiles = resolveSubagentEnabled(projectPath)
@@ -278,6 +297,7 @@ export function agentLoop(
       variant: systemPromptVariant ?? 'default',
       skillInstruction,
       agentProfiles,
+      rules: rulesText,
     });
 
   const memoryBlock = state.memorySnapshot;
@@ -296,10 +316,10 @@ export function agentLoop(
 
   for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
     const { messages } = yield* Effect.sync(() =>
-      assemblePayload(state.sessionId, state.projectPath, config, llm.modelInfo.maxTokens)
+      context.assemblePayload(state.sessionId, state.projectPath, config, llm.modelInfo.maxTokens)
     );
 
-    const currentMemory = yield* Effect.sync(() => loadMemoryForPrompt(projectPath));
+    const currentMemory = yield* Effect.sync(() => memory.loadMemoryForPrompt(projectPath));
     if (currentMemory && currentMemory !== state.memorySnapshot) {
       const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
       if (lastUserMsg) {
@@ -341,7 +361,7 @@ export function agentLoop(
 
       const compressResult = yield* Effect.tryPromise({
         try: () =>
-          compactIfNeeded(
+          context.compactIfNeeded(
             state.sessionId,
             state.projectPath,
             messages,
@@ -360,7 +380,7 @@ export function agentLoop(
         });
 
         const rebuilt = yield* Effect.sync(() =>
-          assemblePayload(state.sessionId, state.projectPath, config, llm.modelInfo.maxTokens)
+          context.assemblePayload(state.sessionId, state.projectPath, config, llm.modelInfo.maxTokens)
         );
         messages.length = 0;
         messages.push(...rebuilt.messages);
@@ -398,7 +418,7 @@ export function agentLoop(
         if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
           const compressResult = yield* Effect.tryPromise({
             try: () =>
-              compactWithLLM(
+              context.compactWithLLM(
                 state.sessionId,
                 state.projectPath,
                 config,
@@ -467,7 +487,7 @@ export function agentLoop(
               turnId: state.currentTurnId,
               status: 'error',
             });
-            flushSessionToMemory(state.sessionId, llm).catch((e) =>
+            memory.flushSessionToMemory(state.sessionId, llm).catch((e) =>
               logger.error('memory flush failed:', e)
             );
             return Result.err(new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded'));
@@ -535,7 +555,7 @@ export function agentLoop(
             messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
           }
           if (!todoPrinted && r.name === 'todo_write') {
-            yield* q.offer({ _tag: 'TodoUpdate', items: sharedTodoStore.read(sessionId) });
+            yield* q.offer({ _tag: 'TodoUpdate', items: todo.read(sessionId) });
             todoPrinted = true;
           }
         }
@@ -566,7 +586,7 @@ export function agentLoop(
             messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
           }
           if (!todoPrinted && r.name === 'todo_write') {
-            yield* q.offer({ _tag: 'TodoUpdate', items: sharedTodoStore.read(sessionId) });
+            yield* q.offer({ _tag: 'TodoUpdate', items: todo.read(sessionId) });
             todoPrinted = true;
           }
         }
@@ -577,7 +597,7 @@ export function agentLoop(
 
     yield* checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
 
-    flushSessionToMemory(state.sessionId, llm).catch((e) =>
+    memory.flushSessionToMemory(state.sessionId, llm).catch((e) =>
       logger.error('memory flush failed:', e)
     );
 
@@ -598,7 +618,7 @@ export function agentLoop(
     turnId: state.currentTurnId,
     status: 'maxSteps',
   });
-  flushSessionToMemory(state.sessionId, llm).catch((e) => logger.error('memory flush failed:', e));
+  memory.flushSessionToMemory(state.sessionId, llm).catch((e) => logger.error('memory flush failed:', e));
   return Result.err(AgentError.maxStepsReached(effectiveMaxSteps));
   }).pipe(
     Effect.interruptible,
@@ -615,7 +635,8 @@ export function agentLoop(
     Effect.ensuring(Effect.gen(function* () {
       const cp = yield* CheckpointService;
       yield* cp.snapshotFinal(projectPath, sessionId, state.currentTurnId).pipe(Effect.ignore);
-      flushSessionToMemory(state.sessionId, llm).catch((e) =>
+      const mem = yield* MemoryService;
+      mem.flushSessionToMemory(state.sessionId, llm).catch((e) =>
         logger.error('memory flush failed:', e)
       );
     }))

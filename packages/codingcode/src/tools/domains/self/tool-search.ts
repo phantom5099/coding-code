@@ -3,18 +3,9 @@ import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 import type { ToolVisibilityPolicy } from '../../types.js';
-
-export interface ToolSearchApi {
-  search: (
-    sessionId: string,
-    query: string,
-    policy?: ToolVisibilityPolicy
-  ) => Array<{ name: string; shortDescription?: string }>;
-  markLoaded: (sessionId: string, toolNames: string[]) => void;
-}
+import { ToolSearchService } from '../../tool-search-service.js';
 
 export function createToolSearchTool(
-  svc: ToolSearchApi,
   policy?: ToolVisibilityPolicy
 ): ToolDefinition {
   return {
@@ -32,7 +23,8 @@ export function createToolSearchTool(
       if (!sessionId)
         return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'tool_search requires sessionId'));
       const { query } = args as { query: string };
-      return Effect.sync(() => {
+      return Effect.gen(function* () {
+        const svc = yield* ToolSearchService;
         const hits = svc.search(sessionId, query, policy);
         if (hits.length === 0) return `No deferred tools matched "${query}".`;
         svc.markLoaded(sessionId, hits.map((h) => h.name));

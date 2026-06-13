@@ -59,49 +59,47 @@ export interface CodeRestoreEntry {
   timestamp: string;
 }
 
-// ---- Module-level state ----
-
-const shadowGitByProject = new ProjectCache<ShadowGit>(10);
-const lockByProject = new ProjectCache<ProjectLock>(10);
-
-function ensure(projectPath: string): ShadowGit {
-  const normalized = normalizePath(projectPath);
-  return shadowGitByProject.get(normalized, () => {
-    const sg = new ShadowGit(normalized);
-    sg.init();
-    return sg;
-  });
-}
-
-function lockFor(projectPath: string): ProjectLock {
-  const normalized = normalizePath(projectPath);
-  return lockByProject.get(normalized, () => new ProjectLock(normalized));
-}
-
-function doSnapshotFinal(sg: ShadowGit, sessionId: string, turnId: number): void {
-  const lock = lockFor(sg.projectPath);
-  lock.lock();
-  try {
-    sg.commit(commitMsg(sessionId, turnId, 'final'));
-  } finally {
-    lock.unlock();
-  }
-}
-
-function repairIncompleteTurn(sg: ShadowGit, sessionId: string): void {
-  const completed = getCompletedTurnsFor(sg, sessionId);
-  const candidate = completed.length > 0 ? completed[completed.length - 1]! + 1 : 1;
-  const baseline = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'baseline'));
-  if (!baseline) return;
-  const final = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'final'));
-  if (final) return;
-  doSnapshotFinal(sg, sessionId, candidate);
-}
-
 // ---- Effect Service ----
 
 export class CheckpointService extends Effect.Service<CheckpointService>()('Checkpoint', {
   effect: Effect.gen(function* () {
+    const shadowGitByProject = new ProjectCache<ShadowGit>(10);
+    const lockByProject = new ProjectCache<ProjectLock>(10);
+
+    function ensure(projectPath: string): ShadowGit {
+      const normalized = normalizePath(projectPath);
+      return shadowGitByProject.get(normalized, () => {
+        const sg = new ShadowGit(normalized);
+        sg.init();
+        return sg;
+      });
+    }
+
+    function lockFor(projectPath: string): ProjectLock {
+      const normalized = normalizePath(projectPath);
+      return lockByProject.get(normalized, () => new ProjectLock(normalized));
+    }
+
+    function doSnapshotFinal(sg: ShadowGit, sessionId: string, turnId: number): void {
+      const lock = lockFor(sg.projectPath);
+      lock.lock();
+      try {
+        sg.commit(commitMsg(sessionId, turnId, 'final'));
+      } finally {
+        lock.unlock();
+      }
+    }
+
+    function repairIncompleteTurn(sg: ShadowGit, sessionId: string): void {
+      const completed = getCompletedTurnsFor(sg, sessionId);
+      const candidate = completed.length > 0 ? completed[completed.length - 1]! + 1 : 1;
+      const baseline = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'baseline'));
+      if (!baseline) return;
+      const final = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'final'));
+      if (final) return;
+      doSnapshotFinal(sg, sessionId, candidate);
+    }
+
     return {
       snapshotBaseline: (
         projectPath: string,

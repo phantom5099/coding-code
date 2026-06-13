@@ -1,9 +1,9 @@
-﻿import { describe, it, expect } from 'vitest';
+﻿﻿import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { findSessionIndex } from '../../src/session/io.js';
+import { findSessionIndex } from '../../src/session/file-ops.js';
 import type { SessionIndex } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');

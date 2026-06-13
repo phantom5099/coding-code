@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 import {
-  sharedTodoStore,
+  TodoService,
   countByStatus,
   TODO_MAX_ITEMS,
   TODO_MAX_STEP_LEN,
@@ -31,8 +31,9 @@ export const todoWriteTool: ToolDefinition = {
     const sessionId = ctx?.sessionId;
     if (!sessionId) return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires sessionId'));
     const { plan } = args as { plan: Todo[] };
-    return Effect.sync(() => {
-      sharedTodoStore.write(sessionId, plan);
+    return Effect.gen(function* () {
+      const todo = yield* TodoService;
+      todo.write(sessionId, plan);
       const c = countByStatus(plan);
       return `pending=${c.pending} in_progress=${c.in_progress} completed=${c.completed}`;
     });

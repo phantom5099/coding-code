@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../core/error.js';
-import { getProcessRoot, getConfig } from '../core/workspace.js';
+import { WorkspaceService } from '../core/workspace.js';
 import type { LLMClient } from './client.js';
 import { OpenAIProvider } from './providers/openai.js';
 import { DeepSeekProvider } from './providers/deepseek.js';
@@ -38,10 +38,6 @@ export interface SelectableModel {
   context_window: number;
 }
 
-function modelsFile(): string {
-  return resolve(getProcessRoot(), 'config/models.json');
-}
-
 function flattenModels(cat: ProviderCatalog): SelectableModel[] {
   const result: SelectableModel[] = [];
   for (const p of cat.providers) {
@@ -63,9 +59,14 @@ function flattenModels(cat: ProviderCatalog): SelectableModel[] {
 
 export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMFactory', {
   effect: Effect.gen(function* () {
+    const workspace = yield* WorkspaceService;
     let catalog: ProviderCatalog | null = null;
     let currentEntry: SelectableModel | null = null;
     let currentClient: LLMClient | null = null;
+
+    function modelsFile(): string {
+      return resolve(workspace.getProcessRoot(), 'config/models.json');
+    }
 
     const loadCatalog = (): Effect.Effect<ProviderCatalog, AgentError> =>
       Effect.gen(function* () {
@@ -94,19 +95,20 @@ export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMF
           return flattenModels(cat);
         }),
 
-      findModel: (target: string): SelectableModel | null => {
-        const result = Effect.runSync(loadCatalog().pipe(Effect.either));
-        if (result._tag === 'Left') return null;
-        const models = flattenModels(result.right);
-        const exactMatch = models.find((m) => m.id === target);
-        if (exactMatch) return exactMatch;
-        return models.find((m) => m.model === target || m.name === target) || null;
-      },
+      findModel: (target: string): Effect.Effect<SelectableModel | null, AgentError> =>
+        Effect.gen(function* () {
+          const cat = yield* loadCatalog().pipe(Effect.either);
+          if (cat._tag === 'Left') return null;
+          const models = flattenModels(cat.right);
+          const exactMatch = models.find((m) => m.id === target);
+          if (exactMatch) return exactMatch;
+          return models.find((m) => m.model === target || m.name === target) || null;
+        }),
 
       getActiveEntry: (): Effect.Effect<SelectableModel, AgentError> =>
         Effect.gen(function* () {
           if (currentEntry) return currentEntry;
-          const cfg = getConfig().activeModel;
+          const cfg = workspace.getConfig().activeModel;
           if (!cfg) {
             return yield* Effect.fail(
               new AgentError(
@@ -197,7 +199,7 @@ export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMF
       getLLMClient: (): Effect.Effect<LLMClient, AgentError> =>
         Effect.gen(function* () {
           if (currentClient) return currentClient;
-          const cfg = getConfig().activeModel;
+          const cfg = workspace.getConfig().activeModel;
           if (!cfg) {
             return yield* Effect.fail(
               new AgentError(
@@ -261,63 +263,3 @@ export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMF
     };
   }),
 }) {}
-
-// Backward-compatible plain function exports
-// These wrap the LLMFactoryService so callers outside Effect context can use them.
-// The functions that return Effect will include LLMFactoryService in their R channel,
-// which callers must provide via Effect.provide.
-
-let _factoryInstance: InstanceType<typeof LLMFactoryService> | null = null;
-
-export function listModels(): Effect.Effect<SelectableModel[], AgentError> {
-  return Effect.gen(function* () {
-    const factory = yield* LLMFactoryService;
-    return yield* factory.listModels();
-  }) as any;
-}
-
-export function findModel(target: string): SelectableModel | null {
-  // Synchronous fallback — only works after factory is initialized
-  if (_factoryInstance) return _factoryInstance.findModel(target);
-  // Try loading catalog directly (no Service context available)
-  const path = modelsFile();
-  if (!existsSync(path)) return null;
-  try {
-    const raw = readFileSync(path, 'utf-8');
-    const parsed = JSON.parse(raw) as ProviderCatalog;
-    const models = flattenModels(parsed);
-    const exactMatch = models.find((m) => m.id === target);
-    if (exactMatch) return exactMatch;
-    return models.find((m) => m.model === target || m.name === target) || null;
-  } catch {
-    return null;
-  }
-}
-
-export function getActiveEntry(): Effect.Effect<SelectableModel, AgentError> {
-  return Effect.gen(function* () {
-    const factory = yield* LLMFactoryService;
-    return yield* factory.getActiveEntry();
-  }) as any;
-}
-
-export function switchModel(id: string): Effect.Effect<SelectableModel, AgentError> {
-  return Effect.gen(function* () {
-    const factory = yield* LLMFactoryService;
-    return yield* factory.switchModel(id);
-  }) as any;
-}
-
-export function createClient(entry: SelectableModel): Effect.Effect<LLMClient, AgentError> {
-  return Effect.gen(function* () {
-    const factory = yield* LLMFactoryService;
-    return yield* factory.createClient(entry);
-  }) as any;
-}
-
-export function getLLMClient(): Effect.Effect<LLMClient, AgentError> {
-  return Effect.gen(function* () {
-    const factory = yield* LLMFactoryService;
-    return yield* factory.getLLMClient();
-  }) as any;
-}

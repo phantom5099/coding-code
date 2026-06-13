@@ -1,15 +1,15 @@
 import {
   DEFAULT_MEMORY_TYPES,
+  loadConfig,
   type MemoryConfig,
   type MemoryTypeConfig,
   updateMemoryEnabled,
   updateMemoryDisabledTypes,
   updateMemoryExtraTypes,
 } from '@codingcode/infra/config';
-import { getConfig } from '../core/workspace.js';
 
 export function getMemoryConfig(): MemoryConfig {
-  return getConfig().memory;
+  return loadConfig().memory;
 }
 
 export function getEffectiveTypes(cfg: MemoryConfig): MemoryTypeConfig[] {

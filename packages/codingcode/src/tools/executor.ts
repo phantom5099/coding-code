@@ -32,7 +32,8 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
       }
     ): Effect.Effect<
       { output: string; diff?: string; filePath?: string; insertions?: number; deletions?: number },
-      AgentError
+      AgentError,
+      any
     > {
       return Effect.gen(function* () {
         const tool = opts?.toolLookup?.(name);
@@ -138,7 +139,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         agentRunner?: any;
         toolLookup?: ToolLookup;
       }
-    ): Effect.Effect<ToolResultUnion> {
+    ): Effect.Effect<ToolResultUnion, never, any> {
       return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
         Effect.matchEffect({
           onSuccess: (result): Effect.Effect<ToolResultUnion> =>
@@ -189,7 +190,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         agentRunner?: any;
         toolLookup?: ToolLookup;
       }
-    ): Effect.Effect<ToolResultUnion[]> {
+    ): Effect.Effect<ToolResultUnion[], never, any> {
       return Effect.gen(function* () {
         // Separate safe & destructive tools: safe tools run in parallel, Bash runs serially
         const safeTools: ToolCall[] = [];

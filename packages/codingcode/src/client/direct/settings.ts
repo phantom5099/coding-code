@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 import { McpService } from '../../mcp/index.js';
 import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
 import { SkillService } from '../../skills/service.js';
@@ -51,7 +51,7 @@ import {
   updateMemoryExtraType as _updateMemoryExtraType,
   deleteMemoryExtraType as _deleteMemoryExtraType,
 } from '../../memory/config.js';
-import { getMemoryEnabled, setMemoryEnabled } from '../../memory/index.js';
+import { MemoryService } from '../../memory/index.js';
 import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
 
 export interface SettingsClient {
@@ -203,12 +203,14 @@ function hooksSetDisabled(cwd: string, name: string, disabled: boolean): void {
   }
 }
 
+type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
+
 export function createDirectSettingsClient(
-  runWithLayer: <T>(eff: any) => Promise<T>
+  rt: ManagedRt
 ): SettingsClient {
   return {
     async getMemoryEnabled() {
-      return getMemoryEnabled();
+      return rt.runPromise(Effect.gen(function* () { const m = yield* MemoryService; return m.getMemoryEnabled(); }));
     },
 
     async getMemoryConfig() {
@@ -217,7 +219,7 @@ export function createDirectSettingsClient(
     },
 
     async setMemoryEnabled(enabled) {
-      setMemoryEnabled(enabled);
+      await rt.runPromise(Effect.gen(function* () { const m = yield* MemoryService; m.setMemoryEnabled(enabled); }));
     },
 
     async setMemoryTypeDisabled(name, disabled) {
@@ -261,7 +263,7 @@ export function createDirectSettingsClient(
     },
 
     async getMcpStatus() {
-      return runWithLayer(
+      return rt.runPromise(
         Effect.gen(function* () {
           const mcp = yield* McpService;
           return yield* mcp.status(process.cwd());
@@ -275,7 +277,7 @@ export function createDirectSettingsClient(
       } else {
         setProjectMcpDisabledState(cwd, name, disabled);
       }
-      await runWithLayer(
+      await rt.runPromise(
         Effect.gen(function* () {
           const mcp = yield* McpService;
           return yield* disabled
@@ -302,7 +304,7 @@ export function createDirectSettingsClient(
     },
 
     async listSkills() {
-      return runWithLayer(
+      return rt.runPromise(
         Effect.gen(function* () {
           const skill = yield* SkillService;
           return yield* skill.listWithStatus(process.cwd());
@@ -312,7 +314,7 @@ export function createDirectSettingsClient(
 
     async toggleSkill({ name, enabled, cwd }) {
       const skillCwd = cwd || process.cwd();
-      await runWithLayer(
+      await rt.runPromise(
         Effect.gen(function* () {
           const skill = yield* SkillService;
           if (enabled) {
@@ -382,13 +384,13 @@ export function createDirectSettingsClient(
     },
 
     async getGlobalPermissionMode() {
-      const approval: any = await runWithLayer(Effect.gen(function* () { return yield* ApprovalService; }));
+      const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
       return approval.getPermissionMode();
     },
 
     async setGlobalPermissionMode(mode) {
-      const approval: any = await runWithLayer(Effect.gen(function* () { return yield* ApprovalService; }));
-      await runWithLayer(approval.setPermissionMode(mode));
+      const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
+      await rt.runPromise(approval.setPermissionMode(mode));
     },
   };
 }
