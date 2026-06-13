@@ -69,17 +69,16 @@ export class AgentService extends Effect.Service<AgentService>()('Agent', {
         )
       );
 
-      const controller = new AbortController();
-
       return (async function* () {
         const fiber = Effect.runFork(program);
 
-        const abort = opts.abortSignal ?? controller.signal;
-        abort.addEventListener('abort', () => {
-          Effect.runFork(Fiber.interrupt(fiber));
-        }, { once: true });
-        if (abort.aborted) {
-          Effect.runFork(Fiber.interrupt(fiber));
+        if (opts.abortSignal) {
+          opts.abortSignal.addEventListener('abort', () => {
+            Effect.runFork(Fiber.interrupt(fiber));
+          }, { once: true });
+          if (opts.abortSignal.aborted) {
+            Effect.runFork(Fiber.interrupt(fiber));
+          }
         }
 
         const stream = Stream.fromQueue(q).pipe(
