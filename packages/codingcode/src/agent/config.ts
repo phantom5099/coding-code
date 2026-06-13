@@ -1,4 +1,4 @@
-import { loadConfig, type AppConfig } from '@codingcode/infra/config';
+import { loadConfig } from '@codingcode/infra/config';
 import type { ResolvedConfig } from './types.js';
 
 export function resolveConfig(): ResolvedConfig {
