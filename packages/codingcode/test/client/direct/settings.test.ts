@@ -12,17 +12,20 @@ const mockEnableSkill = vi.fn(() => Effect.void);
 const mockDisableSkill = vi.fn(() => Effect.void);
 const mockListWithStatus = vi.fn(() => Effect.succeed([]));
 
-const MockSkillLayer = Layer.succeed(SkillService, SkillService.make({
-  getAll: (_p: string) => Effect.succeed([]),
-  findByName: (_p: string, _n: string) => Effect.succeed(undefined),
-  select: (_p: string, _q: string) => Effect.succeed(undefined),
-  selectImplicit: (_p: string, _q: string, _m: any) => Effect.succeed(undefined),
-  extractSkill: (_p: string, _q: string) => Effect.succeed([undefined, '']),
-  enableSkill: mockEnableSkill,
-  disableSkill: mockDisableSkill,
-  listWithStatus: mockListWithStatus,
-  evictProject: (_p: string) => Effect.void,
-}));
+const MockSkillLayer = Layer.succeed(
+  SkillService,
+  SkillService.make({
+    getAll: (_p: string) => Effect.succeed([]),
+    findByName: (_p: string, _n: string) => Effect.succeed(undefined),
+    select: (_p: string, _q: string) => Effect.succeed(undefined),
+    selectImplicit: (_p: string, _q: string, _m: any) => Effect.succeed(undefined),
+    extractSkill: (_p: string, _q: string) => Effect.succeed([undefined, '']),
+    enableSkill: mockEnableSkill,
+    disableSkill: mockDisableSkill,
+    listWithStatus: mockListWithStatus,
+    evictProject: (_p: string) => Effect.void,
+  })
+);
 
 const MockMemoryLayer = Layer.succeed(MemoryService, {
   getMemoryEnabled: () => true,

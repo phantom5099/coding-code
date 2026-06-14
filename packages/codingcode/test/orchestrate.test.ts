@@ -22,8 +22,12 @@ vi.mock('../src/context/organizer.js', () => ({
 }));
 
 vi.mock('../src/context/compressor.js', () => ({
-  compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 })),
-  compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 })),
+  compactIfNeeded: vi.fn(() =>
+    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 })
+  ),
+  compactWithLLM: vi.fn(() =>
+    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 })
+  ),
 }));
 
 vi.mock('../src/checkpoint/checkpoint-service.js', () => {
@@ -35,10 +39,28 @@ vi.mock('../src/checkpoint/checkpoint-service.js', () => {
     getCompletedTurns: vi.fn(() => []),
     getCheckpoints: vi.fn(() => []),
     getCheckpointDiff: vi.fn(() => ({ turnId: 0, files: [] })),
-    revertCheckpointFiles: vi.fn(() => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null })),
+    revertCheckpointFiles: vi.fn(() => ({
+      reverted: false,
+      throughTurnId: 0,
+      affectedTurns: [],
+      selectedFiles: [],
+      restoreEntry: null,
+    })),
     previewRollbackDiff: vi.fn(() => ({ throughTurnId: 0, affectedTurns: [], diff: '' })),
-    rollbackCodeToTurn: vi.fn(() => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null })),
-    undoLastCodeRollback: vi.fn(() => ({ restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] })),
+    rollbackCodeToTurn: vi.fn(() => ({
+      reverted: false,
+      throughTurnId: 0,
+      affectedTurns: [],
+      selectedFiles: [],
+      restoreEntry: null,
+    })),
+    undoLastCodeRollback: vi.fn(() => ({
+      restored: false,
+      conflict: false,
+      conflictFiles: [],
+      restoredFiles: [],
+      remainingRolledBack: [],
+    })),
     getLatestRestoreEntry: vi.fn(() => null),
   };
 });
@@ -65,10 +87,36 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
   getCompletedTurns: vi.fn(() => Effect.succeed([])),
   getCheckpoints: vi.fn(() => Effect.succeed([])),
   getCheckpointDiff: vi.fn(() => Effect.succeed({ turnId: 0, files: [] })),
-  revertCheckpointFiles: vi.fn(() => Effect.succeed({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null })),
-  previewRollbackDiff: vi.fn(() => Effect.succeed({ throughTurnId: 0, affectedTurns: [], diff: '' })),
-  rollbackCodeToTurn: vi.fn(() => Effect.succeed({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null })),
-  undoLastCodeRollback: vi.fn(() => Effect.succeed({ restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] })),
+  revertCheckpointFiles: vi.fn(() =>
+    Effect.succeed({
+      reverted: false,
+      throughTurnId: 0,
+      affectedTurns: [],
+      selectedFiles: [],
+      restoreEntry: null,
+    })
+  ),
+  previewRollbackDiff: vi.fn(() =>
+    Effect.succeed({ throughTurnId: 0, affectedTurns: [], diff: '' })
+  ),
+  rollbackCodeToTurn: vi.fn(() =>
+    Effect.succeed({
+      reverted: false,
+      throughTurnId: 0,
+      affectedTurns: [],
+      selectedFiles: [],
+      restoreEntry: null,
+    })
+  ),
+  undoLastCodeRollback: vi.fn(() =>
+    Effect.succeed({
+      restored: false,
+      conflict: false,
+      conflictFiles: [],
+      restoredFiles: [],
+      remainingRolledBack: [],
+    })
+  ),
   getLatestRestoreEntry: vi.fn(() => Effect.succeed(null)),
 } as any);
 
@@ -78,7 +126,9 @@ const MockSkillLayer = Layer.succeed(SkillService, {
   findByName: vi.fn(() => Effect.succeed(undefined)),
   select: vi.fn(() => Effect.succeed(undefined)),
   selectImplicit: vi.fn(() => Effect.succeed(undefined)),
-  extractSkill: vi.fn((_p: string, q: string) => Effect.sync(() => [undefined, q] as [undefined, string])),
+  extractSkill: vi.fn((_p: string, q: string) =>
+    Effect.sync(() => [undefined, q] as [undefined, string])
+  ),
   disableSkill: vi.fn(() => Effect.void),
   enableSkill: vi.fn(() => Effect.void),
   listWithStatus: vi.fn(() => Effect.succeed([])),
@@ -98,8 +148,7 @@ const mockLlm = {
     supportsToolCalling: true,
     supportsStreaming: true,
   },
-  complete: () =>
-    Effect.succeed({ content: 'Hello world', finishReason: 'stop' as const }),
+  complete: () => Effect.succeed({ content: 'Hello world', finishReason: 'stop' as const }),
   completeStream: (_params: any) => {
     const stream = (async function* () {
       yield 'Hello';
@@ -143,7 +192,7 @@ const AgentLayer = Layer.succeed(AgentService, {
     }
     const resp = await response;
     const content = (resp as any).ok ? ((resp as any).value?.content ?? '') : '';
-    const toolCalls = (resp as any).ok ? ((resp as any).value?.toolCalls) : undefined;
+    const toolCalls = (resp as any).ok ? (resp as any).value?.toolCalls : undefined;
     yield { _tag: 'Assistant', content, toolCalls };
     yield { _tag: 'Done', content };
   },
@@ -174,8 +223,7 @@ vi.mock('../src/runtime/project-runtime.js', () => ({
 }));
 
 const MockSessionLayer = Layer.succeed(SessionService, {
-  create: (_cwd: string, _model: string) =>
-    Effect.succeed({ ...mockState }),
+  create: (_cwd: string, _model: string) => Effect.succeed({ ...mockState }),
   recordUser: () =>
     Effect.succeed({
       type: 'user' as const,
@@ -222,7 +270,12 @@ const MockProjectRuntimeLayer = Layer.succeed(ProjectRuntimeService, {
   resolveMainAgentProfile: () => undefined,
   resolveSubagentProfile: () => undefined,
   listAgentProfiles: () => [],
-  getToolPolicy: () => ({ allowedTools: undefined, allowedMcpServers: undefined, allowToolSearch: true, allowDeferredTools: false }),
+  getToolPolicy: () => ({
+    allowedTools: undefined,
+    allowedMcpServers: undefined,
+    allowToolSearch: true,
+    allowDeferredTools: false,
+  }),
   setSessionProfile: () => {},
   getSessionProfile: () => undefined,
   disposeSession: () => Effect.void,

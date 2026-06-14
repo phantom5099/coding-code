@@ -20,11 +20,18 @@ export function createSseHandler(rt: ManagedRt) {
           };
 
           const waitService = await rt.runPromise(
-            Effect.gen(function* () { return yield* ApprovalWaitService; })
+            Effect.gen(function* () {
+              return yield* ApprovalWaitService;
+            })
           );
-          Effect.runSync(waitService.registerEmitter(sessionId, (id: string, tool: string, args: Record<string, unknown>) => {
-            enqueue({ type: 'approval_request', id, tool, args });
-          }));
+          Effect.runSync(
+            waitService.registerEmitter(
+              sessionId,
+              (id: string, tool: string, args: Record<string, unknown>) => {
+                enqueue({ type: 'approval_request', id, tool, args });
+              }
+            )
+          );
 
           try {
             if (opts?.initialEvents) {

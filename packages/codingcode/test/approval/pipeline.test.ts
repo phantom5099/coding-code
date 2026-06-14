@@ -58,7 +58,7 @@ describe('Approval Pipeline', () => {
         }
       )
     );
-    expect(decision.type).toBe('deny');
+    expect((decision as any).type).toBe('deny');
     expect((decision as any).source).toContain('rule:');
   });
 
@@ -75,7 +75,7 @@ describe('Approval Pipeline', () => {
         }
       )
     );
-    expect(decision.type).toBe('allow');
+    expect((decision as any).type).toBe('allow');
     expect((decision as any).source).toBe('readonly-whitelist');
   });
 
@@ -92,7 +92,7 @@ describe('Approval Pipeline', () => {
         }
       )
     );
-    expect(decision.type).toBe('deny');
+    expect((decision as any).type).toBe('deny');
     expect((decision as any).reason).toContain('plan mode');
   });
 
@@ -109,7 +109,7 @@ describe('Approval Pipeline', () => {
         }
       )
     );
-    expect(decision.type).toBe('allow');
+    expect((decision as any).type).toBe('allow');
   });
 
   it('Layer 3: Bypass mode should allow everything', async () => {
@@ -125,7 +125,7 @@ describe('Approval Pipeline', () => {
         }
       )
     );
-    expect(decision.type).toBe('allow');
+    expect((decision as any).type).toBe('allow');
     expect((decision as any).source).toBe('permission-mode');
   });
 
@@ -142,7 +142,7 @@ describe('Approval Pipeline', () => {
         }
       )
     );
-    expect(decision.type).toBe('allow');
+    expect((decision as any).type).toBe('allow');
   });
 
   it('Layer 3: AcceptEdits should NOT auto-allow destructive tools', async () => {
@@ -159,7 +159,7 @@ describe('Approval Pipeline', () => {
       )
     );
     // Destructive tool in acceptEdits mode with no UI available → system deny
-    expect(decision.type).toBe('deny');
+    expect((decision as any).type).toBe('deny');
     expect((decision as any).source).toBe('system');
   });
 
@@ -168,10 +168,7 @@ describe('Approval Pipeline', () => {
       ...mockHookService,
       emitDecision: () => Effect.succeed({ decision: 'deny' as const, reason: 'Hook denied' }),
     };
-    const layer = Layer.mergeAll(
-      Layer.succeed(HookService, hooksWithDeny as any),
-      WaitTestLayer
-    );
+    const layer = Layer.mergeAll(Layer.succeed(HookService, hooksWithDeny as any), WaitTestLayer);
     const decision = await Effect.runPromise(
       runPipeline(
         { tool: 'Bash', input: { command: 'ls' } },
@@ -184,7 +181,7 @@ describe('Approval Pipeline', () => {
         }
       ).pipe(Effect.provide(layer) as any)
     );
-    expect(decision.type).toBe('deny');
+    expect((decision as any).type).toBe('deny');
     expect((decision as any).source).toBe('hook');
   });
 
@@ -193,10 +190,7 @@ describe('Approval Pipeline', () => {
       ...mockHookService,
       emitDecision: () => Effect.succeed({ decision: 'allow' as const }),
     };
-    const layer = Layer.mergeAll(
-      Layer.succeed(HookService, hooksWithAllow as any),
-      WaitTestLayer
-    );
+    const layer = Layer.mergeAll(Layer.succeed(HookService, hooksWithAllow as any), WaitTestLayer);
     const decision = await Effect.runPromise(
       runPipeline(
         { tool: 'Bash', input: { command: 'ls' } },
@@ -209,7 +203,7 @@ describe('Approval Pipeline', () => {
         }
       ).pipe(Effect.provide(layer) as any)
     );
-    expect(decision.type).toBe('allow');
+    expect((decision as any).type).toBe('allow');
     expect((decision as any).source).toBe('hook');
   });
 
@@ -222,10 +216,7 @@ describe('Approval Pipeline', () => {
           auditPayload = payload;
         }),
     };
-    const layer = Layer.mergeAll(
-      Layer.succeed(HookService, hooksWithAudit as any),
-      WaitTestLayer
-    );
+    const layer = Layer.mergeAll(Layer.succeed(HookService, hooksWithAudit as any), WaitTestLayer);
     await Effect.runPromise(
       runPipeline(
         { tool: 'read_file', input: { path: '/test.txt' } },
@@ -241,6 +232,6 @@ describe('Approval Pipeline', () => {
     expect(auditPayload).not.toBeNull();
     expect(auditPayload.tool).toBe('read_file');
     expect(auditPayload.layers).toContain('AuditLog');
-    expect(auditPayload.decision.type).toBe('allow');
+    expect((auditPayload.decision as any).type).toBe('allow');
   });
 });

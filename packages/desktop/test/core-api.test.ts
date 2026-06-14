@@ -20,7 +20,7 @@ vi.mock('../src/lib/api', () => ({
   API_BASE: 'http://localhost:3000',
 }));
 
-vi.mock('@codingcode/core/client/http', () => ({
+vi.mock('@codingcode/core/client/http-clients', () => ({
   createHttpClients: () => ({
     settings: mockSettings,
     models: { listModels: vi.fn(), switchModel: vi.fn() },
@@ -210,13 +210,19 @@ describe('toggleSkill', () => {
   it('calls settings.toggleSkill with empty cwd when no cwd provided', async () => {
     mockSettings.toggleSkill.mockResolvedValue(undefined);
     await toggleSkill('my-skill', true);
-    expect(mockSettings.toggleSkill).toHaveBeenCalledWith('my-skill', true, { cwd: '' });
+    expect(mockSettings.toggleSkill).toHaveBeenCalledWith({
+      name: 'my-skill',
+      enabled: true,
+      cwd: '',
+    });
   });
 
   it('calls settings.toggleSkill with provided cwd', async () => {
     mockSettings.toggleSkill.mockResolvedValue(undefined);
     await toggleSkill('my-skill', false, '/project/dir');
-    expect(mockSettings.toggleSkill).toHaveBeenCalledWith('my-skill', false, {
+    expect(mockSettings.toggleSkill).toHaveBeenCalledWith({
+      name: 'my-skill',
+      enabled: false,
       cwd: '/project/dir',
     });
   });

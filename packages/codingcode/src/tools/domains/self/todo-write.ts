@@ -29,7 +29,8 @@ export const todoWriteTool: ToolDefinition = {
   parameters: todoSchema,
   execute: (args, ctx) => {
     const sessionId = ctx?.sessionId;
-    if (!sessionId) return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires sessionId'));
+    if (!sessionId)
+      return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires sessionId'));
     const { plan } = args as { plan: Todo[] };
     return Effect.gen(function* () {
       const todo = yield* TodoService;

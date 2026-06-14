@@ -9,7 +9,12 @@ import { resolveSessionJsonlPath, appendLine } from '../session/file-ops.js';
 import { resolveLLM } from '../llm/llm-resolver.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
-import type { SessionEvent, ToolResultEvent, CompactEvent, SummaryEvent } from '../session/types.js';
+import type {
+  SessionEvent,
+  ToolResultEvent,
+  CompactEvent,
+  SummaryEvent,
+} from '../session/types.js';
 import type { LLMClient } from '../llm/client.js';
 import type { BuildResult, CompressResult } from './types.js';
 
@@ -205,7 +210,14 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
 
       const threshold = modelMaxTokens ? modelMaxTokens * config.compactionThreshold : Infinity;
       if (usage === undefined || usage - released > threshold) {
-        released += await tryCompaction(sessionId, config, llm, compactedEvents, currentTurnId, payload.compactedTurnIds);
+        released += await tryCompaction(
+          sessionId,
+          config,
+          llm,
+          compactedEvents,
+          currentTurnId,
+          payload.compactedTurnIds
+        );
       }
 
       const postPayload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
@@ -222,7 +234,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       llm: LLMClient | null,
       compactedEvents: SessionEvent[],
       currentTurnId: number,
-      compactedTurnIds: Set<number>,
+      compactedTurnIds: Set<number>
     ): Promise<number> {
       const endTurn = currentTurnId - config.keepRecentTurns - 1;
       if (endTurn < 1) return 0;
@@ -241,7 +253,9 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const totalTokens = estimateTokens(msgs);
 
       let compactionLlm = await Effect.runPromise(
-        resolveLLM(config.compactionModel, llm).pipe(Effect.provideService(LLMFactoryService, factory))
+        resolveLLM(config.compactionModel, llm).pipe(
+          Effect.provideService(LLMFactoryService, factory)
+        )
       );
       if (compactionLlm && compactionLlm.modelInfo.maxTokens < totalTokens + 25000) {
         compactionLlm = llm;
@@ -291,12 +305,17 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       config: ContextConfig
     ): Promise<string | null> {
       const llm = await Effect.runPromise(
-        resolveLLM(config.compactionModel, fallbackLlm).pipe(Effect.provideService(LLMFactoryService, factory))
+        resolveLLM(config.compactionModel, fallbackLlm).pipe(
+          Effect.provideService(LLMFactoryService, factory)
+        )
       );
       if (!llm) return null;
 
       const transcriptText = transcript
-        .map((m) => `[${m.role}${(m as any).tool_name ? ':' + (m as any).tool_name : ''}]\n${m.content}`)
+        .map(
+          (m) =>
+            `[${m.role}${(m as any).tool_name ? ':' + (m as any).tool_name : ''}]\n${m.content}`
+        )
         .join('\n\n');
 
       const system = COMPACTION_SYSTEM_PROMPT;

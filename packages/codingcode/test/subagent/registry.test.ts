@@ -1,11 +1,7 @@
 import { expect, it, describe } from 'vitest';
 import { Effect } from 'effect';
-import {
-  SubagentService,
-  EXPLORE_PROFILE,
-  PLAN_PROFILE,
-} from '../../src/subagent/registry';
-import type { AgentProfile } from '../../src/subagent/registry';
+import { SubagentService, EXPLORE_PROFILE, PLAN_PROFILE } from '../../src/subagent/registry';
+import type { AgentProfile } from '../../src/subagent/types';
 
 describe('SubagentService', () => {
   it('should register global profiles and retrieve them', async () => {
@@ -167,16 +163,20 @@ describe('SubagentService', () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const svc = yield* SubagentService;
-        svc.registerGlobal([{
-          name: 'global-agent',
-          description: 'Global',
-          systemPrompt: 'G',
-        }]);
-        svc.registerProject('/project/a', [{
-          name: 'project-agent',
-          description: 'Project',
-          systemPrompt: 'P',
-        }]);
+        svc.registerGlobal([
+          {
+            name: 'global-agent',
+            description: 'Global',
+            systemPrompt: 'G',
+          },
+        ]);
+        svc.registerProject('/project/a', [
+          {
+            name: 'project-agent',
+            description: 'Project',
+            systemPrompt: 'P',
+          },
+        ]);
 
         expect(svc.get('/project/a', 'project-agent')).toBeDefined();
         expect(svc.get('/project/a', 'global-agent')).toBeDefined();

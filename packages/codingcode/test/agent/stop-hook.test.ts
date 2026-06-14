@@ -16,7 +16,16 @@ vi.mock('@codingcode/infra/config', () => ({
       compactionModel: '',
       reactiveCompactMaxRetries: 1,
     },
-    memory: { enabled: false, model: '', projectFile: '', userFile: '', maxBytes: 16384, promptMaxBytes: 8192, extraTypes: [], disabledTypes: [] },
+    memory: {
+      enabled: false,
+      model: '',
+      projectFile: '',
+      userFile: '',
+      maxBytes: 16384,
+      promptMaxBytes: 8192,
+      extraTypes: [],
+      disabledTypes: [],
+    },
     server: { port: 8080 },
   }),
 }));
@@ -32,13 +41,17 @@ vi.mock('../../src/context/organizer.js', () => ({
 }));
 
 vi.mock('../../src/context/compressor.js', () => ({
-  compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
-  compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+  compactIfNeeded: vi.fn(() =>
+    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })
+  ),
+  compactWithLLM: vi.fn(() =>
+    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })
+  ),
 }));
 
 import { agentLoop } from '../../src/agent/agent';
 import { Result } from '../../src/core/result';
-import type { RunStreamOptions } from '../../src/agent/agent';
+import type { RunStreamOptions } from '../../src/agent/types';
 import { SessionService } from '../../src/session/store.js';
 
 const AllMockLayer = Layer.mergeAll(
@@ -56,7 +69,12 @@ const AllMockLayer = Layer.mergeAll(
     resolveMainAgentProfile: () => undefined,
     resolveSubagentProfile: () => undefined,
     listAgentProfiles: () => [],
-    getToolPolicy: () => ({ allowedTools: undefined, allowedMcpServers: undefined, allowToolSearch: true, allowDeferredTools: false }),
+    getToolPolicy: () => ({
+      allowedTools: undefined,
+      allowedMcpServers: undefined,
+      allowToolSearch: true,
+      allowDeferredTools: false,
+    }),
     setSessionProfile: () => {},
     getSessionProfile: () => undefined,
     disposeSession: () => Effect.void,
@@ -87,7 +105,6 @@ const AllMockLayer = Layer.mergeAll(
 );
 
 describe('agentLoop stop hook', () => {
-
   const mockState = {
     sessionId: 'test-session',
     cwd: process.cwd(),
@@ -134,14 +151,7 @@ describe('agentLoop stop hook', () => {
 
     const q = Effect.runSync(Queue.unbounded<any>());
     await Effect.runPromise(
-      agentLoop(
-        {} as any,
-        mockHooks,
-        5,
-        2,
-        opts,
-        q,
-              ).pipe(Effect.provide(AllMockLayer)) as any
+      agentLoop({} as any, mockHooks, 5, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
     );
 
     expect(emitDecisionFn).toHaveBeenCalledWith(
@@ -176,14 +186,7 @@ describe('agentLoop stop hook', () => {
 
     const q = Effect.runSync(Queue.unbounded<any>());
     await Effect.runPromise(
-      agentLoop(
-        {} as any,
-        mockHooks,
-        10,
-        10,
-        opts,
-        q,
-              ).pipe(Effect.provide(AllMockLayer)) as any
+      agentLoop({} as any, mockHooks, 10, 10, opts, q).pipe(Effect.provide(AllMockLayer)) as any
     );
     const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
@@ -219,14 +222,7 @@ describe('agentLoop stop hook', () => {
 
     const q = Effect.runSync(Queue.unbounded<any>());
     await Effect.runPromise(
-      agentLoop(
-        {} as any,
-        mockHooks,
-        10,
-        2,
-        opts,
-        q,
-              ).pipe(Effect.provide(AllMockLayer)) as any
+      agentLoop({} as any, mockHooks, 10, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
     );
 
     expect(continueCount).toBeGreaterThanOrEqual(2);
@@ -256,14 +252,7 @@ describe('agentLoop stop hook', () => {
 
     const q = Effect.runSync(Queue.unbounded<any>());
     await Effect.runPromise(
-      agentLoop(
-        {} as any,
-        mockHooks,
-        5,
-        2,
-        opts,
-        q,
-              ).pipe(Effect.provide(AllMockLayer)) as any
+      agentLoop({} as any, mockHooks, 5, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
     );
     const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
@@ -298,14 +287,7 @@ describe('agentLoop stop hook', () => {
 
     const q = Effect.runSync(Queue.unbounded<any>());
     await Effect.runPromise(
-      agentLoop(
-        {} as any,
-        mockHooks,
-        5,
-        2,
-        opts,
-        q,
-              ).pipe(Effect.provide(AllMockLayer)) as any
+      agentLoop({} as any, mockHooks, 5, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
     );
   });
 
@@ -335,14 +317,7 @@ describe('agentLoop stop hook', () => {
 
     const q = Effect.runSync(Queue.unbounded<any>());
     await Effect.runPromise(
-      agentLoop(
-        {} as any,
-        mockHooks,
-        5,
-        2,
-        opts,
-        q,
-              ).pipe(Effect.provide(AllMockLayer)) as any
+      agentLoop({} as any, mockHooks, 5, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
     );
   });
 });

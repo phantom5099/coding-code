@@ -24,9 +24,7 @@ const fallbackClient = {} as LLMClient;
 
 async function runResolveLLM(target: string | null | undefined, fallback: LLMClient | null) {
   return Effect.runPromise(
-    resolveLLM(target, fallback).pipe(
-      Effect.provideService(LLMFactoryService, mockFactory),
-    ),
+    resolveLLM(target, fallback).pipe(Effect.provideService(LLMFactoryService, mockFactory))
   );
 }
 
@@ -53,7 +51,9 @@ describe('resolveLLM (memory)', () => {
 
   it('returns null when fallback is null and create fails', async () => {
     mockFindModel.mockReturnValue(Effect.succeed({ id: 'claude-opus-4-7' } as SelectableModel));
-    mockCreateClient.mockReturnValue(Effect.fail(new AgentError('CONFIG_INVALID', 'creation failed')));
+    mockCreateClient.mockReturnValue(
+      Effect.fail(new AgentError('CONFIG_INVALID', 'creation failed'))
+    );
     const result = await runResolveLLM('claude-opus-4-7', null);
     expect(result).toBeNull();
   });
@@ -67,7 +67,9 @@ describe('resolveLLM (memory)', () => {
 
   it('creates and returns client when model matches by id', async () => {
     const client = { modelInfo: { maxTokens: 4096 } } as LLMClient;
-    mockFindModel.mockReturnValue(Effect.succeed({ id: 'claude-opus-4-7@ANTHROPIC_API_KEY' } as SelectableModel));
+    mockFindModel.mockReturnValue(
+      Effect.succeed({ id: 'claude-opus-4-7@ANTHROPIC_API_KEY' } as SelectableModel)
+    );
     mockCreateClient.mockReturnValue(Effect.succeed(client));
     const result = await runResolveLLM('claude-opus-4-7@ANTHROPIC_API_KEY', fallbackClient);
     expect(result).toBe(client);
@@ -75,7 +77,12 @@ describe('resolveLLM (memory)', () => {
 
   it('creates and returns client when model matches by bare model id', async () => {
     const client = { modelInfo: { maxTokens: 4096 } } as LLMClient;
-    mockFindModel.mockReturnValue(Effect.succeed({ id: 'deepseek-chat@DEEPSEEK_API_KEY', model: 'deepseek-chat' } as SelectableModel));
+    mockFindModel.mockReturnValue(
+      Effect.succeed({
+        id: 'deepseek-chat@DEEPSEEK_API_KEY',
+        model: 'deepseek-chat',
+      } as SelectableModel)
+    );
     mockCreateClient.mockReturnValue(Effect.succeed(client));
     const result = await runResolveLLM('deepseek-chat', fallbackClient);
     expect(result).toBe(client);

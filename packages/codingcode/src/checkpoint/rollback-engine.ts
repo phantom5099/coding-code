@@ -6,9 +6,7 @@ import type { CodeRollbackResult, CodeRestoreEntry, RestorePlan } from './types.
 import { commitMsg } from './utils.js';
 import { readRestoreEntry, writeRestoreEntry } from './undo-store.js';
 
-export function emptyRollbackResult(
-  turnId: number
-): CodeRollbackResult {
+export function emptyRollbackResult(turnId: number): CodeRollbackResult {
   return {
     reverted: false,
     throughTurnId: turnId,

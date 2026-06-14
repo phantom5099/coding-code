@@ -5,7 +5,7 @@ import type { LLMClient } from './client.js';
 
 export function resolveLLM(
   target: string | null | undefined,
-  fallback: LLMClient | null,
+  fallback: LLMClient | null
 ): Effect.Effect<LLMClient | null, AgentError, LLMFactoryService> {
   const trimmed = target?.trim();
   if (!trimmed) return Effect.succeed(fallback);

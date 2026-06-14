@@ -144,7 +144,10 @@ function agentsList(cwd: string): Array<{
       maxSteps: a.maxSteps,
       model: a.model,
       disabled: resolveAgentDisabled(cwd, a.name),
-      source: a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name ? ('builtin' as const) : ('project' as const),
+      source:
+        a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name
+          ? ('builtin' as const)
+          : ('project' as const),
       hasProjectOverride: projectVal !== undefined,
       projectDisabled: projectVal,
     };
@@ -205,12 +208,15 @@ function hooksSetDisabled(cwd: string, name: string, disabled: boolean): void {
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-export function createDirectSettingsClient(
-  rt: ManagedRt
-): SettingsClient {
+export function createDirectSettingsClient(rt: ManagedRt): SettingsClient {
   return {
     async getMemoryEnabled() {
-      return rt.runPromise(Effect.gen(function* () { const m = yield* MemoryService; return m.getMemoryEnabled(); }));
+      return rt.runPromise(
+        Effect.gen(function* () {
+          const m = yield* MemoryService;
+          return m.getMemoryEnabled();
+        })
+      );
     },
 
     async getMemoryConfig() {
@@ -219,7 +225,12 @@ export function createDirectSettingsClient(
     },
 
     async setMemoryEnabled(enabled) {
-      await rt.runPromise(Effect.gen(function* () { const m = yield* MemoryService; m.setMemoryEnabled(enabled); }));
+      await rt.runPromise(
+        Effect.gen(function* () {
+          const m = yield* MemoryService;
+          m.setMemoryEnabled(enabled);
+        })
+      );
     },
 
     async setMemoryTypeDisabled(name, disabled) {
@@ -384,12 +395,20 @@ export function createDirectSettingsClient(
     },
 
     async getGlobalPermissionMode() {
-      const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
+      const approval: any = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalService;
+        })
+      );
       return approval.getPermissionMode();
     },
 
     async setGlobalPermissionMode(mode) {
-      const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
+      const approval: any = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalService;
+        })
+      );
       await rt.runPromise(approval.setPermissionMode(mode));
     },
   };

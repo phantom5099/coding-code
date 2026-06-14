@@ -1,4 +1,4 @@
-﻿﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -16,7 +16,16 @@ vi.mock('@codingcode/infra/config', () => ({
       compactionModel: '',
       reactiveCompactMaxRetries: 1,
     },
-    memory: { enabled: false, model: '', projectFile: '', userFile: '', maxBytes: 16384, promptMaxBytes: 8192, extraTypes: [], disabledTypes: [] },
+    memory: {
+      enabled: false,
+      model: '',
+      projectFile: '',
+      userFile: '',
+      maxBytes: 16384,
+      promptMaxBytes: 8192,
+      extraTypes: [],
+      disabledTypes: [],
+    },
     server: { port: 8080 },
   }),
 }));

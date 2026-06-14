@@ -23,11 +23,13 @@ afterEach(async () => {
 
 describe('editFileTool', () => {
   it('should replace a unique string', async () => {
-    const result = await Effect.runPromise(editFileTool.execute({
-      path: testFile,
-      old_string: 'line three',
-      new_string: 'line THREE',
-    }));
+    const result = await Effect.runPromise(
+      editFileTool.execute({
+        path: testFile,
+        old_string: 'line three',
+        new_string: 'line THREE',
+      }) as any
+    );
     expect(result).toContain('1 replacement made');
     const content = await readFile(testFile, 'utf-8');
     expect(content).toContain('line THREE');
@@ -35,54 +37,64 @@ describe('editFileTool', () => {
   });
 
   it('should replace content at the beginning', async () => {
-    const result = await Effect.runPromise(editFileTool.execute({
-      path: testFile,
-      old_string: 'line one',
-      new_string: 'LINE ONE',
-    }));
+    const result = await Effect.runPromise(
+      editFileTool.execute({
+        path: testFile,
+        old_string: 'line one',
+        new_string: 'LINE ONE',
+      }) as any
+    );
     expect(result).toContain('1 replacement made');
     const content = await readFile(testFile, 'utf-8');
     expect(content).toContain('LINE ONE');
   });
 
   it('should replace content at the end', async () => {
-    const result = await Effect.runPromise(editFileTool.execute({
-      path: testFile,
-      old_string: 'line four',
-      new_string: 'LINE FOUR',
-    }));
+    const result = await Effect.runPromise(
+      editFileTool.execute({
+        path: testFile,
+        old_string: 'line four',
+        new_string: 'LINE FOUR',
+      }) as any
+    );
     expect(result).toContain('1 replacement made');
     const content = await readFile(testFile, 'utf-8');
     expect(content).toContain('LINE FOUR');
   });
 
   it('should reject when old_string appears multiple times', async () => {
-    const result = await Effect.runPromise(editFileTool.execute({
-      path: testFile,
-      old_string: 'line two',
-      new_string: 'LINE TWO',
-    }));
+    const result = await Effect.runPromise(
+      editFileTool.execute({
+        path: testFile,
+        old_string: 'line two',
+        new_string: 'LINE TWO',
+      }) as any
+    );
     expect(result).toContain('Error');
     expect(result).toContain('appears 2 times');
   });
 
   it('should reject when old_string is not found', async () => {
-    const result = await Effect.runPromise(editFileTool.execute({
-      path: testFile,
-      old_string: 'nonexistent text',
-      new_string: 'replacement',
-    }));
+    const result = await Effect.runPromise(
+      editFileTool.execute({
+        path: testFile,
+        old_string: 'nonexistent text',
+        new_string: 'replacement',
+      }) as any
+    );
     expect(result).toContain('Error');
     expect(result).toContain('not found');
   });
 
   it('should make unique by including surrounding context', async () => {
     // "line one\nline two" is unique even though "line two" appears twice
-    const result = await Effect.runPromise(editFileTool.execute({
-      path: testFile,
-      old_string: 'line one\nline two',
-      new_string: 'LINE ONE\nLINE TWO',
-    }));
+    const result = await Effect.runPromise(
+      editFileTool.execute({
+        path: testFile,
+        old_string: 'line one\nline two',
+        new_string: 'LINE ONE\nLINE TWO',
+      }) as any
+    );
     expect(result).toContain('1 replacement made');
     const content = await readFile(testFile, 'utf-8');
     expect(content).toContain('LINE ONE\nLINE TWO');

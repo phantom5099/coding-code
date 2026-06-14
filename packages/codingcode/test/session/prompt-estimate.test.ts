@@ -392,7 +392,13 @@ describe('SessionService record methods update promptEstimate', () => {
       const toolEvent = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', 'tool output here');
+          return yield* svc.recordToolResult(
+            state,
+            assistantEvent.uuid,
+            'bash',
+            'tc1',
+            'tool output here'
+          );
         })
       );
       expect(state.promptEstimate).toBeGreaterThan(before);

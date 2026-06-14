@@ -49,7 +49,11 @@ export async function* agentEventToStreamChunk(
         yield { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
         break;
       case 'Error':
-        yield { type: 'error', message: event.error.message ?? String(event.error), code: event.error.code };
+        yield {
+          type: 'error',
+          message: event.error.message ?? String(event.error),
+          code: event.error.code,
+        };
         break;
       case 'Done':
         yield { type: 'done' };
@@ -83,7 +87,12 @@ export async function createDirectClient(llm: any, rt: ManagedRt): Promise<Agent
   const runWithLayer = <T>(eff: any): Promise<T> => rt.runPromise(eff);
 
   const clients = createDirectClients(activeLlm, rt);
-  const cwdValue = await rt.runPromise(Effect.gen(function* () { const ws = yield* WorkspaceService; return ws.getWorkspaceCwd(); }));
+  const cwdValue = await rt.runPromise(
+    Effect.gen(function* () {
+      const ws = yield* WorkspaceService;
+      return ws.getWorkspaceCwd();
+    })
+  );
   const cwd = () => cwdValue;
 
   return {
@@ -93,7 +102,9 @@ export async function createDirectClient(llm: any, rt: ManagedRt): Promise<Agent
 
     async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
       const waitService: any = await rt.runPromise(
-        Effect.gen(function* () { return yield* ApprovalWaitService; })
+        Effect.gen(function* () {
+          return yield* ApprovalWaitService;
+        })
       );
       const program = sendMessage(currentSessionId || undefined, input, cwd(), activeLlm);
       const { stream: agentGen, sessionId } = (await runWithLayer(program)) as any;
@@ -107,9 +118,14 @@ export async function createDirectClient(llm: any, rt: ManagedRt): Promise<Agent
             args: Record<string, unknown>;
           }) => void)
         | null = null;
-      Effect.runSync(waitService.registerEmitter(sessionId, (id: string, tool: string, args: Record<string, unknown>) => {
-        notify?.({ type: 'approval_request', id, tool, args });
-      }));
+      Effect.runSync(
+        waitService.registerEmitter(
+          sessionId,
+          (id: string, tool: string, args: Record<string, unknown>) => {
+            notify?.({ type: 'approval_request', id, tool, args });
+          }
+        )
+      );
 
       try {
         const gen = agentEventToStreamChunk(agentGen);
@@ -174,7 +190,12 @@ export async function createDirectClient(llm: any, rt: ManagedRt): Promise<Agent
 
     async switchModel(id: string) {
       await clients.models.switchModel({ id });
-      activeLlm = await rt.runPromise(Effect.gen(function* () { const factory = yield* LLMFactoryService; return yield* factory.getLLMClient(); }));
+      activeLlm = await rt.runPromise(
+        Effect.gen(function* () {
+          const factory = yield* LLMFactoryService;
+          return yield* factory.getLLMClient();
+        })
+      );
     },
 
     async getCheckpoints() {
@@ -213,8 +234,7 @@ export async function createDirectClient(llm: any, rt: ManagedRt): Promise<Agent
     },
 
     async previewRollbackDiff(throughTurnId: number) {
-      if (!currentSessionId)
-        return { throughTurnId, affectedTurns: [], diff: '' };
+      if (!currentSessionId) return { throughTurnId, affectedTurns: [], diff: '' };
       return clients.sessions.previewRollbackDiff({
         sessionId: currentSessionId,
         cwd: cwd(),
@@ -433,12 +453,20 @@ export async function createDirectClient(llm: any, rt: ManagedRt): Promise<Agent
     },
 
     async getPermissionMode(): Promise<PermissionMode> {
-      const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
+      const approval: any = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalService;
+        })
+      );
       return approval.getPermissionMode();
     },
 
     async setPermissionMode(mode: PermissionMode): Promise<void> {
-      const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
+      const approval: any = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalService;
+        })
+      );
       await rt.runPromise(approval.setPermissionMode(mode));
     },
   };

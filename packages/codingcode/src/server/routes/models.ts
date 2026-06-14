@@ -30,7 +30,10 @@ export function createModelsRouter(rt: ManagedRt): Hono {
         return yield* Effect.either(factory.switchModel(modelId));
       })
     );
-    return c.json({ ok: result._tag === 'Right', error: result._tag === 'Left' ? result.left.message : undefined });
+    return c.json({
+      ok: result._tag === 'Right',
+      error: result._tag === 'Left' ? result.left.message : undefined,
+    });
   });
 
   return router;

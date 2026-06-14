@@ -7,7 +7,7 @@ import { Effect, Layer } from 'effect';
 import { ContextService } from '../../../src/context/service.js';
 import { SessionService } from '../../../src/session/store.js';
 import { LLMFactoryService } from '../../../src/llm/factory.js';
-import type { ContextConfig } from '../../../src/context/config.js';
+import type { ContextConfig } from '@codingcode/infra/config';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';

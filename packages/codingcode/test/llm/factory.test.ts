@@ -32,7 +32,7 @@ function mockFs() {
 
 function makeWorkspaceLayer(
   WorkspaceService: any,
-  activeModel: { model: string; apiKeyEnv: string } | undefined,
+  activeModel: { model: string; apiKeyEnv: string } | undefined
 ) {
   return Layer.succeed(WorkspaceService, {
     init: () => {},
@@ -41,7 +41,7 @@ function makeWorkspaceLayer(
     resolveWorkspaceCwd: (override?: string) => override ?? tmpdir(),
     getWorkspacePath: () => 'test',
     resolveInWorkspace: (path: string) => path,
-    getConfig: () => ({ activeModel } as any),
+    getConfig: () => ({ activeModel }) as any,
   } as any);
 }
 
@@ -60,14 +60,17 @@ describe('switchModel - persists to config', () => {
 
     const { LLMFactoryService } = await import('../../src/llm/factory.js');
     const { WorkspaceService } = await import('../../src/core/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, { model: 'model-x', apiKeyEnv: 'API_KEY_A' });
+    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
+      model: 'model-x',
+      apiKeyEnv: 'API_KEY_A',
+    });
     const factoryLayer = LLMFactoryService.Default.pipe(Layer.provide(workspaceLayer));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.switchModel('model-y@API_KEY_A');
-      }).pipe(Effect.provide(factoryLayer), Effect.either),
+      }).pipe(Effect.provide(factoryLayer), Effect.either)
     );
     expect(result._tag).toBe('Right');
     if (result._tag === 'Right') {
@@ -86,14 +89,17 @@ describe('switchModel - persists to config', () => {
 
     const { LLMFactoryService } = await import('../../src/llm/factory.js');
     const { WorkspaceService } = await import('../../src/core/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, { model: 'model-x', apiKeyEnv: 'API_KEY_A' });
+    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
+      model: 'model-x',
+      apiKeyEnv: 'API_KEY_A',
+    });
     const factoryLayer = LLMFactoryService.Default.pipe(Layer.provide(workspaceLayer));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.switchModel('nonexistent@API_KEY_A');
-      }).pipe(Effect.provide(factoryLayer), Effect.either),
+      }).pipe(Effect.provide(factoryLayer), Effect.either)
     );
     expect(result._tag).toBe('Left');
     if (result._tag === 'Left') {
@@ -113,14 +119,17 @@ describe('getActiveEntry - activeModel priority', () => {
 
     const { LLMFactoryService } = await import('../../src/llm/factory.js');
     const { WorkspaceService } = await import('../../src/core/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, { model: 'model-y', apiKeyEnv: 'API_KEY_A' });
+    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
+      model: 'model-y',
+      apiKeyEnv: 'API_KEY_A',
+    });
     const factoryLayer = LLMFactoryService.Default.pipe(Layer.provide(workspaceLayer));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either),
+      }).pipe(Effect.provide(factoryLayer), Effect.either)
     );
     expect(result._tag).toBe('Right');
     if (result._tag === 'Right') {
@@ -138,7 +147,7 @@ describe('getActiveEntry - activeModel priority', () => {
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either),
+      }).pipe(Effect.provide(factoryLayer), Effect.either)
     );
     expect(result._tag).toBe('Left');
     if (result._tag === 'Left') {
@@ -152,14 +161,17 @@ describe('getActiveEntry - activeModel priority', () => {
 
     const { LLMFactoryService } = await import('../../src/llm/factory.js');
     const { WorkspaceService } = await import('../../src/core/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, { model: 'nonexistent', apiKeyEnv: 'UNKNOWN_KEY' });
+    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
+      model: 'nonexistent',
+      apiKeyEnv: 'UNKNOWN_KEY',
+    });
     const factoryLayer = LLMFactoryService.Default.pipe(Layer.provide(workspaceLayer));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either),
+      }).pipe(Effect.provide(factoryLayer), Effect.either)
     );
     expect(result._tag).toBe('Left');
     if (result._tag === 'Left') {
@@ -179,14 +191,17 @@ describe('createClient - API key validation', () => {
 
     const { LLMFactoryService } = await import('../../src/llm/factory.js');
     const { WorkspaceService } = await import('../../src/core/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, { model: 'model-x', apiKeyEnv: 'API_KEY_A' });
+    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
+      model: 'model-x',
+      apiKeyEnv: 'API_KEY_A',
+    });
     const factoryLayer = LLMFactoryService.Default.pipe(Layer.provide(workspaceLayer));
 
     const entryResult = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either),
+      }).pipe(Effect.provide(factoryLayer), Effect.either)
     );
     expect(entryResult._tag).toBe('Right');
     if (entryResult._tag === 'Left') return;
@@ -198,7 +213,7 @@ describe('createClient - API key validation', () => {
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.createClient(entryResult.right);
-      }).pipe(Effect.provide(factoryLayer), Effect.either),
+      }).pipe(Effect.provide(factoryLayer), Effect.either)
     );
     expect(result._tag).toBe('Left');
     if (result._tag === 'Left') {
@@ -212,14 +227,17 @@ describe('createClient - API key validation', () => {
 
     const { LLMFactoryService } = await import('../../src/llm/factory.js');
     const { WorkspaceService } = await import('../../src/core/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, { model: 'model-x', apiKeyEnv: 'API_KEY_A' });
+    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
+      model: 'model-x',
+      apiKeyEnv: 'API_KEY_A',
+    });
     const factoryLayer = LLMFactoryService.Default.pipe(Layer.provide(workspaceLayer));
 
     const entryResult = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either),
+      }).pipe(Effect.provide(factoryLayer), Effect.either)
     );
     expect(entryResult._tag).toBe('Right');
     if (entryResult._tag === 'Left') return;
@@ -231,7 +249,7 @@ describe('createClient - API key validation', () => {
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.createClient(entryResult.right);
-      }).pipe(Effect.provide(factoryLayer), Effect.either),
+      }).pipe(Effect.provide(factoryLayer), Effect.either)
     );
     expect(result._tag).toBe('Right');
   });

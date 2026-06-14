@@ -58,7 +58,7 @@ describe('CheckpointService class', () => {
 describe('CheckpointDiff type with insertions/deletions', () => {
   it('CheckpointDiff type includes insertions and deletions fields', async () => {
     // Verify the type structure by creating a mock object
-    const diff: import('../../src/checkpoint/checkpoint-service.js').CheckpointDiff = {
+    const diff: import('../../src/checkpoint/types.js').CheckpointDiff = {
       turnId: 1,
       files: [
         {

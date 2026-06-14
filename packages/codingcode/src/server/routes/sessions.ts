@@ -245,7 +245,11 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
-        return yield* checkpoint.getCheckpointDiff(cwd, sessionId, isNaN(turnId) ? undefined : turnId);
+        return yield* checkpoint.getCheckpointDiff(
+          cwd,
+          sessionId,
+          isNaN(turnId) ? undefined : turnId
+        );
       })
     );
     if (!result.ok) {

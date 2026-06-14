@@ -24,10 +24,7 @@ export interface AgentRuntimeClient {
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
 }
 
-export function createDirectAgentClient(
-  llm: any,
-  rt: ManagedRt
-): AgentRuntimeClient {
+export function createDirectAgentClient(llm: any, rt: ManagedRt): AgentRuntimeClient {
   return {
     async *sendMessage(input, { sessionId, cwd }) {
       const program = sendMessage(sessionId || undefined, input, cwd, llm);
@@ -46,11 +43,18 @@ export function createDirectAgentClient(
           }) => void)
         | null = null;
       const waitService: any = await rt.runPromise(
-        Effect.gen(function* () { return yield* ApprovalWaitService; })
+        Effect.gen(function* () {
+          return yield* ApprovalWaitService;
+        })
       );
-      Effect.runSync(waitService.registerEmitter(resolvedSessionId, (id: string, tool: string, args: Record<string, unknown>) => {
-        notify?.({ type: 'approval_request', id, tool, args });
-      }));
+      Effect.runSync(
+        waitService.registerEmitter(
+          resolvedSessionId,
+          (id: string, tool: string, args: Record<string, unknown>) => {
+            notify?.({ type: 'approval_request', id, tool, args });
+          }
+        )
+      );
 
       try {
         const gen = agentEventToStreamChunk(agentGen);

@@ -4,7 +4,7 @@ import { createSseHandler } from '../../src/server/handler.js';
 import { toSseEvents } from '../../src/server/adapter.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
 import { AgentError } from '../../src/core/error.js';
-import type { AgentEvent } from '../../src/agent/agent.js';
+import type { AgentEvent } from '../../src/agent/types.js';
 
 const rt = ManagedRuntime.make(ApprovalWaitService.Default);
 
@@ -93,7 +93,13 @@ describe('sseHandler + toSseEvents', () => {
             yield { _tag: 'Step', step: 1, max: 50 };
             yield { _tag: 'LlmChunk', text: '\n[Using: readFile]\n' };
             yield { _tag: 'ToolStart', id: 'tc1', name: 'readFile', args: { path: 'test.txt' } };
-            yield { _tag: 'ToolResult', id: 'tc1', name: 'readFile', output: 'file contents', ok: true };
+            yield {
+              _tag: 'ToolResult',
+              id: 'tc1',
+              name: 'readFile',
+              output: 'file contents',
+              ok: true,
+            };
             yield { _tag: 'Done', content: '' };
           })()
         );

@@ -1,4 +1,4 @@
-﻿﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
@@ -75,7 +75,10 @@ describe('core/workspace', () => {
       Effect.gen(function* () {
         const ws = yield* WorkspaceService;
         expect(() =>
-          ws.init({ processRoot: installRoot, workspaceCwd: join(tmpdir(), 'missing-' + randomUUID()) })
+          ws.init({
+            processRoot: installRoot,
+            workspaceCwd: join(tmpdir(), 'missing-' + randomUUID()),
+          })
         ).toThrow(/does not exist/);
       }).pipe(Effect.provide(WorkspaceService.Default))
     );

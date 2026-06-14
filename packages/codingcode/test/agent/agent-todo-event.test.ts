@@ -16,7 +16,16 @@ vi.mock('@codingcode/infra/config', () => ({
       compactionModel: '',
       reactiveCompactMaxRetries: 1,
     },
-    memory: { enabled: false, model: '', projectFile: '', userFile: '', maxBytes: 16384, promptMaxBytes: 8192, extraTypes: [], disabledTypes: [] },
+    memory: {
+      enabled: false,
+      model: '',
+      projectFile: '',
+      userFile: '',
+      maxBytes: 16384,
+      promptMaxBytes: 8192,
+      extraTypes: [],
+      disabledTypes: [],
+    },
     server: { port: 8080 },
   }),
 }));
@@ -32,8 +41,12 @@ vi.mock('../../src/context/organizer.js', () => ({
 }));
 
 vi.mock('../../src/context/compressor.js', () => ({
-  compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
-  compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+  compactIfNeeded: vi.fn(() =>
+    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })
+  ),
+  compactWithLLM: vi.fn(() =>
+    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })
+  ),
 }));
 
 import { agentLoop } from '../../src/agent/agent.js';
@@ -58,7 +71,12 @@ const AllMockLayer = Layer.mergeAll(
     resolveMainAgentProfile: () => undefined,
     resolveSubagentProfile: () => undefined,
     listAgentProfiles: () => [],
-    getToolPolicy: () => ({ allowedTools: undefined, allowedMcpServers: undefined, allowToolSearch: true, allowDeferredTools: false }),
+    getToolPolicy: () => ({
+      allowedTools: undefined,
+      allowedMcpServers: undefined,
+      allowToolSearch: true,
+      allowDeferredTools: false,
+    }),
     setSessionProfile: () => {},
     getSessionProfile: () => undefined,
     disposeSession: () => Effect.void,
@@ -66,8 +84,12 @@ const AllMockLayer = Layer.mergeAll(
   } as any),
   Layer.succeed(TodoService, {
     read: (sessionId: string) => todoStore.get(sessionId) ?? [],
-    write: (sessionId: string, items: any[]) => { todoStore.set(sessionId, items); },
-    reset: () => { todoStore.clear(); },
+    write: (sessionId: string, items: any[]) => {
+      todoStore.set(sessionId, items);
+    },
+    reset: () => {
+      todoStore.clear();
+    },
   } as any),
   Layer.succeed(ContextService, {
     assemblePayload: () => ({
@@ -121,7 +143,6 @@ const mockLlm = {
 };
 
 describe('TodoUpdate event', () => {
-
   it('should yield TodoUpdate when todo_write tool is called', async () => {
     todoStore.set('test-todo-sid', [
       { step: 'setup', status: 'pending' },

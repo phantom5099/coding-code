@@ -1,10 +1,5 @@
 import { spawnSync } from 'child_process';
-import {
-  existsSync,
-  mkdirSync,
-  statSync,
-  writeFileSync,
-} from 'fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { normalizePath, encodeProjectPath } from '../core/path.js';

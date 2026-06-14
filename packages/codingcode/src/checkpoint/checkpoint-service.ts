@@ -6,11 +6,7 @@ import { ProjectLock } from './project-lock.js';
 import { normalizePath } from '../core/path.js';
 import { shortSid, commitMsg, toGitPath, hashWorkspaceFile, ProjectCache } from './utils.js';
 import { readRestoreEntry, writeRestoreEntry } from './undo-store.js';
-import {
-  getCompletedTurnsFor,
-  getTurnRestorePlan,
-  getRollbackToTurnPlan,
-} from './turn-query.js';
+import { getCompletedTurnsFor, getTurnRestorePlan, getRollbackToTurnPlan } from './turn-query.js';
 import { emptyRollbackResult, executeRollback } from './rollback-engine.js';
 
 // ---- Effect Service ----
@@ -55,26 +51,22 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     }
 
     return {
-      snapshotBaseline: (
-        projectPath: string,
-        sessionId: string,
-        turnId: number,
-        title?: string
-      ) => Effect.sync(() => {
-        const sg = ensure(projectPath);
-        repairIncompleteTurn(sg, sessionId);
-        if (sg.isTooLargeForSnapshot()) return;
-        const lock = lockFor(projectPath);
-        const msg = title
-          ? `${commitMsg(sessionId, turnId, 'baseline')} ${title}`
-          : commitMsg(sessionId, turnId, 'baseline');
-        lock.lock();
-        try {
-          sg.commit(msg);
-        } finally {
-          lock.unlock();
-        }
-      }),
+      snapshotBaseline: (projectPath: string, sessionId: string, turnId: number, title?: string) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          repairIncompleteTurn(sg, sessionId);
+          if (sg.isTooLargeForSnapshot()) return;
+          const lock = lockFor(projectPath);
+          const msg = title
+            ? `${commitMsg(sessionId, turnId, 'baseline')} ${title}`
+            : commitMsg(sessionId, turnId, 'baseline');
+          lock.lock();
+          try {
+            sg.commit(msg);
+          } finally {
+            lock.unlock();
+          }
+        }),
 
       snapshotFinal: (projectPath: string, sessionId: string, turnId: number) =>
         Effect.sync(() => {
@@ -108,12 +100,21 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
             const fCommit = sg.findCommitByMessage(`${prefix}${i}-final`);
             if (!fCommit) continue;
 
-            const msgResult = sg.git('log', '--all', '--grep', `${prefix}${i}-baseline`, '--format=%s', '-1');
+            const msgResult = sg.git(
+              'log',
+              '--all',
+              '--grep',
+              `${prefix}${i}-baseline`,
+              '--format=%s',
+              '-1'
+            );
             const fullMsg = msgResult.stdout.trim();
             const title = fullMsg.includes(' ') ? fullMsg.split(' ').slice(1).join(' ') : '';
 
             const allChanges = sg.diffFiles(bCommit, fCommit);
-            const files = [...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file))))];
+            const files = [
+              ...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)))),
+            ];
 
             result.push({ turnId: i, title, files });
           }
@@ -171,14 +172,22 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
         sessionId: string,
         turnId: number,
         files: string[]
-      ) => Effect.sync(() => {
-        const sg = ensure(projectPath);
-        const plan = getTurnRestorePlan(sg, sessionId, turnId);
-        if (!plan) {
-          return emptyRollbackResult(turnId);
-        }
-        return executeRollback(sessionId, plan, files, 'checkpoint-files', sg, lockFor(projectPath));
-      }),
+      ) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          const plan = getTurnRestorePlan(sg, sessionId, turnId);
+          if (!plan) {
+            return emptyRollbackResult(turnId);
+          }
+          return executeRollback(
+            sessionId,
+            plan,
+            files,
+            'checkpoint-files',
+            sg,
+            lockFor(projectPath)
+          );
+        }),
 
       previewRollbackDiff: (projectPath: string, sessionId: string, throughTurnId: number) =>
         Effect.sync(() => {
@@ -221,105 +230,113 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
             };
           }
 
-          return executeRollback(sessionId, plan, selectedFiles, 'rollback-to-turn', sg, lockFor(projectPath));
+          return executeRollback(
+            sessionId,
+            plan,
+            selectedFiles,
+            'rollback-to-turn',
+            sg,
+            lockFor(projectPath)
+          );
         }),
 
       undoLastCodeRollback: (
         projectPath: string,
         sessionId: string,
         opts?: { force?: boolean; files?: string[] }
-      ) => Effect.sync(() => {
-        const sg = ensure(projectPath);
-        const entry = readRestoreEntry(sg.gitDir, sessionId);
-        if (!entry) {
-          return {
-            restored: false,
-            conflict: false,
-            conflictFiles: [],
-            restoredFiles: [],
-            remainingRolledBack: [],
-          };
-        }
+      ) =>
+        Effect.sync(() => {
+          const sg = ensure(projectPath);
+          const entry = readRestoreEntry(sg.gitDir, sessionId);
+          if (!entry) {
+            return {
+              restored: false,
+              conflict: false,
+              conflictFiles: [],
+              restoredFiles: [],
+              remainingRolledBack: [],
+            };
+          }
 
-        const normalizedOptsFiles =
-          opts?.files && opts.files.length > 0
-            ? new Set(opts.files.map((f) => normalizePath(f).toLowerCase()))
-            : null;
-        const filesToRestore = normalizedOptsFiles
-          ? entry.selectedFiles.filter((f) =>
-              normalizedOptsFiles.has(normalizePath(f).toLowerCase())
-            )
-          : [...entry.selectedFiles];
+          const normalizedOptsFiles =
+            opts?.files && opts.files.length > 0
+              ? new Set(opts.files.map((f) => normalizePath(f).toLowerCase()))
+              : null;
+          const filesToRestore = normalizedOptsFiles
+            ? entry.selectedFiles.filter((f) =>
+                normalizedOptsFiles.has(normalizePath(f).toLowerCase())
+              )
+            : [...entry.selectedFiles];
 
-        if (filesToRestore.length === 0) {
-          return {
-            restored: false,
-            conflict: false,
-            conflictFiles: [],
-            restoredFiles: [],
-            remainingRolledBack: entry.selectedFiles,
-          };
-        }
+          if (filesToRestore.length === 0) {
+            return {
+              restored: false,
+              conflict: false,
+              conflictFiles: [],
+              restoredFiles: [],
+              remainingRolledBack: entry.selectedFiles,
+            };
+          }
 
-        const baselineCommit = sg.findCommitByMessage(
-          commitMsg(sessionId, entry.throughTurnId, 'baseline')
-        );
-        const conflictFiles: string[] = [];
+          const baselineCommit = sg.findCommitByMessage(
+            commitMsg(sessionId, entry.throughTurnId, 'baseline')
+          );
+          const conflictFiles: string[] = [];
 
-        if (baselineCommit) {
-          for (const f of filesToRestore) {
-            const gitPath = toGitPath(projectPath, f);
-            const currentHash = hashWorkspaceFile(projectPath, f);
-            const baselineContent = sg.showFile(baselineCommit, gitPath);
-            const baselineHash =
-              baselineContent !== null
-                ? createHash('sha256').update(baselineContent).digest('hex')
-                : null;
+          if (baselineCommit) {
+            for (const f of filesToRestore) {
+              const gitPath = toGitPath(projectPath, f);
+              const currentHash = hashWorkspaceFile(projectPath, f);
+              const baselineContent = sg.showFile(baselineCommit, gitPath);
+              const baselineHash =
+                baselineContent !== null
+                  ? createHash('sha256').update(baselineContent).digest('hex')
+                  : null;
 
-            if (currentHash !== baselineHash) {
-              conflictFiles.push(f);
+              if (currentHash !== baselineHash) {
+                conflictFiles.push(f);
+              }
             }
           }
-        }
 
-        if (conflictFiles.length > 0 && !opts?.force) {
-          return {
-            restored: false,
-            conflict: true,
-            conflictFiles,
-            restoredFiles: [],
-            remainingRolledBack: entry.selectedFiles,
-          };
-        }
-
-        const lock = lockFor(projectPath);
-        lock.lock();
-        try {
-          sg.checkoutFiles(entry.safetyCommit, filesToRestore);
-
-          const remainingFiles = entry.selectedFiles.filter(
-            (f) =>
-              !filesToRestore.some(
-                (rf) => normalizePath(rf).toLowerCase() === normalizePath(f).toLowerCase()
-              )
-          );
-          if (remainingFiles.length === 0) {
-            writeRestoreEntry(sg.gitDir, sessionId, null);
-          } else {
-            writeRestoreEntry(sg.gitDir, sessionId, { ...entry, selectedFiles: remainingFiles });
+          if (conflictFiles.length > 0 && !opts?.force) {
+            return {
+              restored: false,
+              conflict: true,
+              conflictFiles,
+              restoredFiles: [],
+              remainingRolledBack: entry.selectedFiles,
+            };
           }
 
-          return {
-            restored: true,
-            conflict: conflictFiles.length > 0,
-            conflictFiles,
-            restoredFiles: filesToRestore,
-            remainingRolledBack: remainingFiles,
-          };
-        } finally {
-          lock.unlock();
-        }
-      }),
+          const lock = lockFor(projectPath);
+          lock.lock();
+          try {
+            sg.checkoutFiles(entry.safetyCommit, filesToRestore);
+
+            const remainingFiles = entry.selectedFiles.filter(
+              (f) =>
+                !filesToRestore.some(
+                  (rf) => normalizePath(rf).toLowerCase() === normalizePath(f).toLowerCase()
+                )
+            );
+            if (remainingFiles.length === 0) {
+              writeRestoreEntry(sg.gitDir, sessionId, null);
+            } else {
+              writeRestoreEntry(sg.gitDir, sessionId, { ...entry, selectedFiles: remainingFiles });
+            }
+
+            return {
+              restored: true,
+              conflict: conflictFiles.length > 0,
+              conflictFiles,
+              restoredFiles: filesToRestore,
+              remainingRolledBack: remainingFiles,
+            };
+          } finally {
+            lock.unlock();
+          }
+        }),
 
       getLatestRestoreEntry: (projectPath: string, sessionId: string) =>
         Effect.sync(() => {

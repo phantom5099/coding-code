@@ -62,9 +62,9 @@ export const webFetchTool: ToolDefinition = {
       }).pipe(
         Effect.catchAll((e: AgentError) =>
           Effect.succeed(
-            `Error fetching ${url}: ${e.cause instanceof Error ? e.cause.message : String(e.cause ?? e.message)}`,
-          ),
-        ),
+            `Error fetching ${url}: ${e.cause instanceof Error ? e.cause.message : String(e.cause ?? e.message)}`
+          )
+        )
       );
 
       clearTimeout(timer);

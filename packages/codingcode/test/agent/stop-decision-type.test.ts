@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { Result } from '../../src/core/result';
 import { HookService } from '../../src/hooks/registry.js';
-import type { HookDecision } from '../../src/hooks/registry.js';
+import type { HookDecision } from '../../src/hooks/types.js';
 
 describe('agent.turn.stop decision type inference', () => {
   it('should infer HookDecision from emitDecision without any cast', async () => {

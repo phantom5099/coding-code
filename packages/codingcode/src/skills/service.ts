@@ -25,20 +25,23 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
     }
 
     return {
-      getAll: (projectPath: string) => Effect.sync(() => filterEnabled(projectPath, readAll(projectPath))),
+      getAll: (projectPath: string) =>
+        Effect.sync(() => filterEnabled(projectPath, readAll(projectPath))),
 
-      findByName: (projectPath: string, name: string) => Effect.sync(() => {
-        if (resolveSkillDisabled(projectPath, name)) return undefined;
-        return readAll(projectPath).find((s) => s.name === name);
-      }),
+      findByName: (projectPath: string, name: string) =>
+        Effect.sync(() => {
+          if (resolveSkillDisabled(projectPath, name)) return undefined;
+          return readAll(projectPath).find((s) => s.name === name);
+        }),
 
-      select: (projectPath: string, query: string) => Effect.sync(() => {
-        const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
-        if (!match) return undefined;
-        const name = match[1]!;
-        if (resolveSkillDisabled(projectPath, name)) return undefined;
-        return readAll(projectPath).find((s) => s.name === name);
-      }),
+      select: (projectPath: string, query: string) =>
+        Effect.sync(() => {
+          const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
+          if (!match) return undefined;
+          const name = match[1]!;
+          if (resolveSkillDisabled(projectPath, name)) return undefined;
+          return readAll(projectPath).find((s) => s.name === name);
+        }),
 
       selectImplicit: (
         projectPath: string,
@@ -53,32 +56,39 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
           return all.find((s) => s.name === name);
         }),
 
-      extractSkill: (projectPath: string, query: string) => Effect.sync(() => {
-        const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
-        let skill: Skill | undefined;
-        if (match) {
-          const name = match[1]!;
-          if (!resolveSkillDisabled(projectPath, name)) {
-            skill = readAll(projectPath).find((s) => s.name === name);
+      extractSkill: (projectPath: string, query: string) =>
+        Effect.sync(() => {
+          const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
+          let skill: Skill | undefined;
+          if (match) {
+            const name = match[1]!;
+            if (!resolveSkillDisabled(projectPath, name)) {
+              skill = readAll(projectPath).find((s) => s.name === name);
+            }
           }
-        }
-        const actualQuery = query.replace(/^@[a-zA-Z0-9-]+\s*/, '');
-        return [skill, actualQuery] as [Skill | undefined, string];
-      }),
+          const actualQuery = query.replace(/^@[a-zA-Z0-9-]+\s*/, '');
+          return [skill, actualQuery] as [Skill | undefined, string];
+        }),
 
-      disableSkill: (projectPath: string, name: string) => Effect.sync(() => setProjectSkillDisabledState(projectPath, name, true)),
+      disableSkill: (projectPath: string, name: string) =>
+        Effect.sync(() => setProjectSkillDisabledState(projectPath, name, true)),
 
-      enableSkill: (projectPath: string, name: string) => Effect.sync(() => setProjectSkillDisabledState(projectPath, name, false)),
+      enableSkill: (projectPath: string, name: string) =>
+        Effect.sync(() => setProjectSkillDisabledState(projectPath, name, false)),
 
-      listWithStatus: (projectPath: string) => Effect.sync(() =>
-        readAll(projectPath).map((s) => ({
-          name: s.name,
-          description: s.description,
-          enabled: !resolveSkillDisabled(projectPath, s.name),
-        }))
-      ),
+      listWithStatus: (projectPath: string) =>
+        Effect.sync(() =>
+          readAll(projectPath).map((s) => ({
+            name: s.name,
+            description: s.description,
+            enabled: !resolveSkillDisabled(projectPath, s.name),
+          }))
+        ),
 
-      evictProject: (projectPath: string) => Effect.sync(() => { cachedByProject.delete(projectPath); }),
+      evictProject: (projectPath: string) =>
+        Effect.sync(() => {
+          cachedByProject.delete(projectPath);
+        }),
     };
   }),
 }) {}

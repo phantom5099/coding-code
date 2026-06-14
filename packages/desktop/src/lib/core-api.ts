@@ -402,7 +402,10 @@ export async function createAutomation(data: CreateAutomationInput): Promise<Aut
   return res.json();
 }
 
-export async function updateAutomation(id: string, data: UpdateAutomationInput): Promise<Automation> {
+export async function updateAutomation(
+  id: string,
+  data: UpdateAutomationInput
+): Promise<Automation> {
   const res = await fetch(`${API_BASE}/api/automations/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

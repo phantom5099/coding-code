@@ -1,5 +1,5 @@
-﻿import { describe, it, expect, vi } from 'vitest';
-import type { AgentEvent } from '../../src/agent/agent.js';
+import { describe, it, expect, vi } from 'vitest';
+import type { AgentEvent } from '../../src/agent/types.js';
 import { AgentError } from '../../src/core/error.js';
 
 describe('reactive compact event', () => {

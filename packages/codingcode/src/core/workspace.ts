@@ -43,10 +43,16 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()('Worksp
         const raw = opts.workspaceCwd ?? processRoot;
         workspaceCwd = resolve(raw);
         if (!existsSync(workspaceCwd)) {
-          throw new AgentError('CONFIG_INVALID', `Workspace directory does not exist: ${workspaceCwd}`);
+          throw new AgentError(
+            'CONFIG_INVALID',
+            `Workspace directory does not exist: ${workspaceCwd}`
+          );
         }
         if (!statSync(workspaceCwd).isDirectory()) {
-          throw new AgentError('CONFIG_INVALID', `Workspace path is not a directory: ${workspaceCwd}`);
+          throw new AgentError(
+            'CONFIG_INVALID',
+            `Workspace path is not a directory: ${workspaceCwd}`
+          );
         }
       },
 

@@ -80,7 +80,10 @@ export function resolveHookConfigs(projectRoot: string): UserHookConfig[] {
 
 // ---- Hook disabled state ----
 
-const hookDisabledStore = createDisabledStore({ globalKeyPath: ['hooks', 'disabledHooks'], getGlobalConfigDir });
+const hookDisabledStore = createDisabledStore({
+  globalKeyPath: ['hooks', 'disabledHooks'],
+  getGlobalConfigDir,
+});
 export const getGlobalHookDisabledState = hookDisabledStore.getGlobal;
 export const setGlobalHookDisabledState = hookDisabledStore.setGlobal;
 export const getProjectHookDisabledState = hookDisabledStore.getProject;

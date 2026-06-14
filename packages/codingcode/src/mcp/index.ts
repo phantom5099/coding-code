@@ -337,13 +337,24 @@ function mcpToolToDefinition(
     parameters: z.object({}).passthrough(),
     jsonSchema: mcpTool.inputSchema,
     execute: (args: unknown, _ctx?: ToolExecCtx) => {
-      if (isDisabledFn()) return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `MCP server '${serverName}' is disabled`));
-      return Effect.gen(function* () {
-        const result = yield* client.callTool(mcpTool.name, args as Record<string, unknown>).pipe(
-          Effect.catchAll((err) =>
-            Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `MCP tool '${mcpTool.name}' failed: ${String(err)}`, err))
-          )
+      if (isDisabledFn())
+        return Effect.fail(
+          new AgentError('TOOL_EXECUTION_FAILED', `MCP server '${serverName}' is disabled`)
         );
+      return Effect.gen(function* () {
+        const result = yield* client
+          .callTool(mcpTool.name, args as Record<string, unknown>)
+          .pipe(
+            Effect.catchAll((err) =>
+              Effect.fail(
+                new AgentError(
+                  'TOOL_EXECUTION_FAILED',
+                  `MCP tool '${mcpTool.name}' failed: ${String(err)}`,
+                  err
+                )
+              )
+            )
+          );
         return result;
       });
     },

@@ -1,4 +1,4 @@
-﻿﻿import { Effect, ManagedRuntime } from 'effect';
+﻿import { Effect, ManagedRuntime } from 'effect';
 import { SessionService } from '../../session/store.js';
 import { WorkspaceService } from '../../core/workspace.js';
 import { deleteSession } from '../../session/file-ops.js';
@@ -59,9 +59,7 @@ function getWorkspaceCwd(rt: ManagedRt): Promise<string> {
   );
 }
 
-export function createDirectSessionClient(
-  rt: ManagedRt
-): SessionClient {
+export function createDirectSessionClient(rt: ManagedRt): SessionClient {
   return {
     async createSession({ cwd }) {
       return rt.runPromise(

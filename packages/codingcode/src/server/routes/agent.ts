@@ -16,7 +16,11 @@ export function createAgentRouter(rt: ManagedRt): Hono {
   const router = new Hono();
 
   router.get('/permission-mode', async (c) => {
-    const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
+    const approval: any = await rt.runPromise(
+      Effect.gen(function* () {
+        return yield* ApprovalService;
+      })
+    );
     return c.json({ mode: approval.getPermissionMode() });
   });
 
@@ -25,7 +29,11 @@ export function createAgentRouter(rt: ManagedRt): Hono {
     if (!VALID_PERMISSION_MODES.has(body.mode as PermissionMode)) {
       return c.json({ error: `Invalid mode: ${body.mode}` }, 400);
     }
-    const approval: any = await rt.runPromise(Effect.gen(function* () { return yield* ApprovalService; }));
+    const approval: any = await rt.runPromise(
+      Effect.gen(function* () {
+        return yield* ApprovalService;
+      })
+    );
     await rt.runPromise(approval.setPermissionMode(body.mode as PermissionMode));
     return c.json({ mode: approval.getPermissionMode() });
   });

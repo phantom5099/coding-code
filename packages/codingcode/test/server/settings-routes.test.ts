@@ -33,7 +33,9 @@ const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
 
 const MockMemoryLayer = Layer.succeed(MemoryService, {
   getMemoryEnabled: () => memoryEnabled,
-  setMemoryEnabled: (v: boolean) => { memoryEnabled = v; },
+  setMemoryEnabled: (v: boolean) => {
+    memoryEnabled = v;
+  },
   loadMemoryForPrompt: () => '',
   flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
 } as any);
@@ -44,7 +46,9 @@ const MockSkillLayer = Layer.succeed(SkillService, {
   findByName: vi.fn(() => Effect.succeed(undefined)),
   select: vi.fn(() => Effect.succeed(undefined)),
   selectImplicit: vi.fn(() => Effect.succeed(undefined)),
-  extractSkill: vi.fn((_p: string, q: string) => Effect.sync(() => [undefined, q] as [undefined, string])),
+  extractSkill: vi.fn((_p: string, q: string) =>
+    Effect.sync(() => [undefined, q] as [undefined, string])
+  ),
   enableSkill: vi.fn(() => Effect.void),
   disableSkill: vi.fn(() => Effect.void),
   listWithStatus: vi.fn(() => Effect.succeed([])),
@@ -143,8 +147,9 @@ vi.mock('../../src/skills/config.js', () => ({
 }));
 
 vi.mock('../../src/core/workspace.js', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Context } = require('effect');
-  const tag = Context.GenericTag<any>('Workspace');
+  const tag = Context.GenericTag('Workspace') as any;
   return {
     WorkspaceService: tag,
     resolveWorkspaceCwd: vi.fn((cwd?: string) => cwd ?? '/default'),

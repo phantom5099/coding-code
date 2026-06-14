@@ -32,9 +32,7 @@ export interface AgentClient {
   listModels(): Promise<any>;
   switchModel(id: string): Promise<void>;
   getSessionId(): string;
-  getCheckpoints(): Promise<
-    Array<{ turnId: number; title: string; files: string[] }>
-  >;
+  getCheckpoints(): Promise<Array<{ turnId: number; title: string; files: string[] }>>;
   getCheckpointDiff(turnId?: number): Promise<CheckpointDiff>;
   revertCheckpointFiles(turnId: number, files: string[]): Promise<CodeRollbackResult>;
   previewRollbackDiff(throughTurnId: number): Promise<RollbackPreviewDiff>;

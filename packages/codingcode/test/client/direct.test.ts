@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 
 import { createDirectClient, agentEventToStreamChunk } from '../../src/client/direct.js';
-import {
-  ApprovalWaitService,
-} from '../../src/approval/async-confirm.js';
+import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
 import { AgentError } from '../../src/core/error.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
 import { LLMFactoryService } from '../../src/llm/factory.js';
@@ -15,10 +13,21 @@ const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
 
 const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
   getLLMClient: () => Effect.succeed(null),
-  listModels: () => Effect.succeed([
-    { id: 'test-model@TEST_KEY', provider: 'test', driver: 'openai', name: 'Test Model', model: 'test-model', base_url: 'http://localhost', api_key_env: 'TEST_KEY', context_window: 128000 },
-  ]),
-  switchModel: (id: string) => Effect.fail(new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /model to list.`)),
+  listModels: () =>
+    Effect.succeed([
+      {
+        id: 'test-model@TEST_KEY',
+        provider: 'test',
+        driver: 'openai',
+        name: 'Test Model',
+        model: 'test-model',
+        base_url: 'http://localhost',
+        api_key_env: 'TEST_KEY',
+        context_window: 128000,
+      },
+    ]),
+  switchModel: (id: string) =>
+    Effect.fail(new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /model to list.`)),
   findModel: () => Effect.succeed(null),
   getActiveEntry: () => Effect.fail(new AgentError('CONFIG_INVALID', 'No active model configured')),
   createClient: () => Effect.succeed(null),
@@ -153,8 +162,7 @@ describe('agentEventToStreamChunk - approval interleaving', () => {
 });
 
 describe('approval buffering - race condition fix', () => {
-  const run = <T>(eff: Effect.Effect<T, any, any>): Promise<T> =>
-    rt.runPromise(eff);
+  const run = <T>(eff: Effect.Effect<T, any, any>): Promise<T> => rt.runPromise(eff);
 
   it('buffers approval request when notify is null', async () => {
     const sessionId = 'buffer-' + Math.random().toString(36).slice(2);
@@ -165,16 +173,19 @@ describe('approval buffering - race condition fix', () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
-        yield* svc.registerEmitter(sessionId, (id: string, tool: string, args: Record<string, unknown>) => {
-          const req = { type: 'approval_request' as const, id, tool, args };
-          if (notify) {
-            const cb = notify;
-            notify = null;
-            cb(req);
-          } else {
-            bufferedApproval = req;
+        yield* svc.registerEmitter(
+          sessionId,
+          (id: string, tool: string, args: Record<string, unknown>) => {
+            const req = { type: 'approval_request' as const, id, tool, args };
+            if (notify) {
+              const cb = notify;
+              notify = null;
+              cb(req);
+            } else {
+              bufferedApproval = req;
+            }
           }
-        });
+        );
       })
     );
 
@@ -234,16 +245,19 @@ describe('approval buffering - race condition fix', () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
-        yield* svc.registerEmitter(sessionId, (id: string, tool: string, args: Record<string, unknown>) => {
-          const req = { type: 'approval_request' as const, id, tool, args };
-          if (notify) {
-            const cb = notify;
-            notify = null;
-            cb(req);
-          } else {
-            bufferedApproval = req;
+        yield* svc.registerEmitter(
+          sessionId,
+          (id: string, tool: string, args: Record<string, unknown>) => {
+            const req = { type: 'approval_request' as const, id, tool, args };
+            if (notify) {
+              const cb = notify;
+              notify = null;
+              cb(req);
+            } else {
+              bufferedApproval = req;
+            }
           }
-        });
+        );
       })
     );
 
@@ -279,16 +293,19 @@ describe('approval buffering - race condition fix', () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
-        yield* svc.registerEmitter(sessionId, (id: string, tool: string, args: Record<string, unknown>) => {
-          const req = { type: 'approval_request' as const, id, tool, args };
-          if (notify) {
-            const cb = notify;
-            notify = null;
-            cb(req);
-          } else {
-            bufferedApproval = req;
+        yield* svc.registerEmitter(
+          sessionId,
+          (id: string, tool: string, args: Record<string, unknown>) => {
+            const req = { type: 'approval_request' as const, id, tool, args };
+            if (notify) {
+              const cb = notify;
+              notify = null;
+              cb(req);
+            } else {
+              bufferedApproval = req;
+            }
           }
-        });
+        );
       })
     );
 

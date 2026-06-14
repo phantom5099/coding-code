@@ -27,7 +27,9 @@ export const RulesLayer = RulesService.Default;
 export const SessionLayer = SessionService.Default;
 export const LLMFactoryLayer = LLMFactoryService.Default.pipe(Layer.provide(WorkspaceLayer));
 export const MemoryLayer = MemoryService.Default.pipe(Layer.provide(LLMFactoryLayer));
-export const ContextLayer = ContextService.Default.pipe(Layer.provide(Layer.mergeAll(SessionLayer, LLMFactoryLayer)));
+export const ContextLayer = ContextService.Default.pipe(
+  Layer.provide(Layer.mergeAll(SessionLayer, LLMFactoryLayer))
+);
 export const HookLayer = HookService.Default;
 export const SkillLayer = SkillService.Default;
 export const CheckpointLayer = CheckpointService.Default;
@@ -60,7 +62,7 @@ const AgentDeps = Layer.mergeAll(
   TodoLayer,
   RulesLayer,
   ContextLayer,
-  MemoryLayer,
+  MemoryLayer
 );
 const AgentWithDeps = AgentService.Default.pipe(Layer.provide(AgentDeps));
 
@@ -84,5 +86,5 @@ export const AppLayer = Layer.mergeAll(
   RulesLayer,
   MemoryLayer,
   ContextLayer,
-  SchedulerLayer,
+  SchedulerLayer
 );

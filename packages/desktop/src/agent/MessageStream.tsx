@@ -121,7 +121,13 @@ function TurnDiffPanel({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => onRevertTurn(uiTurnId, diff.files.map((f: any) => f.path), isTurnReverted)}
+            onClick={() =>
+              onRevertTurn(
+                uiTurnId,
+                diff.files.map((f: any) => f.path),
+                isTurnReverted
+              )
+            }
             className={`text-[12px] px-3 py-1 rounded ${
               isTurnReverted
                 ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
@@ -242,7 +248,13 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     [turns]
   );
 
-  const { renderEntries, callIdToToolName, entryCountByTurnId, turnById, assistantContentByTurnId } = useMemo(() => {
+  const {
+    renderEntries,
+    callIdToToolName,
+    entryCountByTurnId,
+    turnById,
+    assistantContentByTurnId,
+  } = useMemo(() => {
     const entries: Array<{
       item: Item;
       turnId: string;
@@ -522,35 +534,36 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                       toolResult={entry.toolResult}
                     />
                   </div>
-                  {isLastInTurn && (() => {
-                    const assistantContent = assistantContentByTurnId.get(entry.turnId);
-                    const isTurnDone = turn?.status === 'completed' || turn?.status === 'error';
-                    if (!assistantContent || !isTurnDone) return null;
-                    const isCopied = copiedId === `turn-${entry.turnId}`;
-                    return (
-                      <div className="px-10 pb-1 group/turnCopy">
-                        <div className="pl-8 flex items-center gap-1.5 opacity-0 group-hover/turnCopy:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              copy(assistantContent, `turn-${entry.turnId}`);
-                            }}
-                            aria-label="复制助手消息"
-                            title="复制"
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-colors ${
-                              isCopied
-                                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
-                                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
-                            }`}
-                          >
-                            {isCopied ? <Check size={12} /> : <Copy size={12} />}
-                            {isCopied ? '已复制' : '复制'}
-                          </button>
+                  {isLastInTurn &&
+                    (() => {
+                      const assistantContent = assistantContentByTurnId.get(entry.turnId);
+                      const isTurnDone = turn?.status === 'completed' || turn?.status === 'error';
+                      if (!assistantContent || !isTurnDone) return null;
+                      const isCopied = copiedId === `turn-${entry.turnId}`;
+                      return (
+                        <div className="px-10 pb-1 group/turnCopy">
+                          <div className="pl-8 flex items-center gap-1.5 opacity-0 group-hover/turnCopy:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copy(assistantContent, `turn-${entry.turnId}`);
+                              }}
+                              aria-label="复制助手消息"
+                              title="复制"
+                              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-colors ${
+                                isCopied
+                                  ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
+                                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
+                              }`}
+                            >
+                              {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                              {isCopied ? '已复制' : '复制'}
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
                   {isLastInTurn && (
                     <div className="px-6 pb-2">
                       <TurnDiffPanel

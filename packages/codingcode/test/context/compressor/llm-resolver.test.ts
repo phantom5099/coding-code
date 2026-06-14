@@ -38,7 +38,7 @@ const fakeFallback: LLMClient = {
 
 async function runResolveLLM(target: string | null | undefined, fallback: LLMClient | null) {
   return Effect.runPromise(
-    resolveLLM(target, fallback).pipe(Effect.provideService(LLMFactoryService, mockFactory as any)),
+    resolveLLM(target, fallback).pipe(Effect.provideService(LLMFactoryService, mockFactory as any))
   );
 }
 
@@ -81,23 +81,25 @@ describe('resolveLLM (compaction)', () => {
   });
 
   it('returns fallback when createClient throws', async () => {
-    mockFindModel.mockReturnValue(Effect.succeed({ id: 'test-model' } as SelectableModel));
-    mockCreateClient.mockReturnValue(Effect.fail(new AgentError('CONFIG_MISSING', 'creation failed')));
+    mockFindModel.mockReturnValue(Effect.succeed({ id: 'test-model' } as SelectableModel) as any);
+    mockCreateClient.mockReturnValue(
+      Effect.fail(new AgentError('CONFIG_MISSING', 'creation failed')) as any
+    );
     const result = await runResolveLLM('test-model', fakeFallback);
     expect(result).toBe(fakeFallback);
   });
 
   it('returns fallback when createClient returns error', async () => {
-    mockFindModel.mockReturnValue(Effect.succeed({ id: 'test-model' } as SelectableModel));
-    mockCreateClient.mockReturnValue(Effect.fail(new AgentError('CONFIG_INVALID', 'error')));
+    mockFindModel.mockReturnValue(Effect.succeed({ id: 'test-model' } as SelectableModel) as any);
+    mockCreateClient.mockReturnValue(Effect.fail(new AgentError('CONFIG_INVALID', 'error')) as any);
     const result = await runResolveLLM('test-model', fakeFallback);
     expect(result).toBe(fakeFallback);
   });
 
   it('returns created client on success', async () => {
     const client = { modelInfo: { maxTokens: 100 } } as LLMClient;
-    mockFindModel.mockReturnValue(Effect.succeed({ id: 'test-model' } as SelectableModel));
-    mockCreateClient.mockReturnValue(Effect.succeed(client));
+    mockFindModel.mockReturnValue(Effect.succeed({ id: 'test-model' } as SelectableModel) as any);
+    mockCreateClient.mockReturnValue(Effect.succeed(client) as any);
     const result = await runResolveLLM('test-model', fakeFallback);
     expect(result).toBe(client);
   });

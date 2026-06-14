@@ -10,22 +10,26 @@ const TEST_CODINGCODE_DIR = join(TEST_ROOT, '.codingcode');
 const SkillTestLayer = SkillService.Default;
 
 const runWithSkill = <A>(f: (skill: SkillService) => Effect.Effect<A>): A =>
-  Effect.runSync(Effect.gen(function* () {
-    const skill = yield* SkillService;
-    return yield* f(skill);
-  }).pipe(Effect.provide(SkillTestLayer)));
+  Effect.runSync(
+    Effect.gen(function* () {
+      const skill = yield* SkillService;
+      return yield* f(skill);
+    }).pipe(Effect.provide(SkillTestLayer)) as any
+  );
 
 /** Run multiple operations against the same SkillService instance (shared cache). */
-const runWithSharedSkill = <A>(...ops: Array<(skill: SkillService) => Effect.Effect<unknown>>): A[] =>
+const runWithSharedSkill = <A>(
+  ...ops: Array<(skill: SkillService) => Effect.Effect<unknown>>
+): A[] =>
   Effect.runSync(
     Effect.gen(function* () {
       const skill = yield* SkillService;
       const results: A[] = [];
       for (const op of ops) {
-        results.push(yield* op(skill) as A);
+        results.push((yield* op(skill)) as A);
       }
       return results;
-    }).pipe(Effect.provide(SkillTestLayer))
+    }).pipe(Effect.provide(SkillTestLayer)) as any
   );
 
 describe('SkillService', () => {
@@ -88,7 +92,7 @@ Dynamic skill body.
       }
     );
 
-    expect(after.length).toBe(before.length);
+    expect((after as any[]).length).toBe((before as any[]).length);
   });
 
   it('should parse @skill-name prefix and return matching skill', () => {
@@ -133,7 +137,9 @@ Testing kebab-case name parsing.
   });
 
   it('should extract skill and return clean query', () => {
-    const [matched, cleanQuery] = runWithSkill((s) => s.extractSkill(TEST_ROOT, '@test-basic   do the refactoring work'));
+    const [matched, cleanQuery] = runWithSkill((s) =>
+      s.extractSkill(TEST_ROOT, '@test-basic   do the refactoring work')
+    );
     expect(matched).toBeDefined();
     expect(matched!.name).toBe('test-basic');
     expect(cleanQuery).toBe('do the refactoring work');

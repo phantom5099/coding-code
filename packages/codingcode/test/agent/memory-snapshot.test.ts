@@ -16,7 +16,16 @@ vi.mock('@codingcode/infra/config', () => ({
       compactionModel: '',
       reactiveCompactMaxRetries: 1,
     },
-    memory: { enabled: false, model: '', projectFile: '', userFile: '', maxBytes: 16384, promptMaxBytes: 8192, extraTypes: [], disabledTypes: [] },
+    memory: {
+      enabled: false,
+      model: '',
+      projectFile: '',
+      userFile: '',
+      maxBytes: 16384,
+      promptMaxBytes: 8192,
+      extraTypes: [],
+      disabledTypes: [],
+    },
     server: { port: 8080 },
   }),
 }));
@@ -32,8 +41,12 @@ vi.mock('../../src/context/organizer.js', () => ({
 }));
 
 vi.mock('../../src/context/compressor.js', () => ({
-  compactIfNeeded: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
-  compactWithLLM: vi.fn(() => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })),
+  compactIfNeeded: vi.fn(() =>
+    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })
+  ),
+  compactWithLLM: vi.fn(() =>
+    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })
+  ),
 }));
 
 import { Result } from '../../src/core/result.js';
@@ -66,7 +79,12 @@ const BaseMockLayer = Layer.mergeAll(
     resolveMainAgentProfile: () => undefined,
     resolveSubagentProfile: () => undefined,
     listAgentProfiles: () => [],
-    getToolPolicy: () => ({ allowedTools: undefined, allowedMcpServers: undefined, allowToolSearch: true, allowDeferredTools: false }),
+    getToolPolicy: () => ({
+      allowedTools: undefined,
+      allowedMcpServers: undefined,
+      allowToolSearch: true,
+      allowDeferredTools: false,
+    }),
     setSessionProfile: () => {},
     getSessionProfile: () => undefined,
     disposeSession: () => Effect.void,
@@ -134,22 +152,20 @@ async function runOnce(llm: any, memorySnapshot: string = '', diskMemory: string
   const memoryLayer = makeMemoryLayer(() => diskMemory);
   const fullLayer = Layer.mergeAll(BaseMockLayer, memoryLayer);
   await Effect.runPromise(
-    agentLoop(
-      null as any,
-      mockHooks,
-      1,
-      0,
-      { state, llm },
-      q
-    ).pipe(Effect.provide(fullLayer)) as any
+    agentLoop(null as any, mockHooks, 1, 0, { state, llm }, q).pipe(
+      Effect.provide(fullLayer)
+    ) as any
   );
 }
 
 describe('Memory snapshot stability', () => {
-
   it('system prompt uses state.memorySnapshot instead of loadMemoryForPrompt', async () => {
     const { llm, captured } = makeCapturingLlm();
-    await runOnce(llm, '## Long-term Memory\n\nOriginal snapshot', '## Long-term Memory\n\nNew content from disk');
+    await runOnce(
+      llm,
+      '## Long-term Memory\n\nOriginal snapshot',
+      '## Long-term Memory\n\nNew content from disk'
+    );
     expect(captured.system).toContain('Original snapshot');
     expect(captured.system).not.toContain('New content from disk');
   });
@@ -166,7 +182,11 @@ describe('Memory snapshot stability', () => {
 
   it('injects <system-reminder> when memory changed since snapshot', async () => {
     const { llm, captured } = makeCapturingLlm();
-    await runOnce(llm, '## Long-term Memory\n\nOriginal snapshot', '## Long-term Memory\n\nUpdated on disk');
+    await runOnce(
+      llm,
+      '## Long-term Memory\n\nOriginal snapshot',
+      '## Long-term Memory\n\nUpdated on disk'
+    );
     expect(captured.system).toContain('Original snapshot');
     const lastUserMsg = [...(captured.messages ?? [])]
       .reverse()

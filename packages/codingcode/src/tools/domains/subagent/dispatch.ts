@@ -15,7 +15,13 @@ import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 export function createDispatchAgentTool(): Effect.Effect<
   ToolDefinition,
   never,
-  SessionService | ApprovalService | HookService | McpService | ProjectRuntimeService | LLMFactoryService | RulesService
+  | SessionService
+  | ApprovalService
+  | HookService
+  | McpService
+  | ProjectRuntimeService
+  | LLMFactoryService
+  | RulesService
 > {
   return Effect.gen(function* () {
     const session = yield* SessionService;
@@ -43,22 +49,33 @@ export function createDispatchAgentTool(): Effect.Effect<
 
           // Check global subagent switch
           if (!resolveSubagentEnabled(projectPath)) {
-            return yield* Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'Subagent dispatch is disabled in global settings'));
+            return yield* Effect.fail(
+              new AgentError(
+                'TOOL_EXECUTION_FAILED',
+                'Subagent dispatch is disabled in global settings'
+              )
+            );
           }
 
           // Get profile
           const profile = runtime.resolveSubagentProfile(projectPath, agentName);
           if (!profile) {
-            return yield* Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Unknown subagent: ${agentName}`));
+            return yield* Effect.fail(
+              new AgentError('TOOL_EXECUTION_FAILED', `Unknown subagent: ${agentName}`)
+            );
           }
 
           // Check individual agent disabled state
           if (resolveAgentDisabled(projectPath, agentName)) {
-            return yield* Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Subagent '${agentName}' is disabled`));
+            return yield* Effect.fail(
+              new AgentError('TOOL_EXECUTION_FAILED', `Subagent '${agentName}' is disabled`)
+            );
           }
 
           if (!ctx?.agentRunner?.agentService || !ctx?.agentRunner?.llm) {
-            return yield* Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'dispatch_agent requires agentRunner context'));
+            return yield* Effect.fail(
+              new AgentError('TOOL_EXECUTION_FAILED', 'dispatch_agent requires agentRunner context')
+            );
           }
 
           const { agentService, llm: parentLlm } = ctx.agentRunner;
@@ -67,7 +84,12 @@ export function createDispatchAgentTool(): Effect.Effect<
           if (profile.model) {
             const entry = yield* factory.findModel(profile.model);
             if (!entry) {
-              return yield* Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Subagent profile "${agentName}" specifies unknown model: ${profile.model}`));
+              return yield* Effect.fail(
+                new AgentError(
+                  'TOOL_EXECUTION_FAILED',
+                  `Subagent profile "${agentName}" specifies unknown model: ${profile.model}`
+                )
+              );
             }
             llm = yield* factory.createClient(entry);
           }
@@ -79,16 +101,26 @@ export function createDispatchAgentTool(): Effect.Effect<
             parentSessionId: ctx?.sessionId,
           });
           if (spawnDecision && spawnDecision.decision === 'deny') {
-            return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', `Subagent spawn denied: ${spawnDecision.reason ?? 'no reason provided'}`));
+            return yield* Effect.fail(
+              new AgentError(
+                'TOOL_NOT_ALLOWED',
+                `Subagent spawn denied: ${spawnDecision.reason ?? 'no reason provided'}`
+              )
+            );
           }
 
           // Create subagent transcript nested under parent session
           const childUuid = randomUUID();
 
-          const childState = yield* session.create(projectPath, (ctx as any)?.model ?? 'subagent', childUuid, {
-            parentSessionId: ctx?.sessionId,
-            agentName: agentName,
-          });
+          const childState = yield* session.create(
+            projectPath,
+            (ctx as any)?.model ?? 'subagent',
+            childUuid,
+            {
+              parentSessionId: ctx?.sessionId,
+              agentName: agentName,
+            }
+          );
           session.incrementTurn(childState);
           yield* session.recordUser(childState, prompt);
 
@@ -146,7 +178,14 @@ export function createDispatchAgentTool(): Effect.Effect<
                   if (event._tag === 'Done') {
                     content = event.content;
                   } else if (event._tag === 'Error') {
-                    resume(Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Subagent failed: ${event.error.message}`)));
+                    resume(
+                      Effect.fail(
+                        new AgentError(
+                          'TOOL_EXECUTION_FAILED',
+                          `Subagent failed: ${event.error.message}`
+                        )
+                      )
+                    );
                     return;
                   }
                 }
@@ -156,11 +195,13 @@ export function createDispatchAgentTool(): Effect.Effect<
                 await Effect.runPromise(hooks.disposeSession(childUuid));
 
                 // Emit completion hook
-                await Effect.runPromise(hooks.emit('agent.subagent.complete', {
-                  childSessionId: childUuid,
-                  profile: agentName,
-                  status: 'done',
-                }));
+                await Effect.runPromise(
+                  hooks.emit('agent.subagent.complete', {
+                    childSessionId: childUuid,
+                    profile: agentName,
+                    status: 'done',
+                  })
+                );
 
                 resume(Effect.succeed(content || '(subagent completed without output)'));
               } catch (e) {
@@ -168,7 +209,9 @@ export function createDispatchAgentTool(): Effect.Effect<
                 try {
                   await Effect.runPromise(mcp.disposeSession(childUuid));
                   await Effect.runPromise(hooks.disposeSession(childUuid));
-                } catch { /* ignore cleanup errors */ }
+                } catch {
+                  /* ignore cleanup errors */
+                }
                 const msg = e instanceof Error ? e.message : String(e);
                 resume(Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', msg)));
               }
@@ -181,7 +224,11 @@ export function createDispatchAgentTool(): Effect.Effect<
   });
 }
 
-function buildSubagentPrompt(profile: { systemPrompt?: string }, projectPath: string, rules?: string): string {
+function buildSubagentPrompt(
+  profile: { systemPrompt?: string },
+  projectPath: string,
+  rules?: string
+): string {
   const parts: string[] = [];
 
   if (profile.systemPrompt) {
@@ -194,7 +241,9 @@ function buildSubagentPrompt(profile: { systemPrompt?: string }, projectPath: st
 - Shell: ${process.env.SHELL || process.env.ComSpec || 'bash'}`);
 
   if (rules) {
-    parts.push(`## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`);
+    parts.push(
+      `## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`
+    );
   }
 
   return parts.filter(Boolean).join('\n\n');

@@ -6,9 +6,7 @@ import { LLMFactoryService } from '../../../src/llm/factory.js';
 
 const { mockLLM } = vi.hoisted(() => ({
   mockLLM: {
-    complete: vi.fn(() =>
-      Effect.succeed({ content: '<summary>compacted</summary>' })
-    ),
+    complete: vi.fn(() => Effect.succeed({ content: '<summary>compacted</summary>' })),
     completeStream: () => ({
       stream: (async function* () {})(),
       response: Promise.resolve({

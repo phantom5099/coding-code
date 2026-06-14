@@ -39,14 +39,16 @@ let _service: ApprovalService | null = null;
 async function getService(): Promise<ApprovalService> {
   if (!_service) {
     _service = await Effect.runPromise(
-      Effect.gen(function* () { return yield* ApprovalService; }).pipe(Effect.provide(TestLayer) as any)
+      Effect.gen(function* () {
+        return yield* ApprovalService;
+      }).pipe(Effect.provide(TestLayer) as any)
     );
   }
-  return _service;
+  return _service!;
 }
 
 function run<T>(eff: (svc: ApprovalService) => Effect.Effect<T, any, any>): Promise<T> {
-  return getService().then(svc => Effect.runPromise(eff(svc)));
+  return getService().then((svc) => Effect.runPromise(eff(svc) as any));
 }
 
 describe('Global permission mode state', () => {

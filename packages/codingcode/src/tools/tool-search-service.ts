@@ -20,7 +20,10 @@ export class ToolSearchService extends Effect.Service<ToolSearchService>()('Tool
       return s;
     }
 
-    function filterByPolicy(tools: ToolDefinition[], policy?: ToolVisibilityPolicy): ToolDefinition[] {
+    function filterByPolicy(
+      tools: ToolDefinition[],
+      policy?: ToolVisibilityPolicy
+    ): ToolDefinition[] {
       if (!policy || !policy.allowedTools) return tools;
       return tools.filter((t) => policy.allowedTools!.has(t.name));
     }

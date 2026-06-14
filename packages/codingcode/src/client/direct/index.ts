@@ -13,10 +13,7 @@ export interface DirectClients {
   settings: SettingsClient;
 }
 
-export function createDirectClients(
-  llm: any,
-  rt: ManagedRt
-): DirectClients {
+export function createDirectClients(llm: any, rt: ManagedRt): DirectClients {
   return {
     agent: createDirectAgentClient(llm, rt),
     sessions: createDirectSessionClient(rt),

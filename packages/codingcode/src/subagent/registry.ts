@@ -191,7 +191,14 @@ Structure your analysis as:
 - **Phases**: If the task is complex, break it into ordered phases
 
 If you cannot fully understand the codebase, say so and explain what information is missing.`,
-  tools: ['read_file', 'search_files', 'search_code', 'execute_command', 'fetch_url', 'tool_search'],
+  tools: [
+    'read_file',
+    'search_files',
+    'search_code',
+    'execute_command',
+    'fetch_url',
+    'tool_search',
+  ],
   readonly: true,
   maxSteps: 180,
 };

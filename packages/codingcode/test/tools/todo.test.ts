@@ -10,15 +10,17 @@ describe('todo_write tool', () => {
 
   it('returns pending/in_progress/completed counts', async () => {
     const result = await Effect.runPromise(
-      todoWriteTool.execute(
-        {
-          plan: [
-            { step: 'first', status: 'pending' },
-            { step: 'second', status: 'in_progress' },
-            { step: 'third', status: 'completed' },
-          ],
-        },
-        { sessionId: 'test-agent' }
+      (
+        todoWriteTool.execute(
+          {
+            plan: [
+              { step: 'first', status: 'pending' },
+              { step: 'second', status: 'in_progress' },
+              { step: 'third', status: 'completed' },
+            ],
+          },
+          { sessionId: 'test-agent' }
+        ) as any
       ).pipe(Effect.provide(TodoService.Default))
     );
     expect(result).toBe('pending=1 in_progress=1 completed=1');
@@ -58,7 +60,7 @@ describe('todo_write tool', () => {
 
   it('fails with AgentError if sessionId is missing', async () => {
     const exit = await Effect.runPromiseExit(
-      todoWriteTool.execute({ plan: [{ step: 'x', status: 'pending' }] }, {}).pipe(
+      (todoWriteTool.execute({ plan: [{ step: 'x', status: 'pending' }] }, {}) as any).pipe(
         Effect.provide(TodoService.Default)
       )
     );

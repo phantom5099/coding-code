@@ -29,7 +29,10 @@ export default defineConfig({
         '@codingcode/core/core/workspace': resolve(codingcodeRoot, 'core/workspace.ts'),
         '@codingcode/core/layer': resolve(codingcodeRoot, 'layer.ts'),
         '@codingcode/core/server/create': resolve(codingcodeRoot, 'server/index.ts'),
-        '@codingcode/core/server/port-discovery': resolve(codingcodeRoot, 'server/port-discovery.ts'),
+        '@codingcode/core/server/port-discovery': resolve(
+          codingcodeRoot,
+          'server/port-discovery.ts'
+        ),
         '@codingcode/infra/config': resolve(infraRoot, 'config.ts'),
         '@codingcode/infra/logger': resolve(infraRoot, 'logger.ts'),
       },

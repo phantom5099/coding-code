@@ -22,14 +22,14 @@ describe('tools/domains/bash exec error', () => {
     const effect = bashTool.execute({ command: 'echo test', timeout_ms: 5000 });
     // Emit error on next tick so Effect.async callback has registered listeners
     setTimeout(() => mockProc.emit('error', new Error('spawn failed')), 0);
-    const exit = await Effect.runPromiseExit(effect);
+    const exit = await Effect.runPromiseExit(effect as any);
     expect(exit._tag).toBe('Failure');
   });
 
   it('fails with TOOL_EXECUTION_FAILED code', async () => {
     const effect = bashTool.execute({ command: 'echo test', timeout_ms: 5000 });
     setTimeout(() => mockProc.emit('error', new Error('spawn failed')), 0);
-    const exit = await Effect.runPromiseExit(effect);
+    const exit = await Effect.runPromiseExit(effect as any);
     expect(exit._tag).toBe('Failure');
   });
 });

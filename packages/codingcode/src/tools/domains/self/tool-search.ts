@@ -5,9 +5,7 @@ import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 import type { ToolVisibilityPolicy } from '../../types.js';
 import { ToolSearchService } from '../../tool-search-service.js';
 
-export function createToolSearchTool(
-  policy?: ToolVisibilityPolicy
-): ToolDefinition {
+export function createToolSearchTool(policy?: ToolVisibilityPolicy): ToolDefinition {
   return {
     name: 'tool_search',
     description:
@@ -21,13 +19,18 @@ export function createToolSearchTool(
     execute: (args, ctx) => {
       const sessionId = ctx?.sessionId;
       if (!sessionId)
-        return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'tool_search requires sessionId'));
+        return Effect.fail(
+          new AgentError('TOOL_EXECUTION_FAILED', 'tool_search requires sessionId')
+        );
       const { query } = args as { query: string };
       return Effect.gen(function* () {
         const svc = yield* ToolSearchService;
         const hits = svc.search(sessionId, query, policy);
         if (hits.length === 0) return `No deferred tools matched "${query}".`;
-        svc.markLoaded(sessionId, hits.map((h) => h.name));
+        svc.markLoaded(
+          sessionId,
+          hits.map((h) => h.name)
+        );
         return [
           `Loaded ${hits.length} tool(s). Their full schemas are now available next turn:`,
           ...hits.map((h) => `- ${h.name}: ${h.shortDescription ?? ''}`),

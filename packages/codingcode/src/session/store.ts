@@ -18,11 +18,7 @@ import type {
   SessionIndex,
   TokenUsage,
 } from './types.js';
-import {
-  estimateTokens,
-  estimateTokensForContent,
-  estimateMessageTokens,
-} from '../core/util.js';
+import { estimateTokens, estimateTokensForContent, estimateMessageTokens } from '../core/util.js';
 import {
   projectSessionsDir,
   ensureDirs,
@@ -147,7 +143,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           return state;
         },
         catch: (e) =>
-          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+          e instanceof AgentError
+            ? e
+            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
 
     const recordUser = (
@@ -173,7 +171,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           return event;
         },
         catch: (e) =>
-          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+          e instanceof AgentError
+            ? e
+            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
 
     const recordAssistant = (
@@ -207,7 +207,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           return event;
         },
         catch: (e) =>
-          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+          e instanceof AgentError
+            ? e
+            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
 
     const recordToolResult = (
@@ -243,7 +245,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           return event;
         },
         catch: (e) =>
-          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+          e instanceof AgentError
+            ? e
+            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
 
     const appendSummary = (
@@ -270,7 +274,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           return event;
         },
         catch: (e) =>
-          e instanceof AgentError ? e : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+          e instanceof AgentError
+            ? e
+            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
 
     const hideMessage = (
@@ -318,9 +324,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         return event;
       });
 
-    const undoLastHide = (
-      state: SessionStoreState
-    ): Effect.Effect<UnhideEvent | null> =>
+    const undoLastHide = (state: SessionStoreState): Effect.Effect<UnhideEvent | null> =>
       Effect.sync(() => {
         const history = readHistory(state.transcriptPath);
         let lastHideUuid: string | null = null;
@@ -375,19 +379,13 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
     ): Effect.Effect<import('./types.js').SessionEvent[]> =>
       Effect.sync(() => readHistory(state.transcriptPath));
 
-    const readMessages = (
-      state: SessionStoreState
-    ): Effect.Effect<Message[]> =>
+    const readMessages = (state: SessionStoreState): Effect.Effect<Message[]> =>
       Effect.sync(() => buildMessages(state.transcriptPath));
 
-    const listSessionsFromCwd = (
-      cwd?: string
-    ): Effect.Effect<SessionIndex[]> =>
+    const listSessionsFromCwd = (cwd?: string): Effect.Effect<SessionIndex[]> =>
       Effect.sync(() => listSessions(cwd ? encodeProjectPath(cwd) : undefined));
 
-    const findSessionIndexFromId = (
-      sessionId: string
-    ): Effect.Effect<SessionIndex | null> =>
+    const findSessionIndexFromId = (sessionId: string): Effect.Effect<SessionIndex | null> =>
       Effect.sync(() => findSessionIndex(sessionId));
 
     const getSessionId = (state: SessionStoreState): string => state.sessionId;
@@ -402,9 +400,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         setPermissionMode(state.sessionId, state.indexPath, mode);
       });
 
-    const getPermissionModeFromState = (
-      state: SessionStoreState
-    ): Effect.Effect<string> =>
+    const getPermissionModeFromState = (state: SessionStoreState): Effect.Effect<string> =>
       Effect.sync(() => getPermissionMode(state.indexPath));
 
     const incrementTurn = (state: SessionStoreState): number => {
@@ -435,7 +431,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       incrementTurn,
       resolveSessionJsonlPath: (sessionId: string): string => _resolveSessionJsonlPath(sessionId),
       readHistoryFile: (path: string): import('./types.js').SessionEvent[] => readHistory(path),
-      findSessionIndexProxy: (sessionId: string): SessionIndex | null => findSessionIndex(sessionId),
+      findSessionIndexProxy: (sessionId: string): SessionIndex | null =>
+        findSessionIndex(sessionId),
       appendLineProxy: (path: string, event: object): void => appendLine(path, event),
     };
   }),
@@ -488,11 +485,7 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
   };
 }
 
-function forkSessionImpl(
-  sourceSessionId: string,
-  sourceJsonlPath: string,
-  atUuid: string
-): string {
+function forkSessionImpl(sourceSessionId: string, sourceJsonlPath: string, atUuid: string): string {
   const events = readHistory(sourceJsonlPath);
   const atIdx = atUuid ? events.findIndex((e) => 'uuid' in e && (e as any).uuid === atUuid) : -1;
 

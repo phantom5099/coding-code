@@ -59,7 +59,9 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
         sessionId: string,
         fn: (id: string, tool: string, args: Record<string, unknown>) => void
       ): Effect.Effect<void> =>
-        Effect.sync(() => { approvalEmitters.set(sessionId, fn); }),
+        Effect.sync(() => {
+          approvalEmitters.set(sessionId, fn);
+        }),
 
       delegateEmitter: (childSessionId: string, parentSessionId: string): Effect.Effect<void> =>
         Effect.sync(() => {
@@ -70,7 +72,9 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
         }),
 
       unregisterEmitter: (sessionId: string): Effect.Effect<void> =>
-        Effect.sync(() => { approvalEmitters.delete(sessionId); }),
+        Effect.sync(() => {
+          approvalEmitters.delete(sessionId);
+        }),
 
       hasEmitter: (sessionId: string): Effect.Effect<boolean> =>
         Effect.sync(() => approvalEmitters.has(sessionId)),

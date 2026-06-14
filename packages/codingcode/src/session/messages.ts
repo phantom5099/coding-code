@@ -71,7 +71,7 @@ export function applyVisibilityEvents(events: SessionEvent[]): VisibilityResult 
 
 export function buildMessagesFromEvents(
   events: SessionEvent[],
-  externalCompactedTurnIds?: Set<number>,
+  externalCompactedTurnIds?: Set<number>
 ): Message[] {
   const { hidden, compactedTurnIds: derivedIds } = applyVisibilityEvents(events);
   const compactedTurnIds = externalCompactedTurnIds ?? derivedIds;

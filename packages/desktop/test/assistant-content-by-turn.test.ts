@@ -85,7 +85,11 @@ describe('assistantContentByTurnId', () => {
       },
       {
         id: 't2',
-        items: [makeMsg('user', 'b'), makeMsg('assistant', 'reply-b1'), makeMsg('assistant', 'reply-b2')],
+        items: [
+          makeMsg('user', 'b'),
+          makeMsg('assistant', 'reply-b1'),
+          makeMsg('assistant', 'reply-b2'),
+        ],
         status: 'completed',
       },
     ];

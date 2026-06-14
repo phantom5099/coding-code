@@ -1,4 +1,4 @@
-﻿﻿import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createAgentRouter } from '../../src/server/routes/agent.js';
 import { ApprovalService } from '../../src/approval/index.js';
@@ -9,7 +9,11 @@ const MockApprovalLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.mergeAll(HookService.Default, ApprovalWaitService.Default))
 );
 
-const TestLayer = Layer.mergeAll(MockApprovalLayer, HookService.Default, ApprovalWaitService.Default);
+const TestLayer = Layer.mergeAll(
+  MockApprovalLayer,
+  HookService.Default,
+  ApprovalWaitService.Default
+);
 
 const rt = ManagedRuntime.make(TestLayer);
 const agentRouter = createAgentRouter(rt);

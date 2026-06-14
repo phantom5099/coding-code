@@ -49,7 +49,11 @@ export const bashTool: ToolDefinition = {
 
       const timer = setTimeout(() => {
         proc.kill();
-        resume(Effect.succeed(`Command timed out after ${timeout_ms}ms\nStdout:\n${stdout}\nStderr:\n${stderr}`));
+        resume(
+          Effect.succeed(
+            `Command timed out after ${timeout_ms}ms\nStdout:\n${stdout}\nStderr:\n${stderr}`
+          )
+        );
       }, timeout_ms);
 
       proc.on('close', (code) => {
@@ -72,7 +76,9 @@ export const bashTool: ToolDefinition = {
         clearTimeout(timer);
         ctx?.signal?.removeEventListener('abort', onAbort);
         resume(
-          Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Command failed to start: ${err.message}`, err))
+          Effect.fail(
+            new AgentError('TOOL_EXECUTION_FAILED', `Command failed to start: ${err.message}`, err)
+          )
         );
       });
     });

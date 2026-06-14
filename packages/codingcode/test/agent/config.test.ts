@@ -11,13 +11,21 @@ vi.mock('@codingcode/infra/config', () => ({
       compactionModel: '',
       reactiveCompactMaxRetries: 1,
     },
-    memory: { enabled: false, model: '', projectFile: '', userFile: '', maxBytes: 16384, promptMaxBytes: 8192, extraTypes: [], disabledTypes: [] },
+    memory: {
+      enabled: false,
+      model: '',
+      projectFile: '',
+      userFile: '',
+      maxBytes: 16384,
+      promptMaxBytes: 8192,
+      extraTypes: [],
+      disabledTypes: [],
+    },
     server: { port: 8080 },
   }),
 }));
 
 describe('resolveConfig', () => {
-
   it('returns maxStopContinuations defaulting to 3 when no config file is present', () => {
     const cfg = resolveConfig();
     expect(cfg.maxStopContinuations).toBe(3);
@@ -25,6 +33,6 @@ describe('resolveConfig', () => {
 
   it('returns maxSteps defaulting to 50 when no config file is present', () => {
     const cfg = resolveConfig();
-    expect(cfg.maxSteps).toBe(50);
+    expect(cfg.maxSteps).toBe(250);
   });
 });

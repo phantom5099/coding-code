@@ -19,7 +19,7 @@ describe('createToolSearchTool', () => {
     });
 
     const result = await Effect.runPromise(
-      setupAndRun.pipe(Effect.provide(ToolSearchService.Default))
+      (setupAndRun as any).pipe(Effect.provide(ToolSearchService.Default))
     );
     expect(result).toContain('Loaded 1 tool(s)');
     expect(result).toContain('todo_write');
@@ -39,7 +39,7 @@ describe('createToolSearchTool', () => {
     });
 
     const result = await Effect.runPromise(
-      setupAndRun.pipe(Effect.provide(ToolSearchService.Default))
+      (setupAndRun as any).pipe(Effect.provide(ToolSearchService.Default))
     );
     expect(result).toBe('No deferred tools matched "zzznonexistent".');
   });
@@ -48,7 +48,7 @@ describe('createToolSearchTool', () => {
     const tool = createToolSearchTool();
 
     const exit = await Effect.runPromiseExit(
-      tool.execute({ query: 'anything' }, {}).pipe(
+      (tool.execute({ query: 'anything' }, {}) as any).pipe(
         Effect.provide(ToolSearchService.Default)
       )
     );
@@ -69,9 +69,9 @@ describe('createToolSearchTool', () => {
       return { r1, r2 };
     });
 
-    const { r1, r2 } = await Effect.runPromise(
-      setupAndRun.pipe(Effect.provide(ToolSearchService.Default))
-    );
+    const { r1, r2 } = (await Effect.runPromise(
+      (setupAndRun as any).pipe(Effect.provide(ToolSearchService.Default))
+    )) as any;
 
     expect(r1).toContain('tool_a');
     expect(r2).toContain('tool_b');

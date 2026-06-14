@@ -17,7 +17,7 @@ import {
   resolveAgentDisabled,
 } from '../../src/subagent/registry.js';
 import { buildSystemPrompt } from '../../src/agent/prompt.js';
-import type { AgentProfile } from '../../src/subagent/registry.js';
+import type { AgentProfile } from '../../src/subagent/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

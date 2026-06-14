@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import {
-  ApprovalWaitService,
-} from '../../src/approval/async-confirm.js';
+import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
 import type { ConfirmResult } from '../../src/approval/confirmation.js';
 
 const TestLayer = ApprovalWaitService.Default;
@@ -89,7 +87,10 @@ describe('delegateEmitter', () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
-        yield* svc.registerEmitter(parentSid, (id: string, tool: string, args: Record<string, unknown>) => calls.push([id, tool, args]));
+        yield* svc.registerEmitter(
+          parentSid,
+          (id: string, tool: string, args: Record<string, unknown>) => calls.push([id, tool, args])
+        );
 
         expect(yield* svc.hasEmitter(parentSid)).toBe(true);
         expect(yield* svc.hasEmitter(childSid)).toBe(false);

@@ -79,12 +79,16 @@ export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMF
           const raw = readFileSync(path, 'utf-8');
           const parsed = JSON.parse(raw) as ProviderCatalog;
           if (!parsed.providers || parsed.providers.length === 0) {
-            return yield* Effect.fail(new AgentError('CONFIG_INVALID', 'models.json has no providers defined'));
+            return yield* Effect.fail(
+              new AgentError('CONFIG_INVALID', 'models.json has no providers defined')
+            );
           }
           catalog = parsed;
           return catalog;
         } catch (e) {
-          return yield* Effect.fail(new AgentError('CONFIG_INVALID', `Failed to parse models.json: ${e}`));
+          return yield* Effect.fail(
+            new AgentError('CONFIG_INVALID', `Failed to parse models.json: ${e}`)
+          );
         }
       });
 
@@ -166,7 +170,8 @@ export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMF
             case 'openai': {
               const { createOpenAI } = yield* Effect.tryPromise({
                 try: () => import('@ai-sdk/openai'),
-                catch: (e) => new AgentError('CONFIG_INVALID', `Failed to import openai driver: ${e}`),
+                catch: (e) =>
+                  new AgentError('CONFIG_INVALID', `Failed to import openai driver: ${e}`),
               });
               const provider = createOpenAI({
                 name: entry.provider,
@@ -178,7 +183,8 @@ export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMF
             case 'deepseek': {
               const { createDeepSeek } = yield* Effect.tryPromise({
                 try: () => import('@ai-sdk/deepseek'),
-                catch: (e) => new AgentError('CONFIG_INVALID', `Failed to import deepseek driver: ${e}`),
+                catch: (e) =>
+                  new AgentError('CONFIG_INVALID', `Failed to import deepseek driver: ${e}`),
               });
               const deepseek = createDeepSeek({
                 baseURL: entry.base_url,
@@ -237,16 +243,22 @@ export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMF
             case 'openai': {
               const { createOpenAI } = yield* Effect.tryPromise({
                 try: () => import('@ai-sdk/openai'),
-                catch: (e) => new AgentError('CONFIG_INVALID', `Failed to import openai driver: ${e}`),
+                catch: (e) =>
+                  new AgentError('CONFIG_INVALID', `Failed to import openai driver: ${e}`),
               });
-              const provider = createOpenAI({ name: found.provider, baseURL: found.base_url, apiKey });
+              const provider = createOpenAI({
+                name: found.provider,
+                baseURL: found.base_url,
+                apiKey,
+              });
               client = new OpenAIProvider(provider.chat(found.model), found);
               break;
             }
             case 'deepseek': {
               const { createDeepSeek } = yield* Effect.tryPromise({
                 try: () => import('@ai-sdk/deepseek'),
-                catch: (e) => new AgentError('CONFIG_INVALID', `Failed to import deepseek driver: ${e}`),
+                catch: (e) =>
+                  new AgentError('CONFIG_INVALID', `Failed to import deepseek driver: ${e}`),
               });
               const deepseek = createDeepSeek({ baseURL: found.base_url, apiKey });
               client = new DeepSeekProvider(deepseek(found.model), found);
@@ -254,7 +266,10 @@ export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMF
             }
             default:
               return yield* Effect.fail(
-                new AgentError('CONFIG_INVALID', `Unknown driver "${found.driver}" for provider "${found.provider}"`)
+                new AgentError(
+                  'CONFIG_INVALID',
+                  `Unknown driver "${found.driver}" for provider "${found.provider}"`
+                )
               );
           }
           currentClient = client;

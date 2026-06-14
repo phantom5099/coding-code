@@ -18,7 +18,7 @@ const mockFactory = {
 } as any;
 
 const testLayer = MemoryService.Default.pipe(
-  Layer.provide(Layer.succeed(LLMFactoryService, mockFactory)),
+  Layer.provide(Layer.succeed(LLMFactoryService, mockFactory))
 );
 
 let service: any;
@@ -35,7 +35,7 @@ beforeEach(async () => {
   service = await Effect.runPromise(
     Effect.gen(function* () {
       return yield* MemoryService;
-    }).pipe(Effect.provide(testLayer)),
+    }).pipe(Effect.provide(testLayer))
   );
 });
 
@@ -106,7 +106,7 @@ describe('Memory Index', () => {
         `<!-- auto:begin -->
 ### project
 - Architecture decision 1
-<!-- auto:end -->`,
+<!-- auto:end -->`
       );
 
       const result = service.loadMemoryForPrompt(tmpDir);
@@ -136,7 +136,7 @@ describe('Memory Index', () => {
         `<!-- auto:begin -->
 ### project
 - Very long content that should be truncated ${' x'.repeat(200)}
-<!-- auto:end -->`,
+<!-- auto:end -->`
       );
 
       const result = service.loadMemoryForPrompt(tmpDir);

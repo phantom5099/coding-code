@@ -49,7 +49,7 @@ export const searchTool: ToolDefinition = {
           Effect.tryPromise({
             try: () => readFile(file, 'utf-8'),
             catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
-          }),
+          })
         );
         if (contentResult._tag === 'Left') continue;
         const content = contentResult.right;
@@ -63,7 +63,8 @@ export const searchTool: ToolDefinition = {
         }
       }
 
-      if (results.length === 0) return `No matches for "${pattern}" in ${filesToScan.length} files.`;
+      if (results.length === 0)
+        return `No matches for "${pattern}" in ${filesToScan.length} files.`;
       return `Found ${results.length} matches for "${pattern}":\n${results.join('\n')}`;
     }),
 };
