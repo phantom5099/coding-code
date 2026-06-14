@@ -12,25 +12,6 @@ import { RulesService } from '../src/rules/index.js';
 import { LLMFactoryService } from '../src/llm/factory.js';
 import { SubagentRunnerService } from '../src/subagent/runner-service.js';
 
-vi.mock('../src/context/organizer.js', () => ({
-  assemblePayload: vi.fn(() => ({
-    messages: [{ role: 'user' as const, content: 'hi' }],
-    compactedEvents: [],
-    promptEstimate: 0,
-    currentTurnId: 0,
-    compactedTurnIds: new Set<number>(),
-  })),
-}));
-
-vi.mock('../src/context/compressor.js', () => ({
-  compactIfNeeded: vi.fn(() =>
-    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 })
-  ),
-  compactWithLLM: vi.fn(() =>
-    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 })
-  ),
-}));
-
 vi.mock('../src/checkpoint/checkpoint-service.js', () => {
   const tag = Context.GenericTag<any>('Checkpoint');
   return {

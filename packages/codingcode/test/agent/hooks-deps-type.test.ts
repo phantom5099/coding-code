@@ -30,25 +30,6 @@ vi.mock('@codingcode/infra/config', () => ({
   }),
 }));
 
-vi.mock('../../src/context/organizer.js', () => ({
-  assemblePayload: vi.fn(() => ({
-    messages: [{ role: 'user' as const, content: 'hi' }],
-    compactedEvents: [],
-    promptEstimate: 10,
-    currentTurnId: 1,
-    compactedTurnIds: new Set<number>(),
-  })),
-}));
-
-vi.mock('../../src/context/compressor.js', () => ({
-  compactIfNeeded: vi.fn(() =>
-    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })
-  ),
-  compactWithLLM: vi.fn(() =>
-    Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 })
-  ),
-}));
-
 import { agentLoop } from '../../src/agent/agent.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { Result } from '../../src/core/result.js';
