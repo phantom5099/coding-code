@@ -262,14 +262,6 @@ export function agentLoop(
         context.assemblePayload(state.sessionId, state.projectPath, config, llm.modelInfo.maxTokens)
       );
 
-      const currentMemory = yield* Effect.sync(() => memory.loadMemoryForPrompt(projectPath));
-      if (currentMemory && currentMemory !== state.memorySnapshot) {
-        const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
-        if (lastUserMsg) {
-          lastUserMsg.content += `\n\n<system-reminder>Memory has been updated since the session started. Current memory:\n${currentMemory}</system-reminder>`;
-        }
-      }
-
       let lastResult: Result<string, AgentError> | null = null;
       let overflow = false;
 
