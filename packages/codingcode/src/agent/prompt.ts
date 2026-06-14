@@ -88,10 +88,6 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
     prompt += `\n\n## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`;
   }
 
-  if (opts.skillInstruction) {
-    prompt += `\n\n## Skill Instructions\n\n${opts.skillInstruction}`;
-  }
-
   if (opts.agentProfiles && opts.agentProfiles.length > 0) {
     const enabledProfiles = opts.agentProfiles.filter((p) => !p.disabled);
     if (enabledProfiles.length > 0) {
@@ -110,7 +106,7 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
 
 Dispatch a subagent when the task involves extensively reading files, searching across the codebase, or analyzing a whole module. A subagent runs in an independent context window — all of its tool calls (read_file, search_code, etc.) consume only the subagent\'s own context. Only the final result comes back to you.
 
-**Dispatch = protect your context window.** If you do the same work yourself, all raw content goes directly into your context.
+**Dispatch = protect your context window.** If you do the same work yourself, all the raw content goes directly into your context.
 
 ### When NOT to dispatch
 
@@ -136,6 +132,10 @@ dispatch_agent({
 })
 \`\`\``;
     }
+  }
+
+  if (opts.skillInstruction) {
+    prompt += `\n\n## Skill Instructions\n\n${opts.skillInstruction}`;
   }
 
   return prompt;
