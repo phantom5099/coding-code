@@ -366,9 +366,7 @@ export function AutomationForm({
                 className={`${inputClass} font-mono`}
                 placeholder="0 9 * * *"
               />
-              <p className="text-[11px] text-[var(--text-disabled)] mt-1.5">
-                格式: 分 时 日 月 周
-              </p>
+              <p className="text-[11px] text-[var(--text-disabled)] mt-1.5">格式: 分 时 日 月 周</p>
             </div>
           )}
 

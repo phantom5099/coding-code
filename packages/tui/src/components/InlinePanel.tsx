@@ -5,7 +5,7 @@ import type { PanelItem } from '../types.js';
 interface InlinePanelProps<T = string> {
   title: string;
   items: PanelItem<T>[];
-  activeValue?: T;
+  activeValue?: T | null;
   onSelect: (value: T) => void;
   onCancel: () => void;
   width: number;

@@ -3,8 +3,7 @@ import { join } from 'path';
 import { registerFsHandlers } from './ipc/fs.handler';
 import { registerGitHandlers } from './ipc/git.handler';
 import { startPolling, stopPolling } from './core/git.service';
-import { initBackend } from './core/backend';
-import { startHttpServer } from './core/http-server';
+import { startBackend, stopBackend } from './core/child-process';
 
 process.on('uncaughtException', (err) => {
   console.error('Uncaught exception in main process:', err);
@@ -63,9 +62,7 @@ function createWindow(apiPort: number): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
-  await initBackend();
-
-  const apiPort = await startHttpServer();
+  const apiPort = await startBackend();
 
   mainWindow = createWindow(apiPort);
 
@@ -118,6 +115,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   stopPolling();
+  stopBackend();
   if (process.platform !== 'darwin') {
     app.quit();
   }

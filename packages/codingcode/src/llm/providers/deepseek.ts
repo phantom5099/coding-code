@@ -1,6 +1,6 @@
 import { generateText, streamText, stepCountIs, type ModelMessage } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
-import { Result } from '../../core/result.js';
+import { Effect } from 'effect';
 import { AgentError } from '../../core/error.js';
 import { mapLlmError } from '../errors.js';
 import type { LLMClient } from '../client.js';
@@ -24,30 +24,31 @@ export class DeepSeekProvider implements LLMClient {
     };
   }
 
-  async complete(req: LLMRequest, signal?: AbortSignal): Promise<Result<LLMResponse, AgentError>> {
-    try {
-      const result = await generateText({
-        model: this.model,
-        system: req.system,
-        messages: convertMessages(req.messages),
-        tools: convertTools(req.tools),
-        stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
-        abortSignal: signal,
-      });
+  complete(req: LLMRequest, signal?: AbortSignal): Effect.Effect<LLMResponse, AgentError> {
+    return Effect.tryPromise({
+      try: async () => {
+        const result = await generateText({
+          model: this.model,
+          system: req.system,
+          messages: convertMessages(req.messages),
+          tools: convertTools(req.tools),
+          stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
+          abortSignal: signal,
+        });
 
-      const response = parseResponseMessages(result.response.messages as ModelMessage[]);
-      if (result.usage) {
-        const usage = result.usage as any;
-        response.usage = {
-          prompt: usage.promptTokens ?? 0,
-          completion: usage.completionTokens ?? 0,
-          total: usage.totalTokens ?? 0,
-        };
-      }
-      return Result.ok(response);
-    } catch (e) {
-      return Result.err(mapLlmError('deepseek', e));
-    }
+        const response = parseResponseMessages(result.response.messages as ModelMessage[]);
+        if (result.usage) {
+          const usage = result.usage as any;
+          response.usage = {
+            prompt: usage.promptTokens ?? 0,
+            completion: usage.completionTokens ?? 0,
+            total: usage.totalTokens ?? 0,
+          };
+        }
+        return response;
+      },
+      catch: (e) => mapLlmError('deepseek', e),
+    });
   }
 
   completeStream(req: LLMRequest, signal?: AbortSignal): import('../client.js').StreamResult {
@@ -80,9 +81,9 @@ export class DeepSeekProvider implements LLMClient {
             total: usage.totalTokens ?? 0,
           };
         }
-        return Result.ok(parsed);
+        return { ok: true as const, value: parsed };
       } catch (e) {
-        return Result.err(mapLlmError('deepseek', e));
+        return { ok: false as const, error: mapLlmError('deepseek', e) };
       }
     })();
 

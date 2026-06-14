@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { globby } from 'globby';
 import { relative, resolve } from 'path';
+import { Effect } from 'effect';
+import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 export const globTool: ToolDefinition = {
@@ -21,34 +23,39 @@ export const globTool: ToolDefinition = {
       .default(50)
       .describe('Maximum number of file paths to return'),
   }),
-  execute: async (args: unknown, ctx?: ToolExecCtx) => {
-    const { pattern, path, max_results } = args as {
-      pattern: string;
-      path: string;
-      max_results: number;
-    };
-    const base = ctx?.projectPath ?? process.cwd();
-    const basePath = resolve(base, path);
+  execute: (args: unknown, ctx?: ToolExecCtx) =>
+    Effect.gen(function* () {
+      const { pattern, path, max_results } = args as {
+        pattern: string;
+        path: string;
+        max_results: number;
+      };
+      const base = ctx?.projectPath ?? process.cwd();
+      const basePath = resolve(base, path);
 
-    const files = await globby(pattern, {
-      cwd: basePath,
-      gitignore: true,
-      ignore: ['node_modules/**', 'dist/**', '.git/**', '*.lockb', '*.lock', '*.min.js'],
-      absolute: true,
-      onlyFiles: true,
-    });
+      const files = yield* Effect.tryPromise({
+        try: () =>
+          globby(pattern, {
+            cwd: basePath,
+            gitignore: true,
+            ignore: ['node_modules/**', 'dist/**', '.git/**', '*.lockb', '*.lock', '*.min.js'],
+            absolute: true,
+            onlyFiles: true,
+          }),
+        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+      });
 
-    const truncated = files.slice(0, max_results);
-    const lines = truncated.map((f) => relative(base, f));
+      const truncated = files.slice(0, max_results);
+      const lines = truncated.map((f) => relative(base, f));
 
-    if (files.length === 0) {
-      return `No files matching "${pattern}" in ${relative(base, basePath) || '.'}`;
-    }
+      if (files.length === 0) {
+        return `No files matching "${pattern}" in ${relative(base, basePath) || '.'}`;
+      }
 
-    let out = `Found ${files.length} file(s) matching "${pattern}"`;
-    if (files.length > max_results) {
-      out += ` (showing first ${max_results})`;
-    }
-    return out + '\n' + lines.join('\n');
-  },
+      let out = `Found ${files.length} file(s) matching "${pattern}"`;
+      if (files.length > max_results) {
+        out += ` (showing first ${max_results})`;
+      }
+      return out + '\n' + lines.join('\n');
+    }),
 };

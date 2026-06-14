@@ -18,12 +18,7 @@ export interface DisabledStore {
   resolve(projectRoot: string, name: string): boolean;
 }
 
-function deepSet(
-  obj: Record<string, unknown>,
-  path: string[],
-  name: string,
-  value: unknown
-): void {
+function deepSet(obj: Record<string, unknown>, path: string[], name: string, value: unknown): void {
   let target: any = obj;
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i]!;

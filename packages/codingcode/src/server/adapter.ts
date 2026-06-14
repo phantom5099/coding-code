@@ -1,6 +1,5 @@
-import type { AgentEvent } from '../agent/agent.js';
-
-export type SseEvent = { type: string; [k: string]: unknown };
+import type { AgentEvent } from '../agent/types.js';
+import type { SseEvent } from './types.js';
 
 export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
   switch (event._tag) {
@@ -23,7 +22,11 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
     case 'ToolDenied':
       return { type: 'tool_denied', id: event.id, name: event.name, reason: event.reason };
     case 'Error':
-      return { type: 'error', message: event.error.message ?? String(event.error), code: event.error.code };
+      return {
+        type: 'error',
+        message: event.error.message ?? String(event.error),
+        code: event.error.code,
+      };
     case 'Done':
       return { type: 'done' };
     case 'TodoUpdate':

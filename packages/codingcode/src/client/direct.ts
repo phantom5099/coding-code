@@ -1,14 +1,19 @@
 import { Effect } from 'effect';
-import type { AgentEvent } from '../agent/agent.js';
+import type { AgentEvent } from '../agent/types.js';
 import { sendMessage } from '../agent/agent.js';
-import { AppLayer } from '../layer.js';
 import { CheckpointService } from '../checkpoint/checkpoint-service.js';
-import { getLLMClient } from '../llm/factory.js';
-import { getWorkspaceCwd } from '../core/workspace.js';
-import { getGlobalPermissionMode, setGlobalPermissionMode } from '../approval/index.js';
+import { LLMFactoryService } from '../llm/factory.js';
+import { WorkspaceService } from '../core/workspace.js';
+import { ApprovalService } from '../approval/index.js';
+import { ApprovalWaitService } from '../approval/async-confirm.js';
 import type { PermissionMode } from '../approval/types.js';
+import type { McpServerConfig } from '../mcp/types.js';
+import type { AgentProfile } from '../subagent/types.js';
+import type { UserHookConfig } from '../hooks/types.js';
 import type { StreamChunk, AgentClient } from './types.js';
 import { createDirectClients } from './direct/index.js';
+import type { AppRuntime } from '../layer.js';
+import type { LLMClient } from '../llm/client.js';
 
 export async function* agentEventToStreamChunk(
   source: AsyncGenerator<AgentEvent, any, unknown>
@@ -47,7 +52,11 @@ export async function* agentEventToStreamChunk(
         yield { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
         break;
       case 'Error':
-        yield { type: 'error', message: event.error.message ?? String(event.error), code: event.error.code };
+        yield {
+          type: 'error',
+          message: event.error.message ?? String(event.error),
+          code: event.error.code,
+        };
         break;
       case 'Done':
         yield { type: 'done' };
@@ -74,15 +83,20 @@ export async function* agentEventToStreamChunk(
   }
 }
 
-export async function createDirectClient(llm: any): Promise<AgentClient> {
+export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promise<AgentClient> {
   let currentSessionId = '';
   let activeLlm = llm;
 
-  const runWithLayer = <T>(eff: any): Promise<T> =>
-    Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
+  const runWithLayer = <T>(eff: any): Promise<T> => rt.runPromise(eff);
 
-  const clients = createDirectClients(activeLlm, runWithLayer);
-  const cwd = () => getWorkspaceCwd();
+  const clients = createDirectClients(activeLlm, rt);
+  const cwdValue = await rt.runPromise(
+    Effect.gen(function* () {
+      const ws = yield* WorkspaceService;
+      return ws.getWorkspaceCwd();
+    })
+  );
+  const cwd = () => cwdValue;
 
   return {
     getSessionId() {
@@ -90,7 +104,11 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
-      const { registerEmitter, unregisterEmitter } = await import('../approval/async-confirm.js');
+      const waitService = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalWaitService;
+        })
+      );
       const program = sendMessage(currentSessionId || undefined, input, cwd(), activeLlm);
       const { stream: agentGen, sessionId } = (await runWithLayer(program)) as any;
       currentSessionId = sessionId;
@@ -103,9 +121,14 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
             args: Record<string, unknown>;
           }) => void)
         | null = null;
-      registerEmitter(sessionId, (id, tool, args) => {
-        notify?.({ type: 'approval_request', id, tool, args });
-      });
+      Effect.runSync(
+        waitService.registerEmitter(
+          sessionId,
+          (id: string, tool: string, args: Record<string, unknown>) => {
+            notify?.({ type: 'approval_request', id, tool, args });
+          }
+        )
+      );
 
       try {
         const gen = agentEventToStreamChunk(agentGen);
@@ -142,7 +165,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
           }
         }
       } finally {
-        unregisterEmitter(sessionId);
+        Effect.runSync(waitService.unregisterEmitter(sessionId));
       }
     },
 
@@ -170,9 +193,12 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
 
     async switchModel(id: string) {
       await clients.models.switchModel({ id });
-      const clientResult = await getLLMClient();
-      if (!clientResult.ok) throw clientResult.error;
-      activeLlm = clientResult.value;
+      activeLlm = await rt.runPromise(
+        Effect.gen(function* () {
+          const factory = yield* LLMFactoryService;
+          return yield* factory.getLLMClient();
+        })
+      );
     },
 
     async getCheckpoints() {
@@ -180,7 +206,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       return runWithLayer(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          return checkpoint.getCheckpoints(cwd(), currentSessionId);
+          return yield* checkpoint.getCheckpoints(cwd(), currentSessionId);
         })
       );
     },
@@ -211,8 +237,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async previewRollbackDiff(throughTurnId: number) {
-      if (!currentSessionId)
-        return { throughTurnId, affectedTurns: [], diff: '' };
+      if (!currentSessionId) return { throughTurnId, affectedTurns: [], diff: '' };
       return clients.sessions.previewRollbackDiff({
         sessionId: currentSessionId,
         cwd: cwd(),
@@ -237,7 +262,19 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async rollbackContext(throughTurnId: number) {
-      if (!currentSessionId) return { turns: [], rollbackState: {} };
+      if (!currentSessionId)
+        return {
+          turns: [] as import('../session/types.js').SessionEvent[],
+          rollbackState: {
+            context: { active: false, currentThroughTurnId: null },
+            code: {
+              canUndoLast: false,
+              lastEntry: null,
+              revertedFiles: [] as string[],
+              lastEntryId: null,
+            },
+          } as import('../checkpoint/types.js').RollbackState,
+        };
       return clients.sessions.rollbackContext({
         sessionId: currentSessionId,
         cwd: cwd(),
@@ -248,7 +285,7 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     async rollbackBothToTurn(throughTurnId: number) {
       if (!currentSessionId)
         return {
-          turns: [],
+          turns: [] as import('../session/types.js').SessionEvent[],
           codeResult: {
             reverted: false,
             throughTurnId,
@@ -256,7 +293,15 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
             selectedFiles: [],
             restoreEntry: null,
           },
-          rollbackState: {},
+          rollbackState: {
+            context: { active: false, currentThroughTurnId: null },
+            code: {
+              canUndoLast: false,
+              lastEntry: null,
+              revertedFiles: [] as string[],
+              lastEntryId: null,
+            },
+          } as import('../checkpoint/types.js').RollbackState,
         };
       return clients.sessions.rollbackBothToTurn({
         sessionId: currentSessionId,
@@ -358,11 +403,11 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       await clients.settings.resetMcpDisabled(body);
     },
 
-    async createMcpServer(server: any): Promise<void> {
+    async createMcpServer(server: McpServerConfig): Promise<void> {
       await clients.settings.createMcpServer({ cwd: cwd(), server });
     },
 
-    async updateMcpServer(name: string, server: any): Promise<void> {
+    async updateMcpServer(name: string, server: McpServerConfig): Promise<void> {
       await clients.settings.updateMcpServer({ cwd: cwd(), name, server });
     },
 
@@ -382,11 +427,11 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       return clients.settings.listAgents({ cwd: cwd() });
     },
 
-    async createAgent(profile: any): Promise<void> {
+    async createAgent(profile: AgentProfile): Promise<void> {
       await clients.settings.createAgent({ cwd: cwd(), profile });
     },
 
-    async updateAgent(name: string, profile: any): Promise<void> {
+    async updateAgent(name: string, profile: AgentProfile): Promise<void> {
       await clients.settings.updateAgent({ cwd: cwd(), name, profile });
     },
 
@@ -418,11 +463,11 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
       await clients.settings.resetHookDisabled(body);
     },
 
-    async createHook(hook: any): Promise<void> {
+    async createHook(hook: UserHookConfig): Promise<void> {
       await clients.settings.createHook({ cwd: cwd(), hook });
     },
 
-    async updateHook(name: string, hook: any): Promise<void> {
+    async updateHook(name: string, hook: UserHookConfig): Promise<void> {
       await clients.settings.updateHook({ cwd: cwd(), name, hook });
     },
 
@@ -431,11 +476,21 @@ export async function createDirectClient(llm: any): Promise<AgentClient> {
     },
 
     async getPermissionMode(): Promise<PermissionMode> {
-      return getGlobalPermissionMode();
+      const approval = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalService;
+        })
+      );
+      return approval.getPermissionMode();
     },
 
     async setPermissionMode(mode: PermissionMode): Promise<void> {
-      setGlobalPermissionMode(mode);
+      const approval = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalService;
+        })
+      );
+      await rt.runPromise(approval.setPermissionMode(mode));
     },
   };
 }

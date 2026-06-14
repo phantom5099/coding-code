@@ -1,6 +1,6 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { agentEventToSseEvent, toSseEvents } from '../../src/server/adapter.js';
-import type { AgentEvent } from '../../src/agent/agent.js';
+import type { AgentEvent } from '../../src/agent/types.js';
 import { AgentError } from '../../src/core/error.js';
 
 describe('agentEventToSseEvent', () => {

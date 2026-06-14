@@ -1,41 +1,93 @@
-import { describe, it, expect } from 'vitest';
-import { Effect } from 'effect';
-import { runReActLoop } from '../../src/agent/agent.js';
+import { describe, it, expect, vi } from 'vitest';
+import { Effect, Layer, Queue } from 'effect';
+import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
+import { TodoService } from '../../src/agent/todo.js';
+import { ContextService } from '../../src/context/service.js';
+import { MemoryService } from '../../src/memory/index.js';
+
+vi.mock('@codingcode/infra/config', () => ({
+  loadConfig: () => ({
+    context: {
+      microCompactThreshold: 0.7,
+      microCompactMinChars: 200,
+      compactionThreshold: 0.8,
+      keepRecentTurns: 10,
+      compactionModel: '',
+      reactiveCompactMaxRetries: 1,
+    },
+    memory: {
+      enabled: false,
+      model: '',
+      projectFile: '',
+      userFile: '',
+      maxBytes: 16384,
+      promptMaxBytes: 8192,
+      extraTypes: [],
+      disabledTypes: [],
+    },
+    server: { port: 8080 },
+  }),
+}));
+
+import { agentLoop } from '../../src/agent/agent.js';
 import { Result } from '../../src/core/result.js';
-import { HookService } from '../../src/hooks/registry.js';
+import { SessionService } from '../../src/session/store.js';
 
-const mockAgentService = {
-  runStream: () => {
-    throw new Error('not implemented');
-  },
-};
-
-const mockCtx = {
-  build: (_sessionId: string) =>
-    Effect.sync(() => ({
+const AllMockLayer = Layer.mergeAll(
+  Layer.succeed(CheckpointService, {
+    snapshotBaseline: () => Effect.void,
+    snapshotFinal: () => Effect.void,
+  } as any),
+  Layer.succeed(SessionService, {
+    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordToolResult: () => Effect.succeed({}),
+  } as any),
+  Layer.succeed(ProjectRuntimeService, {
+    prepareProject: () => Effect.void,
+    resolveMainAgentProfile: () => undefined,
+    resolveSubagentProfile: () => undefined,
+    listAgentProfiles: () => [],
+    getToolPolicy: () => ({
+      allowedTools: undefined,
+      allowedMcpServers: undefined,
+      allowToolSearch: true,
+      allowDeferredTools: false,
+    }),
+    setSessionProfile: () => {},
+    getSessionProfile: () => undefined,
+    disposeSession: () => Effect.void,
+    disposeProject: () => Effect.void,
+  } as any),
+  Layer.succeed(TodoService, {
+    read: () => [],
+    write: () => {},
+    reset: () => {},
+  } as any),
+  Layer.succeed(ContextService, {
+    assemblePayload: () => ({
       messages: [{ role: 'user' as const, content: 'hi' }],
-      newBudgets: [],
-      promptEstimate: 0,
-    })),
-  compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
-};
+      compactedEvents: [],
+      promptEstimate: 10,
+      currentTurnId: 1,
+      compactedTurnIds: new Set<number>(),
+    }),
+    compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
+    compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
+  } as any),
+  Layer.succeed(MemoryService, {
+    getMemoryEnabled: () => false,
+    setMemoryEnabled: () => {},
+    loadMemoryForPrompt: () => '',
+    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+  } as any)
+);
 
-const mockSession = {
-  recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
-    Effect.sync(() => ({ uuid: 'a1' })),
-  recordToolResult: (
-    _state: any,
-    _parentUuid: string,
-    _toolName: string,
-    _toolCallId: string,
-    _output: string
-  ) => Effect.sync(() => ({})),
-  recordUser: () => Effect.sync(() => ({})),
-};
-
-const mockCheckpoint = {
-  snapshotFinal: () => {},
-};
+const mockHooks = {
+  emit: () => Effect.succeed(undefined),
+  emitDecision: () => Effect.succeed(null),
+} as any;
 
 const mockState = {
   sessionId: 'cache-test-sid',
@@ -51,24 +103,6 @@ const mockState = {
   promptEstimate: 0,
   memorySnapshot: '',
 };
-
-function makeDeps(overrides?: Record<string, any>) {
-  return {
-    maxSteps: 1,
-    maxStopContinuations: 0,
-    executor: null as any,
-    runtime: { listAgentProfiles: () => [] } as any,
-    agentService: mockAgentService as any,
-    ctx: mockCtx as any,
-    session: mockSession as any,
-    checkpoint: mockCheckpoint as any,
-    hooks: {
-      emit: () => Effect.succeed(undefined),
-      emitDecision: () => Effect.succeed(null),
-    } as unknown as HookService,
-    ...overrides,
-  };
-}
 
 function makeCapturingLlm() {
   const captured: { system?: string } = {};
@@ -86,10 +120,12 @@ function makeCapturingLlm() {
 }
 
 async function runOnce(llm: any) {
-  const gen = runReActLoop({ state: mockState, llm }, makeDeps());
-  for await (const _event of gen) {
-    // drain
-  }
+  const q = Effect.runSync(Queue.unbounded<any>());
+  await Effect.runPromise(
+    agentLoop(null as any, mockHooks, 1, 0, { state: mockState, llm }, q).pipe(
+      Effect.provide(AllMockLayer)
+    ) as any
+  );
 }
 
 describe('LLM prompt cache stability', () => {
@@ -97,9 +133,6 @@ describe('LLM prompt cache stability', () => {
     const { llm, captured } = makeCapturingLlm();
     await runOnce(llm);
     expect(captured.system).toBeDefined();
-    // buildDeferredCatalogContent emits an <available-deferred-tools>...</available-deferred-tools>
-    // block with the list of unloaded deferred tools. Since we removed the call, this block must
-    // not appear in the system prompt.
     expect(captured.system).not.toContain('<available-deferred-tools>');
     expect(captured.system).not.toContain('</available-deferred-tools>');
   });

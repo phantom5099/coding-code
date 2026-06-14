@@ -11,11 +11,11 @@ export type ConfirmResult =
 export function userConfirmAsync(
   tool: string,
   args: Record<string, unknown>,
-  waitSvc: ApprovalWaitService,
   sessionId: string,
   callId: string
-): Effect.Effect<ConfirmResult> {
+): Effect.Effect<ConfirmResult, never, ApprovalWaitService> {
   return Effect.gen(function* () {
+    const waitSvc = yield* ApprovalWaitService;
     const id = callId;
 
     yield* waitSvc.emitApprovalRequest(sessionId, id, tool, args);

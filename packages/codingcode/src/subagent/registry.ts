@@ -1,22 +1,10 @@
-import { Effect } from 'effect';
-import type { UserHookConfig } from '../hooks/config.js';
+import type { AgentProfile } from './types.js';
 import { loadConfig, getUserConfigPath } from '@codingcode/infra/config';
+import { createDisabledStore } from '@codingcode/infra/disabled-store';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { dirname, join } from 'path';
-
-export interface AgentProfile {
-  name: string;
-  description: string;
-  systemPrompt?: string;
-  tools?: string[];
-  mcpServers?: string[];
-  readonly?: boolean;
-  maxSteps?: number;
-  model?: string;
-  hooks?: UserHookConfig[];
-  disabled?: boolean;
-}
+import { Effect } from 'effect';
 
 // ---- 全局级子智能体开关 ----
 
@@ -91,120 +79,72 @@ export function resolveSubagentEnabled(projectCwd: string): boolean {
   return getSubagentEnabledState();
 }
 
-// ---- 全局级 agent disabled 状态：持久化到 ~/.codingcode/config.yaml ----
+// ---- Agent disabled 状态：复用 createDisabledStore ----
 
-export function getGlobalAgentDisabledState(agentName: string): boolean {
-  try {
-    const config = loadConfig() as any;
-    const disabled = config.subagent?.disabledAgents as Record<string, boolean>;
-    return disabled?.[agentName] ?? false;
-  } catch {
-    return false;
-  }
-}
+const agentDisabledStore = createDisabledStore({
+  globalKeyPath: ['subagent', 'disabledAgents'],
+});
 
-export function setGlobalAgentDisabledState(agentName: string, disabled: boolean): void {
-  const p = getUserConfigPath();
-  const dir = dirname(p);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const existing: Record<string, unknown> = existsSync(p)
-    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
-    : {};
-  const subagent = (existing.subagent as Record<string, unknown>) ?? {};
-  const disabledAgents = (subagent.disabledAgents as Record<string, boolean>) ?? {};
-  disabledAgents[agentName] = disabled;
-  subagent.disabledAgents = disabledAgents;
-  existing.subagent = subagent;
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
-}
+export const getGlobalAgentDisabledState = agentDisabledStore.getGlobal;
+export const setGlobalAgentDisabledState = agentDisabledStore.setGlobal;
+export const getProjectAgentDisabledState = agentDisabledStore.getProject;
+export const setProjectAgentDisabledState = agentDisabledStore.setProject;
+export const resetProjectAgentDisabledState = agentDisabledStore.resetProject;
+export const resolveAgentDisabled = agentDisabledStore.resolve;
 
-// ---- 项目级 agent disabled 状态：持久化到 .codingcode/config.yaml ----
+// ---- SubagentService: Effect.Service with global + project-level registries ----
 
-export function getProjectAgentDisabledState(
-  projectCwd: string,
-  agentName: string
-): boolean | undefined {
-  const p = join(projectCwd, '.codingcode', 'config.yaml');
-  if (!existsSync(p)) return undefined;
-  try {
-    const raw = readFileSync(p, 'utf8');
-    const config = parseYaml(raw) as any;
-    const disabled = config.subagent?.disabledAgents as Record<string, boolean>;
-    return disabled?.[agentName];
-  } catch {
-    return undefined;
-  }
-}
-
-export function setProjectAgentDisabledState(
-  projectCwd: string,
-  agentName: string,
-  disabled: boolean
-): void {
-  const dir = join(projectCwd, '.codingcode');
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const p = join(dir, 'config.yaml');
-  const existing: Record<string, unknown> = existsSync(p)
-    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
-    : {};
-  const subagent = (existing.subagent as Record<string, unknown>) ?? {};
-  const disabledAgents = (subagent.disabledAgents as Record<string, boolean>) ?? {};
-  disabledAgents[agentName] = disabled;
-  subagent.disabledAgents = disabledAgents;
-  existing.subagent = subagent;
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
-}
-
-export function resetProjectAgentDisabledState(projectCwd: string, agentName: string): void {
-  const p = join(projectCwd, '.codingcode', 'config.yaml');
-  if (!existsSync(p)) return;
-  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<
-    string,
-    unknown
-  >;
-  const subagent = (existing.subagent as Record<string, unknown>) ?? {};
-  const disabledAgents = subagent.disabledAgents as Record<string, boolean>;
-  if (disabledAgents) {
-    delete disabledAgents[agentName];
-    subagent.disabledAgents = disabledAgents;
-  }
-  existing.subagent = subagent;
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
-}
-
-// 解析最终生效的 agent disabled 状态：项目级 > 全局级
-export function resolveAgentDisabled(projectCwd: string, agentName: string): boolean {
-  const projectVal = getProjectAgentDisabledState(projectCwd, agentName);
-  if (projectVal !== undefined) return projectVal;
-  return getGlobalAgentDisabledState(agentName);
-}
-
-export class SubagentRegistry extends Effect.Service<SubagentRegistry>()('SubagentRegistry', {
-  effect: Effect.gen(function* () {
-    const map = new Map<string, AgentProfile>();
+export class SubagentService extends Effect.Service<SubagentService>()('Subagent', {
+  sync: () => {
+    // 全局层：内置 profile + 全局 ~/.codingcode/agents/ profile
+    const globalRegistry = new Map<string, AgentProfile>();
+    // 项目层：按 projectPath 隔离，项目 profile 覆盖同名全局 profile
+    const projectRegistries = new Map<string, Map<string, AgentProfile>>();
 
     return {
-      register: (profile: AgentProfile): void => {
-        map.set(profile.name, profile);
+      /** 注册全局 profile（内置 + ~/.codingcode/agents/），只在启动时调用一次 */
+      registerGlobal(profiles: AgentProfile[]): void {
+        for (const p of profiles) globalRegistry.set(p.name, p);
       },
 
-      registerAll: (profiles: AgentProfile[]): void => {
-        for (const p of profiles) map.set(p.name, p);
+      /** 注册项目级 profile，覆盖同名全局 profile */
+      registerProject(projectPath: string, profiles: AgentProfile[]): void {
+        let projectMap = projectRegistries.get(projectPath);
+        if (!projectMap) {
+          projectMap = new Map();
+          projectRegistries.set(projectPath, projectMap);
+        }
+        for (const p of profiles) projectMap.set(p.name, p);
       },
 
-      get: (name: string): AgentProfile | undefined => {
-        return map.get(name);
+      /** 查找 profile：项目级优先，回退到全局级 */
+      get(projectPath: string, name: string): AgentProfile | undefined {
+        const projectMap = projectRegistries.get(projectPath);
+        if (projectMap) {
+          const fromProject = projectMap.get(name);
+          if (fromProject) return fromProject;
+        }
+        return globalRegistry.get(name);
       },
 
-      list: (): AgentProfile[] => {
-        return Array.from(map.values());
+      /** 列出某项目的全部 profile：项目级覆盖同名全局级 */
+      list(projectPath: string): AgentProfile[] {
+        const result = new Map<string, AgentProfile>(globalRegistry);
+        const projectMap = projectRegistries.get(projectPath);
+        if (projectMap) {
+          for (const [name, profile] of projectMap) {
+            result.set(name, profile);
+          }
+        }
+        return Array.from(result.values());
       },
 
-      reset: (): void => {
-        map.clear();
+      /** 清除某项目的注册，不影响其他项目 */
+      resetProject(projectPath: string): void {
+        projectRegistries.delete(projectPath);
       },
     };
-  }),
+  },
 }) {}
 
 export const EXPLORE_PROFILE: AgentProfile = {
@@ -251,7 +191,14 @@ Structure your analysis as:
 - **Phases**: If the task is complex, break it into ordered phases
 
 If you cannot fully understand the codebase, say so and explain what information is missing.`,
-  tools: ['read_file', 'search_files', 'search_code', 'execute_command', 'fetch_url', 'tool_search'],
+  tools: [
+    'read_file',
+    'search_files',
+    'search_code',
+    'execute_command',
+    'fetch_url',
+    'tool_search',
+  ],
   readonly: true,
   maxSteps: 180,
 };

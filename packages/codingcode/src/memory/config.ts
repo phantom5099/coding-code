@@ -1,28 +1,22 @@
 import {
   DEFAULT_MEMORY_TYPES,
+  loadConfig,
   type MemoryConfig,
   type MemoryTypeConfig,
   updateMemoryEnabled,
   updateMemoryDisabledTypes,
   updateMemoryExtraTypes,
 } from '@codingcode/infra/config';
-import { getConfig } from '../core/workspace.js';
+import type { MemoryTypeEntry } from './types.js';
 
 export function getMemoryConfig(): MemoryConfig {
-  return getConfig().memory;
+  return loadConfig().memory;
 }
 
 export function getEffectiveTypes(cfg: MemoryConfig): MemoryTypeConfig[] {
   return [...DEFAULT_MEMORY_TYPES, ...cfg.extraTypes].filter(
     (t) => t.enabled && !cfg.disabledTypes.includes(t.name)
   );
-}
-
-export interface MemoryTypeEntry {
-  name: string;
-  description: string;
-  isBuiltIn: boolean;
-  disabled: boolean;
 }
 
 export function getAllTypesWithStatus(cfg?: MemoryConfig): MemoryTypeEntry[] {

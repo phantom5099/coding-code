@@ -2,34 +2,14 @@ import { Effect } from 'effect';
 import type { ApprovalDecision, PermissionMode, PermissionRule, ToolCallRequest } from './types.js';
 import type { RuleEngine } from './rule-engine.js';
 import { userConfirmAsync } from './confirmation.js';
-import type { ApprovalWaitService } from './async-confirm.js';
-import type { HookDecision } from '../hooks/registry.js';
-
-export interface PipelineHooks {
-  /** Emit decision from PreToolUse hooks (Layer 4). Returns first non-null HookDecision or null. */
-  emitPreToolUseDecision: (payload: {
-    toolName: string;
-    args: Record<string, unknown>;
-  }) => Effect.Effect<HookDecision | null>;
-  /** Record audit log for the final decision (Layer 6). */
-  recordAudit: (entry: {
-    tool: string;
-    input: Record<string, unknown>;
-    decision: ApprovalDecision;
-    layers: string[];
-  }) => Effect.Effect<void>;
-}
+import { ApprovalWaitService } from './async-confirm.js';
+import { HookService } from '../hooks/registry.js';
 
 export interface PipelineOptions {
   ruleEngine: RuleEngine;
   readonlyTools: Set<string>;
   destructiveTools: Set<string>;
   permissionMode: PermissionMode;
-  hooks: PipelineHooks;
-  /** Use async SSE-based confirmation instead of blocking readline. */
-  asyncConfirm?: boolean;
-  /** Service for async confirmation (injected to keep R clean). */
-  asyncConfirmService?: ApprovalWaitService;
   /** Called when user selects Always — allows caller to persist the rule. */
   onAlways?: (rule: PermissionRule) => void;
   /** Called when user selects Never — allows caller to persist the rule. */
@@ -52,8 +32,11 @@ const LAYER_NAMES = [
 export function runPipeline(
   request: ToolCallRequest,
   opts: PipelineOptions
-): Effect.Effect<ApprovalDecision> {
+): Effect.Effect<ApprovalDecision, never, HookService | ApprovalWaitService> {
   return Effect.gen(function* () {
+    const hooks = yield* HookService;
+    const approvalWait = yield* ApprovalWaitService;
+    const asyncConfirm = yield* approvalWait.hasEmitter(opts.sessionId);
     const layers: string[] = [];
 
     // Layer 1: Rule Engine
@@ -61,7 +44,7 @@ export function runPipeline(
       const result = opts.ruleEngine.evaluate(request.tool, request.input);
       if (result) {
         layers.push(LAYER_NAMES[0]);
-        const final = yield* recordAuditAndReturn(request, result, layers, opts);
+        const final = yield* recordAuditAndReturn(hooks, request, result, layers);
         return final;
       }
     }
@@ -74,7 +57,7 @@ export function runPipeline(
           source: 'readonly-whitelist',
         };
         layers.push(LAYER_NAMES[1]);
-        const final = yield* recordAuditAndReturn(request, result, layers, opts);
+        const final = yield* recordAuditAndReturn(hooks, request, result, layers);
         return final;
       }
     }
@@ -89,16 +72,22 @@ export function runPipeline(
       );
       if (modeResult) {
         layers.push(LAYER_NAMES[2]);
-        const final = yield* recordAuditAndReturn(request, modeResult, layers, opts);
+        const final = yield* recordAuditAndReturn(hooks, request, modeResult, layers);
         return final;
       }
     }
 
     // Layer 4: Hook PreToolUse
     {
-      const hookResult = yield* opts.hooks.emitPreToolUseDecision({
-        toolName: request.tool,
-        args: request.input,
+      const hookResult = yield* Effect.gen(function* () {
+        const result = yield* hooks.emitDecision('tool.approval.pre', {
+          toolName: request.tool,
+          args: request.input,
+        });
+        if (result && result.decision === 'continue') {
+          return null;
+        }
+        return result;
       });
       if (hookResult) {
         layers.push(LAYER_NAMES[3]);
@@ -108,12 +97,12 @@ export function runPipeline(
             reason: hookResult.reason ?? 'Denied by PreToolUse hook',
             source: 'hook',
           };
-          const final = yield* recordAuditAndReturn(request, result, layers, opts);
+          const final = yield* recordAuditAndReturn(hooks, request, result, layers);
           return final;
         }
         if (hookResult.decision === 'allow') {
           const result: ApprovalDecision = { type: 'allow', source: 'hook' };
-          const final = yield* recordAuditAndReturn(request, result, layers, opts);
+          const final = yield* recordAuditAndReturn(hooks, request, result, layers);
           return final;
         }
         // 'ask' or no decision → continue to user confirmation
@@ -127,22 +116,21 @@ export function runPipeline(
     // Layer 5: User Confirmation
     {
       layers.push(LAYER_NAMES[4]);
-      if (!opts.asyncConfirm || !opts.asyncConfirmService) {
+      if (!asyncConfirm) {
         const result: ApprovalDecision = {
           type: 'deny',
           reason: 'Approval required but no UI available',
           source: 'system',
         };
-        const final = yield* recordAuditAndReturn(request, result, layers, opts);
+        const final = yield* recordAuditAndReturn(hooks, request, result, layers);
         return final;
       }
 
       const confirmResult = yield* userConfirmAsync(
         request.tool,
         request.input,
-        opts.asyncConfirmService,
         opts.sessionId,
-        opts.callId
+        opts.callId ?? ''
       );
 
       let result: ApprovalDecision;
@@ -163,7 +151,7 @@ export function runPipeline(
           break;
       }
 
-      const final = yield* recordAuditAndReturn(request, result, layers, opts);
+      const final = yield* recordAuditAndReturn(hooks, request, result, layers);
       return final;
     }
   });
@@ -205,14 +193,14 @@ function applyPermissionMode(
 }
 
 function recordAuditAndReturn(
+  hooks: HookService,
   request: ToolCallRequest,
   decision: ApprovalDecision,
-  passedLayers: string[],
-  opts: PipelineOptions
-): Effect.Effect<ApprovalDecision> {
+  passedLayers: string[]
+): Effect.Effect<ApprovalDecision, never, HookService> {
   return Effect.gen(function* () {
     passedLayers.push(LAYER_NAMES[5]);
-    yield* opts.hooks.recordAudit({
+    yield* hooks.emit('tool.approval.post', {
       tool: request.tool,
       input: request.input,
       decision,

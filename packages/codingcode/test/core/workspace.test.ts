@@ -1,15 +1,10 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+﻿﻿﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { Effect } from 'effect';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import {
-  parseWorkspaceArgs,
-  initWorkspace,
-  getWorkspaceCwd,
-  getProcessRoot,
-  resolveInWorkspace,
-} from '../../src/core/workspace.js';
+import { WorkspaceService, parseWorkspaceArgs } from '../../src/core/workspace.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 
 describe('core/workspace', () => {
@@ -53,21 +48,39 @@ describe('core/workspace', () => {
     });
   });
 
-  it('initWorkspace separates install root and workspace cwd', () => {
-    initWorkspace({ processRoot: installRoot, workspaceCwd: otherDir });
-    expect(getProcessRoot()).toBe(installRoot);
-    expect(getWorkspaceCwd()).toBe(otherDir);
-    expect(encodeProjectPath(getWorkspaceCwd())).toBe(encodeProjectPath(otherDir));
+  it('init separates install root and workspace cwd', async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* WorkspaceService;
+        ws.init({ processRoot: installRoot, workspaceCwd: otherDir });
+        expect(ws.getProcessRoot()).toBe(installRoot);
+        expect(ws.getWorkspaceCwd()).toBe(otherDir);
+        expect(encodeProjectPath(ws.getWorkspaceCwd())).toBe(encodeProjectPath(otherDir));
+      }).pipe(Effect.provide(WorkspaceService.Default))
+    );
   });
 
-  it('resolveInWorkspace resolves relative paths against workspace', () => {
-    initWorkspace({ processRoot: installRoot, workspaceCwd: otherDir });
-    expect(resolveInWorkspace('src/a.ts')).toBe(join(otherDir, 'src/a.ts'));
+  it('resolveInWorkspace resolves relative paths against workspace', async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* WorkspaceService;
+        ws.init({ processRoot: installRoot, workspaceCwd: otherDir });
+        expect(ws.resolveInWorkspace('src/a.ts')).toBe(join(otherDir, 'src/a.ts'));
+      }).pipe(Effect.provide(WorkspaceService.Default))
+    );
   });
 
-  it('throws when --cwd path does not exist', () => {
-    expect(() =>
-      initWorkspace({ processRoot: installRoot, workspaceCwd: join(tmpdir(), 'missing-' + randomUUID()) })
-    ).toThrow(/does not exist/);
+  it('throws when --cwd path does not exist', async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* WorkspaceService;
+        expect(() =>
+          ws.init({
+            processRoot: installRoot,
+            workspaceCwd: join(tmpdir(), 'missing-' + randomUUID()),
+          })
+        ).toThrow(/does not exist/);
+      }).pipe(Effect.provide(WorkspaceService.Default))
+    );
   });
 });

@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { globby } from 'globby';
 import { readFile } from 'fs/promises';
 import { relative, resolve } from 'path';
+import { Effect } from 'effect';
+import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 export const searchTool: ToolDefinition = {
@@ -22,24 +24,35 @@ export const searchTool: ToolDefinition = {
       .default(30)
       .describe('Maximum number of matches to return'),
   }),
-  execute: async (args: unknown, ctx?: ToolExecCtx) => {
-    const { pattern, glob, max_results } = args as any;
-    const base = ctx?.projectPath ?? process.cwd();
-    const files = await globby(glob, {
-      cwd: base,
-      gitignore: true,
-      ignore: ['node_modules/**', 'dist/**', '.git/**', '*.lockb', '*.lock', '*.min.js'],
-      absolute: true,
-    });
+  execute: (args: unknown, ctx?: ToolExecCtx) =>
+    Effect.gen(function* () {
+      const { pattern, glob, max_results } = args as any;
+      const base = ctx?.projectPath ?? process.cwd();
+      const files = yield* Effect.tryPromise({
+        try: () =>
+          globby(glob, {
+            cwd: base,
+            gitignore: true,
+            ignore: ['node_modules/**', 'dist/**', '.git/**', '*.lockb', '*.lock', '*.min.js'],
+            absolute: true,
+          }),
+        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+      });
 
-    const filesToScan = files.slice(0, 200);
-    const results: string[] = [];
-    const regex = new RegExp(pattern, 'gi');
+      const filesToScan = files.slice(0, 200);
+      const results: string[] = [];
+      const regex = new RegExp(pattern, 'gi');
 
-    for (const file of filesToScan) {
-      if (results.length >= max_results) break;
-      try {
-        const content = await readFile(file, 'utf-8');
+      for (const file of filesToScan) {
+        if (results.length >= max_results) break;
+        const contentResult = yield* Effect.either(
+          Effect.tryPromise({
+            try: () => readFile(file, 'utf-8'),
+            catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+          })
+        );
+        if (contentResult._tag === 'Left') continue;
+        const content = contentResult.right;
         const lines = content.split('\n');
         for (let i = 0; i < lines.length && results.length < max_results; i++) {
           const line = lines[i];
@@ -48,12 +61,10 @@ export const searchTool: ToolDefinition = {
             results.push(`${relPath}:${i + 1}: ${line.trim().slice(0, 120)}`);
           }
         }
-      } catch {
-        /* skip unreadable */
       }
-    }
 
-    if (results.length === 0) return `No matches for "${pattern}" in ${filesToScan.length} files.`;
-    return `Found ${results.length} matches for "${pattern}":\n${results.join('\n')}`;
-  },
+      if (results.length === 0)
+        return `No matches for "${pattern}" in ${filesToScan.length} files.`;
+      return `Found ${results.length} matches for "${pattern}":\n${results.join('\n')}`;
+    }),
 };

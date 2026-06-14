@@ -6,12 +6,16 @@ import type { AgentClient, StreamChunk } from '@codingcode/core/client/types';
 
 export type { AgentClient, StreamChunk };
 
+type DirectClientParams = Parameters<typeof createDirectClient>;
+
 interface TuiOptions {
-  llm?: any;
+  llm?: DirectClientParams[0];
+  rt?: DirectClientParams[1];
   client?: AgentClient;
 }
 
 export async function runTui(options: TuiOptions = {}) {
-  const client: AgentClient = options.client ?? (await createDirectClient(options.llm));
+  const client: AgentClient =
+    options.client ?? (await createDirectClient(options.llm!, options.rt!));
   render(<App client={client} />);
 }

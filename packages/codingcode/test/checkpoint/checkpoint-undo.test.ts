@@ -11,8 +11,8 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { spawnSync } from 'child_process';
-import { Effect, Layer } from 'effect';
-
+import { Effect } from 'effect';
+import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 function setupTempRepo(): { projectPath: string; slug: string } {
@@ -187,26 +187,9 @@ describe('undoLastCodeRollback end-to-end via ShadowGit', () => {
 });
 
 describe('rollbackCodeToTurn uses inclusive target turn', () => {
-  async function makeCheckpointLayer() {
-    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
-    const { HookService } = await import('../../src/hooks/registry.js');
-
-    const mockHookLayer = Layer.succeed(HookService, {
-      register: () => Effect.succeed(() => {}),
-      emit: () => Effect.succeed(undefined),
-      emitDecision: () => Effect.succeed(null),
-      reloadUserHooks: () => Effect.void,
-      registerDecision: () => Effect.succeed(() => {}),
-    } as any);
-
-    return CheckpointService.Default.pipe(Layer.provide(mockHookLayer));
-  }
-
   it('previews the first turn diff when rolling back a single-turn session', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
-    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
     const { createHash } = await import('crypto');
-    const checkpointLayer = await makeCheckpointLayer();
     const { projectPath } = setupTempRepo();
 
     try {
@@ -220,9 +203,9 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
 
       const preview = await Effect.runPromise(
         Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return checkpoint.previewRollbackDiff(projectPath, sessionId, 1);
-        }).pipe(Effect.provide(checkpointLayer))
+          const svc = yield* CheckpointService;
+          return yield* svc.previewRollbackDiff(projectPath, sessionId, 1);
+        }).pipe(Effect.provide(CheckpointService.Default))
       );
 
       expect(preview.affectedTurns).toEqual([1]);
@@ -234,9 +217,7 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
 
   it('rolls back files created by the first turn in a single-turn session', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
-    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
     const { createHash } = await import('crypto');
-    const checkpointLayer = await makeCheckpointLayer();
     const { projectPath } = setupTempRepo();
 
     try {
@@ -250,15 +231,15 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
 
       const result = await Effect.runPromise(
         Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return checkpoint.rollbackCodeToTurn(projectPath, sessionId, 1);
-        }).pipe(Effect.provide(checkpointLayer))
+          const svc = yield* CheckpointService;
+          return yield* svc.rollbackCodeToTurn(projectPath, sessionId, 1);
+        }).pipe(Effect.provide(CheckpointService.Default))
       );
 
       expect(result.reverted).toBe(true);
       expect(result.affectedTurns).toEqual([1]);
       expect(
-        result.selectedFiles.some((f) => f.replace(/\\/g, '/').endsWith('articles/one.md'))
+        result.selectedFiles.some((f: string) => f.replace(/\\/g, '/').endsWith('articles/one.md'))
       ).toBe(true);
       expect(existsSync(join(projectPath, 'articles/one.md'))).toBe(false);
     } finally {
@@ -268,9 +249,7 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
 
   it('includes the target and later turns when rolling back a multi-turn session', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
-    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
     const { createHash } = await import('crypto');
-    const checkpointLayer = await makeCheckpointLayer();
     const { projectPath } = setupTempRepo();
 
     try {
@@ -294,9 +273,9 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
 
       const preview = await Effect.runPromise(
         Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return checkpoint.previewRollbackDiff(projectPath, sessionId, 2);
-        }).pipe(Effect.provide(checkpointLayer))
+          const svc = yield* CheckpointService;
+          return yield* svc.previewRollbackDiff(projectPath, sessionId, 2);
+        }).pipe(Effect.provide(CheckpointService.Default))
       );
 
       expect(preview.affectedTurns).toEqual([2, 3]);
@@ -325,18 +304,6 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
     const { createHash } = await import('crypto');
     const { dirname, join: pathJoin } = await import('path');
-    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
-    const { HookService } = await import('../../src/hooks/registry.js');
-
-    const mockHookLayer = Layer.succeed(HookService, {
-      register: () => Effect.succeed(() => {}),
-      emit: () => Effect.succeed(undefined),
-      emitDecision: () => Effect.succeed(null),
-      reloadUserHooks: () => Effect.void,
-      registerDecision: () => Effect.succeed(() => {}),
-    } as any);
-
-    const checkpointLayer = CheckpointService.Default.pipe(Layer.provide(mockHookLayer));
 
     const { projectPath } = setupTempRepo();
 
@@ -376,11 +343,11 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
       // Call undo with original casing (mixed case)
       const result = await Effect.runPromise(
         Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return checkpoint.undoLastCodeRollback(projectPath, sessionId, {
+          const svc = yield* CheckpointService;
+          return yield* svc.undoLastCodeRollback(projectPath, sessionId, {
             files: [join(projectPath, 'src/main.ts')],
           });
-        }).pipe(Effect.provide(checkpointLayer))
+        }).pipe(Effect.provide(CheckpointService.Default))
       );
 
       expect(result.restored).toBe(true);
@@ -399,18 +366,6 @@ describe('revertFilesImpl case-insensitive deduplication', () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
     const { createHash } = await import('crypto');
     const { dirname, join: pathJoin } = await import('path');
-    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
-    const { HookService } = await import('../../src/hooks/registry.js');
-
-    const mockHookLayer = Layer.succeed(HookService, {
-      register: () => Effect.succeed(() => {}),
-      emit: () => Effect.succeed(undefined),
-      emitDecision: () => Effect.succeed(null),
-      reloadUserHooks: () => Effect.void,
-      registerDecision: () => Effect.succeed(() => {}),
-    } as any);
-
-    const checkpointLayer = CheckpointService.Default.pipe(Layer.provide(mockHookLayer));
 
     const { projectPath } = setupTempRepo();
 
@@ -429,9 +384,9 @@ describe('revertFilesImpl case-insensitive deduplication', () => {
       // First revert with lowercase path
       const result1 = await Effect.runPromise(
         Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return checkpoint.revertCheckpointFiles(projectPath, 'sess', 1, [filePath.toLowerCase()]);
-        }).pipe(Effect.provide(checkpointLayer))
+          const svc = yield* CheckpointService;
+          return yield* svc.revertCheckpointFiles(projectPath, 'sess', 1, [filePath.toLowerCase()]);
+        }).pipe(Effect.provide(CheckpointService.Default))
       );
 
       expect(result1.reverted).toBe(true);
@@ -441,9 +396,9 @@ describe('revertFilesImpl case-insensitive deduplication', () => {
       // Second revert with original casing (simulating different path source)
       const result2 = await Effect.runPromise(
         Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return checkpoint.revertCheckpointFiles(projectPath, 'sess', 1, [filePath]);
-        }).pipe(Effect.provide(checkpointLayer))
+          const svc = yield* CheckpointService;
+          return yield* svc.revertCheckpointFiles(projectPath, 'sess', 1, [filePath]);
+        }).pipe(Effect.provide(CheckpointService.Default))
       );
 
       expect(result2.reverted).toBe(true);
@@ -454,4 +409,12 @@ describe('revertFilesImpl case-insensitive deduplication', () => {
       cleanupTempRepo(projectPath);
     }
   }, 15000);
+});
+
+describe('CheckpointService', () => {
+  it('should export a Default layer', async () => {
+    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
+    expect(CheckpointService).toBeDefined();
+    expect((CheckpointService as any).Default).toBeDefined();
+  });
 });

@@ -1,16 +1,12 @@
-﻿import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { Effect } from 'effect';
 import { extractMemory } from '../../src/memory/extractor.js';
-import type { StructuredTranscript } from '../../src/memory/extractor.js';
+import type { StructuredTranscript } from '../../src/memory/types.js';
 import type { MemoryTypeConfig } from '@codingcode/infra/config';
 
 describe('Memory Extractor', () => {
   const createMockLlm = (response: string) => ({
-    complete: vi.fn(() =>
-      Promise.resolve({
-        ok: true as const,
-        value: { content: response, finishReason: 'stop' as const },
-      })
-    ),
+    complete: vi.fn(() => Effect.succeed({ content: response, finishReason: 'stop' as const })),
     completeStream: vi.fn(() => ({
       stream: (async function* () {
         yield response;
@@ -96,12 +92,7 @@ describe('Memory Extractor', () => {
 
   it('handles LLM call failure gracefully', async () => {
     const llm = {
-      complete: vi.fn(() =>
-        Promise.resolve({
-          ok: false,
-          value: { content: '' },
-        } as any)
-      ),
+      complete: vi.fn(() => Effect.fail({ code: 'LLM_ERROR', message: 'Stream error' } as any)),
       completeStream: vi.fn(() => ({
         stream: (async function* () {
           throw new Error('Stream error');

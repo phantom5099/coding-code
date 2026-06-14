@@ -1,9 +1,12 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { assemblePayload } from '../../src/context/organizer.js';
+import { Effect, Layer } from 'effect';
+import { ContextService } from '../../src/context/service.js';
+import { SessionService } from '../../src/session/store.js';
+import { LLMFactoryService } from '../../src/llm/factory.js';
 import type { SessionEvent } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
@@ -17,6 +20,26 @@ function makeConfig() {
     compactionModel: '',
     reactiveCompactMaxRetries: 3,
   };
+}
+
+const TestLayer = Layer.merge(
+  SessionService.Default,
+  Layer.succeed(LLMFactoryService, {
+    listModels: () => Effect.succeed([]),
+    findModel: () => Effect.succeed(null),
+    getActiveEntry: () => Effect.fail(new Error('no active model')),
+    switchModel: () => Effect.fail(new Error('no models')),
+    createClient: () => Effect.fail(new Error('no client')),
+    getLLMClient: () => Effect.fail(new Error('no client')),
+  } as any)
+);
+
+async function getCtxService(): Promise<ContextService> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      return yield* ContextService;
+    }).pipe(Effect.provide(ContextService.Default), Effect.provide(TestLayer))
+  );
 }
 
 describe('assemblePayload integration', () => {
@@ -102,9 +125,10 @@ describe('assemblePayload integration', () => {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
-  it('returns messages and compactedEvents', () => {
+  it('returns messages and compactedEvents', async () => {
     const config = makeConfig();
-    const result = assemblePayload(sessionId, projectSlug, config);
+    const ctx = await getCtxService();
+    const result = ctx.assemblePayload(sessionId, projectSlug, config);
 
     expect(result.messages.length).toBeGreaterThan(0);
     expect(Array.isArray(result.compactedEvents)).toBe(true);
@@ -112,9 +136,10 @@ describe('assemblePayload integration', () => {
     expect(result.promptEstimate).toBeGreaterThan(0);
   });
 
-  it('returns currentTurnId from session index', () => {
+  it('returns currentTurnId from session index', async () => {
     const config = makeConfig();
-    const result = assemblePayload(sessionId, projectSlug, config);
+    const ctx = await getCtxService();
+    const result = ctx.assemblePayload(sessionId, projectSlug, config);
     expect(result.currentTurnId).toBe(1);
   });
 });

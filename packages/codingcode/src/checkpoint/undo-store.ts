@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import type { CodeRestoreEntry } from './checkpoint-service.js';
+import type { CodeRestoreEntry } from './types.js';
 import { shortSid } from './utils.js';
 
 function restorePath(gitDir: string, sessionId: string): string {

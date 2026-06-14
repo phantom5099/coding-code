@@ -1,11 +1,10 @@
-import { getConfig } from '../core/workspace.js';
-
-export interface ResolvedConfig {
-  maxSteps: number;
-  maxStopContinuations: number;
-}
+import { loadConfig } from '@codingcode/infra/config';
+import type { ResolvedConfig } from './types.js';
 
 export function resolveConfig(): ResolvedConfig {
-  const cfg = getConfig();
-  return { maxSteps: cfg.maxSteps, maxStopContinuations: cfg.maxStopContinuations };
+  const cfg = loadConfig();
+  return {
+    maxSteps: cfg.maxSteps ?? 250,
+    maxStopContinuations: cfg.maxStopContinuations ?? 3,
+  };
 }

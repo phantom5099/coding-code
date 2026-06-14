@@ -93,7 +93,10 @@ export function resolveMcpConfig(projectRoot: string): McpServerConfig[] {
 
 // ---- MCP disabled state ----
 
-const mcpDisabledStore = createDisabledStore({ globalKeyPath: ['mcp', 'disabledServers'], getGlobalConfigDir });
+const mcpDisabledStore = createDisabledStore({
+  globalKeyPath: ['mcp', 'disabledServers'],
+  getGlobalConfigDir,
+});
 export const getGlobalMcpDisabledState = mcpDisabledStore.getGlobal;
 export const setGlobalMcpDisabledState = mcpDisabledStore.setGlobal;
 export const getProjectMcpDisabledState = mcpDisabledStore.getProject;

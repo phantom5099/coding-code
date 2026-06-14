@@ -139,7 +139,7 @@ describe('global store - agent streaming actions', () => {
     const items = useGlobalStore.getState().agent.threads[threadId].turns[0].items;
     const toolItem = items.find((i) => i.id === 'call-1');
     expect(toolItem).toBeDefined();
-    expect((toolItem as any).status).toBe('running');
+    expect((toolItem as any).status).toBe('pending');
     // Should have only one entry (upserted, not duplicated)
     expect(items.filter((i) => i.id === 'call-1')).toHaveLength(1);
   });

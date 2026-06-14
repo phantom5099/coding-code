@@ -1,18 +1,40 @@
 import { Hono } from 'hono';
-import { listModels, switchModel, getActiveEntry } from '../../llm/factory.js';
+import { Effect, ManagedRuntime } from 'effect';
+import { LLMFactoryService } from '../../llm/factory.js';
 
-export const modelsRouter = new Hono();
+type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-modelsRouter.get('/', (c) => {
-  const modelsResult = listModels();
-  const activeResult = getActiveEntry();
-  const models = modelsResult.ok ? modelsResult.value : [];
-  const activeId = activeResult.ok ? activeResult.value.id : '';
-  return c.json({ models, activeId });
-});
+export function createModelsRouter(rt: ManagedRt): Hono {
+  const router = new Hono();
 
-modelsRouter.post('/switch', async (c) => {
-  const { modelId } = (await c.req.json()) as { modelId: string };
-  const result = switchModel(modelId);
-  return c.json({ ok: result.ok, error: result.ok ? undefined : result.error.message });
-});
+  router.get('/', async (c) => {
+    const result = await rt.runPromise(
+      Effect.gen(function* () {
+        const factory = yield* LLMFactoryService;
+        const modelsResult = yield* Effect.either(factory.listModels());
+        const activeResult = yield* Effect.either(factory.getActiveEntry());
+        return {
+          models: modelsResult._tag === 'Right' ? modelsResult.right : [],
+          activeId: activeResult._tag === 'Right' ? activeResult.right.id : '',
+        };
+      })
+    );
+    return c.json(result);
+  });
+
+  router.post('/switch', async (c) => {
+    const { modelId } = (await c.req.json()) as { modelId: string };
+    const result = await rt.runPromise(
+      Effect.gen(function* () {
+        const factory = yield* LLMFactoryService;
+        return yield* Effect.either(factory.switchModel(modelId));
+      })
+    );
+    return c.json({
+      ok: result._tag === 'Right',
+      error: result._tag === 'Left' ? result.left.message : undefined,
+    });
+  });
+
+  return router;
+}

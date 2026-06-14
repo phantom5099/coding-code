@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   getEffectiveTypes,
   getAllTypesWithStatus,
@@ -14,7 +14,7 @@ const { mockUpdateDisabledTypes, mockUpdateExtraTypes } = vi.hoisted(() => ({
   mockUpdateDisabledTypes: vi.fn(),
   mockUpdateExtraTypes: vi.fn(),
 }));
-vi.mock('@codingcode/infra', async (importOriginal) => {
+vi.mock('@codingcode/infra/config', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,

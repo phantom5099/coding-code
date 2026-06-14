@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { Effect } from 'effect';
+import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition, ToolExecCtx } from '../../types.js';
 
 interface SearchResult {
@@ -10,8 +12,7 @@ interface SearchResult {
 const BROWSER_HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  Accept:
-    'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
   'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
   'Accept-Encoding': 'gzip, deflate',
 };
@@ -22,7 +23,7 @@ const BROWSER_HEADERS = {
 async function searchBing(
   query: string,
   maxResults: number,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<SearchResult[]> {
   const url = `https://cn.bing.com/search?q=${encodeURIComponent(query)}&count=${maxResults}&setlang=zh-CN`;
   const response = await fetch(url, {
@@ -57,7 +58,9 @@ export function parseBingHtml(html: string, maxResults: number): SearchResult[] 
     const blockContent = endIdx !== -1 ? block.substring(0, endIdx) : block;
 
     // 标题和链接在 <h2><a href="...">...</a></h2>
-    const titleMatch = blockContent.match(/<h2[^>]*>\s*<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
+    const titleMatch = blockContent.match(
+      /<h2[^>]*>\s*<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i
+    );
     // 摘要在 class="b_caption" 的 <p> 中，或 b_lineclamp 的 <p> 中
     const snippetMatch =
       blockContent.match(/class="b_caption[^"]*"[^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i) ||
@@ -83,7 +86,7 @@ export function parseBingHtml(html: string, maxResults: number): SearchResult[] 
 async function searchBaidu(
   query: string,
   maxResults: number,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<SearchResult[]> {
   const url = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}&rn=${maxResults}`;
   const response = await fetch(url, {
@@ -153,36 +156,50 @@ export const webSearchTool: ToolDefinition = {
       .default(8)
       .describe('Maximum number of results to return'),
   }),
-  execute: async (args: unknown, _ctx?: ToolExecCtx) => {
-    const { query, max_results } = args as { query: string; max_results: number };
+  execute: (args: unknown, _ctx?: ToolExecCtx) =>
+    Effect.gen(function* () {
+      const { query, max_results } = args as { query: string; max_results: number };
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
 
-    try {
-      // 搜索引擎优先级：Bing(cn) → 百度
-      const engines = [searchBing, searchBaidu];
+      const result = yield* Effect.gen(function* () {
+        // 搜索引擎优先级：Bing(cn) → 百度
+        const engines = [searchBing, searchBaidu];
 
-      let lastError = '';
-      for (const engine of engines) {
-        try {
-          const results = await engine(query, max_results, controller.signal);
-          if (results.length > 0) {
-            return results
-              .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet || '(no snippet)'}`)
-              .join('\n\n');
+        let lastError = '';
+        for (const engine of engines) {
+          const engineResult = yield* Effect.either(
+            Effect.tryPromise({
+              try: () => engine(query, max_results, controller.signal),
+              catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+            })
+          );
+
+          if (engineResult._tag === 'Right') {
+            const results = engineResult.right;
+            if (results.length > 0) {
+              return results
+                .map(
+                  (r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet || '(no snippet)'}`
+                )
+                .join('\n\n');
+            }
+          } else {
+            const e = engineResult.left;
+            lastError = e.cause instanceof Error ? e.cause.message : String(e.cause);
           }
-        } catch (err: unknown) {
-          lastError = err instanceof Error ? err.message : String(err);
         }
-      }
 
-      return `No results found for "${query}".${lastError ? ` Last error: ${lastError}` : ''}`;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      return `Search error for "${query}": ${message}`;
-    } finally {
+        return `No results found for "${query}".${lastError ? ` Last error: ${lastError}` : ''}`;
+      }).pipe(
+        Effect.catchAll((e: AgentError) => {
+          const message = e.cause instanceof Error ? e.cause.message : String(e.cause);
+          return Effect.succeed(`Search error for "${query}": ${message}`);
+        })
+      );
+
       clearTimeout(timer);
-    }
-  },
+      return result;
+    }),
 };

@@ -95,7 +95,9 @@ describe('createHttpAgentClient.sendMessage', () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(
-        createSseResponse([JSON.stringify({ type: 'error', message: 'something broke', code: 'LLM_FAILED' })])
+        createSseResponse([
+          JSON.stringify({ type: 'error', message: 'something broke', code: 'LLM_FAILED' }),
+        ])
       );
 
     const request = createRequestHelpers('http://localhost:8080');

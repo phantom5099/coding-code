@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { webSearchTool, parseBingHtml, parseBaiduHtml } from '../../src/tools/domains/web/search.js';
+import { Effect } from 'effect';
+import {
+  webSearchTool,
+  parseBingHtml,
+  parseBaiduHtml,
+} from '../../src/tools/domains/web/search.js';
 
 describe('webSearchTool', () => {
   it('should have correct tool name and schema', () => {
@@ -26,7 +31,9 @@ describe('webSearchTool', () => {
   });
 
   it('should execute search and return results', async () => {
-    const result = await webSearchTool.execute({ query: 'TypeScript programming', max_results: 3 });
+    const result = (await Effect.runPromise(
+      webSearchTool.execute({ query: 'TypeScript programming', max_results: 3 }) as any
+    )) as string;
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
     // 应该返回编号格式的结果，而不是错误信息
@@ -34,7 +41,9 @@ describe('webSearchTool', () => {
   }, 20_000);
 
   it('should support Chinese query', async () => {
-    const result = await webSearchTool.execute({ query: '自主AI agent平台', max_results: 3 });
+    const result = (await Effect.runPromise(
+      webSearchTool.execute({ query: '自主AI agent平台', max_results: 3 })
+    )) as string;
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
     expect(result).not.toContain('Search error');

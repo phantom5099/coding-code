@@ -16,7 +16,11 @@ describe('ProjectLock', () => {
 
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      try { rmSync(d, { recursive: true, force: true }); } catch { /* ignore */ }
+      try {
+        rmSync(d, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
     }
   });
 

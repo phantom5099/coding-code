@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus, Play, Trash2, Power, Clock, FolderOpen } from 'lucide-react';
 import { useGlobalStore, type Automation } from '../stores/global.store';
-import { listAutomations, deleteAutomation, updateAutomation, runAutomationOnce } from '../lib/core-api';
+import {
+  listAutomations,
+  deleteAutomation,
+  updateAutomation,
+  runAutomationOnce,
+} from '../lib/core-api';
 import { AutomationForm } from './AutomationForm';
 
 export function AutomationPanel() {
@@ -168,7 +173,9 @@ export function AutomationPanel() {
                     <button
                       onClick={() => handleToggle(auto.id, !auto.enabled)}
                       className={`p-2 rounded-lg hover:bg-[var(--bg-hover)] transition-colors ${
-                        auto.enabled ? 'text-[var(--accent-primary)]' : 'text-[var(--text-disabled)]'
+                        auto.enabled
+                          ? 'text-[var(--accent-primary)]'
+                          : 'text-[var(--text-disabled)]'
                       }`}
                       title={auto.enabled ? '禁用' : '启用'}
                     >

@@ -2,9 +2,12 @@ import { Effect } from 'effect';
 import { sendMessage } from '../../agent/agent.js';
 import { ApprovalWaitService } from '../../approval/async-confirm.js';
 import { parseApprovalResponse } from '../../approval/response.js';
-import { ContextService } from '../../context/context.js';
+import { ContextService } from '../../context/service.js';
+import { getContextConfig } from '../../context/config.js';
 import type { StreamChunk } from '../types.js';
 import { agentEventToStreamChunk } from '../direct.js';
+import type { AppRuntime } from '../../layer.js';
+import type { LLMClient } from '../../llm/client.js';
 
 export interface AgentRuntimeClient {
   sendMessage(
@@ -21,14 +24,11 @@ export interface AgentRuntimeClient {
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
 }
 
-export function createDirectAgentClient(
-  llm: any,
-  runWithLayer: <T>(eff: any) => Promise<T>
-): AgentRuntimeClient {
+export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRuntimeClient {
   return {
     async *sendMessage(input, { sessionId, cwd }) {
       const program = sendMessage(sessionId || undefined, input, cwd, llm);
-      const { stream: agentGen, sessionId: resolvedSessionId } = (await runWithLayer(
+      const { stream: agentGen, sessionId: resolvedSessionId } = (await rt.runPromise(
         program
       )) as any;
 
@@ -42,11 +42,19 @@ export function createDirectAgentClient(
             args: Record<string, unknown>;
           }) => void)
         | null = null;
-      const { registerEmitter, unregisterEmitter } =
-        await import('../../approval/async-confirm.js');
-      registerEmitter(resolvedSessionId, (id, tool, args) => {
-        notify?.({ type: 'approval_request', id, tool, args });
-      });
+      const waitService = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalWaitService;
+        })
+      );
+      Effect.runSync(
+        waitService.registerEmitter(
+          resolvedSessionId,
+          (id: string, tool: string, args: Record<string, unknown>) => {
+            notify?.({ type: 'approval_request', id, tool, args });
+          }
+        )
+      );
 
       try {
         const gen = agentEventToStreamChunk(agentGen);
@@ -83,13 +91,13 @@ export function createDirectAgentClient(
           }
         }
       } finally {
-        unregisterEmitter(resolvedSessionId);
+        Effect.runSync(waitService.unregisterEmitter(resolvedSessionId));
       }
     },
 
     async sendApprovalResponse({ sessionId, approvalId, response }) {
       const result = parseApprovalResponse(response);
-      await runWithLayer(
+      await rt.runPromise(
         Effect.gen(function* () {
           const svc = yield* ApprovalWaitService;
           return yield* svc.resolveConfirm(approvalId, sessionId, result);
@@ -98,10 +106,12 @@ export function createDirectAgentClient(
     },
 
     async compact({ sessionId, cwd }) {
-      await runWithLayer(
+      await rt.runPromise(
         Effect.gen(function* () {
-          const ctx = yield* ContextService;
-          return yield* ctx.compress(sessionId, cwd, null);
+          const context = yield* ContextService;
+          return yield* Effect.promise(() =>
+            context.compactWithLLM(sessionId, cwd, getContextConfig(), null)
+          );
         })
       );
     },

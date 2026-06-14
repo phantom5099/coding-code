@@ -1,13 +1,7 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import {
-  ApprovalWaitService,
-  registerEmitter,
-  unregisterEmitter,
-  hasEmitter,
-  delegateEmitter,
-} from '../../src/approval/async-confirm';
-import type { ConfirmResult } from '../../src/approval/confirmation';
+import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import type { ConfirmResult } from '../../src/approval/confirmation.js';
 
 const TestLayer = ApprovalWaitService.Default;
 
@@ -85,44 +79,60 @@ describe('ApprovalWaitService', () => {
 });
 
 describe('delegateEmitter', () => {
-  it('delegates parent emitter to child session', () => {
+  it('delegates parent emitter to child session', async () => {
     const parentSid = 'parent-' + Math.random().toString(36).slice(2);
     const childSid = 'child-' + Math.random().toString(36).slice(2);
     const calls: Array<[string, string, Record<string, unknown>]> = [];
 
-    registerEmitter(parentSid, (id, tool, args) => calls.push([id, tool, args]));
+    await run(
+      Effect.gen(function* () {
+        const svc = yield* ApprovalWaitService;
+        yield* svc.registerEmitter(
+          parentSid,
+          (id: string, tool: string, args: Record<string, unknown>) => calls.push([id, tool, args])
+        );
 
-    expect(hasEmitter(parentSid)).toBe(true);
-    expect(hasEmitter(childSid)).toBe(false);
+        expect(yield* svc.hasEmitter(parentSid)).toBe(true);
+        expect(yield* svc.hasEmitter(childSid)).toBe(false);
 
-    delegateEmitter(childSid, parentSid);
+        yield* svc.delegateEmitter(childSid, parentSid);
 
-    expect(hasEmitter(childSid)).toBe(true);
+        expect(yield* svc.hasEmitter(childSid)).toBe(true);
 
-    unregisterEmitter(childSid);
-    unregisterEmitter(parentSid);
+        yield* svc.unregisterEmitter(childSid);
+        yield* svc.unregisterEmitter(parentSid);
+      })
+    );
   });
 
-  it('child emitter fires the same callback as parent', () => {
+  it('child emitter fires the same callback as parent', async () => {
     const parentSid = 'parent-cb-' + Math.random().toString(36).slice(2);
     const childSid = 'child-cb-' + Math.random().toString(36).slice(2);
     const received: string[] = [];
 
-    registerEmitter(parentSid, (id) => received.push(id));
-    delegateEmitter(childSid, parentSid);
+    await run(
+      Effect.gen(function* () {
+        const svc = yield* ApprovalWaitService;
+        yield* svc.registerEmitter(parentSid, (id: string) => received.push(id));
+        yield* svc.delegateEmitter(childSid, parentSid);
 
-    // Simulate emitApprovalRequest calling emitters.get(childSid)
-    const emitterFn = (globalThis as any).__test_get_emitter?.(childSid);
-    // Since we can't directly access the private map, we verify via hasEmitter
-    expect(hasEmitter(childSid)).toBe(true);
+        // Since we can't directly access the private map, we verify via hasEmitter
+        expect(yield* svc.hasEmitter(childSid)).toBe(true);
 
-    unregisterEmitter(childSid);
-    unregisterEmitter(parentSid);
+        yield* svc.unregisterEmitter(childSid);
+        yield* svc.unregisterEmitter(parentSid);
+      })
+    );
   });
 
-  it('delegateEmitter is a no-op when parent has no emitter', () => {
+  it('delegateEmitter is a no-op when parent has no emitter', async () => {
     const childSid = 'child-noop-' + Math.random().toString(36).slice(2);
-    delegateEmitter(childSid, 'nonexistent-parent');
-    expect(hasEmitter(childSid)).toBe(false);
+    await run(
+      Effect.gen(function* () {
+        const svc = yield* ApprovalWaitService;
+        yield* svc.delegateEmitter(childSid, 'nonexistent-parent');
+        expect(yield* svc.hasEmitter(childSid)).toBe(false);
+      })
+    );
   });
 });

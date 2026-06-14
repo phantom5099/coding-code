@@ -1,9 +1,10 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { forkSession } from '../../src/session/store.js';
+import { Effect } from 'effect';
+import { SessionService } from '../../src/session/store.js';
 import { buildMessages } from '../../src/session/messages.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 
@@ -96,14 +97,39 @@ function readEvents(jsonlPath: string): SessionEvent[] {
     .map((l) => JSON.parse(l) as SessionEvent);
 }
 
+function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+}
+
 describe('forkSession', () => {
-  it('fork copies events from root to atUuid', () => {
+  it('fork copies events from root to atUuid', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
     try {
+      const state = {
+        sessionId,
+        cwd: '/tmp/test',
+        projectPath: slug,
+        transcriptPath: fx.transcriptPath,
+        indexPath: fx.indexPath,
+        messageCount: 7,
+        currentTurnId: 3,
+        sessionMeta: null,
+        title: 'fixture',
+        usage: undefined,
+        promptEstimate: 0,
+        memorySnapshot: '',
+      };
+
       // Fork at u2 (turn 2 start)
-      const newSessionId = forkSession(sessionId, fx.transcriptPath, 'u2');
+      const newSessionId = await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.forkSession(state, 'u2');
+        })
+      );
+
       const newJsonlPath = join(fx.dir, `${newSessionId}.jsonl`);
       expect(existsSync(newJsonlPath)).toBe(true);
 
@@ -120,12 +146,33 @@ describe('forkSession', () => {
     }
   });
 
-  it('forked session has new UUIDs', () => {
+  it('forked session has new UUIDs', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
     try {
-      const newSessionId = forkSession(sessionId, fx.transcriptPath, 'u2');
+      const state = {
+        sessionId,
+        cwd: '/tmp/test',
+        projectPath: slug,
+        transcriptPath: fx.transcriptPath,
+        indexPath: fx.indexPath,
+        messageCount: 7,
+        currentTurnId: 3,
+        sessionMeta: null,
+        title: 'fixture',
+        usage: undefined,
+        promptEstimate: 0,
+        memorySnapshot: '',
+      };
+
+      const newSessionId = await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.forkSession(state, 'u2');
+        })
+      );
+
       const newJsonlPath = join(fx.dir, `${newSessionId}.jsonl`);
       const newEvents = readEvents(newJsonlPath);
 
@@ -144,12 +191,33 @@ describe('forkSession', () => {
     }
   });
 
-  it('deleting events in forked session does not affect source', () => {
+  it('deleting events in forked session does not affect source', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
     try {
-      const newSessionId = forkSession(sessionId, fx.transcriptPath, 'u2');
+      const state = {
+        sessionId,
+        cwd: '/tmp/test',
+        projectPath: slug,
+        transcriptPath: fx.transcriptPath,
+        indexPath: fx.indexPath,
+        messageCount: 7,
+        currentTurnId: 3,
+        sessionMeta: null,
+        title: 'fixture',
+        usage: undefined,
+        promptEstimate: 0,
+        memorySnapshot: '',
+      };
+
+      const newSessionId = await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.forkSession(state, 'u2');
+        })
+      );
+
       const newJsonlPath = join(fx.dir, `${newSessionId}.jsonl`);
 
       // Append a hide event in the forked session
@@ -186,12 +254,33 @@ describe('forkSession', () => {
     }
   });
 
-  it('fork creates index.json with correct metadata', () => {
+  it('fork creates index.json with correct metadata', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
     try {
-      const newSessionId = forkSession(sessionId, fx.transcriptPath, 'a1');
+      const state = {
+        sessionId,
+        cwd: '/tmp/test',
+        projectPath: slug,
+        transcriptPath: fx.transcriptPath,
+        indexPath: fx.indexPath,
+        messageCount: 7,
+        currentTurnId: 3,
+        sessionMeta: null,
+        title: 'fixture',
+        usage: undefined,
+        promptEstimate: 0,
+        memorySnapshot: '',
+      };
+
+      const newSessionId = await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.forkSession(state, 'a1');
+        })
+      );
+
       const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
       expect(existsSync(newIndexPath)).toBe(true);
 

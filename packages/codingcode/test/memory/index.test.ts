@@ -1,16 +1,27 @@
-﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Effect, Layer } from 'effect';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import {
-  loadMemoryForPrompt,
-  flushSessionToMemory,
-  getMemoryEnabled,
-  setMemoryEnabled,
-} from '../../src/memory/index.js';
-import type { MemoryConfig } from '@codingcode/infra/config';
+import { MemoryService } from '../../src/memory/index.js';
+import { LLMFactoryService } from '../../src/llm/factory.js';
 
 const tmpDir = path.join(os.tmpdir(), 'memory-index-test');
+
+const mockFactory = {
+  findModel: vi.fn(() => Effect.succeed(null)),
+  createClient: vi.fn(() => Effect.succeed({})),
+  listModels: vi.fn(() => Effect.succeed([])),
+  getActiveEntry: vi.fn(() => Effect.succeed({})),
+  switchModel: vi.fn(() => Effect.succeed({})),
+  getLLMClient: vi.fn(() => Effect.succeed({})),
+} as any;
+
+const testLayer = MemoryService.Default.pipe(
+  Layer.provide(Layer.succeed(LLMFactoryService, mockFactory))
+);
+
+let service: any;
 
 function cleanup() {
   if (fs.existsSync(tmpDir)) {
@@ -18,10 +29,14 @@ function cleanup() {
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   cleanup();
   fs.mkdirSync(tmpDir, { recursive: true });
-  vi.resetModules();
+  service = await Effect.runPromise(
+    Effect.gen(function* () {
+      return yield* MemoryService;
+    }).pipe(Effect.provide(testLayer))
+  );
 });
 
 afterEach(() => {
@@ -50,7 +65,7 @@ vi.mock('../../src/memory/config.js', () => ({
 describe('Memory Index', () => {
   describe('loadMemoryForPrompt', () => {
     it('returns empty string when memory is disabled', () => {
-      const result = loadMemoryForPrompt(tmpDir);
+      const result = service.loadMemoryForPrompt(tmpDir);
       expect(result).toBe('');
     });
 
@@ -67,7 +82,7 @@ describe('Memory Index', () => {
         disabledTypes: [],
       } as any);
 
-      const result = loadMemoryForPrompt(tmpDir);
+      const result = service.loadMemoryForPrompt(tmpDir);
       expect(result).toBe('');
     });
 
@@ -94,7 +109,7 @@ describe('Memory Index', () => {
 <!-- auto:end -->`
       );
 
-      const result = loadMemoryForPrompt(tmpDir);
+      const result = service.loadMemoryForPrompt(tmpDir);
       expect(result).toContain('## Long-term Memory');
       expect(result).toContain('### project');
       expect(result).toContain('Architecture decision 1');
@@ -124,7 +139,7 @@ describe('Memory Index', () => {
 <!-- auto:end -->`
       );
 
-      const result = loadMemoryForPrompt(tmpDir);
+      const result = service.loadMemoryForPrompt(tmpDir);
       const bytes = Buffer.byteLength(result.replace('## Long-term Memory\n\n', ''), 'utf-8');
       expect(bytes).toBeLessThanOrEqual(100);
     });
@@ -132,7 +147,7 @@ describe('Memory Index', () => {
 
   describe('flushSessionToMemory', () => {
     it('returns early when memory disabled', async () => {
-      const result = await flushSessionToMemory('fake-session-id', null);
+      const result = await service.flushSessionToMemory('fake-session-id', null);
       expect(result.written).toBe(false);
     });
 
@@ -149,7 +164,7 @@ describe('Memory Index', () => {
         disabledTypes: [],
       } as any);
 
-      const result = await flushSessionToMemory('nonexistent-session', null);
+      const result = await service.flushSessionToMemory('nonexistent-session', null);
       expect(result.written).toBe(false);
     });
 
@@ -167,50 +182,50 @@ describe('Memory Index', () => {
       } as any);
 
       // This will fail to find session, so returns false
-      const result = await flushSessionToMemory('session', null);
+      const result = await service.flushSessionToMemory('session', null);
       expect(result.written).toBe(false);
     });
   });
 
   describe('runtime memory toggle', () => {
     afterEach(() => {
-      setMemoryEnabled(false);
+      service.setMemoryEnabled(false);
     });
 
     it('setMemoryEnabled(true) makes getMemoryEnabled return true', () => {
-      setMemoryEnabled(true);
-      expect(getMemoryEnabled()).toBe(true);
+      service.setMemoryEnabled(true);
+      expect(service.getMemoryEnabled()).toBe(true);
     });
 
     it('setMemoryEnabled(false) makes getMemoryEnabled return false', () => {
-      setMemoryEnabled(false);
-      expect(getMemoryEnabled()).toBe(false);
+      service.setMemoryEnabled(false);
+      expect(service.getMemoryEnabled()).toBe(false);
     });
 
     it('toggle sequence works correctly', () => {
-      setMemoryEnabled(true);
-      expect(getMemoryEnabled()).toBe(true);
-      setMemoryEnabled(false);
-      expect(getMemoryEnabled()).toBe(false);
+      service.setMemoryEnabled(true);
+      expect(service.getMemoryEnabled()).toBe(true);
+      service.setMemoryEnabled(false);
+      expect(service.getMemoryEnabled()).toBe(false);
     });
 
     it('loadMemoryForPrompt returns empty when runtime disabled', () => {
-      setMemoryEnabled(false);
-      const result = loadMemoryForPrompt(tmpDir);
+      service.setMemoryEnabled(false);
+      const result = service.loadMemoryForPrompt(tmpDir);
       expect(result).toBe('');
     });
 
     it('loadMemoryForPrompt does not short-circuit when runtime enabled', () => {
-      setMemoryEnabled(true);
-      expect(getMemoryEnabled()).toBe(true);
-      // No memory files 鈫?still empty, but NOT because of disabled check
-      const result = loadMemoryForPrompt(tmpDir);
+      service.setMemoryEnabled(true);
+      expect(service.getMemoryEnabled()).toBe(true);
+      // No memory files → still empty, but NOT because of disabled check
+      const result = service.loadMemoryForPrompt(tmpDir);
       expect(result).toBe('');
     });
 
     it('flushSessionToMemory returns early when runtime disabled', async () => {
-      setMemoryEnabled(false);
-      const result = await flushSessionToMemory('any-session', null);
+      service.setMemoryEnabled(false);
+      const result = await service.flushSessionToMemory('any-session', null);
       expect(result.written).toBe(false);
     });
   });

@@ -1,19 +1,26 @@
-import { Effect } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 import { AgentError } from '../core/error.js';
+
+type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export type Result<A, E> = { ok: true; value: A } | { ok: false; error: E };
 
-export async function runWithLayer<A, E>(eff: Effect.Effect<A, E, any>): Promise<Result<A, E>> {
-  const { AppLayer } = await import('../layer.js');
-  return Effect.runPromise(
-    eff.pipe(
-      Effect.match({
-        onSuccess: (a) => ({ ok: true as const, value: a }),
-        onFailure: (e) => ({ ok: false as const, error: e }),
-      }),
-      Effect.provide(AppLayer) as any
-    )
-  );
+export function createRunWithLayer(rt: ManagedRt) {
+  return async function runWithLayer<A, E>(eff: Effect.Effect<A, E, any>): Promise<Result<A, E>> {
+    return rt.runPromise(
+      eff.pipe(
+        Effect.catchAllDefect((defect) =>
+          Effect.fail(
+            new AgentError('SESSION_IO_ERROR' as any, `Unexpected error: ${String(defect)}`, defect)
+          )
+        ),
+        Effect.match({
+          onSuccess: (a) => ({ ok: true as const, value: a }),
+          onFailure: (e) => ({ ok: false as const, error: e as E }),
+        })
+      )
+    ) as Promise<Result<A, E>>;
+  };
 }
 
 export function errorResponse(err: unknown) {

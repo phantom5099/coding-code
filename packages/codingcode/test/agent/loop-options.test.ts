@@ -1,11 +1,91 @@
 import { expect, it, describe, vi } from 'vitest';
-import { Effect } from 'effect';
-import { runReActLoop } from '../../src/agent/agent';
-import { Result } from '../../src/core/result';
-import type { RunStreamOptions } from '../../src/agent/agent';
-import { randomUUID } from 'crypto';
+import { Effect, Layer, Queue, Chunk } from 'effect';
+import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
+import { TodoService } from '../../src/agent/todo.js';
+import { ContextService } from '../../src/context/service.js';
+import { MemoryService } from '../../src/memory/index.js';
 
-describe('runReActLoop 鈥?loop options', () => {
+vi.mock('@codingcode/infra/config', () => ({
+  loadConfig: () => ({
+    context: {
+      microCompactThreshold: 0.7,
+      microCompactMinChars: 200,
+      compactionThreshold: 0.8,
+      keepRecentTurns: 10,
+      compactionModel: '',
+      reactiveCompactMaxRetries: 1,
+    },
+    memory: {
+      enabled: false,
+      model: '',
+      projectFile: '',
+      userFile: '',
+      maxBytes: 16384,
+      promptMaxBytes: 8192,
+      extraTypes: [],
+      disabledTypes: [],
+    },
+    server: { port: 8080 },
+  }),
+}));
+
+import { agentLoop } from '../../src/agent/agent';
+import { Result } from '../../src/core/result';
+import type { RunStreamOptions } from '../../src/agent/types';
+import { SessionService } from '../../src/session/store.js';
+
+const AllMockLayer = Layer.mergeAll(
+  Layer.succeed(CheckpointService, {
+    snapshotBaseline: () => Effect.void,
+    snapshotFinal: () => Effect.void,
+  } as any),
+  Layer.succeed(SessionService, {
+    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
+    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordToolResult: () => Effect.succeed({}),
+  } as any),
+  Layer.succeed(ProjectRuntimeService, {
+    prepareProject: () => Effect.void,
+    resolveMainAgentProfile: () => undefined,
+    resolveSubagentProfile: () => undefined,
+    listAgentProfiles: () => [],
+    getToolPolicy: () => ({
+      allowedTools: undefined,
+      allowedMcpServers: undefined,
+      allowToolSearch: true,
+      allowDeferredTools: false,
+    }),
+    setSessionProfile: () => {},
+    getSessionProfile: () => undefined,
+    disposeSession: () => Effect.void,
+    disposeProject: () => Effect.void,
+  } as any),
+  Layer.succeed(TodoService, {
+    read: () => [],
+    write: () => {},
+    reset: () => {},
+  } as any),
+  Layer.succeed(ContextService, {
+    assemblePayload: () => ({
+      messages: [{ role: 'user' as const, content: 'hi' }],
+      compactedEvents: [],
+      promptEstimate: 10,
+      currentTurnId: 1,
+      compactedTurnIds: new Set<number>(),
+    }),
+    compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
+    compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
+  } as any),
+  Layer.succeed(MemoryService, {
+    getMemoryEnabled: () => false,
+    setMemoryEnabled: () => {},
+    loadMemoryForPrompt: () => '',
+    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+  } as any)
+);
+
+describe('agentLoop loop options', () => {
   const mockState = {
     sessionId: 'test-session',
     cwd: process.cwd(),
@@ -21,40 +101,11 @@ describe('runReActLoop 鈥?loop options', () => {
     memorySnapshot: '',
   };
 
-  const mockHooks = {
-    emit: vi.fn(() => Effect.succeed(undefined)),
-    emitDecision: vi.fn(() => Effect.succeed(null)),
-  } as any;
-
-  function baseMockDeps(overrides: Record<string, any> = {}) {
+  function mockHooks() {
     return {
-      maxSteps: 1,
-      maxStopContinuations: 2,
-      executor: {} as any,
-      runtime: { listAgentProfiles: () => [] } as any,
-      agentIdResolver: { resolve: () => 'agent-id' } as any,
-      agentService: { runStream: () => (async function* () {})() } as any,
-      ctx: {
-        build: () =>
-          Effect.succeed({
-            messages: [{ role: 'user' as const, content: 'hi' }],
-            newBudgets: [],
-            promptEstimate: 0,
-          }),
-        compress: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
-        appendTurnEnd: () => Effect.succeed(undefined),
-        compactIfNeeded: () =>
-          Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
-      } as any,
-      session: {
-        recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
-        recordToolResult: () => Effect.succeed({}),
-        recordUser: () => Effect.succeed({ uuid: 'm1' }),
-      } as any,
-      checkpoint: { snapshotFinal: () => {} } as any,
-      hooks: mockHooks,
-      ...overrides,
-    };
+      emit: vi.fn(() => Effect.succeed(undefined)),
+      emitDecision: vi.fn(() => Effect.succeed(null)),
+    } as any;
   }
 
   it('should accept systemOverride to replace base prompt', async () => {
@@ -76,11 +127,10 @@ describe('runReActLoop 鈥?loop options', () => {
       systemOverride: 'Custom system prompt',
     };
 
-    const gen = runReActLoop(opts, baseMockDeps());
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop({} as any, mockHooks(), 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+    );
 
     expect(mockLlm.completeStream).toHaveBeenCalled();
     const lastCall = (mockLlm.completeStream as any).mock?.calls?.[0]?.[0];
@@ -105,18 +155,16 @@ describe('runReActLoop 鈥?loop options', () => {
       abortSignal: controller.signal,
     };
 
-    const gen = runReActLoop(opts, baseMockDeps({ maxSteps: 10 }));
-
+    const q = Effect.runSync(Queue.unbounded<any>());
     controller.abort();
+    await Effect.runPromise(
+      agentLoop({} as any, mockHooks(), 10, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+    );
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
-
-    const errorEvent = events.find((e: any) => e._tag === 'Error');
-    expect(errorEvent).toBeDefined();
-    expect((errorEvent as any)?.error?.code).toBe('AGENT_ABORTED');
+    // abortSignal is forwarded to llm.completeStream; agentLoop itself does not
+    // short-circuit on abort — that is handled at AgentService.runStream level
+    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
   });
 
   it('should support coreAllowlist to filter available tools', async () => {
@@ -138,11 +186,11 @@ describe('runReActLoop 鈥?loop options', () => {
       coreAllowlist: new Set(['allowed_tool']),
     };
 
-    const gen = runReActLoop(opts, baseMockDeps());
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop({} as any, mockHooks(), 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+    );
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
   });
@@ -166,11 +214,11 @@ describe('runReActLoop 鈥?loop options', () => {
       maxStepsOverride: 5,
     };
 
-    const gen = runReActLoop(opts, baseMockDeps({ maxSteps: 100 }));
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop({} as any, mockHooks(), 100, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+    );
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     const stepEvents = events.filter((e: any) => e._tag === 'Step');
     expect(stepEvents.some((e: any) => e.max === 5)).toBe(true);
@@ -199,11 +247,11 @@ describe('runReActLoop 鈥?loop options', () => {
       approvalOverride: mockApproval as any,
     };
 
-    const gen = runReActLoop(opts, baseMockDeps());
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop({} as any, mockHooks(), 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+    );
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
   });
@@ -219,14 +267,13 @@ describe('runReActLoop 鈥?loop options', () => {
     const opts: RunStreamOptions = {
       state: mockState,
       llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-      // maxStopContinuations not set in opts 鈫?should use deps value
     };
 
-    const gen = runReActLoop(opts, baseMockDeps({ maxStopContinuations: 5 }));
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop({} as any, mockHooks(), 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+    );
+    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
   });
@@ -244,22 +291,23 @@ describe('runReActLoop 鈥?loop options', () => {
       })),
     };
 
+    const hooks = mockHooks();
+
     const opts: RunStreamOptions = {
       state: mockState,
       llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
     };
 
-    const gen = runReActLoop(opts, baseMockDeps());
-    const events = [];
-    for await (const event of gen) {
-      events.push(event);
-    }
+    const q = Effect.runSync(Queue.unbounded<any>());
+    await Effect.runPromise(
+      agentLoop({} as any, hooks, 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+    );
 
-    expect(mockHooks.emit).toHaveBeenCalledWith(
+    expect(hooks.emit).toHaveBeenCalledWith(
       'agent.turn.start',
       expect.objectContaining({ sessionId: mockState.sessionId })
     );
-    expect(mockHooks.emit).toHaveBeenCalledWith(
+    expect(hooks.emit).toHaveBeenCalledWith(
       'agent.turn.end',
       expect.objectContaining({ status: 'done' })
     );

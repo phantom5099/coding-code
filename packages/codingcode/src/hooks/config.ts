@@ -2,20 +2,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { HookPoint } from './registry.js';
+import type { HookPoint, UserHookConfig } from './types.js';
 import { createDisabledStore } from '@codingcode/infra/disabled-store';
-
-export interface UserHookConfig {
-  name: string;
-  description?: string;
-  point: HookPoint;
-  type: 'observer' | 'decision';
-  command: string;
-  args?: string[];
-  env?: Record<string, string>;
-  priority?: number;
-  enabled: boolean;
-}
 
 let _globalConfigDirOverride: string | undefined;
 
@@ -92,7 +80,10 @@ export function resolveHookConfigs(projectRoot: string): UserHookConfig[] {
 
 // ---- Hook disabled state ----
 
-const hookDisabledStore = createDisabledStore({ globalKeyPath: ['hooks', 'disabledHooks'], getGlobalConfigDir });
+const hookDisabledStore = createDisabledStore({
+  globalKeyPath: ['hooks', 'disabledHooks'],
+  getGlobalConfigDir,
+});
 export const getGlobalHookDisabledState = hookDisabledStore.getGlobal;
 export const setGlobalHookDisabledState = hookDisabledStore.setGlobal;
 export const getProjectHookDisabledState = hookDisabledStore.getProject;

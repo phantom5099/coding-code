@@ -1,9 +1,9 @@
-﻿import { describe, it, expect } from 'vitest';
+﻿﻿import { describe, it, expect } from 'vitest';
 import {
   estimateTokensForContent,
   estimateTokens,
   estimateMessageTokens,
-} from '../../src/context/util.js';
+} from '../../src/core/util.js';
 
 describe('token estimation', () => {
   it('empty content returns 0', () => {

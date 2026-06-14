@@ -2,13 +2,11 @@ import { createHash } from 'crypto';
 import { normalizePath } from '../core/path.js';
 import type { ShadowGit } from './shadow-git.js';
 import type { ProjectLock } from './project-lock.js';
-import type { CodeRollbackResult, CodeRestoreEntry } from './checkpoint-service.js';
+import type { CodeRollbackResult, CodeRestoreEntry, RestorePlan } from './types.js';
 import { commitMsg } from './utils.js';
 import { readRestoreEntry, writeRestoreEntry } from './undo-store.js';
 
-export function emptyRollbackResult(
-  turnId: number
-): CodeRollbackResult {
+export function emptyRollbackResult(turnId: number): CodeRollbackResult {
   return {
     reverted: false,
     throughTurnId: turnId,
@@ -20,7 +18,7 @@ export function emptyRollbackResult(
 
 export function executeRollback(
   sessionId: string,
-  plan: { throughTurnId: number; affectedTurns: number[]; baseline: string },
+  plan: RestorePlan,
   selectedFiles: string[],
   action: CodeRestoreEntry['action'],
   sg: ShadowGit,

@@ -1,18 +1,8 @@
-export type TodoStatus = 'pending' | 'in_progress' | 'completed';
-
-export interface Todo {
-  step: string;
-  status: TodoStatus;
-}
+import { Effect } from 'effect';
+import type { Todo, TodoCounts } from './types.js';
 
 export const TODO_MAX_ITEMS = 20;
 export const TODO_MAX_STEP_LEN = 60;
-
-export interface TodoCounts {
-  pending: number;
-  in_progress: number;
-  completed: number;
-}
 
 export function countByStatus(plan: Todo[]): TodoCounts {
   const c: TodoCounts = { pending: 0, in_progress: 0, completed: 0 };
@@ -20,12 +10,22 @@ export function countByStatus(plan: Todo[]): TodoCounts {
   return c;
 }
 
-const store = new Map<string, Todo[]>();
+export class TodoService extends Effect.Service<TodoService>()('Todo', {
+  sync: () => {
+    const store = new Map<string, Todo[]>();
 
-export const sharedTodoStore = {
-  read: (sessionId: string): Todo[] => store.get(sessionId) ?? [],
-  write: (sessionId: string, plan: Todo[]): void => {
-    store.set(sessionId, plan);
+    return {
+      read(sessionId: string): Todo[] {
+        return store.get(sessionId) ?? [];
+      },
+
+      write(sessionId: string, plan: Todo[]): void {
+        store.set(sessionId, plan);
+      },
+
+      reset(): void {
+        store.clear();
+      },
+    };
   },
-  reset: (): void => store.clear(),
-};
+}) {}

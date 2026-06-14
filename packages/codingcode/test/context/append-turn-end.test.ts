@@ -1,10 +1,34 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+﻿﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { estimateTokensForContent } from '../../src/context/util.js';
+import { estimateTokensForContent } from '../../src/core/util.js';
 import { getContextConfig } from '../../src/context/config.js';
+
+vi.mock('@codingcode/infra/config', () => ({
+  loadConfig: () => ({
+    context: {
+      microCompactThreshold: 0.7,
+      microCompactMinChars: 200,
+      compactionThreshold: 0.8,
+      keepRecentTurns: 10,
+      compactionModel: '',
+      reactiveCompactMaxRetries: 1,
+    },
+    memory: {
+      enabled: false,
+      model: '',
+      projectFile: '',
+      userFile: '',
+      maxBytes: 16384,
+      promptMaxBytes: 8192,
+      extraTypes: [],
+      disabledTypes: [],
+    },
+    server: { port: 8080 },
+  }),
+}));
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 

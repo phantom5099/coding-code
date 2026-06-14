@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import {
   existsSync,
   mkdirSync,
@@ -9,19 +8,15 @@ import {
   openSync,
   readSync,
   closeSync,
-  truncateSync,
   statSync,
   unlinkSync,
   rmSync,
 } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
-import { createLogger } from '@codingcode/infra/logger';
 import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
-import type { SessionEvent, SessionMetaEvent, SessionIndex, TokenUsage } from './types.js';
-
-const logger = createLogger();
+import type { SessionEvent, SessionMetaEvent, SessionIndex } from './types.js';
 
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const PROJECT_BASE = join(CODINGCODE_DIR, 'project');
@@ -239,19 +234,4 @@ export function deleteSession(sessionId: string): void {
   try {
     if (existsSync(subagentDir)) rmSync(subagentDir, { recursive: true, force: true });
   } catch {}
-}
-
-// Serialized write queue per session: ensures ordered, non-overlapping writes
-const writeQueues = new Map<string, Promise<void>>();
-
-export function enqueueWrite(sessionId: string, path: string, data: unknown): void {
-  const prev = writeQueues.get(sessionId) ?? Promise.resolve();
-  const task = prev
-    .then(() => {
-      writeFileSync(path, JSON.stringify(data, null, 2), 'utf8');
-    })
-    .catch((err) => {
-      logger.error(`write queue error for ${path}:`, err);
-    });
-  writeQueues.set(sessionId, task);
 }

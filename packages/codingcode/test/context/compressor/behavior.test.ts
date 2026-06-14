@@ -1,15 +1,18 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { compactWithLLM } from '../../../src/context/compressor.js';
-import type { ContextConfig } from '../../../src/context/config.js';
+import { Effect, Layer } from 'effect';
+import { ContextService } from '../../../src/context/service.js';
+import { SessionService } from '../../../src/session/store.js';
+import { LLMFactoryService } from '../../../src/llm/factory.js';
+import type { ContextConfig } from '@codingcode/infra/config';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 import { buildMessages } from '../../../src/session/messages.js';
-import { estimateTokens } from '../../../src/context/util.js';
+import { estimateTokens } from '../../../src/core/util.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
@@ -119,7 +122,7 @@ function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
 
 function makeMockLLM(content: string): LLMClient {
   return {
-    complete: async () => Result.ok({ content, finishReason: 'stop' as const }),
+    complete: () => Effect.succeed({ content, finishReason: 'stop' as const }),
     completeStream: () => ({
       stream: (async function* () {
         yield content;
@@ -136,6 +139,26 @@ function makeMockLLM(content: string): LLMClient {
   };
 }
 
+const TestLayer = Layer.merge(
+  SessionService.Default,
+  Layer.succeed(LLMFactoryService, {
+    listModels: () => Effect.succeed([]),
+    findModel: () => Effect.succeed(null),
+    getActiveEntry: () => Effect.fail(new Error('no active model')),
+    switchModel: () => Effect.fail(new Error('no models')),
+    createClient: () => Effect.fail(new Error('no client')),
+    getLLMClient: () => Effect.fail(new Error('no client')),
+  } as any)
+);
+
+async function getCtxService(): Promise<ContextService> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      return yield* ContextService;
+    }).pipe(Effect.provide(ContextService.Default), Effect.provide(TestLayer))
+  );
+}
+
 describe('compressor behavior', () => {
   describe('L5 compaction', () => {
     it('writes summary event with five-section system summary', async () => {
@@ -145,7 +168,8 @@ describe('compressor behavior', () => {
         const summary =
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
-        await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        const ctx = await getCtxService();
+        await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
@@ -159,7 +183,8 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
         const cfg = tinyConfig({ keepRecentTurns: 2 });
-        const result = await compactWithLLM(fx.sessionId, fx.slug, cfg, null);
+        const ctx = await getCtxService();
+        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, null);
         expect(result.didCompress).toBe(false);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
@@ -177,7 +202,8 @@ describe('compressor behavior', () => {
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
-        await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        const ctx = await getCtxService();
+        await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
@@ -197,7 +223,8 @@ describe('compressor behavior', () => {
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
-        const result = await compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        const ctx = await getCtxService();
+        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
         expect(result.didCompress).toBe(true);
         expect(result.promptEstimate).toBeGreaterThan(0);
         expect(result.promptEstimate).toBeLessThan(before);

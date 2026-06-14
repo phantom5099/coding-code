@@ -1,13 +1,13 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { forkSession, SessionService } from '../../src/session/store.js';
-import { findSessionIndex } from '../../src/session/io.js';
+import { SessionService } from '../../src/session/store.js';
+import { findSessionIndex } from '../../src/session/file-ops.js';
 import { findLastVisibleAssistantUsage, buildMessages } from '../../src/session/messages.js';
-import { estimateTokensForContent, estimateTokens } from '../../src/context/util.js';
+import { estimateTokensForContent, estimateTokens } from '../../src/core/util.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 
@@ -93,6 +93,10 @@ function makeFixture(
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
   return { dir, transcriptPath, indexPath };
+}
+
+function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
 }
 
 describe('promptEstimate', () => {
@@ -192,13 +196,32 @@ describe('promptEstimate', () => {
     }
   });
 
-  it('forkSession restores usage and promptEstimate from last visible assistant', () => {
+  it('forkSession restores usage and promptEstimate from last visible assistant', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const usage = { prompt: 800, completion: 400, total: 1200 };
     const fx = makeFixture(sessionId, slug, usage);
     try {
-      const newSessionId = forkSession(sessionId, fx.transcriptPath, 'a1');
+      const state = {
+        sessionId,
+        cwd: '/tmp/test',
+        projectPath: slug,
+        transcriptPath: fx.transcriptPath,
+        indexPath: fx.indexPath,
+        messageCount: 4,
+        currentTurnId: 2,
+        sessionMeta: null,
+        title: 'fixture',
+        usage,
+        promptEstimate: usage.prompt,
+        memorySnapshot: '',
+      };
+      const newSessionId = await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.forkSession(state, 'a1');
+        })
+      );
       const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
       const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
       expect(idx.usage).toEqual(usage);
@@ -208,12 +231,31 @@ describe('promptEstimate', () => {
     }
   });
 
-  it('forkSession falls back to estimateTokens when no assistant usage', () => {
+  it('forkSession falls back to estimateTokens when no assistant usage', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, undefined);
     try {
-      const newSessionId = forkSession(sessionId, fx.transcriptPath, 'u2');
+      const state = {
+        sessionId,
+        cwd: '/tmp/test',
+        projectPath: slug,
+        transcriptPath: fx.transcriptPath,
+        indexPath: fx.indexPath,
+        messageCount: 4,
+        currentTurnId: 2,
+        sessionMeta: null,
+        title: 'fixture',
+        usage: undefined,
+        promptEstimate: 0,
+        memorySnapshot: '',
+      };
+      const newSessionId = await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.forkSession(state, 'u2');
+        })
+      );
       const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
       const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
       expect(idx.promptEstimate).toBeGreaterThan(0);
@@ -230,10 +272,6 @@ describe('token estimation', () => {
   });
 });
 
-function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
-}
-
 describe('SessionService record methods update promptEstimate', () => {
   it('recordUser increments promptEstimate', async () => {
     const slug = randomUUID();
@@ -241,12 +279,20 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'test-model');
+        })
       );
       expect(state.promptEstimate).toBe(0);
 
       const before = state.promptEstimate;
-      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))));
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.recordUser(state, 'hello world');
+        })
+      );
       expect(state.promptEstimate).toBeGreaterThan(before);
     } finally {
       await new Promise((r) => setTimeout(r, 50));
@@ -261,16 +307,25 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'test-model');
+        })
       );
 
-      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello'))));
+      await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.recordUser(state, 'hello');
+        })
+      );
       const before = state.promptEstimate;
 
       await run(
-        SessionService.pipe(
-          Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model'))
-        )
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.recordAssistant(state, 'reply', [], 'test-model');
+        })
       );
       expect(state.promptEstimate).toBeGreaterThan(before);
       expect(state.usage).toBeUndefined();
@@ -287,14 +342,18 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'test-model');
+        })
       );
 
       const usage = { prompt: 999, completion: 111, total: 1110 };
       await run(
-        SessionService.pipe(
-          Effect.flatMap((s) => s.recordAssistant(state, 'reply', [], 'test-model', usage))
-        )
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.recordAssistant(state, 'reply', [], 'test-model', usage);
+        })
       );
       expect(state.promptEstimate).toBe(999);
       expect(state.usage).toEqual(usage);
@@ -311,29 +370,36 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'test-model');
+        })
       );
 
       const assistantEvent = await run(
-        SessionService.pipe(
-          Effect.flatMap((s) =>
-            s.recordAssistant(
-              state,
-              'use tool',
-              [{ id: 'tc1', name: 'bash', arguments: {} }],
-              'test-model'
-            )
-          )
-        )
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.recordAssistant(
+            state,
+            'use tool',
+            [{ id: 'tc1', name: 'bash', arguments: {} }],
+            'test-model'
+          );
+        })
       );
       const before = state.promptEstimate;
 
       const toolEvent = await run(
-        SessionService.pipe(
-          Effect.flatMap((s) =>
-            s.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', 'tool output here')
-          )
-        )
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.recordToolResult(
+            state,
+            assistantEvent.uuid,
+            'bash',
+            'tc1',
+            'tool output here'
+          );
+        })
       );
       expect(state.promptEstimate).toBeGreaterThan(before);
       expect(toolEvent.tokenCount).toBeGreaterThan(0);
@@ -350,27 +416,35 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'test-model');
+        })
       );
 
       const userEv = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.recordUser(state, 'hello world');
+        })
       );
       await run(
-        SessionService.pipe(
-          Effect.flatMap((s) =>
-            s.recordAssistant(state, 'reply', [], 'test-model', {
-              prompt: 100,
-              completion: 50,
-              total: 150,
-            })
-          )
-        )
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.recordAssistant(state, 'reply', [], 'test-model', {
+            prompt: 100,
+            completion: 50,
+            total: 150,
+          });
+        })
       );
       expect(state.usage).toBeDefined();
 
       await run(
-        SessionService.pipe(Effect.flatMap((s) => s.hideMessage(state, userEv.uuid, 'test')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.hideMessage(state, userEv.uuid, 'test');
+        })
       );
       expect(state.usage).toBeUndefined();
       expect(state.promptEstimate).toBeGreaterThanOrEqual(0);
@@ -387,44 +461,48 @@ describe('SessionService record methods update promptEstimate', () => {
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
-        SessionService.pipe(Effect.flatMap((s) => s.create(dir, 'test-model')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'test-model');
+        })
       );
 
       // Turn 1
-      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'hello world'))));
       await run(
-        SessionService.pipe(
-          Effect.flatMap((s) =>
-            s.recordAssistant(state, 'reply one', [], 'test-model', {
-              prompt: 1000,
-              completion: 100,
-              total: 1100,
-            })
-          )
-        )
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.recordUser(state, 'hello world');
+          yield* svc.recordAssistant(state, 'reply one', [], 'test-model', {
+            prompt: 1000,
+            completion: 100,
+            total: 1100,
+          });
+        })
       );
 
       // Turn 2
       state.currentTurnId = 2;
-      await run(SessionService.pipe(Effect.flatMap((s) => s.recordUser(state, 'do more stuff'))));
       await run(
-        SessionService.pipe(
-          Effect.flatMap((s) =>
-            s.recordAssistant(state, 'reply two', [], 'test-model', {
-              prompt: 5000,
-              completion: 200,
-              total: 5200,
-            })
-          )
-        )
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.recordUser(state, 'do more stuff');
+          yield* svc.recordAssistant(state, 'reply two', [], 'test-model', {
+            prompt: 5000,
+            completion: 200,
+            total: 5200,
+          });
+        })
       );
 
       expect(state.promptEstimate).toBe(5000);
       expect(state.usage).toBeDefined();
 
-      // Rollback to turn 1 鈥?should hide turn 2 messages
+      // Rollback to turn 1 — should hide turn 2 messages
       await run(
-        SessionService.pipe(Effect.flatMap((s) => s.rollbackToTurn(state, 1, 'test rollback')))
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          yield* svc.rollbackToTurn(state, 1, 'test rollback');
+        })
       );
 
       // promptEstimate should restore from last visible assistant usage.prompt, not 5000

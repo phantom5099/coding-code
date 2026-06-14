@@ -41,7 +41,7 @@ export interface SkillStatus {
 
 export type PanelState =
   | { type: 'none' }
-  | { type: 'model'; items: PanelItem[]; activeValue: string }
+  | { type: 'model'; items: PanelItem[]; activeValue: string | null }
   | { type: 'sessions'; items: PanelItem[] }
   | { type: 'approval'; id: string; tool: string; args: Record<string, unknown> }
   | { type: 'help' }

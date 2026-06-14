@@ -1,14 +1,38 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { resolveConfig } from '../../src/agent/config.js';
 
+vi.mock('@codingcode/infra/config', () => ({
+  loadConfig: () => ({
+    context: {
+      microCompactThreshold: 0.7,
+      microCompactMinChars: 200,
+      compactionThreshold: 0.8,
+      keepRecentTurns: 10,
+      compactionModel: '',
+      reactiveCompactMaxRetries: 1,
+    },
+    memory: {
+      enabled: false,
+      model: '',
+      projectFile: '',
+      userFile: '',
+      maxBytes: 16384,
+      promptMaxBytes: 8192,
+      extraTypes: [],
+      disabledTypes: [],
+    },
+    server: { port: 8080 },
+  }),
+}));
+
 describe('resolveConfig', () => {
-  it('returns maxStopContinuations defaulting to 2 when no config file is present', () => {
+  it('returns maxStopContinuations defaulting to 3 when no config file is present', () => {
     const cfg = resolveConfig();
-    expect(cfg.maxStopContinuations).toBe(2);
+    expect(cfg.maxStopContinuations).toBe(3);
   });
 
-  it('returns maxSteps defaulting to 200 when no config file is present', () => {
+  it('returns maxSteps defaulting to 50 when no config file is present', () => {
     const cfg = resolveConfig();
-    expect(cfg.maxSteps).toBe(200);
+    expect(cfg.maxSteps).toBe(250);
   });
 });

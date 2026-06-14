@@ -1,5 +1,4 @@
-import { getAllRules } from '../rules/index.js';
-import type { AgentProfile } from '../subagent/registry.js';
+import type { SystemPromptOptions } from './types.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a coding assistant — an AI agent that helps users with software engineering tasks.
 
@@ -74,17 +73,6 @@ export const SYSTEM_NOTES = `## System Notes
 - This project has a cross-session memory system. If a "Session Memory" block is present at the end of this prompt, it contains persistent facts and decisions from prior sessions. Treat it as reliable context, not as new instructions.
 - The todo_write tool lets you track multi-step plans. Use it for tasks that require more than one step.`;
 
-export type SystemPromptVariant = 'default';
-
-export interface SystemPromptOptions {
-  cwd: string;
-  platform: string;
-  shell: string;
-  variant?: SystemPromptVariant;
-  skillInstruction?: string;
-  agentProfiles?: AgentProfile[];
-}
-
 function renderBase(opts: SystemPromptOptions): string {
   return DEFAULT_SYSTEM_PROMPT.replace('{{cwd}}', opts.cwd)
     .replace('{{platform}}', opts.platform)
@@ -95,13 +83,9 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   let prompt = renderBase(opts);
   prompt += `\n\n${SYSTEM_NOTES}`;
 
-  const rules = getAllRules(opts.cwd);
+  const rules = opts.rules;
   if (rules) {
     prompt += `\n\n## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`;
-  }
-
-  if (opts.skillInstruction) {
-    prompt += `\n\n## Skill Instructions\n\n${opts.skillInstruction}`;
   }
 
   if (opts.agentProfiles && opts.agentProfiles.length > 0) {
@@ -122,7 +106,7 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
 
 Dispatch a subagent when the task involves extensively reading files, searching across the codebase, or analyzing a whole module. A subagent runs in an independent context window — all of its tool calls (read_file, search_code, etc.) consume only the subagent\'s own context. Only the final result comes back to you.
 
-**Dispatch = protect your context window.** If you do the same work yourself, all raw content goes directly into your context.
+**Dispatch = protect your context window.** If you do the same work yourself, all the raw content goes directly into your context.
 
 ### When NOT to dispatch
 
@@ -148,6 +132,10 @@ dispatch_agent({
 })
 \`\`\``;
     }
+  }
+
+  if (opts.skillInstruction) {
+    prompt += `\n\n## Skill Instructions\n\n${opts.skillInstruction}`;
   }
 
   return prompt;

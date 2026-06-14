@@ -2,6 +2,8 @@ import { createDirectAgentClient, type AgentRuntimeClient } from './agent-runtim
 import { createDirectSessionClient, type SessionClient } from './sessions.js';
 import { createDirectModelClient, type ModelClient } from './models.js';
 import { createDirectSettingsClient, type SettingsClient } from './settings.js';
+import type { AppRuntime } from '../../layer.js';
+import type { LLMClient } from '../../llm/client.js';
 
 export interface DirectClients {
   agent: AgentRuntimeClient;
@@ -10,14 +12,11 @@ export interface DirectClients {
   settings: SettingsClient;
 }
 
-export function createDirectClients(
-  llm: any,
-  runWithLayer: <T>(eff: any) => Promise<T>
-): DirectClients {
+export function createDirectClients(llm: LLMClient, rt: AppRuntime): DirectClients {
   return {
-    agent: createDirectAgentClient(llm, runWithLayer),
-    sessions: createDirectSessionClient(runWithLayer),
-    models: createDirectModelClient(),
-    settings: createDirectSettingsClient(runWithLayer),
+    agent: createDirectAgentClient(llm, rt),
+    sessions: createDirectSessionClient(rt),
+    models: createDirectModelClient(rt),
+    settings: createDirectSettingsClient(rt),
   };
 }

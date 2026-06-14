@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { settingsRouter } from '../../src/server/routes/settings.js';
+import { Effect, Layer, ManagedRuntime } from 'effect';
+import { createSettingsRouter } from '../../src/server/routes/settings.js';
+import { MemoryService } from '../../src/memory/index.js';
+import { SkillService } from '../../src/skills/service.js';
+import { McpService } from '../../src/mcp/index.js';
+import { WorkspaceService } from '../../src/core/workspace.js';
 
 vi.mock('../../src/memory/config.js', () => ({
   getMemoryConfig: vi.fn().mockReturnValue({ enabled: true, disabledTypes: [], extraTypes: [] }),
@@ -14,15 +19,56 @@ vi.mock('../../src/memory/config.js', () => ({
   deleteMemoryExtraType: vi.fn(),
 }));
 
-vi.mock('../../src/memory/index.js', () => {
-  let enabled = true;
-  return {
-    getMemoryEnabled: vi.fn().mockImplementation(() => enabled),
-    setMemoryEnabled: vi.fn().mockImplementation((value: boolean) => {
-      enabled = value;
-    }),
-  };
-});
+let memoryEnabled = true;
+
+const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
+  getWorkspaceCwd: () => '/tmp/test',
+  resolveWorkspaceCwd: (override?: string) => override ?? '/tmp/test',
+  getProcessRoot: () => '/tmp/test',
+  getWorkspacePath: () => 'test',
+  resolveInWorkspace: (path: string) => `/tmp/test/${path}`,
+  getConfig: () => ({ activeModel: null }),
+  init: () => {},
+} as any);
+
+const MockMemoryLayer = Layer.succeed(MemoryService, {
+  getMemoryEnabled: () => memoryEnabled,
+  setMemoryEnabled: (v: boolean) => {
+    memoryEnabled = v;
+  },
+  loadMemoryForPrompt: () => '',
+  flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+} as any);
+
+const MockSkillLayer = Layer.succeed(SkillService, {
+  _tag: 'Skill' as const,
+  getAll: vi.fn(() => Effect.succeed([])),
+  findByName: vi.fn(() => Effect.succeed(undefined)),
+  select: vi.fn(() => Effect.succeed(undefined)),
+  selectImplicit: vi.fn(() => Effect.succeed(undefined)),
+  extractSkill: vi.fn((_p: string, q: string) =>
+    Effect.sync(() => [undefined, q] as [undefined, string])
+  ),
+  enableSkill: vi.fn(() => Effect.void),
+  disableSkill: vi.fn(() => Effect.void),
+  listWithStatus: vi.fn(() => Effect.succeed([])),
+  evictProject: vi.fn(() => Effect.void),
+} as any);
+
+const MockMcpLayer = Layer.succeed(McpService, {
+  syncConnections: () => Effect.void,
+  connectServers: () => Effect.void,
+  disconnectServers: () => Effect.void,
+  getServerToolNames: () => [],
+  disconnectAll: () => Effect.void,
+  status: () => Effect.succeed([]),
+  listProjectMcpTools: () => [],
+} as any);
+
+const TestLayer = Layer.mergeAll(MockWorkspaceLayer, MockMemoryLayer, MockSkillLayer, MockMcpLayer);
+
+const rt = ManagedRuntime.make(TestLayer);
+const settingsRouter = await createSettingsRouter(rt);
 
 vi.mock('../../src/subagent/registry.js', () => ({
   EXPLORE_PROFILE: {
@@ -100,13 +146,15 @@ vi.mock('../../src/skills/config.js', () => ({
   discoverProjectSkillDirs: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock('../../src/skills/index.js', () => ({
-  SkillService: {} as any,
-}));
-
-vi.mock('../../src/core/workspace.js', () => ({
-  resolveWorkspaceCwd: vi.fn((cwd?: string) => cwd ?? '/default'),
-}));
+vi.mock('../../src/core/workspace.js', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Context } = require('effect');
+  const tag = Context.GenericTag('Workspace') as any;
+  return {
+    WorkspaceService: tag,
+    resolveWorkspaceCwd: vi.fn((cwd?: string) => cwd ?? '/default'),
+  };
+});
 
 vi.mock('../../src/core/error.js', () => ({
   AlreadyExistsError: class AlreadyExistsError extends Error {
@@ -121,11 +169,6 @@ vi.mock('../../src/core/error.js', () => ({
       this.name = 'NotFoundError';
     }
   },
-}));
-
-vi.mock('../../src/server/util.js', () => ({
-  runWithLayer: vi.fn().mockResolvedValue({ ok: true, value: [] }),
-  errorResponse: vi.fn().mockReturnValue({ status: 500, body: { error: 'test' } }),
 }));
 
 // ---- Memory ----

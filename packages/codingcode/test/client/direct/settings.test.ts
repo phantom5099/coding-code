@@ -1,18 +1,65 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createDirectSettingsClient } from '../../../src/client/direct/settings.js';
+import { SkillService } from '../../../src/skills/service.js';
+import { MemoryService } from '../../../src/memory/index.js';
+import { McpService } from '../../../src/mcp/index.js';
+import { ApprovalService } from '../../../src/approval/index.js';
+import { ApprovalWaitService } from '../../../src/approval/async-confirm.js';
+import { HookService } from '../../../src/hooks/registry.js';
 
-vi.mock('../../../src/mcp/index.js', () => ({
-  McpService: {} as any,
-}));
+const mockEnableSkill = vi.fn(() => Effect.void);
+const mockDisableSkill = vi.fn(() => Effect.void);
+const mockListWithStatus = vi.fn(() => Effect.succeed([]));
 
-vi.mock('../../../src/skills/index.js', () => ({
-  SkillService: {} as any,
-}));
+const MockSkillLayer = Layer.succeed(
+  SkillService,
+  SkillService.make({
+    getAll: (_p: string) => Effect.succeed([]),
+    findByName: (_p: string, _n: string) => Effect.succeed(undefined),
+    select: (_p: string, _q: string) => Effect.succeed(undefined),
+    selectImplicit: (_p: string, _q: string, _m: any) => Effect.succeed(undefined),
+    extractSkill: (_p: string, _q: string) => Effect.succeed([undefined, '']),
+    enableSkill: mockEnableSkill,
+    disableSkill: mockDisableSkill,
+    listWithStatus: mockListWithStatus,
+    evictProject: (_p: string) => Effect.void,
+  })
+);
 
-vi.mock('../../../src/approval/index.js', () => ({
-  getGlobalPermissionMode: vi.fn().mockReturnValue('auto'),
-  setGlobalPermissionMode: vi.fn(),
-}));
+const MockMemoryLayer = Layer.succeed(MemoryService, {
+  getMemoryEnabled: () => true,
+  setMemoryEnabled: () => {},
+  loadMemoryForPrompt: () => '',
+  flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+} as any);
+
+const MockMcpLayer = Layer.succeed(McpService, {
+  syncConnections: () => Effect.void,
+  connectServers: () => Effect.void,
+  disconnectServers: () => Effect.void,
+  getServerToolNames: () => [],
+  disconnectAll: () => Effect.void,
+  status: () => Effect.succeed([]),
+  listProjectMcpTools: () => [],
+  disable: () => Effect.void,
+  enable: () => Effect.void,
+} as any);
+
+const MockApprovalLayer = ApprovalService.Default.pipe(
+  Layer.provide(Layer.mergeAll(HookService.Default, ApprovalWaitService.Default))
+);
+
+const TestLayer = Layer.mergeAll(
+  MockSkillLayer,
+  MockMemoryLayer,
+  MockMcpLayer,
+  MockApprovalLayer,
+  HookService.Default,
+  ApprovalWaitService.Default
+);
+
+const rt = ManagedRuntime.make(TestLayer);
 
 vi.mock('../../../src/mcp/config.js', () => ({
   loadMcpConfig: vi.fn().mockReturnValue([]),
@@ -72,11 +119,6 @@ vi.mock('../../../src/memory/config.js', () => ({
   deleteMemoryExtraType: vi.fn(),
 }));
 
-vi.mock('../../../src/memory/index.js', () => ({
-  getMemoryEnabled: vi.fn().mockReturnValue(true),
-  setMemoryEnabled: vi.fn(),
-}));
-
 vi.mock('../../../src/core/error.js', () => ({
   AlreadyExistsError: class AlreadyExistsError extends Error {
     constructor(msg: string) {
@@ -92,14 +134,12 @@ vi.mock('../../../src/core/error.js', () => ({
   },
 }));
 
-const mockRunWithLayer = vi.fn().mockResolvedValue(undefined);
-
 describe('createDirectSettingsClient - reset APIs', () => {
   let client: ReturnType<typeof createDirectSettingsClient>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    client = createDirectSettingsClient(mockRunWithLayer);
+    client = createDirectSettingsClient(rt);
   });
 
   describe('resetSubagentEnabled', () => {
@@ -141,7 +181,7 @@ describe('createDirectSettingsClient - updated signatures with cwd', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    client = createDirectSettingsClient(mockRunWithLayer);
+    client = createDirectSettingsClient(rt);
   });
 
   describe('getSubagentEnabled', () => {
@@ -222,10 +262,16 @@ describe('createDirectSettingsClient - updated signatures with cwd', () => {
   });
 
   describe('toggleSkill', () => {
-    it('passes cwd to SkillService via runWithLayer', async () => {
-      mockRunWithLayer.mockResolvedValue(undefined);
+    it('calls enableSkill with correct args', async () => {
+      mockEnableSkill.mockClear();
       await client.toggleSkill({ name: 'my-skill', enabled: true, cwd: '/my-project' });
-      expect(mockRunWithLayer).toHaveBeenCalled();
+      expect(mockEnableSkill).toHaveBeenCalledWith('/my-project', 'my-skill');
+    });
+
+    it('calls disableSkill with correct args', async () => {
+      mockDisableSkill.mockClear();
+      await client.toggleSkill({ name: 'my-skill', enabled: false, cwd: '/my-project' });
+      expect(mockDisableSkill).toHaveBeenCalledWith('/my-project', 'my-skill');
     });
   });
 });

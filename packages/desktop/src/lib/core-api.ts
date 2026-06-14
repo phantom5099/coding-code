@@ -38,7 +38,9 @@ export function deleteSession(sessionId: string): Promise<void> {
 export function getSessionHistory(
   sessionId: string
 ): Promise<Array<{ id: string; items: any[]; status: string }>> {
-  return clients.sessions.getSessionHistory({ sessionId });
+  return clients.sessions.getSessionHistory({ sessionId }) as unknown as Promise<
+    Array<{ id: string; items: any[]; status: string }>
+  >;
 }
 
 export function resumeSession(sessionId: string, cwd: string): Promise<any> {
@@ -402,7 +404,10 @@ export async function createAutomation(data: CreateAutomationInput): Promise<Aut
   return res.json();
 }
 
-export async function updateAutomation(id: string, data: UpdateAutomationInput): Promise<Automation> {
+export async function updateAutomation(
+  id: string,
+  data: UpdateAutomationInput
+): Promise<Automation> {
   const res = await fetch(`${API_BASE}/api/automations/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

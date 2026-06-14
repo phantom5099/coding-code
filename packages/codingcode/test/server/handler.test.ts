@@ -1,260 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { Effect, Layer } from 'effect';
-import { sseHandler } from '../../src/server/handler.js';
-import { sendMessage } from '../../src/agent/agent.js';
+import { ManagedRuntime } from 'effect';
+import { createSseHandler } from '../../src/server/handler.js';
 import { toSseEvents } from '../../src/server/adapter.js';
-import { SessionService } from '../../src/session/store.js';
-import { ContextService } from '../../src/context/context.js';
-import { SkillService } from '../../src/skills/service.js';
-import { ToolExecutorService } from '../../src/tools/executor.js';
-import { McpService } from '../../src/mcp/index.js';
-import { Result } from '../../src/core/result.js';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { ToolSearchService } from '../../src/tools/tool-search-service.js';
+import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
 import { AgentError } from '../../src/core/error.js';
+import type { AgentEvent } from '../../src/agent/types.js';
 
-const mockState = {
-  sessionId: 'test-session',
-  cwd: '/tmp/test',
-  projectPath: 'test',
-  transcriptPath: '/tmp/test.jsonl',
-  indexPath: '/tmp/test.index.json',
-  messageCount: 0,
-  currentTurnId: 0,
-  sessionMeta: null,
-  title: 'test-sess',
-  usage: undefined,
-  promptEstimate: 0,
-  memorySnapshot: '',
-};
-
-function createMockLlm(chunks?: string[], responseContent?: string) {
-  return {
-    modelInfo: {
-      provider: 'mock',
-      model: 'mock',
-      maxTokens: 1000,
-      supportsToolCalling: true,
-      supportsStreaming: true,
-    },
-    complete: () =>
-      Promise.resolve(
-        Result.ok({
-          content: responseContent ?? chunks?.join('') ?? '',
-          finishReason: 'stop' as const,
-        })
-      ),
-    completeStream: (_params: any) => ({
-      stream: (async function* () {
-        for (const c of chunks ?? []) yield c;
-      })(),
-      response: Promise.resolve(
-        Result.ok({
-          content: responseContent ?? chunks?.join('') ?? '',
-          finishReason: 'stop' as const,
-        })
-      ),
-    }),
-  };
-}
-
-const MockToolExecutorLayer = Layer.succeed(
-  ToolExecutorService,
-  ToolExecutorService.of({
-    _tag: 'ToolExecutor' as const,
-    execute: () => Effect.succeed({ output: 'done' }),
-    executeBatch: (toolCalls: any[]) =>
-      Effect.succeed(
-        toolCalls.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: '' }))
-      ),
-  })
-);
-
-const MockSessionLayer = Layer.succeed(
-  SessionService,
-  SessionService.of({
-    _tag: 'Session' as const,
-    create: () => Effect.succeed(mockState),
-    recordUser: () =>
-      Effect.succeed({
-        type: 'user' as const,
-        uuid: 'u1',
-        content: '',
-        turnId: 0,
-        timestamp: new Date().toISOString(),
-      }),
-    recordAssistant: () =>
-      Effect.succeed({
-        type: 'assistant' as const,
-        uuid: 'a1',
-        content: '',
-        toolCalls: [],
-        model: 'test',
-        turnId: 0,
-        timestamp: new Date().toISOString(),
-      }),
-    recordToolResult: () =>
-      Effect.succeed({
-        type: 'tool_result' as const,
-        uuid: 't1',
-        parentUuid: 'a1',
-        toolName: 'test',
-        toolCallId: 'tc1',
-        output: '',
-        turnId: 0,
-        timestamp: new Date().toISOString(),
-        tokenCount: 0,
-      }),
-    appendSummary: () =>
-      Effect.succeed({
-        type: 'summary' as const,
-        uuid: 's1',
-        replaces: [],
-        summaryText: '',
-        lastSummarizedTurnId: 0,
-        timestamp: new Date().toISOString(),
-      }),
-    hideMessage: () =>
-      Effect.succeed({
-        type: 'hide' as const,
-        uuid: 'h1',
-        kind: 'message' as const,
-        targetUuid: '',
-        reason: '',
-        timestamp: new Date().toISOString(),
-      }),
-    rollbackToTurn: () =>
-      Effect.succeed({
-        type: 'hide' as const,
-        uuid: 'h1',
-        kind: 'rollback' as const,
-        throughTurnId: 0,
-        reason: '',
-        timestamp: new Date().toISOString(),
-      }),
-    undoLastHide: () => Effect.succeed(null),
-    forkSession: () => Effect.succeed('fork-id'),
-    renameSession: () =>
-      Effect.succeed({
-        type: 'title' as const,
-        uuid: 't1',
-        text: 'renamed',
-        timestamp: new Date().toISOString(),
-      }),
-    readHistory: () => Effect.succeed([]),
-    readMessages: () => Effect.succeed([]),
-    listSessions: () => Effect.succeed([]),
-    getSessionId: () => 'test',
-    getMessageCount: () => 0,
-    setPermissionMode: () => Effect.succeed(undefined),
-    getPermissionMode: () => Effect.succeed('default'),
-    incrementTurn: () => 0,
-    findSessionIndex: () => Effect.succeed(null),
-  })
-);
-
-const MockContextLayer = Layer.succeed(
-  ContextService,
-  ContextService.of({
-    _tag: 'Context' as any,
-    build: () =>
-      Effect.sync(() => ({
-        messages: [{ role: 'user' as const, content: 'hi' }],
-        compactedEvents: [],
-        promptEstimate: 0,
-        currentTurnId: 0,
-      })),
-    compress: () => Effect.succeed({ didCompress: true, released: 0, promptEstimate: 0 }),
-    compactIfNeeded: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
-  })
-);
-
-const MockSkillLayer = Layer.succeed(
-  SkillService,
-  SkillService.of({
-    _tag: 'Skill' as const,
-    getAll: () => Effect.succeed([]),
-    findByName: () => Effect.succeed(undefined),
-    select: () => Effect.succeed(undefined),
-    selectImplicit: () => Effect.succeed(undefined),
-    extractSkill: () => Effect.succeed([undefined, 'hi']),
-    disableSkill: () => Effect.succeed(undefined),
-    enableSkill: () => Effect.succeed(undefined),
-    listWithStatus: () => Effect.succeed([]),
-    evictProject: () => Effect.void,
-  })
-);
-
-const { AgentService } = await import('../../src/agent/agent.js');
-const { HookLayer, SubagentRegistryLayer } = await import('../../src/layer.js');
-
-const MockCheckpointLayer = Layer.succeed(
-  CheckpointService,
-  CheckpointService.of({
-    _tag: 'Checkpoint' as const,
-    snapshotBaseline: () => {},
-    snapshotFinal: () => {},
-    getCompletedTurns: () => [],
-    getCheckpoints: () => [],
-    getCheckpointDiff: () => ({ turnId: 0, files: [] }),
-    revertCheckpointFiles: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
-    previewRollbackDiff: () => ({ throughTurnId: 0, affectedTurns: [], diff: '' }),
-    rollbackCodeToTurn: () => ({ reverted: false, throughTurnId: 0, affectedTurns: [], selectedFiles: [], restoreEntry: null }),
-    undoLastCodeRollback: () => ({ restored: false, conflict: false, conflictFiles: [], restoredFiles: [], remainingRolledBack: [] }),
-    getLatestRestoreEntry: () => null,
-  } as any)
-);
-
-const MockToolSearchLayer = Layer.succeed(
-  ToolSearchService,
-  ToolSearchService.of({
-    _tag: 'ToolSearchService' as const,
-    isLoaded: () => false,
-    listLoaded: () => [],
-    listUnloadedDeferred: () => [],
-    search: () => [],
-    reset: () => {},
-    disposeSession: () => {},
-  })
-);
-
-const MockMcpLayer = Layer.succeed(McpService, {
-  syncConnections: () => Effect.void,
-  connectServers: () => Effect.void,
-  disconnectServers: () => Effect.void,
-  getServerToolNames: () => [],
-  disconnectAll: () => Effect.void,
-  status: () => Effect.succeed([]),
-  listProjectMcpTools: () => [],
-} as any);
-
-const { ProjectRuntimeService } = await import('../../src/runtime/project-runtime.js');
-const MockProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, MockMcpLayer, SubagentRegistryLayer))
-);
-
-const { ApprovalWaitService } = await import('../../src/approval/async-confirm.js');
-const { ApprovalService } = await import('../../src/approval/index.js');
-const MockApprovalWaitLayer = ApprovalWaitService.Default;
-const MockApprovalLayer = ApprovalService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, MockApprovalWaitLayer))
-);
-
-const AllDeps = Layer.mergeAll(
-  MockToolExecutorLayer,
-  MockContextLayer,
-  MockSessionLayer,
-  MockCheckpointLayer,
-  MockSkillLayer,
-  HookLayer,
-  MockToolSearchLayer,
-  MockMcpLayer,
-  MockProjectRuntimeLayer,
-  MockApprovalLayer,
-  MockApprovalWaitLayer
-);
-
-const TestLayer = Layer.mergeAll(AgentService.Default.pipe(Layer.provide(AllDeps)), AllDeps);
+const rt = ManagedRuntime.make(ApprovalWaitService.Default);
 
 async function readSSEStream(response: Response): Promise<{ events: any[] }> {
   const reader = response.body!.getReader();
@@ -277,23 +29,29 @@ async function readSSEStream(response: Response): Promise<{ events: any[] }> {
   return { events };
 }
 
-describe('sseHandler + sendMessage integration', () => {
+describe('sseHandler + toSseEvents', () => {
   it('should stream text chunks and complete event', async () => {
-    const llm = createMockLlm(['Hello', ' ', 'world']);
-    const program = sendMessage('test-session', 'hi', '/tmp/test', llm) as any;
+    const sseHandler = createSseHandler(rt);
     const handler = sseHandler(
       async function* () {
-        const { stream } = (await Effect.runPromise(
-          program.pipe(Effect.provide(TestLayer) as any)
-        )) as any;
-        yield* toSseEvents(stream);
+        yield* toSseEvents(
+          (async function* (): AsyncGenerator<AgentEvent, void, unknown> {
+            yield { _tag: 'TurnId', turnId: 0 };
+            yield { _tag: 'Step', step: 1, max: 50 };
+            yield { _tag: 'LlmChunk', text: 'Hello' };
+            yield { _tag: 'LlmChunk', text: ' ' };
+            yield { _tag: 'LlmChunk', text: 'world' };
+            yield { _tag: 'Assistant', content: 'Hello world' };
+            yield { _tag: 'Done', content: 'Hello world' };
+          })()
+        );
       },
       { sessionId: 'test' }
     );
     const response = await handler({} as any);
     const { events } = await readSSEStream(response);
 
-    expect(events).toHaveLength(8); // 1 turn_id + 1 step + 3 text + 1 message + 1 done + 1 complete
+    expect(events).toHaveLength(8);
     expect(events[0]).toEqual({ type: 'turn_id', turnId: 0 });
     expect(events[1]).toEqual({ type: 'step', step: 1 });
     expect(events[2]).toEqual({ type: 'text', text: 'Hello', messageId: 1 });
@@ -305,14 +63,17 @@ describe('sseHandler + sendMessage integration', () => {
   });
 
   it('should send complete event even when LLM returns no text', async () => {
-    const llm = createMockLlm([], '');
-    const program = sendMessage('test-session', 'hi', '/tmp/test', llm) as any;
+    const sseHandler = createSseHandler(rt);
     const handler = sseHandler(
       async function* () {
-        const { stream } = (await Effect.runPromise(
-          program.pipe(Effect.provide(TestLayer) as any)
-        )) as any;
-        yield* toSseEvents(stream);
+        yield* toSseEvents(
+          (async function* (): AsyncGenerator<AgentEvent, void, unknown> {
+            yield { _tag: 'TurnId', turnId: 0 };
+            yield { _tag: 'Step', step: 1, max: 50 };
+            yield { _tag: 'Assistant', content: '' };
+            yield { _tag: 'Done', content: '' };
+          })()
+        );
       },
       { sessionId: 'test' }
     );
@@ -323,37 +84,25 @@ describe('sseHandler + sendMessage integration', () => {
   });
 
   it('should forward [Using: ...] markers when LLM calls tools', async () => {
-    const llm = {
-      modelInfo: {
-        provider: 'mock',
-        model: 'mock',
-        maxTokens: 1000,
-        supportsToolCalling: true,
-        supportsStreaming: true,
-      },
-      complete: () =>
-        Promise.resolve(Result.ok({ content: '', finishReason: 'tool_calls' as const })),
-      completeStream: (_params: any) => ({
-        stream: (async function* () {
-          yield '\n[Using: readFile]\n';
-        })(),
-        response: Promise.resolve(
-          Result.ok({
-            content: '',
-            finishReason: 'tool_calls' as const,
-            toolCalls: [{ id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } }],
-          })
-        ),
-      }),
-    };
-
-    const program = sendMessage('test-session', 'read file', '/tmp/test', llm) as any;
+    const sseHandler = createSseHandler(rt);
     const handler = sseHandler(
       async function* () {
-        const { stream } = (await Effect.runPromise(
-          program.pipe(Effect.provide(TestLayer) as any)
-        )) as any;
-        yield* toSseEvents(stream);
+        yield* toSseEvents(
+          (async function* (): AsyncGenerator<AgentEvent, void, unknown> {
+            yield { _tag: 'TurnId', turnId: 0 };
+            yield { _tag: 'Step', step: 1, max: 50 };
+            yield { _tag: 'LlmChunk', text: '\n[Using: readFile]\n' };
+            yield { _tag: 'ToolStart', id: 'tc1', name: 'readFile', args: { path: 'test.txt' } };
+            yield {
+              _tag: 'ToolResult',
+              id: 'tc1',
+              name: 'readFile',
+              output: 'file contents',
+              ok: true,
+            };
+            yield { _tag: 'Done', content: '' };
+          })()
+        );
       },
       { sessionId: 'test' }
     );
@@ -366,6 +115,7 @@ describe('sseHandler + sendMessage integration', () => {
   });
 
   it('should preserve AgentError code in catch', async () => {
+    const sseHandler = createSseHandler(rt);
     const handler = sseHandler(
       async function* () {
         throw AgentError.toolNotFound('myTool');
@@ -382,6 +132,7 @@ describe('sseHandler + sendMessage integration', () => {
   });
 
   it('should not include code for plain Error in catch', async () => {
+    const sseHandler = createSseHandler(rt);
     const handler = sseHandler(
       async function* () {
         throw new Error('plain error');

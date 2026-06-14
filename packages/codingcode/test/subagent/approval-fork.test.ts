@@ -1,7 +1,12 @@
 import { expect, it, describe } from 'vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { ApprovalService } from '../../src/approval/index.js';
-import { ApprovalLayer } from '../../src/layer';
+import { HookService } from '../../src/hooks/registry.js';
+import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+
+const ApprovalLayer = ApprovalService.Default.pipe(
+  Layer.provide(Layer.mergeAll(HookService.Default, ApprovalWaitService.Default))
+);
 
 describe('ApprovalService.fork', () => {
   async function makeApproval(): Promise<ApprovalService> {

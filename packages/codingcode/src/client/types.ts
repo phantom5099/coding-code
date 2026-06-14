@@ -1,13 +1,16 @@
 import type { PermissionMode } from '../approval/types.js';
 import type { McpServerConfig, McpStatus } from '../mcp/types.js';
-import type { AgentProfile } from '../subagent/registry.js';
-import type { UserHookConfig } from '../hooks/config.js';
+import type { AgentProfile } from '../subagent/types.js';
+import type { UserHookConfig } from '../hooks/types.js';
+import type { SessionEvent, SessionIndex } from '../session/types.js';
+import type { SelectableModel } from '../llm/factory.js';
 import type {
   CheckpointDiff,
   CodeRollbackResult,
   CodeRollbackUndoResult,
   RollbackPreviewDiff,
-} from '../checkpoint/checkpoint-service.js';
+  RollbackState,
+} from '../checkpoint/types.js';
 
 export type StreamChunk =
   | { type: 'session_id'; sessionId: string }
@@ -27,24 +30,26 @@ export type StreamChunk =
 export interface AgentClient {
   sendMessage(input: string, cwd?: string): AsyncGenerator<StreamChunk>;
   sendApprovalResponse(id: string, response: string): Promise<void>;
-  resumeSession(sid: string): Promise<any>;
-  listSessions(): Promise<any[]>;
-  listModels(): Promise<any>;
+  resumeSession(sid: string): Promise<SessionEvent[]>;
+  listSessions(): Promise<SessionIndex[]>;
+  listModels(): Promise<{ models: SelectableModel[]; activeId: string | null }>;
   switchModel(id: string): Promise<void>;
   getSessionId(): string;
-  getCheckpoints(): Promise<
-    Array<{ turnId: number; title: string; files: string[] }>
-  >;
+  getCheckpoints(): Promise<Array<{ turnId: number; title: string; files: string[] }>>;
   getCheckpointDiff(turnId?: number): Promise<CheckpointDiff>;
   revertCheckpointFiles(turnId: number, files: string[]): Promise<CodeRollbackResult>;
   previewRollbackDiff(throughTurnId: number): Promise<RollbackPreviewDiff>;
   rollbackCodeToTurn(throughTurnId: number): Promise<CodeRollbackResult>;
-  rollbackContext(throughTurnId: number): Promise<{ turns: any[]; rollbackState: any }>;
-  rollbackBothToTurn(
+  rollbackContext(
     throughTurnId: number
-  ): Promise<{ turns: any[]; codeResult: CodeRollbackResult; rollbackState: any }>;
+  ): Promise<{ turns: SessionEvent[]; rollbackState: RollbackState }>;
+  rollbackBothToTurn(throughTurnId: number): Promise<{
+    turns: SessionEvent[];
+    codeResult: CodeRollbackResult;
+    rollbackState: RollbackState;
+  }>;
   undoLastCodeRollback(force?: boolean, files?: string[]): Promise<CodeRollbackUndoResult>;
-  getRollbackState(): Promise<any>;
+  getRollbackState(): Promise<RollbackState>;
   forkSession(atUuid?: string): Promise<string>;
   compact(): Promise<void>;
   getMemoryEnabled(): Promise<boolean>;

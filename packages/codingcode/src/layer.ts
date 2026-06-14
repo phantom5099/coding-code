@@ -1,7 +1,6 @@
-import { Layer } from 'effect';
+import { Layer, Effect, ManagedRuntime } from 'effect';
 import { AgentService } from './agent/agent.js';
 import { SessionService } from './session/store.js';
-import { ContextService } from './context/context.js';
 import { HookService } from './hooks/registry.js';
 import { McpService } from './mcp/index.js';
 import { SkillService } from './skills/service.js';
@@ -9,70 +8,100 @@ import { ApprovalService } from './approval/index.js';
 import { ApprovalWaitService } from './approval/async-confirm.js';
 import { ToolExecutorService } from './tools/executor.js';
 import { CheckpointService } from './checkpoint/checkpoint-service.js';
-import { ToolSearchService } from './tools/tool-search-service.js';
-import { SubagentRegistry } from './subagent/registry.js';
 import { ProjectRuntimeService } from './runtime/project-runtime.js';
+import { LLMFactoryService } from './llm/factory.js';
+import { WorkspaceService } from './core/workspace.js';
+import { TodoService } from './agent/todo.js';
+import { ToolSearchService } from './tools/tool-search-service.js';
+import { SubagentService } from './subagent/registry.js';
+import { SubagentRunnerService } from './subagent/runner-service.js';
+import { RulesService } from './rules/index.js';
+import { MemoryService } from './memory/index.js';
+import { ContextService } from './context/service.js';
 import { SchedulerService } from './scheduler/service.js';
 
-export const AgentLayer = AgentService.Default;
+export const WorkspaceLayer = WorkspaceService.Default;
+export const TodoLayer = TodoService.Default;
+export const ToolSearchLayer = ToolSearchService.Default;
+export const SubagentLayer = SubagentService.Default;
+export const RulesLayer = RulesService.Default;
 export const SessionLayer = SessionService.Default;
-export const ContextLayer = ContextService.Default;
+export const LLMFactoryLayer = LLMFactoryService.Default.pipe(Layer.provide(WorkspaceLayer));
+export const MemoryLayer = MemoryService.Default.pipe(Layer.provide(LLMFactoryLayer));
+export const ContextLayer = ContextService.Default.pipe(
+  Layer.provide(Layer.mergeAll(SessionLayer, LLMFactoryLayer))
+);
 export const HookLayer = HookService.Default;
 export const SkillLayer = SkillService.Default;
+export const CheckpointLayer = CheckpointService.Default;
 export const ApprovalWaitLayer = ApprovalWaitService.Default;
-export const SubagentRegistryLayer = SubagentRegistry.Default;
 export const McpLayer = McpService.Default;
+export const SchedulerLayer = SchedulerService.Default;
+export const ProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
+  Layer.provide(Layer.mergeAll(HookLayer, McpLayer, SubagentLayer, RulesLayer))
+);
 export const ApprovalLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
-);
-
-/** ProjectRuntime depends on HookService + McpService + SubagentRegistry. */
-const ProjectRuntimeDeps = Layer.mergeAll(HookLayer, McpLayer, SubagentRegistryLayer);
-export const ProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-  Layer.provide(ProjectRuntimeDeps)
 );
 
 /** ToolExecutor depends on HookLayer + ApprovalLayer. */
 const ExecutorDeps = Layer.mergeAll(HookLayer, ApprovalLayer);
 const ExecutorLayer = ToolExecutorService.Default.pipe(Layer.provide(ExecutorDeps));
 
-/** Checkpoint depends on HookService (for bootstrap observers). */
-const CheckpointDeps = Layer.mergeAll(HookLayer);
-export const CheckpointLayer = CheckpointService.Default.pipe(Layer.provide(CheckpointDeps));
-
-export const ToolSearchLayer = ToolSearchService.Default;
-
-/** Scheduler depends on SessionService. */
-export const SchedulerLayer = SchedulerService.Default.pipe(
-  Layer.provide(SessionLayer)
-);
-
-/** Agent depends on ToolExecutor + ContextService + SessionService + CheckpointService + ToolSearchService + HookLayer + ProjectRuntime. */
+/** Agent depends on ToolExecutor + HookLayer + ApprovalLayer + ApprovalWaitLayer + Session + Checkpoint + ProjectRuntime + Skill + LLMFactory + Todo + Rules + Context + Memory. */
 const AgentDeps = Layer.mergeAll(
   ExecutorLayer,
-  ContextLayer,
+  ApprovalLayer,
+  ApprovalWaitLayer,
   SessionLayer,
   CheckpointLayer,
-  ToolSearchLayer,
+  McpLayer,
+  SkillLayer,
+  LLMFactoryLayer,
   HookLayer,
-  ProjectRuntimeLayer
+  ProjectRuntimeLayer,
+  TodoLayer,
+  RulesLayer,
+  ContextLayer,
+  MemoryLayer
 );
-const AgentWithDeps = AgentLayer.pipe(Layer.provide(AgentDeps));
+const AgentWithDeps = AgentService.Default.pipe(Layer.provide(AgentDeps));
+
+/** SubagentRunnerService delegates to AgentService.runStream. */
+const SubagentRunnerLayer = Layer.effect(
+  SubagentRunnerService,
+  Effect.gen(function* () {
+    const agent = yield* AgentService;
+    return SubagentRunnerService.make({ runStream: agent.runStream });
+  })
+).pipe(Layer.provide(AgentWithDeps));
 
 /** Final application layer — all services merged. */
 export const AppLayer = Layer.mergeAll(
   AgentWithDeps,
+  SubagentRunnerLayer,
   ExecutorLayer,
   SessionLayer,
-  ContextLayer,
   HookLayer,
   McpLayer,
   SkillLayer,
   ApprovalLayer,
   ApprovalWaitLayer,
   CheckpointLayer,
-  ToolSearchLayer,
-  SubagentRegistryLayer,
   ProjectRuntimeLayer,
+  LLMFactoryLayer,
+  WorkspaceLayer,
+  TodoLayer,
+  ToolSearchLayer,
+  SubagentLayer,
+  RulesLayer,
+  MemoryLayer,
+  ContextLayer,
   SchedulerLayer
 );
+
+/** Create the application ManagedRuntime from AppLayer. */
+export const createAppRuntime = () => ManagedRuntime.make(AppLayer);
+
+/** Concrete runtime type for the application. */
+export type AppRuntime = ManagedRuntime.ManagedRuntime<any, any>;

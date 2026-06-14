@@ -1,8 +1,8 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import { Effect } from 'effect';
 import { AgentError } from '../core/error.js';
-import { getProcessRoot, getConfig } from '../core/workspace.js';
-import { Result } from '../core/result.js';
+import { WorkspaceService } from '../core/workspace.js';
 import type { LLMClient } from './client.js';
 import { OpenAIProvider } from './providers/openai.js';
 import { DeepSeekProvider } from './providers/deepseek.js';
@@ -38,33 +38,6 @@ export interface SelectableModel {
   context_window: number;
 }
 
-function modelsFile(): string {
-  return resolve(getProcessRoot(), 'config/models.json');
-}
-
-let catalog: ProviderCatalog | null = null;
-let currentEntry: SelectableModel | null = null;
-let currentClient: LLMClient | null = null;
-
-function loadCatalog(): Result<ProviderCatalog, AgentError> {
-  if (catalog) return Result.ok(catalog);
-  const path = modelsFile();
-  if (!existsSync(path)) {
-    return Result.err(AgentError.configMissing(path));
-  }
-  try {
-    const raw = readFileSync(path, 'utf-8');
-    const parsed = JSON.parse(raw) as ProviderCatalog;
-    if (!parsed.providers || parsed.providers.length === 0) {
-      return Result.err(new AgentError('CONFIG_INVALID', 'models.json has no providers defined'));
-    }
-    catalog = parsed;
-    return Result.ok(catalog);
-  } catch (e) {
-    return Result.err(new AgentError('CONFIG_INVALID', `Failed to parse models.json: ${e}`));
-  }
-}
-
 function flattenModels(cat: ProviderCatalog): SelectableModel[] {
   const result: SelectableModel[] = [];
   for (const p of cat.providers) {
@@ -84,126 +57,224 @@ function flattenModels(cat: ProviderCatalog): SelectableModel[] {
   return result;
 }
 
-export function listModels(): Result<SelectableModel[], AgentError> {
-  const catResult = loadCatalog();
-  if (!catResult.ok) return catResult;
-  return Result.ok(flattenModels(catResult.value));
-}
+export class LLMFactoryService extends Effect.Service<LLMFactoryService>()('LLMFactory', {
+  effect: Effect.gen(function* () {
+    const workspace = yield* WorkspaceService;
+    let catalog: ProviderCatalog | null = null;
+    let currentEntry: SelectableModel | null = null;
+    let currentClient: LLMClient | null = null;
 
-/**
- * Find a model by identifier with priority:
- *  1. Exact match on full id (e.g. "deepseek-chat@DEEPSEEK_API_KEY")
- *  2. First match on bare model id (e.g. "deepseek-chat")
- *  3. First match on display name (e.g. "DeepSeek Chat")
- * Returns null if not found, ensuring no ambiguity when multiple providers have same model name.
- */
-export function findModel(target: string): SelectableModel | null {
-  const listResult = listModels();
-  if (!listResult.ok) return null;
-
-  const models = listResult.value;
-  // Priority 1: exact match on full id
-  const exactMatch = models.find((m) => m.id === target);
-  if (exactMatch) return exactMatch;
-
-  // Priority 2 & 3: first match on model id or name
-  return models.find((m) => m.model === target || m.name === target) || null;
-}
-
-export function getActiveEntry(): Result<SelectableModel, AgentError> {
-  if (currentEntry) return Result.ok(currentEntry);
-
-  const cfg = getConfig().activeModel;
-  if (!cfg) {
-    return Result.err(
-      new AgentError(
-        'CONFIG_INVALID',
-        'No active model configured. Set activeModel in config.yaml with model and apiKeyEnv fields'
-      )
-    );
-  }
-
-  const catResult = loadCatalog();
-  if (!catResult.ok) return catResult;
-
-  const found = flattenModels(catResult.value).find(
-    (m) => m.model === cfg.model && m.api_key_env === cfg.apiKeyEnv
-  );
-  if (!found) {
-    return Result.err(
-      new AgentError(
-        'CONFIG_INVALID',
-        `Model "${cfg.model}" with apiKeyEnv "${cfg.apiKeyEnv}" not found in models.json`
-      )
-    );
-  }
-
-  currentEntry = found;
-  return Result.ok(currentEntry);
-}
-
-export function switchModel(id: string): Result<SelectableModel, AgentError> {
-  const catResult = loadCatalog();
-  if (!catResult.ok) return catResult;
-  const all = flattenModels(catResult.value);
-  const found = all.find((m) => m.id === id);
-  if (!found)
-    return Result.err(
-      new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /model to list.`)
-    );
-  currentEntry = found;
-  currentClient = null;
-  updateActiveModel(found.model, found.api_key_env);
-  return Result.ok(found);
-}
-
-export async function createClient(entry: SelectableModel): Promise<Result<LLMClient, AgentError>> {
-  const apiKey = process.env[entry.api_key_env] || process.env.OPENAI_API_KEY || '';
-  if (!apiKey) {
-    return Result.err(
-      new AgentError(
-        'CONFIG_MISSING',
-        `API key not found. Set environment variable "${entry.api_key_env}" or "OPENAI_API_KEY".`,
-        undefined,
-        { apiKeyEnv: entry.api_key_env }
-      )
-    );
-  }
-
-  switch (entry.driver) {
-    case 'openai': {
-      const { createOpenAI } = await import('@ai-sdk/openai');
-      const provider = createOpenAI({
-        name: entry.provider,
-        baseURL: entry.base_url,
-        apiKey,
-      });
-      return Result.ok(new OpenAIProvider(provider.chat(entry.model), entry));
+    function modelsFile(): string {
+      return resolve(workspace.getProcessRoot(), 'config/models.json');
     }
-    case 'deepseek': {
-      const { createDeepSeek } = await import('@ai-sdk/deepseek');
-      const deepseek = createDeepSeek({
-        baseURL: entry.base_url,
-        apiKey,
-      });
-      return Result.ok(new DeepSeekProvider(deepseek(entry.model), entry));
-    }
-    default:
-      return Result.err(
-        new AgentError(
-          'CONFIG_INVALID',
-          `Unknown driver "${entry.driver}" for provider "${entry.provider}"`
-        )
-      );
-  }
-}
 
-export async function getLLMClient(): Promise<Result<LLMClient, AgentError>> {
-  if (currentClient) return Result.ok(currentClient);
-  const entryResult = getActiveEntry();
-  if (!entryResult.ok) return entryResult;
-  const clientResult = await createClient(entryResult.value);
-  if (!clientResult.ok) return clientResult;
-  currentClient = clientResult.value;
-  return Result.ok(currentClient);
-}
+    const loadCatalog = (): Effect.Effect<ProviderCatalog, AgentError> =>
+      Effect.gen(function* () {
+        if (catalog) return catalog;
+        const path = modelsFile();
+        if (!existsSync(path)) {
+          return yield* Effect.fail(AgentError.configMissing(path));
+        }
+        try {
+          const raw = readFileSync(path, 'utf-8');
+          const parsed = JSON.parse(raw) as ProviderCatalog;
+          if (!parsed.providers || parsed.providers.length === 0) {
+            return yield* Effect.fail(
+              new AgentError('CONFIG_INVALID', 'models.json has no providers defined')
+            );
+          }
+          catalog = parsed;
+          return catalog;
+        } catch (e) {
+          return yield* Effect.fail(
+            new AgentError('CONFIG_INVALID', `Failed to parse models.json: ${e}`)
+          );
+        }
+      });
+
+    return {
+      listModels: (): Effect.Effect<SelectableModel[], AgentError> =>
+        Effect.gen(function* () {
+          const cat = yield* loadCatalog();
+          return flattenModels(cat);
+        }),
+
+      findModel: (target: string): Effect.Effect<SelectableModel | null, AgentError> =>
+        Effect.gen(function* () {
+          const cat = yield* loadCatalog().pipe(Effect.either);
+          if (cat._tag === 'Left') return null;
+          const models = flattenModels(cat.right);
+          const exactMatch = models.find((m) => m.id === target);
+          if (exactMatch) return exactMatch;
+          return models.find((m) => m.model === target || m.name === target) || null;
+        }),
+
+      getActiveEntry: (): Effect.Effect<SelectableModel, AgentError> =>
+        Effect.gen(function* () {
+          if (currentEntry) return currentEntry;
+          const cfg = workspace.getConfig().activeModel;
+          if (!cfg) {
+            return yield* Effect.fail(
+              new AgentError(
+                'CONFIG_INVALID',
+                'No active model configured. Set activeModel in config.yaml with model and apiKeyEnv fields'
+              )
+            );
+          }
+          const cat = yield* loadCatalog();
+          const found = flattenModels(cat).find(
+            (m) => m.model === cfg.model && m.api_key_env === cfg.apiKeyEnv
+          );
+          if (!found) {
+            return yield* Effect.fail(
+              new AgentError(
+                'CONFIG_INVALID',
+                `Model "${cfg.model}" with apiKeyEnv "${cfg.apiKeyEnv}" not found in models.json`
+              )
+            );
+          }
+          currentEntry = found;
+          return currentEntry;
+        }),
+
+      switchModel: (id: string): Effect.Effect<SelectableModel, AgentError> =>
+        Effect.gen(function* () {
+          const cat = yield* loadCatalog();
+          const all = flattenModels(cat);
+          const found = all.find((m) => m.id === id);
+          if (!found)
+            return yield* Effect.fail(
+              new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /model to list.`)
+            );
+          currentEntry = found;
+          currentClient = null;
+          updateActiveModel(found.model, found.api_key_env);
+          return found;
+        }),
+
+      createClient: (entry: SelectableModel): Effect.Effect<LLMClient, AgentError> =>
+        Effect.gen(function* () {
+          const apiKey = process.env[entry.api_key_env] || process.env.OPENAI_API_KEY || '';
+          if (!apiKey) {
+            return yield* Effect.fail(
+              new AgentError(
+                'CONFIG_MISSING',
+                `API key not found. Set environment variable "${entry.api_key_env}" or "OPENAI_API_KEY".`,
+                undefined,
+                { apiKeyEnv: entry.api_key_env }
+              )
+            );
+          }
+
+          switch (entry.driver) {
+            case 'openai': {
+              const { createOpenAI } = yield* Effect.tryPromise({
+                try: () => import('@ai-sdk/openai'),
+                catch: (e) =>
+                  new AgentError('CONFIG_INVALID', `Failed to import openai driver: ${e}`),
+              });
+              const provider = createOpenAI({
+                name: entry.provider,
+                baseURL: entry.base_url,
+                apiKey,
+              });
+              return new OpenAIProvider(provider.chat(entry.model), entry);
+            }
+            case 'deepseek': {
+              const { createDeepSeek } = yield* Effect.tryPromise({
+                try: () => import('@ai-sdk/deepseek'),
+                catch: (e) =>
+                  new AgentError('CONFIG_INVALID', `Failed to import deepseek driver: ${e}`),
+              });
+              const deepseek = createDeepSeek({
+                baseURL: entry.base_url,
+                apiKey,
+              });
+              return new DeepSeekProvider(deepseek(entry.model), entry);
+            }
+            default:
+              return yield* Effect.fail(
+                new AgentError(
+                  'CONFIG_INVALID',
+                  `Unknown driver "${entry.driver}" for provider "${entry.provider}"`
+                )
+              );
+          }
+        }),
+
+      getLLMClient: (): Effect.Effect<LLMClient, AgentError> =>
+        Effect.gen(function* () {
+          if (currentClient) return currentClient;
+          const cfg = workspace.getConfig().activeModel;
+          if (!cfg) {
+            return yield* Effect.fail(
+              new AgentError(
+                'CONFIG_INVALID',
+                'No active model configured. Set activeModel in config.yaml with model and apiKeyEnv fields'
+              )
+            );
+          }
+          const cat = yield* loadCatalog();
+          const found = flattenModels(cat).find(
+            (m) => m.model === cfg.model && m.api_key_env === cfg.apiKeyEnv
+          );
+          if (!found) {
+            return yield* Effect.fail(
+              new AgentError(
+                'CONFIG_INVALID',
+                `Model "${cfg.model}" with apiKeyEnv "${cfg.apiKeyEnv}" not found in models.json`
+              )
+            );
+          }
+          currentEntry = found;
+          const apiKey = process.env[found.api_key_env] || process.env.OPENAI_API_KEY || '';
+          if (!apiKey) {
+            return yield* Effect.fail(
+              new AgentError(
+                'CONFIG_MISSING',
+                `API key not found. Set environment variable "${found.api_key_env}" or "OPENAI_API_KEY".`,
+                undefined,
+                { apiKeyEnv: found.api_key_env }
+              )
+            );
+          }
+          let client: LLMClient;
+          switch (found.driver) {
+            case 'openai': {
+              const { createOpenAI } = yield* Effect.tryPromise({
+                try: () => import('@ai-sdk/openai'),
+                catch: (e) =>
+                  new AgentError('CONFIG_INVALID', `Failed to import openai driver: ${e}`),
+              });
+              const provider = createOpenAI({
+                name: found.provider,
+                baseURL: found.base_url,
+                apiKey,
+              });
+              client = new OpenAIProvider(provider.chat(found.model), found);
+              break;
+            }
+            case 'deepseek': {
+              const { createDeepSeek } = yield* Effect.tryPromise({
+                try: () => import('@ai-sdk/deepseek'),
+                catch: (e) =>
+                  new AgentError('CONFIG_INVALID', `Failed to import deepseek driver: ${e}`),
+              });
+              const deepseek = createDeepSeek({ baseURL: found.base_url, apiKey });
+              client = new DeepSeekProvider(deepseek(found.model), found);
+              break;
+            }
+            default:
+              return yield* Effect.fail(
+                new AgentError(
+                  'CONFIG_INVALID',
+                  `Unknown driver "${found.driver}" for provider "${found.provider}"`
+                )
+              );
+          }
+          currentClient = client;
+          return currentClient;
+        }),
+    };
+  }),
+}) {}

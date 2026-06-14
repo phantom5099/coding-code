@@ -2,10 +2,10 @@ import { Effect } from 'effect';
 import { McpService } from '../../mcp/index.js';
 import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
 import { SkillService } from '../../skills/service.js';
-import { getGlobalPermissionMode, setGlobalPermissionMode } from '../../approval/index.js';
+import { ApprovalService } from '../../approval/index.js';
 import type { PermissionMode } from '../../approval/types.js';
-import type { AgentProfile } from '../../subagent/registry.js';
-import type { UserHookConfig } from '../../hooks/config.js';
+import type { AgentProfile } from '../../subagent/types.js';
+import type { UserHookConfig } from '../../hooks/types.js';
 import {
   loadMcpConfig,
   writeMcpConfig,
@@ -51,8 +51,9 @@ import {
   updateMemoryExtraType as _updateMemoryExtraType,
   deleteMemoryExtraType as _deleteMemoryExtraType,
 } from '../../memory/config.js';
-import { getMemoryEnabled, setMemoryEnabled } from '../../memory/index.js';
+import { MemoryService } from '../../memory/index.js';
 import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
+import type { AppRuntime } from '../../layer.js';
 
 export interface SettingsClient {
   getMemoryEnabled(): Promise<boolean>;
@@ -144,7 +145,10 @@ function agentsList(cwd: string): Array<{
       maxSteps: a.maxSteps,
       model: a.model,
       disabled: resolveAgentDisabled(cwd, a.name),
-      source: a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name ? ('builtin' as const) : ('project' as const),
+      source:
+        a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name
+          ? ('builtin' as const)
+          : ('project' as const),
       hasProjectOverride: projectVal !== undefined,
       projectDisabled: projectVal,
     };
@@ -203,12 +207,15 @@ function hooksSetDisabled(cwd: string, name: string, disabled: boolean): void {
   }
 }
 
-export function createDirectSettingsClient(
-  runWithLayer: <T>(eff: any) => Promise<T>
-): SettingsClient {
+export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
   return {
     async getMemoryEnabled() {
-      return getMemoryEnabled();
+      return rt.runPromise(
+        Effect.gen(function* () {
+          const m = yield* MemoryService;
+          return m.getMemoryEnabled();
+        })
+      );
     },
 
     async getMemoryConfig() {
@@ -217,7 +224,12 @@ export function createDirectSettingsClient(
     },
 
     async setMemoryEnabled(enabled) {
-      setMemoryEnabled(enabled);
+      await rt.runPromise(
+        Effect.gen(function* () {
+          const m = yield* MemoryService;
+          m.setMemoryEnabled(enabled);
+        })
+      );
     },
 
     async setMemoryTypeDisabled(name, disabled) {
@@ -261,7 +273,7 @@ export function createDirectSettingsClient(
     },
 
     async getMcpStatus() {
-      return runWithLayer(
+      return rt.runPromise(
         Effect.gen(function* () {
           const mcp = yield* McpService;
           return yield* mcp.status(process.cwd());
@@ -275,7 +287,7 @@ export function createDirectSettingsClient(
       } else {
         setProjectMcpDisabledState(cwd, name, disabled);
       }
-      await runWithLayer(
+      await rt.runPromise(
         Effect.gen(function* () {
           const mcp = yield* McpService;
           return yield* disabled
@@ -302,7 +314,7 @@ export function createDirectSettingsClient(
     },
 
     async listSkills() {
-      return runWithLayer(
+      return rt.runPromise(
         Effect.gen(function* () {
           const skill = yield* SkillService;
           return yield* skill.listWithStatus(process.cwd());
@@ -311,13 +323,15 @@ export function createDirectSettingsClient(
     },
 
     async toggleSkill({ name, enabled, cwd }) {
-      await runWithLayer(
+      const skillCwd = cwd || process.cwd();
+      await rt.runPromise(
         Effect.gen(function* () {
           const skill = yield* SkillService;
-          const skillCwd = cwd || process.cwd();
-          return yield* enabled
-            ? skill.enableSkill(skillCwd, name)
-            : skill.disableSkill(skillCwd, name);
+          if (enabled) {
+            yield* skill.enableSkill(skillCwd, name);
+          } else {
+            yield* skill.disableSkill(skillCwd, name);
+          }
         })
       );
     },
@@ -380,11 +394,21 @@ export function createDirectSettingsClient(
     },
 
     async getGlobalPermissionMode() {
-      return getGlobalPermissionMode();
+      const approval = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalService;
+        })
+      );
+      return approval.getPermissionMode();
     },
 
     async setGlobalPermissionMode(mode) {
-      setGlobalPermissionMode(mode);
+      const approval = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* ApprovalService;
+        })
+      );
+      await rt.runPromise(approval.setPermissionMode(mode));
     },
   };
 }

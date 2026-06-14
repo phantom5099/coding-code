@@ -398,7 +398,7 @@ export function App({ client }: AppProps) {
           items={panel.items}
           onSelect={async (value) => {
             const history = await client.resumeSession(value);
-            const uiMsgs = historyToUIMessages(history);
+            const uiMsgs = historyToUIMessages(history as any);
             setStaticMessages(uiMsgs);
             setSessionId(value);
             setPanel({ type: 'none' });
