@@ -45,9 +45,7 @@ describe('tools/domains/bash projectPath isolation', () => {
       ? `powershell -Command "'hello' | Out-File -Encoding utf8 test-bash.txt"`
       : `echo hello > test-bash.txt`;
 
-    await Effect.runPromise(
-      bashTool.execute({ command: cmd, timeout_ms: 10000 }, ctx(projectDir)) as any
-    );
+    await Effect.runPromise(bashTool.execute({ command: cmd, timeout_ms: 10000 }, ctx(projectDir)));
 
     // Verify the file was written to projectDir, not globalDir
     expect(() => readFileSync(join(projectDir, 'test-bash.txt'), 'utf8')).not.toThrow();
@@ -88,7 +86,7 @@ describe('tools/domains/bash projectPath isolation', () => {
         : `echo other > test-other.txt`;
 
       await Effect.runPromise(
-        bashTool.execute({ command: cmd, cwd: otherDir, timeout_ms: 10000 }, ctx(projectDir)) as any
+        bashTool.execute({ command: cmd, cwd: otherDir, timeout_ms: 10000 }, ctx(projectDir))
       );
 
       expect(() => readFileSync(join(otherDir, 'test-other.txt'), 'utf8')).not.toThrow();

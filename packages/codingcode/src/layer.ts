@@ -1,4 +1,4 @@
-import { Layer } from 'effect';
+import { Layer, Effect, ManagedRuntime } from 'effect';
 import { AgentService } from './agent/agent.js';
 import { SessionService } from './session/store.js';
 import { HookService } from './hooks/registry.js';
@@ -14,6 +14,7 @@ import { WorkspaceService } from './core/workspace.js';
 import { TodoService } from './agent/todo.js';
 import { ToolSearchService } from './tools/tool-search-service.js';
 import { SubagentService } from './subagent/registry.js';
+import { SubagentRunnerService } from './subagent/runner-service.js';
 import { RulesService } from './rules/index.js';
 import { MemoryService } from './memory/index.js';
 import { ContextService } from './context/service.js';
@@ -66,9 +67,19 @@ const AgentDeps = Layer.mergeAll(
 );
 const AgentWithDeps = AgentService.Default.pipe(Layer.provide(AgentDeps));
 
+/** SubagentRunnerService delegates to AgentService.runStream. */
+const SubagentRunnerLayer = Layer.effect(
+  SubagentRunnerService,
+  Effect.gen(function* () {
+    const agent = yield* AgentService;
+    return SubagentRunnerService.make({ runStream: agent.runStream });
+  })
+).pipe(Layer.provide(AgentWithDeps));
+
 /** Final application layer — all services merged. */
 export const AppLayer = Layer.mergeAll(
   AgentWithDeps,
+  SubagentRunnerLayer,
   ExecutorLayer,
   SessionLayer,
   HookLayer,
@@ -88,3 +99,9 @@ export const AppLayer = Layer.mergeAll(
   ContextLayer,
   SchedulerLayer
 );
+
+/** Create the application ManagedRuntime from AppLayer. */
+export const createAppRuntime = () => ManagedRuntime.make(AppLayer);
+
+/** Concrete runtime type for the application. */
+export type AppRuntime = ManagedRuntime.ManagedRuntime<any, any>;

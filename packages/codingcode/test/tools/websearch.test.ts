@@ -42,7 +42,7 @@ describe('webSearchTool', () => {
 
   it('should support Chinese query', async () => {
     const result = (await Effect.runPromise(
-      webSearchTool.execute({ query: '自主AI agent平台', max_results: 3 }) as any
+      webSearchTool.execute({ query: '自主AI agent平台', max_results: 3 })
     )) as string;
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);

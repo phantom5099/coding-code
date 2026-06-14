@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 
 import { createDirectClient, agentEventToStreamChunk } from '../../src/client/direct.js';
+import type { LLMClient } from '../../src/llm/client.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
 import { AgentError } from '../../src/core/error.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
@@ -41,11 +42,24 @@ const TestLayer = Layer.mergeAll(
 
 const rt = ManagedRuntime.make(TestLayer);
 
-const noopLlm = {
+const noopLlm: LLMClient = {
   completeStream: () => ({
     stream: (async function* () {})(),
-    response: Promise.resolve({ ok: true, value: { content: '' } }),
+    response: Promise.resolve({ ok: true, value: { content: '', finishReason: 'stop' as const } }),
   }),
+  complete: () =>
+    Effect.succeed({
+      content: '',
+      finishReason: 'stop' as const,
+      usage: { prompt: 0, completion: 0, total: 0 },
+    }),
+  modelInfo: {
+    model: 'test',
+    provider: 'test',
+    maxTokens: 128000,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
 };
 
 describe('createDirectClient model operations', () => {

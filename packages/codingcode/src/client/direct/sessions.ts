@@ -1,56 +1,75 @@
-﻿import { Effect, ManagedRuntime } from 'effect';
+﻿import { Effect } from 'effect';
 import { SessionService } from '../../session/store.js';
 import { WorkspaceService } from '../../core/workspace.js';
 import { deleteSession } from '../../session/file-ops.js';
 import type { PermissionMode } from '../../approval/types.js';
-
-type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
+import type {
+  CheckpointDiff,
+  CodeRollbackResult,
+  CodeRollbackUndoResult,
+  RollbackPreviewDiff,
+  RollbackState,
+} from '../../checkpoint/types.js';
+import type { SessionEvent, SessionIndex } from '../../session/types.js';
+import type { AppRuntime } from '../../layer.js';
 
 export interface SessionClient {
   createSession(input: {
     cwd: string;
     initialPermissionMode?: string;
   }): Promise<{ sessionId: string }>;
-  resumeSession(input: { sessionId: string; cwd: string }): Promise<any>;
-  listSessions(input: { cwd: string }): Promise<any[]>;
-  getSessionHistory(input: { sessionId: string }): Promise<any[]>;
+  resumeSession(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
+  listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
+  getSessionHistory(input: { sessionId: string }): Promise<SessionEvent[]>;
   deleteSession(input: { sessionId: string }): Promise<void>;
   getSessionPermissionMode(input: { sessionId: string }): Promise<PermissionMode>;
   setSessionPermissionMode(input: { sessionId: string; mode: PermissionMode }): Promise<void>;
 
-  getCheckpointDiff(input: { sessionId: string; cwd: string; turnId?: number }): Promise<any>;
-  revertCheckpointFiles(input: { sessionId: string; cwd: string; files: string[] }): Promise<any>;
+  getCheckpointDiff(input: {
+    sessionId: string;
+    cwd: string;
+    turnId?: number;
+  }): Promise<CheckpointDiff>;
+  revertCheckpointFiles(input: {
+    sessionId: string;
+    cwd: string;
+    files: string[];
+  }): Promise<CodeRollbackResult>;
   previewRollbackDiff(input: {
     sessionId: string;
     cwd: string;
     throughTurnId: number;
-  }): Promise<any>;
+  }): Promise<RollbackPreviewDiff>;
   rollbackCodeToTurn(input: {
     sessionId: string;
     cwd: string;
     throughTurnId: number;
-  }): Promise<any>;
-  rollbackContext(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<any>;
-  rollbackBothToTurn(input: {
+  }): Promise<CodeRollbackResult>;
+  rollbackContext(input: {
     sessionId: string;
     cwd: string;
     throughTurnId: number;
-  }): Promise<any>;
+  }): Promise<{ turns: SessionEvent[]; rollbackState: RollbackState }>;
+  rollbackBothToTurn(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<{
+    turns: SessionEvent[];
+    codeResult: CodeRollbackResult;
+    rollbackState: RollbackState;
+  }>;
   undoLastCodeRollback(input: {
     sessionId: string;
     cwd: string;
     force?: boolean;
     files?: string[];
-  }): Promise<any>;
-  getRollbackState(input: { sessionId: string; cwd: string }): Promise<any>;
+  }): Promise<CodeRollbackUndoResult>;
+  getRollbackState(input: { sessionId: string; cwd: string }): Promise<RollbackState>;
   forkSession(input: {
     sessionId: string;
     cwd: string;
     atUuid?: string;
-  }): Promise<{ sessionId: string; turns: any[] }>;
+  }): Promise<{ sessionId: string; turns: SessionEvent[] }>;
 }
 
-function getWorkspaceCwd(rt: ManagedRt): Promise<string> {
+function getWorkspaceCwd(rt: AppRuntime): Promise<string> {
   return rt.runPromise(
     Effect.gen(function* () {
       const ws = yield* WorkspaceService;
@@ -59,7 +78,7 @@ function getWorkspaceCwd(rt: ManagedRt): Promise<string> {
   );
 }
 
-export function createDirectSessionClient(rt: ManagedRt): SessionClient {
+export function createDirectSessionClient(rt: AppRuntime): SessionClient {
   return {
     async createSession({ cwd }) {
       return rt.runPromise(
@@ -153,11 +172,22 @@ export function createDirectSessionClient(rt: ManagedRt): SessionClient {
       };
     },
     async rollbackContext() {
-      return { turns: [], rollbackState: {} };
+      return {
+        turns: [] as SessionEvent[],
+        rollbackState: {
+          context: { active: false, currentThroughTurnId: null },
+          code: {
+            canUndoLast: false,
+            lastEntry: null,
+            revertedFiles: [] as string[],
+            lastEntryId: null,
+          },
+        } as RollbackState,
+      };
     },
     async rollbackBothToTurn() {
       return {
-        turns: [],
+        turns: [] as SessionEvent[],
         codeResult: {
           reverted: false,
           throughTurnId: 0,
@@ -165,7 +195,15 @@ export function createDirectSessionClient(rt: ManagedRt): SessionClient {
           selectedFiles: [],
           restoreEntry: null,
         },
-        rollbackState: {},
+        rollbackState: {
+          context: { active: false, currentThroughTurnId: null },
+          code: {
+            canUndoLast: false,
+            lastEntry: null,
+            revertedFiles: [] as string[],
+            lastEntryId: null,
+          },
+        } as RollbackState,
       };
     },
     async undoLastCodeRollback() {
@@ -192,7 +230,7 @@ export function createDirectSessionClient(rt: ManagedRt): SessionClient {
           return yield* session.forkSession(state, atUuid ?? '');
         })
       );
-      return { sessionId: newSessionId, turns: [] };
+      return { sessionId: newSessionId, turns: [] as SessionEvent[] };
     },
   };
 }

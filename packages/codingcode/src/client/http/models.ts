@@ -1,7 +1,8 @@
+import type { SelectableModel } from '../../llm/factory.js';
 import type { createRequestHelpers } from './request.js';
 
 export interface ModelClient {
-  listModels(): Promise<any>;
+  listModels(): Promise<{ models: SelectableModel[]; activeId: string | null }>;
   switchModel(input: { id: string }): Promise<void>;
 }
 

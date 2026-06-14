@@ -21,22 +21,29 @@ const todoSchema = z.object({
     .max(TODO_MAX_ITEMS),
 });
 
-export const todoWriteTool: ToolDefinition = {
-  name: 'todo_write',
-  description:
-    'Replace the current task list. Use for multi-step work to track plan and progress. Pass the full updated plan; previous list is replaced entirely.',
-  shortDescription: 'Maintain task list for multi-step work',
-  parameters: todoSchema,
-  execute: (args, ctx) => {
-    const sessionId = ctx?.sessionId;
-    if (!sessionId)
-      return Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires sessionId'));
-    const { plan } = args as { plan: Todo[] };
-    return Effect.gen(function* () {
-      const todo = yield* TodoService;
-      todo.write(sessionId, plan);
-      const c = countByStatus(plan);
-      return `pending=${c.pending} in_progress=${c.in_progress} completed=${c.completed}`;
-    });
-  },
-};
+export function createTodoWriteTool(): Effect.Effect<ToolDefinition, never, TodoService> {
+  return Effect.gen(function* () {
+    const todoSvc = yield* TodoService;
+
+    return {
+      name: 'todo_write',
+      description:
+        'Replace the current task list. Use for multi-step work to track plan and progress. Pass the full updated plan; previous list is replaced entirely.',
+      shortDescription: 'Maintain task list for multi-step work',
+      parameters: todoSchema,
+      execute: (args, ctx) => {
+        const sessionId = ctx?.sessionId;
+        if (!sessionId)
+          return Effect.fail(
+            new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires sessionId')
+          );
+        const { plan } = args as { plan: Todo[] };
+        todoSvc.write(sessionId, plan);
+        const c = countByStatus(plan);
+        return Effect.succeed(
+          `pending=${c.pending} in_progress=${c.in_progress} completed=${c.completed}`
+        );
+      },
+    };
+  });
+}

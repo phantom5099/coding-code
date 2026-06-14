@@ -1,4 +1,12 @@
 import type { PermissionMode } from '../../approval/types.js';
+import type {
+  CheckpointDiff,
+  CodeRollbackResult,
+  CodeRollbackUndoResult,
+  RollbackPreviewDiff,
+  RollbackState,
+} from '../../checkpoint/types.js';
+import type { SessionEvent, SessionIndex } from '../../session/types.js';
 import type { createRequestHelpers } from './request.js';
 
 export interface SessionClient {
@@ -6,9 +14,9 @@ export interface SessionClient {
     cwd: string;
     initialPermissionMode?: string;
   }): Promise<{ sessionId: string }>;
-  resumeSession(input: { sessionId: string; cwd: string }): Promise<any>;
-  listSessions(input: { cwd: string }): Promise<any[]>;
-  getSessionHistory(input: { sessionId: string }): Promise<any[]>;
+  resumeSession(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
+  listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
+  getSessionHistory(input: { sessionId: string }): Promise<SessionEvent[]>;
   deleteSession(input: { sessionId: string }): Promise<void>;
   getSessionPermissionMode(input: { sessionId: string }): Promise<PermissionMode>;
   setSessionPermissionMode(input: { sessionId: string; mode: PermissionMode }): Promise<void>;
@@ -17,36 +25,44 @@ export interface SessionClient {
     sessionId: string;
     cwd: string;
     turnId?: number;
-  }): Promise<{ turnId: number; files: any[] }>;
-  revertCheckpointFiles(input: { sessionId: string; cwd: string; files: string[] }): Promise<any>;
+  }): Promise<CheckpointDiff>;
+  revertCheckpointFiles(input: {
+    sessionId: string;
+    cwd: string;
+    files: string[];
+  }): Promise<CodeRollbackResult>;
   previewRollbackDiff(input: {
     sessionId: string;
     cwd: string;
     throughTurnId: number;
-  }): Promise<any>;
+  }): Promise<RollbackPreviewDiff>;
   rollbackCodeToTurn(input: {
     sessionId: string;
     cwd: string;
     throughTurnId: number;
-  }): Promise<any>;
-  rollbackContext(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<any>;
-  rollbackBothToTurn(input: {
+  }): Promise<CodeRollbackResult>;
+  rollbackContext(input: {
     sessionId: string;
     cwd: string;
     throughTurnId: number;
-  }): Promise<any>;
+  }): Promise<{ turns: SessionEvent[]; rollbackState: RollbackState }>;
+  rollbackBothToTurn(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<{
+    turns: SessionEvent[];
+    codeResult: CodeRollbackResult;
+    rollbackState: RollbackState;
+  }>;
   undoLastCodeRollback(input: {
     sessionId: string;
     cwd: string;
     force?: boolean;
     files?: string[];
-  }): Promise<any>;
-  getRollbackState(input: { sessionId: string; cwd: string }): Promise<any>;
+  }): Promise<CodeRollbackUndoResult>;
+  getRollbackState(input: { sessionId: string; cwd: string }): Promise<RollbackState>;
   forkSession(input: {
     sessionId: string;
     cwd: string;
     atUuid?: string;
-  }): Promise<{ sessionId: string; turns: any[] }>;
+  }): Promise<{ sessionId: string; turns: SessionEvent[] }>;
 }
 
 export function createHttpSessionClient(
@@ -65,11 +81,11 @@ export function createHttpSessionClient(
 
     async listSessions({ cwd }) {
       const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : '';
-      return apiGet<any[]>(`/api/sessions${qs}`);
+      return apiGet<SessionIndex[]>(`/api/sessions${qs}`);
     },
 
     async getSessionHistory({ sessionId }) {
-      return apiGet<any[]>(`/api/sessions/${sessionId}/history`);
+      return apiGet<SessionEvent[]>(`/api/sessions/${sessionId}/history`);
     },
 
     async deleteSession({ sessionId }) {

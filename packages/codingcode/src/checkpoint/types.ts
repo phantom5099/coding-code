@@ -47,3 +47,13 @@ export interface RestorePlan {
   affectedTurns: number[];
   baseline: string;
 }
+
+export interface RollbackState {
+  context: { active: boolean; currentThroughTurnId: number | null };
+  code: {
+    canUndoLast: boolean;
+    lastEntry: CodeRestoreEntry | null;
+    revertedFiles: string[];
+    lastEntryId: string | null;
+  };
+}

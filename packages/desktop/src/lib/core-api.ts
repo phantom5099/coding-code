@@ -38,7 +38,9 @@ export function deleteSession(sessionId: string): Promise<void> {
 export function getSessionHistory(
   sessionId: string
 ): Promise<Array<{ id: string; items: any[]; status: string }>> {
-  return clients.sessions.getSessionHistory({ sessionId });
+  return clients.sessions.getSessionHistory({ sessionId }) as unknown as Promise<
+    Array<{ id: string; items: any[]; status: string }>
+  >;
 }
 
 export function resumeSession(sessionId: string, cwd: string): Promise<any> {

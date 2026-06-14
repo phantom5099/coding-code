@@ -40,6 +40,7 @@
     "./subagent/registry": "./src/subagent/registry.ts",
     "./subagent/loader": "./src/subagent/loader.ts",
     "./llm/factory": "./src/llm/factory.ts",
+    "./llm/client": "./src/llm/client.ts",
     "./layer": "./src/layer.ts"
   },
   "dependencies": {

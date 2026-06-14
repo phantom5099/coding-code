@@ -45,7 +45,7 @@ describe('tools/domains/fs projectPath isolation', () => {
   it('read_file uses ctx.projectPath over workspaceCwd', async () => {
     writeFileSync(join(projectDir, 'a.txt'), 'hello', 'utf8');
     const result = await Effect.runPromise(
-      readFileTool.execute({ path: 'a.txt', offset: 1, limit: 200 }, ctx(projectDir)) as any
+      readFileTool.execute({ path: 'a.txt', offset: 1, limit: 200 }, ctx(projectDir))
     );
     expect(result).toContain('hello');
   });
@@ -63,10 +63,7 @@ describe('tools/domains/fs projectPath isolation', () => {
   it('edit_file edits in ctx.projectPath', async () => {
     writeFileSync(join(projectDir, 'c.txt'), 'old', 'utf8');
     const result = await Effect.runPromise(
-      editFileTool.execute(
-        { path: 'c.txt', old_string: 'old', new_string: 'new' },
-        ctx(projectDir)
-      ) as any
+      editFileTool.execute({ path: 'c.txt', old_string: 'old', new_string: 'new' }, ctx(projectDir))
     );
     expect(result).toContain('1 replacement');
     expect(readFileSync(join(projectDir, 'c.txt'), 'utf8')).toBe('new');
@@ -89,7 +86,7 @@ describe('tools/domains/fs projectPath isolation', () => {
     writeFileSync(join(projectDir, 'f.ts'), '', 'utf8');
     writeFileSync(join(globalDir, 'g.ts'), '', 'utf8');
     const result = await Effect.runPromise(
-      globTool.execute({ pattern: '*.ts', path: '.', max_results: 50 }, ctx(projectDir)) as any
+      globTool.execute({ pattern: '*.ts', path: '.', max_results: 50 }, ctx(projectDir))
     );
     expect(result).toContain('f.ts');
     expect(result).not.toContain('g.ts');
@@ -99,7 +96,7 @@ describe('tools/domains/fs projectPath isolation', () => {
     const cwd = process.cwd();
     writeFileSync(join(cwd, 'h-test.txt'), 'fallback', 'utf8');
     const result = await Effect.runPromise(
-      readFileTool.execute({ path: 'h-test.txt', offset: 1, limit: 200 }, undefined) as any
+      readFileTool.execute({ path: 'h-test.txt', offset: 1, limit: 200 }, undefined)
     );
     expect(result).toContain('fallback');
   });

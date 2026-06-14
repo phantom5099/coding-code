@@ -1,8 +1,8 @@
-import { Effect, ManagedRuntime as MR } from 'effect';
+import { Effect } from 'effect';
 import { serve } from '@hono/node-server';
 import { LLMFactoryService } from './llm/factory.js';
 import { createServer } from './server/index.js';
-import { AppLayer } from './layer.js';
+import { createAppRuntime } from './layer.js';
 import { loadConfig, ensureUserConfig } from '../../infra/src/config.js';
 import { WorkspaceService, parseWorkspaceArgs } from './core/workspace.js';
 import { findAvailablePort } from './server/port-discovery.js';
@@ -19,7 +19,7 @@ async function main() {
   const tuiOnly = args.includes('tui');
   const basePort = config.server.port;
 
-  const rt = MR.make(AppLayer);
+  const rt = createAppRuntime();
 
   const program = Effect.gen(function* () {
     const ws = yield* WorkspaceService;

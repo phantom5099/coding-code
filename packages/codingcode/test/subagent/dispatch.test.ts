@@ -8,6 +8,7 @@ import { McpService } from '../../src/mcp/index.js';
 import { LLMFactoryService } from '../../src/llm/factory.js';
 import { RulesService } from '../../src/rules/index.js';
 import { SubagentService } from '../../src/subagent/registry.js';
+import { SubagentRunnerService } from '../../src/subagent/runner-service.js';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { EXPLORE_PROFILE } from '../../src/subagent/registry.js';
 import type { ToolDefinition } from '../../src/tools/types.js';
@@ -128,6 +129,7 @@ const mockModelEntry = {
   api_key_env: 'API_KEY_B',
 };
 const mockSubagentLlm = { _tag: 'subagent-llm' };
+const mockDefaultLlm = { _tag: 'default-llm' };
 
 const mockLLMFactory = {
   listModels: vi.fn(() => Effect.succeed([])),
@@ -140,6 +142,7 @@ const mockLLMFactory = {
   getActiveEntry: vi.fn(() => Effect.succeed(mockModelEntry)),
   switchModel: vi.fn(() => Effect.succeed(mockModelEntry)),
   createClient: vi.fn(() => Effect.succeed(mockSubagentLlm)),
+  getLLMClient: vi.fn(() => Effect.succeed(mockDefaultLlm)),
 };
 
 const mockRulesService = {
@@ -181,6 +184,14 @@ const mockProjectRuntime = {
   disposeProject: vi.fn(() => Effect.void),
 };
 
+const defaultRunStream = async function* () {
+  yield { _tag: 'Done' as const, content: 'done' };
+};
+
+const mockSubagentRunner = {
+  runStream: vi.fn(defaultRunStream),
+};
+
 const MockSessionLayer = Layer.succeed(SessionService, SessionService.make(mockSession as any));
 const MockApprovalLayer = Layer.succeed(ApprovalService, ApprovalService.make(mockApproval as any));
 const MockHooksLayer = Layer.succeed(HookService, HookService.make(mockHooks as any));
@@ -189,6 +200,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, mockLLMFactory as a
 const MockRulesLayer = Layer.succeed(RulesService, mockRulesService as any);
 const MockSubagentLayer = Layer.succeed(SubagentService, mockSubagentService as any);
 const MockProjectRuntimeLayer = Layer.succeed(ProjectRuntimeService, mockProjectRuntime as any);
+const MockSubagentRunnerLayer = Layer.succeed(SubagentRunnerService, mockSubagentRunner as any);
 
 const MockLayer = Layer.mergeAll(
   MockSessionLayer,
@@ -198,7 +210,8 @@ const MockLayer = Layer.mergeAll(
   MockLLMFactoryLayer,
   MockRulesLayer,
   MockSubagentLayer,
-  MockProjectRuntimeLayer
+  MockProjectRuntimeLayer,
+  MockSubagentRunnerLayer
 );
 
 async function makeTool(): Promise<ToolDefinition> {
@@ -208,8 +221,27 @@ async function makeTool(): Promise<ToolDefinition> {
   return result as ToolDefinition;
 }
 
+function makeMockLayer(overrides: Record<string, any> = {}) {
+  const layers: Layer.Layer<any, any, any>[] = [
+    overrides.session ?? MockSessionLayer,
+    overrides.approval ?? MockApprovalLayer,
+    overrides.hooks ?? MockHooksLayer,
+    overrides.mcp ?? MockMcpLayer,
+    overrides.llmFactory ?? MockLLMFactoryLayer,
+    overrides.rules ?? MockRulesLayer,
+    overrides.subagent ?? MockSubagentLayer,
+    overrides.runtime ?? MockProjectRuntimeLayer,
+    overrides.runner ?? MockSubagentRunnerLayer,
+  ];
+  return (Layer.mergeAll as any)(...layers);
+}
+
 describe('dispatch_agent tool', () => {
-  beforeEach(() => {});
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSubagentRunner.runStream.mockImplementation(defaultRunStream);
+    mockLLMFactory.getLLMClient.mockReturnValue(Effect.succeed(mockDefaultLlm));
+  });
 
   it('should create dispatch tool with description mentioning profiles', async () => {
     const tool = await makeTool();
@@ -227,10 +259,7 @@ describe('dispatch_agent tool', () => {
     const tool = await makeTool();
     try {
       await Effect.runPromise(
-        tool.execute(
-          { agent: 'nonexistent', prompt: 'do something' },
-          { projectPath: '/test' }
-        ) as any
+        tool.execute({ agent: 'nonexistent', prompt: 'do something' }, { projectPath: '/test' })
       );
       expect.fail('Should have thrown error');
     } catch (e: any) {
@@ -238,45 +267,31 @@ describe('dispatch_agent tool', () => {
     }
   });
 
-  it('should require agentRunner context', async () => {
+  it('should use SubagentRunnerService.runStream to run the subagent', async () => {
     const tool = await makeTool();
-    try {
-      await Effect.runPromise(
-        tool.execute({ agent: 'explore', prompt: 'do something' }, { projectPath: '/test' }) as any
-      );
-      expect.fail('Should have thrown error');
-    } catch (e: any) {
-      expect(e.message).toContain('agentRunner');
-    }
+    await Effect.runPromise(
+      tool.execute(
+        { agent: 'explore', prompt: 'test' },
+        { projectPath: '/test', sessionId: 'parent-1' }
+      )
+    );
+    expect(mockSubagentRunner.runStream).toHaveBeenCalled();
   });
 
   it('should emit spawn.before hook', async () => {
     const emitDecisionFn = vi.fn().mockReturnValue(Effect.succeed(null));
     const customHooks = { ...mockHooks, emitDecision: emitDecisionFn };
     const customHooksLayer = Layer.succeed(HookService, HookService.make(customHooks as any));
-    const customLayer = Layer.mergeAll(
-      MockSessionLayer,
-      MockApprovalLayer,
-      customHooksLayer,
-      MockMcpLayer,
-      MockLLMFactoryLayer,
-      MockRulesLayer,
-      MockSubagentLayer,
-      MockProjectRuntimeLayer
-    );
+    const customLayer = makeMockLayer({ hooks: customHooksLayer });
 
     const tool = (await Effect.runPromise(
       (createDispatchAgentTool() as any).pipe(Effect.provide(customLayer as any))
     )) as ToolDefinition;
-    const runStream = async function* () {
-      yield { _tag: 'Done' as const, content: 'done' };
-    };
-    const agentRunner = { agentService: { runStream }, llm: {} };
     await Effect.runPromise(
       tool.execute(
         { agent: 'explore', prompt: 'test' },
-        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
-      ) as any
+        { projectPath: '/test', sessionId: 'parent-1' }
+      )
     );
     expect(emitDecisionFn).toHaveBeenCalledWith(
       'agent.subagent.spawn.before',
@@ -290,26 +305,16 @@ describe('dispatch_agent tool', () => {
       .mockReturnValue(Effect.succeed({ decision: 'deny', reason: 'Not allowed' }));
     const customHooks = { ...mockHooks, emitDecision: emitDecisionFn };
     const customHooksLayer = Layer.succeed(HookService, HookService.make(customHooks as any));
-    const customLayer = Layer.mergeAll(
-      MockSessionLayer,
-      MockApprovalLayer,
-      customHooksLayer,
-      MockMcpLayer,
-      MockLLMFactoryLayer,
-      MockRulesLayer,
-      MockSubagentLayer,
-      MockProjectRuntimeLayer
-    );
+    const customLayer = makeMockLayer({ hooks: customHooksLayer });
 
     const tool = (await Effect.runPromise(
       (createDispatchAgentTool() as any).pipe(Effect.provide(customLayer as any))
     )) as ToolDefinition;
-    const agentRunner = { agentService: { runStream: async function* () {} }, llm: {} };
     try {
       await Effect.runPromise(
         tool.execute(
           { agent: 'explore', prompt: 'test' },
-          { projectPath: '/test', sessionId: 'parent-1', agentRunner }
+          { projectPath: '/test', sessionId: 'parent-1' }
         ) as any
       );
       expect.fail('Should have thrown error');
@@ -322,29 +327,16 @@ describe('dispatch_agent tool', () => {
     const emitFn = vi.fn().mockReturnValue(Effect.void);
     const customHooks = { ...mockHooks, emit: emitFn };
     const customHooksLayer = Layer.succeed(HookService, HookService.make(customHooks as any));
-    const customLayer = Layer.mergeAll(
-      MockSessionLayer,
-      MockApprovalLayer,
-      customHooksLayer,
-      MockMcpLayer,
-      MockLLMFactoryLayer,
-      MockRulesLayer,
-      MockSubagentLayer,
-      MockProjectRuntimeLayer
-    );
+    const customLayer = makeMockLayer({ hooks: customHooksLayer });
 
     const tool = (await Effect.runPromise(
       (createDispatchAgentTool() as any).pipe(Effect.provide(customLayer as any))
     )) as ToolDefinition;
-    const runStream = async function* () {
-      yield { _tag: 'Done' as const, content: 'completed' };
-    };
-    const agentRunner = { agentService: { runStream }, llm: {} };
     const result = await Effect.runPromise(
       tool.execute(
         { agent: 'explore', prompt: 'test' },
-        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
-      ) as any
+        { projectPath: '/test', sessionId: 'parent-1' }
+      )
     );
     expect(emitFn).toHaveBeenCalledWith(
       'agent.subagent.complete',
@@ -353,18 +345,17 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should pass systemOverride with profile prompt, environment info, and user rules', async () => {
-    const tool = await makeTool();
     let capturedSystemOverride: string | undefined;
-    const runStream = async function* (opts: any) {
+    mockSubagentRunner.runStream.mockImplementation(async function* (opts: any) {
       capturedSystemOverride = opts.systemOverride;
       yield { _tag: 'Done' as const, content: 'done' };
-    };
-    const agentRunner = { agentService: { runStream }, llm: {} };
+    } as any);
+    const tool = await makeTool();
     await Effect.runPromise(
       tool.execute(
         { agent: 'explore', prompt: 'test' },
-        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
-      ) as any
+        { projectPath: '/test', sessionId: 'parent-1' }
+      )
     );
     expect(capturedSystemOverride).toBeTruthy();
     // Should contain the profile's system prompt content
@@ -376,16 +367,15 @@ describe('dispatch_agent tool', () => {
   });
 
   it('should handle subagent error', async () => {
-    const tool = await makeTool();
-    const runStream = async function* () {
+    mockSubagentRunner.runStream.mockImplementation(async function* () {
       yield { _tag: 'Error' as const, error: { message: 'Something went wrong' } };
-    };
-    const agentRunner = { agentService: { runStream }, llm: {} };
+    } as any);
+    const tool = await makeTool();
     try {
       await Effect.runPromise(
         tool.execute(
           { agent: 'explore', prompt: 'test' },
-          { projectPath: '/test', sessionId: 'parent-1', agentRunner }
+          { projectPath: '/test', sessionId: 'parent-1' }
         ) as any
       );
       expect.fail('Should have thrown error');
@@ -394,36 +384,34 @@ describe('dispatch_agent tool', () => {
     }
   });
 
-  it('should use parent llm when profile has no model field', async () => {
-    const tool = await makeTool();
-    const parentLlm = { _tag: 'parent-llm' };
+  it('should use LLM from factory.getLLMClient when profile has no model field', async () => {
     let capturedLlm: any;
-    const runStream = async function* (opts: any) {
+    mockSubagentRunner.runStream.mockImplementation(async function* (opts: any) {
       capturedLlm = opts.llm;
       yield { _tag: 'Done' as const, content: 'done' };
-    };
-    const agentRunner = { agentService: { runStream }, llm: parentLlm };
+    } as any);
+    const tool = await makeTool();
     await Effect.runPromise(
       tool.execute(
         { agent: 'explore', prompt: 'test' },
-        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
-      ) as any
+        { projectPath: '/test', sessionId: 'parent-1' }
+      )
     );
-    expect(capturedLlm).toBe(parentLlm);
+    expect(mockLLMFactory.getLLMClient).toHaveBeenCalled();
+    expect(capturedLlm).toBe(mockDefaultLlm);
   });
 
   it('should create a new llm client when profile specifies a model', async () => {
-    const tool = await makeTool();
     let capturedLlm: any;
-    const runStream = async function* (opts: any) {
+    mockSubagentRunner.runStream.mockImplementation(async function* (opts: any) {
       capturedLlm = opts.llm;
       yield { _tag: 'Done' as const, content: 'done' };
-    };
-    const agentRunner = { agentService: { runStream }, llm: {} };
+    } as any);
+    const tool = await makeTool();
     await Effect.runPromise(
       tool.execute(
         { agent: 'custom-model-agent', prompt: 'test' },
-        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
+        { projectPath: '/test', sessionId: 'parent-1' }
       ) as any
     );
     expect(mockLLMFactory.findModel).toHaveBeenCalledWith('fast-model@API_KEY_B');
@@ -433,12 +421,11 @@ describe('dispatch_agent tool', () => {
 
   it('should throw when profile model is not found in catalog', async () => {
     const tool = await makeTool();
-    const agentRunner = { agentService: { runStream: async function* () {} }, llm: {} };
     try {
       await Effect.runPromise(
         tool.execute(
           { agent: 'bad-model-agent', prompt: 'test' },
-          { projectPath: '/test', sessionId: 'parent-1', agentRunner }
+          { projectPath: '/test', sessionId: 'parent-1' }
         ) as any
       );
       expect.fail('Should have thrown error');
@@ -469,29 +456,16 @@ describe('dispatch_agent tool', () => {
       SessionService,
       SessionService.make(customSession as any)
     );
-    const customLayer = Layer.mergeAll(
-      customSessionLayer,
-      MockApprovalLayer,
-      MockHooksLayer,
-      MockMcpLayer,
-      MockLLMFactoryLayer,
-      MockRulesLayer,
-      MockSubagentLayer,
-      MockProjectRuntimeLayer
-    );
+    const customLayer = makeMockLayer({ session: customSessionLayer });
 
     const tool = (await Effect.runPromise(
       (createDispatchAgentTool() as any).pipe(Effect.provide(customLayer as any))
     )) as ToolDefinition;
-    const runStream = async function* () {
-      yield { _tag: 'Done' as const, content: 'done' };
-    };
-    const agentRunner = { agentService: { runStream }, llm: {} };
     await Effect.runPromise(
       tool.execute(
         { agent: 'explore', prompt: 'test child' },
-        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
-      ) as any
+        { projectPath: '/test', sessionId: 'parent-1' }
+      )
     );
     expect(createFn).toHaveBeenCalledWith(
       '/test',
@@ -503,17 +477,16 @@ describe('dispatch_agent tool', () => {
 
   it('runStream receives state with child sessionId', async () => {
     let capturedState: any;
-    const runStream = async function* (opts: any) {
+    mockSubagentRunner.runStream.mockImplementation(async function* (opts: any) {
       capturedState = opts.state;
       yield { _tag: 'Done' as const, content: 'done' };
-    };
+    } as any);
     const tool = await makeTool();
-    const agentRunner = { agentService: { runStream }, llm: {} };
     await Effect.runPromise(
       tool.execute(
         { agent: 'explore', prompt: 'test' },
-        { projectPath: '/test', sessionId: 'parent-1', agentRunner }
-      ) as any
+        { projectPath: '/test', sessionId: 'parent-1' }
+      )
     );
     expect(capturedState).toBeDefined();
     expect(capturedState.sessionId).toBe('child-123');

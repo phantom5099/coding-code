@@ -33,7 +33,7 @@ describe('globTool', () => {
           pattern: '*.ts',
           path: testDir,
           max_results: 50,
-        }) as any
+        })
       );
       expect(result).toContain('a.ts');
       expect(result).toContain('b.ts');
@@ -85,7 +85,7 @@ describe('globTool', () => {
           pattern: '*.py',
           path: testDir,
           max_results: 50,
-        }) as any
+        })
       );
       expect(result).toContain('No files matching');
     } finally {

@@ -1,4 +1,4 @@
-import { Effect, ManagedRuntime } from 'effect';
+import { Effect } from 'effect';
 import { sendMessage } from '../../agent/agent.js';
 import { ApprovalWaitService } from '../../approval/async-confirm.js';
 import { parseApprovalResponse } from '../../approval/response.js';
@@ -6,8 +6,8 @@ import { ContextService } from '../../context/service.js';
 import { getContextConfig } from '../../context/config.js';
 import type { StreamChunk } from '../types.js';
 import { agentEventToStreamChunk } from '../direct.js';
-
-type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
+import type { AppRuntime } from '../../layer.js';
+import type { LLMClient } from '../../llm/client.js';
 
 export interface AgentRuntimeClient {
   sendMessage(
@@ -24,7 +24,7 @@ export interface AgentRuntimeClient {
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
 }
 
-export function createDirectAgentClient(llm: any, rt: ManagedRt): AgentRuntimeClient {
+export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRuntimeClient {
   return {
     async *sendMessage(input, { sessionId, cwd }) {
       const program = sendMessage(sessionId || undefined, input, cwd, llm);
@@ -42,7 +42,7 @@ export function createDirectAgentClient(llm: any, rt: ManagedRt): AgentRuntimeCl
             args: Record<string, unknown>;
           }) => void)
         | null = null;
-      const waitService: any = await rt.runPromise(
+      const waitService = await rt.runPromise(
         Effect.gen(function* () {
           return yield* ApprovalWaitService;
         })
@@ -91,7 +91,7 @@ export function createDirectAgentClient(llm: any, rt: ManagedRt): AgentRuntimeCl
           }
         }
       } finally {
-        Effect.runSync((waitService as any).unregisterEmitter(resolvedSessionId));
+        Effect.runSync(waitService.unregisterEmitter(resolvedSessionId));
       }
     },
 

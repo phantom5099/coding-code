@@ -80,7 +80,7 @@ describe('editFileTool', () => {
         path: testFile,
         old_string: 'nonexistent text',
         new_string: 'replacement',
-      }) as any
+      })
     );
     expect(result).toContain('Error');
     expect(result).toContain('not found');
@@ -93,7 +93,7 @@ describe('editFileTool', () => {
         path: testFile,
         old_string: 'line one\nline two',
         new_string: 'LINE ONE\nLINE TWO',
-      }) as any
+      })
     );
     expect(result).toContain('1 replacement made');
     const content = await readFile(testFile, 'utf-8');

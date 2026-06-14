@@ -1,4 +1,4 @@
-import { Effect, ManagedRuntime } from 'effect';
+import { Effect } from 'effect';
 import { McpService } from '../../mcp/index.js';
 import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
 import { SkillService } from '../../skills/service.js';
@@ -53,6 +53,7 @@ import {
 } from '../../memory/config.js';
 import { MemoryService } from '../../memory/index.js';
 import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
+import type { AppRuntime } from '../../layer.js';
 
 export interface SettingsClient {
   getMemoryEnabled(): Promise<boolean>;
@@ -206,9 +207,7 @@ function hooksSetDisabled(cwd: string, name: string, disabled: boolean): void {
   }
 }
 
-type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
-
-export function createDirectSettingsClient(rt: ManagedRt): SettingsClient {
+export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
   return {
     async getMemoryEnabled() {
       return rt.runPromise(
@@ -395,7 +394,7 @@ export function createDirectSettingsClient(rt: ManagedRt): SettingsClient {
     },
 
     async getGlobalPermissionMode() {
-      const approval: any = await rt.runPromise(
+      const approval = await rt.runPromise(
         Effect.gen(function* () {
           return yield* ApprovalService;
         })
@@ -404,7 +403,7 @@ export function createDirectSettingsClient(rt: ManagedRt): SettingsClient {
     },
 
     async setGlobalPermissionMode(mode) {
-      const approval: any = await rt.runPromise(
+      const approval = await rt.runPromise(
         Effect.gen(function* () {
           return yield* ApprovalService;
         })

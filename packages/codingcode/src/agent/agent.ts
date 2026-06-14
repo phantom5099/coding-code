@@ -25,7 +25,7 @@ import { resolveSubagentEnabled, resolveAgentDisabled } from '../subagent/regist
 import { ProjectRuntimeService } from '../runtime/project-runtime.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { LLMFactoryService } from '../llm/factory.js';
-import { STATIC_BUILTIN_TOOLS } from '../tools/providers.js';
+import { getBuiltinTools } from '../tools/providers.js';
 import { canonicalizeSchema } from '../tools/utils/canonicalize-schema.js';
 import { normalizePath } from '../core/path.js';
 import { RulesService } from '../rules/index.js';
@@ -280,7 +280,8 @@ export function agentLoop(
       for (let step = 0; step < effectiveMaxSteps; step++) {
         yield* q.offer({ _tag: 'Step', step: step + 1, max: effectiveMaxSteps });
 
-        let allToolDefs: ToolDefinition[] = [...STATIC_BUILTIN_TOOLS, ...(opts.mcpTools ?? [])];
+        const builtinTools = yield* getBuiltinTools();
+        let allToolDefs: ToolDefinition[] = [...builtinTools, ...(opts.mcpTools ?? [])];
         if (opts.dispatchTool && resolveSubagentEnabled(projectPath))
           allToolDefs = [...allToolDefs, opts.dispatchTool];
 
@@ -485,7 +486,6 @@ export function agentLoop(
             projectPath,
             signal: opts.abortSignal,
             approval: opts.approvalOverride,
-            agentRunner: { runStream: null as any, llm },
             toolLookup,
           });
           for (const r of allResults) {
@@ -526,7 +526,6 @@ export function agentLoop(
             projectPath,
             signal: opts.abortSignal,
             approval: opts.approvalOverride,
-            agentRunner: { runStream: null as any, llm },
             toolLookup,
           });
 

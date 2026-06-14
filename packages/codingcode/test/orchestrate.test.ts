@@ -10,6 +10,7 @@ import { ContextService } from '../src/context/service.js';
 import { MemoryService } from '../src/memory/index.js';
 import { RulesService } from '../src/rules/index.js';
 import { LLMFactoryService } from '../src/llm/factory.js';
+import { SubagentRunnerService } from '../src/subagent/runner-service.js';
 
 vi.mock('../src/context/organizer.js', () => ({
   assemblePayload: vi.fn(() => ({
@@ -320,6 +321,12 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
   createClient: () => Effect.fail(new Error('no factory')),
 } as any);
 
+const MockSubagentRunnerLayer = Layer.succeed(SubagentRunnerService, {
+  runStream: async function* () {
+    yield { _tag: 'Done' as const, content: '' };
+  },
+} as any);
+
 const AllDeps = Layer.mergeAll(
   MockToolExecutorLayer,
   HookLayer,
@@ -334,7 +341,8 @@ const AllDeps = Layer.mergeAll(
   MockContextLayer,
   MockMemoryLayer,
   MockRulesLayer,
-  MockLLMFactoryLayer
+  MockLLMFactoryLayer,
+  MockSubagentRunnerLayer
 );
 
 const TestLayer = Layer.mergeAll(AgentLayer, AllDeps);

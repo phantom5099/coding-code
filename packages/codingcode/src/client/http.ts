@@ -1,4 +1,10 @@
 import type { AgentClient, StreamChunk } from './types.js';
+import type { McpServerConfig } from '../mcp/types.js';
+import type { AgentProfile } from '../subagent/types.js';
+import type { UserHookConfig } from '../hooks/types.js';
+import type { PermissionMode } from '../approval/types.js';
+import type { SessionEvent } from '../session/types.js';
+import type { RollbackState } from '../checkpoint/types.js';
 import { parseSseStream } from './sse.js';
 import { createHttpClients } from './http/index.js';
 
@@ -155,11 +161,22 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       };
     },
     async rollbackContext() {
-      return { turns: [], rollbackState: {} };
+      return {
+        turns: [] as SessionEvent[],
+        rollbackState: {
+          context: { active: false, currentThroughTurnId: null },
+          code: {
+            canUndoLast: false,
+            lastEntry: null,
+            revertedFiles: [] as string[],
+            lastEntryId: null,
+          },
+        } as RollbackState,
+      };
     },
     async rollbackBothToTurn() {
       return {
-        turns: [],
+        turns: [] as SessionEvent[],
         codeResult: {
           reverted: false,
           throughTurnId: 0,
@@ -167,7 +184,15 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
           selectedFiles: [],
           restoreEntry: null,
         },
-        rollbackState: {},
+        rollbackState: {
+          context: { active: false, currentThroughTurnId: null },
+          code: {
+            canUndoLast: false,
+            lastEntry: null,
+            revertedFiles: [] as string[],
+            lastEntryId: null,
+          },
+        } as RollbackState,
       };
     },
     async undoLastCodeRollback() {
@@ -255,11 +280,11 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       await clients.settings.toggleSkill(body);
     },
 
-    async createMcpServer(server: any) {
+    async createMcpServer(server: McpServerConfig) {
       await clients.settings.createMcpServer({ cwd: '', server });
     },
 
-    async updateMcpServer(name: string, server: any) {
+    async updateMcpServer(name: string, server: McpServerConfig) {
       await clients.settings.updateMcpServer({ cwd: '', name, server });
     },
 
@@ -271,11 +296,11 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       return clients.settings.listAgents({ cwd: '' });
     },
 
-    async createAgent(profile: any) {
+    async createAgent(profile: AgentProfile) {
       await clients.settings.createAgent({ cwd: '', profile });
     },
 
-    async updateAgent(name: string, profile: any) {
+    async updateAgent(name: string, profile: AgentProfile) {
       await clients.settings.updateAgent({ cwd: '', name, profile });
     },
 
@@ -303,11 +328,11 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       await clients.settings.resetHookDisabled(body);
     },
 
-    async createHook(hook: any) {
+    async createHook(hook: UserHookConfig) {
       await clients.settings.createHook({ cwd: '', hook });
     },
 
-    async updateHook(name: string, hook: any) {
+    async updateHook(name: string, hook: UserHookConfig) {
       await clients.settings.updateHook({ cwd: '', name, hook });
     },
 
@@ -319,7 +344,7 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       return clients.settings.getGlobalPermissionMode();
     },
 
-    async setPermissionMode(mode: any) {
+    async setPermissionMode(mode: PermissionMode) {
       await clients.settings.setGlobalPermissionMode(mode);
     },
   };

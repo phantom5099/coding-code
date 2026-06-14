@@ -26,7 +26,6 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         turnId?: number;
         projectPath?: string;
         approval?: any;
-        agentRunner?: any;
         callId?: string;
         toolLookup?: ToolLookup;
       }
@@ -82,7 +81,6 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           sessionId: opts?.sessionId,
           turnId: opts?.turnId,
           projectPath: opts?.projectPath,
-          agentRunner: opts?.agentRunner,
         };
 
         // Race tool execution against abort signal for immediate cancellation
@@ -136,7 +134,6 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         projectPath?: string;
         signal?: AbortSignal;
         approval?: any;
-        agentRunner?: any;
         toolLookup?: ToolLookup;
       }
     ): Effect.Effect<ToolResultUnion, never, any> {
@@ -187,7 +184,6 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         projectPath?: string;
         signal?: AbortSignal;
         approval?: any;
-        agentRunner?: any;
         toolLookup?: ToolLookup;
       }
     ): Effect.Effect<ToolResultUnion[], never, any> {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Effect } from 'effect';
 import type { ToolDefinition, ToolDescription } from './types.js';
 import type { AgentProfile } from '../subagent/types.js';
 import type { ToolVisibilityPolicy } from './types.js';
@@ -11,7 +12,8 @@ import { searchTool } from './domains/fs/grep.js';
 import { globTool } from './domains/fs/glob.js';
 import { webFetchTool } from './domains/web/fetch.js';
 import { webSearchTool } from './domains/web/search.js';
-import { todoWriteTool } from './domains/self/todo-write.js';
+import { createTodoWriteTool } from './domains/self/todo-write.js';
+import { TodoService } from '../agent/todo.js';
 
 export interface ToolBuildContext {
   projectPath: string;
@@ -35,7 +37,8 @@ export interface SessionToolResolver {
   }): ToolDescription[];
 }
 
-export const STATIC_BUILTIN_TOOLS: ToolDefinition[] = [
+/** Tools that require no Effect services — safe to instantiate statically. */
+const STATELESS_BUILTIN_TOOLS: ToolDefinition[] = [
   readFileTool,
   writeFileTool,
   editFileTool,
@@ -44,15 +47,26 @@ export const STATIC_BUILTIN_TOOLS: ToolDefinition[] = [
   globTool,
   webFetchTool,
   webSearchTool,
-  todoWriteTool,
 ];
+
+/**
+ * Build the full list of builtin tools, including those that depend on
+ * Effect services (e.g. TodoService). Must be called inside an Effect
+ * context that provides the required services.
+ */
+export function getBuiltinTools(): Effect.Effect<ToolDefinition[], never, TodoService> {
+  return Effect.gen(function* () {
+    const todoTool = yield* createTodoWriteTool();
+    return [...STATELESS_BUILTIN_TOOLS, todoTool];
+  });
+}
 
 // ---- Implementation factories ----
 
 export function createBuiltinToolProvider(): BuiltinToolProvider {
   return {
     listBuiltinTools(_ctx: ToolBuildContext): ToolDefinition[] {
-      return [...STATIC_BUILTIN_TOOLS];
+      return [...STATELESS_BUILTIN_TOOLS];
     },
   };
 }

@@ -8,10 +8,6 @@ export interface ToolExecCtx {
   sessionId?: string;
   turnId?: number;
   projectPath?: string;
-  agentRunner?: {
-    agentService: any; // AgentService — use any to avoid circular imports
-    llm: any; // LLMClient — use any to avoid circular imports
-  };
 }
 
 export interface ToolDefinition {
@@ -22,7 +18,7 @@ export interface ToolDefinition {
   parameters: z.ZodTypeAny;
   /** Optional JSON Schema override. When absent, the schema is auto-generated from `parameters`. */
   jsonSchema?: Record<string, unknown>;
-  execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, any>;
+  execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, never>;
 }
 
 export interface ToolVisibilityPolicy {

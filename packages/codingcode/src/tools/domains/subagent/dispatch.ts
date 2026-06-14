@@ -11,6 +11,7 @@ import { LLMFactoryService } from '../../../llm/factory.js';
 import { resolveSubagentEnabled, resolveAgentDisabled } from '../../../subagent/registry.js';
 import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
+import { SubagentRunnerService } from '../../../subagent/runner-service.js';
 
 export function createDispatchAgentTool(): Effect.Effect<
   ToolDefinition,
@@ -22,6 +23,7 @@ export function createDispatchAgentTool(): Effect.Effect<
   | ProjectRuntimeService
   | LLMFactoryService
   | RulesService
+  | SubagentRunnerService
 > {
   return Effect.gen(function* () {
     const session = yield* SessionService;
@@ -31,6 +33,7 @@ export function createDispatchAgentTool(): Effect.Effect<
     const runtime = yield* ProjectRuntimeService;
     const factory = yield* LLMFactoryService;
     const rulesService = yield* RulesService;
+    const runner = yield* SubagentRunnerService;
 
     return {
       name: 'dispatch_agent',
@@ -72,15 +75,7 @@ export function createDispatchAgentTool(): Effect.Effect<
             );
           }
 
-          if (!ctx?.agentRunner?.agentService || !ctx?.agentRunner?.llm) {
-            return yield* Effect.fail(
-              new AgentError('TOOL_EXECUTION_FAILED', 'dispatch_agent requires agentRunner context')
-            );
-          }
-
-          const { agentService, llm: parentLlm } = ctx.agentRunner;
-
-          let llm = parentLlm;
+          let llm = yield* factory.getLLMClient();
           if (profile.model) {
             const entry = yield* factory.findModel(profile.model);
             if (!entry) {
@@ -150,7 +145,7 @@ export function createDispatchAgentTool(): Effect.Effect<
           // Run subagent
           const rulesText = rulesService.getAllRules(projectPath);
           const systemOverride = buildSubagentPrompt(profile, projectPath, rulesText);
-          const stream = agentService.runStream({
+          const stream = runner.runStream({
             state: childState,
             llm,
             systemOverride,
