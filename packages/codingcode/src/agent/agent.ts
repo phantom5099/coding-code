@@ -465,88 +465,41 @@ export function agentLoop(
           }
         }
 
-        if (session) {
-          const record = yield* session.recordAssistant(
-            state,
-            resp.content,
-            toolCalls!,
-            model,
-            resp.usage
-          );
-          const allResults = yield* executor.executeBatch(toolCalls, state.sessionId, {
-            turnId: state.currentTurnId,
-            projectPath,
-            signal: opts.abortSignal,
-            approval: opts.approvalOverride,
-            toolLookup,
-          });
-          for (const r of allResults) {
-            const resultOut = r.type === 'denied' ? '' : r.output;
-            yield* session.recordToolResult(state, record.uuid, r.name, r.id, resultOut);
-          }
+        const record = yield* session.recordAssistant(
+          state,
+          resp.content,
+          toolCalls!,
+          model,
+          resp.usage
+        );
+        const allResults = yield* executor.executeBatch(toolCalls, state.sessionId, {
+          turnId: state.currentTurnId,
+          projectPath,
+          signal: opts.abortSignal,
+          approval: opts.approvalOverride,
+          toolLookup,
+        });
 
-          let todoPrinted = false;
-          for (const r of allResults) {
-            const resultOut = r.type === 'denied' ? '' : r.output;
-            if (r.type === 'denied') {
-              yield* q.offer({ _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason });
-            } else {
-              const isOk = r.type === 'ok';
-              yield* q.offer({
-                _tag: 'ToolResult',
-                id: r.id,
-                name: r.name,
-                output: resultOut,
-                ok: isOk,
-              });
-            }
-            if (!messages.find((m) => m.tool_call_id === r.id)) {
-              const content =
-                r.type === 'denied'
-                  ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
-                  : (r.output ?? '');
-              messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
-            }
-            if (!todoPrinted && r.name === 'todo_write') {
-              yield* q.offer({ _tag: 'TodoUpdate', items: todo.read(sessionId) });
-              todoPrinted = true;
-            }
+        let todoPrinted = false;
+        for (const r of allResults) {
+          const resultOut = r.type === 'denied' ? '' : r.output;
+          yield* session.recordToolResult(state, record.uuid, r.name, r.id, resultOut);
+          if (r.type === 'denied') {
+            yield* q.offer({ _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason });
+          } else {
+            const isOk = r.type === 'ok';
+            yield* q.offer({ _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk });
           }
-        } else {
-          const allResults = yield* executor.executeBatch(toolCalls, state.sessionId, {
-            turnId: state.currentTurnId,
-            projectPath,
-            signal: opts.abortSignal,
-            approval: opts.approvalOverride,
-            toolLookup,
-          });
-
-          let todoPrinted = false;
-          for (const r of allResults) {
-            const resultOut = r.type === 'denied' ? '' : r.output;
-            if (r.type === 'denied') {
-              yield* q.offer({ _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason });
-            } else {
-              const isOk = r.type === 'ok';
-              yield* q.offer({
-                _tag: 'ToolResult',
-                id: r.id,
-                name: r.name,
-                output: resultOut,
-                ok: isOk,
-              });
-            }
-            if (!messages.find((m) => m.tool_call_id === r.id)) {
-              const content =
-                r.type === 'denied'
-                  ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
-                  : (r.output ?? '');
-              messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
-            }
-            if (!todoPrinted && r.name === 'todo_write') {
-              yield* q.offer({ _tag: 'TodoUpdate', items: todo.read(sessionId) });
-              todoPrinted = true;
-            }
+          if (!messages.find((m) => m.tool_call_id === r.id)) {
+            const content =
+              r.type === 'denied'
+                ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
+                : (r.output ?? '');
+            messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
+          }
+          if (!todoPrinted && r.name === 'todo_write') {
+            yield* q.offer({ _tag: 'TodoUpdate', items: todo.read(sessionId) });
+            todoPrinted = true;
           }
         }
       }
