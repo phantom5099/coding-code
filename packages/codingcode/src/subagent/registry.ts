@@ -1,5 +1,6 @@
 import type { AgentProfile } from './types.js';
 import { loadConfig, getUserConfigPath } from '@codingcode/infra/config';
+import { createDisabledStore } from '@codingcode/infra/disabled-store';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { dirname, join } from 'path';
@@ -78,93 +79,18 @@ export function resolveSubagentEnabled(projectCwd: string): boolean {
   return getSubagentEnabledState();
 }
 
-// ---- 全局级 agent disabled 状态：持久化到 ~/.codingcode/config.yaml ----
+// ---- Agent disabled 状态：复用 createDisabledStore ----
 
-export function getGlobalAgentDisabledState(agentName: string): boolean {
-  try {
-    const config = loadConfig() as any;
-    const disabled = config.subagent?.disabledAgents as Record<string, boolean>;
-    return disabled?.[agentName] ?? false;
-  } catch {
-    return false;
-  }
-}
+const agentDisabledStore = createDisabledStore({
+  globalKeyPath: ['subagent', 'disabledAgents'],
+});
 
-export function setGlobalAgentDisabledState(agentName: string, disabled: boolean): void {
-  const p = getUserConfigPath();
-  const dir = dirname(p);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const existing: Record<string, unknown> = existsSync(p)
-    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
-    : {};
-  const subagent = (existing.subagent as Record<string, unknown>) ?? {};
-  const disabledAgents = (subagent.disabledAgents as Record<string, boolean>) ?? {};
-  disabledAgents[agentName] = disabled;
-  subagent.disabledAgents = disabledAgents;
-  existing.subagent = subagent;
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
-}
-
-// ---- 项目级 agent disabled 状态：持久化到 .codingcode/config.yaml ----
-
-export function getProjectAgentDisabledState(
-  projectCwd: string,
-  agentName: string
-): boolean | undefined {
-  const p = join(projectCwd, '.codingcode', 'config.yaml');
-  if (!existsSync(p)) return undefined;
-  try {
-    const raw = readFileSync(p, 'utf8');
-    const config = parseYaml(raw) as any;
-    const disabled = config.subagent?.disabledAgents as Record<string, boolean>;
-    return disabled?.[agentName];
-  } catch {
-    return undefined;
-  }
-}
-
-export function setProjectAgentDisabledState(
-  projectCwd: string,
-  agentName: string,
-  disabled: boolean
-): void {
-  const dir = join(projectCwd, '.codingcode');
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const p = join(dir, 'config.yaml');
-  const existing: Record<string, unknown> = existsSync(p)
-    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
-    : {};
-  const subagent = (existing.subagent as Record<string, unknown>) ?? {};
-  const disabledAgents = (subagent.disabledAgents as Record<string, boolean>) ?? {};
-  disabledAgents[agentName] = disabled;
-  subagent.disabledAgents = disabledAgents;
-  existing.subagent = subagent;
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
-}
-
-export function resetProjectAgentDisabledState(projectCwd: string, agentName: string): void {
-  const p = join(projectCwd, '.codingcode', 'config.yaml');
-  if (!existsSync(p)) return;
-  const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<
-    string,
-    unknown
-  >;
-  const subagent = (existing.subagent as Record<string, unknown>) ?? {};
-  const disabledAgents = subagent.disabledAgents as Record<string, boolean>;
-  if (disabledAgents) {
-    delete disabledAgents[agentName];
-    subagent.disabledAgents = disabledAgents;
-  }
-  existing.subagent = subagent;
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
-}
-
-// 解析最终生效的 agent disabled 状态：项目级 > 全局级
-export function resolveAgentDisabled(projectCwd: string, agentName: string): boolean {
-  const projectVal = getProjectAgentDisabledState(projectCwd, agentName);
-  if (projectVal !== undefined) return projectVal;
-  return getGlobalAgentDisabledState(agentName);
-}
+export const getGlobalAgentDisabledState = agentDisabledStore.getGlobal;
+export const setGlobalAgentDisabledState = agentDisabledStore.setGlobal;
+export const getProjectAgentDisabledState = agentDisabledStore.getProject;
+export const setProjectAgentDisabledState = agentDisabledStore.setProject;
+export const resetProjectAgentDisabledState = agentDisabledStore.resetProject;
+export const resolveAgentDisabled = agentDisabledStore.resolve;
 
 // ---- SubagentService: Effect.Service with global + project-level registries ----
 
