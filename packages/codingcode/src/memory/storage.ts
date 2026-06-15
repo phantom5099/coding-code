@@ -1,27 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as os from 'node:os';
-import type { MemoryConfig } from '@codingcode/infra/config';
 
-// ── Path Resolution ──
-
-export function resolveProjectMemoryPath(cwd: string, cfg: MemoryConfig): string {
-  const filePath = cfg.projectFile;
-  if (path.isAbsolute(filePath)) {
-    return filePath;
-  }
-  return path.join(cwd, filePath);
-}
-
-export function resolveUserMemoryPath(cfg: MemoryConfig): string {
-  const filePath = cfg.userFile;
-  if (filePath.startsWith('~')) {
-    return path.join(os.homedir(), filePath.slice(1));
-  }
-  if (path.isAbsolute(filePath)) {
-    return filePath;
-  }
-  return path.join(os.homedir(), filePath);
+export function resolveMemoryPath(cwd: string): string {
+  return path.join(cwd, '.codingcode', 'memory.md');
 }
 
 // ── File Read/Write ──

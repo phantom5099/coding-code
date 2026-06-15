@@ -3,8 +3,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import {
-  resolveProjectMemoryPath,
-  resolveUserMemoryPath,
   readMemoryFile,
   extractAutoBlock,
   replaceAutoBlock,
@@ -29,34 +27,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-});
-
-describe('Path Resolution', () => {
-  it('resolves project memory path - relative', () => {
-    const cfg = { projectFile: '.codingcode/memory.md' } as any;
-    const result = resolveProjectMemoryPath(tmpDir, cfg);
-    expect(result).toBe(path.join(tmpDir, '.codingcode/memory.md'));
-  });
-
-  it('resolves project memory path - absolute', () => {
-    const absPath = path.join(tmpDir, 'absolute.md');
-    const cfg = { projectFile: absPath } as any;
-    const result = resolveProjectMemoryPath(tmpDir, cfg);
-    expect(result).toBe(absPath);
-  });
-
-  it('resolves user memory path - tilde expansion', () => {
-    const cfg = { userFile: '~/.codingcode/memory.md' } as any;
-    const result = resolveUserMemoryPath(cfg);
-    expect(result).toBe(path.join(os.homedir(), '.codingcode/memory.md'));
-  });
-
-  it('resolves user memory path - absolute', () => {
-    const absPath = path.join(tmpDir, 'user.md');
-    const cfg = { userFile: absPath } as any;
-    const result = resolveUserMemoryPath(cfg);
-    expect(result).toBe(absPath);
-  });
 });
 
 describe('File Operations', () => {

@@ -47,8 +47,6 @@ vi.mock('../../src/memory/config.js', () => ({
   getMemoryConfig: vi.fn(() => ({
     enabled: false,
     model: '',
-    projectFile: '.codingcode/memory.md',
-    userFile: '~/.codingcode/memory.md',
     maxBytes: 16384,
     promptMaxBytes: 8192,
     extraTypes: [],
@@ -74,8 +72,6 @@ describe('Memory Index', () => {
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        projectFile: '.codingcode/memory.md',
-        userFile: '~/.codingcode/memory.md',
         maxBytes: 16384,
         promptMaxBytes: 8192,
         extraTypes: [],
@@ -86,13 +82,11 @@ describe('Memory Index', () => {
       expect(result).toBe('');
     });
 
-    it('loads and combines memory from project and user files', async () => {
+    it('loads memory from project file', async () => {
       const { getMemoryConfig } = await import('../../src/memory/config.js');
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        projectFile: '.codingcode/memory.md',
-        userFile: '~/.codingcode/memory.md',
         maxBytes: 16384,
         promptMaxBytes: 8192,
         extraTypes: [],
@@ -121,8 +115,6 @@ describe('Memory Index', () => {
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        projectFile: '.codingcode/memory.md',
-        userFile: '~/.codingcode/memory.md',
         maxBytes: 16384,
         promptMaxBytes: 100,
         extraTypes: [],
@@ -156,8 +148,6 @@ describe('Memory Index', () => {
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        projectFile: '.codingcode/memory.md',
-        userFile: '~/.codingcode/memory.md',
         maxBytes: 16384,
         promptMaxBytes: 8192,
         extraTypes: [],
@@ -173,8 +163,6 @@ describe('Memory Index', () => {
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        projectFile: '.codingcode/memory.md',
-        userFile: '~/.codingcode/memory.md',
         maxBytes: 16384,
         promptMaxBytes: 8192,
         extraTypes: [],

@@ -5,9 +5,8 @@ import McpPanel from './McpPanel';
 import HooksPanel from './HooksPanel';
 import SubagentsPanel from './SubagentsPanel';
 import SkillPanel from './SkillPanel';
-import MemoryPanel from './MemoryPanel';
 
-type Section = 'theme' | 'mcp' | 'hooks' | 'agents' | 'skills' | 'memory';
+type Section = 'theme' | 'mcp' | 'hooks' | 'agents' | 'skills';
 
 const NAV_ITEMS: { id: Section; label: string }[] = [
   { id: 'theme', label: '主题' },
@@ -15,7 +14,6 @@ const NAV_ITEMS: { id: Section; label: string }[] = [
   { id: 'hooks', label: '钩子' },
   { id: 'agents', label: '子智能体' },
   { id: 'skills', label: 'Skills' },
-  { id: 'memory', label: '记忆模式' },
 ];
 
 const THEMES = [
@@ -90,7 +88,6 @@ export default function GlobalSettingsPage() {
           {section === 'hooks' && <HooksPanel global />}
           {section === 'agents' && <SubagentsPanel global />}
           {section === 'skills' && <SkillPanel global />}
-          {section === 'memory' && <MemoryPanel />}
         </div>
       </div>
     </div>
