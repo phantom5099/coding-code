@@ -44,13 +44,12 @@ const MessageItem = memo(function MessageItem({
   useLayoutEffect(() => {
     if (!rollbackMenuOpen || !rollbackMenuRef.current || !rollbackBtnRef.current) return;
     const menuRect = rollbackMenuRef.current.getBoundingClientRect();
-    const btnRect = rollbackBtnRef.current.getBoundingClientRect();
     const flip: { vertical?: boolean; horizontal?: boolean } = {};
-    // If menu goes above viewport, flip to below button
-    if (menuRect.top < 0) {
+    // Account for title bar overlay (~36px on Windows, ~28px on macOS)
+    const safeTop = 40;
+    if (menuRect.top < safeTop) {
       flip.vertical = true;
     }
-    // If menu goes beyond right edge, flip to left-align
     if (menuRect.right > window.innerWidth) {
       flip.horizontal = true;
     }
