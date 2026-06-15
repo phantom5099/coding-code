@@ -3,9 +3,13 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 function classNamesFromSource(relativePath: string): string[] {
-  const src = readFileSync(resolve(__dirname, '..', 'src', relativePath), 'utf-8');
+  const src = readSource(relativePath);
   const matches = src.matchAll(/className="([^"]*)"/g);
   return [...matches].map((m) => m[1]!);
+}
+
+function readSource(relativePath: string): string {
+  return readFileSync(resolve(__dirname, '..', 'src', relativePath), 'utf-8');
 }
 
 describe('MessageStream scroll layout', () => {
@@ -26,5 +30,20 @@ describe('MessageStream scroll layout', () => {
       (c) => c.includes('flex-1') && c.includes('flex-col') && c.includes('min-h-0')
     ).length;
     expect(minH0Count).toBeGreaterThanOrEqual(1);
+  });
+
+  it('virtualizer starts at the bottom via initialOffset', () => {
+    const src = readSource('agent/MessageStream.tsx');
+    expect(src).toContain('initialOffset: () => Number.MAX_SAFE_INTEGER');
+  });
+
+  it('scrollToEnd uses instant behavior to avoid top-to-bottom animation', () => {
+    const src = readSource('agent/MessageStream.tsx');
+    expect(src).toContain("scrollToEnd({ behavior: 'instant' })");
+  });
+
+  it('AgentWorkspace remounts MessageStream per thread via key', () => {
+    const src = readSource('agent/AgentWorkspace.tsx');
+    expect(src).toContain('<MessageStream key={currentThreadId} threadId={currentThreadId} />');
   });
 });
