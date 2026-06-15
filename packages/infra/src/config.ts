@@ -4,15 +4,10 @@ import { homedir } from 'os';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export interface ContextConfig {
-  microCompactThreshold: number;
-  microCompactMinChars: number;
-  compactionThreshold: number;
-  keepRecentTurns: number;
   /** Model for context compaction. Empty string falls back to main session LLM.
    *  Use full id format "model@API_KEY_ENV" to avoid ambiguity (e.g. "deepseek-chat@DEEPSEEK_API_KEY").
    *  Can also use bare model id (e.g. "deepseek-chat") or display name, first match wins. */
   compactionModel: string;
-  reactiveCompactMaxRetries: number;
 }
 
 export interface MemoryTypeConfig {
@@ -52,12 +47,7 @@ export interface AppConfig {
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
-  microCompactThreshold: 0.25,
-  microCompactMinChars: 120,
-  compactionThreshold: 0.9,
-  keepRecentTurns: 1,
   compactionModel: '',
-  reactiveCompactMaxRetries: 3,
 };
 
 export const DEFAULT_MEMORY_TYPES: MemoryTypeConfig[] = [

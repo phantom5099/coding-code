@@ -90,12 +90,7 @@ async function getCtxService(): Promise<ContextService> {
 
 function config(threshold: number, maxTokens = 10000) {
   return {
-    microCompactThreshold: 0.5,
-    microCompactMinChars: 120,
-    compactionThreshold: threshold,
-    keepRecentTurns: 1,
     compactionModel: '',
-    reactiveCompactMaxRetries: 1,
   } as any;
 }
 

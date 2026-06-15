@@ -1,4 +1,4 @@
-﻿﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -9,12 +9,7 @@ import { getContextConfig } from '../../src/context/config.js';
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
     context: {
-      microCompactThreshold: 0.7,
-      microCompactMinChars: 200,
-      compactionThreshold: 0.8,
-      keepRecentTurns: 10,
       compactionModel: '',
-      reactiveCompactMaxRetries: 1,
     },
     memory: {
       enabled: false,
@@ -74,8 +69,4 @@ describe('appendTurnEnd', () => {
     expect(parsed.tokenCount).toBe(tokens);
   });
 
-  it('compression thresholds have sensible defaults', () => {
-    const config = getContextConfig();
-    expect(config.compactionThreshold).toBeGreaterThan(0);
-  });
 });

@@ -4,12 +4,7 @@ import { resolveConfig } from '../../src/agent/config.js';
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
     context: {
-      microCompactThreshold: 0.7,
-      microCompactMinChars: 200,
-      compactionThreshold: 0.8,
-      keepRecentTurns: 10,
       compactionModel: '',
-      reactiveCompactMaxRetries: 1,
     },
     memory: {
       enabled: false,

@@ -29,6 +29,12 @@ const COMPACTABLE_TOOLS = new Set([
   'edit_file',
 ]);
 
+const MICRO_COMPACT_THRESHOLD = 0.25;
+const MICRO_COMPACT_MIN_CHARS = 120;
+const COMPACTION_THRESHOLD = 0.9;
+const KEEP_RECENT_TURNS = 1;
+const REACTIVE_COMPACT_MAX_RETRIES = 3;
+
 export class ContextService extends Effect.Service<ContextService>()('Context', {
   effect: Effect.gen(function* () {
     const session = yield* SessionService;
@@ -107,7 +113,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       contextWindow: number,
       jsonlPath: string
     ): boolean {
-      if (promptEstimate <= contextWindow * config.microCompactThreshold) return false;
+      if (promptEstimate <= contextWindow * MICRO_COMPACT_THRESHOLD) return false;
 
       const compactedTurnIds = new Set<number>();
       for (const ev of events) {
@@ -124,7 +130,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         if (ev.turnId >= currentTurnId - 1) continue;
         if (compactedTurnIds.has(ev.turnId)) continue;
         if (!COMPACTABLE_TOOLS.has(ev.toolName.toLowerCase())) continue;
-        if (ev.output.length <= config.microCompactMinChars) continue;
+        if (ev.output.length <= MICRO_COMPACT_MIN_CHARS) continue;
         oldResults.push(ev);
       }
 
@@ -165,7 +171,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         return { didCompress: false, released: 0, promptEstimate };
       }
 
-      const threshold = modelMaxTokens * config.compactionThreshold;
+      const threshold = modelMaxTokens * COMPACTION_THRESHOLD;
       if (promptEstimate <= threshold) {
         return { didCompress: false, released: 0, promptEstimate };
       }
@@ -208,7 +214,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
 
       let released = 0;
 
-      const threshold = modelMaxTokens ? modelMaxTokens * config.compactionThreshold : Infinity;
+      const threshold = modelMaxTokens ? modelMaxTokens * COMPACTION_THRESHOLD : Infinity;
       if (usage === undefined || usage - released > threshold) {
         released += await tryCompaction(
           sessionId,
@@ -236,7 +242,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       currentTurnId: number,
       compactedTurnIds: Set<number>
     ): Promise<number> {
-      const endTurn = currentTurnId - config.keepRecentTurns - 1;
+      const endTurn = currentTurnId - KEEP_RECENT_TURNS - 1;
       if (endTurn < 1) return 0;
 
       const inRange = compactedEvents.filter((ev) => {

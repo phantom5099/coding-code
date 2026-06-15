@@ -13,12 +13,7 @@ const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
 function makeConfig() {
   return {
-    microCompactThreshold: 0.5,
-    microCompactMinChars: 120,
-    compactionThreshold: 0.9,
-    keepRecentTurns: 1,
     compactionModel: '',
-    reactiveCompactMaxRetries: 3,
   };
 }
 

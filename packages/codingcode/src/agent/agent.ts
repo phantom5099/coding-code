@@ -28,6 +28,8 @@ import { LLMFactoryService } from '../llm/factory.js';
 import { getBuiltinTools } from '../tools/providers.js';
 import { canonicalizeSchema } from '../tools/utils/canonicalize-schema.js';
 import { normalizePath } from '../core/path.js';
+
+const REACTIVE_COMPACT_MAX_RETRIES = 3;
 import { RulesService } from '../rules/index.js';
 
 const logger = createLogger();
@@ -250,7 +252,7 @@ export function agentLoop(
     const system = [basePrompt, memorySection].filter(Boolean).join('\n\n');
 
     const config = getContextConfig();
-    const maxOverflowRetries = config.reactiveCompactMaxRetries;
+    const maxOverflowRetries = REACTIVE_COMPACT_MAX_RETRIES;
     const model = state.sessionMeta?.model ?? 'unknown';
     const effectiveMaxSteps = opts.maxStepsOverride ?? maxSteps;
 

@@ -6,12 +6,7 @@ import { LLMFactoryService } from '../../src/llm/factory.js';
 import type { SessionEvent, ToolResultEvent } from '../../src/session/types.js';
 
 const baseConfig = {
-  microCompactThreshold: 0.5,
-  microCompactMinChars: 120,
-  compactionThreshold: 0.9,
-  keepRecentTurns: 1,
   compactionModel: '',
-  reactiveCompactMaxRetries: 3,
 };
 
 function makeUserEvent(content: string, turnId: number): SessionEvent {

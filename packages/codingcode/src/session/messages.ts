@@ -15,6 +15,8 @@ const COMPACTABLE_TOOLS = new Set([
   'edit_file',
 ]);
 
+const MICRO_COMPACT_MIN_CHARS = 120;
+
 export interface VisibilityResult {
   hidden: Set<string>;
   compactedTurnIds: Set<number>;
@@ -109,7 +111,7 @@ export function buildMessagesFromEvents(
         if (
           compactedTurnIds.has(event.turnId) &&
           COMPACTABLE_TOOLS.has(event.toolName.toLowerCase()) &&
-          event.output.length > getContextConfig().microCompactMinChars
+          event.output.length > MICRO_COMPACT_MIN_CHARS
         ) {
           output = `[Earlier: used ${event.toolName}]`;
         }
