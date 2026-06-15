@@ -9,8 +9,6 @@ vi.mock('@codingcode/infra/config', () => ({
     memory: {
       enabled: false,
       model: '',
-      projectFile: '',
-      userFile: '',
       maxBytes: 16384,
       promptMaxBytes: 8192,
       extraTypes: [],

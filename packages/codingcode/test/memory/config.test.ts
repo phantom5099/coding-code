@@ -27,8 +27,6 @@ function makeCfg(overrides?: Partial<MemoryConfig>): MemoryConfig {
   return {
     enabled: true,
     model: '',
-    projectFile: '',
-    userFile: '',
     maxBytes: 16384,
     promptMaxBytes: 8192,
     extraTypes: [],
@@ -45,16 +43,7 @@ describe('Memory Config', () => {
 
   describe('getEffectiveTypes', () => {
     it('includes default types when enabled', () => {
-      const cfg: MemoryConfig = {
-        enabled: true,
-        model: '',
-        projectFile: '',
-        userFile: '',
-        maxBytes: 16384,
-        promptMaxBytes: 8192,
-        extraTypes: [],
-        disabledTypes: [],
-      };
+      const cfg: MemoryConfig = makeCfg();
 
       const types = getEffectiveTypes(cfg);
       expect(types).toHaveLength(3);
@@ -71,16 +60,7 @@ describe('Memory Config', () => {
           enabled: true,
         },
       ];
-      const cfg: MemoryConfig = {
-        enabled: true,
-        model: '',
-        projectFile: '',
-        userFile: '',
-        maxBytes: 16384,
-        promptMaxBytes: 8192,
-        extraTypes: extra,
-        disabledTypes: [],
-      };
+      const cfg: MemoryConfig = makeCfg({ extraTypes: extra });
 
       const types = getEffectiveTypes(cfg);
       expect(types).toHaveLength(4);
@@ -88,16 +68,7 @@ describe('Memory Config', () => {
     });
 
     it('filters disabled types', () => {
-      const cfg: MemoryConfig = {
-        enabled: true,
-        model: '',
-        projectFile: '',
-        userFile: '',
-        maxBytes: 16384,
-        promptMaxBytes: 8192,
-        extraTypes: [],
-        disabledTypes: ['user', 'project'],
-      };
+      const cfg: MemoryConfig = makeCfg({ disabledTypes: ['user', 'project'] });
 
       const types = getEffectiveTypes(cfg);
       expect(types).toHaveLength(1);
@@ -112,16 +83,7 @@ describe('Memory Config', () => {
           enabled: true,
         },
       ];
-      const cfg: MemoryConfig = {
-        enabled: true,
-        model: '',
-        projectFile: '',
-        userFile: '',
-        maxBytes: 16384,
-        promptMaxBytes: 8192,
-        extraTypes: extra,
-        disabledTypes: ['custom'],
-      };
+      const cfg: MemoryConfig = makeCfg({ extraTypes: extra, disabledTypes: ['custom'] });
 
       const types = getEffectiveTypes(cfg);
       expect(types.map((t) => t.name)).not.toContain('custom');
@@ -135,16 +97,7 @@ describe('Memory Config', () => {
           enabled: false,
         },
       ];
-      const cfg: MemoryConfig = {
-        enabled: true,
-        model: '',
-        projectFile: '',
-        userFile: '',
-        maxBytes: 16384,
-        promptMaxBytes: 8192,
-        extraTypes: extra,
-        disabledTypes: [],
-      };
+      const cfg: MemoryConfig = makeCfg({ extraTypes: extra });
 
       const types = getEffectiveTypes(cfg);
       expect(types.map((t) => t.name)).not.toContain('disabled_custom');

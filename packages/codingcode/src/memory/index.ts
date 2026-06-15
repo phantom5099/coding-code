@@ -4,8 +4,7 @@ import { findSessionIndex, resolveSessionDir } from '../session/file-ops.js';
 import type { SessionEvent } from '../session/types.js';
 import {
   readMemoryFile,
-  resolveProjectMemoryPath,
-  resolveUserMemoryPath,
+  resolveMemoryPath,
   extractAutoBlock,
   replaceAutoBlock,
   mergeAutoBlocks,
@@ -38,24 +37,13 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
       if (!getMemoryEnabled()) return '';
       const cfg = getMemoryConfig();
 
-      const projectPath = resolveProjectMemoryPath(cwd, cfg);
-      const userPath = resolveUserMemoryPath(cfg);
-
+      const projectPath = resolveMemoryPath(cwd);
       const projectContent = readMemoryFile(projectPath);
-      const userContent = readMemoryFile(userPath);
-
       const projectAuto = extractAutoBlock(projectContent);
-      const userAuto = extractAutoBlock(userContent);
 
-      const parts = [];
-      if (projectAuto) parts.push(projectAuto);
-      if (userAuto) parts.push(userAuto);
+      if (!projectAuto) return '';
 
-      if (parts.length === 0) return '';
-
-      const combined = parts.join('\n\n');
-      const stripped = stripMarkersForPrompt(combined);
-
+      const stripped = stripMarkersForPrompt(projectAuto);
       const truncated = truncateForPrompt(stripped, cfg.promptMaxBytes);
 
       return truncated ? `## Long-term Memory\n\n${truncated}` : '';
@@ -129,15 +117,10 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
       }
 
       const cwd = sessionIndex.cwd;
-      const projectPath = resolveProjectMemoryPath(cwd, cfg);
-      const userPath = resolveUserMemoryPath(cfg);
+      const projectPath = resolveMemoryPath(cwd);
 
       const projectContent = readMemoryFile(projectPath);
-      const userContent = readMemoryFile(userPath);
-
-      const projectAuto = extractAutoBlock(projectContent);
-      const userAuto = extractAutoBlock(userContent);
-      const currentAuto = [projectAuto, userAuto].filter(Boolean).join('\n\n');
+      const currentAuto = extractAutoBlock(projectContent);
 
       try {
         let events: SessionEvent[] = [];

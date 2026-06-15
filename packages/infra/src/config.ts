@@ -22,8 +22,6 @@ export interface MemoryConfig {
    *  Use full id format "model@API_KEY_ENV" to avoid ambiguity (e.g. "deepseek-chat@DEEPSEEK_API_KEY").
    *  Can also use bare model id (e.g. "deepseek-chat") or display name, first match wins. */
   model: string;
-  projectFile: string;
-  userFile: string;
   maxBytes: number;
   promptMaxBytes: number;
   extraTypes: MemoryTypeConfig[];
@@ -59,8 +57,6 @@ export const DEFAULT_MEMORY_TYPES: MemoryTypeConfig[] = [
 export const DEFAULT_MEMORY: MemoryConfig = {
   enabled: false,
   model: '',
-  projectFile: '.codingcode/memory.md',
-  userFile: '~/.codingcode/memory.md',
   maxBytes: 16384,
   promptMaxBytes: 8192,
   extraTypes: [],
