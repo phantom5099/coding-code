@@ -7,7 +7,7 @@ packages/desktop/out/
 .DS_Store
 .claude/
 .codingcode/
-docs/
+docs-hidden/
 typecheck-output.txt
 neoneo-v2
 cb_test.json
