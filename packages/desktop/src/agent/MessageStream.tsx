@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useGlobalStore } from '../stores/global.store';
@@ -229,6 +229,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   } = useAgentRollback();
   const { copiedId, copy } = useCopyToClipboard();
   const parentRef = useRef<HTMLDivElement>(null);
+  const didScrollToEndRef = useRef(false);
   const markFileRestored = useGlobalStore((s) => s.markFileRestored);
   const setPendingInput = useGlobalStore((s) => s.setPendingInput);
 
@@ -371,7 +372,15 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     anchorTo: 'end',
     followOnAppend: 'smooth',
     scrollEndThreshold: 80,
+    initialOffset: () => Number.MAX_SAFE_INTEGER,
   });
+
+  useLayoutEffect(() => {
+    if (renderEntries.length === 0) return;
+    if (didScrollToEndRef.current) return;
+    virtualizer.scrollToEnd({ behavior: 'instant' });
+    didScrollToEndRef.current = true;
+  }, [renderEntries.length, virtualizer]);
 
   const turnStatusKey = useMemo(() => turns.map((t) => `${t.id}:${t.status}`).join(','), [turns]);
 

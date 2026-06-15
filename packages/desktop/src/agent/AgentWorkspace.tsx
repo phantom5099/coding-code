@@ -370,7 +370,7 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[var(--bg-panel)]">
-      <MessageStream threadId={currentThreadId} />
+      <MessageStream key={currentThreadId} threadId={currentThreadId} />
       <ApprovalPanel threadId={currentThreadId} />
       <TodoPanel threadId={currentThreadId} />
       {isCompressing && (

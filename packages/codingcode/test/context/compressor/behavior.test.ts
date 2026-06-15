@@ -110,12 +110,7 @@ function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
 
 function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
   return {
-    microCompactThreshold: 0.5,
-    microCompactMinChars: 120,
-    compactionThreshold: 0.5,
-    keepRecentTurns: 2,
     compactionModel: '',
-    reactiveCompactMaxRetries: 1,
     ...overrides,
   };
 }
@@ -164,7 +159,7 @@ describe('compressor behavior', () => {
     it('writes summary event with five-section system summary', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig({ keepRecentTurns: 2 });
+        const cfg = tinyConfig();
         const summary =
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
@@ -182,7 +177,7 @@ describe('compressor behavior', () => {
     it('returns no-op when no LLM available', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig({ keepRecentTurns: 2 });
+        const cfg = tinyConfig();
         const ctx = await getCtxService();
         const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, null);
         expect(result.didCompress).toBe(false);
@@ -198,7 +193,7 @@ describe('compressor behavior', () => {
     it('appends summary event directly to JSONL after L5', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig({ keepRecentTurns: 2 });
+        const cfg = tinyConfig();
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
@@ -219,7 +214,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
         const before = estimateTokens(buildMessages(fx.transcriptPath));
-        const cfg = tinyConfig({ keepRecentTurns: 2 });
+        const cfg = tinyConfig();
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );

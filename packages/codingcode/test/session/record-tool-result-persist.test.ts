@@ -4,12 +4,7 @@ import { SessionService } from '../../src/session/store.js';
 
 vi.mock('../../src/context/config.js', () => ({
   getContextConfig: vi.fn(() => ({
-    microCompactThreshold: 0.5,
-    microCompactMinChars: 120,
-    compactionThreshold: 0.9,
-    keepRecentTurns: 1,
     compactionModel: '',
-    reactiveCompactMaxRetries: 3,
   })),
 }));
 
