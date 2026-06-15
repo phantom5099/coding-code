@@ -123,7 +123,7 @@ interface ToolVisibilityPolicy {
 | `sudo` | deny | 禁止提权执行 |
 | `curl \| sh` | deny | 禁止管道执行远程脚本 |
 | `chmod u+s` | deny | 禁止设置 SUID 位 |
-| `shutdown` / `reboot` | deny | 禁止系统关机/重启 |
+| `shutdown` | deny | 禁止系统关机 |
 | `/etc/shadow` | deny | 禁止读取影子密码文件 |
 | `/etc/passwd` | deny | 禁止读取系统密码文件 |
 | `.ssh` | ask | 访问 SSH 目录需确认 |
@@ -140,6 +140,6 @@ type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypass';
 - `plan`：只允许只读工具，适合纯分析场景
 - `bypass`：全部放行，跳过所有审批（慎用）
 
-### OS 级沙箱（可选）
+### OS 级沙箱（预留）
 
-需要安装 `@anthropic-ai/sandbox-runtime`，提供文件系统隔离、网络隔离、防绕过等能力。开箱即用时审批流水线已提供基本安全保障，OS 级沙箱适用于更高安全要求的场景。
+`packages/codingcode/src/sandbox/` 目前是 stub 实现（`SandboxService` 为空类），尚未集成实际的沙箱运行时。审批流水线已提供基本安全保障，OS 级沙箱将在未来版本中实现。

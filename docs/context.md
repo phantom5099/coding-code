@@ -87,16 +87,20 @@ LLM 压缩的摘要包含 10 个固定小节：
 // 微压缩事件
 interface CompactEvent {
   type: 'compact';
+  uuid: string;
   startTurnId: number;
   endTurnId: number;
+  timestamp: string;
 }
 
 // LLM 压缩摘要事件
 interface SummaryEvent {
   type: 'summary';
+  uuid: string;
   replaces: string[];          // 被替换的事件 UUID 列表
   summaryText: string;         // 摘要文本
   lastSummarizedTurnId: number; // 最后压缩到的 turn ID
+  timestamp: string;
 }
 ```
 
@@ -129,12 +133,9 @@ context:
 
 通过 API 手动触发 LLM 压缩：
 
-```bash
-POST /api/sessions/:id/compact
-Content-Type: application/json
-
-{ "cwd": "/path/to/project" }
-```
+| 路由 | 方法 | Body | 说明 |
+|------|------|------|------|
+| `/api/sessions/:id/compact` | POST | `{ cwd }` | 手动触发上下文压缩 |
 
 返回：
 
@@ -147,3 +148,10 @@ interface CompressResult {
 ```
 
 手动触发会强制执行 LLM 压缩，不受阈值限制。
+
+也可通过 `AgentClient` SDK 调用：
+
+```typescript
+const client = await createHttpClient('http://localhost:8080');
+await client.compact();
+```

@@ -54,7 +54,7 @@ Agent 在每次会话后自动执行记忆提取：
 - 常用技术栈：React + TypeScript
 
 ### project
-- 采用 monorepo 架构，使用 npm workspaces
+- 采用 monorepo 架构，使用 pnpm workspaces
 - 入口文件：packages/codingcode/src/cli.ts
 
 ### reference

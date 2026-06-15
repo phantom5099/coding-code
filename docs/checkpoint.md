@@ -31,12 +31,14 @@ Shadow Git 的提交消息格式为：
 
 ## API 接口
 
+所有路由挂载在 `/api/sessions` 下。
+
 ### 查看 Diff
 
 | 路由 | 方法 | 说明 |
 |------|------|------|
-| `/:id/checkpoints/latest/diff` | GET | 获取最新 checkpoint 的 diff |
-| `/:id/checkpoints/:turnId/diff` | GET | 获取指定 turn 的 diff |
+| `/api/sessions/:id/checkpoints/latest/diff` | GET | 获取最新 checkpoint 的 diff |
+| `/api/sessions/:id/checkpoints/:turnId/diff` | GET | 获取指定 turn 的 diff |
 
 响应格式：
 
@@ -57,24 +59,24 @@ interface CheckpointDiff {
 
 | 路由 | 方法 | Body | 说明 |
 |------|------|------|------|
-| `/:id/checkpoints/latest/revert-file` | POST | `{ cwd, file }` | 回退最新 checkpoint 的单个文件 |
-| `/:id/checkpoints/latest/revert-files` | POST | `{ cwd, files }` | 回退最新 checkpoint 的多个文件 |
+| `/api/sessions/:id/checkpoints/latest/revert-file` | POST | `{ cwd, file }` | 回退最新 checkpoint 的单个文件 |
+| `/api/sessions/:id/checkpoints/latest/revert-files` | POST | `{ cwd, files }` | 回退最新 checkpoint 的多个文件 |
 
 ### 回滚到指定轮次
 
 | 路由 | 方法 | Body | 说明 |
 |------|------|------|------|
-| `/:id/rollback-preview` | GET | query: `throughTurnId` | 预览回退到指定 turn 的 diff |
-| `/:id/rollback-code-to-turn` | POST | `{ cwd, throughTurnId }` | 代码回退到指定 turn |
-| `/:id/rollback-context` | POST | `{ cwd, throughTurnId }` | 上下文回退到指定 turn |
-| `/:id/rollback-both-to-turn` | POST | `{ cwd, throughTurnId }` | 代码 + 上下文同时回退 |
+| `/api/sessions/:id/rollback-preview` | GET | query: `throughTurnId` | 预览回退到指定 turn 的 diff |
+| `/api/sessions/:id/rollback-code-to-turn` | POST | `{ cwd, throughTurnId }` | 代码回退到指定 turn |
+| `/api/sessions/:id/rollback-context` | POST | `{ cwd, throughTurnId }` | 上下文回退到指定 turn |
+| `/api/sessions/:id/rollback-both-to-turn` | POST | `{ cwd, throughTurnId }` | 代码 + 上下文同时回滚 |
 
 ### 撤销回滚
 
 | 路由 | 方法 | Body | 说明 |
 |------|------|------|------|
-| `/:id/undo-code-rollback` | POST | `{ cwd, force?, files? }` | 撤销上次代码回退 |
-| `/:id/rollback-state` | GET | - | 获取当前回退状态 |
+| `/api/sessions/:id/undo-code-rollback` | POST | `{ cwd, force?, files? }` | 撤销上次代码回滚 |
+| `/api/sessions/:id/rollback-state` | GET | - | 获取当前回退状态 |
 
 ---
 
@@ -101,7 +103,7 @@ interface CodeRestoreEntry {
 
 ## 回退状态查询
 
-通过 `GET /:id/rollback-state` 获取当前回退状态：
+通过 `GET /api/sessions/:id/rollback-state` 获取当前回退状态：
 
 ```typescript
 interface RollbackState {
@@ -115,23 +117,5 @@ interface RollbackState {
     revertedFiles: string[];
     lastEntryId: string | null;
   };
-}
-```
-
----
-
-## 手动触发上下文压缩
-
-| 路由 | 方法 | Body | 说明 |
-|------|------|------|------|
-| `/:id/compact` | POST | `{ cwd }` | 手动触发上下文压缩 |
-
-返回：
-
-```typescript
-interface CompressResult {
-  didCompress: boolean;    // 是否执行了压缩
-  released: number;        // 释放的 token 数
-  promptEstimate: number;  // 压缩后的 prompt 估算
 }
 ```

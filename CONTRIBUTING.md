@@ -7,15 +7,15 @@
 ```bash
 git clone https://github.com/phantom5099/coding-code.git
 cd coding-code
-npm install
+pnpm install
 ```
 
 ## 开发命令
 
 ```bash
-npm run typecheck    # 类型检查
-npm test             # 运行测试
-npm run dev          # 开发模式（watch）
+pnpm run typecheck    # 类型检查
+pnpm test             # 运行测试
+pnpm run dev          # 开发模式（watch）
 ```
 
 ## 目录结构
@@ -30,34 +30,40 @@ coding-code/
 │   │   ├── context/              #   上下文管理 + 自动压缩
 │   │   ├── session/              #   JSONL 会话持久化
 │   │   ├── memory/               #   长期记忆（用户/项目级）
-│   │   ├── checkpoint/           #   变更跟踪 + Git Shadow
+│   │   ├── checkpoint/           #   变更跟踪 + Shadow Git
 │   │   ├── tools/                #   工具注册表 + 执行器
 │   │   │   └── domains/          #     按域分类的工具实现
 │   │   ├── approval/             #   执行前审批流水线
 │   │   ├── hooks/                #   可插拔钩子系统
-│   │   ├── prompts/              #   系统提示词构建
-│   │   ├── rules/                #   规则注入
-│   │   ├── sandbox/              #   OS 级沙箱集成
-│   │   ├── server/               #   Hono HTTP 服务 + SSE
-│   │   ├── orchestration/        #   跨域编排入口
-│   │   ├── agent-state/          #   代理状态管理
+│   │   ├── skills/               #   技能系统（Markdown 技能包）
 │   │   ├── subagent/             #   子智能体加载和注册
-│   │   ├── skills/               #   技能系统
-│   │   └── cli.ts                #   CLI 入口
+│   │   ├── scheduler/            #   调度服务
+│   │   ├── rules/                #   规则注入
+│   │   ├── client/               #   客户端（HTTP / Direct / SSE）
+│   │   ├── core/                 #   核心工具类型和路径
+│   │   ├── runtime/              #   项目运行时
+│   │   ├── sandbox/              #   沙箱（stub，预留）
+│   │   ├── server/               #   Hono HTTP 服务 + SSE
+│   │   ├── cli.ts                #   CLI 入口
+│   │   └── layer.ts              #   Effect Layer 入口
 │   ├── tui/src/                  # @codingcode/tui — Ink 终端 UI
 │   │   ├── components/           #   App, InputBox, MessageItem 等
 │   │   └── hooks/                #   useAgentRunner, useTerminalSize
+│   ├── desktop/                  # @codingcode/desktop — Electron 桌面应用
+│   │   ├── electron/             #   主进程（IPC、文件服务、Git 服务）
+│   │   └── src/                  #   React 前端（Agent UI、设置面板）
 │   └── infra/src/                # @codingcode/infra — 基础设施
+├── config/                        # 模型配置
+│   └── models.json               # 模型/厂商目录
 ├── docs/                         # 项目文档
-├── models.json                   # 模型/厂商目录
-└── package.json                  # npm workspaces monorepo
+└── package.json                  # pnpm workspaces monorepo
 ```
 
 ## 提交 PR
 
 1. Fork 本仓库
 2. 创建功能分支：`git checkout -b feature/my-feature`
-3. 提交变更：请确保通过 `npm run typecheck` 和 `npm test`
+3. 提交变更：请确保通过 `pnpm run typecheck` 和 `pnpm test`
 4. 推送分支：`git push origin feature/my-feature`
 5. 创建 Pull Request
 
