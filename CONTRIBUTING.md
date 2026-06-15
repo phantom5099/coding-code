@@ -5,7 +5,7 @@
 ## 开发环境
 
 ```bash
-git clone https://github.com/<org>/coding-code.git
+git clone https://github.com/phantom5099/coding-code.git
 cd coding-code
 npm install
 ```
@@ -69,5 +69,5 @@ coding-code/
 
 ## 报告问题
 
-- 使用 [GitHub Issues](https://github.com/<org>/coding-code/issues) 提交 Bug 报告或功能建议
+- 使用 [GitHub Issues](https://github.com/phantom5099/coding-code/issues) 提交 Bug 报告或功能建议
 - 请包含复现步骤、预期行为和实际行为
