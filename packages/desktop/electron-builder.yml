@@ -16,6 +16,8 @@ extraResources:
     to: backend/cli.bundle.js
   - from: ../codingcode/dist/cli.bundle.js.map
     to: backend/cli.bundle.js.map
+  - from: ../../config/models.json
+    to: config/models.json
 
 asar: true
 

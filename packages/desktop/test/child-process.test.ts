@@ -151,6 +151,12 @@ describe('child-process', () => {
       const env = (options as any)?.env;
       expect(env?.NODE_ENV).toBe('production');
 
+      // 生产模式 cwd 应指向 resources 目录（而非 process.cwd()）
+      const cwd = (options as any)?.cwd;
+      expect(cwd).toBeDefined();
+      expect(cwd).not.toBe(process.cwd());
+      expect(cwd.toLowerCase()).toContain('resources');
+
       mockCp.stdout.emit('data', Buffer.from('CODINGCODE_SERVER_READY:3000\n'));
 
       const port = await promise;

@@ -9,23 +9,26 @@ function isDev(): boolean {
   return !!process.env.ELECTRON_RENDERER_URL;
 }
 
+function getResourcesDir(): string {
+  return process.platform === 'darwin'
+    ? join(process.execPath, '../../Resources')
+    : join(process.execPath, '../resources');
+}
+
 function getBackendEntry(): string {
   if (isDev()) {
     return resolve(app.getAppPath(), '../../packages/codingcode/src/cli.ts');
   }
   // 生产模式：后端 bundle 通过 extraResources 放到 resources/backend/
-  const resourcesDir =
-    process.platform === 'darwin'
-      ? join(process.execPath, '../../Resources')
-      : join(process.execPath, '../resources');
-  return join(resourcesDir, 'backend', 'cli.bundle.js');
+  return join(getResourcesDir(), 'backend', 'cli.bundle.js');
 }
 
 function getProjectRoot(): string {
   if (isDev()) {
     return resolve(app.getAppPath(), '../../');
   }
-  return process.cwd();
+  // 生产模式：config/models.json 通过 extraResources 放到 resources/config/
+  return getResourcesDir();
 }
 
 export async function startBackend(): Promise<number> {
