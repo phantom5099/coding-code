@@ -350,10 +350,10 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
     const forkSession = (
       state: SessionStoreState,
-      atUuid: string
+      atTurnId: number
     ): Effect.Effect<string, AgentError> =>
       Effect.sync(() => {
-        return forkSessionImpl(state.sessionId, state.transcriptPath, atUuid);
+        return forkSessionImpl(state.sessionId, state.transcriptPath, atTurnId);
       });
 
     const renameSession = (
@@ -485,9 +485,11 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
   };
 }
 
-function forkSessionImpl(sourceSessionId: string, sourceJsonlPath: string, atUuid: string): string {
+function forkSessionImpl(sourceSessionId: string, sourceJsonlPath: string, atTurnId: number): string {
   const events = readHistory(sourceJsonlPath);
-  const atIdx = atUuid ? events.findIndex((e) => 'uuid' in e && (e as any).uuid === atUuid) : -1;
+  const atIdx = events.findIndex(
+    (e) => e.type === 'user' && (e as any).turnId === atTurnId
+  );
 
   const chain = atIdx >= 0 ? events.slice(0, atIdx + 1) : events;
   const newSessionId = randomUUID();

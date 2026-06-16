@@ -82,13 +82,11 @@ beforeEach(() => {
       pendingInput: null,
       usageByThreadId: {},
       isCompressing: false,
-      hasRunningTurn: false,
       automations: [],
     },
     rollback: {
       rollbackStateByThreadId: {},
       checkpointDiffByTurnId: {},
-      rollbackPreviewByThreadId: {},
       revertedFilesByTurnId: {},
       turnCheckpointMapping: {},
     },

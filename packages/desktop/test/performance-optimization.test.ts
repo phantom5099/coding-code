@@ -50,58 +50,6 @@ describe('computeDiff - large file protection', () => {
   });
 });
 
-// ─── global.store: hasRunningTurn ────────────────────────────────────────
-
-describe('global store - hasRunningTurn', () => {
-  beforeEach(() => {
-    useGlobalStore.setState({
-      agent: {
-        currentThreadId: null,
-        threads: {},
-        approvalPolicy: 'ask-all',
-        model: '',
-        models: [],
-        contextUsage: null,
-        todoByThreadId: {},
-        pendingInput: null,
-        usageByThreadId: {},
-        isCompressing: false,
-        hasRunningTurn: false,
-      },
-    });
-  });
-
-  it('startTurn sets hasRunningTurn to true', () => {
-    useGlobalStore.getState().startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
-    expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(true);
-  });
-
-  it('completeTurn sets hasRunningTurn to false when no other running turns', () => {
-    useGlobalStore.getState().startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
-    useGlobalStore.getState().completeTurn('t1', 'turn-1', 'completed');
-    expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(false);
-  });
-
-  it('hasRunningTurn stays true when one of two turns is still running', () => {
-    useGlobalStore.getState().startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
-    useGlobalStore.getState().startTurn('t2', { id: 'turn-2', items: [], status: 'running' });
-
-    useGlobalStore.getState().completeTurn('t1', 'turn-1', 'completed');
-    expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(true);
-
-    useGlobalStore.getState().completeTurn('t2', 'turn-2', 'completed');
-    expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(false);
-  });
-
-  it('clearRunningTurns recalculates hasRunningTurn', () => {
-    useGlobalStore.getState().startTurn('t1', { id: 'turn-1', items: [], status: 'running' });
-    expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(true);
-
-    useGlobalStore.getState().clearRunningTurns('t1');
-    expect(useGlobalStore.getState().agent.hasRunningTurn).toBe(false);
-  });
-});
-
 // ─── global.store: applyChunk tool_result priority ──────────────────────
 
 describe('global store - applyChunk tool_result searches current turn first', () => {
@@ -118,7 +66,6 @@ describe('global store - applyChunk tool_result searches current turn first', ()
         pendingInput: null,
         usageByThreadId: {},
         isCompressing: false,
-        hasRunningTurn: false,
       },
     });
   });
@@ -260,7 +207,6 @@ describe('global store - applyChunk tool_result uses push', () => {
         pendingInput: null,
         usageByThreadId: {},
         isCompressing: false,
-        hasRunningTurn: false,
       },
     });
   });

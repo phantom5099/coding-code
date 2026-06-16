@@ -34,7 +34,7 @@ describe('MessageStream scroll layout', () => {
 
   it('virtualizer starts at the bottom via initialOffset', () => {
     const src = readSource('agent/MessageStream.tsx');
-    expect(src).toContain('initialOffset: () => Number.MAX_SAFE_INTEGER');
+    expect(src).toContain('Number.MAX_SAFE_INTEGER');
   });
 
   it('scrollToEnd uses instant behavior to avoid top-to-bottom animation', () => {

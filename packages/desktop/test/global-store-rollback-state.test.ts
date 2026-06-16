@@ -6,12 +6,11 @@ describe('Rollback state in global store', () => {
     // Reset the store state
     useGlobalStore.setState({
       rollback: {
-        rollbackStateByThreadId: {},
-        checkpointDiffByTurnId: {},
-        rollbackPreviewByThreadId: {},
-        revertedFilesByTurnId: {},
-        turnCheckpointMapping: {},
-      },
+      rollbackStateByThreadId: {},
+      checkpointDiffByTurnId: {},
+      revertedFilesByTurnId: {},
+      turnCheckpointMapping: {},
+    },
     });
   });
 
@@ -54,32 +53,6 @@ describe('Rollback state in global store', () => {
     expect(cached!.files).toHaveLength(1);
     expect(cached!.files[0]!.insertions).toBe(2);
     expect(cached!.files[0]!.deletions).toBe(1);
-  });
-
-  it('setRollbackPreview stores preview', () => {
-    const preview = {
-      throughTurnId: 2,
-      affectedTurns: [3, 4],
-      diff: 'diff content',
-    };
-    useGlobalStore.getState().setRollbackPreview('thread1', preview);
-
-    const cached = useGlobalStore.getState().rollback.rollbackPreviewByThreadId['thread1'];
-    expect(cached).toBeDefined();
-    expect(cached!.diff).toBe('diff content');
-  });
-
-  it('clearRollbackPreview removes preview', () => {
-    const preview = {
-      throughTurnId: 2,
-      affectedTurns: [3, 4],
-      diff: 'diff content',
-    };
-    useGlobalStore.getState().setRollbackPreview('thread1', preview);
-    expect(useGlobalStore.getState().rollback.rollbackPreviewByThreadId['thread1']).toBeDefined();
-
-    useGlobalStore.getState().clearRollbackPreview('thread1');
-    expect(useGlobalStore.getState().rollback.rollbackPreviewByThreadId['thread1']).toBeUndefined();
   });
 
   it('markFileReverted adds file to reverted list', () => {

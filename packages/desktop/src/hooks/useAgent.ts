@@ -24,7 +24,6 @@ import type {
   CheckpointDiff,
   CodeRollbackResult,
   CodeRollbackUndoResult,
-  RollbackPreviewDiff,
   SessionRollbackState,
 } from '../lib/core-api';
 import type { Item, Turn, Project } from '@shared/types';
@@ -356,7 +355,6 @@ export function useAgentRollback() {
   const revertedFilesByTurnId = useGlobalStore((s) => s.rollback.revertedFilesByTurnId);
   const setRollbackState = useGlobalStore((s) => s.setRollbackState);
   const setCheckpointDiff = useGlobalStore((s) => s.setCheckpointDiff);
-  const setRollbackPreview = useGlobalStore((s) => s.setRollbackPreview);
   const markFileReverted = useGlobalStore((s) => s.markFileReverted);
   const markFileRestored = useGlobalStore((s) => s.markFileRestored);
   const setTurnCheckpointMapping = useGlobalStore((s) => s.setTurnCheckpointMapping);
@@ -422,10 +420,9 @@ export function useAgentRollback() {
     async (threadId: string, throughTurnId: number) => {
       const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
       const preview = await previewRollbackDiff(threadId, cwd, throughTurnId);
-      setRollbackPreview(threadId, preview);
       return preview;
     },
-    [workspace.rootPath, setRollbackPreview]
+    [workspace.rootPath]
   );
 
   const rollbackCode = useCallback(
@@ -495,9 +492,9 @@ export function useAgentRollback() {
   );
 
   const forkThread = useCallback(
-    async (threadId: string, atUuid?: string) => {
+    async (threadId: string, atTurnId?: number) => {
       const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
-      const res = await forkSession(threadId, cwd, atUuid);
+      const res = await forkSession(threadId, cwd, atTurnId);
       return res.sessionId;
     },
     [workspace.rootPath]

@@ -611,3 +611,75 @@ describe('global store - compressing state', () => {
     expect(useGlobalStore.getState().agent.isCompressing).toBe(false);
   });
 });
+
+describe('global store - loadThreads orphan data cleanup', () => {
+  it('cleans up todoByThreadId for deleted threads', () => {
+    useGlobalStore.getState().applyTodoUpdate('deleted-thread', [
+      { id: '1', text: 'todo', status: 'in_progress' },
+    ]);
+    expect(useGlobalStore.getState().agent.todoByThreadId['deleted-thread']).toBeDefined();
+
+    useGlobalStore.getState().loadThreads([]);
+    expect(useGlobalStore.getState().agent.todoByThreadId['deleted-thread']).toBeUndefined();
+  });
+
+  it('preserves todoByThreadId for threads still in the list', () => {
+    useGlobalStore.getState().applyTodoUpdate('kept-thread', [
+      { id: '1', text: 'todo', status: 'in_progress' },
+    ]);
+    useGlobalStore.getState().loadThreads([
+      { id: 'kept-thread', projectId: '', title: 'test', cwd: '/x', turns: [], createdAt: 1, updatedAt: 2 },
+    ]);
+    expect(useGlobalStore.getState().agent.todoByThreadId['kept-thread']).toBeDefined();
+  });
+
+  it('cleans up rollbackStateByThreadId for deleted threads', () => {
+    useGlobalStore.getState().setRollbackState('deleted-thread', {
+      context: { active: false, currentThroughTurnId: null },
+      code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: '' },
+    } as any);
+    useGlobalStore.getState().loadThreads([]);
+    expect(useGlobalStore.getState().rollback.rollbackStateByThreadId['deleted-thread']).toBeUndefined();
+  });
+
+  it('cleans up checkpointDiffByTurnId for deleted threads', () => {
+    useGlobalStore.getState().setCheckpointDiff('deleted-thread', '1', {
+      turnId: 1, files: [],
+    } as any);
+    useGlobalStore.getState().loadThreads([]);
+    expect(useGlobalStore.getState().rollback.checkpointDiffByTurnId['deleted-thread:1']).toBeUndefined();
+  });
+
+  it('cleans up revertedFilesByTurnId for deleted threads', () => {
+    useGlobalStore.getState().markFileReverted('deleted-thread', '1', '/a.ts');
+    useGlobalStore.getState().loadThreads([]);
+    expect(useGlobalStore.getState().rollback.revertedFilesByTurnId['deleted-thread:1']).toBeUndefined();
+  });
+
+  it('cleans up turnCheckpointMapping for deleted threads', () => {
+    useGlobalStore.getState().setTurnCheckpointMapping('deleted-thread', 1, 'ui-1');
+    useGlobalStore.getState().loadThreads([]);
+    expect(useGlobalStore.getState().rollback.turnCheckpointMapping['deleted-thread']).toBeUndefined();
+  });
+
+  it('preserves rollback data for threads still in the list', () => {
+    useGlobalStore.getState().setRollbackState('kept-thread', {
+      context: { active: false, currentThroughTurnId: null },
+      code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: '' },
+    } as any);
+    useGlobalStore.getState().setCheckpointDiff('kept-thread', '1', {
+      turnId: 1, files: [],
+    } as any);
+    useGlobalStore.getState().markFileReverted('kept-thread', '1', '/a.ts');
+    useGlobalStore.getState().setTurnCheckpointMapping('kept-thread', 1, 'ui-1');
+
+    useGlobalStore.getState().loadThreads([
+      { id: 'kept-thread', projectId: '', title: 'test', cwd: '/x', turns: [], createdAt: 1, updatedAt: 2 },
+    ]);
+
+    expect(useGlobalStore.getState().rollback.rollbackStateByThreadId['kept-thread']).toBeDefined();
+    expect(useGlobalStore.getState().rollback.checkpointDiffByTurnId['kept-thread:1']).toBeDefined();
+    expect(useGlobalStore.getState().rollback.revertedFilesByTurnId['kept-thread:1']).toBeDefined();
+    expect(useGlobalStore.getState().rollback.turnCheckpointMapping['kept-thread']).toBeDefined();
+  });
+});

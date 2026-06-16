@@ -386,9 +386,9 @@ export function getRollbackState(sessionId: string, cwd: string): Promise<Sessio
 export function forkSession(
   sessionId: string,
   cwd: string,
-  atUuid?: string
+  atTurnId?: number
 ): Promise<{ sessionId: string; turns: any[] }> {
-  return clients.sessions.forkSession({ sessionId, cwd, atUuid });
+  return clients.sessions.forkSession({ sessionId, cwd, atTurnId });
 }
 
 // ---- Automations ----

@@ -230,6 +230,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const { copiedId, copy } = useCopyToClipboard();
   const parentRef = useRef<HTMLDivElement>(null);
   const didScrollToEndRef = useRef(false);
+  const loadedCheckpointRef = useRef<string | null>(null);
   const markFileRestored = useGlobalStore((s) => s.markFileRestored);
   const setPendingInput = useGlobalStore((s) => s.setPendingInput);
 
@@ -341,7 +342,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                 (i) => i.type === 'message' && (i as any).role === 'user'
               );
               const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
-              const newSessionId = await forkThread(threadId, lastItem.id);
+              const newSessionId = await forkThread(threadId, Number(turn.id));
               if (newSessionId) {
                 setCurrentThread(newSessionId);
                 if (userContent) setPendingInput(userContent);
@@ -363,16 +364,23 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     setPendingInput,
   ]);
 
+  const getItemKey = useCallback(
+    (index: number) => renderEntries[index]?.key ?? `empty-${index}`,
+    [renderEntries]
+  );
+
+  const getScrollElement = useCallback(() => parentRef.current, []);
+
   const virtualizer = useVirtualizer({
     count: renderEntries.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 60,
-    getItemKey: (index: number) => renderEntries[index]?.key ?? `empty-${index}`,
+    getScrollElement,
+    estimateSize: useCallback(() => 60, []),
+    getItemKey,
     overscan: 5,
     anchorTo: 'end',
     followOnAppend: 'smooth',
     scrollEndThreshold: 80,
-    initialOffset: () => Number.MAX_SAFE_INTEGER,
+    initialOffset: useCallback(() => Number.MAX_SAFE_INTEGER, []),
   });
 
   useLayoutEffect(() => {
@@ -384,34 +392,31 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
 
   const turnStatusKey = useMemo(() => turns.map((t) => `${t.id}:${t.status}`).join(','), [turns]);
 
-  const handleLoadDiff = useCallback(
-    async (uiTurnId: string) => {
-      const diff = await loadCheckpointDiff(threadId);
-      if (diff.turnId > 0) {
-        const state = useGlobalStore.getState();
-        const mapping = state.rollback.turnCheckpointMapping[threadId];
-        if (mapping?.[diff.turnId] !== uiTurnId) {
-          state.setTurnCheckpointMapping(threadId, diff.turnId, uiTurnId);
-        }
-      }
-    },
-    [threadId, loadCheckpointDiff]
-  );
+  useEffect(() => {
+    loadedCheckpointRef.current = null;
+  }, [threadId]);
 
   useEffect(() => {
-    for (const turn of turns) {
-      if (turn.status !== 'completed' && turn.status !== 'error') continue;
-      const ckKey = getCheckpointKey(
-        threadId,
-        turn.id,
-        useGlobalStore.getState().rollback.checkpointDiffByTurnId,
-        useGlobalStore.getState().rollback.turnCheckpointMapping[threadId] ?? EMPTY_MAPPING
-      );
-      if (!ckKey) {
-        handleLoadDiff(turn.id);
-      }
-    }
-  }, [turnStatusKey, threadId, handleLoadDiff]);
+    const completedTurnIds = turns
+      .filter((t) => t.status === 'completed' || t.status === 'error')
+      .map((t) => t.id);
+    if (completedTurnIds.length === 0) return;
+
+    const loadKey = `${threadId}:${completedTurnIds.join(',')}`;
+    if (loadedCheckpointRef.current === loadKey) return;
+    loadedCheckpointRef.current = loadKey;
+
+    const state = useGlobalStore.getState();
+    const existingMapping = state.rollback.turnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
+    const existingDiffs = state.rollback.checkpointDiffByTurnId;
+
+    const alreadyLoaded = completedTurnIds.some((id) =>
+      getCheckpointKey(threadId, id, existingDiffs, existingMapping) !== null
+    );
+    if (alreadyLoaded) return;
+
+    loadCheckpointDiff(threadId);
+  }, [turnStatusKey, threadId, loadCheckpointDiff]);
 
   const handleRevertFile = useCallback(
     async (uiTurnId: string, file: string, isReverted: boolean) => {

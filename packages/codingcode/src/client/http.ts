@@ -210,7 +210,7 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
         code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null },
       };
     },
-    async forkSession() {
+    async forkSession(_atTurnId?: number) {
       return '';
     },
 

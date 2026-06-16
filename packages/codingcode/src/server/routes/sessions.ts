@@ -454,18 +454,19 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
 
   router.post('/:id/fork', async (c) => {
     const sessionId = c.req.param('id');
-    const body = (await c.req.json()) as { cwd: string; atUuid?: string };
+    const body = (await c.req.json()) as { cwd: string; atTurnId?: number };
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
         const ws = yield* WorkspaceService;
         return ws.resolveWorkspaceCwd(body.cwd);
       })
     );
+    const atTurnId = body.atTurnId ?? 0;
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.create(cwd, 'unknown', sessionId);
-        const newSessionId = yield* session.forkSession(state, body.atUuid ?? '');
+        const newSessionId = yield* session.forkSession(state, atTurnId);
         const turns = readUIHistory(newSessionId);
         return { sessionId: newSessionId, turns };
       }) as any

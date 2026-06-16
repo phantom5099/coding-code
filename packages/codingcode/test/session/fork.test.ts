@@ -102,7 +102,7 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 }
 
 describe('forkSession', () => {
-  it('fork copies events from root to atUuid', async () => {
+  it('fork copies events from root to atTurnId', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
@@ -122,11 +122,11 @@ describe('forkSession', () => {
         memorySnapshot: '',
       };
 
-      // Fork at u2 (turn 2 start)
+      // Fork at turn 2 (user message "second")
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 'u2');
+          return yield* svc.forkSession(state, 2);
         })
       );
 
@@ -169,7 +169,7 @@ describe('forkSession', () => {
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 'u2');
+          return yield* svc.forkSession(state, 2);
         })
       );
 
@@ -214,7 +214,7 @@ describe('forkSession', () => {
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 'u2');
+          return yield* svc.forkSession(state, 2);
         })
       );
 
@@ -277,7 +277,7 @@ describe('forkSession', () => {
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 'a1');
+          return yield* svc.forkSession(state, 1);
         })
       );
 

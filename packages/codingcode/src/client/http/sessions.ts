@@ -61,7 +61,7 @@ export interface SessionClient {
   forkSession(input: {
     sessionId: string;
     cwd: string;
-    atUuid?: string;
+    atTurnId?: number;
   }): Promise<{ sessionId: string; turns: SessionEvent[] }>;
 }
 
@@ -140,8 +140,8 @@ export function createHttpSessionClient(
       return apiGet(`/api/sessions/${sessionId}/rollback-state?cwd=${encodeURIComponent(cwd)}`);
     },
 
-    async forkSession({ sessionId, cwd, atUuid }) {
-      return apiPost(`/api/sessions/${sessionId}/fork`, { cwd, atUuid });
+    async forkSession({ sessionId, cwd, atTurnId }) {
+      return apiPost(`/api/sessions/${sessionId}/fork`, { cwd, atTurnId });
     },
   };
 }
