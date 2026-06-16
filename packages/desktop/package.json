@@ -6,10 +6,17 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "electron-vite build",
+    "bundle:backend": "pnpm --filter @codingcode/core run bundle",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "verify": "electron-vite build && node scripts/verify.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pack": "electron-builder --dir",
+    "dist": "pnpm run bundle:backend && pnpm run build && electron-builder",
+    "dist:win": "pnpm run bundle:backend && pnpm run build && electron-builder --win",
+    "dist:mac": "pnpm run bundle:backend && pnpm run build && electron-builder --mac",
+    "dist:linux": "pnpm run bundle:backend && pnpm run build && electron-builder --linux",
+    "release": "pnpm run bundle:backend && pnpm run build && electron-builder --publish always"
   },
   "dependencies": {
     "@codingcode/core": "workspace:*",

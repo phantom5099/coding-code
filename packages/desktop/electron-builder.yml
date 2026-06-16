@@ -1,0 +1,48 @@
+appId: com.codingcode.desktop
+productName: Coding Agent
+copyright: Copyright © 2025
+
+directories:
+  buildResources: resources
+  output: dist
+
+files:
+  - out/**/*
+  - "!out/shots"
+
+# 后端打包为单文件 bundle，通过 extraResources 放入安装包
+extraResources:
+  - from: ../codingcode/dist/cli.bundle.js
+    to: backend/cli.bundle.js
+  - from: ../codingcode/dist/cli.bundle.js.map
+    to: backend/cli.bundle.js.map
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.developer-tools
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  category: Development
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+
+publish:
+  provider: github
+  owner: phantom5099
+  repo: coding-code
+  releaseType: draft

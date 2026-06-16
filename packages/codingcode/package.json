@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "main": "./src/layer.ts",
+  "scripts": {
+    "bundle": "node scripts/bundle.mjs"
+  },
   "exports": {
     ".": "./src/layer.ts",
     "./agent/agent": "./src/agent/agent.ts",

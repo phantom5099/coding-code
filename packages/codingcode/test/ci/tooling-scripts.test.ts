@@ -40,6 +40,34 @@ describe('CI tooling configuration', () => {
     expect(content).toContain('build-desktop:');
   });
 
+  it('GitHub Actions release workflow exists and is triggered by tags', () => {
+    const workflowPath = join(root, '.github/workflows/release.yml');
+    expect(existsSync(workflowPath)).toBe(true);
+    const content = readFileSync(workflowPath, 'utf8');
+    expect(content).toContain('tags:');
+    expect(content).toContain("- 'v*'");
+    expect(content).toContain('permissions:');
+    expect(content).toContain('contents: write');
+    expect(content).toContain('GH_TOKEN');
+    expect(content).toContain('--publish always');
+  });
+
+  it('electron-builder.yml has publish config for GitHub Releases', () => {
+    const configPath = join(root, 'packages/desktop/electron-builder.yml');
+    expect(existsSync(configPath)).toBe(true);
+    const content = readFileSync(configPath, 'utf8');
+    expect(content).toContain('publish:');
+    expect(content).toContain('provider: github');
+    expect(content).toContain('releaseType: draft');
+  });
+
+  it('desktop package.json has release script', () => {
+    const pkgPath = join(root, 'packages/desktop/package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    expect(pkg.scripts.release).toBeDefined();
+    expect(pkg.scripts.release).toContain('--publish always');
+  });
+
   it('pnpm run lint exits successfully', () => {
     expect(() => execSync('pnpm run lint', { cwd: root, stdio: 'pipe' })).not.toThrow();
   }, 20000);
