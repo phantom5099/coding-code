@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useGlobalStore } from '../stores/global.store';
 import Toggle from './Toggle';
 import {
   getMemoryConfig,
@@ -7,6 +8,7 @@ import {
   createMemoryExtraType,
   updateMemoryExtraType,
   deleteMemoryExtraType,
+  setMemoryModel,
 } from '../lib/core-api';
 
 interface MemoryTypeEntry {
@@ -19,6 +21,7 @@ interface MemoryTypeEntry {
 interface MemoryConfig {
   enabled: boolean;
   types: MemoryTypeEntry[];
+  model: string;
 }
 
 interface FormType {
@@ -29,20 +32,28 @@ interface FormType {
 const EMPTY_FORM: FormType = { name: '', description: '' };
 
 export default function MemoryPanel() {
-  const [config, setConfig] = useState<MemoryConfig>({ enabled: false, types: [] });
+  const models = useGlobalStore((s) => s.agent.models);
+  const [config, setConfig] = useState<MemoryConfig>({
+    enabled: false,
+    types: [],
+    model: '',
+  });
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [editingName, setEditingName] = useState<string | null>(null);
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [form, setForm] = useState<FormType>(EMPTY_FORM);
-
   const load = async () => {
     setLoading(true);
     try {
       const data = await getMemoryConfig();
-      setConfig(data ?? { enabled: false, types: [] });
+      setConfig({
+        enabled: data.enabled ?? false,
+        types: data.types ?? [],
+        model: data.model ?? '',
+      });
     } catch {
-      setConfig({ enabled: false, types: [] });
+      setConfig({ enabled: false, types: [], model: '' });
     } finally {
       setLoading(false);
     }
@@ -64,6 +75,21 @@ export default function MemoryPanel() {
       types: prev.types.map((t) => (t.name === name ? { ...t, disabled } : t)),
     }));
   };
+
+  const handleModel = async (model: string) => {
+    setConfig((prev) => ({ ...prev, model }));
+    try {
+      await setMemoryModel(model);
+    } catch {
+      // revert on error
+    }
+  };
+
+  const groups: Record<string, typeof models> = {};
+  for (const m of models) {
+    if (!groups[m.provider]) groups[m.provider] = [];
+    groups[m.provider]!.push(m);
+  }
 
   const startCreate = () => {
     setForm(EMPTY_FORM);
@@ -112,6 +138,8 @@ export default function MemoryPanel() {
   const inputCls =
     'w-full bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
   const labelCls = 'text-[12px] text-[var(--text-placeholder)] mb-1';
+  const selectCls =
+    'w-[200px] bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
   const btnPrimary =
     'px-4 py-2 rounded text-[13px] bg-[var(--btn-primary-bg)] text-[var(--accent-primary)] hover:bg-[var(--btn-primary-hover)]';
   const btnDanger =
@@ -134,6 +162,38 @@ export default function MemoryPanel() {
         </div>
         <Toggle checked={config.enabled} onChange={toggleEnabled} />
       </div>
+
+      {config.enabled && (
+        <>
+          <div className="px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)] mb-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[14px] text-[var(--text-title)]">记忆模型</div>
+                <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">
+                  用于提取和汇总记忆的模型，空则使用主对话模型
+                </div>
+              </div>
+              <select
+                value={config.model}
+                onChange={(e) => handleModel(e.target.value)}
+                className={selectCls}
+              >
+                <option value="">使用主对话模型</option>
+                {Object.entries(groups).map(([provider, providerModels]) => (
+                  <optgroup key={provider} label={provider}>
+                    {providerModels.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+          </div>
+
+        </>
+      )}
 
       <div className="flex items-center gap-2 mb-3">
         <div className="text-[11px] font-medium text-[var(--text-disabled)] uppercase tracking-wider">

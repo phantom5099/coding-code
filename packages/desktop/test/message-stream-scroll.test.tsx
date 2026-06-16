@@ -97,7 +97,9 @@ beforeEach(() => {
 
 describe('MessageStream scroll behavior', () => {
   it('configures virtualizer with initialOffset set to a very large value', () => {
-    setThread('t1', [makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }])]);
+    setThread('t1', [
+      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+    ]);
     render(<MessageStream threadId="t1" />);
     expect(lastVirtualizerOptions).not.toBeNull();
     expect(typeof lastVirtualizerOptions!.initialOffset).toBe('function');
@@ -105,14 +107,18 @@ describe('MessageStream scroll behavior', () => {
   });
 
   it('scrolls to end instantly on initial render with messages', () => {
-    setThread('t1', [makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }])]);
+    setThread('t1', [
+      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+    ]);
     render(<MessageStream threadId="t1" />);
     expect(scrollToEndMock).toHaveBeenCalledTimes(1);
     expect(scrollToEndMock).toHaveBeenCalledWith({ behavior: 'instant' });
   });
 
   it('does not scroll again when messages append to the same thread', () => {
-    setThread('t1', [makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }])]);
+    setThread('t1', [
+      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+    ]);
     const { rerender } = render(<MessageStream threadId="t1" />);
     expect(scrollToEndMock).toHaveBeenCalledTimes(1);
 
@@ -133,7 +139,9 @@ describe('MessageStream scroll behavior', () => {
     expect(scrollToEndMock).not.toHaveBeenCalled();
 
     act(() => {
-      setThread('t1', [makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }])]);
+      setThread('t1', [
+        makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+      ]);
     });
 
     rerender(<MessageStream threadId="t1" />);
@@ -142,8 +150,12 @@ describe('MessageStream scroll behavior', () => {
   });
 
   it('scrolls to end again after switching to a different thread', () => {
-    setThread('t1', [makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }])]);
-    setThread('t2', [makeTurn('t2-1', [{ id: 'm2', type: 'message', role: 'user', content: 'yo' }])]);
+    setThread('t1', [
+      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+    ]);
+    setThread('t2', [
+      makeTurn('t2-1', [{ id: 'm2', type: 'message', role: 'user', content: 'yo' }]),
+    ]);
 
     const { unmount } = render(<MessageStream threadId="t1" />);
     expect(scrollToEndMock).toHaveBeenCalledTimes(1);

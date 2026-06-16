@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockSettings } = vi.hoisted(() => {
+const { mockSettings, mockApi } = vi.hoisted(() => {
   const mockSettings = {
     getSubagentEnabled: vi.fn(),
     setSubagentEnabled: vi.fn(),
@@ -13,11 +13,13 @@ const { mockSettings } = vi.hoisted(() => {
     resetHookDisabled: vi.fn(),
     toggleSkill: vi.fn(),
   };
-  return { mockSettings };
+  const mockApi = vi.fn();
+  return { mockSettings, mockApi };
 });
 
 vi.mock('../src/lib/api', () => ({
   API_BASE: 'http://localhost:3000',
+  api: mockApi,
 }));
 
 vi.mock('@codingcode/core/client/http-clients', () => ({
@@ -40,6 +42,11 @@ import {
   setHookDisabled,
   resetHookDisabled,
   toggleSkill,
+  getMemoryConfig,
+  setMemoryModel,
+  getAgentConfig,
+  setAgentConfig,
+  setCompactionModel,
 } from '../src/lib/core-api';
 
 beforeEach(() => {
@@ -224,6 +231,60 @@ describe('toggleSkill', () => {
       name: 'my-skill',
       enabled: false,
       cwd: '/project/dir',
+    });
+  });
+});
+
+// ---- New config API functions ----
+
+describe('getMemoryConfig', () => {
+  it('calls api with correct path', async () => {
+    mockApi.mockResolvedValue({ enabled: false, types: [], model: '' });
+    await getMemoryConfig();
+    expect(mockApi).toHaveBeenCalledWith('/api/settings/memory/config');
+  });
+});
+
+describe('setMemoryModel', () => {
+  it('calls api with correct POST body', async () => {
+    mockApi.mockResolvedValue({ model: 'gpt-4o' });
+    await setMemoryModel('gpt-4o');
+    expect(mockApi).toHaveBeenCalledWith('/api/settings/memory/model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-4o' }),
+    });
+  });
+});
+
+describe('getAgentConfig', () => {
+  it('calls api with correct path', async () => {
+    mockApi.mockResolvedValue({ maxSteps: 200, maxStopContinuations: 2 });
+    await getAgentConfig();
+    expect(mockApi).toHaveBeenCalledWith('/api/settings/agent/config');
+  });
+});
+
+describe('setAgentConfig', () => {
+  it('calls api with maxSteps', async () => {
+    mockApi.mockResolvedValue({ maxSteps: 500, maxStopContinuations: 2 });
+    await setAgentConfig({ maxSteps: 500 });
+    expect(mockApi).toHaveBeenCalledWith('/api/settings/agent/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxSteps: 500 }),
+    });
+  });
+});
+
+describe('setCompactionModel', () => {
+  it('calls api with compactionModel', async () => {
+    mockApi.mockResolvedValue({ compactionModel: 'gpt-4o-mini' });
+    await setCompactionModel('gpt-4o-mini');
+    expect(mockApi).toHaveBeenCalledWith('/api/settings/context/compaction-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ compactionModel: 'gpt-4o-mini' }),
     });
   });
 });

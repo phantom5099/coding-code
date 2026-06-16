@@ -27,8 +27,6 @@ function makeCfg(overrides?: Partial<MemoryConfig>): MemoryConfig {
   return {
     enabled: true,
     model: '',
-    maxBytes: 16384,
-    promptMaxBytes: 8192,
     extraTypes: [],
     disabledTypes: [],
     ...overrides,

@@ -59,10 +59,14 @@ const HOOK_GROUPS: HookGroup[] = [
   {
     label: 'Agent 轮次',
     points: [
-      { name: 'agent.turn.start', description: '一轮对话开始时触发', type: 'observer' },
+      { name: 'agent.turn.start', description: '每一轮对话开始时触发', type: 'observer' },
       { name: 'agent.step.before', description: '每个推理步骤前触发', type: 'decision' },
-      { name: 'agent.turn.stop', description: '对话轮次停止时触发', type: 'observer' },
-      { name: 'agent.turn.end', description: '对话轮次结束时触发', type: 'observer' },
+      {
+        name: 'agent.turn.stop',
+        description: 'Agent 本轮无工具调用、准备停止时裁决，可返回 continue 续行',
+        type: 'decision',
+      },
+      { name: 'agent.turn.end', description: '轮次最终结束时通知，不可干预', type: 'observer' },
     ],
   },
   {
@@ -81,7 +85,6 @@ interface HookForm {
   name: string;
   description: string;
   point: string;
-  type: 'observer' | 'decision';
   command: string;
   args: string;
   env: string;
@@ -93,7 +96,6 @@ const EMPTY_FORM: HookForm = {
   name: '',
   description: '',
   point: ALL_POINTS[0]?.name ?? '',
-  type: 'observer',
   command: '',
   args: '',
   env: '',
@@ -139,7 +141,6 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
       name: h.name,
       description: h.description ?? '',
       point: h.point,
-      type: h.type,
       command: h.command,
       args: (h.args ?? []).join(', '),
       env: h.env
@@ -164,7 +165,7 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
     const hook: Record<string, unknown> = {
       name: form.name,
       point: form.point,
-      type: form.type,
+      type: ALL_POINTS.find((p) => p.name === form.point)?.type ?? 'observer',
       command: form.command,
       enabled: form.enabled,
     };
@@ -492,31 +493,6 @@ function FormCard({
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <div className={labelCls}>类型</div>
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => setForm({ ...form, type: 'observer' })}
-              className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
-                form.type === 'observer'
-                  ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]'
-                  : 'bg-[var(--border-card)] text-[var(--text-secondary)] border border-[var(--border-hover)]'
-              }`}
-            >
-              observer
-            </button>
-            <button
-              onClick={() => setForm({ ...form, type: 'decision' })}
-              className={`px-3 py-1.5 rounded text-[13px] font-mono transition-colors ${
-                form.type === 'decision'
-                  ? 'bg-[var(--btn-primary-bg)] text-[var(--accent-primary)]'
-                  : 'bg-[var(--border-card)] text-[var(--text-secondary)] border border-[var(--border-hover)]'
-              }`}
-            >
-              decision
-            </button>
-          </div>
         </div>
       </div>
       <div>

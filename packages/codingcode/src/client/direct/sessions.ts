@@ -1,4 +1,4 @@
-﻿﻿import { Effect } from 'effect';
+﻿import { Effect } from 'effect';
 import { SessionService } from '../../session/store.js';
 import { WorkspaceService } from '../../core/workspace.js';
 import { deleteSession } from '../../session/file-ops.js';
