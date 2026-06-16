@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Toggle from './Toggle';
-import { useGlobalStore } from '../stores/global.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
 import {
   listAgents,
   getSubagentEnabled,
@@ -13,7 +13,7 @@ import {
   deleteAgent,
   listMcpServers,
 } from '../lib/core-api';
-import type { ModelEntry } from '../stores/global.store';
+import type { ModelEntry } from '../stores/agent.store';
 
 const AVAILABLE_TOOLS = [
   'read_file',
@@ -78,7 +78,7 @@ export default function SubagentsPanel({ global: isGlobal }: { global?: boolean 
   const [editingName, setEditingName] = useState<string | null>(null);
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [form, setForm] = useState<AgentForm>(EMPTY_FORM);
-  const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+  const rootPath = useWorkspaceStore((s) => s.rootPath);
   const cwd = isGlobal ? undefined : rootPath;
 
   const load = async () => {

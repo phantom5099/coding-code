@@ -1,10 +1,10 @@
-import { useGlobalStore } from './stores/global.store';
+import { useUIStore } from './stores/ui.store';
 
 const isWindows = window.electronAPI?.platform === 'win32';
 
 export default function TitleBar() {
-  const mode = useGlobalStore((s) => s.ui.mode);
-  const setMode = useGlobalStore((s) => s.setMode);
+  const mode = useUIStore((s) => s.mode);
+  const setMode = useUIStore((s) => s.setMode);
 
   if (!isWindows) return null;
 

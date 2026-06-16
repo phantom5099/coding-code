@@ -4,7 +4,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { useGlobalStore } from '../src/stores/global.store';
+import { useAgentStore } from '../src/stores/agent.store';
+import { useRollbackStore } from '../src/stores/rollback.store';
 import MessageStream from '../src/agent/MessageStream';
 import type { Turn } from '../shared/types';
 
@@ -51,8 +52,8 @@ function makeTurn(id: string, items: Turn['items']): Turn {
 
 function setThread(threadId: string, turns: Turn[]) {
   act(() => {
-    useGlobalStore.setState((s) => {
-      s.agent.threads[threadId] = {
+    useAgentStore.setState((s) => {
+      s.threads[threadId] = {
         id: threadId,
         projectId: '',
         title: threadId,
@@ -70,26 +71,24 @@ beforeEach(() => {
   scrollToEndMock.mockClear();
   measureElementMock.mockClear();
   lastVirtualizerOptions = null;
-  useGlobalStore.setState({
-    agent: {
-      currentThreadId: null,
-      threads: {},
-      approvalPolicy: 'ask-all',
-      model: '',
-      models: [],
-      contextUsage: null,
-      todoByThreadId: {},
-      pendingInput: null,
-      usageByThreadId: {},
-      isCompressing: false,
-      automations: [],
-    },
-    rollback: {
-      rollbackStateByThreadId: {},
-      checkpointDiffByTurnId: {},
-      revertedFilesByTurnId: {},
-      turnCheckpointMapping: {},
-    },
+  useAgentStore.setState({
+    currentThreadId: null,
+    threads: {},
+    approvalPolicy: 'ask-all',
+    model: '',
+    models: [],
+    contextUsage: null,
+    todoByThreadId: {},
+    pendingInput: null,
+    usageByThreadId: {},
+    isCompressing: false,
+    automations: [],
+  });
+  useRollbackStore.setState({
+    rollbackStateByThreadId: {},
+    checkpointDiffByTurnId: {},
+    revertedFilesByTurnId: {},
+    turnCheckpointMapping: {},
   });
 });
 

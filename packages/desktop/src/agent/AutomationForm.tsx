@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { useGlobalStore, type Automation } from '../stores/global.store';
+import { useAgentStore, type Automation } from '../stores/agent.store';
 import { createAutomation, updateAutomation } from '../lib/core-api';
 
 interface AutomationFormProps {
@@ -38,7 +38,7 @@ export function AutomationForm({
   onClose,
   onSaved,
 }: AutomationFormProps) {
-  const automations = useGlobalStore((s) => s.agent.automations);
+  const automations = useAgentStore((s) => s.automations);
   const existing = automationId ? automations.find((a: Automation) => a.id === automationId) : null;
 
   const [name, setName] = useState(existing?.name ?? '');

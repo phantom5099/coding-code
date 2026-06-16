@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { computeDiff } from '../src/lib/diff-compute';
 import { parseUnifiedDiff } from '../src/lib/diff-parser';
-import { useGlobalStore } from '../src/stores/global.store';
+import { useAgentStore } from '../src/stores/agent.store';
 import type { Item, Turn } from '../shared/types';
 
 // ─── diff-compute: large file protection ─────────────────────────────────
@@ -54,19 +54,17 @@ describe('computeDiff - large file protection', () => {
 
 describe('global store - applyChunk tool_result searches current turn first', () => {
   beforeEach(() => {
-    useGlobalStore.setState({
-      agent: {
-        currentThreadId: null,
-        threads: {},
-        approvalPolicy: 'ask-all',
-        model: '',
-        models: [],
-        contextUsage: null,
-        todoByThreadId: {},
-        pendingInput: null,
-        usageByThreadId: {},
-        isCompressing: false,
-      },
+    useAgentStore.setState({
+      currentThreadId: null,
+      threads: {},
+      approvalPolicy: 'ask-all',
+      model: '',
+      models: [],
+      contextUsage: null,
+      todoByThreadId: {},
+      pendingInput: null,
+      usageByThreadId: {},
+      isCompressing: false,
     });
   });
 
@@ -74,17 +72,17 @@ describe('global store - applyChunk tool_result searches current turn first', ()
     const threadId = 't1';
 
     // Turn 1 with a tool_call
-    useGlobalStore.getState().startTurn(threadId, {
+    useAgentStore.getState().startTurn(threadId, {
       id: 'turn-1',
       items: [
         { id: 'call-1', type: 'tool_call', name: 'read_file', args: {}, status: 'running' } as Item,
       ],
       status: 'completed',
     });
-    useGlobalStore.getState().completeTurn(threadId, 'turn-1', 'completed');
+    useAgentStore.getState().completeTurn(threadId, 'turn-1', 'completed');
 
     // Turn 2 with a tool_call of same name but different id
-    useGlobalStore.getState().startTurn(threadId, {
+    useAgentStore.getState().startTurn(threadId, {
       id: 'turn-2',
       items: [
         { id: 'call-2', type: 'tool_call', name: 'read_file', args: {}, status: 'running' } as Item,
@@ -93,7 +91,7 @@ describe('global store - applyChunk tool_result searches current turn first', ()
     });
 
     // Apply tool_result for call-2 (should find it in turn-2 first)
-    useGlobalStore.getState().applyChunk(threadId, 'turn-2', {
+    useAgentStore.getState().applyChunk(threadId, 'turn-2', {
       id: 'res-2',
       type: 'tool_result',
       callId: 'call-2',
@@ -102,7 +100,7 @@ describe('global store - applyChunk tool_result searches current turn first', ()
       exitCode: 0,
     } as Item);
 
-    const turn2 = useGlobalStore.getState().agent.threads[threadId].turns[1];
+    const turn2 = useAgentStore.getState().threads[threadId].turns[1];
     const call = turn2.items.find((i) => i.id === 'call-2') as any;
     expect(call.status).toBe('approved');
     expect(turn2.items).toHaveLength(2); // call + result
@@ -112,24 +110,24 @@ describe('global store - applyChunk tool_result searches current turn first', ()
     const threadId = 't1';
 
     // Turn 1 with tool_call
-    useGlobalStore.getState().startTurn(threadId, {
+    useAgentStore.getState().startTurn(threadId, {
       id: 'turn-1',
       items: [
         { id: 'call-1', type: 'tool_call', name: 'read_file', args: {}, status: 'running' } as Item,
       ],
       status: 'completed',
     });
-    useGlobalStore.getState().completeTurn(threadId, 'turn-1', 'completed');
+    useAgentStore.getState().completeTurn(threadId, 'turn-1', 'completed');
 
     // Turn 2 with no tool_call
-    useGlobalStore.getState().startTurn(threadId, {
+    useAgentStore.getState().startTurn(threadId, {
       id: 'turn-2',
       items: [],
       status: 'running',
     });
 
     // Apply tool_result for call-1 (should find it in turn-1 via fallback)
-    useGlobalStore.getState().applyChunk(threadId, 'turn-2', {
+    useAgentStore.getState().applyChunk(threadId, 'turn-2', {
       id: 'res-1',
       type: 'tool_result',
       callId: 'call-1',
@@ -138,7 +136,7 @@ describe('global store - applyChunk tool_result searches current turn first', ()
       exitCode: 0,
     } as Item);
 
-    const turn1 = useGlobalStore.getState().agent.threads[threadId].turns[0];
+    const turn1 = useAgentStore.getState().threads[threadId].turns[0];
     const call = turn1.items.find((i) => i.id === 'call-1') as any;
     expect(call.status).toBe('approved');
   });
@@ -148,9 +146,9 @@ describe('global store - applyChunk tool_result searches current turn first', ()
 
 describe('global store - persist partialize', () => {
   it('partialize does not include usageByThreadId', () => {
-    const state = useGlobalStore.getState();
+    const state = useAgentStore.getState();
     // Access the persist config's partialize
-    const store: any = useGlobalStore;
+    const store: any = useAgentStore;
     const persistConfig = store.persist?.options;
     if (persistConfig?.partialize) {
       const partial = persistConfig.partialize(state);
@@ -195,26 +193,24 @@ describe('main.ts - resource cleanup', () => {
 
 describe('global store - applyChunk tool_result uses push', () => {
   beforeEach(() => {
-    useGlobalStore.setState({
-      agent: {
-        currentThreadId: null,
-        threads: {},
-        approvalPolicy: 'ask-all',
-        model: '',
-        models: [],
-        contextUsage: null,
-        todoByThreadId: {},
-        pendingInput: null,
-        usageByThreadId: {},
-        isCompressing: false,
-      },
+    useAgentStore.setState({
+      currentThreadId: null,
+      threads: {},
+      approvalPolicy: 'ask-all',
+      model: '',
+      models: [],
+      contextUsage: null,
+      todoByThreadId: {},
+      pendingInput: null,
+      usageByThreadId: {},
+      isCompressing: false,
     });
   });
 
   it('tool_result is pushed to end, not spliced after tool_call', () => {
     const threadId = 't1';
 
-    useGlobalStore.getState().startTurn(threadId, {
+    useAgentStore.getState().startTurn(threadId, {
       id: 'turn-1',
       items: [
         { id: 'msg-1', type: 'message', role: 'user', content: 'hi' } as Item,
@@ -231,7 +227,7 @@ describe('global store - applyChunk tool_result uses push', () => {
     });
 
     // Apply tool_result for call-1
-    useGlobalStore.getState().applyChunk(threadId, 'turn-1', {
+    useAgentStore.getState().applyChunk(threadId, 'turn-1', {
       id: 'res-1',
       type: 'tool_result',
       callId: 'call-1',
@@ -240,7 +236,7 @@ describe('global store - applyChunk tool_result uses push', () => {
       exitCode: 0,
     } as Item);
 
-    const turn = useGlobalStore.getState().agent.threads[threadId].turns[0];
+    const turn = useAgentStore.getState().threads[threadId].turns[0];
     // tool_result should be at the end, not between call-1 and msg-2
     const lastItem = turn.items[turn.items.length - 1];
     expect(lastItem.type).toBe('tool_result');
@@ -251,7 +247,7 @@ describe('global store - applyChunk tool_result uses push', () => {
   it('existing item indices are not shifted when tool_result is pushed', () => {
     const threadId = 't1';
 
-    useGlobalStore.getState().startTurn(threadId, {
+    useAgentStore.getState().startTurn(threadId, {
       id: 'turn-1',
       items: [
         { id: 'call-1', type: 'tool_call', name: 'edit', args: {}, status: 'running' } as Item,
@@ -267,11 +263,11 @@ describe('global store - applyChunk tool_result uses push', () => {
     });
 
     // Record index of msg-1 before tool_result
-    const beforeTurn = useGlobalStore.getState().agent.threads[threadId].turns[0];
+    const beforeTurn = useAgentStore.getState().threads[threadId].turns[0];
     const msgIndexBefore = beforeTurn.items.findIndex((i) => i.id === 'msg-1');
     expect(msgIndexBefore).toBe(1);
 
-    useGlobalStore.getState().applyChunk(threadId, 'turn-1', {
+    useAgentStore.getState().applyChunk(threadId, 'turn-1', {
       id: 'res-1',
       type: 'tool_result',
       callId: 'call-1',
@@ -280,7 +276,7 @@ describe('global store - applyChunk tool_result uses push', () => {
       exitCode: 0,
     } as Item);
 
-    const afterTurn = useGlobalStore.getState().agent.threads[threadId].turns[0];
+    const afterTurn = useAgentStore.getState().threads[threadId].turns[0];
     const msgIndexAfter = afterTurn.items.findIndex((i) => i.id === 'msg-1');
     // msg-1 should still be at the same index
     expect(msgIndexAfter).toBe(msgIndexBefore);

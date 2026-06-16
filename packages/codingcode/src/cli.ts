@@ -3,7 +3,7 @@ import { serve } from '@hono/node-server';
 import { LLMFactoryService } from './llm/factory.js';
 import { createServer } from './server/index.js';
 import { createAppRuntime } from './layer.js';
-import { loadConfig, ensureUserConfig } from '../../infra/src/config.js';
+import { loadConfig, ensureUserConfig } from '@codingcode/infra/config';
 import { WorkspaceService, parseWorkspaceArgs } from './core/workspace.js';
 import { findAvailablePort } from './server/port-discovery.js';
 import { AgentError } from './core/error.js';

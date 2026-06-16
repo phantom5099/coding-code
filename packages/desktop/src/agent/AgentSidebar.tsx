@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Plus, Search, Zap, Settings } from 'lucide-react';
-import { useGlobalStore } from '../stores/global.store';
+import { useUIStore } from '../stores/ui.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
+import { useAgentStore } from '../stores/agent.store';
 import { api } from '../lib/api';
 
 function normalizeCwd(p: string): string {
@@ -18,15 +20,15 @@ function relativeTime(ts: number): string {
 }
 
 export default function AgentSidebar() {
-  const sidebarCollapsed = useGlobalStore((s) => s.ui.sidebarCollapsed);
-  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
-  const rootPath = useGlobalStore((s) => s.workspace.rootPath);
-  const workspace = useGlobalStore((s) => s.workspace);
-  const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
-  const setView = useGlobalStore((s) => s.setView);
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  const currentThreadId = useAgentStore((s) => s.currentThreadId);
+  const rootPath = useWorkspaceStore((s) => s.rootPath);
+  const workspace = useWorkspaceStore();
+  const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
+  const setView = useUIStore((s) => s.setView);
 
   // Subscribe to raw threads, derive list with useMemo for stable reference
-  const rawThreads = useGlobalStore((s) => s.agent.threads);
+  const rawThreads = useAgentStore((s) => s.threads);
   const threadList = useMemo(() => {
     const normalizedRoot = normalizeCwd(rootPath);
     return Object.values(rawThreads)
@@ -41,8 +43,7 @@ export default function AgentSidebar() {
     await api(`/api/sessions/${threadId}`, { method: 'DELETE' }).catch((e) => {
       console.error('Failed to delete session:', e);
     });
-    const store = useGlobalStore.getState();
-    const rootPath = store.workspace.rootPath;
+    const rootPath = useWorkspaceStore.getState().rootPath;
     if (rootPath) {
       try {
         const sessions = await api<any[]>(`/api/sessions?cwd=${encodeURIComponent(rootPath)}`);
@@ -55,7 +56,7 @@ export default function AgentSidebar() {
           createdAt: new Date(s.createdAt).getTime(),
           updatedAt: new Date(s.updatedAt).getTime(),
         }));
-        store.loadThreads(threads);
+        useAgentStore.getState().loadThreads(threads);
       } catch {}
     }
     if (threadId === currentThreadId) {

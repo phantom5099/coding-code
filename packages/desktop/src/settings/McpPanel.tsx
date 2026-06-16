@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Toggle from './Toggle';
-import { useGlobalStore } from '../stores/global.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
 import {
   listMcpServers,
   setMcpDisabled,
@@ -51,7 +51,7 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [form, setForm] = useState<McpForm>(EMPTY_FORM);
-  const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+  const rootPath = useWorkspaceStore((s) => s.rootPath);
   const cwd = isGlobal ? undefined : rootPath;
 
   const load = async () => {

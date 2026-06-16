@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useGlobalStore } from '../stores/global.store';
+import { useAgentStore } from '../stores/agent.store';
 import { getAgentConfig, setAgentConfig, setCompactionModel } from '../lib/core-api';
 
 const inputCls =
@@ -9,7 +9,7 @@ const selectCls =
   'w-[200px] bg-[var(--bg-hover)] border border-[var(--border-hover)] text-[var(--text-title)] px-3 py-2 rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]';
 
 export default function AgentConfigPanel() {
-  const models = useGlobalStore((s) => s.agent.models);
+  const models = useAgentStore((s) => s.models);
 
   const [maxSteps, setMaxSteps] = useState(200);
   const [maxStopContinuations, setMaxStopContinuations] = useState(2);

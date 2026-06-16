@@ -68,6 +68,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.19
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.0
       eslint:
         specifier: ^10.4.1
         version: 10.4.1(jiti@2.7.0)

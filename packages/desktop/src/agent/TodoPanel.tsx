@@ -1,4 +1,4 @@
-import { useGlobalStore } from '../stores/global.store';
+import { useAgentStore } from '../stores/agent.store';
 import type { TodoItem } from '@shared/types';
 
 function TodoItemRow({ item }: { item: TodoItem }) {
@@ -31,8 +31,8 @@ function TodoItemRow({ item }: { item: TodoItem }) {
 }
 
 export default function TodoPanel({ threadId }: { threadId: string }) {
-  const state = useGlobalStore((s) => s.agent.todoByThreadId[threadId]);
-  const toggleCollapsed = useGlobalStore((s) => s.toggleTodoCollapsed);
+  const state = useAgentStore((s) => s.todoByThreadId[threadId]);
+  const toggleCollapsed = useAgentStore((s) => s.toggleTodoCollapsed);
 
   if (!state?.hasSeenNonEmptyTodo) return null;
 

@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
-import { useGlobalStore } from '../stores/global.store';
+import { useUIStore } from '../stores/ui.store';
 import { useState } from 'react';
 import McpPanel from './McpPanel';
 import HooksPanel from './HooksPanel';
@@ -18,7 +18,7 @@ const NAV_ITEMS: { id: Section; label: string }[] = [
 ];
 
 export default function ProjectSettingsPage() {
-  const setView = useGlobalStore((s) => s.setView);
+  const setView = useUIStore((s) => s.setView);
   const [section, setSection] = useState<Section>('mcp');
 
   return (
