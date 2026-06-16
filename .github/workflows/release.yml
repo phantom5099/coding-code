@@ -13,7 +13,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+          - os: ubuntu-latest
+            platform: linux
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -31,14 +37,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build & publish
-        shell: bash
-        run: |
-          pnpm --filter @codingcode/desktop run bundle:backend
-          pnpm --filter @codingcode/desktop run build
-          if [ "$RUNNER_OS" = "Windows" ]; then PLAT=--win; \
-          elif [ "$RUNNER_OS" = "macOS" ]; then PLAT=--mac; \
-          else PLAT=--linux; fi
-          pnpm --filter @codingcode/desktop exec electron-builder $PLAT --publish always
+      - name: Bundle backend
+        run: pnpm --filter @codingcode/desktop run bundle:backend
+
+      - name: Build Electron app
+        run: pnpm --filter @codingcode/desktop run build
+
+      - name: Package & publish
+        run: pnpm --filter @codingcode/desktop exec electron-builder --${{ matrix.platform }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
