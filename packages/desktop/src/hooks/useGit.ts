@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import { useGlobalStore } from '../stores/global.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
 import type { GitStatus } from '@shared/types';
 
 export function useGit() {
-  const setGit = useGlobalStore((s) => s.setGit);
-  const git = useGlobalStore((s) => s.git);
-  const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+  const setGit = useWorkspaceStore((s) => s.setGit);
+  const git = useWorkspaceStore((s) => s.git);
+  const rootPath = useWorkspaceStore((s) => s.rootPath);
 
   useEffect(() => {
     if (!rootPath) return;

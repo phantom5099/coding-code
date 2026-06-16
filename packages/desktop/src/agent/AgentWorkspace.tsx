@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, Square, ShieldAlert, ShieldCheck, Shield, Eye } from 'lucide-react';
-import { useGlobalStore } from '../stores/global.store';
+import { useAgentStore } from '../stores/agent.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
 import { API_BASE, api } from '../lib/api';
 import { setSessionPermissionMode } from '../lib/core-api';
 import MessageStream from './MessageStream';
@@ -11,12 +12,12 @@ import ApprovalPanel from './ApprovalPanel';
 // ─── ContextIndicator ──────────────────────────────────────────────────────
 
 function ContextIndicator({ threadId }: { threadId: string }) {
-  const contextUsage = useGlobalStore((s) => s.agent.contextUsage);
-  const usage = useGlobalStore((s) => s.agent.usageByThreadId[threadId]);
-  const setContextUsage = useGlobalStore((s) => s.setContextUsage);
-  const isCompressing = useGlobalStore((s) => s.agent.isCompressing);
-  const startCompressing = useGlobalStore((s) => s.startCompressing);
-  const stopCompressing = useGlobalStore((s) => s.stopCompressing);
+  const contextUsage = useAgentStore((s) => s.contextUsage);
+  const usage = useAgentStore((s) => s.usageByThreadId[threadId]);
+  const setContextUsage = useAgentStore((s) => s.setContextUsage);
+  const isCompressing = useAgentStore((s) => s.isCompressing);
+  const startCompressing = useAgentStore((s) => s.startCompressing);
+  const stopCompressing = useAgentStore((s) => s.stopCompressing);
 
   const r = 7;
   const circ = 2 * Math.PI * r;
@@ -110,9 +111,9 @@ function ContextIndicator({ threadId }: { threadId: string }) {
 // ─── ModelSelector ─────────────────────────────────────────────────────────
 
 function ModelSelector() {
-  const model = useGlobalStore((s) => s.agent.model);
-  const models = useGlobalStore((s) => s.agent.models);
-  const setModel = useGlobalStore((s) => s.setModel);
+  const model = useAgentStore((s) => s.model);
+  const models = useAgentStore((s) => s.models);
+  const setModel = useAgentStore((s) => s.setModel);
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -210,18 +211,18 @@ function InputBox({
 }) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
-  const isStreaming = useGlobalStore((s) => {
-    const tid = s.agent.currentThreadId;
+  const currentThreadId = useAgentStore((s) => s.currentThreadId);
+  const isStreaming = useAgentStore((s) => {
+    const tid = s.currentThreadId;
     if (!tid) return false;
-    const thread = s.agent.threads[tid];
+    const thread = s.threads[tid];
     return thread?.turns.some((t) => t.status === 'running') ?? false;
   });
-  const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy);
-  const workspace = useGlobalStore((s) => s.workspace);
-  const setApprovalPolicy = useGlobalStore((s) => s.setApprovalPolicy);
-  const pendingInput = useGlobalStore((s) => s.agent.pendingInput);
-  const setPendingInput = useGlobalStore((s) => s.setPendingInput);
+  const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
+  const workspace = useWorkspaceStore();
+  const setApprovalPolicy = useAgentStore((s) => s.setApprovalPolicy);
+  const pendingInput = useAgentStore((s) => s.pendingInput);
+  const setPendingInput = useAgentStore((s) => s.setPendingInput);
 
   // Consume pendingInput when it's set
   useEffect(() => {
@@ -349,9 +350,9 @@ interface AgentWorkspaceProps {
 }
 
 export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspaceProps) {
-  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
-  const isCompressing = useGlobalStore((s) => s.agent.isCompressing);
-  const workspace = useGlobalStore((s) => s.workspace);
+  const currentThreadId = useAgentStore((s) => s.currentThreadId);
+  const isCompressing = useAgentStore((s) => s.isCompressing);
+  const workspace = useWorkspaceStore();
 
   if (!currentThreadId) {
     return (

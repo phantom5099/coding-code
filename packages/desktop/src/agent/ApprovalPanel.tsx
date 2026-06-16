@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { Item } from '@shared/types';
-import { useGlobalStore } from '../stores/global.store';
+import { useAgentStore } from '../stores/agent.store';
 import { useAgentApproval } from '../hooks/useAgent';
 import ToolCallCard from '../shared/ToolCallCard';
 
@@ -13,8 +13,8 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
   const { approveTool, rejectTool } = useAgentApproval();
 
   // Stable string key: only changes when pending item IDs change, not on every content update
-  const pendingKey = useGlobalStore((s) => {
-    const thread = s.agent.threads[threadId];
+  const pendingKey = useAgentStore((s) => {
+    const thread = s.threads[threadId];
     if (!thread) return '';
     return thread.turns
       .flatMap((t) => t.items)
@@ -26,7 +26,7 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
   // Only compute pending items when the key changes
   const pendingItems = useMemo(() => {
     if (!pendingKey) return [];
-    const thread = useGlobalStore.getState().agent.threads[threadId];
+    const thread = useAgentStore.getState().threads[threadId];
     if (!thread) return [];
     return thread.turns.flatMap((turn) =>
       turn.items.filter(

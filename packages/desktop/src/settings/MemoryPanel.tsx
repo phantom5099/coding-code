@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useGlobalStore } from '../stores/global.store';
+import { useAgentStore } from '../stores/agent.store';
 import Toggle from './Toggle';
 import {
   getMemoryConfig,
@@ -32,7 +32,7 @@ interface FormType {
 const EMPTY_FORM: FormType = { name: '', description: '' };
 
 export default function MemoryPanel() {
-  const models = useGlobalStore((s) => s.agent.models);
+  const models = useAgentStore((s) => s.models);
   const [config, setConfig] = useState<MemoryConfig>({
     enabled: false,
     types: [],

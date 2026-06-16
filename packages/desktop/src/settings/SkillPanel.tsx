@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Toggle from './Toggle';
-import { useGlobalStore } from '../stores/global.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
 import { listSkills, toggleSkill } from '../lib/core-api';
 
 interface SkillEntry {
@@ -14,7 +14,7 @@ interface SkillEntry {
 export default function SkillPanel({ global: isGlobal }: { global?: boolean }) {
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+  const rootPath = useWorkspaceStore((s) => s.rootPath);
   const cwd = isGlobal ? undefined : rootPath;
 
   const load = async () => {

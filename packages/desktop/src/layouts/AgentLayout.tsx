@@ -1,5 +1,5 @@
 import { useAgentCore } from '../hooks/useAgent';
-import { useGlobalStore } from '../stores/global.store';
+import { useUIStore } from '../stores/ui.store';
 import ProjectStrip from '../agent/ProjectStrip';
 import AgentSidebar from '../agent/AgentSidebar';
 import AgentWorkspace from '../agent/AgentWorkspace';
@@ -9,7 +9,7 @@ import ProjectSettingsPage from '../settings/ProjectSettingsPage';
 
 export default function AgentLayout() {
   const { sendMessage, abort } = useAgentCore();
-  const view = useGlobalStore((s) => s.ui.view);
+  const view = useUIStore((s) => s.view);
 
   if (view === 'global-settings') {
     return <GlobalSettingsPage />;

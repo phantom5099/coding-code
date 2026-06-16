@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus, Play, Trash2, Power, Clock, FolderOpen } from 'lucide-react';
-import { useGlobalStore, type Automation } from '../stores/global.store';
+import { useAgentStore, type Automation } from '../stores/agent.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
+import { useUIStore } from '../stores/ui.store';
 import {
   listAutomations,
   deleteAutomation,
@@ -10,10 +12,10 @@ import {
 import { AutomationForm } from './AutomationForm';
 
 export function AutomationPanel() {
-  const automations = useGlobalStore((s) => s.agent.automations);
-  const setAutomations = useGlobalStore((s) => s.setAutomations);
-  const workspace = useGlobalStore((s) => s.workspace);
-  const setView = useGlobalStore((s) => s.setView);
+  const automations = useAgentStore((s) => s.automations);
+  const setAutomations = useAgentStore((s) => s.setAutomations);
+  const workspace = useWorkspaceStore();
+  const setView = useUIStore((s) => s.setView);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

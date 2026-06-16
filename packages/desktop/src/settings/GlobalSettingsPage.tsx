@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
-import { useGlobalStore } from '../stores/global.store';
+import { useUIStore } from '../stores/ui.store';
 import { useState } from 'react';
 import McpPanel from './McpPanel';
 import HooksPanel from './HooksPanel';
@@ -25,10 +25,10 @@ const THEMES = [
 ];
 
 export default function GlobalSettingsPage() {
-  const setView = useGlobalStore((s) => s.setView);
+  const setView = useUIStore((s) => s.setView);
   const [section, setSection] = useState<Section>('theme');
-  const theme = useGlobalStore((s) => s.ui.theme);
-  const setTheme = useGlobalStore((s) => s.setTheme);
+  const theme = useUIStore((s) => s.theme);
+  const setTheme = useUIStore((s) => s.setTheme);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-[var(--bg-panel)] text-[var(--text-primary)] pl-3">

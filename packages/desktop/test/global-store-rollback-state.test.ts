@@ -1,16 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useGlobalStore } from '../src/stores/global.store';
+import { useRollbackStore } from '../src/stores/rollback.store';
 
 describe('Rollback state in global store', () => {
   beforeEach(() => {
     // Reset the store state
-    useGlobalStore.setState({
-      rollback: {
+    useRollbackStore.setState({
       rollbackStateByThreadId: {},
       checkpointDiffByTurnId: {},
       revertedFilesByTurnId: {},
       turnCheckpointMapping: {},
-    },
     });
   });
 
@@ -24,9 +22,9 @@ describe('Rollback state in global store', () => {
         lastEntryId: 'entry1',
       },
     };
-    useGlobalStore.getState().setRollbackState('thread1', state as any);
+    useRollbackStore.getState().setRollbackState('thread1', state as any);
 
-    const stored = useGlobalStore.getState().rollback.rollbackStateByThreadId['thread1'];
+    const stored = useRollbackStore.getState().rollbackStateByThreadId['thread1'];
     expect(stored).toBeDefined();
     expect(stored!.code.revertedFiles).toEqual(['/test/file.ts']);
   });
@@ -45,9 +43,9 @@ describe('Rollback state in global store', () => {
         },
       ],
     };
-    useGlobalStore.getState().setCheckpointDiff('thread1', '3', diff);
+    useRollbackStore.getState().setCheckpointDiff('thread1', '3', diff);
 
-    const cached = useGlobalStore.getState().rollback.checkpointDiffByTurnId['thread1:3'];
+    const cached = useRollbackStore.getState().checkpointDiffByTurnId['thread1:3'];
     expect(cached).toBeDefined();
     expect(cached!.turnId).toBe(3);
     expect(cached!.files).toHaveLength(1);
@@ -56,29 +54,29 @@ describe('Rollback state in global store', () => {
   });
 
   it('markFileReverted adds file to reverted list', () => {
-    useGlobalStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
-    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
+    useRollbackStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
+    const reverted = useRollbackStore.getState().revertedFilesByTurnId['thread1:3'];
     expect(reverted).toContain('/test/a.ts');
   });
 
   it('markFileReverted does not duplicate entries', () => {
-    useGlobalStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
-    useGlobalStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
-    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
+    useRollbackStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
+    useRollbackStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
+    const reverted = useRollbackStore.getState().revertedFilesByTurnId['thread1:3'];
     expect(reverted).toEqual(['/test/a.ts']);
   });
 
   it('markFileRestored removes file from reverted list', () => {
-    useGlobalStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
-    useGlobalStore.getState().markFileReverted('thread1', '3', '/test/b.ts');
-    useGlobalStore.getState().markFileRestored('thread1', '3', '/test/a.ts');
+    useRollbackStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
+    useRollbackStore.getState().markFileReverted('thread1', '3', '/test/b.ts');
+    useRollbackStore.getState().markFileRestored('thread1', '3', '/test/a.ts');
 
-    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId['thread1:3'];
+    const reverted = useRollbackStore.getState().revertedFilesByTurnId['thread1:3'];
     expect(reverted).toEqual(['/test/b.ts']);
   });
 
   it('initRevertedFilesFromState populates from server state', () => {
-    useGlobalStore.getState().setTurnCheckpointMapping('thread1', 5, 'ui-turn-5');
+    useRollbackStore.getState().setTurnCheckpointMapping('thread1', 5, 'ui-turn-5');
     const state = {
       context: { active: false, currentThroughTurnId: null },
       code: {
@@ -88,17 +86,17 @@ describe('Rollback state in global store', () => {
         lastEntryId: 'e1',
       },
     };
-    useGlobalStore.getState().setRollbackState('thread1', state as any);
-    useGlobalStore.getState().initRevertedFilesFromState('thread1');
+    useRollbackStore.getState().setRollbackState('thread1', state as any);
+    useRollbackStore.getState().initRevertedFilesFromState('thread1');
 
     const key = 'thread1:ui-turn-5';
-    const reverted = useGlobalStore.getState().rollback.revertedFilesByTurnId[key];
+    const reverted = useRollbackStore.getState().revertedFilesByTurnId[key];
     expect(reverted).toEqual(['/a.ts', '/b.ts']);
   });
 
   it('setTurnCheckpointMapping links checkpoint turnId to UI turnId', () => {
-    useGlobalStore.getState().setTurnCheckpointMapping('thread1', 1, 'ui-turn-1');
-    const mapping = useGlobalStore.getState().rollback.turnCheckpointMapping['thread1'];
+    useRollbackStore.getState().setTurnCheckpointMapping('thread1', 1, 'ui-turn-1');
+    const mapping = useRollbackStore.getState().turnCheckpointMapping['thread1'];
     expect(mapping).toBeDefined();
     expect(mapping![1]).toBe('ui-turn-1');
   });
@@ -117,9 +115,9 @@ describe('Rollback state in global store', () => {
         },
       ],
     };
-    useGlobalStore.getState().setCheckpointDiff('thread1', '1', diff);
+    useRollbackStore.getState().setCheckpointDiff('thread1', '1', diff);
 
-    const direct = useGlobalStore.getState().rollback.checkpointDiffByTurnId['thread1:1'];
+    const direct = useRollbackStore.getState().checkpointDiffByTurnId['thread1:1'];
     expect(direct).toBeDefined();
     expect(direct!.turnId).toBe(1);
   });
@@ -138,22 +136,22 @@ describe('Rollback state in global store', () => {
         },
       ],
     };
-    useGlobalStore.getState().setCheckpointDiff('thread1', '2', diff);
-    useGlobalStore.getState().setTurnCheckpointMapping('thread1', 2, 'ui-turn-2');
+    useRollbackStore.getState().setCheckpointDiff('thread1', '2', diff);
+    useRollbackStore.getState().setTurnCheckpointMapping('thread1', 2, 'ui-turn-2');
 
-    const mapping = useGlobalStore.getState().rollback.turnCheckpointMapping['thread1'];
+    const mapping = useRollbackStore.getState().turnCheckpointMapping['thread1'];
     expect(mapping![2]).toBe('ui-turn-2');
 
     // Simulating getCheckpointKey logic: when directKey misses, mapping resolves it
     const uiTurnId = 'ui-turn-2';
     const directKey = 'thread1:ui-turn-2';
-    const cached = useGlobalStore.getState().rollback.checkpointDiffByTurnId[directKey];
+    const cached = useRollbackStore.getState().checkpointDiffByTurnId[directKey];
     expect(cached).toBeUndefined();
 
     for (const [cpId, mappedUiId] of Object.entries(mapping!)) {
       if (mappedUiId === uiTurnId) {
         const resolvedKey = `thread1:${cpId}`;
-        const resolvedDiff = useGlobalStore.getState().rollback.checkpointDiffByTurnId[resolvedKey];
+        const resolvedDiff = useRollbackStore.getState().checkpointDiffByTurnId[resolvedKey];
         expect(resolvedDiff).toBeDefined();
         expect(resolvedDiff!.turnId).toBe(2);
         return;

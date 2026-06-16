@@ -1,14 +1,15 @@
 import { useEffect } from 'react';
-import { useGlobalStore } from './stores/global.store';
+import { useUIStore } from './stores/ui.store';
+import { useWorkspaceStore } from './stores/workspace.store';
 import AgentLayout from './layouts/AgentLayout';
 import IDELayout from './layouts/IDELayout';
 import TitleBar from './TitleBar';
 import ErrorBoundary from './shared/ErrorBoundary';
 
 export default function App() {
-  const mode = useGlobalStore((s) => s.ui.mode);
-  const theme = useGlobalStore((s) => s.ui.theme);
-  const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+  const mode = useUIStore((s) => s.mode);
+  const theme = useUIStore((s) => s.theme);
+  const rootPath = useWorkspaceStore((s) => s.rootPath);
 
   // Sync workspace cwd to main process for git polling
   useEffect(() => {

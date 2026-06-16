@@ -1,7 +1,7 @@
-import { useGlobalStore } from '../stores/global.store';
+import { useUIStore } from '../stores/ui.store';
 
 export default function IDELayout() {
-  const setMode = useGlobalStore((s) => s.setMode);
+  const setMode = useUIStore((s) => s.setMode);
 
   return (
     <div className="flex-1 flex items-center justify-center flex-col gap-6 bg-[var(--bg-hover)]">

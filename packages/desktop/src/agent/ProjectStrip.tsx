@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Settings, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useGlobalStore } from '../stores/global.store';
+import { useUIStore } from '../stores/ui.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
+import { useAgentStore } from '../stores/agent.store';
 import { API_BASE, api } from '../lib/api';
 import type { Project, Thread } from '@shared/types';
 
@@ -122,9 +124,9 @@ function SessionListPopup({
 }
 
 export default function ProjectStrip() {
-  const projects = useGlobalStore((s) => s.workspace.projects);
-  const currentProjectId = useGlobalStore((s) => s.workspace.currentProjectId);
-  const rawThreads = useGlobalStore((s) => s.agent.threads);
+  const projects = useWorkspaceStore((s) => s.projects);
+  const currentProjectId = useWorkspaceStore((s) => s.currentProjectId);
+  const rawThreads = useAgentStore((s) => s.threads);
   const threadMetadata = useMemo(() => {
     return Object.values(rawThreads).map((t) => ({
       id: t.id,
@@ -133,13 +135,13 @@ export default function ProjectStrip() {
       updatedAt: t.updatedAt,
     }));
   }, [rawThreads]);
-  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
-  const sidebarCollapsed = useGlobalStore((s) => s.ui.sidebarCollapsed);
-  const switchProject = useGlobalStore((s) => s.switchProject);
-  const addProject = useGlobalStore((s) => s.addProject);
-  const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
-  const setView = useGlobalStore((s) => s.setView);
-  const toggleSidebar = useGlobalStore((s) => s.toggleSidebar);
+  const currentThreadId = useAgentStore((s) => s.currentThreadId);
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  const switchProject = useWorkspaceStore((s) => s.switchProject);
+  const addProject = useWorkspaceStore((s) => s.addProject);
+  const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
+  const setView = useUIStore((s) => s.setView);
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -147,8 +149,7 @@ export default function ProjectStrip() {
     await api(`/api/sessions/${threadId}`, { method: 'DELETE' }).catch((e) => {
       console.error('Failed to delete session:', e);
     });
-    const store = useGlobalStore.getState();
-    const rootPath = store.workspace.rootPath;
+    const rootPath = useWorkspaceStore.getState().rootPath;
     if (rootPath) {
       try {
         const sessions = await api<any[]>(`/api/sessions?cwd=${encodeURIComponent(rootPath)}`);
@@ -161,7 +162,7 @@ export default function ProjectStrip() {
           createdAt: new Date(s.createdAt).getTime(),
           updatedAt: new Date(s.updatedAt).getTime(),
         }));
-        store.loadThreads(threads);
+        useAgentStore.getState().loadThreads(threads);
       } catch {}
     }
     if (threadId === currentThreadId) {

@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { useGlobalStore } from '../stores/global.store';
+import { useFilesStore } from '../stores/files.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
 import type { FileNode } from '@shared/types';
 
 export function useFileSystem() {
-  const setFileTree = useGlobalStore((s) => s.setFileTree);
-  const rootPath = useGlobalStore((s) => s.workspace.rootPath);
+  const setFileTree = useFilesStore((s) => s.setFileTree);
+  const rootPath = useWorkspaceStore((s) => s.rootPath);
 
   useEffect(() => {
     if (!rootPath) return;

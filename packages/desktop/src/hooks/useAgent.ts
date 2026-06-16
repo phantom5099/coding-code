@@ -1,5 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { useGlobalStore, type ModelEntry } from '../stores/global.store';
+import { useAgentStore, type ModelEntry } from '../stores/agent.store';
+import { useWorkspaceStore } from '../stores/workspace.store';
+import { useRollbackStore } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import type { StreamChunk } from '@codingcode/core/client/types';
 import { ApiError } from '../lib/api';
@@ -42,23 +44,23 @@ const abortControllers = new Map<string, AbortController>();
 // ---- useAgentCore: sendMessage + abort + initialization ----
 
 export function useAgentCore() {
-  const startTurn = useGlobalStore((s) => s.startTurn);
-  const applyChunk = useGlobalStore((s) => s.applyChunk);
-  const updateTurnId = useGlobalStore((s) => s.updateTurnId);
-  const completeTurn = useGlobalStore((s) => s.completeTurn);
-  const setPendingInput = useGlobalStore((s) => s.setPendingInput);
-  const clearRunningTurns = useGlobalStore((s) => s.clearRunningTurns);
-  const applyTodoUpdate = useGlobalStore((s) => s.applyTodoUpdate);
-  const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
-  const loadThreads = useGlobalStore((s) => s.loadThreads);
-  const setThreadTurns = useGlobalStore((s) => s.setThreadTurns);
-  const setModel = useGlobalStore((s) => s.setModel);
-  const setModels = useGlobalStore((s) => s.setModels);
-  const setContextUsage = useGlobalStore((s) => s.setContextUsage);
-  const setThreadUsage = useGlobalStore((s) => s.setThreadUsage);
-  const workspace = useGlobalStore((s) => s.workspace);
-  const currentThreadId = useGlobalStore((s) => s.agent.currentThreadId);
-  const approvalPolicy = useGlobalStore((s) => s.agent.approvalPolicy);
+  const startTurn = useAgentStore((s) => s.startTurn);
+  const applyChunk = useAgentStore((s) => s.applyChunk);
+  const updateTurnId = useAgentStore((s) => s.updateTurnId);
+  const completeTurn = useAgentStore((s) => s.completeTurn);
+  const setPendingInput = useAgentStore((s) => s.setPendingInput);
+  const clearRunningTurns = useAgentStore((s) => s.clearRunningTurns);
+  const applyTodoUpdate = useAgentStore((s) => s.applyTodoUpdate);
+  const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
+  const loadThreads = useAgentStore((s) => s.loadThreads);
+  const setThreadTurns = useAgentStore((s) => s.setThreadTurns);
+  const setModel = useAgentStore((s) => s.setModel);
+  const setModels = useAgentStore((s) => s.setModels);
+  const setContextUsage = useAgentStore((s) => s.setContextUsage);
+  const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
+  const workspace = useWorkspaceStore();
+  const currentThreadId = useAgentStore((s) => s.currentThreadId);
+  const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
 
   // Load sessions, models, and projects on mount
   useEffect(() => {
@@ -104,7 +106,7 @@ export function useAgentCore() {
   // Load history from HTTP when switching to a thread with no turns
   useEffect(() => {
     if (!currentThreadId) return;
-    const thread = useGlobalStore.getState().agent.threads[currentThreadId];
+    const thread = useAgentStore.getState().threads[currentThreadId];
     if (!thread || thread.turns.length > 0) return;
     getSessionHistory(currentThreadId)
       .then((turns) => {
@@ -188,8 +190,8 @@ export function useAgentCore() {
             completion: event.completion,
             total: event.total,
           });
-          const state = useGlobalStore.getState();
-          const model = state.agent.models.find((m) => m.id === state.agent.model);
+          const agentState = useAgentStore.getState();
+          const model = agentState.models.find((m) => m.id === agentState.model);
           if (model) {
             setContextUsage({ used: event.prompt, contextWindow: model.context_window });
           }
@@ -197,7 +199,7 @@ export function useAgentCore() {
         }
         case 'reactive_compact':
           {
-            const contextUsage = useGlobalStore.getState().agent.contextUsage;
+            const contextUsage = useAgentStore.getState().contextUsage;
             if (contextUsage) {
               setContextUsage({
                 used: event.promptEstimate,
@@ -312,7 +314,7 @@ export function useAgentCore() {
 // ---- useAgentApproval: approveTool + rejectTool ----
 
 export function useAgentApproval() {
-  const updateToolCallStatus = useGlobalStore((s) => s.updateToolCallStatus);
+  const updateToolCallStatus = useAgentStore((s) => s.updateToolCallStatus);
 
   const approveTool = useCallback(
     async (threadId: string, callId: string) => {
@@ -344,24 +346,24 @@ export function useAgentApproval() {
 // ---- useAgentRollback: all rollback methods ----
 
 export function useAgentRollback() {
-  const workspace = useGlobalStore((s) => s.workspace);
-  const setPendingInput = useGlobalStore((s) => s.setPendingInput);
-  const clearRunningTurns = useGlobalStore((s) => s.clearRunningTurns);
-  const setThreadTurns = useGlobalStore((s) => s.setThreadTurns);
-  const setContextUsage = useGlobalStore((s) => s.setContextUsage);
-  const loadThreads = useGlobalStore((s) => s.loadThreads);
-  const setThreadUsage = useGlobalStore((s) => s.setThreadUsage);
+  const workspace = useWorkspaceStore();
+  const setPendingInput = useAgentStore((s) => s.setPendingInput);
+  const clearRunningTurns = useAgentStore((s) => s.clearRunningTurns);
+  const setThreadTurns = useAgentStore((s) => s.setThreadTurns);
+  const setContextUsage = useAgentStore((s) => s.setContextUsage);
+  const loadThreads = useAgentStore((s) => s.loadThreads);
+  const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
   // Rollback store
-  const revertedFilesByTurnId = useGlobalStore((s) => s.rollback.revertedFilesByTurnId);
-  const setRollbackState = useGlobalStore((s) => s.setRollbackState);
-  const setCheckpointDiff = useGlobalStore((s) => s.setCheckpointDiff);
-  const markFileReverted = useGlobalStore((s) => s.markFileReverted);
-  const markFileRestored = useGlobalStore((s) => s.markFileRestored);
-  const setTurnCheckpointMapping = useGlobalStore((s) => s.setTurnCheckpointMapping);
-  const initRevertedFilesFromState = useGlobalStore((s) => s.initRevertedFilesFromState);
+  const revertedFilesByTurnId = useRollbackStore((s) => s.revertedFilesByTurnId);
+  const setRollbackState = useRollbackStore((s) => s.setRollbackState);
+  const setCheckpointDiff = useRollbackStore((s) => s.setCheckpointDiff);
+  const markFileReverted = useRollbackStore((s) => s.markFileReverted);
+  const markFileRestored = useRollbackStore((s) => s.markFileRestored);
+  const setTurnCheckpointMapping = useRollbackStore((s) => s.setTurnCheckpointMapping);
+  const initRevertedFilesFromState = useRollbackStore((s) => s.initRevertedFilesFromState);
 
   const resolveUITurnId = useCallback((threadId: string, checkpointId: number): string => {
-    const mapping = useGlobalStore.getState().rollback.turnCheckpointMapping;
+    const mapping = useRollbackStore.getState().turnCheckpointMapping;
     const uiId = mapping[threadId]?.[checkpointId];
     if (uiId) return uiId;
     return String(checkpointId);
@@ -369,13 +371,13 @@ export function useAgentRollback() {
 
   const loadCheckpointDiff = useCallback(
     async (threadId: string, turnId?: string) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const parsed = turnId != null ? parseInt(turnId, 10) : undefined;
       const numericTurnId = parsed != null && !isNaN(parsed) ? parsed : undefined;
       const diff = await getCheckpointDiff(threadId, cwd, numericTurnId);
       setCheckpointDiff(threadId, String(diff.turnId), diff);
       if (diff.turnId > 0 && numericTurnId == null) {
-        const thread = useGlobalStore.getState().agent.threads[threadId];
+        const thread = useAgentStore.getState().threads[threadId];
         if (thread) {
           const completed = thread.turns.filter((t) => t.status === 'completed');
           const last = completed[completed.length - 1];
@@ -391,7 +393,7 @@ export function useAgentRollback() {
 
   const revertFile = useCallback(
     async (threadId: string, file: string) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const { result } = await revertCheckpointFiles(threadId, cwd, [file]);
       if (result.reverted) {
         markFileReverted(threadId, resolveUITurnId(threadId, result.throughTurnId), file);
@@ -403,7 +405,7 @@ export function useAgentRollback() {
 
   const revertFiles = useCallback(
     async (threadId: string, files: string[]) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const { result } = await revertCheckpointFiles(threadId, cwd, files);
       if (result.reverted) {
         const uiId = resolveUITurnId(threadId, result.throughTurnId);
@@ -418,7 +420,7 @@ export function useAgentRollback() {
 
   const previewRollback = useCallback(
     async (threadId: string, throughTurnId: number) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const preview = await previewRollbackDiff(threadId, cwd, throughTurnId);
       return preview;
     },
@@ -427,7 +429,7 @@ export function useAgentRollback() {
 
   const rollbackCode = useCallback(
     async (threadId: string, throughTurnId: number) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const { result } = await rollbackCodeToTurn(threadId, cwd, throughTurnId);
       return result;
     },
@@ -436,7 +438,7 @@ export function useAgentRollback() {
 
   const rollbackCtx = useCallback(
     async (threadId: string, throughTurnId: number) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const res = await rollbackContext(threadId, cwd, throughTurnId);
       clearRunningTurns(threadId);
       setThreadTurns(threadId, res.turns as Turn[]);
@@ -444,8 +446,8 @@ export function useAgentRollback() {
         setPendingInput(res.rolledBackMessage);
       }
       if (res.promptEstimate != null) {
-        const state = useGlobalStore.getState();
-        const entry = state.agent.models.find((m) => m.id === state.agent.model);
+        const agentState = useAgentStore.getState();
+        const entry = agentState.models.find((m) => m.id === agentState.model);
         const contextWindow = entry?.context_window ?? 0;
         if (contextWindow > 0) {
           setContextUsage({ used: res.promptEstimate, contextWindow });
@@ -458,15 +460,15 @@ export function useAgentRollback() {
 
   const rollbackBoth = useCallback(
     async (threadId: string, throughTurnId: number) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const res = await rollbackBothToTurn(threadId, cwd, throughTurnId);
       setThreadTurns(threadId, res.turns as Turn[]);
       if (res.rolledBackMessage) {
         setPendingInput(res.rolledBackMessage);
       }
       if (res.promptEstimate != null) {
-        const state = useGlobalStore.getState();
-        const entry = state.agent.models.find((m) => m.id === state.agent.model);
+        const agentState = useAgentStore.getState();
+        const entry = agentState.models.find((m) => m.id === agentState.model);
         const contextWindow = entry?.context_window ?? 0;
         if (contextWindow > 0) {
           setContextUsage({ used: res.promptEstimate, contextWindow });
@@ -479,7 +481,7 @@ export function useAgentRollback() {
 
   const undoCodeRollback = useCallback(
     async (threadId: string, uiTurnId: string, force?: boolean, files?: string[]) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const { result } = await undoLastCodeRollback(threadId, cwd, force, files);
       if (result.restored) {
         for (const f of result.restoredFiles) {
@@ -493,7 +495,7 @@ export function useAgentRollback() {
 
   const forkThread = useCallback(
     async (threadId: string, atTurnId?: number) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const res = await forkSession(threadId, cwd, atTurnId);
       return res.sessionId;
     },
@@ -502,7 +504,7 @@ export function useAgentRollback() {
 
   const initRollbackState = useCallback(
     async (threadId: string) => {
-      const cwd = useGlobalStore.getState().agent.threads[threadId]?.cwd ?? workspace.rootPath;
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       try {
         const state = await getRollbackState(threadId, cwd);
         setRollbackState(threadId, state);
@@ -521,7 +523,7 @@ export function useAgentRollback() {
       } catch (e) {
         console.error('Failed to delete session:', e);
       }
-      const currentCwd = useGlobalStore.getState().workspace.rootPath;
+      const currentCwd = useWorkspaceStore.getState().rootPath;
       if (currentCwd) {
         const sessions = await listSessions(currentCwd).catch(() => []);
         if (sessions) {

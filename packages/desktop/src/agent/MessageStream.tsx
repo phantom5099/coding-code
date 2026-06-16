@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useGlobalStore } from '../stores/global.store';
+import { useAgentStore } from '../stores/agent.store';
+import { useRollbackStore } from '../stores/rollback.store';
 import MessageItem from '../shared/MessageItem';
 import UnifiedDiffView from '../shared/UnifiedDiffView';
 import type { Item } from '@shared/types';
@@ -55,9 +56,9 @@ function TurnDiffPanel({
   onRevertFile,
   onRevertTurn,
 }: TurnDiffPanelProps) {
-  const rawCheckpointDiffByTurnId = useGlobalStore((s) => s.rollback.checkpointDiffByTurnId);
-  const rawTurnCheckpointMapping = useGlobalStore((s) => s.rollback.turnCheckpointMapping);
-  const revertedFilesByTurnId = useGlobalStore((s) => s.rollback.revertedFilesByTurnId);
+  const rawCheckpointDiffByTurnId = useRollbackStore((s) => s.checkpointDiffByTurnId);
+  const rawTurnCheckpointMapping = useRollbackStore((s) => s.turnCheckpointMapping);
+  const revertedFilesByTurnId = useRollbackStore((s) => s.revertedFilesByTurnId);
 
   const checkpointDiffs = useMemo(() => {
     const prefix = `${threadId}:`;
@@ -213,8 +214,8 @@ function TurnDiffPanel({
 }
 
 export default function MessageStream({ threadId }: MessageStreamProps) {
-  const turns = useGlobalStore((s) => s.agent.threads[threadId]?.turns ?? []);
-  const setCurrentThread = useGlobalStore((s) => s.setCurrentThread);
+  const turns = useAgentStore((s) => s.threads[threadId]?.turns ?? []);
+  const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
   const { approveTool, rejectTool } = useAgentApproval();
   const {
     loadCheckpointDiff,
@@ -231,8 +232,8 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const didScrollToEndRef = useRef(false);
   const loadedCheckpointRef = useRef<string | null>(null);
-  const markFileRestored = useGlobalStore((s) => s.markFileRestored);
-  const setPendingInput = useGlobalStore((s) => s.setPendingInput);
+  const markFileRestored = useRollbackStore((s) => s.markFileRestored);
+  const setPendingInput = useAgentStore((s) => s.setPendingInput);
 
   const [showRollbackPanel, setShowRollbackPanel] = useState<{
     turnId: string;
@@ -406,9 +407,8 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     if (loadedCheckpointRef.current === loadKey) return;
     loadedCheckpointRef.current = loadKey;
 
-    const state = useGlobalStore.getState();
-    const existingMapping = state.rollback.turnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
-    const existingDiffs = state.rollback.checkpointDiffByTurnId;
+    const existingMapping = useRollbackStore.getState().turnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
+    const existingDiffs = useRollbackStore.getState().checkpointDiffByTurnId;
 
     const alreadyLoaded = completedTurnIds.some((id) =>
       getCheckpointKey(threadId, id, existingDiffs, existingMapping) !== null
@@ -438,7 +438,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
         const result = await undoCodeRollback(threadId, uiTurnId, false);
         if (result.restored) {
           const key = `${threadId}:${uiTurnId}`;
-          delete useGlobalStore.getState().rollback.revertedFilesByTurnId[key];
+          delete useRollbackStore.getState().revertedFilesByTurnId[key];
         }
       } else {
         await revertFiles(threadId, files);
