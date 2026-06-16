@@ -22,8 +22,6 @@ export interface MemoryConfig {
    *  Use full id format "model@API_KEY_ENV" to avoid ambiguity (e.g. "deepseek-chat@DEEPSEEK_API_KEY").
    *  Can also use bare model id (e.g. "deepseek-chat") or display name, first match wins. */
   model: string;
-  maxBytes: number;
-  promptMaxBytes: number;
   extraTypes: MemoryTypeConfig[];
   disabledTypes: string[];
 }
@@ -57,8 +55,6 @@ export const DEFAULT_MEMORY_TYPES: MemoryTypeConfig[] = [
 export const DEFAULT_MEMORY: MemoryConfig = {
   enabled: false,
   model: '',
-  maxBytes: 16384,
-  promptMaxBytes: 8192,
   extraTypes: [],
   disabledTypes: [],
 };
@@ -92,43 +88,78 @@ function isObject(val: unknown): val is Record<string, unknown> {
   return typeof val === 'object' && val !== null && !Array.isArray(val);
 }
 
+function readExistingConfig(configPath: string): Record<string, unknown> {
+  return existsSync(configPath)
+    ? (parseYaml(readFileSync(configPath, 'utf8')) as Record<string, unknown>)
+    : {};
+}
+
+function writeConfig(configPath: string, data: Record<string, unknown>): void {
+  writeFileSync(configPath, stringifyYaml(data), 'utf8');
+}
+
 export function updateActiveModel(model: string, apiKeyEnv: string, configPath?: string): void {
   const p = configPath ?? getUserConfigPath();
-  const existing: Record<string, unknown> = existsSync(p)
-    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
-    : {};
+  const existing = readExistingConfig(p);
   existing.activeModel = { model, apiKeyEnv };
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
+  writeConfig(p, existing);
 }
 
 export function updateMemoryEnabled(enabled: boolean, configPath?: string): void {
   const p = configPath ?? getUserConfigPath();
-  const existing: Record<string, unknown> = existsSync(p)
-    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
-    : {};
+  const existing = readExistingConfig(p);
   const memory = (existing.memory as Record<string, unknown>) ?? {};
   existing.memory = { ...memory, enabled };
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
+  writeConfig(p, existing);
 }
 
 export function updateMemoryDisabledTypes(disabledTypes: string[], configPath?: string): void {
   const p = configPath ?? getUserConfigPath();
-  const existing: Record<string, unknown> = existsSync(p)
-    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
-    : {};
+  const existing = readExistingConfig(p);
   const memory = (existing.memory as Record<string, unknown>) ?? {};
   existing.memory = { ...memory, disabledTypes };
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
+  writeConfig(p, existing);
 }
 
 export function updateMemoryExtraTypes(extraTypes: MemoryTypeConfig[], configPath?: string): void {
   const p = configPath ?? getUserConfigPath();
-  const existing: Record<string, unknown> = existsSync(p)
-    ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
-    : {};
+  const existing = readExistingConfig(p);
   const memory = (existing.memory as Record<string, unknown>) ?? {};
   existing.memory = { ...memory, extraTypes };
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
+  writeConfig(p, existing);
+}
+
+export function updateMemoryModel(model: string, configPath?: string): void {
+  const p = configPath ?? getUserConfigPath();
+  const existing = readExistingConfig(p);
+  const memory = (existing.memory as Record<string, unknown>) ?? {};
+  existing.memory = { ...memory, model };
+  writeConfig(p, existing);
+}
+
+export function updateMaxSteps(maxSteps: number, configPath?: string): void {
+  const p = configPath ?? getUserConfigPath();
+  const existing = readExistingConfig(p);
+  existing.maxSteps = maxSteps;
+  writeConfig(p, existing);
+}
+
+export function updateMaxStopContinuations(
+  maxStopContinuations: number,
+  configPath?: string
+): void {
+  const p = configPath ?? getUserConfigPath();
+  const existing = readExistingConfig(p);
+  existing.maxStopContinuations = maxStopContinuations;
+  writeConfig(p, existing);
+}
+
+export function updateContextCompactionModel(compactionModel: string, configPath?: string): void {
+  const p = configPath ?? getUserConfigPath();
+  const existing = readExistingConfig(p);
+  const context = (existing.context as Record<string, unknown>) ?? {};
+  existing.context = { ...context, compactionModel };
+  writeConfig(p, existing);
 }
 
 export function loadConfig(configPath?: string): AppConfig {

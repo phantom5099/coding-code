@@ -19,6 +19,9 @@ import { updateMemoryEnabled } from '@codingcode/infra/config';
 import { extractMemory } from './extractor.js';
 import type { StructuredTranscript } from './types.js';
 
+const MAX_BYTES = 16384;
+const PROMPT_MAX_BYTES = 8192;
+
 export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
   effect: Effect.gen(function* () {
     const factory = yield* LLMFactoryService;
@@ -44,7 +47,7 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
       if (!projectAuto) return '';
 
       const stripped = stripMarkersForPrompt(projectAuto);
-      const truncated = truncateForPrompt(stripped, cfg.promptMaxBytes);
+      const truncated = truncateForPrompt(stripped, PROMPT_MAX_BYTES);
 
       return truncated ? `## Long-term Memory\n\n${truncated}` : '';
     }
@@ -165,7 +168,7 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
         const projectContentFresh = readMemoryFile(projectPath);
         const projectAutoFresh = extractAutoBlock(projectContentFresh);
         const merged = mergeAutoBlocks(projectAutoFresh, extracted);
-        const truncated = enforceMaxBytes(merged, cfg.maxBytes);
+        const truncated = enforceMaxBytes(merged, MAX_BYTES);
         const newProjectContent = replaceAutoBlock(projectContentFresh, truncated);
 
         writeMemoryFileAtomic(projectPath, newProjectContent);

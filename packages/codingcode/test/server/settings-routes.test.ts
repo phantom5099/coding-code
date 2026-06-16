@@ -6,8 +6,36 @@ import { SkillService } from '../../src/skills/service.js';
 import { McpService } from '../../src/mcp/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
 
+vi.mock('@codingcode/infra/config', () => ({
+  loadConfig: vi.fn().mockReturnValue({
+    maxSteps: 200,
+    maxStopContinuations: 2,
+    context: { compactionModel: '' },
+    memory: {
+      enabled: true,
+      model: '',
+      disabledTypes: [],
+      extraTypes: [],
+    },
+    activeModel: null,
+    server: { port: 8080 },
+  }),
+  updateMaxSteps: vi.fn(),
+  updateMaxStopContinuations: vi.fn(),
+  updateContextCompactionModel: vi.fn(),
+  updateMemoryModel: vi.fn(),
+  updateMemoryEnabled: vi.fn(),
+  updateMemoryDisabledTypes: vi.fn(),
+  updateMemoryExtraTypes: vi.fn(),
+}));
+
 vi.mock('../../src/memory/config.js', () => ({
-  getMemoryConfig: vi.fn().mockReturnValue({ enabled: true, disabledTypes: [], extraTypes: [] }),
+    getMemoryConfig: vi.fn().mockReturnValue({
+      enabled: true,
+      disabledTypes: [],
+      extraTypes: [],
+      model: '',
+    }),
   getAllTypesWithStatus: vi
     .fn()
     .mockReturnValue([
@@ -611,5 +639,78 @@ describe('POST /skills', () => {
     });
     expect(res.status).toBe(200);
     expect(setProjectSkillDisabledState).toHaveBeenCalledWith('/my-project', 'my-skill', true);
+  });
+});
+
+// ---- Memory config extended ----
+describe('GET /memory/config (extended)', () => {
+  it('returns model field', async () => {
+    const res = await settingsRouter.request('/memory/config');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toHaveProperty('model');
+  });
+});
+
+// ---- Memory model ----
+describe('POST /memory/model', () => {
+  it('updates memory model via updateMemoryModel', async () => {
+    const { updateMemoryModel } = await import('@codingcode/infra/config');
+    const res = await settingsRouter.request('/memory/model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'deepseek-v4-flash' }),
+    });
+    expect(res.status).toBe(200);
+    expect(updateMemoryModel).toHaveBeenCalledWith('deepseek-v4-flash');
+  });
+});
+
+// ---- Agent config ----
+describe('GET /agent/config', () => {
+  it('returns maxSteps and maxStopContinuations from loadConfig', async () => {
+    const res = await settingsRouter.request('/agent/config');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toHaveProperty('maxSteps');
+    expect(body).toHaveProperty('maxStopContinuations');
+  });
+});
+
+describe('POST /agent/config', () => {
+  it('updates maxSteps via updateMaxSteps', async () => {
+    const { updateMaxSteps } = await import('@codingcode/infra/config');
+    const res = await settingsRouter.request('/agent/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxSteps: 500 }),
+    });
+    expect(res.status).toBe(200);
+    expect(updateMaxSteps).toHaveBeenCalledWith(500);
+  });
+
+  it('updates maxStopContinuations via updateMaxStopContinuations', async () => {
+    const { updateMaxStopContinuations } = await import('@codingcode/infra/config');
+    const res = await settingsRouter.request('/agent/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxStopContinuations: 10 }),
+    });
+    expect(res.status).toBe(200);
+    expect(updateMaxStopContinuations).toHaveBeenCalledWith(10);
+  });
+});
+
+// ---- Context compaction model ----
+describe('POST /context/compaction-model', () => {
+  it('updates compaction model via updateContextCompactionModel', async () => {
+    const { updateContextCompactionModel } = await import('@codingcode/infra/config');
+    const res = await settingsRouter.request('/context/compaction-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ compactionModel: 'gpt-4o-mini' }),
+    });
+    expect(res.status).toBe(200);
+    expect(updateContextCompactionModel).toHaveBeenCalledWith('gpt-4o-mini');
   });
 });

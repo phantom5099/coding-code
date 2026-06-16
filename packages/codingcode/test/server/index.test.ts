@@ -1,4 +1,4 @@
-﻿﻿import { describe, it, expect, vi } from 'vitest';
+﻿import { describe, it, expect, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';

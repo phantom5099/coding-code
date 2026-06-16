@@ -66,5 +66,4 @@ describe('appendTurnEnd', () => {
     const parsed = JSON.parse(serialized);
     expect(parsed.tokenCount).toBe(tokens);
   });
-
 });

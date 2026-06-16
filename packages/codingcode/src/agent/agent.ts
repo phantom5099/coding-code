@@ -490,7 +490,13 @@ export function agentLoop(
             yield* q.offer({ _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason });
           } else {
             const isOk = r.type === 'ok';
-            yield* q.offer({ _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: isOk });
+            yield* q.offer({
+              _tag: 'ToolResult',
+              id: r.id,
+              name: r.name,
+              output: resultOut,
+              ok: isOk,
+            });
           }
           if (!messages.find((m) => m.tool_call_id === r.id)) {
             const content =

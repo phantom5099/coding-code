@@ -70,6 +70,13 @@ import {
   updateMemoryExtraType as _updateMemoryExtraType,
   deleteMemoryExtraType as _deleteMemoryExtraType,
 } from '../../memory/config.js';
+import {
+  loadConfig,
+  updateMaxSteps,
+  updateMaxStopContinuations,
+  updateContextCompactionModel,
+  updateMemoryModel,
+} from '@codingcode/infra/config';
 import { MemoryService } from '../../memory/index.js';
 import { createRunWithLayer, errorResponse } from '../util.js';
 
@@ -268,7 +275,11 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
   // ---- Memory ----
   settingsRouter.get('/memory/config', (c) => {
     const cfg = getMemoryConfig();
-    return c.json({ enabled: cfg.enabled, types: getAllTypesWithStatus(cfg) });
+    return c.json({
+      enabled: cfg.enabled,
+      types: getAllTypesWithStatus(cfg),
+      model: cfg.model,
+    });
   });
 
   settingsRouter.post('/memory/enabled', async (c) => {
@@ -331,6 +342,34 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
       if (e.message?.includes('not found')) return c.json({ error: e.message }, 404);
       throw e;
     }
+  });
+
+  settingsRouter.post('/memory/model', async (c) => {
+    const body = (await c.req.json()) as { model: string };
+    updateMemoryModel(body.model);
+    return c.json({ model: body.model });
+  });
+
+  // ---- Agent config ----
+  settingsRouter.get('/agent/config', (c) => {
+    const cfg = loadConfig();
+    return c.json({ maxSteps: cfg.maxSteps, maxStopContinuations: cfg.maxStopContinuations });
+  });
+
+  settingsRouter.post('/agent/config', async (c) => {
+    const body = (await c.req.json()) as { maxSteps?: number; maxStopContinuations?: number };
+    if (body.maxSteps !== undefined) updateMaxSteps(body.maxSteps);
+    if (body.maxStopContinuations !== undefined)
+      updateMaxStopContinuations(body.maxStopContinuations);
+    const cfg = loadConfig();
+    return c.json({ maxSteps: cfg.maxSteps, maxStopContinuations: cfg.maxStopContinuations });
+  });
+
+  // ---- Context config ----
+  settingsRouter.post('/context/compaction-model', async (c) => {
+    const body = (await c.req.json()) as { compactionModel: string };
+    updateContextCompactionModel(body.compactionModel);
+    return c.json({ compactionModel: body.compactionModel });
   });
 
   // ---- Agents ----

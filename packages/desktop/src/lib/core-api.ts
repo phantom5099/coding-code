@@ -1,4 +1,4 @@
-import { API_BASE } from './api';
+import { API_BASE, api } from './api';
 import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client/http-clients';
 
 const clients = createHttpClients(API_BASE);
@@ -64,8 +64,9 @@ export function sendApprovalResponse(
 export function getMemoryConfig(): Promise<{
   enabled: boolean;
   types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
+  model: string;
 }> {
-  return clients.settings.getMemoryConfig();
+  return api('/api/settings/memory/config');
 }
 
 export function setMemoryEnabled(enabled: boolean): Promise<void> {
@@ -89,6 +90,46 @@ export function updateMemoryExtraType(
 
 export function deleteMemoryExtraType(name: string): Promise<void> {
   return clients.settings.deleteMemoryExtraType(name);
+}
+
+export function setMemoryModel(model: string): Promise<{ model: string }> {
+  return api('/api/settings/memory/model', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model }),
+  });
+}
+
+// ---- Settings: Agent config ----
+
+export async function getAgentConfig(): Promise<{
+  maxSteps: number;
+  maxStopContinuations: number;
+}> {
+  return api('/api/settings/agent/config');
+}
+
+export async function setAgentConfig(partial: {
+  maxSteps?: number;
+  maxStopContinuations?: number;
+}): Promise<{ maxSteps: number; maxStopContinuations: number }> {
+  return api('/api/settings/agent/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(partial),
+  });
+}
+
+// ---- Settings: Context config ----
+
+export async function setCompactionModel(
+  compactionModel: string
+): Promise<{ compactionModel: string }> {
+  return api('/api/settings/context/compaction-model', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ compactionModel }),
+  });
 }
 
 // ---- Settings: MCP ----
