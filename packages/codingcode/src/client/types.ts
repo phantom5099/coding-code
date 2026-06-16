@@ -50,7 +50,7 @@ export interface AgentClient {
   }>;
   undoLastCodeRollback(force?: boolean, files?: string[]): Promise<CodeRollbackUndoResult>;
   getRollbackState(): Promise<RollbackState>;
-  forkSession(atUuid?: string): Promise<string>;
+  forkSession(atTurnId?: number): Promise<string>;
   compact(): Promise<void>;
   getMemoryEnabled(): Promise<boolean>;
   setMemoryEnabled(enabled: boolean): Promise<void>;

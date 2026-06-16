@@ -336,12 +336,12 @@ export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promis
       return clients.sessions.getRollbackState({ sessionId: currentSessionId, cwd: cwd() });
     },
 
-    async forkSession(atUuid?: string) {
+    async forkSession(atTurnId?: number) {
       if (!currentSessionId) return '';
       const result = await clients.sessions.forkSession({
         sessionId: currentSessionId,
         cwd: cwd(),
-        atUuid,
+        atTurnId,
       });
       return result.sessionId;
     },

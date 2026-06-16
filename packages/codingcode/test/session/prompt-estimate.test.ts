@@ -219,7 +219,7 @@ describe('promptEstimate', () => {
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 'a1');
+          return yield* svc.forkSession(state, 2);
         })
       );
       const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
@@ -253,7 +253,7 @@ describe('promptEstimate', () => {
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 'u2');
+          return yield* svc.forkSession(state, 2);
         })
       );
       const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);

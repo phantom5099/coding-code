@@ -65,7 +65,7 @@ export interface SessionClient {
   forkSession(input: {
     sessionId: string;
     cwd: string;
-    atUuid?: string;
+    atTurnId?: number;
   }): Promise<{ sessionId: string; turns: SessionEvent[] }>;
 }
 
@@ -221,13 +221,13 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
         code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null },
       };
     },
-    async forkSession({ sessionId, atUuid }) {
+    async forkSession({ sessionId, atTurnId }) {
       const cwd = await getWorkspaceCwd(rt);
       const newSessionId = await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
           const state = yield* session.create(cwd, 'unknown', sessionId);
-          return yield* session.forkSession(state, atUuid ?? '');
+          return yield* session.forkSession(state, atTurnId ?? 0);
         })
       );
       return { sessionId: newSessionId, turns: [] as SessionEvent[] };

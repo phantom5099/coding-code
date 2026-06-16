@@ -12,7 +12,7 @@ import type {
   Turn,
   TodoItem,
 } from '@shared/types';
-import type { SessionRollbackState, CheckpointDiff, RollbackPreviewDiff } from '../lib/core-api';
+import type { SessionRollbackState, CheckpointDiff } from '../lib/core-api';
 import { buildToolDiff } from '../lib/diff-compute';
 
 function normalizeCwd(p: string): string {
@@ -83,19 +83,12 @@ interface AgentState {
   pendingInput: string | null;
   usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>;
   isCompressing: boolean;
-  hasRunningTurn: boolean;
   automations: Automation[];
-}
-
-interface EditorState {
-  cursorLine: number;
-  cursorCol: number;
 }
 
 interface RollbackState {
   rollbackStateByThreadId: Record<string, SessionRollbackState>;
   checkpointDiffByTurnId: Record<string, CheckpointDiff>;
-  rollbackPreviewByThreadId: Record<string, RollbackPreviewDiff>;
   revertedFilesByTurnId: Record<string, string[]>;
   turnCheckpointMapping: Record<string, Record<number, string>>;
 }
@@ -107,7 +100,6 @@ interface GlobalState {
   git: GitStatus;
   terminals: TerminalSession[];
   agent: AgentState;
-  editor: EditorState;
   rollback: RollbackState;
 }
 
@@ -146,7 +138,6 @@ interface GlobalActions {
     threadId: string,
     usage: { prompt: number; completion: number; total: number }
   ) => void;
-  setCursor: (line: number, col: number) => void;
   loadThreads: (threads: Thread[]) => void;
   updateToolCallStatus: (
     threadId: string,
@@ -165,8 +156,6 @@ interface GlobalActions {
   // Rollback state
   setRollbackState: (threadId: string, state: SessionRollbackState) => void;
   setCheckpointDiff: (threadId: string, turnId: string, diff: CheckpointDiff) => void;
-  setRollbackPreview: (threadId: string, preview: RollbackPreviewDiff) => void;
-  clearRollbackPreview: (threadId: string) => void;
   markFileReverted: (threadId: string, turnId: string, file: string) => void;
   markFileRestored: (threadId: string, turnId: string, file: string) => void;
   initRevertedFilesFromState: (threadId: string) => void;
@@ -239,17 +228,11 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         pendingInput: null,
         usageByThreadId: {},
         isCompressing: false,
-        hasRunningTurn: false,
         automations: [],
-      },
-      editor: {
-        cursorLine: 1,
-        cursorCol: 1,
       },
       rollback: {
         rollbackStateByThreadId: {},
         checkpointDiffByTurnId: {},
-        rollbackPreviewByThreadId: {},
         revertedFilesByTurnId: {},
         turnCheckpointMapping: {},
       },
@@ -409,12 +392,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         set((s) => {
           s.agent.usageByThreadId[threadId] = usage;
         }),
-      setCursor: (line, col) =>
-        set((s) => {
-          s.editor.cursorLine = line;
-          s.editor.cursorCol = col;
-        }),
-
       loadThreads: (threads) =>
         set((s) => {
           const incomingIds = new Set(threads.map((t) => t.id));
@@ -433,6 +410,35 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           for (const id of Object.keys(s.agent.usageByThreadId)) {
             if (!incomingIds.has(id)) {
               delete s.agent.usageByThreadId[id];
+            }
+          }
+          // Clean up todoByThreadId for deleted threads
+          for (const id of Object.keys(s.agent.todoByThreadId)) {
+            if (!incomingIds.has(id)) {
+              delete s.agent.todoByThreadId[id];
+            }
+          }
+          // Clean up rollback data for deleted threads
+          for (const id of Object.keys(s.rollback.rollbackStateByThreadId)) {
+            if (!incomingIds.has(id)) {
+              delete s.rollback.rollbackStateByThreadId[id];
+            }
+          }
+          for (const key of Object.keys(s.rollback.checkpointDiffByTurnId)) {
+            const threadId = key.split(':')[0];
+            if (threadId && !incomingIds.has(threadId)) {
+              delete s.rollback.checkpointDiffByTurnId[key];
+            }
+          }
+          for (const id of Object.keys(s.rollback.revertedFilesByTurnId)) {
+            const threadId = id.split(':')[0];
+            if (threadId && !incomingIds.has(threadId)) {
+              delete s.rollback.revertedFilesByTurnId[id];
+            }
+          }
+          for (const id of Object.keys(s.rollback.turnCheckpointMapping)) {
+            if (!incomingIds.has(id)) {
+              delete s.rollback.turnCheckpointMapping[id];
             }
           }
         }),
@@ -468,7 +474,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
             thread.turns.push(turn);
             thread.updatedAt = Date.now();
           }
-          s.agent.hasRunningTurn = true;
         }),
 
       applyChunk: (threadId, turnId, chunk) =>
@@ -585,10 +590,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
               item.partial = false;
             }
           }
-          // Recalculate hasRunningTurn across all threads
-          s.agent.hasRunningTurn = Object.values(s.agent.threads).some((t) =>
-            t.turns.some((tu) => tu.status === 'running')
-          );
         }),
 
       setPendingInput: (input) =>
@@ -601,9 +602,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
           const thread = s.agent.threads[threadId];
           if (!thread) return;
           thread.turns = thread.turns.filter((t) => t.status !== 'running');
-          s.agent.hasRunningTurn = Object.values(s.agent.threads).some((t) =>
-            t.turns.some((tu) => tu.status === 'running')
-          );
         }),
 
       applyTodoUpdate: (threadId, items) =>
@@ -652,14 +650,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
       setCheckpointDiff: (threadId, turnId, diff) =>
         set((s) => {
           s.rollback.checkpointDiffByTurnId[`${threadId}:${turnId}`] = diff as any;
-        }),
-      setRollbackPreview: (threadId, preview) =>
-        set((s) => {
-          s.rollback.rollbackPreviewByThreadId[threadId] = preview as any;
-        }),
-      clearRollbackPreview: (threadId) =>
-        set((s) => {
-          delete s.rollback.rollbackPreviewByThreadId[threadId];
         }),
       markFileReverted: (threadId, turnId, file) =>
         set((s) => {
@@ -733,10 +723,6 @@ export const useGlobalStore = create<GlobalState & GlobalActions>()(
         agent: {
           approvalPolicy: state.agent.approvalPolicy,
           model: state.agent.model,
-        },
-        editor: {
-          cursorLine: state.editor.cursorLine,
-          cursorCol: state.editor.cursorCol,
         },
       }),
       merge: (persisted, current) => {
