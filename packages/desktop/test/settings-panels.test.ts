@@ -137,6 +137,7 @@ describe('HooksPanel - hook point coverage', () => {
       'tool.approval.pre',
       'llm.request.before',
       'agent.step.before',
+      'agent.turn.stop',
       'agent.subagent.spawn.before',
     ];
     for (const h of decisionHooks) {

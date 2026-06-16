@@ -99,7 +99,7 @@ export default function AgentConfigPanel() {
             <div>
               <div className="text-[14px] text-[var(--text-title)]">最大停止续行次数</div>
               <div className="text-[12px] text-[var(--text-placeholder)] mt-0.5">
-                Agent 在自动停止后最多允许重新激活的次数
+                stop 钩子判定"继续执行"的最大次数，超出则强制终止
               </div>
             </div>
             <input
