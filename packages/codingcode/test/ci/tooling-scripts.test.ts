@@ -49,7 +49,9 @@ describe('CI tooling configuration', () => {
     expect(content).toContain('permissions:');
     expect(content).toContain('contents: write');
     expect(content).toContain('GH_TOKEN');
-    expect(content).toContain('--publish always');
+    expect(content).toContain('--publish never');
+    expect(content).toContain('gh release create');
+    expect(content).toContain('needs: build');
   });
 
   it('electron-builder.yml has publish config for GitHub Releases', () => {
