@@ -47,7 +47,7 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
       if (!projectAuto) return '';
 
       const stripped = stripMarkersForPrompt(projectAuto);
-      const truncated = truncateForPrompt(stripped, PROMPT_MAX_BYTES);
+      const truncated = truncateForPrompt(stripped, cfg.promptMaxBytes);
 
       return truncated ? `## Long-term Memory\n\n${truncated}` : '';
     }

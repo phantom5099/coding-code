@@ -37,7 +37,6 @@ function makeFixture(opts: FixtureOptions) {
       sessionId,
       projectPath: slug,
       cwd: '/tmp/test',
-      model: 'test',
       createdAt: new Date().toISOString(),
     },
   ];
@@ -164,7 +163,8 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
         const ctx = await getCtxService();
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        const { messages } = ctx.assemblePayload(fx.sessionId, fx.slug, cfg);
+        await ctx.compactWithLLM(fx.sessionId, fx.slug, messages, cfg, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
@@ -179,8 +179,10 @@ describe('compressor behavior', () => {
       try {
         const cfg = tinyConfig();
         const ctx = await getCtxService();
-        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, null);
+        const { messages } = ctx.assemblePayload(fx.sessionId, fx.slug, cfg);
+        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, messages, cfg, null);
         expect(result.didCompress).toBe(false);
+        expect(result.messages).toBeUndefined();
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
       } finally {
@@ -198,7 +200,8 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
         const ctx = await getCtxService();
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        const { messages } = ctx.assemblePayload(fx.sessionId, fx.slug, cfg);
+        await ctx.compactWithLLM(fx.sessionId, fx.slug, messages, cfg, llm);
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
@@ -219,11 +222,14 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
         const ctx = await getCtxService();
-        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        const { messages } = ctx.assemblePayload(fx.sessionId, fx.slug, cfg);
+        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, messages, cfg, llm);
         expect(result.didCompress).toBe(true);
         expect(result.promptEstimate).toBeGreaterThan(0);
         expect(result.promptEstimate).toBeLessThan(before);
         expect(result.released).toBeGreaterThan(0);
+        expect(result.messages).toBeDefined();
+        expect(result.messages!.length).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
       }

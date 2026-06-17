@@ -104,6 +104,7 @@ describe('agentLoop hooks type', () => {
       messageCount: 0,
       currentTurnId: 1,
       sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
+      model: 'test-model',
       title: 'type-test',
       usage: undefined,
       promptEstimate: 0,

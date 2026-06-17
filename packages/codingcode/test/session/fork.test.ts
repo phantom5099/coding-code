@@ -22,7 +22,6 @@ function makeFixture(sessionId: string, slug: string) {
       sessionId,
       projectPath: slug,
       cwd: '/tmp/test',
-      model: 'test',
       createdAt: new Date().toISOString(),
     },
     { type: 'user', turnId: 1, uuid: 'u1', content: 'first', timestamp: new Date().toISOString() },
@@ -116,6 +115,7 @@ describe('forkSession', () => {
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage: undefined,
         promptEstimate: 0,
@@ -160,6 +160,7 @@ describe('forkSession', () => {
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage: undefined,
         promptEstimate: 0,
@@ -205,6 +206,7 @@ describe('forkSession', () => {
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage: undefined,
         promptEstimate: 0,
@@ -268,6 +270,7 @@ describe('forkSession', () => {
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage: undefined,
         promptEstimate: 0,
@@ -288,6 +291,7 @@ describe('forkSession', () => {
       expect(idx.sessionId).toBe(newSessionId);
       expect(idx.title).toBe('fixture');
       expect(idx.permissionMode).toBe('default');
+      expect(idx.model).toBe('test');
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }

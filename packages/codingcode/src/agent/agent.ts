@@ -253,16 +253,19 @@ export function agentLoop(
 
     const config = getContextConfig();
     const maxOverflowRetries = REACTIVE_COMPACT_MAX_RETRIES;
-    const model = state.sessionMeta?.model ?? 'unknown';
+    const model = state.model ?? 'unknown';
     const effectiveMaxSteps = opts.maxStepsOverride ?? maxSteps;
 
     let stopContinuations = 0;
     const effectiveMaxStopContinuations = opts.maxStopContinuations ?? maxStopContinuations;
 
+    let messages: Message[] = [];
+
     for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
-      const { messages } = yield* Effect.sync(() =>
+      const payload = yield* Effect.sync(() =>
         context.assemblePayload(state.sessionId, state.projectPath, config, llm.modelInfo.maxTokens)
       );
+      messages = payload.messages;
 
       let lastResult: Result<string, AgentError> | null = null;
       let overflow = false;
@@ -309,7 +312,7 @@ export function agentLoop(
             ),
           catch: (e) => new AgentError('LLM_FAILED', String(e)),
         });
-        if (compressResult.didCompress) {
+        if (compressResult.didCompress && compressResult.messages) {
           yield* q.offer({
             _tag: 'ReactiveCompact',
             attempt: 1,
@@ -317,18 +320,9 @@ export function agentLoop(
             promptEstimate: compressResult.promptEstimate,
           });
 
-          const rebuilt = yield* Effect.sync(() =>
-            context.assemblePayload(
-              state.sessionId,
-              state.projectPath,
-              config,
-              llm.modelInfo.maxTokens
-            )
-          );
-          messages.length = 0;
-          messages.push(...rebuilt.messages);
+          messages = compressResult.messages;
           state.usage = undefined;
-          state.promptEstimate = rebuilt.promptEstimate;
+          state.promptEstimate = compressResult.promptEstimate;
         }
 
         const llmMessages = [...messages];
@@ -364,15 +358,18 @@ export function agentLoop(
                 context.compactWithLLM(
                   state.sessionId,
                   state.projectPath,
+                  messages,
                   config,
-                  null,
-                  undefined,
-                  undefined,
+                  llm,
                   undefined,
                   llm.modelInfo.maxTokens
                 ),
               catch: (e) => new AgentError('LLM_FAILED', String(e)),
             });
+            if (compressResult.didCompress && compressResult.messages) {
+              messages = compressResult.messages;
+              state.promptEstimate = compressResult.promptEstimate;
+            }
             yield* q.offer({
               _tag: 'ReactiveCompact',
               attempt: attempt + 1,

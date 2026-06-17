@@ -120,8 +120,27 @@ describe('compactIfNeeded', () => {
 
   it('returns didCompress=true when promptEstimate exceeds threshold', async () => {
     (estimateTokens as any).mockReturnValue(10000);
+    (estimateMessageTokens as any).mockReturnValue(50);
     const ctx = await getCtxService();
-    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
+    const result = await ctx.compactIfNeeded(
+      's1',
+      'proj',
+      [
+        { type: 'user', content: 'a'.repeat(200), uuid: 'u1', turnId: 1 },
+        { type: 'assistant', content: 'b'.repeat(200), uuid: 'a1', turnId: 1 },
+        {
+          type: 'tool_result',
+          output: 'c'.repeat(5000),
+          uuid: 't1',
+          turnId: 1,
+          toolName: 'read_file',
+          toolCallId: 'tc1',
+        },
+      ] as any,
+      10000,
+      config(0.5),
+      null
+    );
     expect(result.didCompress).toBe(true);
     expect(result.released).toBeGreaterThan(0);
     expect(result.promptEstimate).toBeGreaterThanOrEqual(0);

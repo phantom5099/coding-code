@@ -450,11 +450,9 @@ describe('global store - per-thread isStreaming derivation', () => {
     useAgentStore.getState().startTurn(threadB, { id: 'turn-b', items: [], status: 'running' });
 
     const isStreamingA = () =>
-      useAgentStore.getState().threads[threadA]?.turns.some((t) => t.status === 'running') ??
-      false;
+      useAgentStore.getState().threads[threadA]?.turns.some((t) => t.status === 'running') ?? false;
     const isStreamingB = () =>
-      useAgentStore.getState().threads[threadB]?.turns.some((t) => t.status === 'running') ??
-      false;
+      useAgentStore.getState().threads[threadB]?.turns.some((t) => t.status === 'running') ?? false;
 
     expect(isStreamingA()).toBe(true);
     expect(isStreamingB()).toBe(true);
@@ -469,9 +467,8 @@ describe('global store - per-thread isStreaming derivation', () => {
   it('thread with no running turns is not streaming', () => {
     const threadId = 'thread-x';
     const isStreaming = () =>
-      useAgentStore
-        .getState()
-        .threads[threadId]?.turns.some((t) => t.status === 'running') ?? false;
+      useAgentStore.getState().threads[threadId]?.turns.some((t) => t.status === 'running') ??
+      false;
 
     // Thread not yet created
     expect(isStreaming()).toBe(false);
@@ -614,9 +611,9 @@ describe('global store - compressing state', () => {
 
 describe('global store - loadThreads orphan data cleanup', () => {
   it('cleans up todoByThreadId for deleted threads', () => {
-    useAgentStore.getState().applyTodoUpdate('deleted-thread', [
-      { id: '1', text: 'todo', status: 'in_progress' },
-    ]);
+    useAgentStore
+      .getState()
+      .applyTodoUpdate('deleted-thread', [{ id: '1', text: 'todo', status: 'in_progress' }]);
     expect(useAgentStore.getState().todoByThreadId['deleted-thread']).toBeDefined();
 
     useAgentStore.getState().loadThreads([]);
@@ -624,11 +621,19 @@ describe('global store - loadThreads orphan data cleanup', () => {
   });
 
   it('preserves todoByThreadId for threads still in the list', () => {
-    useAgentStore.getState().applyTodoUpdate('kept-thread', [
-      { id: '1', text: 'todo', status: 'in_progress' },
-    ]);
+    useAgentStore
+      .getState()
+      .applyTodoUpdate('kept-thread', [{ id: '1', text: 'todo', status: 'in_progress' }]);
     useAgentStore.getState().loadThreads([
-      { id: 'kept-thread', projectId: '', title: 'test', cwd: '/x', turns: [], createdAt: 1, updatedAt: 2 },
+      {
+        id: 'kept-thread',
+        projectId: '',
+        title: 'test',
+        cwd: '/x',
+        turns: [],
+        createdAt: 1,
+        updatedAt: 2,
+      },
     ]);
     expect(useAgentStore.getState().todoByThreadId['kept-thread']).toBeDefined();
   });
@@ -644,7 +649,8 @@ describe('global store - loadThreads orphan data cleanup', () => {
 
   it('cleans up checkpointDiffByTurnId for deleted threads', () => {
     useRollbackStore.getState().setCheckpointDiff('deleted-thread', '1', {
-      turnId: 1, files: [],
+      turnId: 1,
+      files: [],
     } as any);
     useAgentStore.getState().loadThreads([]);
     expect(useRollbackStore.getState().checkpointDiffByTurnId['deleted-thread:1']).toBeUndefined();
@@ -668,13 +674,22 @@ describe('global store - loadThreads orphan data cleanup', () => {
       code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: '' },
     } as any);
     useRollbackStore.getState().setCheckpointDiff('kept-thread', '1', {
-      turnId: 1, files: [],
+      turnId: 1,
+      files: [],
     } as any);
     useRollbackStore.getState().markFileReverted('kept-thread', '1', '/a.ts');
     useRollbackStore.getState().setTurnCheckpointMapping('kept-thread', 1, 'ui-1');
 
     useAgentStore.getState().loadThreads([
-      { id: 'kept-thread', projectId: '', title: 'test', cwd: '/x', turns: [], createdAt: 1, updatedAt: 2 },
+      {
+        id: 'kept-thread',
+        projectId: '',
+        title: 'test',
+        cwd: '/x',
+        turns: [],
+        createdAt: 1,
+        updatedAt: 2,
+      },
     ]);
 
     expect(useRollbackStore.getState().rollbackStateByThreadId['kept-thread']).toBeDefined();

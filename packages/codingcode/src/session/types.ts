@@ -3,7 +3,6 @@ export interface SessionMetaEvent {
   sessionId: string;
   projectPath: string;
   cwd: string;
-  model: string;
   createdAt: string;
   parentSessionId?: string;
   parentAgentId?: string;

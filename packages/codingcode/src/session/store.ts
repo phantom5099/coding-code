@@ -47,6 +47,7 @@ export interface SessionStoreState {
   indexPath: string;
   messageCount: number;
   sessionMeta: SessionMetaEvent | null;
+  model: string;
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;
@@ -85,7 +86,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         sessionId: state.sessionId,
         projectPath: state.projectPath,
         cwd: state.cwd,
-        model: state.sessionMeta.model,
+        model: state.model,
         createdAt: state.sessionMeta.createdAt,
         updatedAt: new Date().toISOString(),
         messageCount: state.messageCount,
@@ -111,6 +112,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           const state = initState(cwd, sessionId, opts?.parentSessionId);
           ensureDirs(state.transcriptPath);
 
+          state.model = model;
+
           if (existsSync(state.transcriptPath)) {
             const history = readHistory(state.transcriptPath);
             const meta = history.find((e) => e.type === 'session_meta') as
@@ -130,7 +133,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             sessionId: state.sessionId,
             projectPath: state.projectPath,
             cwd: state.cwd,
-            model,
             createdAt: new Date().toISOString(),
             ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
             ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
@@ -451,6 +453,7 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
   let usage: TokenUsage | undefined = undefined;
   let promptEstimate = 0;
   let memorySnapshot = '';
+  let model = '';
   try {
     if (existsSync(indexPath)) {
       const idx = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
@@ -458,6 +461,7 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
       usage = idx.usage ?? undefined;
       promptEstimate = idx.promptEstimate ?? 0;
       memorySnapshot = idx.memorySnapshot ?? '';
+      model = idx.model ?? '';
     }
   } catch {
     /* ignore corrupt index */
@@ -477,6 +481,7 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
     indexPath,
     messageCount: 0,
     sessionMeta: null,
+    model,
     title: id.slice(0, 8),
     currentTurnId,
     usage,
@@ -485,11 +490,13 @@ function initState(cwd: string, sessionId?: string, parentSessionId?: string): S
   };
 }
 
-function forkSessionImpl(sourceSessionId: string, sourceJsonlPath: string, atTurnId: number): string {
+function forkSessionImpl(
+  sourceSessionId: string,
+  sourceJsonlPath: string,
+  atTurnId: number
+): string {
   const events = readHistory(sourceJsonlPath);
-  const atIdx = events.findIndex(
-    (e) => e.type === 'user' && (e as any).turnId === atTurnId
-  );
+  const atIdx = events.findIndex((e) => e.type === 'user' && (e as any).turnId === atTurnId);
 
   const chain = atIdx >= 0 ? events.slice(0, atIdx + 1) : events;
   const newSessionId = randomUUID();
@@ -526,9 +533,10 @@ function forkSessionImpl(sourceSessionId: string, sourceJsonlPath: string, atTur
   let usage: TokenUsage | undefined = undefined;
   let promptEstimate = 0;
   let permissionMode = 'default';
+  let srcIdx: SessionIndex | undefined;
   if (existsSync(sourceIdxPath)) {
     try {
-      const srcIdx = JSON.parse(readFileSync(sourceIdxPath, 'utf8')) as SessionIndex;
+      srcIdx = JSON.parse(readFileSync(sourceIdxPath, 'utf8')) as SessionIndex;
       title = srcIdx.title;
       usage = srcIdx.usage ?? undefined;
       promptEstimate = srcIdx.promptEstimate ?? 0;
@@ -552,7 +560,7 @@ function forkSessionImpl(sourceSessionId: string, sourceJsonlPath: string, atTur
     sessionId: newSessionId,
     projectPath: meta?.projectPath ?? '',
     cwd: meta?.cwd ?? '',
-    model: meta?.model ?? '',
+    model: srcIdx?.model ?? '',
     createdAt: meta?.createdAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     messageCount: countNonMetaEvents(chain),

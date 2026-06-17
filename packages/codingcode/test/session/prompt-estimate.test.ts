@@ -141,7 +141,6 @@ describe('promptEstimate', () => {
         sessionId,
         projectPath: slug,
         cwd: '/tmp/test',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       {
@@ -211,6 +210,7 @@ describe('promptEstimate', () => {
         messageCount: 4,
         currentTurnId: 2,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage,
         promptEstimate: usage.prompt,
@@ -245,6 +245,7 @@ describe('promptEstimate', () => {
         messageCount: 4,
         currentTurnId: 2,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage: undefined,
         promptEstimate: 0,
@@ -269,6 +270,30 @@ describe('token estimation', () => {
   it('estimateTokensForContent returns > 0 for non-empty strings', () => {
     expect(estimateTokensForContent('hello world')).toBeGreaterThan(0);
     expect(estimateTokensForContent('')).toBe(0);
+  });
+});
+
+describe('SessionService create sets model', () => {
+  it('create sets state.model and persists it to index', async () => {
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug);
+    mkdirSync(dir, { recursive: true });
+    try {
+      const state = await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.create(dir, 'my-test-model');
+        })
+      );
+      expect(state.model).toBe('my-test-model');
+
+      const idx = JSON.parse(readFileSync(state.indexPath, 'utf8'));
+      expect(idx.model).toBe('my-test-model');
+    } finally {
+      await new Promise((r) => setTimeout(r, 50));
+      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

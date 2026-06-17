@@ -56,6 +56,7 @@ const mockState = {
   messageCount: 0,
   currentTurnId: 0,
   sessionMeta: null,
+  model: 'test',
   title: 'test-sess',
   usage: undefined,
   promptEstimate: 0,

@@ -11,7 +11,6 @@ function makeEvents(overrides: SessionEvent[] = []): SessionEvent[] {
       sessionId: 's1',
       projectPath: 'p',
       cwd: '/tmp',
-      model: 'test',
       createdAt: new Date().toISOString(),
     },
     { type: 'user', turnId: 1, uuid: 'u1', content: 'hello', timestamp: new Date().toISOString() },
@@ -200,7 +199,6 @@ describe('buildMessagesFromEvents', () => {
         sessionId: 's1',
         projectPath: 'p',
         cwd: '/tmp',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       {
@@ -234,7 +232,6 @@ describe('buildMessagesFromEvents', () => {
         sessionId: 's1',
         projectPath: 'p',
         cwd: '/tmp',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       {
@@ -299,7 +296,6 @@ describe('buildMessagesFromEvents', () => {
         sessionId: 's1',
         projectPath: 'p',
         cwd: '/tmp',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       {
@@ -369,7 +365,6 @@ describe('buildMessagesFromEvents', () => {
         sessionId: 's1',
         projectPath: 'p',
         cwd: '/tmp',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       {
@@ -424,7 +419,6 @@ describe('buildMessagesFromEvents', () => {
         sessionId: 's1',
         projectPath: 'p',
         cwd: '/tmp',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       {
@@ -480,7 +474,6 @@ describe('buildMessagesFromEvents', () => {
         sessionId: 's1',
         projectPath: 'p',
         cwd: '/tmp',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       { type: 'user', turnId: 1, uuid: 'u1', content: 'q1', timestamp: new Date().toISOString() },

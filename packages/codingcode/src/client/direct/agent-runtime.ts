@@ -109,8 +109,9 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
       await rt.runPromise(
         Effect.gen(function* () {
           const context = yield* ContextService;
+          const { messages } = context.assemblePayload(sessionId, cwd, getContextConfig());
           return yield* Effect.promise(() =>
-            context.compactWithLLM(sessionId, cwd, getContextConfig(), null)
+            context.compactWithLLM(sessionId, cwd, messages, getContextConfig(), null)
           );
         })
       );

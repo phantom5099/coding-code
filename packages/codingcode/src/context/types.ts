@@ -13,4 +13,5 @@ export interface CompressResult {
   didCompress: boolean;
   released: number;
   promptEstimate: number;
+  messages?: Message[];
 }

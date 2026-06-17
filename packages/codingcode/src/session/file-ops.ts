@@ -103,7 +103,7 @@ function buildIndexFromMeta(meta: SessionMetaEvent, history: SessionEvent[]): Se
     sessionId: meta.sessionId,
     projectPath: meta.projectPath,
     cwd: meta.cwd,
-    model: meta.model,
+    model: 'unknown',
     createdAt: meta.createdAt,
     updatedAt: meta.createdAt,
     messageCount: countNonMetaEvents(history),

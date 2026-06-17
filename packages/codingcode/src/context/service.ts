@@ -161,9 +161,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       messages: Message[],
       modelMaxTokens: number,
       config: ContextConfig,
-      llm: LLMClient | null,
-      compactedEvents?: SessionEvent[],
-      currentTurnId?: number
+      llm: LLMClient | null
     ): Promise<CompressResult> => {
       const promptEstimate = estimateTokens(messages);
       const failures = getFailures(sessionId);
@@ -179,10 +177,9 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const result = await compactWithLLM(
         sessionId,
         encodedProjectPath,
+        messages,
         config,
         llm,
-        compactedEvents,
-        currentTurnId,
         promptEstimate,
         modelMaxTokens
       );
@@ -199,38 +196,46 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
     const compactWithLLM = async (
       sessionId: string,
       encodedProjectPath: string,
+      messages: Message[],
       config: ContextConfig,
       llm: LLMClient | null,
-      compactedEvents?: SessionEvent[],
-      currentTurnId?: number,
       usage?: number,
       modelMaxTokens?: number
     ): Promise<CompressResult> => {
-      const payload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
-      if (!compactedEvents || currentTurnId === undefined) {
-        compactedEvents = payload.compactedEvents;
-        currentTurnId = payload.currentTurnId;
-      }
-
       let released = 0;
 
       const threshold = modelMaxTokens ? modelMaxTokens * COMPACTION_THRESHOLD : Infinity;
       if (usage === undefined || usage - released > threshold) {
+        const { compactedEvents, currentTurnId, compactedTurnIds } = assemblePayload(
+          sessionId,
+          encodedProjectPath,
+          config,
+          modelMaxTokens
+        );
         released += await tryCompaction(
           sessionId,
           config,
           llm,
           compactedEvents,
           currentTurnId,
-          payload.compactedTurnIds
+          compactedTurnIds
         );
+      }
+
+      if (released <= 0) {
+        return {
+          didCompress: false,
+          released: 0,
+          promptEstimate: usage ?? estimateTokens(messages),
+        };
       }
 
       const postPayload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
       return {
-        didCompress: released > 0,
+        didCompress: true,
         released,
         promptEstimate: estimateTokens(postPayload.messages),
+        messages: postPayload.messages,
       };
     };
 

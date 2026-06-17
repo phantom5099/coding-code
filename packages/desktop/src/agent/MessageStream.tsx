@@ -407,11 +407,12 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     if (loadedCheckpointRef.current === loadKey) return;
     loadedCheckpointRef.current = loadKey;
 
-    const existingMapping = useRollbackStore.getState().turnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
+    const existingMapping =
+      useRollbackStore.getState().turnCheckpointMapping[threadId] ?? EMPTY_MAPPING;
     const existingDiffs = useRollbackStore.getState().checkpointDiffByTurnId;
 
-    const alreadyLoaded = completedTurnIds.some((id) =>
-      getCheckpointKey(threadId, id, existingDiffs, existingMapping) !== null
+    const alreadyLoaded = completedTurnIds.some(
+      (id) => getCheckpointKey(threadId, id, existingDiffs, existingMapping) !== null
     );
     if (alreadyLoaded) return;
 

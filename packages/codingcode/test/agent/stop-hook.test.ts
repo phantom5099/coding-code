@@ -84,6 +84,7 @@ describe('agentLoop stop hook', () => {
     cwd: process.cwd(),
     currentTurnId: 0,
     sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
+    model: 'test-model',
     title: 'test',
     usage: undefined,
     projectPath: '',

@@ -59,6 +59,7 @@ const mockSession = {
       messageCount: 0,
       currentTurnId: 0,
       sessionMeta: null,
+      model: 'test',
       title: 'child',
       usage: undefined,
       promptEstimate: 0,

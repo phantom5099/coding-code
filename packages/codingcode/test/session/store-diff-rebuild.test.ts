@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { sessionEventsToTurns } from '../../src/session/messages.js';
 import type { SessionEvent } from '../../src/session/types.js';
 
@@ -10,7 +10,6 @@ describe('sessionEventsToTurns', () => {
         sessionId: 's1',
         projectPath: 'p',
         cwd: '/tmp',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       {
@@ -69,7 +68,6 @@ describe('sessionEventsToTurns', () => {
         sessionId: 's1',
         projectPath: 'p',
         cwd: '/tmp',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       {
@@ -126,7 +124,6 @@ describe('sessionEventsToTurns', () => {
         sessionId: 's1',
         projectPath: 'p',
         cwd: '/tmp',
-        model: 'test',
         createdAt: new Date().toISOString(),
       },
       {

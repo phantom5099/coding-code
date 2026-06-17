@@ -14,6 +14,8 @@ import { ContextService } from '../../context/service.js';
 import { getContextConfig } from '../../context/config.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
 import { WorkspaceService } from '../../core/workspace.js';
+import { LLMFactoryService } from '../../llm/factory.js';
+import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -136,9 +138,31 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const context = yield* ContextService;
-        const state = yield* (yield* SessionService).create(normalizedCwd, 'unknown', sessionId);
+        const factory = yield* LLMFactoryService;
+        const session = yield* SessionService;
+        const state = yield* session.create(normalizedCwd, 'unknown', sessionId);
+
+        let llm: LLMClient | null = null;
+        const entry = yield* factory.getActiveEntry().pipe(Effect.either);
+        if (entry._tag === 'Right') {
+          const client = yield* factory.createClient(entry.right).pipe(Effect.either);
+          if (client._tag === 'Right') llm = client.right;
+        }
+
+        const { messages } = context.assemblePayload(
+          state.sessionId,
+          state.projectPath,
+          getContextConfig()
+        );
+
         return yield* Effect.promise(() =>
-          context.compactWithLLM(state.sessionId, state.projectPath, getContextConfig(), null)
+          context.compactWithLLM(
+            state.sessionId,
+            state.projectPath,
+            messages,
+            getContextConfig(),
+            llm
+          )
         );
       })
     );
