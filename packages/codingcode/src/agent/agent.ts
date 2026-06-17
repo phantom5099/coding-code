@@ -253,7 +253,6 @@ export function agentLoop(
 
     const config = getContextConfig();
     const maxOverflowRetries = REACTIVE_COMPACT_MAX_RETRIES;
-    const model = state.model ?? 'unknown';
     const effectiveMaxSteps = opts.maxStepsOverride ?? maxSteps;
 
     let stopContinuations = 0;
@@ -408,7 +407,7 @@ export function agentLoop(
 
         if (!toolCalls || toolCalls.length === 0) {
           if (session) {
-            yield* session.recordAssistant(state, resp.content, toolCalls || [], model, resp.usage);
+            yield* session.recordAssistant(state, resp.content, toolCalls || [], resp.usage);
           }
           const stopDecision = yield* hooks.emitDecision('agent.turn.stop', {
             sessionId,
@@ -464,13 +463,7 @@ export function agentLoop(
           }
         }
 
-        const record = yield* session.recordAssistant(
-          state,
-          resp.content,
-          toolCalls!,
-          model,
-          resp.usage
-        );
+        const record = yield* session.recordAssistant(state, resp.content, toolCalls!, resp.usage);
         const allResults = yield* executor.executeBatch(toolCalls, state.sessionId, {
           turnId: state.currentTurnId,
           projectPath,
@@ -482,7 +475,7 @@ export function agentLoop(
         let todoPrinted = false;
         for (const r of allResults) {
           const resultOut = r.type === 'denied' ? '' : r.output;
-          yield* session.recordToolResult(state, record.uuid, r.name, r.id, resultOut);
+          yield* session.recordToolResult(state, r.name, r.id, resultOut);
           if (r.type === 'denied') {
             yield* q.offer({ _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason });
           } else {

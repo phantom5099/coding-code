@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -46,24 +46,5 @@ describe('appendTurnEnd', () => {
     const tokens = estimateTokensForContent(output);
     expect(tokens).toBeGreaterThan(0);
     expect(Number.isInteger(tokens)).toBe(true);
-  });
-
-  it('tokenCount is included in ToolResultEvent write', () => {
-    const output = 'short output';
-    const tokens = estimateTokensForContent(output);
-    const event = {
-      type: 'tool_result',
-      turnId: 1,
-      uuid: 't1',
-      parentUuid: 'a1',
-      toolName: 'bash',
-      toolCallId: 'tc1',
-      output,
-      timestamp: new Date().toISOString(),
-      tokenCount: tokens,
-    };
-    const serialized = JSON.stringify(event);
-    const parsed = JSON.parse(serialized);
-    expect(parsed.tokenCount).toBe(tokens);
   });
 });

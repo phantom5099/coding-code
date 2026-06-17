@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { sessionEventsToTurns } from '../../src/session/messages.js';
 import type { SessionEvent } from '../../src/session/types.js';
+import { sessionEventsToTurns } from '../../src/session/messages.js';
 
 describe('sessionEventsToTurns', () => {
   it('parses edit_file tool_result without diff (diff is computed on frontend)', () => {
@@ -15,14 +15,11 @@ describe('sessionEventsToTurns', () => {
       {
         type: 'user',
         turnId: 1,
-        uuid: 'u1',
         content: 'edit file',
-        timestamp: new Date().toISOString(),
       },
       {
         type: 'assistant',
         turnId: 1,
-        uuid: 'a1',
         content: 'editing',
         toolCalls: [
           {
@@ -31,19 +28,13 @@ describe('sessionEventsToTurns', () => {
             arguments: { path: 'src/utils.ts', old_string: 'a\nb\nc', new_string: 'a\nB\nc' },
           },
         ],
-        model: 'test',
-        timestamp: new Date().toISOString(),
       },
       {
         type: 'tool_result',
         turnId: 1,
-        uuid: 'tr1',
-        parentUuid: 'a1',
         toolName: 'edit_file',
         toolCallId: 'tc1',
         output: 'File updated',
-        timestamp: new Date().toISOString(),
-        tokenCount: 5,
       },
     ];
 
@@ -73,14 +64,11 @@ describe('sessionEventsToTurns', () => {
       {
         type: 'user',
         turnId: 1,
-        uuid: 'u1',
         content: 'write file',
-        timestamp: new Date().toISOString(),
       },
       {
         type: 'assistant',
         turnId: 1,
-        uuid: 'a1',
         content: 'writing',
         toolCalls: [
           {
@@ -89,19 +77,13 @@ describe('sessionEventsToTurns', () => {
             arguments: { path: 'README.md', content: '# Title\n\nHello' },
           },
         ],
-        model: 'test',
-        timestamp: new Date().toISOString(),
       },
       {
         type: 'tool_result',
         turnId: 1,
-        uuid: 'tr1',
-        parentUuid: 'a1',
         toolName: 'write_file',
         toolCallId: 'tc1',
         output: 'File written',
-        timestamp: new Date().toISOString(),
-        tokenCount: 5,
       },
     ];
 
@@ -129,14 +111,11 @@ describe('sessionEventsToTurns', () => {
       {
         type: 'user',
         turnId: 1,
-        uuid: 'u1',
         content: 'run command',
-        timestamp: new Date().toISOString(),
       },
       {
         type: 'assistant',
         turnId: 1,
-        uuid: 'a1',
         content: 'running',
         toolCalls: [
           {
@@ -145,19 +124,13 @@ describe('sessionEventsToTurns', () => {
             arguments: { command: 'echo hi' },
           },
         ],
-        model: 'test',
-        timestamp: new Date().toISOString(),
       },
       {
         type: 'tool_result',
         turnId: 1,
-        uuid: 'tr1',
-        parentUuid: 'a1',
         toolName: 'bash',
         toolCallId: 'tc1',
         output: 'hi',
-        timestamp: new Date().toISOString(),
-        tokenCount: 5,
       },
     ];
 

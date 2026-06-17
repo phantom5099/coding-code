@@ -65,7 +65,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          yield* svc.recordAssistant(state, 'reply', [], 'test-model');
+          yield* svc.recordAssistant(state, 'reply', []);
         })
       );
 
@@ -77,7 +77,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
     }
   });
 
-  it('hideMessage calls readCurrentIndex exactly once', async () => {
+  it('rollbackToTurn calls readCurrentIndex exactly once', async () => {
     const slug = randomUUID();
     const dir = join(PROJECT_BASE, slug);
     mkdirSync(dir, { recursive: true });
@@ -96,7 +96,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          yield* svc.hideMessage(state, 'dummy-uuid', 'test');
+          yield* svc.rollbackToTurn(state, 1, 'test');
         })
       );
 

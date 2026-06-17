@@ -1,6 +1,12 @@
 import { join } from 'path';
 import type { Message } from '../core/types.js';
-import type { SessionEvent, AssistantEvent, TokenUsage } from './types.js';
+import type {
+  SessionEvent,
+  AssistantEvent,
+  SummaryEvent,
+  CompactEvent,
+  TokenUsage,
+} from './types.js';
 import { readHistory, resolveSessionDir } from './file-ops.js';
 import { getContextConfig } from '../context/config.js';
 
@@ -18,71 +24,78 @@ const COMPACTABLE_TOOLS = new Set([
 const MICRO_COMPACT_MIN_CHARS = 120;
 
 export interface VisibilityResult {
-  hidden: Set<string>;
+  hiddenTurnIds: Set<number>;
+  hiddenOpUuids: Set<string>;
   compactedTurnIds: Set<number>;
 }
 
 export function applyVisibilityEvents(events: SessionEvent[]): VisibilityResult {
-  const hidden = new Set<string>();
+  const hiddenTurnIds = new Set<number>();
+  const hiddenOpUuids = new Set<string>();
   const compactedTurnIds = new Set<number>();
-  const hideEffects = new Map<string, Set<string>>();
 
+  // First pass: find operation events revoked by rollback.
+  for (const ev of events) {
+    if (ev.type !== 'rollback') continue;
+    for (const prior of events) {
+      if (prior === ev) break;
+      if (prior.type === 'summary' || prior.type === 'compact') {
+        if (prior.endTurnId >= ev.throughTurnId) {
+          hiddenOpUuids.add(prior.uuid);
+        }
+      }
+    }
+  }
+
+  // Second pass: compute visible turn ranges.
   for (const ev of events) {
     switch (ev.type) {
-      case 'hide': {
-        let effect: Set<string>;
-        if (ev.kind === 'message') {
-          effect = new Set([ev.targetUuid]);
-        } else {
-          effect = new Set<string>();
-          for (const prior of events) {
-            if (prior === ev) break;
-            if ('turnId' in prior && prior.turnId >= ev.throughTurnId && 'uuid' in prior) {
-              effect.add((prior as any).uuid);
-            }
+      case 'rollback': {
+        for (const prior of events) {
+          if (prior === ev) break;
+          if ('turnId' in prior && prior.turnId >= ev.throughTurnId) {
+            hiddenTurnIds.add(prior.turnId);
           }
-        }
-        hideEffects.set(ev.uuid, effect);
-        for (const u of effect) hidden.add(u);
-        break;
-      }
-      case 'unhide': {
-        const effect = hideEffects.get(ev.targetHideUuid);
-        if (effect) {
-          for (const u of effect) hidden.delete(u);
         }
         break;
       }
       case 'summary': {
-        for (const u of ev.replaces) hidden.add(u);
+        if (hiddenOpUuids.has(ev.uuid)) break;
+        for (let t = ev.startTurnId; t <= ev.endTurnId; t++) {
+          hiddenTurnIds.add(t);
+        }
         break;
       }
       case 'compact': {
-        if (!hidden.has(ev.uuid)) {
-          for (let t = ev.startTurnId; t <= ev.endTurnId; t++) {
-            compactedTurnIds.add(t);
-          }
+        if (hiddenOpUuids.has(ev.uuid)) break;
+        for (let t = ev.startTurnId; t <= ev.endTurnId; t++) {
+          compactedTurnIds.add(t);
         }
         break;
       }
     }
   }
 
-  return { hidden, compactedTurnIds };
+  return { hiddenTurnIds, hiddenOpUuids, compactedTurnIds };
 }
 
 export function buildMessagesFromEvents(
   events: SessionEvent[],
   externalCompactedTurnIds?: Set<number>
 ): Message[] {
-  const { hidden, compactedTurnIds: derivedIds } = applyVisibilityEvents(events);
+  const {
+    hiddenTurnIds,
+    hiddenOpUuids,
+    compactedTurnIds: derivedIds,
+  } = applyVisibilityEvents(events);
   const compactedTurnIds = externalCompactedTurnIds ?? derivedIds;
 
   const visible: SessionEvent[] = [];
   for (const ev of events) {
-    if (ev.type === 'hide' || ev.type === 'unhide') continue;
+    if (ev.type === 'rollback') continue;
     if (ev.type === 'compact') continue;
-    if ('uuid' in ev && hidden.has((ev as any).uuid)) continue;
+    if (ev.type === 'summary' && hiddenOpUuids.has(ev.uuid)) continue;
+    if ('turnId' in ev && hiddenTurnIds.has(ev.turnId)) continue;
     visible.push(ev);
   }
 
@@ -187,20 +200,25 @@ export function findLastVisibleAssistantUsage(path: string): TokenUsage | undefi
   return undefined;
 }
 
+function createTurnScopedIdGenerator() {
+  const counters = new Map<string, number>();
+  return (prefix: string, turnId: number): string => {
+    const key = `${prefix}:${turnId}`;
+    const next = (counters.get(key) ?? 0) + 1;
+    counters.set(key, next);
+    return `${prefix}-${turnId}-${next}`;
+  };
+}
+
 export function sessionEventsToTurns(
   events: SessionEvent[]
 ): Array<{ id: string; items: object[]; status: string }> {
   const turnsMap = new Map<number, { id: string; items: object[]; status: string }>();
+  const nextId = createTurnScopedIdGenerator();
+
   for (const event of events) {
     if (event.type === 'session_meta') continue;
-    if (
-      event.type === 'summary' ||
-      event.type === 'hide' ||
-      event.type === 'unhide' ||
-      event.type === 'title' ||
-      event.type === 'compact'
-    )
-      continue;
+    if (event.type === 'summary' || event.type === 'compact' || event.type === 'rollback') continue;
     let turn = turnsMap.get(event.turnId);
     if (!turn) {
       turn = { id: String(event.turnId), items: [], status: 'completed' };
@@ -208,12 +226,17 @@ export function sessionEventsToTurns(
     }
     switch (event.type) {
       case 'user':
-        turn.items.push({ id: event.uuid, type: 'message', role: 'user', content: event.content });
+        turn.items.push({
+          id: nextId('user', event.turnId),
+          type: 'message',
+          role: 'user',
+          content: event.content,
+        });
         break;
       case 'assistant':
         if (event.content) {
           turn.items.push({
-            id: event.uuid,
+            id: nextId('assistant', event.turnId),
             type: 'message',
             role: 'assistant',
             content: event.content,
@@ -232,7 +255,7 @@ export function sessionEventsToTurns(
         break;
       case 'tool_result': {
         const item: Record<string, unknown> = {
-          id: event.uuid,
+          id: `result-${event.toolCallId}`,
           type: 'tool_result',
           callId: event.toolCallId,
           name: event.toolName,
@@ -253,10 +276,12 @@ export function readUIHistory(
   if (!dir) return [];
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
   const events = readHistory(jsonlPath);
-  const { hidden } = applyVisibilityEvents(events);
+  const { hiddenTurnIds, hiddenOpUuids } = applyVisibilityEvents(events);
   const visibleEvents = events.filter((ev) => {
-    if (ev.type === 'hide' || ev.type === 'unhide') return false;
-    if ('uuid' in ev && hidden.has((ev as any).uuid)) return false;
+    if (ev.type === 'rollback') return false;
+    if (ev.type === 'summary' && hiddenOpUuids.has((ev as SummaryEvent).uuid)) return false;
+    if (ev.type === 'compact' && hiddenOpUuids.has((ev as CompactEvent).uuid)) return false;
+    if ('turnId' in ev && hiddenTurnIds.has(ev.turnId)) return false;
     return true;
   });
   return sessionEventsToTurns(visibleEvents);

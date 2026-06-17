@@ -12,75 +12,37 @@ export interface SessionMetaEvent {
 export interface UserEvent {
   type: 'user';
   turnId: number;
-  uuid: string;
   content: string;
-  timestamp: string;
 }
 
 export interface AssistantEvent {
   type: 'assistant';
   turnId: number;
-  uuid: string;
   content: string;
   toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
-  model: string;
-  timestamp: string;
   usage?: TokenUsage;
 }
 
 export interface ToolResultEvent {
   type: 'tool_result';
   turnId: number;
-  uuid: string;
-  parentUuid: string;
-  toolName: string;
   toolCallId: string;
+  toolName: string;
   output: string;
-  timestamp: string;
-  tokenCount: number;
 }
 
 export interface SummaryEvent {
   type: 'summary';
   uuid: string;
-  replaces: string[];
+  startTurnId: number;
+  endTurnId: number;
   summaryText: string;
-  lastSummarizedTurnId: number;
-  timestamp: string;
 }
 
-export interface HideMessageEvent {
-  type: 'hide';
-  uuid: string;
-  kind: 'message';
-  targetUuid: string;
-  reason: string;
-  timestamp: string;
-}
-
-export interface HideRollbackEvent {
-  type: 'hide';
-  uuid: string;
-  kind: 'rollback';
+export interface RollbackEvent {
+  type: 'rollback';
   throughTurnId: number;
   reason: string;
-  timestamp: string;
-}
-
-export type HideEvent = HideMessageEvent | HideRollbackEvent;
-
-export interface UnhideEvent {
-  type: 'unhide';
-  uuid: string;
-  targetHideUuid: string;
-  timestamp: string;
-}
-
-export interface TitleEvent {
-  type: 'title';
-  uuid: string;
-  text: string;
-  timestamp: string;
 }
 
 export interface CompactEvent {
@@ -88,7 +50,6 @@ export interface CompactEvent {
   uuid: string;
   startTurnId: number;
   endTurnId: number;
-  timestamp: string;
 }
 
 export type SessionEvent =
@@ -97,9 +58,7 @@ export type SessionEvent =
   | AssistantEvent
   | ToolResultEvent
   | SummaryEvent
-  | HideEvent
-  | UnhideEvent
-  | TitleEvent
+  | RollbackEvent
   | CompactEvent;
 
 export interface TokenUsage {

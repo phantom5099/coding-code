@@ -46,29 +46,20 @@ function makeFixture(opts: FixtureOptions) {
     lines.push({
       type: 'user',
       turnId: turn,
-      uuid: `u${turn}`,
       content: `q${turn}`,
-      timestamp: new Date().toISOString(),
     });
     lines.push({
       type: 'assistant',
       turnId: turn,
-      uuid: `a${turn}`,
       content: `r${turn}`,
       toolCalls: [{ id: `tc${turn}`, name: opts.toolName ?? 'bash', arguments: '{}' }],
-      model: 'test',
-      timestamp: new Date().toISOString(),
     });
     lines.push({
       type: 'tool_result',
       turnId: turn,
-      uuid: `t${turn}`,
-      parentUuid: `a${turn}`,
       toolName: opts.toolName ?? 'bash',
       toolCallId: `tc${turn}`,
       output: toolContent,
-      timestamp: new Date().toISOString(),
-      tokenCount: Math.ceil(toolContent.length / 3.5),
     });
   }
 
@@ -78,7 +69,7 @@ function makeFixture(opts: FixtureOptions) {
     sessionId,
     projectPath: slug,
     cwd: '/tmp/test',
-    model: 'test',
+    model: 'test-model',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     messageCount: opts.numTurns * 3,
@@ -168,7 +159,8 @@ describe('compressor behavior', () => {
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
-        expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
+        expect(summaries[0]!.startTurnId).toBeLessThanOrEqual(summaries[0]!.endTurnId);
+        expect(summaries[0]!.endTurnId).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
       }
@@ -205,7 +197,8 @@ describe('compressor behavior', () => {
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
-        expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
+        expect(summaries[0]!.startTurnId).toBeLessThanOrEqual(summaries[0]!.endTurnId);
+        expect(summaries[0]!.endTurnId).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
       }

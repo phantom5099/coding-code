@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -23,7 +23,7 @@ function makeFixture(
     sessionId,
     projectPath: slug,
     cwd: '/tmp/test',
-    model: 'test',
+
     createdAt: new Date().toISOString(),
   };
   writeFileSync(transcriptPath, JSON.stringify(meta) + '\n', 'utf8');
@@ -32,7 +32,7 @@ function makeFixture(
     sessionId,
     projectPath: slug,
     cwd: '/tmp/test',
-    model: 'test',
+    model: 'test-model',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     messageCount: 0,

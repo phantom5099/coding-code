@@ -29,29 +29,21 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       projectPath: 'test-path',
       model: 'deepseek-chat',
     }),
-  recordUser: () =>
-    Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 0, timestamp: '' }),
+  recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
     Effect.succeed({
       type: 'assistant',
-      uuid: 'a1',
       content: '',
       toolCalls: [],
-      model: 'test',
       turnId: 0,
-      timestamp: '',
     }),
   recordToolResult: () =>
     Effect.succeed({
       type: 'tool_result',
-      uuid: 't1',
-      parentUuid: 'a1',
       toolName: 'test',
       toolCallId: 'tc1',
       output: '',
       turnId: 0,
-      timestamp: '',
-      tokenCount: 0,
     }),
   incrementTurn: () => 0,
 } as any);

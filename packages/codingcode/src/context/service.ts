@@ -64,8 +64,12 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const idx = session.findSessionIndexProxy(sessionId);
       const currentTurnId = idx?.currentTurnId ?? 0;
 
-      const { hidden, compactedTurnIds: initialCompactedTurnIds } = applyVisibilityEvents(events);
-      let visible = filterVisible(events, hidden);
+      const {
+        hiddenTurnIds,
+        hiddenOpUuids,
+        compactedTurnIds: initialCompactedTurnIds,
+      } = applyVisibilityEvents(events);
+      let visible = filterVisible(events, hiddenTurnIds, hiddenOpUuids);
       let compactedTurnIds = initialCompactedTurnIds;
 
       const preEstimate = estimateTokensFromEvents(visible);
@@ -82,7 +86,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       if (didCompact) {
         events = session.readHistoryFile(jsonlPath);
         const updated = applyVisibilityEvents(events);
-        visible = filterVisible(events, updated.hidden);
+        visible = filterVisible(events, updated.hiddenTurnIds, updated.hiddenOpUuids);
         compactedTurnIds = updated.compactedTurnIds;
       }
 
@@ -96,11 +100,17 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       };
     };
 
-    function filterVisible(events: SessionEvent[], hidden: Set<string>): SessionEvent[] {
+    function filterVisible(
+      events: SessionEvent[],
+      hiddenTurnIds: Set<number>,
+      hiddenOpUuids: Set<string>
+    ): SessionEvent[] {
       return events.filter((ev) => {
-        if (ev.type === 'hide' || ev.type === 'unhide') return false;
-        if (ev.type === 'compact') return false;
-        if ('uuid' in ev && hidden.has((ev as any).uuid)) return false;
+        if (ev.type === 'session_meta') return false;
+        if (ev.type === 'rollback') return false;
+        if (ev.type === 'summary' && hiddenOpUuids.has(ev.uuid)) return false;
+        if (ev.type === 'compact' && hiddenOpUuids.has(ev.uuid)) return false;
+        if ('turnId' in ev && hiddenTurnIds.has(ev.turnId)) return false;
         return true;
       }) as SessionEvent[];
     }
@@ -145,7 +155,6 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         uuid: randomUUID(),
         startTurnId,
         endTurnId,
-        timestamp: new Date().toISOString(),
       };
       appendLine(jsonlPath, compactEvent);
       return true;
@@ -275,23 +284,18 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const summary = await callLLMForCompaction(msgs, compactionLlm, config);
       if (!summary) return 0;
 
-      const replacedUuids: string[] = [];
-      for (const ev of targetEvents) {
-        if ('uuid' in (ev as any)) replacedUuids.push((ev as any).uuid);
-      }
-
-      const lastTurnId = Math.max(
-        ...targetEvents.filter((e) => 'turnId' in e).map((e) => (e as any).turnId),
-        0
-      );
+      const turnIds = targetEvents
+        .filter((e) => 'turnId' in e)
+        .map((e) => (e as any).turnId as number);
+      const startTurnId = Math.min(...turnIds);
+      const endTurnId = Math.max(...turnIds);
 
       const event: SummaryEvent = {
         type: 'summary',
         uuid: randomUUID(),
-        replaces: replacedUuids,
+        startTurnId,
+        endTurnId,
         summaryText: summary,
-        lastSummarizedTurnId: lastTurnId,
-        timestamp: new Date().toISOString(),
       };
       appendLine(resolveSessionJsonlPath(sessionId), event);
 
@@ -306,7 +310,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
 
       if (!existingSummary) return inRange;
 
-      const lastTurn = existingSummary.lastSummarizedTurnId ?? 0;
+      const lastTurn = existingSummary.endTurnId ?? 0;
       return inRange.filter((e) => 'turnId' in e && (e as any).turnId > lastTurn);
     }
 

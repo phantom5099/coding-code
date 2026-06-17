@@ -22,7 +22,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       messageCount: 0,
       currentTurnId: 1,
       sessionMeta: { model: 'test', createdAt: new Date().toISOString() },
-      model: 'test',
+
       title: 'io-err-sid'.slice(0, 8),
       usage: undefined,
       promptEstimate: 0,
@@ -54,7 +54,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       messageCount: 0,
       currentTurnId: 1,
       sessionMeta: { model: 'test', createdAt: new Date().toISOString() },
-      model: 'test',
+
       title: 'io-err-asst'.slice(0, 8),
       usage: undefined,
       promptEstimate: 0,
@@ -64,7 +64,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
     const exit = await Effect.runPromiseExit(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.recordAssistant(state, 'hi', [], 'model');
+        return yield* svc.recordAssistant(state, 'hi', []);
       }).pipe(Effect.provide(SessionService.Default))
     );
 
@@ -85,7 +85,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       messageCount: 0,
       currentTurnId: 1,
       sessionMeta: { model: 'test', createdAt: new Date().toISOString() },
-      model: 'test',
+
       title: 'io-err-eff'.slice(0, 8),
       usage: undefined,
       promptEstimate: 0,

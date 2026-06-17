@@ -10,18 +10,15 @@ const baseConfig = {
 };
 
 function makeUserEvent(content: string, turnId: number): SessionEvent {
-  return { type: 'user', uuid: `u${turnId}`, content, turnId, timestamp: new Date().toISOString() };
+  return { type: 'user', content, turnId };
 }
 
 function makeAssistant(content: string, turnId: number): SessionEvent {
   return {
     type: 'assistant',
-    uuid: `a${turnId}`,
     content,
     turnId,
     toolCalls: [],
-    model: 'test',
-    timestamp: new Date().toISOString(),
   };
 }
 
@@ -29,18 +26,14 @@ function makeToolResult(
   toolName: string,
   output: string,
   turnId: number,
-  uuid: string
+  toolCallId: string
 ): ToolResultEvent {
   return {
     type: 'tool_result',
-    uuid,
-    parentUuid: 'a1',
     toolName,
-    toolCallId: `tc${uuid}`,
+    toolCallId,
     output,
     turnId,
-    timestamp: new Date().toISOString(),
-    tokenCount: 0,
   };
 }
 

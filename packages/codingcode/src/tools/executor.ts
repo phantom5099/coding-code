@@ -58,7 +58,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         }
 
         // Use modified input from pipeline if present
-        let finalArgs: Record<string, unknown> =
+        const finalArgs: Record<string, unknown> =
           decision.type === 'modified' ? decision.input : (args as Record<string, unknown>);
 
         // 2. Notification hook — use callId for consistent pairing

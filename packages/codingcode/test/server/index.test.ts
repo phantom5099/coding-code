@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
@@ -21,29 +21,21 @@ const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
 
 const MockSessionLayer = Layer.succeed(SessionService, {
   create: () => Effect.succeed({ sessionId: 'test', cwd: '/tmp/test' }),
-  recordUser: () =>
-    Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 0, timestamp: '' }),
+  recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
     Effect.succeed({
       type: 'assistant',
-      uuid: 'a1',
       content: '',
       toolCalls: [],
-      model: 'test',
       turnId: 0,
-      timestamp: '',
     }),
   recordToolResult: () =>
     Effect.succeed({
       type: 'tool_result',
-      uuid: 't1',
-      parentUuid: 'a1',
       toolName: 'test',
       toolCallId: 'tc1',
       output: '',
       turnId: 0,
-      timestamp: '',
-      tokenCount: 0,
     }),
   incrementTurn: () => 0,
 } as any);

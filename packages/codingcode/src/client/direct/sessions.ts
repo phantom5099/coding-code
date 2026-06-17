@@ -1,4 +1,4 @@
-﻿import { Effect } from 'effect';
+import { Effect } from 'effect';
 import { SessionService } from '../../session/store.js';
 import { WorkspaceService } from '../../core/workspace.js';
 import { deleteSession } from '../../session/file-ops.js';
@@ -21,6 +21,7 @@ export interface SessionClient {
   resumeSession(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
   listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
   getSessionHistory(input: { sessionId: string }): Promise<SessionEvent[]>;
+
   deleteSession(input: { sessionId: string }): Promise<void>;
   getSessionPermissionMode(input: { sessionId: string }): Promise<PermissionMode>;
   setSessionPermissionMode(input: { sessionId: string; mode: PermissionMode }): Promise<void>;

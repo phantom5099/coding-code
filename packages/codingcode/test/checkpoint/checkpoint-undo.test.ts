@@ -168,7 +168,6 @@ describe('undoLastCodeRollback end-to-end via ShadowGit', () => {
         affectedTurns: [],
         selectedFiles: [join(projectPath, 'src/main.ts')],
         safetyCommit: safetyHash,
-        timestamp: new Date().toISOString(),
       };
       writeFileSync(restorePath, JSON.stringify(entry, null, 2), 'utf8');
 
@@ -336,7 +335,6 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
         affectedTurns: [],
         selectedFiles: [join(projectPath, 'src/main.ts').toLowerCase()],
         safetyCommit: safetyHash,
-        timestamp: new Date().toISOString(),
       };
       writeFileSync(restorePath, JSON.stringify(entry, null, 2), 'utf8');
 

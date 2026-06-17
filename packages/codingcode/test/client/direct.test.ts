@@ -54,8 +54,8 @@ const noopLlm: LLMClient = {
       usage: { prompt: 0, completion: 0, total: 0 },
     }),
   modelInfo: {
-    model: 'test',
     provider: 'test',
+    model: 'test-model',
     maxTokens: 128000,
     supportsToolCalling: true,
     supportsStreaming: true,

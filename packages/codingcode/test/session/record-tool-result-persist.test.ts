@@ -25,19 +25,16 @@ describe('recordToolResult', () => {
     const assistantEvent = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.recordAssistant(
-          state,
-          'use tool',
-          [{ id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } }],
-          'test-model'
-        );
+        return yield* svc.recordAssistant(state, 'use tool', [
+          { id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } },
+        ]);
       })
     );
 
     const event = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', longOutput);
+        return yield* svc.recordToolResult(state, 'bash', 'tc1', longOutput);
       })
     );
 
@@ -57,19 +54,16 @@ describe('recordToolResult', () => {
     const assistantEvent = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.recordAssistant(
-          state,
-          'use tool',
-          [{ id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } }],
-          'test-model'
-        );
+        return yield* svc.recordAssistant(state, 'use tool', [
+          { id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } },
+        ]);
       })
     );
 
     const event = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.recordToolResult(state, assistantEvent.uuid, 'bash', 'tc1', shortOutput);
+        return yield* svc.recordToolResult(state, 'bash', 'tc1', shortOutput);
       })
     );
 
