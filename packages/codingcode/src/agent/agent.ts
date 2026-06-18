@@ -141,7 +141,10 @@ export const sendMessage = (
     yield* runtime.prepareProject(normalizedCwd);
     yield* skills.evictProject(normalizedCwd);
 
-    const state = yield* session.create(normalizedCwd, llm.modelInfo.model, sessionId);
+    const state = sessionId
+      ? yield* session.load(normalizedCwd, sessionId)
+      : yield* session.create(normalizedCwd, llm.modelInfo.model);
+    state.model = llm.modelInfo.model;
     state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
     const sid = state.sessionId;
 
@@ -321,7 +324,6 @@ export function agentLoop(
 
           messages = compressResult.messages;
           state.usage = undefined;
-          state.promptEstimate = compressResult.promptEstimate;
         }
 
         const llmMessages = [...messages];
@@ -367,7 +369,6 @@ export function agentLoop(
             });
             if (compressResult.didCompress && compressResult.messages) {
               messages = compressResult.messages;
-              state.promptEstimate = compressResult.promptEstimate;
             }
             yield* q.offer({
               _tag: 'ReactiveCompact',

@@ -98,7 +98,6 @@ describe('assemblePayload integration', () => {
       title: 'fixture',
       currentTurnId: 1,
       usage: undefined,
-      promptEstimate: 0,
       permissionMode: 'default',
     };
     writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');

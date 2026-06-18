@@ -3,17 +3,18 @@ import { randomUUID } from 'crypto';
 import type { ContextConfig } from '@codingcode/infra/config';
 import type { Message } from '../core/types.js';
 import { SessionService } from '../session/store.js';
-import { applyVisibilityEvents, buildMessagesFromEvents } from '../session/messages.js';
 import { estimateTokens, estimateMessageTokens } from '../core/util.js';
-import { resolveSessionJsonlPath, appendLine } from '../session/file-ops.js';
+import { resolveSessionJsonlPath, appendLine, readHistory } from '../session/file-ops.js';
 import { resolveLLM } from '../llm/llm-resolver.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
 import type {
   SessionEvent,
+  AssistantEvent,
   ToolResultEvent,
   CompactEvent,
   SummaryEvent,
+  TokenUsage,
 } from '../session/types.js';
 import type { LLMClient } from '../llm/client.js';
 import type { BuildResult, CompressResult } from './types.js';
@@ -34,6 +35,186 @@ const MICRO_COMPACT_MIN_CHARS = 120;
 const COMPACTION_THRESHOLD = 0.9;
 const KEEP_RECENT_TURNS = 1;
 const REACTIVE_COMPACT_MAX_RETRIES = 3;
+
+// --- Internal: visibility computation for LLM context ---
+
+function applyVisibilityEvents(events: SessionEvent[]): {
+  hiddenTurnIds: Set<number>;
+  hiddenOpUuids: Set<string>;
+  compactedTurnIds: Set<number>;
+} {
+  const hiddenTurnIds = new Set<number>();
+  const hiddenOpUuids = new Set<string>();
+  const compactedTurnIds = new Set<number>();
+
+  for (const ev of events) {
+    if (ev.type !== 'rollback') continue;
+    for (const prior of events) {
+      if (prior === ev) break;
+      if (prior.type === 'summary' || prior.type === 'compact') {
+        if (prior.endTurnId >= ev.throughTurnId) {
+          hiddenOpUuids.add(prior.uuid);
+        }
+      }
+    }
+  }
+
+  for (const ev of events) {
+    switch (ev.type) {
+      case 'rollback': {
+        for (const prior of events) {
+          if (prior === ev) break;
+          if ('turnId' in prior && prior.turnId >= ev.throughTurnId) {
+            hiddenTurnIds.add(prior.turnId);
+          }
+        }
+        break;
+      }
+      case 'summary': {
+        if (hiddenOpUuids.has(ev.uuid)) break;
+        for (let t = ev.startTurnId; t <= ev.endTurnId; t++) {
+          hiddenTurnIds.add(t);
+        }
+        break;
+      }
+      case 'compact': {
+        if (hiddenOpUuids.has(ev.uuid)) break;
+        for (let t = ev.startTurnId; t <= ev.endTurnId; t++) {
+          compactedTurnIds.add(t);
+        }
+        break;
+      }
+    }
+  }
+
+  return { hiddenTurnIds, hiddenOpUuids, compactedTurnIds };
+}
+
+/** Filter events for LLM context building: hide summary-covered turns, apply rollback */
+export function filterForContext(events: SessionEvent[]): {
+  visible: SessionEvent[];
+  compactedTurnIds: Set<number>;
+} {
+  const { hiddenTurnIds, hiddenOpUuids, compactedTurnIds } = applyVisibilityEvents(events);
+  const visible = events.filter((ev) => {
+    if (ev.type === 'session_meta') return false;
+    if (ev.type === 'rollback') return false;
+    if (ev.type === 'compact') return false;
+    if (ev.type === 'summary' && hiddenOpUuids.has(ev.uuid)) return false;
+    if ('turnId' in ev && hiddenTurnIds.has(ev.turnId)) return false;
+    return true;
+  }) as SessionEvent[];
+  return { visible, compactedTurnIds };
+}
+
+/** Format filtered events as LLM messages, with micro-compaction for compacted turns */
+export function buildContextMessages(
+  events: SessionEvent[],
+  compactedTurnIds?: Set<number>
+): Message[] {
+  const messages: Message[] = [];
+  const resolvedIds = new Set<string>();
+  for (const event of events) {
+    switch (event.type) {
+      case 'user':
+        messages.push({ role: 'user', content: event.content });
+        break;
+      case 'assistant': {
+        const ev = event as AssistantEvent;
+        const msg: Message = { role: 'assistant', content: event.content };
+        if (event.toolCalls && event.toolCalls.length > 0) {
+          (msg as any).tool_calls = event.toolCalls.map((tc: any) => ({
+            id: tc.id,
+            name: tc.name,
+            arguments: tc.arguments,
+          }));
+        }
+        if (ev.usage) (msg as any).usage = ev.usage;
+        messages.push(msg);
+        break;
+      }
+      case 'tool_result': {
+        let output = event.output;
+        if (
+          compactedTurnIds?.has(event.turnId) &&
+          COMPACTABLE_TOOLS.has(event.toolName.toLowerCase()) &&
+          event.output.length > MICRO_COMPACT_MIN_CHARS
+        ) {
+          output = `[Earlier: used ${event.toolName}]`;
+        }
+        resolvedIds.add(event.toolCallId);
+        messages.push({
+          role: 'tool',
+          content: output,
+          tool_call_id: event.toolCallId,
+          tool_name: event.toolName,
+        } as any);
+        break;
+      }
+      case 'summary':
+        messages.push({ role: 'system', name: 'compacted_history', content: event.summaryText });
+        break;
+    }
+  }
+
+  // tool call pairing validation + filter
+  const validAssistantIds = new Set<string>();
+  for (const m of messages) {
+    if (m.role !== 'assistant') continue;
+    const tcs = (m as any).tool_calls as Array<{ id: string }> | undefined;
+    if (!tcs || tcs.length === 0) continue;
+    if (tcs.every((tc) => resolvedIds.has(tc.id))) {
+      for (const tc of tcs) validAssistantIds.add(tc.id);
+    }
+  }
+
+  const filtered = messages.filter((m) => {
+    if (m.role === 'assistant') {
+      const tcs = (m as any).tool_calls as Array<{ id: string }> | undefined;
+      if (!tcs || tcs.length === 0) return true;
+      return tcs.every((tc) => resolvedIds.has(tc.id));
+    }
+    if (m.role === 'tool') {
+      return validAssistantIds.has((m as any).tool_call_id);
+    }
+    return true;
+  });
+
+  // merge adjacent same-role messages
+  for (let i = filtered.length - 1; i > 0; i--) {
+    const curr = filtered[i]!;
+    const prev = filtered[i - 1]!;
+    if (curr.role === prev.role && curr.role !== 'system') {
+      if (curr.role === 'tool') continue;
+      if (curr.role === 'assistant' && (curr as any).tool_calls?.length > 0) continue;
+      prev.content += '\n\n' + curr.content;
+      filtered.splice(i, 1);
+    }
+  }
+
+  return filtered;
+}
+
+/** Find the last visible assistant usage for token estimation */
+export function findLastVisibleAssistantUsage(path: string): TokenUsage | undefined {
+  const events = readHistory(path);
+  const { visible, compactedTurnIds } = filterForContext(events);
+  const messages = buildContextMessages(visible, compactedTurnIds);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!;
+    if (m.role !== 'assistant') continue;
+    const usage = (m as any).usage as TokenUsage | undefined;
+    if (usage) return usage;
+  }
+  return undefined;
+}
+
+/** Estimate prompt tokens for a session's jsonl file */
+export function estimatePromptTokens(jsonlPath: string): number {
+  const events = readHistory(jsonlPath);
+  const { visible, compactedTurnIds } = filterForContext(events);
+  return estimateTokens(buildContextMessages(visible, compactedTurnIds));
+}
 
 export class ContextService extends Effect.Service<ContextService>()('Context', {
   effect: Effect.gen(function* () {
@@ -64,15 +245,9 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const idx = session.findSessionIndexProxy(sessionId);
       const currentTurnId = idx?.currentTurnId ?? 0;
 
-      const {
-        hiddenTurnIds,
-        hiddenOpUuids,
-        compactedTurnIds: initialCompactedTurnIds,
-      } = applyVisibilityEvents(events);
-      let visible = filterVisible(events, hiddenTurnIds, hiddenOpUuids);
-      let compactedTurnIds = initialCompactedTurnIds;
+      let { visible, compactedTurnIds } = filterForContext(events);
 
-      const preEstimate = estimateTokensFromEvents(visible);
+      const preEstimate = estimateTokens(buildContextMessages(visible, compactedTurnIds));
 
       const didCompact = applyOldTurnCompaction(
         visible,
@@ -85,12 +260,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
 
       if (didCompact) {
         events = session.readHistoryFile(jsonlPath);
-        const updated = applyVisibilityEvents(events);
-        visible = filterVisible(events, updated.hiddenTurnIds, updated.hiddenOpUuids);
-        compactedTurnIds = updated.compactedTurnIds;
+        ({ visible, compactedTurnIds } = filterForContext(events));
       }
 
-      const messages = buildMessagesFromEvents(visible);
+      const messages = buildContextMessages(visible, compactedTurnIds);
       return {
         messages,
         compactedEvents: visible,
@@ -99,21 +272,6 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         compactedTurnIds,
       };
     };
-
-    function filterVisible(
-      events: SessionEvent[],
-      hiddenTurnIds: Set<number>,
-      hiddenOpUuids: Set<string>
-    ): SessionEvent[] {
-      return events.filter((ev) => {
-        if (ev.type === 'session_meta') return false;
-        if (ev.type === 'rollback') return false;
-        if (ev.type === 'summary' && hiddenOpUuids.has(ev.uuid)) return false;
-        if (ev.type === 'compact' && hiddenOpUuids.has(ev.uuid)) return false;
-        if ('turnId' in ev && hiddenTurnIds.has(ev.turnId)) return false;
-        return true;
-      }) as SessionEvent[];
-    }
 
     function applyOldTurnCompaction(
       events: SessionEvent[],
@@ -158,10 +316,6 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       };
       appendLine(jsonlPath, compactEvent);
       return true;
-    }
-
-    function estimateTokensFromEvents(events: SessionEvent[]): number {
-      return estimateTokens(buildMessagesFromEvents(events));
     }
 
     const compactIfNeeded = async (
@@ -269,7 +423,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const targetEvents = getIncrementalEvents(inRange);
       if (targetEvents.length === 0) return 0;
 
-      const msgs = buildMessagesFromEvents(targetEvents, compactedTurnIds);
+      const msgs = buildContextMessages(targetEvents, compactedTurnIds);
       const totalTokens = estimateTokens(msgs);
 
       let compactionLlm = await Effect.runPromise(

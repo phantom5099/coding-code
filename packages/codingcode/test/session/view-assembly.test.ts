@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildMessagesFromEvents } from '../../src/session/messages.js';
+import { filterForContext, buildContextMessages } from '../../src/context/service.js';
 import type { SessionEvent } from '../../src/session/types.js';
+
+function toMessages(events: SessionEvent[]) {
+  const { visible, compactedTurnIds } = filterForContext(events);
+  return buildContextMessages(visible, compactedTurnIds);
+}
 
 function makeEvents(extra: SessionEvent[] = []): SessionEvent[] {
   const base: SessionEvent[] = [
@@ -47,10 +52,10 @@ function makeEvents(extra: SessionEvent[] = []): SessionEvent[] {
   return [...base, ...extra];
 }
 
-describe('buildMessagesFromEvents', () => {
+describe('buildContextMessages', () => {
   it('converts user/assistant/tool_result events to messages', () => {
     const events = makeEvents();
-    const messages = buildMessagesFromEvents(events);
+    const messages = toMessages(events);
     expect(messages).toHaveLength(7);
     expect(messages[0]).toEqual({ role: 'user', content: 'hello' });
     expect(messages[1]).toEqual({ role: 'assistant', content: 'hi there' });
@@ -72,7 +77,7 @@ describe('buildMessagesFromEvents', () => {
         summaryText: '[compacted]',
       },
     ]);
-    const messages = buildMessagesFromEvents(events);
+    const messages = toMessages(events);
     const toolMessages = messages.filter((m) => m.role === 'tool');
     expect(toolMessages).toHaveLength(0);
     const summaryMessages = messages.filter((m) => m.role === 'system');
@@ -88,7 +93,7 @@ describe('buildMessagesFromEvents', () => {
         reason: 'rollback',
       },
     ]);
-    const messages = buildMessagesFromEvents(events);
+    const messages = toMessages(events);
     const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
     expect(userContents).toEqual([]);
     const assistantContents = messages.filter((m) => m.role === 'assistant').map((m) => m.content);
@@ -116,7 +121,7 @@ describe('buildMessagesFromEvents', () => {
         toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }],
       },
     ];
-    const messages = buildMessagesFromEvents(events);
+    const messages = toMessages(events);
     expect(messages).toHaveLength(1);
     expect(messages[0]).toEqual({ role: 'user', content: 'do something' });
   });
@@ -163,7 +168,7 @@ describe('buildMessagesFromEvents', () => {
         toolCalls: [],
       },
     ];
-    const messages = buildMessagesFromEvents(events);
+    const messages = toMessages(events);
     expect(messages.filter((m) => m.role === 'assistant')).toHaveLength(1);
     expect((messages.find((m) => m.role === 'assistant') as any).content).toBe('done');
     expect(messages.filter((m) => m.role === 'tool')).toHaveLength(0);
@@ -211,7 +216,7 @@ describe('buildMessagesFromEvents', () => {
         toolCalls: [],
       },
     ];
-    const messages = buildMessagesFromEvents(events);
+    const messages = toMessages(events);
     const assistantContents = messages
       .filter((m) => m.role === 'assistant')
       .map((m) => (m as any).content);
@@ -258,7 +263,7 @@ describe('buildMessagesFromEvents', () => {
         content: 'second',
       },
     ];
-    const messages = buildMessagesFromEvents(events);
+    const messages = toMessages(events);
     const userMsgs = messages.filter((m) => m.role === 'user');
     expect(userMsgs).toHaveLength(1);
     expect((userMsgs[0] as any).content).toContain('first');
@@ -303,7 +308,7 @@ describe('buildMessagesFromEvents', () => {
         output: 'out2',
       },
     ];
-    const messages = buildMessagesFromEvents(events);
+    const messages = toMessages(events);
     expect(messages.filter((m) => m.role === 'tool')).toHaveLength(2);
   });
 
@@ -330,7 +335,7 @@ describe('buildMessagesFromEvents', () => {
         toolCalls: [],
       },
     ];
-    const messages = buildMessagesFromEvents(events);
+    const messages = toMessages(events);
     const assistantMsgs = messages.filter((m) => m.role === 'assistant');
     expect(assistantMsgs).toHaveLength(1);
     expect((assistantMsgs[0] as any).content).toContain('reply1');
@@ -338,7 +343,7 @@ describe('buildMessagesFromEvents', () => {
   });
 
   it('handles empty events list', () => {
-    const messages = buildMessagesFromEvents([]);
+    const messages = toMessages([]);
     expect(messages).toHaveLength(0);
   });
 });

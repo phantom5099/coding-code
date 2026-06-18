@@ -11,7 +11,8 @@ import type { ContextConfig } from '@codingcode/infra/config';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
-import { buildMessages } from '../../../src/session/messages.js';
+import { filterForContext, buildContextMessages } from '../../../src/context/service.js';
+import { readHistory } from '../../../src/session/file-ops.js';
 import { estimateTokens } from '../../../src/core/util.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
@@ -209,7 +210,10 @@ describe('compressor behavior', () => {
     it('returns promptEstimate after compression', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const before = estimateTokens(buildMessages(fx.transcriptPath));
+        const { visible: bVisible, compactedTurnIds: bCompacted } = filterForContext(
+          readHistory(fx.transcriptPath)
+        );
+        const before = estimateTokens(buildContextMessages(bVisible, bCompacted));
         const cfg = tinyConfig();
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'

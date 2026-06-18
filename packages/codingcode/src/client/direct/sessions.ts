@@ -95,7 +95,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           return yield* session.readHistory(state);
         })
       );
@@ -115,7 +115,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           return yield* session.readHistory(state);
         })
       );
@@ -130,7 +130,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       const mode = await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           return yield* session.getPermissionMode(state);
         })
       );
@@ -142,7 +142,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           yield* session.setPermissionMode(state, mode);
         })
       );
@@ -227,7 +227,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       const newSessionId = await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           return yield* session.forkSession(state, atTurnId ?? 0);
         })
       );

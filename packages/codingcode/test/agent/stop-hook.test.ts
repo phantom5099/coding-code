@@ -91,7 +91,6 @@ describe('agentLoop stop hook', () => {
     transcriptPath: '',
     indexPath: '',
     messageCount: 0,
-    promptEstimate: 0,
     memorySnapshot: '',
   };
 

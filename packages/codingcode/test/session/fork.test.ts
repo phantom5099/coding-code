@@ -5,7 +5,8 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
-import { buildMessages } from '../../src/session/messages.js';
+import { filterForContext, buildContextMessages } from '../../src/context/service.js';
+import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
@@ -67,7 +68,6 @@ function makeFixture(sessionId: string, slug: string) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
-    promptEstimate: 0,
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -120,7 +120,6 @@ describe('forkSession', () => {
         model: 'test',
         title: 'fixture',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       };
 
@@ -165,14 +164,14 @@ describe('forkSession', () => {
         model: 'test',
         title: 'fixture',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       };
 
+      // Fork at non-existent turnId so chain = all events (including summary + compact)
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 3);
+          return yield* svc.forkSession(state, 999);
         })
       );
 
@@ -219,7 +218,6 @@ describe('forkSession', () => {
         model: 'test',
         title: 'fixture',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       };
 
@@ -246,14 +244,20 @@ describe('forkSession', () => {
       );
 
       // Source should be unaffected
-      const sourceMessages = buildMessages(fx.transcriptPath);
+      const { visible: srcVisible, compactedTurnIds: srcCompacted } = filterForContext(
+        readHistory(fx.transcriptPath)
+      );
+      const sourceMessages = buildContextMessages(srcVisible, srcCompacted);
       const sourceUserContents = sourceMessages
         .filter((m) => m.role === 'user')
         .map((m) => m.content);
       expect(sourceUserContents).toEqual(['first', 'second', 'third']);
 
       // Fork should reflect the rollback
-      const forkMessages = buildMessages(newJsonlPath);
+      const { visible: forkVisible, compactedTurnIds: forkCompacted } = filterForContext(
+        readHistory(newJsonlPath)
+      );
+      const forkMessages = buildContextMessages(forkVisible, forkCompacted);
       const forkUserContents = forkMessages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(forkUserContents).toEqual(['first']);
     } finally {
@@ -278,7 +282,6 @@ describe('forkSession', () => {
         model: 'test',
         title: 'fixture',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       };
 
@@ -297,6 +300,88 @@ describe('forkSession', () => {
       expect(idx.title).toBe('fixture');
       expect(idx.permissionMode).toBe('default');
       expect(idx.model).toBe('test');
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
+  });
+
+  it('fork preserves summary/compact uuid (no regeneration)', async () => {
+    const sessionId = randomUUID();
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug, 'sessions');
+    mkdirSync(dir, { recursive: true });
+    const transcriptPath = join(dir, `${sessionId}.jsonl`);
+    const indexPath = join(dir, `${sessionId}.index.json`);
+
+    const fixedSummaryUuid = '11111111-1111-1111-1111-111111111111';
+    const fixedCompactUuid = '22222222-2222-2222-2222-222222222222';
+
+    const lines: any[] = [
+      {
+        type: 'session_meta',
+        sessionId,
+        projectPath: slug,
+        cwd: '/tmp/test',
+        createdAt: new Date().toISOString(),
+      },
+      { type: 'user', turnId: 1, content: 'q1' },
+      { type: 'assistant', turnId: 1, content: 'a1', toolCalls: [] },
+      { type: 'summary', uuid: fixedSummaryUuid, startTurnId: 1, endTurnId: 1, summaryText: 'sum' },
+      { type: 'user', turnId: 2, content: 'q2' },
+      { type: 'assistant', turnId: 2, content: 'a2', toolCalls: [] },
+      { type: 'compact', uuid: fixedCompactUuid, startTurnId: 1, endTurnId: 2 },
+    ];
+    writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
+    const idx: SessionIndex = {
+      sessionId,
+      projectPath: slug,
+      cwd: '/tmp/test',
+      model: 'test',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messageCount: lines.length - 1,
+      title: 'uuid-fixture',
+      currentTurnId: 2,
+      usage: undefined,
+      permissionMode: 'default',
+    };
+    writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
+
+    try {
+      const state = {
+        sessionId,
+        cwd: '/tmp/test',
+        projectPath: slug,
+        transcriptPath,
+        indexPath,
+        messageCount: lines.length - 1,
+        currentTurnId: 2,
+        sessionMeta: null,
+        model: 'test',
+        title: 'uuid-fixture',
+        usage: undefined,
+        memorySnapshot: '',
+      };
+
+      const newSessionId = await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.forkSession(state, 999);
+        })
+      );
+
+      const forkedPath = join(dir, `${newSessionId}.jsonl`);
+      const forkedEvents = readEvents(forkedPath);
+      const forkedSummary = forkedEvents.find(
+        (e) => e.type === 'summary'
+      ) as any;
+      const forkedCompact = forkedEvents.find(
+        (e) => e.type === 'compact'
+      ) as any;
+      expect(forkedSummary).toBeDefined();
+      expect(forkedCompact).toBeDefined();
+      expect((forkedSummary! as any).uuid).toBe(fixedSummaryUuid);
+      expect((forkedCompact! as any).uuid).toBe(fixedCompactUuid);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }

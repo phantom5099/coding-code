@@ -5,7 +5,6 @@ export interface SessionMetaEvent {
   cwd: string;
   createdAt: string;
   parentSessionId?: string;
-  parentAgentId?: string;
   agentName?: string;
 }
 
@@ -78,7 +77,21 @@ export interface SessionIndex {
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;
-  promptEstimate?: number;
   permissionMode: string;
   memorySnapshot?: string;
+}
+
+export interface SessionStoreState {
+  sessionId: string;
+  cwd: string;
+  projectPath: string;
+  transcriptPath: string;
+  indexPath: string;
+  messageCount: number;
+  sessionMeta: SessionMetaEvent | null;
+  model: string;
+  title: string;
+  currentTurnId: number;
+  usage: TokenUsage | undefined;
+  memorySnapshot: string;
 }

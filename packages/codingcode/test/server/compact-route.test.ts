@@ -29,6 +29,14 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       projectPath: 'test-path',
       model: 'deepseek-chat',
     }),
+  load: () =>
+    Effect.succeed({
+      sessionId: 'test-sid',
+      cwd: '/tmp/test',
+      projectPath: 'test-path',
+      transcriptPath: '/tmp/test.jsonl',
+      model: 'deepseek-chat',
+    }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
     Effect.succeed({

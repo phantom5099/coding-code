@@ -107,7 +107,6 @@ describe('agentLoop hooks type', () => {
       model: 'test-model',
       title: 'type-test',
       usage: undefined,
-      promptEstimate: 0,
       memorySnapshot: '',
     };
 

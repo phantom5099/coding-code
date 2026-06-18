@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
@@ -105,17 +104,11 @@ export function createDispatchAgentTool(): Effect.Effect<
           }
 
           // Create subagent transcript nested under parent session
-          const childUuid = randomUUID();
-
-          const childState = yield* session.create(
-            projectPath,
-            (ctx as any)?.model ?? 'subagent',
-            childUuid,
-            {
-              parentSessionId: ctx?.sessionId,
-              agentName: agentName,
-            }
-          );
+          const childState = yield* session.create(projectPath, (ctx as any)?.model ?? 'subagent', {
+            parentSessionId: ctx?.sessionId,
+            agentName: agentName,
+          });
+          const childUuid = childState.sessionId;
           session.incrementTurn(childState);
           yield* session.recordUser(childState, prompt);
 

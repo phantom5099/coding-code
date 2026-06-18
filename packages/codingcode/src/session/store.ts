@@ -2,10 +2,8 @@ import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
-import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
-import { createLogger } from '@codingcode/infra/logger';
 import type {
   SessionMetaEvent,
   UserEvent,
@@ -16,8 +14,8 @@ import type {
   SessionIndex,
   TokenUsage,
   SessionEvent,
+  SessionStoreState,
 } from './types.js';
-import { estimateTokens, estimateMessageTokens } from '../core/util.js';
 import {
   projectSessionsDir,
   ensureDirs,
@@ -31,28 +29,8 @@ import {
   countNonMetaEvents,
   truncateTitle,
   findFirstUserContent,
-  resolveSessionDir,
   resolveSessionJsonlPath as _resolveSessionJsonlPath,
 } from './file-ops.js';
-import { buildMessages, findLastVisibleAssistantUsage } from './messages.js';
-
-const logger = createLogger();
-
-export interface SessionStoreState {
-  sessionId: string;
-  cwd: string;
-  projectPath: string;
-  transcriptPath: string;
-  indexPath: string;
-  messageCount: number;
-  sessionMeta: SessionMetaEvent | null;
-  model: string;
-  title: string;
-  currentTurnId: number;
-  usage: TokenUsage | undefined;
-  promptEstimate: number;
-  memorySnapshot: string;
-}
 
 function assertResumeWorkspace(cwd: string, sessionId: string): void {
   const index = findSessionIndex(sessionId);
@@ -64,20 +42,6 @@ function assertResumeWorkspace(cwd: string, sessionId: string): void {
 
 export class SessionService extends Effect.Service<SessionService>()('Session', {
   effect: Effect.gen(function* () {
-    const writeQueues = new Map<string, Promise<void>>();
-
-    const enqueueWriteLocal = (sessionId: string, path: string, data: unknown): void => {
-      const prev = writeQueues.get(sessionId) ?? Promise.resolve();
-      const task = prev
-        .then(() => {
-          writeFileSync(path, JSON.stringify(data, null, 2), 'utf8');
-        })
-        .catch((err) => {
-          logger.error(`write queue error for ${path}:`, err);
-        });
-      writeQueues.set(sessionId, task);
-    };
-
     function updateIndex(state: SessionStoreState): void {
       if (!state.sessionMeta) return;
       const current = readCurrentIndex(state.indexPath);
@@ -92,40 +56,32 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         title: state.title,
         currentTurnId: state.currentTurnId,
         usage: state.usage,
-        promptEstimate: state.promptEstimate,
         permissionMode: current?.permissionMode ?? 'default',
         memorySnapshot: state.memorySnapshot,
       };
-      enqueueWriteLocal(state.sessionId, state.indexPath, index);
+      writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8');
     }
 
     const create = (
       cwd: string,
       model: string,
-      sessionId?: string,
-      opts?: { parentSessionId?: string; parentAgentId?: string; agentName?: string }
+      opts?: { parentSessionId?: string; agentName?: string }
     ): Effect.Effect<SessionStoreState, AgentError> =>
       Effect.try({
         try: () => {
-          if (sessionId && !opts?.parentSessionId) assertResumeWorkspace(cwd, sessionId);
-          const state = initState(cwd, sessionId, opts?.parentSessionId);
-          ensureDirs(state.transcriptPath);
+          const paths = computePaths(cwd, randomUUID(), opts?.parentSessionId);
+          ensureDirs(paths.transcriptPath);
 
-          state.model = model;
-
-          if (existsSync(state.transcriptPath)) {
-            const history = readHistory(state.transcriptPath);
-            const meta = history.find((e) => e.type === 'session_meta') as
-              | SessionMetaEvent
-              | undefined;
-            if (meta) {
-              state.sessionMeta = meta;
-              state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
-            }
-            const firstUser = findFirstUserContent(history);
-            if (firstUser) state.title = truncateTitle(firstUser);
-            return state;
-          }
+          const state: SessionStoreState = {
+            ...paths,
+            messageCount: 0,
+            sessionMeta: null,
+            model,
+            title: paths.sessionId.slice(0, 8),
+            currentTurnId: 0,
+            usage: undefined,
+            memorySnapshot: '',
+          };
 
           const meta: SessionMetaEvent = {
             type: 'session_meta',
@@ -134,7 +90,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             cwd: state.cwd,
             createdAt: new Date().toISOString(),
             ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
-            ...(opts?.parentAgentId && { parentAgentId: opts.parentAgentId }),
             ...(opts?.agentName && { agentName: opts.agentName }),
           };
           state.sessionMeta = meta;
@@ -147,6 +102,46 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           e instanceof AgentError
             ? e
             : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
+
+    const load = (cwd: string, sessionId: string): Effect.Effect<SessionStoreState, AgentError> =>
+      Effect.try({
+        try: () => {
+          assertResumeWorkspace(cwd, sessionId);
+          const paths = computePaths(cwd, sessionId);
+          ensureDirs(paths.transcriptPath);
+
+          const idx = readCurrentIndex(paths.indexPath);
+
+          const state: SessionStoreState = {
+            ...paths,
+            messageCount: 0,
+            sessionMeta: null,
+            model: idx?.model ?? '',
+            title: paths.sessionId.slice(0, 8),
+            currentTurnId: idx?.currentTurnId ?? 0,
+            usage: idx?.usage ?? undefined,
+            memorySnapshot: idx?.memorySnapshot ?? '',
+          };
+
+          if (existsSync(state.transcriptPath)) {
+            const history = readHistory(state.transcriptPath);
+            const meta = history.find((e) => e.type === 'session_meta') as
+              | SessionMetaEvent
+              | undefined;
+            if (meta) {
+              state.sessionMeta = meta;
+              state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
+            }
+            const firstUser = findFirstUserContent(history);
+            if (firstUser) state.title = truncateTitle(firstUser);
+          }
+          return state;
+        },
+        catch: (e) =>
+          e instanceof AgentError
+            ? e
+            : new AgentError('SESSION_IO_ERROR', `Session load failed: ${String(e)}`, e),
       });
 
     const recordUser = (
@@ -166,7 +161,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           appendLine(state.transcriptPath, event);
           state.messageCount++;
           updateIndex(state);
-          state.promptEstimate += estimateMessageTokens({ role: 'user', content });
           return event;
         },
         catch: (e) =>
@@ -195,9 +189,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           updateIndex(state);
           if (usage) {
             state.usage = usage;
-            state.promptEstimate = usage.prompt;
-          } else {
-            state.promptEstimate += estimateMessageTokens({ role: 'assistant', content });
           }
           return event;
         },
@@ -225,12 +216,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           appendLine(state.transcriptPath, event);
           state.messageCount++;
           updateIndex(state);
-          state.promptEstimate += estimateMessageTokens({
-            role: 'tool',
-            content: output,
-            tool_call_id: toolCallId,
-            tool_name: toolName,
-          });
           return event;
         },
         catch: (e) =>
@@ -258,7 +243,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           state.messageCount++;
           updateIndex(state);
           state.usage = undefined;
-          state.promptEstimate = estimateTokens(buildMessages(state.transcriptPath));
           return event;
         },
         catch: (e) =>
@@ -281,9 +265,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         appendLine(state.transcriptPath, event);
         state.messageCount++;
         updateIndex(state);
-        const lastUsage = findLastVisibleAssistantUsage(state.transcriptPath);
-        state.usage = lastUsage;
-        state.promptEstimate = lastUsage?.prompt ?? 0;
         return event;
       });
 
@@ -292,7 +273,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       atTurnId: number
     ): Effect.Effect<string, AgentError> =>
       Effect.sync(() => {
-        return forkSessionImpl(state.sessionId, state.transcriptPath, atTurnId);
+        return forkSessionImpl(state.transcriptPath, atTurnId);
       });
 
     const renameSession = (
@@ -306,9 +287,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
     const readHistoryFromState = (state: SessionStoreState): Effect.Effect<SessionEvent[]> =>
       Effect.sync(() => readHistory(state.transcriptPath));
-
-    const readMessages = (state: SessionStoreState): Effect.Effect<Message[]> =>
-      Effect.sync(() => buildMessages(state.transcriptPath));
 
     const listSessionsFromCwd = (cwd?: string): Effect.Effect<SessionIndex[]> =>
       Effect.sync(() => listSessions(cwd ? encodeProjectPath(cwd) : undefined));
@@ -339,6 +317,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
     return {
       create,
+      load,
       recordUser,
       recordAssistant,
       recordToolResult,
@@ -347,7 +326,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       forkSession,
       renameSession,
       readHistory: readHistoryFromState,
-      readMessages,
       listSessions: listSessionsFromCwd,
       findSessionIndex: findSessionIndexFromId,
       getSessionId,
@@ -364,58 +342,22 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
   }),
 }) {}
 
-function initState(cwd: string, sessionId?: string, parentSessionId?: string): SessionStoreState {
-  const id = sessionId ?? randomUUID();
+function computePaths(
+  cwd: string,
+  sessionId: string,
+  parentSessionId?: string
+): Pick<SessionStoreState, 'sessionId' | 'cwd' | 'projectPath' | 'transcriptPath' | 'indexPath'> {
   const normalizedCwd = normalizePath(cwd);
   const projectPath = encodeProjectPath(normalizedCwd);
   const sessionsDir = projectSessionsDir(projectPath);
   const transcriptPath = parentSessionId
-    ? join(sessionsDir, parentSessionId, 'subagents', `${id}.jsonl`)
-    : join(sessionsDir, `${id}.jsonl`);
+    ? join(sessionsDir, parentSessionId, 'subagents', `${sessionId}.jsonl`)
+    : join(sessionsDir, `${sessionId}.jsonl`);
   const indexPath = transcriptPath.replace('.jsonl', '.index.json');
-  let currentTurnId = 0;
-  let usage: TokenUsage | undefined = undefined;
-  let promptEstimate = 0;
-  let memorySnapshot = '';
-  let model = '';
-  try {
-    if (existsSync(indexPath)) {
-      const idx = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
-      currentTurnId = idx.currentTurnId ?? 0;
-      usage = idx.usage ?? undefined;
-      promptEstimate = idx.promptEstimate ?? 0;
-      memorySnapshot = idx.memorySnapshot ?? '';
-      model = idx.model ?? '';
-    }
-  } catch {
-    /* ignore corrupt index */
-  }
-  if (!usage && promptEstimate === 0) {
-    const lastUsage = findLastVisibleAssistantUsage(transcriptPath);
-    if (lastUsage) {
-      usage = lastUsage;
-      promptEstimate = lastUsage.prompt;
-    }
-  }
-  return {
-    sessionId: id,
-    cwd: normalizedCwd,
-    projectPath,
-    transcriptPath,
-    indexPath,
-    messageCount: 0,
-    sessionMeta: null,
-    model,
-    title: id.slice(0, 8),
-    currentTurnId,
-    usage,
-    promptEstimate,
-    memorySnapshot,
-  };
+  return { sessionId, cwd: normalizedCwd, projectPath, transcriptPath, indexPath };
 }
 
 function forkSessionImpl(
-  sourceSessionId: string,
   sourceJsonlPath: string,
   atTurnId: number
 ): string {
@@ -434,10 +376,6 @@ function forkSessionImpl(
 
   for (const ev of chain) {
     const cloned: any = { ...ev };
-
-    if (cloned.type === 'summary' || cloned.type === 'compact') {
-      cloned.uuid = randomUUID();
-    }
 
     if (cloned.type === 'assistant' && Array.isArray(cloned.toolCalls)) {
       for (const tc of cloned.toolCalls) {
@@ -464,7 +402,6 @@ function forkSessionImpl(
   const sourceIdxPath = sourceJsonlPath.replace('.jsonl', '.index.json');
   let title = newSessionId.slice(0, 8);
   let usage: TokenUsage | undefined = undefined;
-  let promptEstimate = 0;
   let permissionMode = 'default';
   let srcIdx: SessionIndex | undefined;
   if (existsSync(sourceIdxPath)) {
@@ -472,20 +409,10 @@ function forkSessionImpl(
       srcIdx = JSON.parse(readFileSync(sourceIdxPath, 'utf8')) as SessionIndex;
       title = srcIdx.title;
       usage = srcIdx.usage ?? undefined;
-      promptEstimate = srcIdx.promptEstimate ?? 0;
       permissionMode = srcIdx.permissionMode ?? 'default';
     } catch {
       /* corrupt */
     }
-  }
-
-  const lastUsage = findLastVisibleAssistantUsage(newJsonlPath);
-  if (lastUsage) {
-    usage = lastUsage;
-    promptEstimate = lastUsage.prompt;
-  } else {
-    usage = undefined;
-    promptEstimate = estimateTokens(buildMessages(newJsonlPath));
   }
 
   const meta = chain[0] as SessionMetaEvent | undefined;
@@ -500,7 +427,6 @@ function forkSessionImpl(
     title,
     currentTurnId: turnId,
     usage,
-    promptEstimate,
     permissionMode,
   };
   writeFileSync(newIndexPath, JSON.stringify(newIdx, null, 2), 'utf8');

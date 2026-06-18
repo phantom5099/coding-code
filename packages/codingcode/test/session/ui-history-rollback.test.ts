@@ -3,8 +3,37 @@ import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { buildMessages, applyVisibilityEvents, readUIHistory } from '../../src/session/messages.js';
-import type { SessionIndex } from '../../src/session/types.js';
+import { filterForContext, buildContextMessages } from '../../src/context/service.js';
+import { readHistory } from '../../src/session/file-ops.js';
+import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
+
+function filterForUI(events: SessionEvent[]): SessionEvent[] {
+  const rollbackHiddenTurnIds = new Set<number>();
+  const rollbackHiddenOpUuids = new Set<string>();
+
+  for (const ev of events) {
+    if (ev.type !== 'rollback') continue;
+    for (const prior of events) {
+      if (prior === ev) break;
+      if ('turnId' in prior && prior.turnId >= ev.throughTurnId) {
+        rollbackHiddenTurnIds.add(prior.turnId);
+      }
+      if (prior.type === 'summary' || prior.type === 'compact') {
+        if ((prior as any).endTurnId >= ev.throughTurnId) {
+          rollbackHiddenOpUuids.add((prior as any).uuid);
+        }
+      }
+    }
+  }
+
+  return events.filter((ev) => {
+    if (ev.type === 'rollback') return false;
+    if (ev.type === 'summary' && rollbackHiddenOpUuids.has((ev as any).uuid)) return false;
+    if (ev.type === 'compact' && rollbackHiddenOpUuids.has((ev as any).uuid)) return false;
+    if ('turnId' in ev && rollbackHiddenTurnIds.has(ev.turnId)) return false;
+    return true;
+  }) as SessionEvent[];
+}
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
@@ -56,7 +85,6 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
-    promptEstimate: 0,
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -64,7 +92,7 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
   return { dir, transcriptPath, indexPath };
 }
 
-describe('applyVisibilityEvents', () => {
+describe('filterForContext', () => {
   it('marks rollback-hidden events', () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
@@ -83,16 +111,16 @@ describe('applyVisibilityEvents', () => {
         { type: 'assistant' as const, turnId: 2, content: 'bye', toolCalls: [] },
         { type: 'rollback' as const, throughTurnId: 1, reason: 'test' },
       ];
-      const { hiddenTurnIds } = applyVisibilityEvents(events);
-      expect(hiddenTurnIds.has(2)).toBe(true);
-      expect(hiddenTurnIds.has(1)).toBe(true);
+      const { visible } = filterForContext(events);
+      const visibleTurnIds = visible.filter((e) => 'turnId' in e).map((e) => (e as any).turnId);
+      expect(visibleTurnIds).toEqual([]);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }
   });
 });
 
-describe('buildMessages with visibility filtering', () => {
+describe('buildContextMessages with visibility filtering', () => {
   it('visible turns match after rollback', () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
@@ -100,7 +128,8 @@ describe('buildMessages with visibility filtering', () => {
       { type: 'rollback', throughTurnId: 1, reason: 'test' },
     ]);
     try {
-      const messages = buildMessages(fx.transcriptPath);
+      const { visible, compactedTurnIds } = filterForContext(readHistory(fx.transcriptPath));
+      const messages = buildContextMessages(visible, compactedTurnIds);
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toEqual([]);
     } finally {
@@ -145,13 +174,13 @@ describe('readUIHistory with visibility filtering', () => {
           title: 'test',
           currentTurnId: 2,
           usage: undefined,
-          promptEstimate: 0,
           permissionMode: 'default',
         })
       );
 
-      const turns = readUIHistory(sessionId);
-      expect(turns.length).toBe(0);
+      const visible = filterForUI(readHistory(tp));
+      const turnIds = visible.filter((e) => 'turnId' in e).map((e) => (e as any).turnId);
+      expect(turnIds).toEqual([]);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }
@@ -162,8 +191,9 @@ describe('readUIHistory with visibility filtering', () => {
     const slug = randomUUID();
     const _fx = makeFixture(sessionId, slug);
     try {
-      const turns = readUIHistory(sessionId);
-      expect(turns.length).toBe(3);
+      const visible = filterForUI(readHistory(_fx.transcriptPath));
+      const turnIds = visible.filter((e) => 'turnId' in e).map((e) => (e as any).turnId);
+      expect(new Set(turnIds)).toEqual(new Set([1, 2, 3]));
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }

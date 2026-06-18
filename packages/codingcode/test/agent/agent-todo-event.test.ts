@@ -101,7 +101,6 @@ const mockState = {
   model: 'test-model',
   title: 'test',
   usage: undefined,
-  promptEstimate: 0,
   memorySnapshot: '',
 };
 

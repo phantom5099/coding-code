@@ -110,7 +110,6 @@ function buildIndexFromMeta(meta: SessionMetaEvent, history: SessionEvent[]): Se
     title: firstUser ? truncateTitle(firstUser) : meta.sessionId.slice(0, 8),
     currentTurnId: 0,
     usage: undefined,
-    promptEstimate: 0,
     permissionMode: 'default',
   };
 }

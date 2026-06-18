@@ -91,7 +91,6 @@ describe('agentLoop loop options', () => {
     transcriptPath: '',
     indexPath: '',
     messageCount: 0,
-    promptEstimate: 0,
     memorySnapshot: '',
   };
 

@@ -62,7 +62,6 @@ const mockSession = {
 
       title: 'child',
       usage: undefined,
-      promptEstimate: 0,
       memorySnapshot: '',
     }),
   incrementTurn: () => 0,
@@ -415,7 +414,7 @@ describe('dispatch_agent tool', () => {
     }
   });
 
-  it('should call session.create with plain UUID sessionId and parentSessionId in opts', async () => {
+  it('should call session.create with model and parentSessionId in opts', async () => {
     const createFn = vi.fn().mockReturnValue(
       Effect.succeed({
         sessionId: 'child-456',
@@ -428,7 +427,6 @@ describe('dispatch_agent tool', () => {
         sessionMeta: null,
         title: 'child',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       })
     );
@@ -450,7 +448,6 @@ describe('dispatch_agent tool', () => {
     );
     expect(createFn).toHaveBeenCalledWith(
       '/test',
-      expect.any(String),
       expect.any(String),
       expect.objectContaining({ parentSessionId: 'parent-1', agentName: 'explore' })
     );

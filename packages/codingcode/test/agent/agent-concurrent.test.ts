@@ -94,7 +94,6 @@ const mockState = {
   model: 'test-model',
   title: 'concurrent',
   usage: undefined,
-  promptEstimate: 0,
   memorySnapshot: '',
 };
 

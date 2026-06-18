@@ -3,7 +3,8 @@ import { mkdirSync, writeFileSync, rmSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
-import { buildMessages } from '../../src/session/messages.js';
+import { filterForContext, buildContextMessages } from '../../src/context/service.js';
+import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionIndex } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
@@ -55,7 +56,6 @@ function makeFixture(sessionId: string, slug: string) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
-    promptEstimate: 0,
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -79,7 +79,8 @@ describe('rollback', () => {
         reason: 'user rollback',
       });
 
-      const messages = buildMessages(fx.transcriptPath);
+      const { visible, compactedTurnIds } = filterForContext(readHistory(fx.transcriptPath));
+      const messages = buildContextMessages(visible, compactedTurnIds);
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toEqual([]);
     } finally {
@@ -98,7 +99,8 @@ describe('rollback', () => {
         reason: 'user rollback',
       });
 
-      const messages = buildMessages(fx.transcriptPath);
+      const { visible, compactedTurnIds } = filterForContext(readHistory(fx.transcriptPath));
+      const messages = buildContextMessages(visible, compactedTurnIds);
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toEqual(['hello']);
     } finally {

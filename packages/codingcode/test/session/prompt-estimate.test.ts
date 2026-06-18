@@ -5,9 +5,8 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
-import { findSessionIndex } from '../../src/session/file-ops.js';
-import { findLastVisibleAssistantUsage, buildMessages } from '../../src/session/messages.js';
-import { estimateTokensForContent, estimateTokens } from '../../src/core/util.js';
+import { findLastVisibleAssistantUsage, estimatePromptTokens } from '../../src/context/service.js';
+import { estimateTokensForContent } from '../../src/core/util.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
 
@@ -76,7 +75,6 @@ function makeFixture(
     title: 'fixture',
     currentTurnId: 2,
     usage: usage ?? undefined,
-    promptEstimate: usage ? usage.prompt : estimateTokens(buildMessages(transcriptPath)),
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -162,19 +160,6 @@ describe('promptEstimate', () => {
     }
   });
 
-  it('findSessionIndex reads promptEstimate from index.json', () => {
-    const sessionId = randomUUID();
-    const slug = randomUUID();
-    const _fx = makeFixture(sessionId, slug, { prompt: 500, completion: 200, total: 700 });
-    try {
-      const idx = findSessionIndex(sessionId);
-      expect(idx).not.toBeNull();
-      expect(idx!.promptEstimate).toBe(500);
-    } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
-    }
-  });
-
   it('forkSession restores usage and promptEstimate from last visible assistant', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
@@ -193,7 +178,6 @@ describe('promptEstimate', () => {
         model: 'test-model',
         title: 'fixture',
         usage,
-        promptEstimate: usage.prompt,
         memorySnapshot: '',
       };
       const newSessionId = await run(
@@ -205,7 +189,6 @@ describe('promptEstimate', () => {
       const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
       const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
       expect(idx.usage).toEqual(usage);
-      expect(idx.promptEstimate).toBe(usage.prompt);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }
@@ -228,7 +211,6 @@ describe('promptEstimate', () => {
         model: 'test-model',
         title: 'fixture',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       };
       const newSessionId = await run(
@@ -239,7 +221,8 @@ describe('promptEstimate', () => {
       );
       const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
       const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
-      expect(idx.promptEstimate).toBeGreaterThan(0);
+      expect(idx.sessionId).toBe(newSessionId);
+      expect(estimatePromptTokens(join(fx.dir, `${newSessionId}.jsonl`))).toBeGreaterThan(0);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }
@@ -269,243 +252,6 @@ describe('SessionService create sets model', () => {
 
       const idx = JSON.parse(readFileSync(state.indexPath, 'utf8'));
       expect(idx.model).toBe('my-test-model');
-    } finally {
-      await new Promise((r) => setTimeout(r, 50));
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
-
-describe('SessionService record methods update promptEstimate', () => {
-  it('recordUser increments promptEstimate', async () => {
-    const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
-    mkdirSync(dir, { recursive: true });
-    try {
-      const state = await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
-        })
-      );
-      expect(state.promptEstimate).toBe(0);
-
-      const before = state.promptEstimate;
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.recordUser(state, 'hello world');
-        })
-      );
-      expect(state.promptEstimate).toBeGreaterThan(before);
-    } finally {
-      await new Promise((r) => setTimeout(r, 50));
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('recordAssistant without usage increments promptEstimate', async () => {
-    const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
-    mkdirSync(dir, { recursive: true });
-    try {
-      const state = await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
-        })
-      );
-
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.recordUser(state, 'hello');
-        })
-      );
-      const before = state.promptEstimate;
-
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.recordAssistant(state, 'reply', []);
-        })
-      );
-      expect(state.promptEstimate).toBeGreaterThan(before);
-      expect(state.usage).toBeUndefined();
-    } finally {
-      await new Promise((r) => setTimeout(r, 50));
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('recordAssistant with usage sets promptEstimate to usage.prompt', async () => {
-    const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
-    mkdirSync(dir, { recursive: true });
-    try {
-      const state = await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
-        })
-      );
-
-      const usage = { prompt: 999, completion: 111, total: 1110 };
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.recordAssistant(state, 'reply', [], usage);
-        })
-      );
-      expect(state.promptEstimate).toBe(999);
-      expect(state.usage).toEqual(usage);
-    } finally {
-      await new Promise((r) => setTimeout(r, 50));
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('recordToolResult increments promptEstimate', async () => {
-    const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
-    mkdirSync(dir, { recursive: true });
-    try {
-      const state = await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
-        })
-      );
-
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.recordAssistant(state, 'use tool', [
-            { id: 'tc1', name: 'bash', arguments: {} },
-          ]);
-        })
-      );
-      const before = state.promptEstimate;
-
-      const toolEvent = await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.recordToolResult(state, 'bash', 'tc1', 'tool output here');
-        })
-      );
-      expect(state.promptEstimate).toBeGreaterThan(before);
-      expect(toolEvent.output).toBe('tool output here');
-    } finally {
-      await new Promise((r) => setTimeout(r, 50));
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('rollbackToTurn resets usage and recalculates promptEstimate', async () => {
-    const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
-    mkdirSync(dir, { recursive: true });
-    try {
-      const state = await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
-        })
-      );
-
-      const userEv = await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.recordUser(state, 'hello world');
-        })
-      );
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.recordAssistant(state, 'reply', [], {
-            prompt: 100,
-            completion: 50,
-            total: 150,
-          });
-        })
-      );
-      expect(state.usage).toBeDefined();
-
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.rollbackToTurn(state, userEv.turnId, 'test');
-        })
-      );
-      expect(state.usage).toBeUndefined();
-      expect(state.promptEstimate).toBeGreaterThanOrEqual(0);
-    } finally {
-      await new Promise((r) => setTimeout(r, 50));
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('rollbackToTurn recalculates promptEstimate from visible messages, not old usage', async () => {
-    const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
-    mkdirSync(dir, { recursive: true });
-    try {
-      const state = await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
-        })
-      );
-
-      // Turn 1
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.recordUser(state, 'hello world');
-          yield* svc.recordAssistant(state, 'reply one', [], {
-            prompt: 1000,
-            completion: 100,
-            total: 1100,
-          });
-        })
-      );
-
-      // Turn 2
-      state.currentTurnId = 2;
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.recordUser(state, 'do more stuff');
-          yield* svc.recordAssistant(state, 'reply two', [], {
-            prompt: 5000,
-            completion: 200,
-            total: 5200,
-          });
-        })
-      );
-
-      expect(state.promptEstimate).toBe(5000);
-      expect(state.usage).toBeDefined();
-
-      // Rollback to turn 1 — should hide turn 2 messages
-      await run(
-        Effect.gen(function* () {
-          const svc = yield* SessionService;
-          yield* svc.rollbackToTurn(state, 1, 'test rollback');
-        })
-      );
-
-      // promptEstimate should restore from last visible assistant usage.prompt, not 5000
-      expect(state.promptEstimate).toBeLessThan(5000);
-      expect(state.promptEstimate).toBe(1000); // turn 1 assistant usage.prompt
-      // usage should be restored from last visible assistant
-      expect(state.usage).toEqual({ prompt: 1000, completion: 100, total: 1100 });
     } finally {
       await new Promise((r) => setTimeout(r, 50));
       rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });

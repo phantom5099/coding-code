@@ -94,7 +94,6 @@ const mockState = {
   model: 'test-model',
   title: 'cache-stability',
   usage: undefined,
-  promptEstimate: 0,
   memorySnapshot: '',
 };
 

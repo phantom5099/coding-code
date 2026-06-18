@@ -39,7 +39,6 @@ function makeFixture(
     title: 'test',
     currentTurnId: 0,
     usage: usage as any,
-    promptEstimate: 0,
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
