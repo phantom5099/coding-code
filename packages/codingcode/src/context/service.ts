@@ -1,10 +1,12 @@
 import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
+import { join } from 'path';
+import { readFileSync, existsSync } from 'fs';
 import type { ContextConfig } from '@codingcode/infra/config';
 import type { Message } from '../core/types.js';
 import { SessionService } from '../session/store.js';
 import { estimateTokens, estimateMessageTokens } from '../core/util.js';
-import { resolveSessionJsonlPath, appendLine, readHistory } from '../session/file-ops.js';
+import { projectSessionsDir, appendLine, readHistory } from '../session/file-ops.js';
 import { resolveLLM } from '../llm/llm-resolver.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
@@ -239,11 +241,17 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       config: ContextConfig,
       contextWindow: number = 128000
     ): BuildResult => {
-      const jsonlPath = resolveSessionJsonlPath(sessionId);
+      const jsonlPath = join(projectSessionsDir(encodedProjectPath), `${sessionId}.jsonl`);
       let events = session.readHistoryFile(jsonlPath);
 
-      const idx = session.findSessionIndexProxy(sessionId);
-      const currentTurnId = idx?.currentTurnId ?? 0;
+      let currentTurnId = 0;
+      const idxPath = join(projectSessionsDir(encodedProjectPath), `${sessionId}.index.json`);
+      if (existsSync(idxPath)) {
+        try {
+          const idx = JSON.parse(readFileSync(idxPath, 'utf8'));
+          currentTurnId = idx?.currentTurnId ?? 0;
+        } catch {}
+      }
 
       let { visible, compactedTurnIds } = filterForContext(events);
 
@@ -377,6 +385,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         );
         released += await tryCompaction(
           sessionId,
+          encodedProjectPath,
           config,
           llm,
           compactedEvents,
@@ -404,6 +413,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
 
     async function tryCompaction(
       sessionId: string,
+      encodedProjectPath: string,
       config: ContextConfig,
       llm: LLMClient | null,
       compactedEvents: SessionEvent[],
@@ -451,7 +461,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         endTurnId,
         summaryText: summary,
       };
-      appendLine(resolveSessionJsonlPath(sessionId), event);
+      appendLine(join(projectSessionsDir(encodedProjectPath), `${sessionId}.jsonl`), event);
 
       const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
       return Math.max(0, totalTokens - estimateMessageTokens(summaryMsg));

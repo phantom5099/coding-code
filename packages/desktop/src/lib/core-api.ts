@@ -31,14 +31,15 @@ export function createSession(
   return clients.sessions.createSession({ cwd, initialPermissionMode });
 }
 
-export function deleteSession(sessionId: string): Promise<void> {
-  return clients.sessions.deleteSession({ sessionId });
+export function deleteSession(sessionId: string, cwd: string): Promise<void> {
+  return clients.sessions.deleteSession({ sessionId, cwd });
 }
 
 export function getSessionHistory(
-  sessionId: string
+  sessionId: string,
+  cwd: string
 ): Promise<Array<{ id: string; items: any[]; status: string }>> {
-  return clients.sessions.getSessionHistory({ sessionId }) as unknown as Promise<
+  return clients.sessions.getSessionHistory({ sessionId, cwd }) as unknown as Promise<
     Array<{ id: string; items: any[]; status: string }>
   >;
 }
@@ -47,8 +48,8 @@ export function resumeSession(sessionId: string, cwd: string): Promise<any> {
   return clients.sessions.resumeSession({ sessionId, cwd });
 }
 
-export function setSessionPermissionMode(sessionId: string, mode: string): Promise<void> {
-  return clients.sessions.setSessionPermissionMode({ sessionId, mode: mode as any });
+export function setSessionPermissionMode(sessionId: string, cwd: string, mode: string): Promise<void> {
+  return clients.sessions.setSessionPermissionMode({ sessionId, cwd, mode: mode as any });
 }
 
 export function sendApprovalResponse(

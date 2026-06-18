@@ -26,16 +26,8 @@ const { mockLLM } = vi.hoisted(() => ({
 
 vi.mock('../../../src/session/file-ops.js', async (importOriginal) => {
   const actual = await importOriginal();
-  const mockResolveSessionDir = vi.fn((_sessionId: string) => '/tmp/sessions');
   return {
     ...(actual as any),
-    findSessionIndex: vi.fn(() => ({ currentTurnId: 10 })),
-    resolveSessionDir: mockResolveSessionDir,
-    resolveSessionJsonlPath: vi.fn((sessionId: string) => {
-      const dir = mockResolveSessionDir(sessionId);
-      if (!dir) throw new Error(`Session ${sessionId} not found`);
-      return `${dir}/${sessionId}.jsonl`;
-    }),
     readHistory: vi.fn(() => [
       { type: 'user', content: 'a'.repeat(200), turnId: 1 },
       { type: 'assistant', content: 'b'.repeat(200), turnId: 1 },
@@ -56,6 +48,14 @@ vi.mock('fs', async (importOriginal) => {
   return {
     ...(actual as any),
     appendFileSync: vi.fn(),
+    existsSync: vi.fn((p: string) => {
+      if (p.endsWith('.index.json')) return true;
+      return (actual as any).existsSync(p);
+    }),
+    readFileSync: vi.fn((p: string, encoding: BufferEncoding) => {
+      if (p.endsWith('.index.json')) return JSON.stringify({ currentTurnId: p.includes('ttl-session') ? 0 : 10 });
+      return (actual as any).readFileSync(p, encoding);
+    }),
   };
 });
 
@@ -65,7 +65,6 @@ vi.mock('../../../src/core/util.js', () => ({
   estimateTokensForContent: vi.fn(),
 }));
 
-import { findSessionIndex } from '../../../src/session/file-ops.js';
 import { estimateTokens, estimateMessageTokens } from '../../../src/core/util.js';
 
 const TestLayer = Layer.merge(
@@ -96,7 +95,6 @@ function config(threshold: number, maxTokens = 10000) {
 
 describe('compactIfNeeded', () => {
   beforeEach(() => {
-    (findSessionIndex as any).mockReturnValue({ currentTurnId: 10 });
     (estimateTokens as any).mockReturnValue(0);
     (estimateMessageTokens as any).mockReturnValue(50);
   });
@@ -153,8 +151,6 @@ describe('compactIfNeeded', () => {
   });
 
   it('resets failure count after TTL expires', async () => {
-    (findSessionIndex as any).mockReturnValue({ currentTurnId: 0 });
-
     (estimateTokens as any).mockReturnValue(10000);
     const ctx = await getCtxService();
     await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);

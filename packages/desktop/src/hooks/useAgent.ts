@@ -108,7 +108,7 @@ export function useAgentCore() {
     if (!currentThreadId) return;
     const thread = useAgentStore.getState().threads[currentThreadId];
     if (!thread || thread.turns.length > 0) return;
-    getSessionHistory(currentThreadId)
+    getSessionHistory(currentThreadId, thread.cwd)
       .then((turns) => {
         if (turns && turns.length > 0) {
           setThreadTurns(currentThreadId, turns as any);
@@ -518,12 +518,12 @@ export function useAgentRollback() {
 
   const deleteThread = useCallback(
     async (threadId: string) => {
+      const currentCwd = useWorkspaceStore.getState().rootPath;
       try {
-        await deleteSession(threadId);
+        await deleteSession(threadId, currentCwd);
       } catch (e) {
         console.error('Failed to delete session:', e);
       }
-      const currentCwd = useWorkspaceStore.getState().rootPath;
       if (currentCwd) {
         const sessions = await listSessions(currentCwd).catch(() => []);
         if (sessions) {

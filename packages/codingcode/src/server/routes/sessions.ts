@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { join } from 'path';
+import { existsSync } from 'fs';
 import type { SessionStoreState } from '../../session/types.js';
 import { SessionService } from '../../session/store.js';
 import {
-  resolveSessionDir,
+  sessionJsonlPathFromCwd,
   getPermissionMode,
   setPermissionMode,
   readHistory,
@@ -142,19 +142,17 @@ function sessionEventsToTurns(
   return [...turnsMap.values()].sort((a, b) => Number(a.id) - Number(b.id));
 }
 
-function readUIHistory(sessionId: string): Array<{ id: string; items: object[]; status: string }> {
-  const dir = resolveSessionDir(sessionId);
-  if (!dir) return [];
-  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+function readUIHistory(sessionId: string, cwd: string): Array<{ id: string; items: object[]; status: string }> {
+  const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
+  if (!existsSync(jsonlPath)) return [];
   const events = readHistory(jsonlPath);
   const visibleEvents = filterForUI(events);
   return sessionEventsToTurns(visibleEvents);
 }
 
-function findUserMessageForTurn(sessionId: string, turnId: number): string {
-  const dir = resolveSessionDir(sessionId);
-  if (!dir) return '';
-  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+function findUserMessageForTurn(sessionId: string, turnId: number, cwd: string): string {
+  const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
+  if (!existsSync(jsonlPath)) return '';
   const rawEvents = readHistory(jsonlPath);
   for (const ev of rawEvents) {
     if (ev.type === 'user' && (ev as any).turnId === turnId) {
@@ -220,11 +218,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     }
     const state = result.value as SessionStoreState;
     if (body.initialPermissionMode) {
-      const dir = resolveSessionDir(state.sessionId);
-      if (dir) {
-        const idxPath = join(dir, `${state.sessionId}.index.json`);
-        setPermissionMode(state.sessionId, idxPath, body.initialPermissionMode);
-      }
+      setPermissionMode(state.sessionId, state.indexPath, body.initialPermissionMode);
     }
     return c.json({ sessionId: state.sessionId });
   });
@@ -301,31 +295,35 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
 
   router.delete('/:id', async (c) => {
     const sessionId = c.req.param('id');
-    deleteSession(sessionId);
+    const cwd = c.req.query('cwd');
+    if (!cwd) return c.json({ error: 'cwd required' }, 400);
+    deleteSession(sessionId, cwd);
     return c.json({ ok: true });
   });
 
   router.get('/:id/history', async (c) => {
     const sessionId = c.req.param('id');
-    const turns = readUIHistory(sessionId);
+    const cwd = c.req.query('cwd');
+    if (!cwd) return c.json({ error: 'cwd required' }, 400);
+    const turns = readUIHistory(sessionId, cwd);
     return c.json(turns);
   });
 
   router.get('/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
-    const dir = resolveSessionDir(sessionId);
-    if (!dir) return c.json({ mode: 'default' });
-    const idxPath = join(dir, `${sessionId}.index.json`);
+    const cwd = c.req.query('cwd');
+    if (!cwd) return c.json({ mode: 'default' });
+    const idxPath = sessionJsonlPathFromCwd(cwd, sessionId).replace('.jsonl', '.index.json');
+    if (!existsSync(idxPath)) return c.json({ mode: 'default' });
     const mode = getPermissionMode(idxPath);
     return c.json({ mode });
   });
 
   router.put('/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
-    const { mode } = await c.req.json<{ mode: string }>();
-    const dir = resolveSessionDir(sessionId);
-    if (!dir) return c.json({ error: 'Session not found' }, 404);
-    const idxPath = join(dir, `${sessionId}.index.json`);
+    const { cwd, mode } = await c.req.json<{ cwd: string; mode: string }>();
+    if (!cwd) return c.json({ error: 'cwd required' }, 400);
+    const idxPath = sessionJsonlPathFromCwd(cwd, sessionId).replace('.jsonl', '.index.json');
     setPermissionMode(sessionId, idxPath, mode);
     const handle = activeApprovalForks.get(sessionId);
     if (handle) handle.setPermissionMode(mode);
@@ -530,9 +528,9 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId);
+        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
-        const turns = readUIHistory(sessionId);
+        const turns = readUIHistory(sessionId, cwd);
         const promptEstimate = estimatePromptTokens(state.transcriptPath);
         return { ok: true, turns, rolledBackMessage, promptEstimate };
       }) as any
@@ -559,9 +557,9 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const checkpoint = yield* CheckpointService;
         const codeResult = yield* checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
         const state = yield* session.load(cwd, sessionId);
-        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId);
+        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
-        const turns = readUIHistory(sessionId);
+        const turns = readUIHistory(sessionId, cwd);
         const promptEstimate = estimatePromptTokens(state.transcriptPath);
         return {
           ok: true,
@@ -619,8 +617,8 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
         const newSessionId = yield* session.forkSession(state, atTurnId);
-        const turns = readUIHistory(newSessionId);
-        const newJsonlPath = join(resolveSessionDir(newSessionId)!, `${newSessionId}.jsonl`);
+        const turns = readUIHistory(newSessionId, cwd);
+        const newJsonlPath = sessionJsonlPathFromCwd(cwd, newSessionId);
         const promptEstimate = estimatePromptTokens(newJsonlPath);
         return { sessionId: newSessionId, turns, promptEstimate };
       }) as any

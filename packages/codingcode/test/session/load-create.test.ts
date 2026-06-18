@@ -138,7 +138,7 @@ describe('load — restores model from disk, not overwritten', () => {
       expect(exit._tag).toBe('Failure');
       if (exit._tag === 'Failure') {
         const msg = String(exit.cause);
-        expect(msg).toContain('SESSION_WORKSPACE_MISMATCH');
+        expect(msg).toContain('SESSION_NOT_FOUND');
       }
     } finally {
       cleanup(dir);

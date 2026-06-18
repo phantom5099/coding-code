@@ -92,7 +92,6 @@ const mockSession = {
   readHistory: () => Effect.succeed([]),
   readMessages: () => Effect.succeed([]),
   listSessions: () => Effect.succeed([]),
-  findSessionIndex: () => Effect.succeed(null),
   getSessionId: () => 'test-session',
   getMessageCount: () => 0,
   setPermissionMode: () => Effect.void,

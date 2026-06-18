@@ -4,8 +4,8 @@ import { sendMessage } from '../../agent/agent.js';
 import { WorkspaceService } from '../../core/workspace.js';
 import { toSseEvents } from '../adapter.js';
 import { ApprovalService } from '../../approval/index.js';
-import { resolveSessionDir, getPermissionMode } from '../../session/file-ops.js';
-import { join } from 'path';
+import { sessionJsonlPathFromCwd, getPermissionMode } from '../../session/file-ops.js';
+import { existsSync } from 'fs';
 import type { PermissionMode } from '../../approval/types.js';
 import { LLMFactoryService } from '../../llm/factory.js';
 import { errorResponse } from '../util.js';
@@ -43,9 +43,8 @@ export function createMessagesRouter(rt: ManagedRt): Hono {
     // Read session permissionMode if session exists
     let approvalOverride: any = undefined;
     if (sessionId !== '_') {
-      const dir = resolveSessionDir(sessionId);
-      if (dir) {
-        const idxPath = join(dir, `${sessionId}.index.json`);
+      const idxPath = sessionJsonlPathFromCwd(normalizedCwd, sessionId).replace('.jsonl', '.index.json');
+      if (existsSync(idxPath)) {
         const mode = getPermissionMode(idxPath) as PermissionMode;
         const forked: any = await rt.runPromise(
           Effect.gen(function* () {

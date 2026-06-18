@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { LLMClient } from '../llm/client.js';
-import { findSessionIndex, resolveSessionDir } from '../session/file-ops.js';
+import { sessionJsonlPathFromCwd } from '../session/file-ops.js';
 import type { SessionEvent } from '../session/types.js';
 import {
   readMemoryFile,
@@ -107,19 +107,15 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
 
     async function flushSessionToMemory(
       sessionId: string,
-      llm: LLMClient | null
+      llm: LLMClient | null,
+      sessionCwd: string
     ): Promise<{ written: boolean; bytes: number }> {
       if (!getMemoryEnabled()) {
         return { written: false, bytes: 0 };
       }
       const cfg = getMemoryConfig();
 
-      const sessionIndex = findSessionIndex(sessionId);
-      if (!sessionIndex) {
-        return { written: false, bytes: 0 };
-      }
-
-      const cwd = sessionIndex.cwd;
+      const cwd = sessionCwd;
       const projectPath = resolveMemoryPath(cwd);
 
       const projectContent = readMemoryFile(projectPath);
@@ -129,11 +125,8 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
         let events: SessionEvent[] = [];
         try {
           const { readFileSync } = await import('node:fs');
-          const { join } = await import('node:path');
 
-          const sessionDir = resolveSessionDir(sessionId);
-          if (!sessionDir) return { written: false, bytes: 0 };
-          const jsonlPath = join(sessionDir, `${sessionId}.jsonl`);
+          const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
 
           const content = readFileSync(jsonlPath, 'utf-8');
           events = content

@@ -21,7 +21,6 @@ import {
   ensureDirs,
   readHistory,
   appendLine,
-  findSessionIndex,
   listSessions,
   setPermissionMode,
   getPermissionMode,
@@ -29,15 +28,12 @@ import {
   countNonMetaEvents,
   truncateTitle,
   findFirstUserContent,
-  resolveSessionJsonlPath as _resolveSessionJsonlPath,
+  sessionJsonlPathFromCwd,
 } from './file-ops.js';
 
 function assertResumeWorkspace(cwd: string, sessionId: string): void {
-  const index = findSessionIndex(sessionId);
-  if (!index) throw AgentError.sessionNotFound(sessionId);
-  if (encodeProjectPath(cwd) !== index.projectPath) {
-    throw AgentError.sessionWorkspaceMismatch(sessionId, index.cwd);
-  }
+  const expectedPath = sessionJsonlPathFromCwd(cwd, sessionId);
+  if (!existsSync(expectedPath)) throw AgentError.sessionNotFound(sessionId);
 }
 
 export class SessionService extends Effect.Service<SessionService>()('Session', {
@@ -291,9 +287,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
     const listSessionsFromCwd = (cwd?: string): Effect.Effect<SessionIndex[]> =>
       Effect.sync(() => listSessions(cwd ? encodeProjectPath(cwd) : undefined));
 
-    const findSessionIndexFromId = (sessionId: string): Effect.Effect<SessionIndex | null> =>
-      Effect.sync(() => findSessionIndex(sessionId));
-
     const getSessionId = (state: SessionStoreState): string => state.sessionId;
 
     const getMessageCount = (state: SessionStoreState): number => state.messageCount;
@@ -327,16 +320,12 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       renameSession,
       readHistory: readHistoryFromState,
       listSessions: listSessionsFromCwd,
-      findSessionIndex: findSessionIndexFromId,
       getSessionId,
       getMessageCount,
       setPermissionMode: setPermissionModeFromState,
       getPermissionMode: getPermissionModeFromState,
       incrementTurn,
-      resolveSessionJsonlPath: (sessionId: string): string => _resolveSessionJsonlPath(sessionId),
       readHistoryFile: (path: string): SessionEvent[] => readHistory(path),
-      findSessionIndexProxy: (sessionId: string): SessionIndex | null =>
-        findSessionIndex(sessionId),
       appendLineProxy: (path: string, event: object): void => appendLine(path, event),
     };
   }),

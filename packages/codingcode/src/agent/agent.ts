@@ -428,7 +428,7 @@ export function agentLoop(
                 status: 'error',
               });
               memory
-                .flushSessionToMemory(state.sessionId, llm)
+                .flushSessionToMemory(state.sessionId, llm, state.cwd)
                 .catch((e) => logger.error('memory flush failed:', e));
               return Result.err(
                 new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded')
@@ -508,7 +508,7 @@ export function agentLoop(
       yield* checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
 
       memory
-        .flushSessionToMemory(state.sessionId, llm)
+        .flushSessionToMemory(state.sessionId, llm, state.cwd)
         .catch((e) => logger.error('memory flush failed:', e));
 
       if (lastResult) return lastResult;
@@ -529,7 +529,7 @@ export function agentLoop(
       status: 'maxSteps',
     });
     memory
-      .flushSessionToMemory(state.sessionId, llm)
+      .flushSessionToMemory(state.sessionId, llm, state.cwd)
       .catch((e) => logger.error('memory flush failed:', e));
     return Result.err(AgentError.maxStepsReached(effectiveMaxSteps));
   }).pipe(
@@ -555,7 +555,7 @@ export function agentLoop(
         yield* cp.snapshotFinal(projectPath, sessionId, state.currentTurnId).pipe(Effect.ignore);
         const mem = yield* MemoryService;
         mem
-          .flushSessionToMemory(state.sessionId, llm)
+          .flushSessionToMemory(state.sessionId, llm, state.cwd)
           .catch((e) => logger.error('memory flush failed:', e));
       })
     )
