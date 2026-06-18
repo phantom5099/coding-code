@@ -372,12 +372,8 @@ describe('forkSession', () => {
 
       const forkedPath = join(dir, `${newSessionId}.jsonl`);
       const forkedEvents = readEvents(forkedPath);
-      const forkedSummary = forkedEvents.find(
-        (e) => e.type === 'summary'
-      ) as any;
-      const forkedCompact = forkedEvents.find(
-        (e) => e.type === 'compact'
-      ) as any;
+      const forkedSummary = forkedEvents.find((e) => e.type === 'summary') as any;
+      const forkedCompact = forkedEvents.find((e) => e.type === 'compact') as any;
       expect(forkedSummary).toBeDefined();
       expect(forkedCompact).toBeDefined();
       expect((forkedSummary! as any).uuid).toBe(fixedSummaryUuid);

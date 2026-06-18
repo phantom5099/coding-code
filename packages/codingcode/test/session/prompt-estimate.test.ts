@@ -5,7 +5,7 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
-import { findLastVisibleAssistantUsage, estimatePromptTokens } from '../../src/context/service.js';
+import { estimatePromptTokens } from '../../src/context/service.js';
 import { estimateTokensForContent } from '../../src/core/util.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
@@ -87,79 +87,6 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 }
 
 describe('promptEstimate', () => {
-  it('findLastVisibleAssistantUsage reads usage from visible assistant event', () => {
-    const sessionId = randomUUID();
-    const slug = randomUUID();
-    const usage = { prompt: 1200, completion: 300, total: 1500 };
-    const lastUsage = { prompt: 1300, completion: 350, total: 1650 };
-    const fx = makeFixture(sessionId, slug, usage);
-    try {
-      const result = findLastVisibleAssistantUsage(fx.transcriptPath);
-      expect(result).toEqual(lastUsage);
-    } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
-    }
-  });
-
-  it('findLastVisibleAssistantUsage returns undefined when no assistant usage', () => {
-    const sessionId = randomUUID();
-    const slug = randomUUID();
-    const fx = makeFixture(sessionId, slug, undefined);
-    try {
-      const result = findLastVisibleAssistantUsage(fx.transcriptPath);
-      expect(result).toBeUndefined();
-    } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
-    }
-  });
-
-  it('findLastVisibleAssistantUsage skips rolled-back assistant events', () => {
-    const sessionId = randomUUID();
-    const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug, 'sessions');
-    mkdirSync(dir, { recursive: true });
-    const transcriptPath = join(dir, `${sessionId}.jsonl`);
-
-    const usage1 = { prompt: 100, completion: 50, total: 150 };
-    const usage2 = { prompt: 200, completion: 100, total: 300 };
-    const lines: any[] = [
-      {
-        type: 'session_meta',
-        sessionId,
-        projectPath: slug,
-        cwd: '/tmp/test',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        type: 'assistant',
-        turnId: 1,
-        content: 'first',
-        toolCalls: [],
-        usage: usage1,
-      },
-      {
-        type: 'rollback',
-        throughTurnId: 1,
-        reason: 'test',
-      },
-      {
-        type: 'assistant',
-        turnId: 2,
-        content: 'second',
-        toolCalls: [],
-        usage: usage2,
-      },
-    ];
-    writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
-
-    try {
-      const result = findLastVisibleAssistantUsage(transcriptPath);
-      expect(result).toEqual(usage2);
-    } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
-    }
-  });
-
   it('forkSession restores usage and promptEstimate from last visible assistant', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();

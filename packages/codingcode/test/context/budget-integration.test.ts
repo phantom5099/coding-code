@@ -11,12 +11,6 @@ import type { SessionEvent } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
-function makeConfig() {
-  return {
-    compactionModel: '',
-  };
-}
-
 const TestLayer = Layer.merge(
   SessionService.Default,
   Layer.succeed(LLMFactoryService, {
@@ -109,9 +103,8 @@ describe('assemblePayload integration', () => {
   });
 
   it('returns messages and compactedEvents', async () => {
-    const config = makeConfig();
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(sessionId, projectSlug, config);
+    const result = ctx.assemblePayload(sessionId, projectSlug, 128000);
 
     expect(result.messages.length).toBeGreaterThan(0);
     expect(Array.isArray(result.compactedEvents)).toBe(true);
@@ -120,9 +113,8 @@ describe('assemblePayload integration', () => {
   });
 
   it('returns currentTurnId from session index', async () => {
-    const config = makeConfig();
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(sessionId, projectSlug, config);
+    const result = ctx.assemblePayload(sessionId, projectSlug, 128000);
     expect(result.currentTurnId).toBe(1);
   });
 });

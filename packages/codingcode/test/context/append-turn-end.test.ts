@@ -4,7 +4,6 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { estimateTokensForContent } from '../../src/core/util.js';
-import { getContextConfig } from '../../src/context/config.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({

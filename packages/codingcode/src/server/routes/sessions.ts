@@ -12,7 +12,6 @@ import {
 } from '../../session/file-ops.js';
 import type { SessionEvent, SummaryEvent, CompactEvent } from '../../session/types.js';
 import { ContextService, estimatePromptTokens } from '../../context/service.js';
-import { getContextConfig } from '../../context/config.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
 import { WorkspaceService } from '../../core/workspace.js';
 import { LLMFactoryService } from '../../llm/factory.js';
@@ -142,7 +141,10 @@ function sessionEventsToTurns(
   return [...turnsMap.values()].sort((a, b) => Number(a.id) - Number(b.id));
 }
 
-function readUIHistory(sessionId: string, cwd: string): Array<{ id: string; items: object[]; status: string }> {
+function readUIHistory(
+  sessionId: string,
+  cwd: string
+): Array<{ id: string; items: object[]; status: string }> {
   const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
   if (!existsSync(jsonlPath)) return [];
   const events = readHistory(jsonlPath);
@@ -269,20 +271,10 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
           if (client._tag === 'Right') llm = client.right;
         }
 
-        const { messages } = context.assemblePayload(
-          state.sessionId,
-          state.projectPath,
-          getContextConfig()
-        );
+        const maxTokens = llm?.modelInfo.maxTokens ?? 128000;
 
         return yield* Effect.promise(() =>
-          context.compactWithLLM(
-            state.sessionId,
-            state.projectPath,
-            messages,
-            getContextConfig(),
-            llm
-          )
+          context.compactWithLLM(state.sessionId, state.projectPath, maxTokens, llm)
         );
       })
     );

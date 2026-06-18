@@ -48,7 +48,11 @@ export function resumeSession(sessionId: string, cwd: string): Promise<any> {
   return clients.sessions.resumeSession({ sessionId, cwd });
 }
 
-export function setSessionPermissionMode(sessionId: string, cwd: string, mode: string): Promise<void> {
+export function setSessionPermissionMode(
+  sessionId: string,
+  cwd: string,
+  mode: string
+): Promise<void> {
   return clients.sessions.setSessionPermissionMode({ sessionId, cwd, mode: mode as any });
 }
 

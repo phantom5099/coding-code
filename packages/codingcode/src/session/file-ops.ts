@@ -14,7 +14,7 @@ import {
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
-import type { SessionEvent, SessionMetaEvent, SessionIndex } from './types.js';
+import type { SessionEvent, SessionMetaEvent, SessionIndex, SessionStoreState } from './types.js';
 
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const PROJECT_BASE = join(CODINGCODE_DIR, 'project');
@@ -27,6 +27,21 @@ export function sessionJsonlPathFromCwd(cwd: string, sessionId: string): string 
   const projectPath = encodeProjectPath(normalizePath(cwd));
   const sessionsDir = projectSessionsDir(projectPath);
   return join(sessionsDir, `${sessionId}.jsonl`);
+}
+
+export function computePaths(
+  cwd: string,
+  sessionId: string,
+  parentSessionId?: string
+): Pick<SessionStoreState, 'sessionId' | 'cwd' | 'projectPath' | 'transcriptPath' | 'indexPath'> {
+  const normalizedCwd = normalizePath(cwd);
+  const projectPath = encodeProjectPath(normalizedCwd);
+  const sessionsDir = projectSessionsDir(projectPath);
+  const transcriptPath = parentSessionId
+    ? join(sessionsDir, parentSessionId, 'subagents', `${sessionId}.jsonl`)
+    : join(sessionsDir, `${sessionId}.jsonl`);
+  const indexPath = transcriptPath.replace('.jsonl', '.index.json');
+  return { sessionId, cwd: normalizedCwd, projectPath, transcriptPath, indexPath };
 }
 
 export function ensureDirs(transcriptPath: string): void {

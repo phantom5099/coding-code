@@ -3,7 +3,6 @@ import { sendMessage } from '../../agent/agent.js';
 import { ApprovalWaitService } from '../../approval/async-confirm.js';
 import { parseApprovalResponse } from '../../approval/response.js';
 import { ContextService } from '../../context/service.js';
-import { getContextConfig } from '../../context/config.js';
 import type { StreamChunk } from '../types.js';
 import { agentEventToStreamChunk } from '../direct.js';
 import type { AppRuntime } from '../../layer.js';
@@ -109,9 +108,8 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
       await rt.runPromise(
         Effect.gen(function* () {
           const context = yield* ContextService;
-          const { messages } = context.assemblePayload(sessionId, cwd, getContextConfig());
           return yield* Effect.promise(() =>
-            context.compactWithLLM(sessionId, cwd, messages, getContextConfig(), null)
+            context.compactWithLLM(sessionId, cwd, llm.modelInfo.maxTokens, null)
           );
         })
       );

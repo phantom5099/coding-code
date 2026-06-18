@@ -18,7 +18,7 @@ export class OpenAIProvider implements LLMClient {
     return {
       provider: this.entry.provider,
       model: this.entry.model,
-      maxTokens: 128_000,
+      maxTokens: this.entry.context_window,
       supportsToolCalling: true,
       supportsStreaming: true,
     };

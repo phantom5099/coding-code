@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { AgentError } from '../core/error.js';
-import { normalizePath, encodeProjectPath } from '../core/path.js';
+import { encodeProjectPath } from '../core/path.js';
 import type {
   SessionMetaEvent,
   UserEvent,
@@ -17,7 +17,6 @@ import type {
   SessionStoreState,
 } from './types.js';
 import {
-  projectSessionsDir,
   ensureDirs,
   readHistory,
   appendLine,
@@ -29,6 +28,7 @@ import {
   truncateTitle,
   findFirstUserContent,
   sessionJsonlPathFromCwd,
+  computePaths,
 } from './file-ops.js';
 
 function assertResumeWorkspace(cwd: string, sessionId: string): void {
@@ -331,25 +331,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
   }),
 }) {}
 
-function computePaths(
-  cwd: string,
-  sessionId: string,
-  parentSessionId?: string
-): Pick<SessionStoreState, 'sessionId' | 'cwd' | 'projectPath' | 'transcriptPath' | 'indexPath'> {
-  const normalizedCwd = normalizePath(cwd);
-  const projectPath = encodeProjectPath(normalizedCwd);
-  const sessionsDir = projectSessionsDir(projectPath);
-  const transcriptPath = parentSessionId
-    ? join(sessionsDir, parentSessionId, 'subagents', `${sessionId}.jsonl`)
-    : join(sessionsDir, `${sessionId}.jsonl`);
-  const indexPath = transcriptPath.replace('.jsonl', '.index.json');
-  return { sessionId, cwd: normalizedCwd, projectPath, transcriptPath, indexPath };
-}
-
-function forkSessionImpl(
-  sourceJsonlPath: string,
-  atTurnId: number
-): string {
+function forkSessionImpl(sourceJsonlPath: string, atTurnId: number): string {
   const events = readHistory(sourceJsonlPath);
   const atIdx = events.findIndex((e) => e.type === 'user' && (e as any).turnId === atTurnId);
 

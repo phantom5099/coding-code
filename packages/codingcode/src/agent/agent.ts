@@ -13,7 +13,6 @@ import { ApprovalWaitService } from '../approval/async-confirm.js';
 import { buildSystemPrompt } from './prompt.js';
 import type { AgentEvent, RunStreamOptions } from './types.js';
 import { resolveConfig } from './config.js';
-import { getContextConfig } from '../context/config.js';
 import { TodoService } from './todo.js';
 import { HookService } from '../hooks/registry.js';
 import { SkillService } from '../skills/service.js';
@@ -254,7 +253,6 @@ export function agentLoop(
     const memorySection = memoryBlock ? `## Session Memory\n\n${memoryBlock}` : '';
     const system = [basePrompt, memorySection].filter(Boolean).join('\n\n');
 
-    const config = getContextConfig();
     const maxOverflowRetries = REACTIVE_COMPACT_MAX_RETRIES;
     const effectiveMaxSteps = opts.maxStepsOverride ?? maxSteps;
 
@@ -265,7 +263,7 @@ export function agentLoop(
 
     for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
       const payload = yield* Effect.sync(() =>
-        context.assemblePayload(state.sessionId, state.projectPath, config, llm.modelInfo.maxTokens)
+        context.assemblePayload(state.sessionId, state.projectPath, llm.modelInfo.maxTokens)
       );
       messages = payload.messages;
 
@@ -309,7 +307,6 @@ export function agentLoop(
               state.projectPath,
               messages,
               llm.modelInfo.maxTokens,
-              config,
               llm
             ),
           catch: (e) => new AgentError('LLM_FAILED', String(e)),
@@ -359,11 +356,9 @@ export function agentLoop(
                 context.compactWithLLM(
                   state.sessionId,
                   state.projectPath,
-                  messages,
-                  config,
+                  llm.modelInfo.maxTokens,
                   llm,
-                  undefined,
-                  llm.modelInfo.maxTokens
+                  undefined
                 ),
               catch: (e) => new AgentError('LLM_FAILED', String(e)),
             });

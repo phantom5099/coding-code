@@ -2,12 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 
-vi.mock('../../src/context/config.js', () => ({
-  getContextConfig: vi.fn(() => ({
-    compactionModel: '',
-  })),
-}));
-
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
 }

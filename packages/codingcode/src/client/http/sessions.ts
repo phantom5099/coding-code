@@ -19,7 +19,11 @@ export interface SessionClient {
   getSessionHistory(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
   deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
   getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
-  setSessionPermissionMode(input: { sessionId: string; cwd: string; mode: PermissionMode }): Promise<void>;
+  setSessionPermissionMode(input: {
+    sessionId: string;
+    cwd: string;
+    mode: PermissionMode;
+  }): Promise<void>;
 
   getCheckpointDiff(input: {
     sessionId: string;

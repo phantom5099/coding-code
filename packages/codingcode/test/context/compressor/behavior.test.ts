@@ -7,7 +7,6 @@ import { Effect, Layer } from 'effect';
 import { ContextService } from '../../../src/context/service.js';
 import { SessionService } from '../../../src/session/store.js';
 import { LLMFactoryService } from '../../../src/llm/factory.js';
-import type { ContextConfig } from '@codingcode/infra/config';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
@@ -99,13 +98,6 @@ function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
     .filter((ev): ev is SummaryEvent => ev.type === 'summary');
 }
 
-function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
-  return {
-    compactionModel: '',
-    ...overrides,
-  };
-}
-
 function makeMockLLM(content: string): LLMClient {
   return {
     complete: () => Effect.succeed({ content, finishReason: 'stop' as const }),
@@ -150,13 +142,11 @@ describe('compressor behavior', () => {
     it('writes summary event with five-section system summary', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig();
         const summary =
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
         const ctx = await getCtxService();
-        const { messages } = ctx.assemblePayload(fx.sessionId, fx.slug, cfg);
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, messages, cfg, llm);
+        await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
@@ -170,10 +160,8 @@ describe('compressor behavior', () => {
     it('returns no-op when no LLM available', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig();
         const ctx = await getCtxService();
-        const { messages } = ctx.assemblePayload(fx.sessionId, fx.slug, cfg);
-        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, messages, cfg, null);
+        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, 1000, null);
         expect(result.didCompress).toBe(false);
         expect(result.messages).toBeUndefined();
         const summaries = readSummaryEvents(fx.transcriptPath);
@@ -188,13 +176,11 @@ describe('compressor behavior', () => {
     it('appends summary event directly to JSONL after L5', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig();
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
         const ctx = await getCtxService();
-        const { messages } = ctx.assemblePayload(fx.sessionId, fx.slug, cfg);
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, messages, cfg, llm);
+        await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
@@ -214,13 +200,11 @@ describe('compressor behavior', () => {
           readHistory(fx.transcriptPath)
         );
         const before = estimateTokens(buildContextMessages(bVisible, bCompacted));
-        const cfg = tinyConfig();
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
         const ctx = await getCtxService();
-        const { messages } = ctx.assemblePayload(fx.sessionId, fx.slug, cfg);
-        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, messages, cfg, llm);
+        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
         expect(result.didCompress).toBe(true);
         expect(result.promptEstimate).toBeGreaterThan(0);
         expect(result.promptEstimate).toBeLessThan(before);

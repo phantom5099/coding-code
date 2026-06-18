@@ -43,7 +43,10 @@ export function createMessagesRouter(rt: ManagedRt): Hono {
     // Read session permissionMode if session exists
     let approvalOverride: any = undefined;
     if (sessionId !== '_') {
-      const idxPath = sessionJsonlPathFromCwd(normalizedCwd, sessionId).replace('.jsonl', '.index.json');
+      const idxPath = sessionJsonlPathFromCwd(normalizedCwd, sessionId).replace(
+        '.jsonl',
+        '.index.json'
+      );
       if (existsSync(idxPath)) {
         const mode = getPermissionMode(idxPath) as PermissionMode;
         const forked: any = await rt.runPromise(

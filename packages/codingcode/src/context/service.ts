@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { readFileSync, existsSync } from 'fs';
-import type { ContextConfig } from '@codingcode/infra/config';
+import { loadConfig } from '@codingcode/infra/config';
 import type { Message } from '../core/types.js';
 import { SessionService } from '../session/store.js';
 import { estimateTokens, estimateMessageTokens } from '../core/util.js';
@@ -16,7 +16,6 @@ import type {
   ToolResultEvent,
   CompactEvent,
   SummaryEvent,
-  TokenUsage,
 } from '../session/types.js';
 import type { LLMClient } from '../llm/client.js';
 import type { BuildResult, CompressResult } from './types.js';
@@ -34,9 +33,8 @@ const COMPACTABLE_TOOLS = new Set([
 
 const MICRO_COMPACT_THRESHOLD = 0.25;
 const MICRO_COMPACT_MIN_CHARS = 120;
-const COMPACTION_THRESHOLD = 0.9;
+const COMPACTION_THRESHOLD = 0.85;
 const KEEP_RECENT_TURNS = 1;
-const REACTIVE_COMPACT_MAX_RETRIES = 3;
 
 // --- Internal: visibility computation for LLM context ---
 
@@ -49,43 +47,28 @@ function applyVisibilityEvents(events: SessionEvent[]): {
   const hiddenOpUuids = new Set<string>();
   const compactedTurnIds = new Set<number>();
 
-  for (const ev of events) {
-    if (ev.type !== 'rollback') continue;
-    for (const prior of events) {
-      if (prior === ev) break;
-      if (prior.type === 'summary' || prior.type === 'compact') {
-        if (prior.endTurnId >= ev.throughTurnId) {
-          hiddenOpUuids.add(prior.uuid);
-        }
+  let minRollbackThrough = Infinity;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i]!;
+    if (ev.type === 'rollback') {
+      if (ev.throughTurnId < minRollbackThrough) {
+        minRollbackThrough = ev.throughTurnId;
       }
+      continue;
     }
-  }
-
-  for (const ev of events) {
-    switch (ev.type) {
-      case 'rollback': {
-        for (const prior of events) {
-          if (prior === ev) break;
-          if ('turnId' in prior && prior.turnId >= ev.throughTurnId) {
-            hiddenTurnIds.add(prior.turnId);
-          }
-        }
-        break;
+    if (ev.type === 'summary' || ev.type === 'compact') {
+      const op = ev as SummaryEvent | CompactEvent;
+      if (minRollbackThrough <= op.endTurnId) {
+        hiddenOpUuids.add(op.uuid);
+      } else if (ev.type === 'summary') {
+        for (let t = op.startTurnId; t <= op.endTurnId; t++) hiddenTurnIds.add(t);
+      } else {
+        for (let t = op.startTurnId; t <= op.endTurnId; t++) compactedTurnIds.add(t);
       }
-      case 'summary': {
-        if (hiddenOpUuids.has(ev.uuid)) break;
-        for (let t = ev.startTurnId; t <= ev.endTurnId; t++) {
-          hiddenTurnIds.add(t);
-        }
-        break;
-      }
-      case 'compact': {
-        if (hiddenOpUuids.has(ev.uuid)) break;
-        for (let t = ev.startTurnId; t <= ev.endTurnId; t++) {
-          compactedTurnIds.add(t);
-        }
-        break;
-      }
+      continue;
+    }
+    if ('turnId' in ev && minRollbackThrough <= (ev as any).turnId) {
+      hiddenTurnIds.add((ev as any).turnId);
     }
   }
 
@@ -125,13 +108,13 @@ export function buildContextMessages(
         const ev = event as AssistantEvent;
         const msg: Message = { role: 'assistant', content: event.content };
         if (event.toolCalls && event.toolCalls.length > 0) {
-          (msg as any).tool_calls = event.toolCalls.map((tc: any) => ({
+          msg.tool_calls = event.toolCalls.map((tc) => ({
             id: tc.id,
             name: tc.name,
             arguments: tc.arguments,
           }));
         }
-        if (ev.usage) (msg as any).usage = ev.usage;
+        if (ev.usage) msg.usage = ev.usage;
         messages.push(msg);
         break;
       }
@@ -150,7 +133,7 @@ export function buildContextMessages(
           content: output,
           tool_call_id: event.toolCallId,
           tool_name: event.toolName,
-        } as any);
+        });
         break;
       }
       case 'summary':
@@ -163,7 +146,7 @@ export function buildContextMessages(
   const validAssistantIds = new Set<string>();
   for (const m of messages) {
     if (m.role !== 'assistant') continue;
-    const tcs = (m as any).tool_calls as Array<{ id: string }> | undefined;
+    const tcs = m.tool_calls;
     if (!tcs || tcs.length === 0) continue;
     if (tcs.every((tc) => resolvedIds.has(tc.id))) {
       for (const tc of tcs) validAssistantIds.add(tc.id);
@@ -172,12 +155,12 @@ export function buildContextMessages(
 
   const filtered = messages.filter((m) => {
     if (m.role === 'assistant') {
-      const tcs = (m as any).tool_calls as Array<{ id: string }> | undefined;
+      const tcs = m.tool_calls;
       if (!tcs || tcs.length === 0) return true;
       return tcs.every((tc) => resolvedIds.has(tc.id));
     }
     if (m.role === 'tool') {
-      return validAssistantIds.has((m as any).tool_call_id);
+      return validAssistantIds.has(m.tool_call_id!);
     }
     return true;
   });
@@ -188,27 +171,13 @@ export function buildContextMessages(
     const prev = filtered[i - 1]!;
     if (curr.role === prev.role && curr.role !== 'system') {
       if (curr.role === 'tool') continue;
-      if (curr.role === 'assistant' && (curr as any).tool_calls?.length > 0) continue;
+      if (curr.role === 'assistant' && curr.tool_calls && curr.tool_calls.length > 0) continue;
       prev.content += '\n\n' + curr.content;
       filtered.splice(i, 1);
     }
   }
 
   return filtered;
-}
-
-/** Find the last visible assistant usage for token estimation */
-export function findLastVisibleAssistantUsage(path: string): TokenUsage | undefined {
-  const events = readHistory(path);
-  const { visible, compactedTurnIds } = filterForContext(events);
-  const messages = buildContextMessages(visible, compactedTurnIds);
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]!;
-    if (m.role !== 'assistant') continue;
-    const usage = (m as any).usage as TokenUsage | undefined;
-    if (usage) return usage;
-  }
-  return undefined;
 }
 
 /** Estimate prompt tokens for a session's jsonl file */
@@ -222,24 +191,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
   effect: Effect.gen(function* () {
     const session = yield* SessionService;
     const factory = yield* LLMFactoryService;
-    const compactFailureTracker = new Map<string, { count: number; lastAttempt: number }>();
-    const FAILURE_TTL_MS = 24 * 60 * 60 * 1000;
-
-    function getFailures(sessionId: string): number {
-      const entry = compactFailureTracker.get(sessionId);
-      if (!entry) return 0;
-      if (Date.now() - entry.lastAttempt > FAILURE_TTL_MS) {
-        compactFailureTracker.delete(sessionId);
-        return 0;
-      }
-      return entry.count;
-    }
-
     const assemblePayload = (
       sessionId: string,
       encodedProjectPath: string,
-      config: ContextConfig,
-      contextWindow: number = 128000
+      contextWindow: number
     ): BuildResult => {
       const jsonlPath = join(projectSessionsDir(encodedProjectPath), `${sessionId}.jsonl`);
       let events = session.readHistoryFile(jsonlPath);
@@ -260,7 +215,6 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const didCompact = applyOldTurnCompaction(
         visible,
         currentTurnId,
-        config,
         preEstimate,
         contextWindow,
         jsonlPath
@@ -284,7 +238,6 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
     function applyOldTurnCompaction(
       events: SessionEvent[],
       currentTurnId: number,
-      config: ContextConfig,
       promptEstimate: number,
       contextWindow: number,
       jsonlPath: string
@@ -331,15 +284,9 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       encodedProjectPath: string,
       messages: Message[],
       modelMaxTokens: number,
-      config: ContextConfig,
       llm: LLMClient | null
     ): Promise<CompressResult> => {
       const promptEstimate = estimateTokens(messages);
-      const failures = getFailures(sessionId);
-      if (failures >= 3) {
-        return { didCompress: false, released: 0, promptEstimate };
-      }
-
       const threshold = modelMaxTokens * COMPACTION_THRESHOLD;
       if (promptEstimate <= threshold) {
         return { didCompress: false, released: 0, promptEstimate };
@@ -348,18 +295,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const result = await compactWithLLM(
         sessionId,
         encodedProjectPath,
-        messages,
-        config,
+        modelMaxTokens,
         llm,
-        promptEstimate,
-        modelMaxTokens
+        promptEstimate
       );
-
-      if (result.didCompress) {
-        compactFailureTracker.set(sessionId, { count: 0, lastAttempt: Date.now() });
-      } else {
-        compactFailureTracker.set(sessionId, { count: failures + 1, lastAttempt: Date.now() });
-      }
 
       return result;
     };
@@ -367,26 +306,24 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
     const compactWithLLM = async (
       sessionId: string,
       encodedProjectPath: string,
-      messages: Message[],
-      config: ContextConfig,
+      modelMaxTokens: number,
       llm: LLMClient | null,
-      usage?: number,
-      modelMaxTokens?: number
+      usage?: number
     ): Promise<CompressResult> => {
       let released = 0;
+      let preEstimate = usage;
 
-      const threshold = modelMaxTokens ? modelMaxTokens * COMPACTION_THRESHOLD : Infinity;
+      const threshold = modelMaxTokens * COMPACTION_THRESHOLD;
       if (usage === undefined || usage - released > threshold) {
-        const { compactedEvents, currentTurnId, compactedTurnIds } = assemblePayload(
+        const { compactedEvents, currentTurnId, compactedTurnIds, promptEstimate } = assemblePayload(
           sessionId,
           encodedProjectPath,
-          config,
           modelMaxTokens
         );
+        preEstimate = promptEstimate;
         released += await tryCompaction(
           sessionId,
           encodedProjectPath,
-          config,
           llm,
           compactedEvents,
           currentTurnId,
@@ -398,11 +335,11 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         return {
           didCompress: false,
           released: 0,
-          promptEstimate: usage ?? estimateTokens(messages),
+          promptEstimate: preEstimate ?? 0,
         };
       }
 
-      const postPayload = assemblePayload(sessionId, encodedProjectPath, config, modelMaxTokens);
+      const postPayload = assemblePayload(sessionId, encodedProjectPath, modelMaxTokens);
       return {
         didCompress: true,
         released,
@@ -414,7 +351,6 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
     async function tryCompaction(
       sessionId: string,
       encodedProjectPath: string,
-      config: ContextConfig,
       llm: LLMClient | null,
       compactedEvents: SessionEvent[],
       currentTurnId: number,
@@ -437,7 +373,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const totalTokens = estimateTokens(msgs);
 
       let compactionLlm = await Effect.runPromise(
-        resolveLLM(config.compactionModel, llm).pipe(
+        resolveLLM(loadConfig().context.compactionModel, llm).pipe(
           Effect.provideService(LLMFactoryService, factory)
         )
       );
@@ -445,7 +381,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         compactionLlm = llm;
       }
 
-      const summary = await callLLMForCompaction(msgs, compactionLlm, config);
+      const summary = await callLLMForCompaction(msgs, compactionLlm);
       if (!summary) return 0;
 
       const turnIds = targetEvents
@@ -480,11 +416,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
 
     async function callLLMForCompaction(
       transcript: Message[],
-      fallbackLlm: LLMClient | null,
-      config: ContextConfig
+      fallbackLlm: LLMClient | null
     ): Promise<string | null> {
       const llm = await Effect.runPromise(
-        resolveLLM(config.compactionModel, fallbackLlm).pipe(
+        resolveLLM(loadConfig().context.compactionModel, fallbackLlm).pipe(
           Effect.provideService(LLMFactoryService, factory)
         )
       );
