@@ -113,30 +113,29 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
       if (!getMemoryEnabled()) {
         return { written: false, bytes: 0 };
       }
+      if (!sessionCwd) {
+        return { written: false, bytes: 0 };
+      }
+
+      let events: SessionEvent[];
+      try {
+        const { readFileSync } = await import('node:fs');
+        const jsonlPath = sessionJsonlPathFromCwd(sessionCwd, sessionId);
+        const content = readFileSync(jsonlPath, 'utf-8');
+        events = content
+          .split('\n')
+          .filter((l) => l.trim() && !l.includes('"type":"session_meta"'))
+          .map((l) => JSON.parse(l) as SessionEvent);
+      } catch {
+        return { written: false, bytes: 0 };
+      }
+
       const cfg = getMemoryConfig();
-
-      const cwd = sessionCwd;
-      const projectPath = resolveMemoryPath(cwd);
-
+      const projectPath = resolveMemoryPath(sessionCwd);
       const projectContent = readMemoryFile(projectPath);
       const currentAuto = extractAutoBlock(projectContent);
 
       try {
-        let events: SessionEvent[] = [];
-        try {
-          const { readFileSync } = await import('node:fs');
-
-          const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
-
-          const content = readFileSync(jsonlPath, 'utf-8');
-          events = content
-            .split('\n')
-            .filter((l) => l.trim() && !l.includes('"type":"session_meta"'))
-            .map((l) => JSON.parse(l) as SessionEvent);
-        } catch {
-          return { written: false, bytes: 0 };
-        }
-
         const transcript = buildStructuredTranscript(events);
         const types = getEffectiveTypes(cfg);
 

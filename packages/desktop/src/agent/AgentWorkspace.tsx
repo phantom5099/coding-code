@@ -320,6 +320,7 @@ function InputBox({
                 };
                 setSessionPermissionMode(
                   currentThreadId,
+                  workspace.rootPath || '',
                   POLICY_TO_CORE_MODE[next] ?? 'default'
                 ).catch((e) => {
                   console.error('Failed to sync permission mode:', e);

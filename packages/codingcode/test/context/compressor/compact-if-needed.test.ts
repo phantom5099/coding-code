@@ -143,5 +143,4 @@ describe('compactIfNeeded', () => {
     const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, null);
     expect('restoredFiles' in result).toBe(false);
   });
-
 });

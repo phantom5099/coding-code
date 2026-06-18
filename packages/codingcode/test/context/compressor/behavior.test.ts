@@ -76,7 +76,6 @@ function makeFixture(opts: FixtureOptions) {
     title: 'fixture',
     currentTurnId: opts.currentTurnId ?? opts.numTurns,
     usage: undefined,
-    promptEstimate: 0,
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -204,7 +203,12 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
         const ctx = await getCtxService();
-        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
+        const result = await ctx.compactWithLLM(
+          fx.sessionId,
+          fx.slug,
+          llm.modelInfo.maxTokens,
+          llm
+        );
         expect(result.didCompress).toBe(true);
         expect(result.promptEstimate).toBeGreaterThan(0);
         expect(result.promptEstimate).toBeLessThan(before);

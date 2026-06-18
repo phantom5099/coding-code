@@ -315,11 +315,8 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
 
       const threshold = modelMaxTokens * COMPACTION_THRESHOLD;
       if (usage === undefined || usage - released > threshold) {
-        const { compactedEvents, currentTurnId, compactedTurnIds, promptEstimate } = assemblePayload(
-          sessionId,
-          encodedProjectPath,
-          modelMaxTokens
-        );
+        const { compactedEvents, currentTurnId, compactedTurnIds, promptEstimate } =
+          assemblePayload(sessionId, encodedProjectPath, modelMaxTokens);
         preEstimate = promptEstimate;
         released += await tryCompaction(
           sessionId,

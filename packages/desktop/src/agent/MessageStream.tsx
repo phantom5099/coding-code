@@ -216,6 +216,7 @@ function TurnDiffPanel({
 export default function MessageStream({ threadId }: MessageStreamProps) {
   const turns = useAgentStore((s) => s.threads[threadId]?.turns ?? []);
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
+  const upsertThread = useAgentStore((s) => s.upsertThread);
   const { approveTool, rejectTool } = useAgentApproval();
   const {
     loadCheckpointDiff,
@@ -338,17 +339,47 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
             : undefined,
           onForkFromHere: async () => {
             const lastItem = turn.items[turn.items.length - 1];
-            if (lastItem) {
-              const userMsg = turn.items.find(
-                (i) => i.type === 'message' && (i as any).role === 'user'
-              );
-              const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
-              const newSessionId = await forkThread(threadId, Number(turn.id));
-              if (newSessionId) {
-                setCurrentThread(newSessionId);
-                if (userContent) setPendingInput(userContent);
-              }
+            if (!lastItem) {
+              console.warn('[fork] turn.items is empty, turnId=', turn.id);
+              return;
             }
+            const atTurnId = Number(turn.id);
+            if (!Number.isFinite(atTurnId)) {
+              console.error('[fork] turn.id is not numeric:', turn.id, 'turn:', turn);
+              return;
+            }
+            const userMsg = turn.items.find(
+              (i) => i.type === 'message' && (i as any).role === 'user'
+            );
+            const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
+            let newSessionId: string | undefined;
+            try {
+              newSessionId = await forkThread(threadId, atTurnId);
+            } catch (err) {
+              console.error('[fork] forkThread threw:', err, {
+                threadId,
+                atTurnId,
+              });
+              throw err;
+            }
+            if (!newSessionId) {
+              console.error('[fork] forkThread returned no sessionId', {
+                threadId,
+                atTurnId,
+              });
+              return;
+            }
+            upsertThread({
+              id: newSessionId,
+              projectId: '',
+              title: newSessionId.slice(0, 8),
+              cwd: useAgentStore.getState().threads[threadId]?.cwd ?? '',
+              turns: [],
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            });
+            setCurrentThread(newSessionId);
+            if (userContent) setPendingInput(userContent);
           },
         });
       }
@@ -363,6 +394,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     forkThread,
     setCurrentThread,
     setPendingInput,
+    upsertThread,
   ]);
 
   const getItemKey = useCallback(

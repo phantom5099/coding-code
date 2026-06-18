@@ -519,6 +519,7 @@ export function useAgentRollback() {
   const deleteThread = useCallback(
     async (threadId: string) => {
       const currentCwd = useWorkspaceStore.getState().rootPath;
+      const wasCurrent = useAgentStore.getState().currentThreadId === threadId;
       try {
         await deleteSession(threadId, currentCwd);
       } catch (e) {
@@ -547,6 +548,9 @@ export function useAgentRollback() {
             }
           }
         }
+      }
+      if (wasCurrent) {
+        useAgentStore.getState().setCurrentThread(null);
       }
     },
     [loadThreads, setThreadUsage]
