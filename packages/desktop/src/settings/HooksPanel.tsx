@@ -293,6 +293,7 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
                 </div>
               );
             }
+            const canMutate = h.source === (isGlobal ? 'global' : 'project');
             return (
               <div
                 key={h.name}
@@ -344,38 +345,42 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    title="编辑"
-                    onClick={() => startEdit(h)}
-                    className="text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] transition-colors"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                    </svg>
-                  </button>
-                  <button
-                    title="删除"
-                    onClick={() => setDeletingName(h.name)}
-                    className="text-[var(--text-disabled)] hover:text-[var(--accent-danger)] transition-colors"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </svg>
-                  </button>
+                  {canMutate && (
+                    <>
+                      <button
+                        title="编辑"
+                        onClick={() => startEdit(h)}
+                        className="text-[var(--text-disabled)] hover:text-[var(--text-tertiary)] transition-colors"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                        </svg>
+                      </button>
+                      <button
+                        title="删除"
+                        onClick={() => setDeletingName(h.name)}
+                        className="text-[var(--text-disabled)] hover:text-[var(--accent-danger)] transition-colors"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
                   <Toggle
                     checked={h.enabled}
                     onChange={(v) => {

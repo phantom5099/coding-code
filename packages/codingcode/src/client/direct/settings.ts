@@ -6,10 +6,14 @@ import { ApprovalService } from '../../approval/index.js';
 import type { PermissionMode } from '../../approval/types.js';
 import type { AgentProfile } from '../../subagent/types.js';
 import type { UserHookConfig } from '../../hooks/types.js';
+import { isGlobalCwd } from '../../core/workspace.js';
 import {
   loadMcpConfig,
   writeMcpConfig,
+  loadGlobalMcpConfig,
+  writeGlobalMcpConfig,
   resolveMcpDisabled,
+  getGlobalMcpDisabledState,
   setGlobalMcpDisabledState,
   setProjectMcpDisabledState,
   resetProjectMcpDisabledState,
@@ -19,6 +23,10 @@ import {
   writeAgentProfile,
   updateAgentProfile,
   deleteAgentProfile,
+  loadGlobalAgentProfiles,
+  writeGlobalAgentProfile,
+  updateGlobalAgentProfile,
+  deleteGlobalAgentProfile,
 } from '../../subagent/loader.js';
 import {
   EXPLORE_PROFILE,
@@ -28,6 +36,7 @@ import {
   getProjectSubagentEnabledState,
   setProjectSubagentEnabledState,
   resetProjectSubagentEnabledState,
+  getGlobalAgentDisabledState,
   setGlobalAgentDisabledState,
   setProjectAgentDisabledState,
   resetProjectAgentDisabledState,
@@ -37,6 +46,9 @@ import {
 import {
   loadHookConfigs,
   writeHookConfigs,
+  loadGlobalHookConfigs,
+  writeGlobalHookConfigs,
+  resolveHookConfigs,
   resolveHookDisabled,
   setGlobalHookDisabledState,
   setProjectHookDisabledState,
@@ -69,7 +81,7 @@ export interface SettingsClient {
   getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
   setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
   resetSubagentEnabled(body: { cwd: string }): Promise<void>;
-  getMcpStatus(): Promise<McpStatus[]>;
+  getMcpStatus(input: { cwd: string }): Promise<McpStatus[]>;
   setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
   createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
@@ -95,31 +107,6 @@ export interface SettingsClient {
 
 // ---- Helpers with validation ----
 
-function mcpCreateServer(cwd: string, server: McpServerConfig): void {
-  const servers = loadMcpConfig(cwd);
-  if (servers.some((s) => s.name === server.name)) {
-    throw new AlreadyExistsError(`MCP server '${server.name}' already exists`);
-  }
-  servers.push(server);
-  writeMcpConfig(cwd, servers);
-}
-
-function mcpUpdateServer(cwd: string, name: string, server: McpServerConfig): void {
-  const servers = loadMcpConfig(cwd);
-  const idx = servers.findIndex((s) => s.name === name);
-  if (idx === -1) throw new NotFoundError(`MCP server '${name}' not found`);
-  if (server.name !== name && servers.some((s) => s.name === server.name)) {
-    throw new AlreadyExistsError(`MCP server '${server.name}' already exists`);
-  }
-  servers[idx] = server;
-  writeMcpConfig(cwd, servers);
-}
-
-function mcpDeleteServer(cwd: string, name: string): void {
-  const servers = loadMcpConfig(cwd).filter((s) => s.name !== name);
-  writeMcpConfig(cwd, servers);
-}
-
 function agentsList(cwd: string): Array<{
   name: string;
   description: string;
@@ -133,10 +120,48 @@ function agentsList(cwd: string): Array<{
   hasProjectOverride?: boolean;
   projectDisabled?: boolean;
 }> {
-  const custom = loadAgentProfiles(cwd);
-  return [EXPLORE_PROFILE, PLAN_PROFILE, ...custom].map((a) => {
+  if (isGlobalCwd(cwd)) {
+    const custom = loadGlobalAgentProfiles();
+    return [EXPLORE_PROFILE, PLAN_PROFILE, ...custom].map((a) => {
+      const disabled = getGlobalAgentDisabledState(a.name);
+      return {
+        name: a.name,
+        description: a.description,
+        tools: a.tools,
+        mcpServers: a.mcpServers,
+        readonly: a.readonly,
+        maxSteps: a.maxSteps,
+        model: a.model,
+        disabled,
+        source:
+          a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name
+            ? ('builtin' as const)
+            : ('global' as const),
+      };
+    });
+  }
+  const globalCustom = loadGlobalAgentProfiles();
+  const projectCustom = loadAgentProfiles(cwd);
+  const globalNames = new Set(globalCustom.map((a) => a.name));
+  const projectNames = new Set(projectCustom.map((a) => a.name));
+
+  const result: Array<{
+    name: string;
+    description: string;
+    tools?: string[];
+    mcpServers?: string[];
+    readonly?: boolean;
+    maxSteps?: number;
+    model?: string;
+    disabled: boolean;
+    source: 'builtin' | 'global' | 'project';
+    hasProjectOverride?: boolean;
+    projectDisabled?: boolean;
+  }> = [];
+
+  for (const a of [EXPLORE_PROFILE, PLAN_PROFILE]) {
     const projectVal = getProjectAgentDisabledState(cwd, a.name);
-    return {
+    result.push({
       name: a.name,
       description: a.description,
       tools: a.tools,
@@ -145,17 +170,59 @@ function agentsList(cwd: string): Array<{
       maxSteps: a.maxSteps,
       model: a.model,
       disabled: resolveAgentDisabled(cwd, a.name),
-      source:
-        a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name
-          ? ('builtin' as const)
-          : ('project' as const),
+      source: 'builtin',
       hasProjectOverride: projectVal !== undefined,
       projectDisabled: projectVal,
-    };
-  });
+    });
+  }
+
+  for (const a of globalCustom) {
+    if (projectNames.has(a.name)) continue;
+    const projectVal = getProjectAgentDisabledState(cwd, a.name);
+    result.push({
+      name: a.name,
+      description: a.description,
+      tools: a.tools,
+      mcpServers: a.mcpServers,
+      readonly: a.readonly,
+      maxSteps: a.maxSteps,
+      model: a.model,
+      disabled: resolveAgentDisabled(cwd, a.name),
+      source: 'global',
+      hasProjectOverride: projectVal !== undefined,
+      projectDisabled: projectVal,
+    });
+  }
+
+  for (const a of projectCustom) {
+    const projectVal = getProjectAgentDisabledState(cwd, a.name);
+    result.push({
+      name: a.name,
+      description: a.description,
+      tools: a.tools,
+      mcpServers: a.mcpServers,
+      readonly: a.readonly,
+      maxSteps: a.maxSteps,
+      model: a.model,
+      disabled: resolveAgentDisabled(cwd, a.name),
+      source: 'project',
+      hasProjectOverride: globalNames.has(a.name),
+      projectDisabled: projectVal,
+    });
+  }
+
+  return result;
 }
 
 function agentsCreate(cwd: string, profile: AgentProfile): void {
+  if (isGlobalCwd(cwd)) {
+    const existing = loadGlobalAgentProfiles();
+    if (existing.some((a) => a.name === profile.name)) {
+      throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
+    }
+    writeGlobalAgentProfile(profile);
+    return;
+  }
   const existing = loadAgentProfiles(cwd);
   if (existing.some((a) => a.name === profile.name)) {
     throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
@@ -164,6 +231,17 @@ function agentsCreate(cwd: string, profile: AgentProfile): void {
 }
 
 function agentsUpdate(cwd: string, name: string, profile: AgentProfile): void {
+  if (isGlobalCwd(cwd)) {
+    const existing = loadGlobalAgentProfiles();
+    if (!existing.some((a) => a.name === name)) {
+      throw new NotFoundError(`Agent '${name}' not found`);
+    }
+    if (profile.name !== name && existing.some((a) => a.name === profile.name)) {
+      throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
+    }
+    updateGlobalAgentProfile(name, profile);
+    return;
+  }
   const existing = loadAgentProfiles(cwd);
   if (!existing.some((a) => a.name === name)) throw new NotFoundError(`Agent '${name}' not found`);
   if (profile.name !== name && existing.some((a) => a.name === profile.name)) {
@@ -172,7 +250,101 @@ function agentsUpdate(cwd: string, name: string, profile: AgentProfile): void {
   updateAgentProfile(cwd, name, profile);
 }
 
+function agentsDelete(cwd: string, name: string): void {
+  if (isGlobalCwd(cwd)) {
+    deleteGlobalAgentProfile(name);
+    return;
+  }
+  deleteAgentProfile(cwd, name);
+}
+
+function mcpCreateServer(cwd: string, server: McpServerConfig): void {
+  if (isGlobalCwd(cwd)) {
+    const servers = loadGlobalMcpConfig();
+    if (servers.some((s) => s.name === server.name)) {
+      throw new AlreadyExistsError(`MCP server '${server.name}' already exists`);
+    }
+    writeGlobalMcpConfig([...servers, server]);
+    return;
+  }
+  const servers = loadMcpConfig(cwd);
+  if (servers.some((s) => s.name === server.name)) {
+    throw new AlreadyExistsError(`MCP server '${server.name}' already exists`);
+  }
+  servers.push(server);
+  writeMcpConfig(cwd, servers);
+}
+
+function mcpUpdateServer(cwd: string, name: string, server: McpServerConfig): void {
+  if (isGlobalCwd(cwd)) {
+    const servers = loadGlobalMcpConfig();
+    const idx = servers.findIndex((s) => s.name === name);
+    if (idx === -1) throw new NotFoundError(`MCP server '${name}' not found`);
+    if (server.name !== name && servers.some((s) => s.name === server.name)) {
+      throw new AlreadyExistsError(`MCP server '${server.name}' already exists`);
+    }
+    servers[idx] = server;
+    writeGlobalMcpConfig(servers);
+    return;
+  }
+  const servers = loadMcpConfig(cwd);
+  const idx = servers.findIndex((s) => s.name === name);
+  if (idx === -1) throw new NotFoundError(`MCP server '${name}' not found`);
+  if (server.name !== name && servers.some((s) => s.name === server.name)) {
+    throw new AlreadyExistsError(`MCP server '${server.name}' already exists`);
+  }
+  servers[idx] = server;
+  writeMcpConfig(cwd, servers);
+}
+
+function mcpDeleteServer(cwd: string, name: string): void {
+  if (isGlobalCwd(cwd)) {
+    const servers = loadGlobalMcpConfig().filter((s) => s.name !== name);
+    writeGlobalMcpConfig(servers);
+    return;
+  }
+  const servers = loadMcpConfig(cwd);
+  if (!servers.some((s) => s.name === name)) {
+    throw new NotFoundError(`MCP server '${name}' not found in project config`);
+  }
+  writeMcpConfig(
+    cwd,
+    servers.filter((s) => s.name !== name)
+  );
+}
+
+function hooksList(
+  cwd: string
+): Array<UserHookConfig & { source: 'global' | 'project'; hasProjectOverride?: boolean }> {
+  if (isGlobalCwd(cwd)) {
+    return loadGlobalHookConfigs().map((h) => ({ ...h, source: 'global' as const }));
+  }
+  const globalHooks = loadGlobalHookConfigs();
+  const projectHooks = loadHookConfigs(cwd);
+  const globalNames = new Set(globalHooks.map((h) => h.name));
+  const projectNames = new Set(projectHooks.map((h) => h.name));
+  const merged = resolveHookConfigs(cwd);
+  return merged.map((h) => {
+    const isFromProject = projectNames.has(h.name);
+    const isFromGlobal = globalNames.has(h.name);
+    const hasProjectOverride = isFromProject && isFromGlobal;
+    return {
+      ...h,
+      source: (isFromProject ? 'project' : 'global') as 'global' | 'project',
+      hasProjectOverride,
+    };
+  });
+}
+
 function hooksCreate(cwd: string, hook: UserHookConfig): void {
+  if (isGlobalCwd(cwd)) {
+    const hooks = loadGlobalHookConfigs();
+    if (hooks.some((h) => h.name === hook.name)) {
+      throw new AlreadyExistsError(`Hook '${hook.name}' already exists`);
+    }
+    writeGlobalHookConfigs([...hooks, hook]);
+    return;
+  }
   const hooks = loadHookConfigs(cwd);
   if (hooks.some((h) => h.name === hook.name)) {
     throw new AlreadyExistsError(`Hook '${hook.name}' already exists`);
@@ -182,6 +354,17 @@ function hooksCreate(cwd: string, hook: UserHookConfig): void {
 }
 
 function hooksUpdate(cwd: string, name: string, hook: UserHookConfig): void {
+  if (isGlobalCwd(cwd)) {
+    const hooks = loadGlobalHookConfigs();
+    const idx = hooks.findIndex((h) => h.name === name);
+    if (idx === -1) throw new NotFoundError(`Hook '${name}' not found`);
+    if (hook.name !== name && hooks.some((h) => h.name === hook.name)) {
+      throw new AlreadyExistsError(`Hook '${hook.name}' already exists`);
+    }
+    hooks[idx] = hook;
+    writeGlobalHookConfigs(hooks);
+    return;
+  }
   const hooks = loadHookConfigs(cwd);
   const idx = hooks.findIndex((h) => h.name === name);
   if (idx === -1) throw new NotFoundError(`Hook '${name}' not found`);
@@ -193,8 +376,19 @@ function hooksUpdate(cwd: string, name: string, hook: UserHookConfig): void {
 }
 
 function hooksDelete(cwd: string, name: string): void {
-  const hooks = loadHookConfigs(cwd).filter((h) => h.name !== name);
-  writeHookConfigs(cwd, hooks);
+  if (isGlobalCwd(cwd)) {
+    const hooks = loadGlobalHookConfigs().filter((h) => h.name !== name);
+    writeGlobalHookConfigs(hooks);
+    return;
+  }
+  const hooks = loadHookConfigs(cwd);
+  if (!hooks.some((h) => h.name === name)) {
+    throw new NotFoundError(`Hook '${name}' not found in project config`);
+  }
+  writeHookConfigs(
+    cwd,
+    hooks.filter((h) => h.name !== name)
+  );
 }
 
 function hooksSetDisabled(cwd: string, name: string, disabled: boolean): void {
@@ -261,7 +455,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
     },
 
     async setSubagentEnabled({ enabled, cwd }) {
-      if (!cwd || cwd === '' || cwd === 'global') {
+      if (isGlobalCwd(cwd)) {
         setSubagentEnabledState(enabled);
       } else {
         setProjectSubagentEnabledState(cwd, enabled);
@@ -272,17 +466,71 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
       resetProjectSubagentEnabledState(cwd);
     },
 
-    async getMcpStatus() {
-      return rt.runPromise(
+    async getMcpStatus({ cwd }) {
+      const projectCwd = isGlobalCwd(cwd) ? process.cwd() : cwd;
+      const runtime = await rt.runPromise(
         Effect.gen(function* () {
           const mcp = yield* McpService;
-          return yield* mcp.status(process.cwd());
+          return yield* mcp.status(projectCwd);
         })
       );
+      const runtimeByName = new Map(runtime.map((r) => [r.name, r]));
+      if (isGlobalCwd(cwd)) {
+        return loadGlobalMcpConfig().map((s) => ({
+          ...runtimeByName.get(s.name),
+          name: s.name,
+          disabled: getGlobalMcpDisabledState(s.name),
+          source: 'global' as const,
+        })) as McpStatus[];
+      }
+      const globalServers = loadGlobalMcpConfig();
+      const projectServers = loadMcpConfig(projectCwd);
+      const globalNames = new Set(globalServers.map((s) => s.name));
+      const seen = new Set<string>();
+      const result: Array<
+        McpStatus & { source: 'global' | 'project'; hasProjectOverride?: boolean }
+      > = [];
+      for (const s of projectServers) {
+        seen.add(s.name);
+        const isFromGlobal = globalNames.has(s.name);
+        const r = runtimeByName.get(s.name);
+        result.push({
+          ...(r ?? {
+            name: s.name,
+            connected: false,
+            transport: 'stdio' as const,
+            reconnectAttempts: 0,
+            leaseCount: 0,
+            toolCount: 0,
+          }),
+          name: s.name,
+          disabled: r?.disabled ?? false,
+          source: 'project',
+          hasProjectOverride: isFromGlobal,
+        });
+      }
+      for (const s of globalServers) {
+        if (seen.has(s.name)) continue;
+        const r = runtimeByName.get(s.name);
+        result.push({
+          ...(r ?? {
+            name: s.name,
+            connected: false,
+            transport: 'stdio' as const,
+            reconnectAttempts: 0,
+            leaseCount: 0,
+            toolCount: 0,
+          }),
+          name: s.name,
+          disabled: r?.disabled ?? false,
+          source: 'global',
+        });
+      }
+      return result as McpStatus[];
     },
 
     async setMcpDisabled({ name, disabled, cwd }) {
-      if (!cwd || cwd === '' || cwd === 'global') {
+      if (isGlobalCwd(cwd)) {
         setGlobalMcpDisabledState(name, disabled);
       } else {
         setProjectMcpDisabledState(cwd, name, disabled);
@@ -291,8 +539,8 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
         Effect.gen(function* () {
           const mcp = yield* McpService;
           return yield* disabled
-            ? mcp.disable(cwd || process.cwd(), name)
-            : mcp.enable(cwd || process.cwd(), name);
+            ? mcp.disable(isGlobalCwd(cwd) ? process.cwd() : cwd, name)
+            : mcp.enable(isGlobalCwd(cwd) ? process.cwd() : cwd, name);
         })
       );
     },
@@ -349,11 +597,11 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
     },
 
     async deleteAgent({ cwd, name }) {
-      deleteAgentProfile(cwd, name);
+      agentsDelete(cwd, name);
     },
 
     async setAgentDisabled({ name, disabled, cwd }) {
-      if (!cwd || cwd === '' || cwd === 'global') {
+      if (isGlobalCwd(cwd)) {
         setGlobalAgentDisabledState(name, disabled);
       } else {
         setProjectAgentDisabledState(cwd, name, disabled);
@@ -365,7 +613,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
     },
 
     async listHooks({ cwd }) {
-      return loadHookConfigs(cwd);
+      return hooksList(cwd) as unknown as UserHookConfig[];
     },
 
     async createHook({ cwd, hook }) {
@@ -381,7 +629,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
     },
 
     async setHookDisabled({ cwd, name, disabled }) {
-      if (!cwd || cwd === '' || cwd === 'global') {
+      if (isGlobalCwd(cwd)) {
         setGlobalHookDisabledState(name, disabled);
       } else {
         setProjectHookDisabledState(cwd, name, disabled);

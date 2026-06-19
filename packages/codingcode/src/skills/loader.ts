@@ -1,7 +1,7 @@
 import { statSync } from 'fs';
 import { basename } from 'path';
 import type { Skill } from './types.js';
-import { readSkillMd, readFileContent, getFilesInDir, getMimeType } from './config.js';
+import { readSkillMd, readFileContent, getFilesInDir, getMimeType } from './source.js';
 
 export function loadSkill(dirPath: string): Skill | null {
   const parsed = readSkillMd(dirPath);

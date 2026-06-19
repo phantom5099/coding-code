@@ -140,16 +140,19 @@ vi.mock('../../src/mcp/config.js', () => ({
   resetProjectMcpDisabledState: vi.fn(),
 }));
 
-vi.mock('../../src/subagent/loader.js', () => ({
-  loadAgentProfiles: vi.fn().mockReturnValue([]),
-  writeAgentProfile: vi.fn(),
-  updateAgentProfile: vi.fn(),
-  deleteAgentProfile: vi.fn(),
-  loadGlobalAgentProfiles: vi.fn().mockReturnValue([]),
-  writeGlobalAgentProfile: vi.fn(),
-  updateGlobalAgentProfile: vi.fn(),
-  deleteGlobalAgentProfile: vi.fn(),
-}));
+vi.mock('../../src/subagent/loader.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/subagent/loader.js')>();
+  return {
+    loadAgentProfiles: vi.fn().mockReturnValue([]),
+    writeAgentProfile: vi.fn(),
+    updateAgentProfile: vi.fn(),
+    deleteAgentProfile: vi.fn().mockImplementation(actual.deleteAgentProfile),
+    loadGlobalAgentProfiles: vi.fn().mockReturnValue([]),
+    writeGlobalAgentProfile: vi.fn(),
+    updateGlobalAgentProfile: vi.fn(),
+    deleteGlobalAgentProfile: vi.fn(),
+  };
+});
 
 vi.mock('../../src/hooks/config.js', () => ({
   loadHookConfigs: vi.fn().mockReturnValue([]),
@@ -167,20 +170,22 @@ vi.mock('../../src/hooks/executor.js', () => ({
   setHookRuntimeEnabled: vi.fn(),
 }));
 
-vi.mock('../../src/skills/config.js', () => ({
+vi.mock('../../src/skills/source.js', () => ({
   setGlobalSkillDisabledState: vi.fn(),
   setProjectSkillDisabledState: vi.fn(),
   discoverGlobalSkillDirs: vi.fn().mockReturnValue([]),
   discoverProjectSkillDirs: vi.fn().mockReturnValue([]),
 }));
 
-vi.mock('../../src/core/workspace.js', () => {
+vi.mock('../../src/core/workspace.js', async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Context } = require('effect');
   const tag = Context.GenericTag('Workspace') as any;
+  const actual = await importOriginal<typeof import('../../src/core/workspace.js')>();
   return {
     WorkspaceService: tag,
     resolveWorkspaceCwd: vi.fn((cwd?: string) => cwd ?? '/default'),
+    isGlobalCwd: actual.isGlobalCwd,
   };
 });
 
@@ -620,7 +625,7 @@ describe('POST /skills', () => {
   });
 
   it('calls setGlobalSkillDisabledState for global cwd', async () => {
-    const { setGlobalSkillDisabledState } = await import('../../src/skills/config.js');
+    const { setGlobalSkillDisabledState } = await import('../../src/skills/source.js');
     const res = await settingsRouter.request('/skills?cwd=global', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -631,7 +636,7 @@ describe('POST /skills', () => {
   });
 
   it('calls setProjectSkillDisabledState for project cwd', async () => {
-    const { setProjectSkillDisabledState } = await import('../../src/skills/config.js');
+    const { setProjectSkillDisabledState } = await import('../../src/skills/source.js');
     const res = await settingsRouter.request('/skills?cwd=/my-project', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -712,5 +717,159 @@ describe('POST /context/compaction-model', () => {
     });
     expect(res.status).toBe(200);
     expect(updateContextCompactionModel).toHaveBeenCalledWith('gpt-4o-mini');
+  });
+});
+
+// ---- Override source labeling (regression for L2) ----
+
+describe('GET /mcp - override source labeling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('project override of global is labeled source=project + hasProjectOverride=true', async () => {
+    const { loadGlobalMcpConfig, loadMcpConfig, resolveMcpConfig, resolveMcpDisabled } =
+      await import('../../src/mcp/config.js');
+    vi.mocked(loadGlobalMcpConfig).mockReturnValue([{ name: 'shared', command: 'global-cmd' }]);
+    vi.mocked(loadMcpConfig).mockReturnValue([{ name: 'shared', command: 'project-cmd' }]);
+    vi.mocked(resolveMcpConfig).mockReturnValue([{ name: 'shared', command: 'project-cmd' }]);
+    vi.mocked(resolveMcpDisabled).mockReturnValue(false);
+    const res = await settingsRouter.request('/mcp?cwd=/my-project');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any[];
+    expect(body).toHaveLength(1);
+    expect(body[0].source).toBe('project');
+    expect(body[0].hasProjectOverride).toBe(true);
+  });
+});
+
+describe('GET /hooks - override source labeling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('project override of global is labeled source=project + hasProjectOverride=true', async () => {
+    const { loadGlobalHookConfigs, loadHookConfigs, resolveHookConfigs, resolveHookDisabled } =
+      await import('../../src/hooks/config.js');
+    vi.mocked(loadGlobalHookConfigs).mockReturnValue([
+      {
+        name: 'shared',
+        point: 'tool.execute.before',
+        type: 'observer',
+        command: 'echo',
+        enabled: true,
+      },
+    ]);
+    vi.mocked(loadHookConfigs).mockReturnValue([
+      {
+        name: 'shared',
+        point: 'tool.execute.before',
+        type: 'observer',
+        command: 'sh',
+        enabled: true,
+      },
+    ]);
+    vi.mocked(resolveHookConfigs).mockReturnValue([
+      {
+        name: 'shared',
+        point: 'tool.execute.before',
+        type: 'observer',
+        command: 'sh',
+        enabled: true,
+      },
+    ]);
+    vi.mocked(resolveHookDisabled).mockReturnValue(false);
+    const res = await settingsRouter.request('/hooks?cwd=/my-project');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any[];
+    expect(body).toHaveLength(1);
+    expect(body[0].source).toBe('project');
+    expect(body[0].hasProjectOverride).toBe(true);
+  });
+});
+
+describe('GET /skills - override source labeling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('empty skill list returns empty array (override logic mirrors mcp/hooks)', async () => {
+    // The MockSkillLayer returns [] for listWithStatus, so we can only verify
+    // the endpoint shape with empty input. The source labeling change
+    // (isFromProject ? 'project' : 'global') is identical to mcp/hooks and
+    // is verified by the corresponding mcp/hooks tests above.
+    const res = await settingsRouter.request('/skills?cwd=/my-project');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any[];
+    expect(body).toEqual([]);
+  });
+});
+
+// ---- Project-level delete rejects names not in project config (L5) ----
+
+describe('DELETE /mcp/:name - project view rejects non-project items', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns 500 (NotFoundError) when deleting a global-only MCP from project view', async () => {
+    const { loadMcpConfig } = await import('../../src/mcp/config.js');
+    vi.mocked(loadMcpConfig).mockReturnValue([]);
+    const res = await settingsRouter.request('/mcp/global-only?cwd=/my-project', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(500);
+  });
+
+  it('succeeds when deleting an MCP that exists in project config', async () => {
+    const { loadMcpConfig, writeMcpConfig } = await import('../../src/mcp/config.js');
+    vi.mocked(loadMcpConfig).mockReturnValue([{ name: 'local', command: 'npx' }]);
+    const res = await settingsRouter.request('/mcp/local?cwd=/my-project', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(200);
+    expect(writeMcpConfig).toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /mcp/:name - global view remains idempotent', () => {
+  it('returns 200 even when name does not exist in global config', async () => {
+    const { loadGlobalMcpConfig, writeGlobalMcpConfig } = await import('../../src/mcp/config.js');
+    vi.mocked(loadGlobalMcpConfig).mockReturnValue([]);
+    const res = await settingsRouter.request('/mcp/anything?cwd=global', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(200);
+    expect(writeGlobalMcpConfig).toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /hooks/:name - project view rejects non-project items', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns 500 (NotFoundError) when deleting a global-only hook from project view', async () => {
+    const { loadHookConfigs } = await import('../../src/hooks/config.js');
+    vi.mocked(loadHookConfigs).mockReturnValue([]);
+    const res = await settingsRouter.request('/hooks/global-only?cwd=/my-project', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('DELETE /agents/:name - project view rejects non-project items', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns 500 (NotFoundError) when deleting a global-only agent from project view', async () => {
+    const { loadAgentProfiles } = await import('../../src/subagent/loader.js');
+    vi.mocked(loadAgentProfiles).mockReturnValue([]);
+    const res = await settingsRouter.request('/agents/global-only?cwd=/my-project', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(500);
   });
 });

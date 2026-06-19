@@ -139,8 +139,8 @@ export async function setCompactionModel(
 
 // ---- Settings: MCP ----
 
-export function listMcpServers(_cwd?: string): Promise<any[]> {
-  return clients.settings.getMcpStatus();
+export function listMcpServers(cwd?: string): Promise<any[]> {
+  return clients.settings.getMcpStatus({ cwd: cwd ?? '' });
 }
 
 export function setMcpDisabled(name: string, disabled: boolean, cwd?: string): Promise<void> {

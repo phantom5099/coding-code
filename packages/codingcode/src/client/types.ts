@@ -65,15 +65,15 @@ export interface AgentClient {
   getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
   setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
   resetSubagentEnabled(body: { cwd: string }): Promise<void>;
-  getMcpStatus(): Promise<McpStatus[]>;
-  createMcpServer(server: McpServerConfig): Promise<void>;
-  updateMcpServer(name: string, server: McpServerConfig): Promise<void>;
-  deleteMcpServer(name: string): Promise<void>;
+  getMcpStatus(query: { cwd: string }): Promise<McpStatus[]>;
+  createMcpServer(server: McpServerConfig, query: { cwd: string }): Promise<void>;
+  updateMcpServer(name: string, server: McpServerConfig, query: { cwd: string }): Promise<void>;
+  deleteMcpServer(name: string, query: { cwd: string }): Promise<void>;
   setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
-  listAgents(): Promise<
+  listAgents(query: { cwd: string }): Promise<
     Array<{
       name: string;
       description: string;
@@ -85,17 +85,17 @@ export interface AgentClient {
       disabled?: boolean;
     }>
   >;
-  createAgent(profile: AgentProfile): Promise<void>;
-  updateAgent(name: string, profile: AgentProfile): Promise<void>;
-  deleteAgent(name: string): Promise<void>;
+  createAgent(profile: AgentProfile, query: { cwd: string }): Promise<void>;
+  updateAgent(name: string, profile: AgentProfile, query: { cwd: string }): Promise<void>;
+  deleteAgent(name: string, query: { cwd: string }): Promise<void>;
   setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetAgentDisabled(body: { name: string; cwd: string }): Promise<void>;
-  listHooks(): Promise<UserHookConfig[]>;
+  listHooks(query: { cwd: string }): Promise<UserHookConfig[]>;
   setHookDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;
-  createHook(hook: UserHookConfig): Promise<void>;
-  updateHook(name: string, hook: UserHookConfig): Promise<void>;
-  deleteHook(name: string): Promise<void>;
+  createHook(hook: UserHookConfig, query: { cwd: string }): Promise<void>;
+  updateHook(name: string, hook: UserHookConfig, query: { cwd: string }): Promise<void>;
+  deleteHook(name: string, query: { cwd: string }): Promise<void>;
   getPermissionMode(): Promise<PermissionMode>;
   setPermissionMode(mode: PermissionMode): Promise<void>;
 }

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { SkillService } from '../../skills/service.js';
-import { WorkspaceService } from '../../core/workspace.js';
+import { WorkspaceService, isGlobalCwd } from '../../core/workspace.js';
 import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
 import type { McpServerConfig } from '../../mcp/types.js';
 import type { AgentProfile } from '../../subagent/types.js';
@@ -61,7 +61,7 @@ import {
   setProjectSkillDisabledState,
   discoverGlobalSkillDirs,
   discoverProjectSkillDirs,
-} from '../../skills/config.js';
+} from '../../skills/source.js';
 import {
   getMemoryConfig,
   getAllTypesWithStatus,
@@ -92,12 +92,6 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
   );
   const resolveWorkspaceCwd = (override?: string) => ws.resolveWorkspaceCwd(override);
 
-  // ---- Helpers for global vs project ----
-
-  function isGlobalCwd(cwd: string | undefined): boolean {
-    return !cwd || cwd === '' || cwd === 'global';
-  }
-
   // ---- Helpers for CRUD with validation ----
 
   function mcpCreateServer(cwd: string, server: McpServerConfig): void {
@@ -121,8 +115,14 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
   }
 
   function mcpDeleteServer(cwd: string, name: string): void {
-    const servers = loadMcpConfig(cwd).filter((s) => s.name !== name);
-    writeMcpConfig(cwd, servers);
+    const servers = loadMcpConfig(cwd);
+    if (!servers.some((s) => s.name === name)) {
+      throw new NotFoundError(`MCP server '${name}' not found in project config`);
+    }
+    writeMcpConfig(
+      cwd,
+      servers.filter((s) => s.name !== name)
+    );
   }
 
   function agentsList(cwd: string): Array<{
@@ -268,8 +268,14 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
   }
 
   function hooksDelete(cwd: string, name: string): void {
-    const hooks = loadHookConfigs(cwd).filter((h) => h.name !== name);
-    writeHookConfigs(cwd, hooks);
+    const hooks = loadHookConfigs(cwd);
+    if (!hooks.some((h) => h.name === name)) {
+      throw new NotFoundError(`Hook '${name}' not found in project config`);
+    }
+    writeHookConfigs(
+      cwd,
+      hooks.filter((h) => h.name !== name)
+    );
   }
 
   // ---- Memory ----
@@ -488,7 +494,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
         const hasProjectOverride = isFromProject && isFromGlobal;
         return {
           ...h,
-          source: isFromProject ? (hasProjectOverride ? 'global' : 'project') : 'global',
+          source: isFromProject ? 'project' : 'global',
           hasProjectOverride,
           disabled: resolveHookDisabled(cwd, h.name),
         };
@@ -614,7 +620,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
         return {
           ...s,
           disabled: resolveMcpDisabled(cwd, s.name),
-          source: isFromProject ? (hasProjectOverride ? 'global' : 'project') : 'global',
+          source: isFromProject ? 'project' : 'global',
           hasProjectOverride,
         };
       })
@@ -736,7 +742,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
         const hasProjectOverride = isFromProject && isFromGlobal;
         return {
           ...s,
-          source: isFromProject ? (hasProjectOverride ? 'global' : 'project') : 'global',
+          source: isFromProject ? 'project' : 'global',
           hasProjectOverride,
         };
       })

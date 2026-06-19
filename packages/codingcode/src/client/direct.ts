@@ -379,8 +379,8 @@ export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promis
       await clients.settings.deleteMemoryExtraType(name);
     },
 
-    async getSubagentEnabled() {
-      return clients.settings.getSubagentEnabled({ cwd: cwd() });
+    async getSubagentEnabled({ cwd: targetCwd }: { cwd: string }) {
+      return clients.settings.getSubagentEnabled({ cwd: targetCwd });
     },
 
     async setSubagentEnabled(body: { enabled: boolean; cwd: string }) {
@@ -391,8 +391,8 @@ export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promis
       await clients.settings.resetSubagentEnabled(body);
     },
 
-    async getMcpStatus() {
-      return clients.settings.getMcpStatus();
+    async getMcpStatus({ cwd: targetCwd }: { cwd: string }) {
+      return clients.settings.getMcpStatus({ cwd: targetCwd });
     },
 
     async setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }) {
@@ -403,16 +403,23 @@ export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promis
       await clients.settings.resetMcpDisabled(body);
     },
 
-    async createMcpServer(server: McpServerConfig): Promise<void> {
-      await clients.settings.createMcpServer({ cwd: cwd(), server });
+    async createMcpServer(
+      server: McpServerConfig,
+      { cwd: targetCwd }: { cwd: string }
+    ): Promise<void> {
+      await clients.settings.createMcpServer({ cwd: targetCwd, server });
     },
 
-    async updateMcpServer(name: string, server: McpServerConfig): Promise<void> {
-      await clients.settings.updateMcpServer({ cwd: cwd(), name, server });
+    async updateMcpServer(
+      name: string,
+      server: McpServerConfig,
+      { cwd: targetCwd }: { cwd: string }
+    ): Promise<void> {
+      await clients.settings.updateMcpServer({ cwd: targetCwd, name, server });
     },
 
-    async deleteMcpServer(name: string): Promise<void> {
-      await clients.settings.deleteMcpServer({ cwd: cwd(), name });
+    async deleteMcpServer(name: string, { cwd: targetCwd }: { cwd: string }): Promise<void> {
+      await clients.settings.deleteMcpServer({ cwd: targetCwd, name });
     },
 
     async listSkills() {
@@ -423,20 +430,24 @@ export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promis
       await clients.settings.toggleSkill(body);
     },
 
-    async listAgents() {
-      return clients.settings.listAgents({ cwd: cwd() });
+    async listAgents({ cwd: targetCwd }: { cwd: string }) {
+      return clients.settings.listAgents({ cwd: targetCwd });
     },
 
-    async createAgent(profile: AgentProfile): Promise<void> {
-      await clients.settings.createAgent({ cwd: cwd(), profile });
+    async createAgent(profile: AgentProfile, { cwd: targetCwd }: { cwd: string }): Promise<void> {
+      await clients.settings.createAgent({ cwd: targetCwd, profile });
     },
 
-    async updateAgent(name: string, profile: AgentProfile): Promise<void> {
-      await clients.settings.updateAgent({ cwd: cwd(), name, profile });
+    async updateAgent(
+      name: string,
+      profile: AgentProfile,
+      { cwd: targetCwd }: { cwd: string }
+    ): Promise<void> {
+      await clients.settings.updateAgent({ cwd: targetCwd, name, profile });
     },
 
-    async deleteAgent(name: string): Promise<void> {
-      await clients.settings.deleteAgent({ cwd: cwd(), name });
+    async deleteAgent(name: string, { cwd: targetCwd }: { cwd: string }): Promise<void> {
+      await clients.settings.deleteAgent({ cwd: targetCwd, name });
     },
 
     async setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void> {
@@ -447,32 +458,32 @@ export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promis
       await clients.settings.resetAgentDisabled(body);
     },
 
-    async listHooks() {
-      return clients.settings.listHooks({ cwd: cwd() });
+    async listHooks({ cwd: targetCwd }: { cwd: string }) {
+      return clients.settings.listHooks({ cwd: targetCwd });
     },
 
     async setHookDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void> {
-      await clients.settings.setHookDisabled({
-        cwd: cwd(),
-        name: body.name,
-        disabled: body.disabled,
-      });
+      await clients.settings.setHookDisabled(body);
     },
 
     async resetHookDisabled(body: { name: string; cwd: string }): Promise<void> {
       await clients.settings.resetHookDisabled(body);
     },
 
-    async createHook(hook: UserHookConfig): Promise<void> {
-      await clients.settings.createHook({ cwd: cwd(), hook });
+    async createHook(hook: UserHookConfig, { cwd: targetCwd }: { cwd: string }): Promise<void> {
+      await clients.settings.createHook({ cwd: targetCwd, hook });
     },
 
-    async updateHook(name: string, hook: UserHookConfig): Promise<void> {
-      await clients.settings.updateHook({ cwd: cwd(), name, hook });
+    async updateHook(
+      name: string,
+      hook: UserHookConfig,
+      { cwd: targetCwd }: { cwd: string }
+    ): Promise<void> {
+      await clients.settings.updateHook({ cwd: targetCwd, name, hook });
     },
 
-    async deleteHook(name: string): Promise<void> {
-      await clients.settings.deleteHook({ cwd: cwd(), name });
+    async deleteHook(name: string, { cwd: targetCwd }: { cwd: string }): Promise<void> {
+      await clients.settings.deleteHook({ cwd: targetCwd, name });
     },
 
     async getPermissionMode(): Promise<PermissionMode> {
