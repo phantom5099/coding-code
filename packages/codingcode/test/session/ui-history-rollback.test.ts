@@ -5,35 +5,8 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { filterForContext, buildContextMessages } from '../../src/context/service.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
-
-function filterForUI(events: SessionEvent[]): SessionEvent[] {
-  const rollbackHiddenTurnIds = new Set<number>();
-  const rollbackHiddenOpUuids = new Set<string>();
-
-  for (const ev of events) {
-    if (ev.type !== 'rollback') continue;
-    for (const prior of events) {
-      if (prior === ev) break;
-      if ('turnId' in prior && prior.turnId >= ev.throughTurnId) {
-        rollbackHiddenTurnIds.add(prior.turnId);
-      }
-      if (prior.type === 'summary' || prior.type === 'compact') {
-        if ((prior as any).endTurnId >= ev.throughTurnId) {
-          rollbackHiddenOpUuids.add((prior as any).uuid);
-        }
-      }
-    }
-  }
-
-  return events.filter((ev) => {
-    if (ev.type === 'rollback') return false;
-    if (ev.type === 'summary' && rollbackHiddenOpUuids.has((ev as any).uuid)) return false;
-    if (ev.type === 'compact' && rollbackHiddenOpUuids.has((ev as any).uuid)) return false;
-    if ('turnId' in ev && rollbackHiddenTurnIds.has(ev.turnId)) return false;
-    return true;
-  }) as SessionEvent[];
-}
+import { filterForUI } from '../../src/session/ui-history.js';
+import type { SessionIndex } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
