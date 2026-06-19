@@ -20,7 +20,6 @@
     "./core/result": "./src/core/result.ts",
     "./core/types": "./src/core/types.ts",
     "./context/context": "./src/context/context.ts",
-    "./context/config": "./src/context/config.ts",
     "./hooks/registry": "./src/hooks/registry.ts",
     "./tools/executor": "./src/tools/executor.ts",
     "./tools/tool-search-service": "./src/tools/tool-search-service.ts",

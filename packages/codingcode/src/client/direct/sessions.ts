@@ -1,6 +1,5 @@
-﻿import { Effect } from 'effect';
+import { Effect } from 'effect';
 import { SessionService } from '../../session/store.js';
-import { WorkspaceService } from '../../core/workspace.js';
 import { deleteSession } from '../../session/file-ops.js';
 import type { PermissionMode } from '../../approval/types.js';
 import type {
@@ -20,10 +19,15 @@ export interface SessionClient {
   }): Promise<{ sessionId: string }>;
   resumeSession(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
   listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
-  getSessionHistory(input: { sessionId: string }): Promise<SessionEvent[]>;
-  deleteSession(input: { sessionId: string }): Promise<void>;
-  getSessionPermissionMode(input: { sessionId: string }): Promise<PermissionMode>;
-  setSessionPermissionMode(input: { sessionId: string; mode: PermissionMode }): Promise<void>;
+  getSessionHistory(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
+
+  deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
+  getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
+  setSessionPermissionMode(input: {
+    sessionId: string;
+    cwd: string;
+    mode: PermissionMode;
+  }): Promise<void>;
 
   getCheckpointDiff(input: {
     sessionId: string;
@@ -69,15 +73,6 @@ export interface SessionClient {
   }): Promise<{ sessionId: string; turns: SessionEvent[] }>;
 }
 
-function getWorkspaceCwd(rt: AppRuntime): Promise<string> {
-  return rt.runPromise(
-    Effect.gen(function* () {
-      const ws = yield* WorkspaceService;
-      return ws.getWorkspaceCwd();
-    })
-  );
-}
-
 export function createDirectSessionClient(rt: AppRuntime): SessionClient {
   return {
     async createSession({ cwd }) {
@@ -94,7 +89,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           return yield* session.readHistory(state);
         })
       );
@@ -109,39 +104,36 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       );
     },
 
-    async getSessionHistory({ sessionId }) {
-      const cwd = await getWorkspaceCwd(rt);
+    async getSessionHistory({ sessionId, cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           return yield* session.readHistory(state);
         })
       );
     },
 
-    async deleteSession({ sessionId }) {
-      deleteSession(sessionId);
+    async deleteSession({ sessionId, cwd }) {
+      deleteSession(sessionId, cwd);
     },
 
-    async getSessionPermissionMode({ sessionId }): Promise<PermissionMode> {
-      const cwd = await getWorkspaceCwd(rt);
+    async getSessionPermissionMode({ sessionId, cwd }): Promise<PermissionMode> {
       const mode = await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           return yield* session.getPermissionMode(state);
         })
       );
       return mode as PermissionMode;
     },
 
-    async setSessionPermissionMode({ sessionId, mode }) {
-      const cwd = await getWorkspaceCwd(rt);
+    async setSessionPermissionMode({ sessionId, cwd, mode }) {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           yield* session.setPermissionMode(state, mode);
         })
       );
@@ -221,12 +213,11 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
         code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null },
       };
     },
-    async forkSession({ sessionId, atTurnId }) {
-      const cwd = await getWorkspaceCwd(rt);
+    async forkSession({ sessionId, cwd, atTurnId }) {
       const newSessionId = await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown', sessionId);
+          const state = yield* session.load(cwd, sessionId);
           return yield* session.forkSession(state, atTurnId ?? 0);
         })
       );

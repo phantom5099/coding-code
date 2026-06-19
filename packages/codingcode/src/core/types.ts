@@ -13,6 +13,7 @@ export interface Message {
   tool_call_id?: string;
   tool_name?: string;
   name?: string;
+  usage?: { prompt: number; completion: number; total: number };
 }
 
 export interface ToolCall {

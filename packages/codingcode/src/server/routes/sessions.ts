@@ -1,19 +1,21 @@
 import { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { join } from 'path';
-import { SessionService, type SessionStoreState } from '../../session/store.js';
+import { existsSync } from 'fs';
+import type { SessionStoreState } from '../../session/types.js';
+import { SessionService } from '../../session/store.js';
 import {
-  resolveSessionDir,
+  sessionJsonlPathFromCwd,
   getPermissionMode,
   setPermissionMode,
   readHistory,
   deleteSession,
 } from '../../session/file-ops.js';
-import { readUIHistory } from '../../session/messages.js';
-import { ContextService } from '../../context/service.js';
-import { getContextConfig } from '../../context/config.js';
+import type { SessionEvent, SummaryEvent, CompactEvent } from '../../session/types.js';
+import { ContextService, estimatePromptTokens } from '../../context/service.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
 import { WorkspaceService } from '../../core/workspace.js';
+import { LLMFactoryService } from '../../llm/factory.js';
+import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -23,10 +25,136 @@ export const activeApprovalForks = new Map<
   { setPermissionMode: (mode: any) => Promise<void> | void }
 >();
 
-function findUserMessageForTurn(sessionId: string, turnId: number): string {
-  const dir = resolveSessionDir(sessionId);
-  if (!dir) return '';
-  const jsonlPath = join(dir, `${sessionId}.jsonl`);
+// --- UI history functions (moved from messages.ts) ---
+
+function filterForUI(events: SessionEvent[]): SessionEvent[] {
+  const rollbackHiddenTurnIds = new Set<number>();
+  const rollbackHiddenOpUuids = new Set<string>();
+
+  for (const ev of events) {
+    if (ev.type !== 'rollback') continue;
+    for (const prior of events) {
+      if (prior === ev) break;
+      if ('turnId' in prior && prior.turnId >= ev.throughTurnId) {
+        rollbackHiddenTurnIds.add(prior.turnId);
+      }
+      if (prior.type === 'summary' || prior.type === 'compact') {
+        if ((prior as SummaryEvent | CompactEvent).endTurnId >= ev.throughTurnId) {
+          rollbackHiddenOpUuids.add((prior as SummaryEvent | CompactEvent).uuid);
+        }
+      }
+    }
+  }
+
+  return events.filter((ev) => {
+    if (ev.type === 'rollback') return false;
+    if (ev.type === 'summary' && rollbackHiddenOpUuids.has((ev as SummaryEvent).uuid)) return false;
+    if (ev.type === 'compact' && rollbackHiddenOpUuids.has((ev as CompactEvent).uuid)) return false;
+    if ('turnId' in ev && rollbackHiddenTurnIds.has(ev.turnId)) return false;
+    return true;
+  }) as SessionEvent[];
+}
+
+function createTurnScopedIdGenerator() {
+  const counters = new Map<string, number>();
+  return (prefix: string, turnId: number): string => {
+    const key = `${prefix}:${turnId}`;
+    const next = (counters.get(key) ?? 0) + 1;
+    counters.set(key, next);
+    return `${prefix}-${turnId}-${next}`;
+  };
+}
+
+function sessionEventsToTurns(
+  events: SessionEvent[]
+): Array<{ id: string; items: object[]; status: string }> {
+  const turnsMap = new Map<number, { id: string; items: object[]; status: string }>();
+  const nextId = createTurnScopedIdGenerator();
+
+  for (const event of events) {
+    if (event.type === 'session_meta') continue;
+    if (event.type === 'compact' || event.type === 'rollback') continue;
+
+    if (event.type === 'summary') {
+      let turn = turnsMap.get(event.endTurnId);
+      if (!turn) {
+        turn = { id: String(event.endTurnId), items: [], status: 'completed' };
+        turnsMap.set(event.endTurnId, turn);
+      }
+      turn.items.push({
+        id: `summary-${event.uuid}`,
+        type: 'summary',
+        content: event.summaryText,
+        startTurnId: event.startTurnId,
+        endTurnId: event.endTurnId,
+      });
+      continue;
+    }
+
+    let turn = turnsMap.get(event.turnId);
+    if (!turn) {
+      turn = { id: String(event.turnId), items: [], status: 'completed' };
+      turnsMap.set(event.turnId, turn);
+    }
+    switch (event.type) {
+      case 'user':
+        turn.items.push({
+          id: nextId('user', event.turnId),
+          type: 'message',
+          role: 'user',
+          content: event.content,
+        });
+        break;
+      case 'assistant':
+        if (event.content) {
+          turn.items.push({
+            id: nextId('assistant', event.turnId),
+            type: 'message',
+            role: 'assistant',
+            content: event.content,
+          });
+        }
+        for (const tc of event.toolCalls ?? []) {
+          const args = tc.arguments ?? {};
+          turn.items.push({
+            id: tc.id,
+            type: 'tool_call',
+            name: tc.name,
+            args,
+            status: 'approved',
+          });
+        }
+        break;
+      case 'tool_result': {
+        const item: Record<string, unknown> = {
+          id: `result-${event.toolCallId}`,
+          type: 'tool_result',
+          callId: event.toolCallId,
+          name: event.toolName,
+          output: event.output,
+        };
+        turn.items.push(item);
+        break;
+      }
+    }
+  }
+  return [...turnsMap.values()].sort((a, b) => Number(a.id) - Number(b.id));
+}
+
+function readUIHistory(
+  sessionId: string,
+  cwd: string
+): Array<{ id: string; items: object[]; status: string }> {
+  const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
+  if (!existsSync(jsonlPath)) return [];
+  const events = readHistory(jsonlPath);
+  const visibleEvents = filterForUI(events);
+  return sessionEventsToTurns(visibleEvents);
+}
+
+function findUserMessageForTurn(sessionId: string, turnId: number, cwd: string): string {
+  const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
+  if (!existsSync(jsonlPath)) return '';
   const rawEvents = readHistory(jsonlPath);
   for (const ev of rawEvents) {
     if (ev.type === 'user' && (ev as any).turnId === turnId) {
@@ -92,11 +220,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     }
     const state = result.value as SessionStoreState;
     if (body.initialPermissionMode) {
-      const dir = resolveSessionDir(state.sessionId);
-      if (dir) {
-        const idxPath = join(dir, `${state.sessionId}.index.json`);
-        setPermissionMode(state.sessionId, idxPath, body.initialPermissionMode);
-      }
+      setPermissionMode(state.sessionId, state.indexPath, body.initialPermissionMode);
     }
     return c.json({ sessionId: state.sessionId });
   });
@@ -113,7 +237,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const state = yield* session.create(normalizedCwd, 'unknown', sessionId);
+        const state = yield* session.load(normalizedCwd, sessionId);
         return yield* session.readHistory(state);
       }) as any
     );
@@ -136,9 +260,21 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const context = yield* ContextService;
-        const state = yield* (yield* SessionService).create(normalizedCwd, 'unknown', sessionId);
+        const factory = yield* LLMFactoryService;
+        const session = yield* SessionService;
+        const state = yield* session.load(normalizedCwd, sessionId);
+
+        let llm: LLMClient | null = null;
+        const entry = yield* factory.getActiveEntry().pipe(Effect.either);
+        if (entry._tag === 'Right') {
+          const client = yield* factory.createClient(entry.right).pipe(Effect.either);
+          if (client._tag === 'Right') llm = client.right;
+        }
+
+        const maxTokens = llm?.modelInfo.maxTokens ?? 128000;
+
         return yield* Effect.promise(() =>
-          context.compactWithLLM(state.sessionId, state.projectPath, getContextConfig(), null)
+          context.compactWithLLM(state.sessionId, state.projectPath, maxTokens, llm)
         );
       })
     );
@@ -151,31 +287,35 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
 
   router.delete('/:id', async (c) => {
     const sessionId = c.req.param('id');
-    deleteSession(sessionId);
+    const cwd = c.req.query('cwd');
+    if (!cwd) return c.json({ error: 'cwd required' }, 400);
+    deleteSession(sessionId, cwd);
     return c.json({ ok: true });
   });
 
   router.get('/:id/history', async (c) => {
     const sessionId = c.req.param('id');
-    const turns = readUIHistory(sessionId);
+    const cwd = c.req.query('cwd');
+    if (!cwd) return c.json({ error: 'cwd required' }, 400);
+    const turns = readUIHistory(sessionId, cwd);
     return c.json(turns);
   });
 
   router.get('/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
-    const dir = resolveSessionDir(sessionId);
-    if (!dir) return c.json({ mode: 'default' });
-    const idxPath = join(dir, `${sessionId}.index.json`);
+    const cwd = c.req.query('cwd');
+    if (!cwd) return c.json({ mode: 'default' });
+    const idxPath = sessionJsonlPathFromCwd(cwd, sessionId).replace('.jsonl', '.index.json');
+    if (!existsSync(idxPath)) return c.json({ mode: 'default' });
     const mode = getPermissionMode(idxPath);
     return c.json({ mode });
   });
 
   router.put('/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
-    const { mode } = await c.req.json<{ mode: string }>();
-    const dir = resolveSessionDir(sessionId);
-    if (!dir) return c.json({ error: 'Session not found' }, 404);
-    const idxPath = join(dir, `${sessionId}.index.json`);
+    const { cwd, mode } = await c.req.json<{ cwd: string; mode: string }>();
+    if (!cwd) return c.json({ error: 'cwd required' }, 400);
+    const idxPath = sessionJsonlPathFromCwd(cwd, sessionId).replace('.jsonl', '.index.json');
     setPermissionMode(sessionId, idxPath, mode);
     const handle = activeApprovalForks.get(sessionId);
     if (handle) handle.setPermissionMode(mode);
@@ -379,11 +519,13 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const state = yield* session.create(cwd, 'unknown', sessionId);
-        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId);
+        const state = yield* session.load(cwd, sessionId);
+        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
-        const turns = readUIHistory(sessionId);
-        return { ok: true, turns, rolledBackMessage, promptEstimate: state.promptEstimate };
+        const turns = readUIHistory(sessionId, cwd);
+        const promptEstimate = estimatePromptTokens(state.transcriptPath);
+        const usage = state.usage;
+        return { ok: true, turns, rolledBackMessage, promptEstimate, usage };
       }) as any
     );
     if (!result.ok) {
@@ -407,16 +549,19 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const session = yield* SessionService;
         const checkpoint = yield* CheckpointService;
         const codeResult = yield* checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
-        const state = yield* session.create(cwd, 'unknown', sessionId);
-        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId);
+        const state = yield* session.load(cwd, sessionId);
+        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
-        const turns = readUIHistory(sessionId);
+        const turns = readUIHistory(sessionId, cwd);
+        const promptEstimate = estimatePromptTokens(state.transcriptPath);
+        const usage = state.usage;
         return {
           ok: true,
           turns,
           codeResult,
           rolledBackMessage,
-          promptEstimate: state.promptEstimate,
+          promptEstimate,
+          usage,
         };
       }) as any
     );
@@ -465,10 +610,12 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const state = yield* session.create(cwd, 'unknown', sessionId);
+        const state = yield* session.load(cwd, sessionId);
         const newSessionId = yield* session.forkSession(state, atTurnId);
-        const turns = readUIHistory(newSessionId);
-        return { sessionId: newSessionId, turns };
+        const turns = readUIHistory(newSessionId, cwd);
+        const newJsonlPath = sessionJsonlPathFromCwd(cwd, newSessionId);
+        const promptEstimate = estimatePromptTokens(newJsonlPath);
+        return { sessionId: newSessionId, turns, promptEstimate };
       }) as any
     );
     if (!result.ok) {

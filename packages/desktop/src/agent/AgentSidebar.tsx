@@ -3,7 +3,7 @@ import { Plus, Search, Zap, Settings } from 'lucide-react';
 import { useUIStore } from '../stores/ui.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { useAgentStore } from '../stores/agent.store';
-import { api } from '../lib/api';
+import { useAgentRollback } from '../hooks/useAgent';
 
 function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`);
@@ -24,8 +24,9 @@ export default function AgentSidebar() {
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
   const rootPath = useWorkspaceStore((s) => s.rootPath);
   const workspace = useWorkspaceStore();
-  const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
   const setView = useUIStore((s) => s.setView);
+  const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
+  const { deleteThread } = useAgentRollback();
 
   // Subscribe to raw threads, derive list with useMemo for stable reference
   const rawThreads = useAgentStore((s) => s.threads);
@@ -39,29 +40,8 @@ export default function AgentSidebar() {
 
   const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
 
-  const handleDelete = async (threadId: string) => {
-    await api(`/api/sessions/${threadId}`, { method: 'DELETE' }).catch((e) => {
-      console.error('Failed to delete session:', e);
-    });
-    const rootPath = useWorkspaceStore.getState().rootPath;
-    if (rootPath) {
-      try {
-        const sessions = await api<any[]>(`/api/sessions?cwd=${encodeURIComponent(rootPath)}`);
-        const threads = sessions.map((s: any) => ({
-          id: s.sessionId,
-          projectId: '',
-          title: s.title ?? s.sessionId.slice(0, 8),
-          cwd: s.cwd ?? '',
-          turns: [],
-          createdAt: new Date(s.createdAt).getTime(),
-          updatedAt: new Date(s.updatedAt).getTime(),
-        }));
-        useAgentStore.getState().loadThreads(threads);
-      } catch {}
-    }
-    if (threadId === currentThreadId) {
-      setCurrentThread(null);
-    }
+  const handleDelete = (threadId: string) => {
+    void deleteThread(threadId);
   };
 
   // Find current project name

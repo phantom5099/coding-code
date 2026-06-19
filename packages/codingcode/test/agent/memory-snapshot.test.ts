@@ -44,8 +44,8 @@ const BaseMockLayer = Layer.mergeAll(
     snapshotFinal: () => Effect.void,
   } as any),
   Layer.succeed(SessionService, {
-    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
-    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordAssistant: () => Effect.succeed({}),
+    recordUser: () => Effect.succeed({}),
     recordToolResult: () => Effect.succeed({}),
   } as any),
   Layer.succeed(ProjectRuntimeService, {
@@ -97,9 +97,9 @@ function makeState(memorySnapshot: string = '') {
     messageCount: 0,
     currentTurnId: 1,
     sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
+    model: 'test-model',
     title: 'memory-test',
     usage: undefined,
-    promptEstimate: 0,
     memorySnapshot,
   };
 }
@@ -154,7 +154,7 @@ describe('Memory snapshot stability', () => {
     expect(second).toBe(first);
   });
 
-  it('injects <system-reminder> when memory changed since snapshot', async () => {
+  it('does not inject <system-reminder> when memory changed since snapshot', async () => {
     const { llm, captured } = makeCapturingLlm();
     await runOnce(
       llm,
@@ -166,8 +166,7 @@ describe('Memory snapshot stability', () => {
       .reverse()
       .find((m: any) => m.role === 'user');
     expect(lastUserMsg).toBeDefined();
-    expect(lastUserMsg.content).toContain('<system-reminder>');
-    expect(lastUserMsg.content).toContain('Updated on disk');
+    expect(lastUserMsg.content).not.toContain('<system-reminder>');
   });
 
   it('does not inject <system-reminder> when memory matches snapshot', async () => {

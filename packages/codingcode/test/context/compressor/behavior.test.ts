@@ -7,11 +7,11 @@ import { Effect, Layer } from 'effect';
 import { ContextService } from '../../../src/context/service.js';
 import { SessionService } from '../../../src/session/store.js';
 import { LLMFactoryService } from '../../../src/llm/factory.js';
-import type { ContextConfig } from '@codingcode/infra/config';
 import type { LLMClient } from '../../../src/llm/client.js';
 import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
-import { buildMessages } from '../../../src/session/messages.js';
+import { filterForContext, buildContextMessages } from '../../../src/context/service.js';
+import { readHistory } from '../../../src/session/file-ops.js';
 import { estimateTokens } from '../../../src/core/util.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
@@ -37,7 +37,6 @@ function makeFixture(opts: FixtureOptions) {
       sessionId,
       projectPath: slug,
       cwd: '/tmp/test',
-      model: 'test',
       createdAt: new Date().toISOString(),
     },
   ];
@@ -47,29 +46,20 @@ function makeFixture(opts: FixtureOptions) {
     lines.push({
       type: 'user',
       turnId: turn,
-      uuid: `u${turn}`,
       content: `q${turn}`,
-      timestamp: new Date().toISOString(),
     });
     lines.push({
       type: 'assistant',
       turnId: turn,
-      uuid: `a${turn}`,
       content: `r${turn}`,
       toolCalls: [{ id: `tc${turn}`, name: opts.toolName ?? 'bash', arguments: '{}' }],
-      model: 'test',
-      timestamp: new Date().toISOString(),
     });
     lines.push({
       type: 'tool_result',
       turnId: turn,
-      uuid: `t${turn}`,
-      parentUuid: `a${turn}`,
       toolName: opts.toolName ?? 'bash',
       toolCallId: `tc${turn}`,
       output: toolContent,
-      timestamp: new Date().toISOString(),
-      tokenCount: Math.ceil(toolContent.length / 3.5),
     });
   }
 
@@ -79,14 +69,13 @@ function makeFixture(opts: FixtureOptions) {
     sessionId,
     projectPath: slug,
     cwd: '/tmp/test',
-    model: 'test',
+    model: 'test-model',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     messageCount: opts.numTurns * 3,
     title: 'fixture',
     currentTurnId: opts.currentTurnId ?? opts.numTurns,
     usage: undefined,
-    promptEstimate: 0,
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -106,13 +95,6 @@ function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
     .filter((l) => l.trim())
     .map((l) => JSON.parse(l) as SessionEvent)
     .filter((ev): ev is SummaryEvent => ev.type === 'summary');
-}
-
-function tinyConfig(overrides: Partial<ContextConfig> = {}): ContextConfig {
-  return {
-    compactionModel: '',
-    ...overrides,
-  };
 }
 
 function makeMockLLM(content: string): LLMClient {
@@ -159,16 +141,16 @@ describe('compressor behavior', () => {
     it('writes summary event with five-section system summary', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig();
         const summary =
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
         const ctx = await getCtxService();
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
-        expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
+        expect(summaries[0]!.startTurnId).toBeLessThanOrEqual(summaries[0]!.endTurnId);
+        expect(summaries[0]!.endTurnId).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
       }
@@ -177,10 +159,10 @@ describe('compressor behavior', () => {
     it('returns no-op when no LLM available', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig();
         const ctx = await getCtxService();
-        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, null);
+        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, 1000, null);
         expect(result.didCompress).toBe(false);
+        expect(result.messages).toBeUndefined();
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
       } finally {
@@ -193,16 +175,16 @@ describe('compressor behavior', () => {
     it('appends summary event directly to JSONL after L5', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const cfg = tinyConfig();
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
         const ctx = await getCtxService();
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
-        expect(summaries[0]!.replaces.length).toBeGreaterThan(0);
+        expect(summaries[0]!.startTurnId).toBeLessThanOrEqual(summaries[0]!.endTurnId);
+        expect(summaries[0]!.endTurnId).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
       }
@@ -213,17 +195,26 @@ describe('compressor behavior', () => {
     it('returns promptEstimate after compression', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
-        const before = estimateTokens(buildMessages(fx.transcriptPath));
-        const cfg = tinyConfig();
+        const { visible: bVisible, compactedTurnIds: bCompacted } = filterForContext(
+          readHistory(fx.transcriptPath)
+        );
+        const before = estimateTokens(buildContextMessages(bVisible, bCompacted));
         const llm = makeMockLLM(
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
         const ctx = await getCtxService();
-        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, cfg, llm);
+        const result = await ctx.compactWithLLM(
+          fx.sessionId,
+          fx.slug,
+          llm.modelInfo.maxTokens,
+          llm
+        );
         expect(result.didCompress).toBe(true);
         expect(result.promptEstimate).toBeGreaterThan(0);
         expect(result.promptEstimate).toBeLessThan(before);
         expect(result.released).toBeGreaterThan(0);
+        expect(result.messages).toBeDefined();
+        expect(result.messages!.length).toBeGreaterThan(0);
       } finally {
         cleanup(fx.slug);
       }

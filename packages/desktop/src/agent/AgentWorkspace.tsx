@@ -15,6 +15,7 @@ function ContextIndicator({ threadId }: { threadId: string }) {
   const contextUsage = useAgentStore((s) => s.contextUsage);
   const usage = useAgentStore((s) => s.usageByThreadId[threadId]);
   const setContextUsage = useAgentStore((s) => s.setContextUsage);
+  const clearThreadUsage = useAgentStore((s) => s.clearThreadUsage);
   const isCompressing = useAgentStore((s) => s.isCompressing);
   const startCompressing = useAgentStore((s) => s.startCompressing);
   const stopCompressing = useAgentStore((s) => s.stopCompressing);
@@ -74,11 +75,12 @@ function ContextIndicator({ threadId }: { threadId: string }) {
               body: JSON.stringify({ cwd: '' }),
             }
           );
-          if (res.promptEstimate != null && contextUsage) {
+          if (res.didCompress && contextUsage) {
             setContextUsage({
               used: res.promptEstimate,
               contextWindow: contextUsage.contextWindow,
             });
+            clearThreadUsage(threadId);
           }
         } catch (e) {
           console.error('Failed to compact session:', e);
@@ -320,6 +322,7 @@ function InputBox({
                 };
                 setSessionPermissionMode(
                   currentThreadId,
+                  workspace.rootPath || '',
                   POLICY_TO_CORE_MODE[next] ?? 'default'
                 ).catch((e) => {
                   console.error('Failed to sync permission mode:', e);

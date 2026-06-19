@@ -5,7 +5,8 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
-import { buildMessages } from '../../src/session/messages.js';
+import { filterForContext, buildContextMessages } from '../../src/context/service.js';
+import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
@@ -22,49 +23,35 @@ function makeFixture(sessionId: string, slug: string) {
       sessionId,
       projectPath: slug,
       cwd: '/tmp/test',
-      model: 'test',
       createdAt: new Date().toISOString(),
     },
-    { type: 'user', turnId: 1, uuid: 'u1', content: 'first', timestamp: new Date().toISOString() },
+    { type: 'user', turnId: 1, content: 'first' },
     {
       type: 'assistant',
       turnId: 1,
-      uuid: 'a1',
       content: 'reply1',
       toolCalls: [],
-      model: 'test',
-      timestamp: new Date().toISOString(),
     },
-    { type: 'user', turnId: 2, uuid: 'u2', content: 'second', timestamp: new Date().toISOString() },
+    { type: 'user', turnId: 2, content: 'second' },
     {
       type: 'assistant',
       turnId: 2,
-      uuid: 'a2',
       content: 'reply2',
       toolCalls: [{ id: 'tc1', name: 'bash', arguments: '{}' }],
-      model: 'test',
-      timestamp: new Date().toISOString(),
     },
     {
       type: 'tool_result',
       turnId: 2,
-      uuid: 't1',
-      parentUuid: 'a2',
       toolName: 'bash',
       toolCallId: 'tc1',
       output: 'cmd output',
-      timestamp: new Date().toISOString(),
-      tokenCount: 5,
     },
-    { type: 'user', turnId: 3, uuid: 'u3', content: 'third', timestamp: new Date().toISOString() },
+    { type: 'user', turnId: 3, content: 'third' },
     {
       type: 'assistant',
       turnId: 3,
-      uuid: 'a3',
       content: 'reply3',
       toolCalls: [],
-      model: 'test',
-      timestamp: new Date().toISOString(),
     },
   ];
 
@@ -81,7 +68,6 @@ function makeFixture(sessionId: string, slug: string) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
-    promptEstimate: 0,
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -95,6 +81,21 @@ function readEvents(jsonlPath: string): SessionEvent[] {
     .split('\n')
     .filter((l) => l.trim())
     .map((l) => JSON.parse(l) as SessionEvent);
+}
+
+function collectToolCallIds(events: SessionEvent[]): Set<string> {
+  const ids = new Set<string>();
+  for (const e of events) {
+    if (e.type === 'assistant') {
+      for (const tc of e.toolCalls) {
+        ids.add(tc.id);
+      }
+    }
+    if (e.type === 'tool_result') {
+      ids.add(e.toolCallId);
+    }
+  }
+  return ids;
 }
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
@@ -116,9 +117,9 @@ describe('forkSession', () => {
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       };
 
@@ -146,7 +147,7 @@ describe('forkSession', () => {
     }
   });
 
-  it('forked session has new UUIDs', async () => {
+  it('forked session has regenerated toolCallIds', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
@@ -160,16 +161,17 @@ describe('forkSession', () => {
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       };
 
+      // Fork at non-existent turnId so chain = all events (including summary + compact)
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 2);
+          return yield* svc.forkSession(state, 999);
         })
       );
 
@@ -177,21 +179,29 @@ describe('forkSession', () => {
       const newEvents = readEvents(newJsonlPath);
 
       const originalEvents = readEvents(fx.transcriptPath);
-      const originalUuids = new Set(
-        originalEvents.filter((e) => 'uuid' in e).map((e) => (e as any).uuid)
-      );
-      const newUuids = newEvents.filter((e) => 'uuid' in e).map((e) => (e as any).uuid);
+      const originalToolCallIds = collectToolCallIds(originalEvents);
+      const newToolCallIds = collectToolCallIds(newEvents);
 
-      // No UUID overlap
-      for (const u of newUuids) {
-        expect(originalUuids.has(u)).toBe(false);
+      // No toolCallId overlap
+      for (const id of newToolCallIds) {
+        expect(originalToolCallIds.has(id)).toBe(false);
       }
+      // Tool result still maps to the regenerated assistant toolCall id
+      const forkedAssistant = newEvents.find((e) => e.type === 'assistant' && e.turnId === 2) as
+        | { toolCalls: Array<{ id: string }> }
+        | undefined;
+      const forkedToolResult = newEvents.find((e) => e.type === 'tool_result') as
+        | { toolCallId: string }
+        | undefined;
+      expect(forkedAssistant).toBeDefined();
+      expect(forkedToolResult).toBeDefined();
+      expect(forkedToolResult!.toolCallId).toBe(forkedAssistant!.toolCalls[0]!.id);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }
   });
 
-  it('deleting events in forked session does not affect source', async () => {
+  it('rollback in forked session does not affect source', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
@@ -205,9 +215,9 @@ describe('forkSession', () => {
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       };
 
@@ -220,35 +230,36 @@ describe('forkSession', () => {
 
       const newJsonlPath = join(fx.dir, `${newSessionId}.jsonl`);
 
-      // Append a hide event in the forked session
-      const newEvents = readEvents(newJsonlPath);
-      const targetUuid = (newEvents[1] as any).uuid; // first user event in fork
+      // Append a rollback event in the forked session
       writeFileSync(
         newJsonlPath,
         readFileSync(newJsonlPath, 'utf8') +
           JSON.stringify({
-            type: 'hide',
-            uuid: randomUUID(),
-            kind: 'message',
-            targetUuid,
-            reason: 'deleted in fork',
-            timestamp: new Date().toISOString(),
+            type: 'rollback',
+            throughTurnId: 2,
+            reason: 'rolled back in fork',
           }) +
           '\n',
         'utf8'
       );
 
       // Source should be unaffected
-      const sourceMessages = buildMessages(fx.transcriptPath);
+      const { visible: srcVisible, compactedTurnIds: srcCompacted } = filterForContext(
+        readHistory(fx.transcriptPath)
+      );
+      const sourceMessages = buildContextMessages(srcVisible, srcCompacted);
       const sourceUserContents = sourceMessages
         .filter((m) => m.role === 'user')
         .map((m) => m.content);
       expect(sourceUserContents).toEqual(['first', 'second', 'third']);
 
-      // Fork should reflect the hide
-      const forkMessages = buildMessages(newJsonlPath);
+      // Fork should reflect the rollback
+      const { visible: forkVisible, compactedTurnIds: forkCompacted } = filterForContext(
+        readHistory(newJsonlPath)
+      );
+      const forkMessages = buildContextMessages(forkVisible, forkCompacted);
       const forkUserContents = forkMessages.filter((m) => m.role === 'user').map((m) => m.content);
-      expect(forkUserContents).toEqual(['second']);
+      expect(forkUserContents).toEqual(['first']);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }
@@ -268,9 +279,9 @@ describe('forkSession', () => {
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
+        model: 'test',
         title: 'fixture',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       };
 
@@ -288,6 +299,85 @@ describe('forkSession', () => {
       expect(idx.sessionId).toBe(newSessionId);
       expect(idx.title).toBe('fixture');
       expect(idx.permissionMode).toBe('default');
+      expect(idx.model).toBe('test');
+    } finally {
+      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+    }
+  });
+
+  it('fork preserves summary/compact uuid (no regeneration)', async () => {
+    const sessionId = randomUUID();
+    const slug = randomUUID();
+    const dir = join(PROJECT_BASE, slug, 'sessions');
+    mkdirSync(dir, { recursive: true });
+    const transcriptPath = join(dir, `${sessionId}.jsonl`);
+    const indexPath = join(dir, `${sessionId}.index.json`);
+
+    const fixedSummaryUuid = '11111111-1111-1111-1111-111111111111';
+    const fixedCompactUuid = '22222222-2222-2222-2222-222222222222';
+
+    const lines: any[] = [
+      {
+        type: 'session_meta',
+        sessionId,
+        projectPath: slug,
+        cwd: '/tmp/test',
+        createdAt: new Date().toISOString(),
+      },
+      { type: 'user', turnId: 1, content: 'q1' },
+      { type: 'assistant', turnId: 1, content: 'a1', toolCalls: [] },
+      { type: 'summary', uuid: fixedSummaryUuid, startTurnId: 1, endTurnId: 1, summaryText: 'sum' },
+      { type: 'user', turnId: 2, content: 'q2' },
+      { type: 'assistant', turnId: 2, content: 'a2', toolCalls: [] },
+      { type: 'compact', uuid: fixedCompactUuid, startTurnId: 1, endTurnId: 2 },
+    ];
+    writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
+    const idx: SessionIndex = {
+      sessionId,
+      projectPath: slug,
+      cwd: '/tmp/test',
+      model: 'test',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messageCount: lines.length - 1,
+      title: 'uuid-fixture',
+      currentTurnId: 2,
+      usage: undefined,
+      permissionMode: 'default',
+    };
+    writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
+
+    try {
+      const state = {
+        sessionId,
+        cwd: '/tmp/test',
+        projectPath: slug,
+        transcriptPath,
+        indexPath,
+        messageCount: lines.length - 1,
+        currentTurnId: 2,
+        sessionMeta: null,
+        model: 'test',
+        title: 'uuid-fixture',
+        usage: undefined,
+        memorySnapshot: '',
+      };
+
+      const newSessionId = await run(
+        Effect.gen(function* () {
+          const svc = yield* SessionService;
+          return yield* svc.forkSession(state, 999);
+        })
+      );
+
+      const forkedPath = join(dir, `${newSessionId}.jsonl`);
+      const forkedEvents = readEvents(forkedPath);
+      const forkedSummary = forkedEvents.find((e) => e.type === 'summary') as any;
+      const forkedCompact = forkedEvents.find((e) => e.type === 'compact') as any;
+      expect(forkedSummary).toBeDefined();
+      expect(forkedCompact).toBeDefined();
+      expect((forkedSummary! as any).uuid).toBe(fixedSummaryUuid);
+      expect((forkedCompact! as any).uuid).toBe(fixedCompactUuid);
     } finally {
       rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
     }

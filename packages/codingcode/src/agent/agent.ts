@@ -13,7 +13,6 @@ import { ApprovalWaitService } from '../approval/async-confirm.js';
 import { buildSystemPrompt } from './prompt.js';
 import type { AgentEvent, RunStreamOptions } from './types.js';
 import { resolveConfig } from './config.js';
-import { getContextConfig } from '../context/config.js';
 import { TodoService } from './todo.js';
 import { HookService } from '../hooks/registry.js';
 import { SkillService } from '../skills/service.js';
@@ -141,7 +140,10 @@ export const sendMessage = (
     yield* runtime.prepareProject(normalizedCwd);
     yield* skills.evictProject(normalizedCwd);
 
-    const state = yield* session.create(normalizedCwd, llm.modelInfo.model, sessionId);
+    const state = sessionId
+      ? yield* session.load(normalizedCwd, sessionId)
+      : yield* session.create(normalizedCwd, llm.modelInfo.model);
+    state.model = llm.modelInfo.model;
     state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
     const sid = state.sessionId;
 
@@ -251,18 +253,19 @@ export function agentLoop(
     const memorySection = memoryBlock ? `## Session Memory\n\n${memoryBlock}` : '';
     const system = [basePrompt, memorySection].filter(Boolean).join('\n\n');
 
-    const config = getContextConfig();
     const maxOverflowRetries = REACTIVE_COMPACT_MAX_RETRIES;
-    const model = state.sessionMeta?.model ?? 'unknown';
     const effectiveMaxSteps = opts.maxStepsOverride ?? maxSteps;
 
     let stopContinuations = 0;
     const effectiveMaxStopContinuations = opts.maxStopContinuations ?? maxStopContinuations;
 
+    let messages: Message[] = [];
+
     for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
-      const { messages } = yield* Effect.sync(() =>
-        context.assemblePayload(state.sessionId, state.projectPath, config, llm.modelInfo.maxTokens)
+      const payload = yield* Effect.sync(() =>
+        context.assemblePayload(state.sessionId, state.projectPath, llm.modelInfo.maxTokens)
       );
+      messages = payload.messages;
 
       let lastResult: Result<string, AgentError> | null = null;
       let overflow = false;
@@ -304,12 +307,11 @@ export function agentLoop(
               state.projectPath,
               messages,
               llm.modelInfo.maxTokens,
-              config,
               llm
             ),
           catch: (e) => new AgentError('LLM_FAILED', String(e)),
         });
-        if (compressResult.didCompress) {
+        if (compressResult.didCompress && compressResult.messages) {
           yield* q.offer({
             _tag: 'ReactiveCompact',
             attempt: 1,
@@ -317,18 +319,8 @@ export function agentLoop(
             promptEstimate: compressResult.promptEstimate,
           });
 
-          const rebuilt = yield* Effect.sync(() =>
-            context.assemblePayload(
-              state.sessionId,
-              state.projectPath,
-              config,
-              llm.modelInfo.maxTokens
-            )
-          );
-          messages.length = 0;
-          messages.push(...rebuilt.messages);
+          messages = compressResult.messages;
           state.usage = undefined;
-          state.promptEstimate = rebuilt.promptEstimate;
         }
 
         const llmMessages = [...messages];
@@ -364,15 +356,15 @@ export function agentLoop(
                 context.compactWithLLM(
                   state.sessionId,
                   state.projectPath,
-                  config,
-                  null,
-                  undefined,
-                  undefined,
-                  undefined,
-                  llm.modelInfo.maxTokens
+                  llm.modelInfo.maxTokens,
+                  llm,
+                  undefined
                 ),
               catch: (e) => new AgentError('LLM_FAILED', String(e)),
             });
+            if (compressResult.didCompress && compressResult.messages) {
+              messages = compressResult.messages;
+            }
             yield* q.offer({
               _tag: 'ReactiveCompact',
               attempt: attempt + 1,
@@ -411,7 +403,7 @@ export function agentLoop(
 
         if (!toolCalls || toolCalls.length === 0) {
           if (session) {
-            yield* session.recordAssistant(state, resp.content, toolCalls || [], model, resp.usage);
+            yield* session.recordAssistant(state, resp.content, toolCalls || [], resp.usage);
           }
           const stopDecision = yield* hooks.emitDecision('agent.turn.stop', {
             sessionId,
@@ -431,7 +423,7 @@ export function agentLoop(
                 status: 'error',
               });
               memory
-                .flushSessionToMemory(state.sessionId, llm)
+                .flushSessionToMemory(state.sessionId, llm, state.cwd)
                 .catch((e) => logger.error('memory flush failed:', e));
               return Result.err(
                 new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded')
@@ -467,13 +459,7 @@ export function agentLoop(
           }
         }
 
-        const record = yield* session.recordAssistant(
-          state,
-          resp.content,
-          toolCalls!,
-          model,
-          resp.usage
-        );
+        const record = yield* session.recordAssistant(state, resp.content, toolCalls!, resp.usage);
         const allResults = yield* executor.executeBatch(toolCalls, state.sessionId, {
           turnId: state.currentTurnId,
           projectPath,
@@ -485,7 +471,7 @@ export function agentLoop(
         let todoPrinted = false;
         for (const r of allResults) {
           const resultOut = r.type === 'denied' ? '' : r.output;
-          yield* session.recordToolResult(state, record.uuid, r.name, r.id, resultOut);
+          yield* session.recordToolResult(state, r.name, r.id, resultOut);
           if (r.type === 'denied') {
             yield* q.offer({ _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason });
           } else {
@@ -517,7 +503,7 @@ export function agentLoop(
       yield* checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
 
       memory
-        .flushSessionToMemory(state.sessionId, llm)
+        .flushSessionToMemory(state.sessionId, llm, state.cwd)
         .catch((e) => logger.error('memory flush failed:', e));
 
       if (lastResult) return lastResult;
@@ -538,7 +524,7 @@ export function agentLoop(
       status: 'maxSteps',
     });
     memory
-      .flushSessionToMemory(state.sessionId, llm)
+      .flushSessionToMemory(state.sessionId, llm, state.cwd)
       .catch((e) => logger.error('memory flush failed:', e));
     return Result.err(AgentError.maxStepsReached(effectiveMaxSteps));
   }).pipe(
@@ -564,7 +550,7 @@ export function agentLoop(
         yield* cp.snapshotFinal(projectPath, sessionId, state.currentTurnId).pipe(Effect.ignore);
         const mem = yield* MemoryService;
         mem
-          .flushSessionToMemory(state.sessionId, llm)
+          .flushSessionToMemory(state.sessionId, llm, state.cwd)
           .catch((e) => logger.error('memory flush failed:', e));
       })
     )

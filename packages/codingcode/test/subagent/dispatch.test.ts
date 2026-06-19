@@ -59,60 +59,39 @@ const mockSession = {
       messageCount: 0,
       currentTurnId: 0,
       sessionMeta: null,
+
       title: 'child',
       usage: undefined,
-      promptEstimate: 0,
       memorySnapshot: '',
     }),
   incrementTurn: () => 0,
-  recordUser: () =>
-    Effect.succeed({ type: 'user', uuid: 'u1', content: '', turnId: 0, timestamp: '' }),
+  recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
     Effect.succeed({
       type: 'assistant',
-      uuid: 'a1',
       content: '',
       toolCalls: [],
-      model: 'test',
       turnId: 0,
-      timestamp: '',
     }),
   recordToolResult: () =>
     Effect.succeed({
       type: 'tool_result',
-      uuid: 't1',
-      parentUuid: 'a1',
       toolName: 'test',
       toolCallId: 'tc1',
       output: '',
       turnId: 0,
-      timestamp: '',
-      tokenCount: 0,
-    }),
-  hideMessage: () =>
-    Effect.succeed({
-      type: 'hide',
-      uuid: 'h1',
-      kind: 'message',
-      targetUuid: '',
-      reason: '',
-      timestamp: '',
     }),
   rollbackToTurn: () =>
     Effect.succeed({
-      type: 'hide',
-      uuid: 'h1',
-      kind: 'rollback',
+      type: 'rollback',
       throughTurnId: 0,
       reason: '',
-      timestamp: '',
     }),
   forkSession: () => Effect.succeed('forked-session-id'),
-  renameSession: () => Effect.succeed({ type: 'title', uuid: 't1', text: '', timestamp: '' }),
+  renameSession: () => Effect.succeed(undefined),
   readHistory: () => Effect.succeed([]),
   readMessages: () => Effect.succeed([]),
   listSessions: () => Effect.succeed([]),
-  findSessionIndex: () => Effect.succeed(null),
   getSessionId: () => 'test-session',
   getMessageCount: () => 0,
   setPermissionMode: () => Effect.void,
@@ -434,7 +413,7 @@ describe('dispatch_agent tool', () => {
     }
   });
 
-  it('should call session.create with plain UUID sessionId and parentSessionId in opts', async () => {
+  it('should call session.create with model and parentSessionId in opts', async () => {
     const createFn = vi.fn().mockReturnValue(
       Effect.succeed({
         sessionId: 'child-456',
@@ -447,7 +426,6 @@ describe('dispatch_agent tool', () => {
         sessionMeta: null,
         title: 'child',
         usage: undefined,
-        promptEstimate: 0,
         memorySnapshot: '',
       })
     );
@@ -469,7 +447,6 @@ describe('dispatch_agent tool', () => {
     );
     expect(createFn).toHaveBeenCalledWith(
       '/test',
-      expect.any(String),
       expect.any(String),
       expect.objectContaining({ parentSessionId: 'parent-1', agentName: 'explore' })
     );

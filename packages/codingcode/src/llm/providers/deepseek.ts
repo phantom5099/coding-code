@@ -18,7 +18,7 @@ export class DeepSeekProvider implements LLMClient {
     return {
       provider: this.entry.provider,
       model: this.entry.model,
-      maxTokens: 64_000,
+      maxTokens: this.entry.context_window,
       supportsToolCalling: true,
       supportsStreaming: true,
     };

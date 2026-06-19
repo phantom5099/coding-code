@@ -16,10 +16,14 @@ export interface SessionClient {
   }): Promise<{ sessionId: string }>;
   resumeSession(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
   listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
-  getSessionHistory(input: { sessionId: string }): Promise<SessionEvent[]>;
-  deleteSession(input: { sessionId: string }): Promise<void>;
-  getSessionPermissionMode(input: { sessionId: string }): Promise<PermissionMode>;
-  setSessionPermissionMode(input: { sessionId: string; mode: PermissionMode }): Promise<void>;
+  getSessionHistory(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
+  deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
+  getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
+  setSessionPermissionMode(input: {
+    sessionId: string;
+    cwd: string;
+    mode: PermissionMode;
+  }): Promise<void>;
 
   getCheckpointDiff(input: {
     sessionId: string;
@@ -84,23 +88,25 @@ export function createHttpSessionClient(
       return apiGet<SessionIndex[]>(`/api/sessions${qs}`);
     },
 
-    async getSessionHistory({ sessionId }) {
-      return apiGet<SessionEvent[]>(`/api/sessions/${sessionId}/history`);
+    async getSessionHistory({ sessionId, cwd }) {
+      return apiGet<SessionEvent[]>(
+        `/api/sessions/${sessionId}/history?cwd=${encodeURIComponent(cwd)}`
+      );
     },
 
-    async deleteSession({ sessionId }) {
-      await apiDelete(`/api/sessions/${sessionId}`);
+    async deleteSession({ sessionId, cwd }) {
+      await apiDelete(`/api/sessions/${sessionId}?cwd=${encodeURIComponent(cwd)}`);
     },
 
-    async getSessionPermissionMode({ sessionId }) {
+    async getSessionPermissionMode({ sessionId, cwd }) {
       const data = await apiGet<{ mode: PermissionMode }>(
-        `/api/sessions/${sessionId}/permission-mode`
+        `/api/sessions/${sessionId}/permission-mode?cwd=${encodeURIComponent(cwd)}`
       );
       return data.mode;
     },
 
-    async setSessionPermissionMode({ sessionId, mode }) {
-      await apiPut(`/api/sessions/${sessionId}/permission-mode`, { mode });
+    async setSessionPermissionMode({ sessionId, cwd, mode }) {
+      await apiPut(`/api/sessions/${sessionId}/permission-mode`, { cwd, mode });
     },
 
     async getCheckpointDiff({ sessionId, cwd, turnId }) {

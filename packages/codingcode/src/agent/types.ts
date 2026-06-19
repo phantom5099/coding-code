@@ -1,6 +1,6 @@
 import type { ToolCall } from '../core/types.js';
 import type { AgentError } from '../core/error.js';
-import type { SessionStoreState } from '../session/store.js';
+import type { SessionStoreState } from '../session/types.js';
 import type { LLMClient } from '../llm/client.js';
 import type { ToolDefinition, ToolVisibilityPolicy } from '../tools/types.js';
 import type { AgentProfile } from '../subagent/types.js';

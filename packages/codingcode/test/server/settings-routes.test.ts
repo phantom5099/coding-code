@@ -30,12 +30,12 @@ vi.mock('@codingcode/infra/config', () => ({
 }));
 
 vi.mock('../../src/memory/config.js', () => ({
-    getMemoryConfig: vi.fn().mockReturnValue({
-      enabled: true,
-      disabledTypes: [],
-      extraTypes: [],
-      model: '',
-    }),
+  getMemoryConfig: vi.fn().mockReturnValue({
+    enabled: true,
+    disabledTypes: [],
+    extraTypes: [],
+    model: '',
+  }),
   getAllTypesWithStatus: vi
     .fn()
     .mockReturnValue([

@@ -54,16 +54,10 @@ const mockAgentService = {
 };
 
 const mockSession = {
-  recordAssistant: (_state: any, _content: string, _toolCalls: any, _model: string) =>
-    Effect.succeed({ uuid: 'a1' }),
-  recordToolResult: (
-    _state: any,
-    _parentUuid: string,
-    _toolName: string,
-    _toolCallId: string,
-    _output: string
-  ) => Effect.succeed({}),
-  recordUser: (_state: any, _content: string) => Effect.succeed({ uuid: 'm1' }),
+  recordAssistant: (_state: any, _content: string, _toolCalls: any) => Effect.succeed({}),
+  recordToolResult: (_state: any, _toolName: string, _toolCallId: string, _output: string) =>
+    Effect.succeed({}),
+  recordUser: (_state: any, _content: string) => Effect.succeed({}),
 };
 
 const mockState = {
@@ -75,9 +69,9 @@ const mockState = {
   messageCount: 0,
   currentTurnId: 1,
   sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
+  model: 'test-model',
   title: 'test',
   usage: undefined,
-  promptEstimate: 0,
   memorySnapshot: '',
 };
 
@@ -134,8 +128,8 @@ const AllMockLayer = Layer.mergeAll(
     getLatestRestoreEntry: () => Effect.succeed(null),
   } as any),
   Layer.succeed(SessionService, {
-    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
-    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordAssistant: () => Effect.succeed({}),
+    recordUser: () => Effect.succeed({}),
     recordToolResult: () => Effect.succeed({}),
   } as any),
   Layer.succeed(HookService, {

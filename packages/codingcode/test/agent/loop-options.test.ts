@@ -34,8 +34,8 @@ const AllMockLayer = Layer.mergeAll(
     snapshotFinal: () => Effect.void,
   } as any),
   Layer.succeed(SessionService, {
-    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
-    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordAssistant: () => Effect.succeed({}),
+    recordUser: () => Effect.succeed({}),
     recordToolResult: () => Effect.succeed({}),
   } as any),
   Layer.succeed(ProjectRuntimeService, {
@@ -84,13 +84,13 @@ describe('agentLoop loop options', () => {
     cwd: process.cwd(),
     currentTurnId: 0,
     sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
+    model: 'test-model',
     title: 'test',
     usage: undefined,
     projectPath: '',
     transcriptPath: '',
     indexPath: '',
     messageCount: 0,
-    promptEstimate: 0,
     memorySnapshot: '',
   };
 

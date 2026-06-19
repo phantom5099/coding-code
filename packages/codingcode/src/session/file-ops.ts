@@ -8,15 +8,13 @@ import {
   openSync,
   readSync,
   closeSync,
-  statSync,
   unlinkSync,
   rmSync,
 } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
-import { AgentError } from '../core/error.js';
 import { normalizePath, encodeProjectPath } from '../core/path.js';
-import type { SessionEvent, SessionMetaEvent, SessionIndex } from './types.js';
+import type { SessionEvent, SessionMetaEvent, SessionIndex, SessionStoreState } from './types.js';
 
 const CODINGCODE_DIR = join(homedir(), '.codingcode');
 const PROJECT_BASE = join(CODINGCODE_DIR, 'project');
@@ -25,39 +23,25 @@ export function projectSessionsDir(encodedProjectPath: string): string {
   return join(PROJECT_BASE, encodedProjectPath, 'sessions');
 }
 
-export function resolveSessionDir(sessionId: string): string | null {
-  if (!existsSync(PROJECT_BASE)) return null;
-  for (const encoded of readdirSync(PROJECT_BASE)) {
-    const sessionsDir = join(PROJECT_BASE, encoded, 'sessions');
-    if (!existsSync(sessionsDir)) continue;
-    try {
-      if (!statSync(sessionsDir).isDirectory()) continue;
-    } catch {
-      continue;
-    }
-    if (existsSync(join(sessionsDir, `${sessionId}.jsonl`))) return sessionsDir;
-    try {
-      for (const entry of readdirSync(sessionsDir)) {
-        const entryPath = join(sessionsDir, entry);
-        try {
-          if (!statSync(entryPath).isDirectory()) continue;
-        } catch {
-          continue;
-        }
-        const subagentDir = join(entryPath, 'subagents');
-        if (existsSync(join(subagentDir, `${sessionId}.jsonl`))) return subagentDir;
-      }
-    } catch {
-      /* race: directory removed between existsSync and readdirSync */
-    }
-  }
-  return null;
+export function sessionJsonlPathFromCwd(cwd: string, sessionId: string): string {
+  const projectPath = encodeProjectPath(normalizePath(cwd));
+  const sessionsDir = projectSessionsDir(projectPath);
+  return join(sessionsDir, `${sessionId}.jsonl`);
 }
 
-export function resolveSessionJsonlPath(sessionId: string): string {
-  const dir = resolveSessionDir(sessionId);
-  if (!dir) throw new Error(`Session ${sessionId} not found`);
-  return join(dir, `${sessionId}.jsonl`);
+export function computePaths(
+  cwd: string,
+  sessionId: string,
+  parentSessionId?: string
+): Pick<SessionStoreState, 'sessionId' | 'cwd' | 'projectPath' | 'transcriptPath' | 'indexPath'> {
+  const normalizedCwd = normalizePath(cwd);
+  const projectPath = encodeProjectPath(normalizedCwd);
+  const sessionsDir = projectSessionsDir(projectPath);
+  const transcriptPath = parentSessionId
+    ? join(sessionsDir, parentSessionId, 'subagents', `${sessionId}.jsonl`)
+    : join(sessionsDir, `${sessionId}.jsonl`);
+  const indexPath = transcriptPath.replace('.jsonl', '.index.json');
+  return { sessionId, cwd: normalizedCwd, projectPath, transcriptPath, indexPath };
 }
 
 export function ensureDirs(transcriptPath: string): void {
@@ -103,36 +87,15 @@ function buildIndexFromMeta(meta: SessionMetaEvent, history: SessionEvent[]): Se
     sessionId: meta.sessionId,
     projectPath: meta.projectPath,
     cwd: meta.cwd,
-    model: meta.model,
+    model: 'unknown',
     createdAt: meta.createdAt,
     updatedAt: meta.createdAt,
     messageCount: countNonMetaEvents(history),
     title: firstUser ? truncateTitle(firstUser) : meta.sessionId.slice(0, 8),
     currentTurnId: 0,
     usage: undefined,
-    promptEstimate: 0,
     permissionMode: 'default',
   };
-}
-
-export function findSessionIndex(sessionId: string): SessionIndex | null {
-  const dir = resolveSessionDir(sessionId);
-  if (!dir) return null;
-  const idxPath = join(dir, `${sessionId}.index.json`);
-  if (existsSync(idxPath)) {
-    try {
-      const index = JSON.parse(readFileSync(idxPath, 'utf8')) as SessionIndex;
-      if (index.sessionId === sessionId) return index;
-    } catch {
-      /* corrupt */
-    }
-  }
-  const jsonlPath = join(dir, `${sessionId}.jsonl`);
-  if (!existsSync(jsonlPath)) return null;
-  const meta = quickReadMeta(jsonlPath);
-  if (meta?.sessionId !== sessionId) return null;
-  const h = readHistory(jsonlPath);
-  return buildIndexFromMeta(meta, h);
 }
 
 export function listSessions(projectPath?: string): SessionIndex[] {
@@ -200,10 +163,7 @@ export function setPermissionMode(sessionId: string, indexPath: string, mode: st
       /* corrupt */
     }
   }
-  if (!index) {
-    index = findSessionIndex(sessionId);
-    if (!index) throw new Error(`Session ${sessionId} not found`);
-  }
+  if (!index) throw new Error(`Session index not found: ${indexPath}`);
   index.permissionMode = mode;
   index.updatedAt = new Date().toISOString();
   writeFileSync(indexPath, JSON.stringify(index, null, 2), 'utf8');
@@ -219,8 +179,8 @@ export function getPermissionMode(indexPath: string): string {
   }
 }
 
-export function deleteSession(sessionId: string): void {
-  const dir = resolveSessionDir(sessionId);
+export function deleteSession(sessionId: string, cwd: string): void {
+  const dir = dirname(sessionJsonlPathFromCwd(cwd, sessionId));
   if (!dir) return;
   const jsonlPath = join(dir, `${sessionId}.jsonl`);
   const idxPath = join(dir, `${sessionId}.index.json`);

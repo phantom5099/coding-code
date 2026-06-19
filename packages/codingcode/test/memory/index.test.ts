@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer } from 'effect';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -32,6 +32,14 @@ function cleanup() {
 beforeEach(async () => {
   cleanup();
   fs.mkdirSync(tmpDir, { recursive: true });
+  const { getMemoryConfig } = await import('../../src/memory/config.js');
+  vi.mocked(getMemoryConfig).mockReturnValue({
+    enabled: false,
+    model: '',
+    promptMaxBytes: 8192,
+    extraTypes: [],
+    disabledTypes: [],
+  });
   service = await Effect.runPromise(
     Effect.gen(function* () {
       return yield* MemoryService;
@@ -47,7 +55,6 @@ vi.mock('../../src/memory/config.js', () => ({
   getMemoryConfig: vi.fn(() => ({
     enabled: false,
     model: '',
-    maxBytes: 16384,
     promptMaxBytes: 8192,
     extraTypes: [],
     disabledTypes: [],
@@ -72,7 +79,6 @@ describe('Memory Index', () => {
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        maxBytes: 16384,
         promptMaxBytes: 8192,
         extraTypes: [],
         disabledTypes: [],
@@ -87,7 +93,6 @@ describe('Memory Index', () => {
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        maxBytes: 16384,
         promptMaxBytes: 8192,
         extraTypes: [],
         disabledTypes: [],
@@ -115,7 +120,6 @@ describe('Memory Index', () => {
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        maxBytes: 16384,
         promptMaxBytes: 100,
         extraTypes: [],
         disabledTypes: [],
@@ -139,7 +143,7 @@ describe('Memory Index', () => {
 
   describe('flushSessionToMemory', () => {
     it('returns early when memory disabled', async () => {
-      const result = await service.flushSessionToMemory('fake-session-id', null);
+      const result = await service.flushSessionToMemory('fake-session-id', null, tmpDir);
       expect(result.written).toBe(false);
     });
 
@@ -148,13 +152,12 @@ describe('Memory Index', () => {
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        maxBytes: 16384,
         promptMaxBytes: 8192,
         extraTypes: [],
         disabledTypes: [],
       } as any);
 
-      const result = await service.flushSessionToMemory('nonexistent-session', null);
+      const result = await service.flushSessionToMemory('nonexistent-session', null, tmpDir);
       expect(result.written).toBe(false);
     });
 
@@ -163,14 +166,12 @@ describe('Memory Index', () => {
       vi.mocked(getMemoryConfig).mockReturnValue({
         enabled: true,
         model: '',
-        maxBytes: 16384,
         promptMaxBytes: 8192,
         extraTypes: [],
         disabledTypes: [],
       } as any);
 
-      // This will fail to find session, so returns false
-      const result = await service.flushSessionToMemory('session', null);
+      const result = await service.flushSessionToMemory('session', null, tmpDir);
       expect(result.written).toBe(false);
     });
   });
@@ -213,7 +214,7 @@ describe('Memory Index', () => {
 
     it('flushSessionToMemory returns early when runtime disabled', async () => {
       service.setMemoryEnabled(false);
-      const result = await service.flushSessionToMemory('any-session', null);
+      const result = await service.flushSessionToMemory('any-session', null, tmpDir);
       expect(result.written).toBe(false);
     });
   });

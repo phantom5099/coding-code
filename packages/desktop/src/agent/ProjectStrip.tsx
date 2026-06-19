@@ -3,7 +3,7 @@ import { Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUIStore } from '../stores/ui.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { useAgentStore } from '../stores/agent.store';
-import { API_BASE, api } from '../lib/api';
+import { useAgentRollback } from '../hooks/useAgent';
 import type { Project, Thread } from '@shared/types';
 
 function normalizeCwd(p: string): string {
@@ -142,32 +142,12 @@ export default function ProjectStrip() {
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
   const setView = useUIStore((s) => s.setView);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const { deleteThread } = useAgentRollback();
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const handleDelete = async (threadId: string) => {
-    await api(`/api/sessions/${threadId}`, { method: 'DELETE' }).catch((e) => {
-      console.error('Failed to delete session:', e);
-    });
-    const rootPath = useWorkspaceStore.getState().rootPath;
-    if (rootPath) {
-      try {
-        const sessions = await api<any[]>(`/api/sessions?cwd=${encodeURIComponent(rootPath)}`);
-        const threads = sessions.map((s: any) => ({
-          id: s.sessionId,
-          projectId: '',
-          title: s.title ?? s.sessionId.slice(0, 8),
-          cwd: s.cwd ?? '',
-          turns: [],
-          createdAt: new Date(s.createdAt).getTime(),
-          updatedAt: new Date(s.updatedAt).getTime(),
-        }));
-        useAgentStore.getState().loadThreads(threads);
-      } catch {}
-    }
-    if (threadId === currentThreadId) {
-      setCurrentThread(null);
-    }
+  const handleDelete = (threadId: string) => {
+    void deleteThread(threadId);
   };
 
   const handleSelectProject = (id: string) => {

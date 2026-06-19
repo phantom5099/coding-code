@@ -24,6 +24,7 @@ export interface MemoryConfig {
   model: string;
   extraTypes: MemoryTypeConfig[];
   disabledTypes: string[];
+  promptMaxBytes: number;
 }
 
 export interface ActiveModelConfig {
@@ -57,6 +58,7 @@ export const DEFAULT_MEMORY: MemoryConfig = {
   model: '',
   extraTypes: [],
   disabledTypes: [],
+  promptMaxBytes: 8192,
 };
 
 export const DEFAULT_CONFIG: AppConfig = {

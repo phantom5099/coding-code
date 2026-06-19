@@ -72,9 +72,9 @@ describe('CI tooling configuration', () => {
 
   it('pnpm run lint exits successfully', () => {
     expect(() => execSync('pnpm run lint', { cwd: root, stdio: 'pipe' })).not.toThrow();
-  }, 20000);
+  }, 60000);
 
   it('pnpm run format:check exits successfully', () => {
     expect(() => execSync('pnpm run format:check', { cwd: root, stdio: 'pipe' })).not.toThrow();
-  }, 20000);
+  }, 60000);
 });

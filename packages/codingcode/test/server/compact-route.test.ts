@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
@@ -14,13 +14,29 @@ import { SchedulerService } from '../../src/scheduler/service.js';
 import { ContextService } from '../../src/context/service.js';
 import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
 
+const mockCompactWithLLM = vi.fn();
+
 const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
   getWorkspaceCwd: () => '/tmp/test',
   resolveWorkspaceCwd: (override?: string) => override ?? '/tmp/test',
 } as any);
 
 const MockSessionLayer = Layer.succeed(SessionService, {
-  create: () => Effect.succeed({ sessionId: 'test', cwd: '/tmp/test' }),
+  create: () =>
+    Effect.succeed({
+      sessionId: 'test-sid',
+      cwd: '/tmp/test',
+      projectPath: 'test-path',
+      model: 'deepseek-chat',
+    }),
+  load: () =>
+    Effect.succeed({
+      sessionId: 'test-sid',
+      cwd: '/tmp/test',
+      projectPath: 'test-path',
+      transcriptPath: '/tmp/test.jsonl',
+      model: 'deepseek-chat',
+    }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
     Effect.succeed({
@@ -41,7 +57,37 @@ const MockSessionLayer = Layer.succeed(SessionService, {
 } as any);
 
 const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
+  findModel: () =>
+    Effect.succeed({
+      id: 'deepseek-chat',
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      driver: 'openai',
+      api_key_env: 'DEEPSEEK_API_KEY',
+      base_url: 'https://api.deepseek.com',
+    }),
+  createClient: () =>
+    Effect.succeed({
+      modelInfo: {
+        provider: 'deepseek',
+        model: 'deepseek-chat',
+        maxTokens: 64000,
+        supportsToolCalling: true,
+        supportsStreaming: true,
+      },
+    }),
   getLLMClient: () => Effect.succeed(null),
+  listModels: () => Effect.succeed([]),
+  getActiveEntry: () =>
+    Effect.succeed({
+      id: 'deepseek-chat',
+      model: 'deepseek-chat',
+      provider: 'deepseek',
+      driver: 'openai',
+      api_key_env: 'DEEPSEEK_API_KEY',
+      base_url: 'https://api.deepseek.com',
+    }),
+  switchModel: () => Effect.fail(new Error('no models')),
 } as any);
 
 const MockApprovalLayer = ApprovalService.Default.pipe(
@@ -86,7 +132,16 @@ const MockSchedulerLayer = Layer.succeed(SchedulerService, {
   runOnce: () => Promise.resolve('session-id'),
 } as any);
 
-const MockContextLayer = Layer.succeed(ContextService, {} as any);
+const MockContextLayer = Layer.succeed(ContextService, {
+  assemblePayload: () => ({
+    messages: [],
+    compactedEvents: [],
+    promptEstimate: 0,
+    currentTurnId: 0,
+    compactedTurnIds: new Set(),
+  }),
+  compactWithLLM: mockCompactWithLLM,
+} as any);
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, {
   _tag: 'Checkpoint' as const,
@@ -140,18 +195,90 @@ const TestLayer = Layer.mergeAll(
 
 const rt = ManagedRuntime.make(TestLayer);
 
-describe('createServer', () => {
-  it('creates server without LLM client initialization', async () => {
-    const app = await createServer(rt);
-    expect(app).toBeDefined();
-    expect(app).toBeInstanceOf(Object);
+describe('POST /api/sessions/:id/compact (manual compact)', () => {
+  beforeEach(() => {
+    mockCompactWithLLM.mockReset();
+    mockCompactWithLLM.mockResolvedValue({
+      didCompress: true,
+      released: 5000,
+      promptEstimate: 3000,
+    });
   });
 
-  it('health endpoint returns ok without API key', async () => {
+  it('should call compactWithLLM with a non-null llm when session has a valid model', async () => {
     const app = await createServer(rt);
-    const res = await app.request('/api/health');
+    const res = await app.request('/api/sessions/test-sid/compact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: '' }),
+    });
+
     expect(res.status).toBe(200);
+    expect(mockCompactWithLLM).toHaveBeenCalledTimes(1);
+
+    const args = mockCompactWithLLM.mock.calls[0];
+    // args[3] is the llm parameter — should not be null
+    expect(args?.[3]).not.toBeNull();
+    expect(args?.[3].modelInfo.model).toBe('deepseek-chat');
+  });
+
+  it('should return CompressResult from the API', async () => {
+    const app = await createServer(rt);
+    const res = await app.request('/api/sessions/test-sid/compact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: '' }),
+    });
+
     const body = await res.json();
-    expect(body).toEqual({ status: 'ok' });
+    expect(body).toEqual({ didCompress: true, released: 5000, promptEstimate: 3000 });
+  });
+
+  it('should call compactWithLLM with null llm when getActiveEntry fails', async () => {
+    const FailingFactoryLayer = Layer.succeed(LLMFactoryService, {
+      findModel: () => Effect.succeed(null),
+      createClient: () =>
+        Effect.succeed({
+          modelInfo: {
+            provider: 'deepseek',
+            model: 'deepseek-chat',
+            maxTokens: 64000,
+            supportsToolCalling: true,
+            supportsStreaming: true,
+          },
+        }),
+      getLLMClient: () => Effect.succeed(null),
+      listModels: () => Effect.succeed([]),
+      getActiveEntry: () => Effect.fail(new Error('no active model')),
+      switchModel: () => Effect.fail(new Error('no models')),
+    } as any);
+
+    const FailLayer = Layer.mergeAll(
+      MockWorkspaceLayer,
+      MockSessionLayer,
+      FailingFactoryLayer,
+      MockApprovalLayer,
+      HookService.Default,
+      ApprovalWaitService.Default,
+      MockSkillLayer,
+      MockMcpLayer,
+      MockMemoryLayer,
+      MockSchedulerLayer,
+      MockContextLayer,
+      MockCheckpointLayer
+    );
+    const failRt = ManagedRuntime.make(FailLayer);
+    const app = await createServer(failRt);
+    const res = await app.request('/api/sessions/test-sid/compact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: '' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockCompactWithLLM).toHaveBeenCalledTimes(1);
+
+    const args = mockCompactWithLLM.mock.calls[0];
+    expect(args?.[3]).toBeNull();
   });
 });

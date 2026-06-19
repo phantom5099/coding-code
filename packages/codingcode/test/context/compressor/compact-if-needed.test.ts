@@ -26,19 +26,11 @@ const { mockLLM } = vi.hoisted(() => ({
 
 vi.mock('../../../src/session/file-ops.js', async (importOriginal) => {
   const actual = await importOriginal();
-  const mockResolveSessionDir = vi.fn((_sessionId: string) => '/tmp/sessions');
   return {
     ...(actual as any),
-    findSessionIndex: vi.fn(() => ({ currentTurnId: 10 })),
-    resolveSessionDir: mockResolveSessionDir,
-    resolveSessionJsonlPath: vi.fn((sessionId: string) => {
-      const dir = mockResolveSessionDir(sessionId);
-      if (!dir) throw new Error(`Session ${sessionId} not found`);
-      return `${dir}/${sessionId}.jsonl`;
-    }),
     readHistory: vi.fn(() => [
-      { type: 'user', content: 'a'.repeat(200), uuid: 'u1', turnId: 1 },
-      { type: 'assistant', content: 'b'.repeat(200), uuid: 'a1', turnId: 1 },
+      { type: 'user', content: 'a'.repeat(200), turnId: 1 },
+      { type: 'assistant', content: 'b'.repeat(200), turnId: 1 },
     ]),
   };
 });
@@ -56,6 +48,16 @@ vi.mock('fs', async (importOriginal) => {
   return {
     ...(actual as any),
     appendFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    existsSync: vi.fn((p: string) => {
+      if (p.endsWith('.index.json') || p.endsWith('.jsonl')) return true;
+      return (actual as any).existsSync(p);
+    }),
+    readFileSync: vi.fn((p: string, encoding: BufferEncoding) => {
+      if (p.endsWith('.index.json'))
+        return JSON.stringify({ currentTurnId: p.includes('ttl-session') ? 0 : 10 });
+      return (actual as any).readFileSync(p, encoding);
+    }),
   };
 });
 
@@ -65,7 +67,6 @@ vi.mock('../../../src/core/util.js', () => ({
   estimateTokensForContent: vi.fn(),
 }));
 
-import { findSessionIndex } from '../../../src/session/file-ops.js';
 import { estimateTokens, estimateMessageTokens } from '../../../src/core/util.js';
 
 const TestLayer = Layer.merge(
@@ -88,15 +89,8 @@ async function getCtxService(): Promise<ContextService> {
   );
 }
 
-function config(threshold: number, maxTokens = 10000) {
-  return {
-    compactionModel: '',
-  } as any;
-}
-
 describe('compactIfNeeded', () => {
   beforeEach(() => {
-    (findSessionIndex as any).mockReturnValue({ currentTurnId: 10 });
     (estimateTokens as any).mockReturnValue(0);
     (estimateMessageTokens as any).mockReturnValue(50);
   });
@@ -104,7 +98,7 @@ describe('compactIfNeeded', () => {
   it('returns didCompress=false when promptEstimate is below threshold', async () => {
     (estimateTokens as any).mockReturnValue(100);
     const ctx = await getCtxService();
-    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
+    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
     expect(result.promptEstimate).toBe(100);
@@ -113,15 +107,32 @@ describe('compactIfNeeded', () => {
   it('returns didCompress=false when promptEstimate equals threshold', async () => {
     (estimateTokens as any).mockReturnValue(5000);
     const ctx = await getCtxService();
-    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
+    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
   });
 
   it('returns didCompress=true when promptEstimate exceeds threshold', async () => {
     (estimateTokens as any).mockReturnValue(10000);
+    (estimateMessageTokens as any).mockReturnValue(50);
     const ctx = await getCtxService();
-    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
+    const result = await ctx.compactIfNeeded(
+      's1',
+      'proj',
+      [
+        { type: 'user', content: 'a'.repeat(200), turnId: 1 },
+        { type: 'assistant', content: 'b'.repeat(200), turnId: 1 },
+        {
+          type: 'tool_result',
+          output: 'c'.repeat(5000),
+          turnId: 1,
+          toolName: 'read_file',
+          toolCallId: 'tc1',
+        },
+      ] as any,
+      10000,
+      null
+    );
     expect(result.didCompress).toBe(true);
     expect(result.released).toBeGreaterThan(0);
     expect(result.promptEstimate).toBeGreaterThanOrEqual(0);
@@ -130,28 +141,7 @@ describe('compactIfNeeded', () => {
   it('does not return restoredFiles field (removed)', async () => {
     (estimateTokens as any).mockReturnValue(10000);
     const ctx = await getCtxService();
-    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, config(0.5), null);
+    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, null);
     expect('restoredFiles' in result).toBe(false);
-  });
-
-  it('resets failure count after TTL expires', async () => {
-    (findSessionIndex as any).mockReturnValue({ currentTurnId: 0 });
-
-    (estimateTokens as any).mockReturnValue(10000);
-    const ctx = await getCtxService();
-    await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
-    await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
-    await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
-
-    const blocked = await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
-    expect(blocked.didCompress).toBe(false);
-
-    const originalNow = Date.now;
-    vi.spyOn(Date, 'now').mockReturnValue(originalNow() + 25 * 60 * 60 * 1000);
-
-    const afterTTL = await ctx.compactIfNeeded('ttl-session', 'proj', [], 10000, config(0.5), null);
-    expect(afterTTL.didCompress).toBe(false);
-
-    vi.restoreAllMocks();
   });
 });

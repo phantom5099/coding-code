@@ -11,12 +11,6 @@ import type { SessionEvent } from '../../src/session/types.js';
 
 const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 
-function makeConfig() {
-  return {
-    compactionModel: '',
-  };
-}
-
 const TestLayer = Layer.merge(
   SessionService.Default,
   Layer.succeed(LLMFactoryService, {
@@ -57,43 +51,32 @@ describe('assemblePayload integration', () => {
         sessionId,
         projectPath: projectSlug,
         cwd: '/tmp/test',
-        model: 'test',
+
         createdAt: new Date().toISOString(),
       },
-      { type: 'user', turnId: 1, uuid: 'u1', content: 'q1', timestamp: new Date().toISOString() },
+      { type: 'user', turnId: 1, content: 'q1' },
       {
         type: 'assistant',
         turnId: 1,
-        uuid: 'a1',
         content: 'r1',
         toolCalls: [
           { id: 'tc1', name: 'bash', arguments: {} },
           { id: 'tc2', name: 'bash', arguments: {} },
         ],
-        model: 'test',
-        timestamp: new Date().toISOString(),
       },
       {
         type: 'tool_result',
         turnId: 1,
-        uuid: 't1',
-        parentUuid: 'a1',
         toolName: 'bash',
         toolCallId: 'tc1',
         output: 'x'.repeat(200),
-        timestamp: new Date().toISOString(),
-        tokenCount: 0,
       },
       {
         type: 'tool_result',
         turnId: 1,
-        uuid: 't2',
-        parentUuid: 'a1',
         toolName: 'bash',
         toolCallId: 'tc2',
         output: 'y'.repeat(200),
-        timestamp: new Date().toISOString(),
-        tokenCount: 0,
       },
     ];
     writeFileSync(jsonlPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
@@ -102,14 +85,13 @@ describe('assemblePayload integration', () => {
       sessionId,
       projectPath: projectSlug,
       cwd: '/tmp/test',
-      model: 'test',
+      model: 'test-model',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       messageCount: lines.length,
       title: 'fixture',
       currentTurnId: 1,
       usage: undefined,
-      promptEstimate: 0,
       permissionMode: 'default',
     };
     writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -121,9 +103,8 @@ describe('assemblePayload integration', () => {
   });
 
   it('returns messages and compactedEvents', async () => {
-    const config = makeConfig();
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(sessionId, projectSlug, config);
+    const result = ctx.assemblePayload(sessionId, projectSlug, 128000);
 
     expect(result.messages.length).toBeGreaterThan(0);
     expect(Array.isArray(result.compactedEvents)).toBe(true);
@@ -132,9 +113,8 @@ describe('assemblePayload integration', () => {
   });
 
   it('returns currentTurnId from session index', async () => {
-    const config = makeConfig();
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(sessionId, projectSlug, config);
+    const result = ctx.assemblePayload(sessionId, projectSlug, 128000);
     expect(result.currentTurnId).toBe(1);
   });
 });

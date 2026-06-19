@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { LLMClient } from '../llm/client.js';
-import { findSessionIndex, resolveSessionDir } from '../session/file-ops.js';
+import { sessionJsonlPathFromCwd } from '../session/file-ops.js';
 import type { SessionEvent } from '../session/types.js';
 import {
   readMemoryFile,
@@ -47,7 +47,7 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
       if (!projectAuto) return '';
 
       const stripped = stripMarkersForPrompt(projectAuto);
-      const truncated = truncateForPrompt(stripped, PROMPT_MAX_BYTES);
+      const truncated = truncateForPrompt(stripped, cfg.promptMaxBytes);
 
       return truncated ? `## Long-term Memory\n\n${truncated}` : '';
     }
@@ -107,43 +107,35 @@ export class MemoryService extends Effect.Service<MemoryService>()('Memory', {
 
     async function flushSessionToMemory(
       sessionId: string,
-      llm: LLMClient | null
+      llm: LLMClient | null,
+      sessionCwd: string
     ): Promise<{ written: boolean; bytes: number }> {
       if (!getMemoryEnabled()) {
         return { written: false, bytes: 0 };
       }
-      const cfg = getMemoryConfig();
-
-      const sessionIndex = findSessionIndex(sessionId);
-      if (!sessionIndex) {
+      if (!sessionCwd) {
         return { written: false, bytes: 0 };
       }
 
-      const cwd = sessionIndex.cwd;
-      const projectPath = resolveMemoryPath(cwd);
+      let events: SessionEvent[];
+      try {
+        const { readFileSync } = await import('node:fs');
+        const jsonlPath = sessionJsonlPathFromCwd(sessionCwd, sessionId);
+        const content = readFileSync(jsonlPath, 'utf-8');
+        events = content
+          .split('\n')
+          .filter((l) => l.trim() && !l.includes('"type":"session_meta"'))
+          .map((l) => JSON.parse(l) as SessionEvent);
+      } catch {
+        return { written: false, bytes: 0 };
+      }
 
+      const cfg = getMemoryConfig();
+      const projectPath = resolveMemoryPath(sessionCwd);
       const projectContent = readMemoryFile(projectPath);
       const currentAuto = extractAutoBlock(projectContent);
 
       try {
-        let events: SessionEvent[] = [];
-        try {
-          const { readFileSync } = await import('node:fs');
-          const { join } = await import('node:path');
-
-          const sessionDir = resolveSessionDir(sessionId);
-          if (!sessionDir) return { written: false, bytes: 0 };
-          const jsonlPath = join(sessionDir, `${sessionId}.jsonl`);
-
-          const content = readFileSync(jsonlPath, 'utf-8');
-          events = content
-            .split('\n')
-            .filter((l) => l.trim() && !l.includes('"type":"session_meta"'))
-            .map((l) => JSON.parse(l) as SessionEvent);
-        } catch {
-          return { written: false, bytes: 0 };
-        }
-
         const transcript = buildStructuredTranscript(events);
         const types = getEffectiveTypes(cfg);
 

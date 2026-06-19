@@ -11,13 +11,17 @@ describe('createHttpSessionClient.setSessionPermissionMode', () => {
     const request = createRequestHelpers('http://localhost:8080');
     const client = createHttpSessionClient(request);
 
-    await client.setSessionPermissionMode({ sessionId: 'sess-123', mode: 'acceptEdits' as any });
+    await client.setSessionPermissionMode({
+      sessionId: 'sess-123',
+      cwd: '/test',
+      mode: 'acceptEdits' as any,
+    });
 
     expect(fetchSpy).toHaveBeenCalledWith(
       'http://localhost:8080/api/sessions/sess-123/permission-mode',
       expect.objectContaining({
         method: 'PUT',
-        body: JSON.stringify({ mode: 'acceptEdits' }),
+        body: JSON.stringify({ cwd: '/test', mode: 'acceptEdits' }),
       })
     );
 

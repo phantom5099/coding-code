@@ -33,8 +33,8 @@ const AllMockLayer = Layer.mergeAll(
     snapshotFinal: () => Effect.void,
   } as any),
   Layer.succeed(SessionService, {
-    recordAssistant: () => Effect.succeed({ uuid: 'a1' }),
-    recordUser: () => Effect.succeed({ uuid: 'u1' }),
+    recordAssistant: () => Effect.succeed({}),
+    recordUser: () => Effect.succeed({}),
     recordToolResult: () => Effect.succeed({}),
   } as any),
   Layer.succeed(ProjectRuntimeService, {
@@ -91,9 +91,9 @@ const mockState = {
   messageCount: 0,
   currentTurnId: 1,
   sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
-  title: 'test',
+  model: 'test-model',
+  title: 'concurrent',
   usage: undefined,
-  promptEstimate: 0,
   memorySnapshot: '',
 };
 
