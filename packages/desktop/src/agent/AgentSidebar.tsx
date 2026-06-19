@@ -25,6 +25,7 @@ export default function AgentSidebar() {
   const rootPath = useWorkspaceStore((s) => s.rootPath);
   const workspace = useWorkspaceStore();
   const setView = useUIStore((s) => s.setView);
+  const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
   const { deleteThread } = useAgentRollback();
 
   // Subscribe to raw threads, derive list with useMemo for stable reference

@@ -62,6 +62,7 @@ interface AgentActions {
     threadId: string,
     usage: { prompt: number; completion: number; total: number }
   ) => void;
+  clearThreadUsage: (threadId: string) => void;
   loadThreads: (threads: Thread[]) => void;
   updateToolCallStatus: (
     threadId: string,
@@ -154,6 +155,11 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setThreadUsage: (threadId, usage) =>
         set((s) => {
           s.usageByThreadId[threadId] = usage;
+        }),
+
+      clearThreadUsage: (threadId) =>
+        set((s) => {
+          delete s.usageByThreadId[threadId];
         }),
 
       loadThreads: (threads) => {

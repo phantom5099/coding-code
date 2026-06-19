@@ -589,6 +589,30 @@ describe('global store - token usage', () => {
     useAgentStore.getState().setCurrentThread('t1');
     expect(useAgentStore.getState().contextUsage).toBeNull();
   });
+
+  it('clearThreadUsage removes the entry for a single thread', () => {
+    useAgentStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 });
+    useAgentStore.getState().setThreadUsage('t2', { prompt: 800, completion: 400, total: 1200 });
+    useAgentStore.getState().clearThreadUsage('t1');
+    expect(useAgentStore.getState().usageByThreadId['t1']).toBeUndefined();
+    expect(useAgentStore.getState().usageByThreadId['t2']).toEqual({
+      prompt: 800,
+      completion: 400,
+      total: 1200,
+    });
+    expect('t1' in useAgentStore.getState().usageByThreadId).toBe(false);
+    expect('t2' in useAgentStore.getState().usageByThreadId).toBe(true);
+  });
+
+  it('clearThreadUsage is a no-op for a threadId with no entry', () => {
+    useAgentStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 });
+    useAgentStore.getState().clearThreadUsage('t-does-not-exist');
+    expect(useAgentStore.getState().usageByThreadId['t1']).toEqual({
+      prompt: 1000,
+      completion: 500,
+      total: 1500,
+    });
+  });
 });
 
 describe('global store - compressing state', () => {

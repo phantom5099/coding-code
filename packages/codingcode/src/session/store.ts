@@ -237,8 +237,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           };
           appendLine(state.transcriptPath, event);
           state.messageCount++;
-          updateIndex(state);
           state.usage = undefined;
+          updateIndex(state);
           return event;
         },
         catch: (e) =>
@@ -260,6 +260,25 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         };
         appendLine(state.transcriptPath, event);
         state.messageCount++;
+
+        const events = readHistory(state.transcriptPath);
+        const minRollbackThrough = events.reduce(
+          (min, ev) => (ev.type === 'rollback' && ev.throughTurnId < min ? ev.throughTurnId : min),
+          Infinity
+        );
+        let lastUsage: TokenUsage | undefined;
+        for (let i = events.length - 1; i >= 0; i--) {
+          const ev = events[i]!;
+          if ('turnId' in ev && minRollbackThrough <= (ev as { turnId: number }).turnId) {
+            continue;
+          }
+          if (ev.type === 'assistant' && (ev as AssistantEvent).usage) {
+            lastUsage = (ev as AssistantEvent).usage;
+            break;
+          }
+        }
+        state.usage = lastUsage;
+
         updateIndex(state);
         return event;
       });

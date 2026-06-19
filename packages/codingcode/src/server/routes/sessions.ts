@@ -524,7 +524,8 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
         const turns = readUIHistory(sessionId, cwd);
         const promptEstimate = estimatePromptTokens(state.transcriptPath);
-        return { ok: true, turns, rolledBackMessage, promptEstimate };
+        const usage = state.usage;
+        return { ok: true, turns, rolledBackMessage, promptEstimate, usage };
       }) as any
     );
     if (!result.ok) {
@@ -553,12 +554,14 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
         const turns = readUIHistory(sessionId, cwd);
         const promptEstimate = estimatePromptTokens(state.transcriptPath);
+        const usage = state.usage;
         return {
           ok: true,
           turns,
           codeResult,
           rolledBackMessage,
           promptEstimate,
+          usage,
         };
       }) as any
     );

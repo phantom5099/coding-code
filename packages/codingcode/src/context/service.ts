@@ -387,14 +387,8 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const startTurnId = Math.min(...turnIds);
       const endTurnId = Math.max(...turnIds);
 
-      const event: SummaryEvent = {
-        type: 'summary',
-        uuid: randomUUID(),
-        startTurnId,
-        endTurnId,
-        summaryText: summary,
-      };
-      appendLine(join(projectSessionsDir(encodedProjectPath), `${sessionId}.jsonl`), event);
+      const state = await Effect.runPromise(session.load(encodedProjectPath, sessionId));
+      await Effect.runPromise(session.appendSummary(state, summary, startTurnId, endTurnId));
 
       const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
       return Math.max(0, totalTokens - estimateMessageTokens(summaryMsg));

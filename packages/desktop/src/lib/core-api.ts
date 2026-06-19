@@ -357,7 +357,13 @@ export function rollbackContext(
   sessionId: string,
   cwd: string,
   throughTurnId: number
-): Promise<{ ok: boolean; turns: any[]; rolledBackMessage?: string; promptEstimate?: number }> {
+): Promise<{
+  ok: boolean;
+  turns: any[];
+  rolledBackMessage?: string;
+  promptEstimate?: number;
+  usage?: { prompt: number; completion: number; total: number };
+}> {
   return clients.sessions.rollbackContext({ sessionId, cwd, throughTurnId }) as any;
 }
 
@@ -371,6 +377,7 @@ export function rollbackBothToTurn(
   codeResult: CodeRollbackResult;
   rolledBackMessage?: string;
   promptEstimate?: number;
+  usage?: { prompt: number; completion: number; total: number };
 }> {
   return clients.sessions.rollbackBothToTurn({ sessionId, cwd, throughTurnId }) as any;
 }

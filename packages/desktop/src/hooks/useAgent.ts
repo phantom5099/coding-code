@@ -58,6 +58,7 @@ export function useAgentCore() {
   const setModels = useAgentStore((s) => s.setModels);
   const setContextUsage = useAgentStore((s) => s.setContextUsage);
   const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
+  const clearThreadUsage = useAgentStore((s) => s.clearThreadUsage);
   const workspace = useWorkspaceStore();
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
   const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
@@ -206,6 +207,7 @@ export function useAgentCore() {
                 contextWindow: contextUsage.contextWindow,
               });
             }
+            clearThreadUsage(threadId);
           }
           return null;
         case 'done':
@@ -215,7 +217,7 @@ export function useAgentCore() {
           return null;
       }
     },
-    [applyTodoUpdate, updateTurnId, setThreadUsage, setContextUsage]
+    [applyTodoUpdate, updateTurnId, setThreadUsage, setContextUsage, clearThreadUsage]
   );
 
   const sendMessage = useCallback(
@@ -442,6 +444,7 @@ export function useAgentRollback() {
       const res = await rollbackContext(threadId, cwd, throughTurnId);
       clearRunningTurns(threadId);
       setThreadTurns(threadId, res.turns as Turn[]);
+      setThreadUsage(threadId, res.usage ?? { prompt: 0, completion: 0, total: 0 });
       if (res.rolledBackMessage) {
         setPendingInput(res.rolledBackMessage);
       }
@@ -455,7 +458,14 @@ export function useAgentRollback() {
       }
       return res;
     },
-    [workspace.rootPath, setThreadTurns, clearRunningTurns, setPendingInput, setContextUsage]
+    [
+      workspace.rootPath,
+      setThreadTurns,
+      setThreadUsage,
+      clearRunningTurns,
+      setPendingInput,
+      setContextUsage,
+    ]
   );
 
   const rollbackBoth = useCallback(
@@ -463,6 +473,7 @@ export function useAgentRollback() {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
       const res = await rollbackBothToTurn(threadId, cwd, throughTurnId);
       setThreadTurns(threadId, res.turns as Turn[]);
+      setThreadUsage(threadId, res.usage ?? { prompt: 0, completion: 0, total: 0 });
       if (res.rolledBackMessage) {
         setPendingInput(res.rolledBackMessage);
       }
@@ -476,7 +487,7 @@ export function useAgentRollback() {
       }
       return res;
     },
-    [workspace.rootPath, setThreadTurns, setPendingInput, setContextUsage]
+    [workspace.rootPath, setThreadTurns, setThreadUsage, setPendingInput, setContextUsage]
   );
 
   const undoCodeRollback = useCallback(

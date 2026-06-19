@@ -48,8 +48,9 @@ vi.mock('fs', async (importOriginal) => {
   return {
     ...(actual as any),
     appendFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
     existsSync: vi.fn((p: string) => {
-      if (p.endsWith('.index.json')) return true;
+      if (p.endsWith('.index.json') || p.endsWith('.jsonl')) return true;
       return (actual as any).existsSync(p);
     }),
     readFileSync: vi.fn((p: string, encoding: BufferEncoding) => {
