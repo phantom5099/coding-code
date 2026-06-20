@@ -1,10 +1,11 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
+import { tmpdir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import { loadHookConfigs, writeHookConfigs } from '../../src/hooks/config.js';
 
-const testDir = resolve(process.cwd(), '.test-hooks-config');
+const testDir = resolve(tmpdir(), 'codingcode-test-hooks-config');
 
 describe('loadHookConfigs', () => {
   beforeEach(() => {

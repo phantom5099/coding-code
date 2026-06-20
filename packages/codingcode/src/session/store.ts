@@ -119,6 +119,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             currentTurnId: idx?.currentTurnId ?? 0,
             usage: idx?.usage ?? undefined,
             memorySnapshot: idx?.memorySnapshot ?? '',
+            activeProfile: idx?.activeProfile,
           };
 
           if (existsSync(state.transcriptPath)) {

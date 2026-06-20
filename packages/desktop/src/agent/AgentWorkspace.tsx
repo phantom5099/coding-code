@@ -9,6 +9,7 @@ import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
 import ApprovalPanel from './ApprovalPanel';
 import ModeIndicator from './ModeIndicator';
+import { useAgentMode } from '../hooks/useAgent';
 import PlanPanel from '../shared/PlanPanel';
 
 // ─── ContextIndicator ──────────────────────────────────────────────────────
@@ -229,6 +230,27 @@ function InputBox({
   const setApprovalPolicy = useAgentStore((s) => s.setApprovalPolicy);
   const pendingInput = useAgentStore((s) => s.pendingInput);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
+  const { fetchMode: fetchSessionMode } = useAgentMode();
+  const [isPlanMode, setIsPlanMode] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentThreadId) {
+      setIsPlanMode(false);
+      return;
+    }
+    fetchSessionMode(currentThreadId, workspace.rootPath)
+      .then((m) => {
+        if (cancelled) return;
+        setIsPlanMode(m.profileName === 'plan');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setIsPlanMode(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentThreadId, workspace.rootPath, fetchSessionMode]);
 
   // Consume pendingInput when it's set
   useEffect(() => {
@@ -312,6 +334,7 @@ function InputBox({
         </div>
         {/* Row 2: toolbar */}
         <div className="flex items-center gap-2 px-3 pb-3 pt-0">
+          {!isPlanMode && (
           <button
             type="button"
             onClick={() => {
@@ -339,14 +362,9 @@ function InputBox({
             <span>{POLICY_LABELS[approvalPolicy] ?? '全部询问'}</span>
             <span className="text-[var(--text-disabled)] text-[10px]">▾</span>
           </button>
+          )}
           <div className="ml-auto flex items-center gap-2">
-            {currentThreadId && (
-              <ModeIndicator
-                sessionId={currentThreadId}
-                cwd={workspace.rootPath}
-                onPlanPanelOpen={onOpenPlanPanel}
-              />
-            )}
+            <ModeIndicator sessionId={currentThreadId} cwd={workspace.rootPath} />
             {currentThreadId && <ContextIndicator threadId={currentThreadId} />}
             <ModelSelector />
           </div>

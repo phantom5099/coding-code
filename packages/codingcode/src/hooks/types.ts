@@ -1,3 +1,5 @@
+import type { Effect } from 'effect';
+
 export type HookPoint =
   | 'tool.execute.before'
   | 'tool.execute.after'
@@ -29,7 +31,16 @@ export interface HookDecision {
   payload?: Record<string, unknown>;
 }
 
-export type ObserverHandler = (payload: Record<string, unknown>) => void | Promise<void>;
+// ObserverHandler may return an Effect, a Promise<void>, or nothing. The
+// Effect path lets system observers yield* services in the emit fiber's
+// context (e.g. ProjectRuntimeService); the caller's fiber provides those
+// services at run time, so we don't track them at the type level here.
+// The Promise<void> / void paths are kept for shell-command user hooks and
+// simple synchronous observers; they are normalized into Effect internally
+// by `HookService.emit`.
+export type ObserverHandler = (
+  payload: Record<string, unknown>
+) => Effect.Effect<void, never, any> | void | Promise<void>;
 
 export type DecisionHandler = (
   payload: Record<string, unknown>

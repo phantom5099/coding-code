@@ -248,7 +248,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const session = yield* SessionService;
         const target = runtime.resolveSubagentProfile(cwd, profileName) ??
           (profileName === PLAN_PROFILE.name ? PLAN_PROFILE : BUILD_PROFILE);
-        yield* runtime.setSessionProfile(sessionId, target);
+        yield* runtime.setSessionProfile(cwd, sessionId, target);
         try {
           const state = yield* session.load(cwd, sessionId);
           yield* session.updateActiveProfile(state, target.name);

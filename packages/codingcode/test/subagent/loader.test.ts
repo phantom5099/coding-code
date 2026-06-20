@@ -1,6 +1,7 @@
-﻿import { expect, it, describe, beforeEach, afterEach } from 'vitest';
+import { expect, it, describe, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import {
   loadAgentProfiles,
   writeAgentProfile,
@@ -9,7 +10,7 @@ import {
 } from '../../src/subagent/loader';
 
 describe('loadAgentProfiles', () => {
-  const testDir = join(process.cwd(), '.test-agents');
+  const testDir = join(tmpdir(), 'codingcode-test-agents');
 
   beforeEach(() => {
     mkdirSync(join(testDir, '.codingcode', 'agents'), { recursive: true });
@@ -224,7 +225,7 @@ System prompt.`;
 });
 
 describe('writeAgentProfile', () => {
-  const testDir = join(process.cwd(), '.test-agents-write');
+  const testDir = join(tmpdir(), 'codingcode-test-agents-write');
 
   afterEach(() => {
     rmSync(testDir, { recursive: true, force: true });
@@ -281,7 +282,7 @@ describe('writeAgentProfile', () => {
 });
 
 describe('updateAgentProfile', () => {
-  const testDir = join(process.cwd(), '.test-agents-update');
+  const testDir = join(tmpdir(), 'codingcode-test-agents-update');
 
   afterEach(() => {
     rmSync(testDir, { recursive: true, force: true });
@@ -305,7 +306,7 @@ describe('updateAgentProfile', () => {
 });
 
 describe('deleteAgentProfile', () => {
-  const testDir = join(process.cwd(), '.test-agents-delete');
+  const testDir = join(tmpdir(), 'codingcode-test-agents-delete');
 
   afterEach(() => {
     rmSync(testDir, { recursive: true, force: true });

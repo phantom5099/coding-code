@@ -2,11 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Cause } from 'effect';
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import { submitPlanTool } from '../../src/tools/domains/subagent/submit-plan';
 import { AgentError } from '../../src/core/error';
 import { getPlanFilePath } from '../../src/config/plan-config';
 
-const TEST_DIR = join(process.cwd(), '.test-submit-plan');
+// Use the OS temp dir so a crashed/interrupted test run never leaves artifacts
+// in the project workspace root.
+const TEST_DIR = join(tmpdir(), 'codingcode-test-submit-plan');
 
 describe('submitPlanTool', () => {
   beforeEach(() => {

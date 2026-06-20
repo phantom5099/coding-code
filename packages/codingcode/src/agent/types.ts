@@ -28,6 +28,7 @@ export interface SystemPromptOptions {
   skillInstruction?: string;
   agentProfiles?: AgentProfile[];
   rules?: string;
+  profileSystemPrompt?: string;
 }
 
 export interface ResolvedConfig {
@@ -92,6 +93,7 @@ export type AgentEvent =
 export interface RunStreamOptions {
   state: SessionStoreState;
   llm: LLMClient;
+  profile?: AgentProfile;
   skillInstruction?: string;
   systemPromptVariant?: SystemPromptVariant;
   systemOverride?: string;

@@ -25,6 +25,7 @@ import { ProjectRuntimeService } from '../runtime/project-runtime.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { getBuiltinTools } from '../tools/providers.js';
+import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
 import { canonicalizeSchema } from '../tools/utils/canonicalize-schema.js';
 import { normalizePath } from '../core/path.js';
 
@@ -143,6 +144,9 @@ export const sendMessage = (
     const state = sessionId
       ? yield* session.load(normalizedCwd, sessionId)
       : yield* session.create(normalizedCwd, llm.modelInfo.model);
+    if (state.activeProfile) {
+      yield* runtime.restoreSessionProfile(normalizedCwd, state.sessionId, state.activeProfile);
+    }
     state.model = llm.modelInfo.model;
     state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
     const sid = state.sessionId;
@@ -160,9 +164,7 @@ export const sendMessage = (
       }
     }
     const effectiveMaxSteps = profile?.maxSteps;
-    const effectiveApproval: any = profile?.readonly
-      ? { permissionMode: 'bypass' }
-      : options?.approvalOverride;
+    const effectiveApproval: any = options?.approvalOverride;
 
     if (profile?.hooks?.length) {
       yield* hooks.attachSessionHooks(sid, profile.hooks);
@@ -187,6 +189,7 @@ export const sendMessage = (
     const stream = agent.runStream({
       state,
       llm: activeLlm,
+      profile,
       toolPolicy: policy,
       maxStepsOverride: effectiveMaxSteps,
       approvalOverride: effectiveApproval,
@@ -221,6 +224,7 @@ export function agentLoop(
 > {
   const state = opts.state;
   const llm = opts.llm;
+  const profile = opts.profile;
   const sessionId = state.sessionId;
   const projectPath = state.cwd;
 
@@ -234,9 +238,13 @@ export function agentLoop(
     const { skillInstruction, systemPromptVariant, rulesText } = opts;
 
     const allAgentProfiles = runtime.listAgentProfiles(projectPath);
-    const agentProfiles = resolveSubagentEnabled(projectPath)
+    const enabledAgentProfiles = resolveSubagentEnabled(projectPath)
       ? allAgentProfiles.filter((p) => !resolveAgentDisabled(projectPath, p.name))
       : [];
+    const visibleAgentProfiles =
+      profile?.name === 'plan'
+        ? enabledAgentProfiles.filter((p) => p.name === 'explore')
+        : enabledAgentProfiles;
     const basePrompt =
       opts.systemOverride ??
       buildSystemPrompt({
@@ -245,8 +253,9 @@ export function agentLoop(
         shell: process.env.SHELL || process.env.ComSpec || 'bash',
         variant: systemPromptVariant ?? 'default',
         skillInstruction,
-        agentProfiles,
+        agentProfiles: visibleAgentProfiles,
         rules: rulesText,
+        profileSystemPrompt: profile?.systemPrompt,
       });
 
     const memoryBlock = state.memorySnapshot;
@@ -281,6 +290,7 @@ export function agentLoop(
         let allToolDefs: ToolDefinition[] = [...builtinTools, ...(opts.mcpTools ?? [])];
         if (opts.dispatchTool && resolveSubagentEnabled(projectPath))
           allToolDefs = [...allToolDefs, opts.dispatchTool];
+        if (profile?.name === 'plan') allToolDefs = [...allToolDefs, submitPlanTool];
 
         const allowedByPolicy = opts.toolPolicy?.allowedTools;
         let filteredDefs = allToolDefs;
@@ -530,18 +540,19 @@ export function agentLoop(
   }).pipe(
     Effect.interruptible,
     Effect.onInterrupt(() =>
-      Effect.sync(() => {
-        Effect.runSync(
-          q.offer({ _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') })
-        );
-        hooks
+      Effect.gen(function* () {
+        yield* Effect.sync(() => {
+          Effect.runSync(
+            q.offer({ _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') })
+          );
+        });
+        yield* hooks
           .emit('agent.turn.end', {
             sessionId,
             turnId: state.currentTurnId,
             status: 'aborted',
           })
-          .pipe(Effect.runPromise)
-          .catch(() => {});
+          .pipe(Effect.ignore);
       })
     ),
     Effect.ensuring(

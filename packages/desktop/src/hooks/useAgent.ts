@@ -66,6 +66,7 @@ export function useAgentCore() {
   const workspace = useWorkspaceStore();
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
   const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
+  const pendingProfile = useAgentStore((s) => s.pendingProfile);
 
   // Load sessions, models, and projects on mount
   useEffect(() => {
@@ -240,7 +241,10 @@ export function useAgentCore() {
           'full-allow': 'bypass',
           'read-only': 'plan',
         };
-        const initialMode = POLICY_TO_MODE[approvalPolicy] ?? 'default';
+        // pendingProfile ('plan' | 'build') set on the welcome screen
+        // overrides the permission-policy default when it asks for plan.
+        const initialMode =
+          pendingProfile === 'plan' ? 'plan' : (POLICY_TO_MODE[approvalPolicy] ?? 'default');
         const data = await createServerSession(effectiveCwd, initialMode);
         threadId = data.sessionId;
         setCurrentThread(threadId);
@@ -304,6 +308,7 @@ export function useAgentCore() {
       completeTurn,
       workspace.rootPath,
       approvalPolicy,
+      pendingProfile,
       currentThreadId,
     ]
   );
@@ -368,11 +373,7 @@ export function useAgentApproval() {
   const submitPlanChoice = useCallback(
     async (threadId: string, callId: string, choice: PlanChoice) => {
       const nextStatus =
-        choice.type === 'allow'
-          ? 'approved'
-          : choice.type === 'canceled'
-            ? 'rejected'
-            : 'running';
+        choice.type === 'allow' ? 'approved' : choice.type === 'canceled' ? 'rejected' : 'running';
       updateToolCallStatus(threadId, callId, nextStatus as any);
       try {
         if (choice.type === 'allow') {

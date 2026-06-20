@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve, join } from 'path';
+import { tmpdir } from 'os';
 import { readAutomations, writeAutomations } from '../../src/scheduler/store.js';
 import type { Automation } from '../../src/scheduler/types.js';
 
-const testDir = resolve(process.cwd(), '.test-scheduler-store');
+const testDir = resolve(tmpdir(), 'codingcode-test-scheduler-store');
 const testFile = join(testDir, 'automations.yaml');
 
 describe('readAutomations', () => {

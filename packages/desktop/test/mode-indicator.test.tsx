@@ -2,9 +2,10 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, render, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import ModeIndicator from '../src/agent/ModeIndicator';
+import { useAgentStore } from '../src/stores/agent.store';
 
 const fetchModeMock = vi.fn();
 const switchModeMock = vi.fn();
@@ -32,31 +33,25 @@ const baseMode = {
   ],
 };
 
-describe('ModeIndicator', () => {
+describe('ModeIndicator (with live session)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fetchModeMock.mockResolvedValue(baseMode);
     switchModeMock.mockResolvedValue({ profileName: 'plan', permissionMode: 'plan' });
+    // Reset pendingProfile between tests
+    useAgentStore.setState({ pendingProfile: 'build' });
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it('renders nothing when sessionId is null', () => {
-    const { container } = render(<ModeIndicator sessionId={null} cwd="/tmp" />);
-    expect(container.firstChild).toBeNull();
-  });
-
   it('fetches the current mode on mount and shows the build label', async () => {
-    const { getByTestId, getByText } = render(
-      <ModeIndicator sessionId="s-1" cwd="/tmp" />
-    );
+    const { getByTestId, getByText } = render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
     expect(fetchModeMock).toHaveBeenCalledWith('s-1', '/tmp');
     await waitFor(() => {
       expect(getByTestId('mode-indicator')).toHaveTextContent('构建模式');
     });
-    // The default label "构建模式" appears inside the pill
     expect(getByText('构建模式')).toBeInTheDocument();
   });
 
@@ -66,57 +61,42 @@ describe('ModeIndicator', () => {
       profileName: 'plan',
       permissionMode: 'plan',
     });
-    const { getByTestId, getByText } = render(
-      <ModeIndicator sessionId="s-1" cwd="/tmp" />
-    );
+    const { getByTestId, getByText } = render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
       expect(getByTestId('mode-indicator')).toHaveTextContent('计划模式');
     });
     expect(getByText('计划模式')).toBeInTheDocument();
   });
 
-  it('opens the popover and switches to plan mode when clicked', async () => {
+  it('toggles directly to the other mode on click (no popover)', async () => {
     const { getByTestId } = render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
       expect(getByTestId('mode-indicator')).toHaveTextContent('构建模式');
     });
-    // Open popover
+    expect(document.querySelector('[data-testid="mode-popover"]')).toBeNull();
     fireEvent.click(getByTestId('mode-indicator'));
-    expect(getByTestId('mode-popover')).toBeInTheDocument();
-    // Click "计划模式"
-    fireEvent.click(getByTestId('mode-option-plan'));
     await waitFor(() => {
       expect(switchModeMock).toHaveBeenCalledWith('s-1', 'plan', '/tmp');
     });
   });
 
-  it('does not call switchMode when the same mode is selected', async () => {
+  it('toggles from plan to build when current is plan', async () => {
+    fetchModeMock.mockResolvedValue({
+      ...baseMode,
+      profileName: 'plan',
+      permissionMode: 'plan',
+    });
     const { getByTestId } = render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
-      expect(getByTestId('mode-indicator')).toHaveTextContent('构建模式');
+      expect(getByTestId('mode-indicator')).toHaveTextContent('计划模式');
     });
     fireEvent.click(getByTestId('mode-indicator'));
-    // Click "build" (the current mode) — should be a no-op for the server
-    fireEvent.click(getByTestId('mode-option-build'));
     await waitFor(() => {
-      expect(switchModeMock).not.toHaveBeenCalled();
+      expect(switchModeMock).toHaveBeenCalledWith('s-1', 'build', '/tmp');
     });
   });
 
-  it('invokes onPlanPanelOpen when the "查看当前计划" link is clicked', async () => {
-    const onOpen = vi.fn();
-    const { getByTestId, getByText } = render(
-      <ModeIndicator sessionId="s-1" cwd="/tmp" onPlanPanelOpen={onOpen} />
-    );
-    await waitFor(() => {
-      expect(getByTestId('mode-indicator')).toBeInTheDocument();
-    });
-    fireEvent.click(getByTestId('mode-indicator'));
-    fireEvent.click(getByText(/查看当前计划/));
-    expect(onOpen).toHaveBeenCalledTimes(1);
-  });
-
-  it('refetches mode after a successful switch', async () => {
+  it('refetches mode after a successful switch and updates the label', async () => {
     fetchModeMock
       .mockResolvedValueOnce(baseMode)
       .mockResolvedValueOnce({ ...baseMode, profileName: 'plan', permissionMode: 'plan' });
@@ -125,14 +105,74 @@ describe('ModeIndicator', () => {
       expect(getByTestId('mode-indicator')).toHaveTextContent('构建模式');
     });
     fireEvent.click(getByTestId('mode-indicator'));
-    fireEvent.click(getByTestId('mode-option-plan'));
     await waitFor(() => {
-      // second fetch happens after switch
       expect(fetchModeMock).toHaveBeenCalledTimes(2);
     });
-    // The pill should now show the plan label
     await waitFor(() => {
       expect(getByTestId('mode-indicator')).toHaveTextContent('计划模式');
     });
+  });
+
+  it('ignores clicks while a switch is in flight', async () => {
+    let resolveSwitch!: (v: unknown) => void;
+    switchModeMock.mockReturnValue(new Promise((res) => (resolveSwitch = res)));
+    const { getByTestId } = render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
+    await waitFor(() => {
+      expect(getByTestId('mode-indicator')).toHaveTextContent('构建模式');
+    });
+    fireEvent.click(getByTestId('mode-indicator'));
+    fireEvent.click(getByTestId('mode-indicator'));
+    expect(switchModeMock).toHaveBeenCalledTimes(1);
+    resolveSwitch({ profileName: 'plan' });
+  });
+});
+
+describe('ModeIndicator (welcome screen, no session)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAgentStore.setState({ pendingProfile: 'build' });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('renders the pill even when sessionId is null (regression: previously returned null)', () => {
+    const { getByTestId } = render(<ModeIndicator sessionId={null} cwd="/tmp" />);
+    expect(getByTestId('mode-indicator')).toBeInTheDocument();
+  });
+
+  it('reads the current label from pendingProfile (default: build)', () => {
+    useAgentStore.setState({ pendingProfile: 'build' });
+    const { getByTestId } = render(<ModeIndicator sessionId={null} cwd="/tmp" />);
+    expect(getByTestId('mode-indicator')).toHaveTextContent('构建模式');
+  });
+
+  it('reads the current label from pendingProfile when set to plan', () => {
+    useAgentStore.setState({ pendingProfile: 'plan' });
+    const { getByTestId } = render(<ModeIndicator sessionId={null} cwd="/tmp" />);
+    expect(getByTestId('mode-indicator')).toHaveTextContent('计划模式');
+  });
+
+  it('toggles pendingProfile locally without calling the server', () => {
+    useAgentStore.setState({ pendingProfile: 'build' });
+    const { getByTestId } = render(<ModeIndicator sessionId={null} cwd="/tmp" />);
+    fireEvent.click(getByTestId('mode-indicator'));
+    expect(useAgentStore.getState().pendingProfile).toBe('plan');
+    expect(switchModeMock).not.toHaveBeenCalled();
+    expect(fetchModeMock).not.toHaveBeenCalled();
+    fireEvent.click(getByTestId('mode-indicator'));
+    expect(useAgentStore.getState().pendingProfile).toBe('build');
+  });
+
+  it('toggles back and forth and label updates after each click', () => {
+    useAgentStore.setState({ pendingProfile: 'build' });
+    const { getByTestId } = render(<ModeIndicator sessionId={null} cwd="/tmp" />);
+    const pill = getByTestId('mode-indicator');
+    expect(pill).toHaveTextContent('构建模式');
+    fireEvent.click(pill);
+    expect(pill).toHaveTextContent('计划模式');
+    fireEvent.click(pill);
+    expect(pill).toHaveTextContent('构建模式');
   });
 });

@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import {
   getPlanDirectory,
   getPlanFilePath,
   ensurePlanDirectory,
 } from '../../src/config/plan-config';
 
-const TEST_PROJECT = join(process.cwd(), '.test-plan-config');
+// Use the OS temp dir so a crashed/interrupted test run never leaves artifacts
+// in the project workspace root.
+const TEST_PROJECT = join(tmpdir(), 'codingcode-test-plan-config');
 
 describe('plan-config', () => {
   beforeEach(() => {

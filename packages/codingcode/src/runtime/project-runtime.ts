@@ -11,6 +11,7 @@ import type { ToolVisibilityPolicy } from '../tools/types.js';
 import { HookService } from '../hooks/registry.js';
 import { McpService } from '../mcp/index.js';
 import { RulesService } from '../rules/index.js';
+import { SessionService } from '../session/store.js';
 import { normalizePath } from '../core/path.js';
 import { ApprovalService } from '../approval/index.js';
 import type { PermissionMode } from '../approval/types.js';
@@ -27,9 +28,7 @@ function buildGlobalProfiles(): AgentProfile[] {
 }
 
 function profileToPermissionMode(profile: AgentProfile | undefined): PermissionMode {
-  if (profile?.permissionMode) return profile.permissionMode;
-  if (profile?.readonly) return 'bypass';
-  return 'default';
+  return profile?.permissionMode ?? 'default';
 }
 
 /** 构建项目级 profile：<project>/.codingcode/agents/ */
@@ -45,6 +44,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
       const mcp = yield* McpService;
       const subagent = yield* SubagentService;
       const rules = yield* RulesService;
+      const session = yield* SessionService;
       const sessionAgentProfiles = new Map<string, AgentProfile>();
       const sessionPermissionModes = new Map<string, PermissionMode>();
       const prepared = new Set<string>();
@@ -98,10 +98,19 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           allowDeferredTools: false,
         }),
 
-        setSessionProfile: (sessionId: string, profile: AgentProfile): Effect.Effect<void> =>
-          Effect.sync(() => {
+        setSessionProfile: (
+          projectPath: string,
+          sessionId: string,
+          profile: AgentProfile
+        ): Effect.Effect<void> =>
+          Effect.gen(function* () {
             sessionAgentProfiles.set(sessionId, profile);
-            sessionPermissionModes.set(sessionId, profileToPermissionMode(profile));
+            const mode = profileToPermissionMode(profile);
+            sessionPermissionModes.set(sessionId, mode);
+            // 写盘：跨重启恢复时 messages.ts 从 idx 读 permissionMode + activeProfile
+            const state = yield* session.load(projectPath, sessionId);
+            yield* session.setPermissionMode(state, mode);
+            yield* session.updateActiveProfile(state, profile.name);
           }),
 
         getSessionProfile: (sessionId: string): AgentProfile | undefined =>
@@ -115,14 +124,17 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           sessionId: string,
           profileName: string | undefined
         ): Effect.Effect<void> =>
-          Effect.sync(() => {
+          Effect.gen(function* () {
             if (!profileName) return;
             const norm = normalizePath(projectPath);
             const profile = subagent.get(norm, profileName);
-            if (profile) {
-              sessionAgentProfiles.set(sessionId, profile);
-              sessionPermissionModes.set(sessionId, profileToPermissionMode(profile));
-            }
+            if (!profile) return;
+            sessionAgentProfiles.set(sessionId, profile);
+            const mode = profileToPermissionMode(profile);
+            sessionPermissionModes.set(sessionId, mode);
+            // 写盘：保持 idx 状态与内存态一致
+            const state = yield* session.load(projectPath, sessionId);
+            yield* session.setPermissionMode(state, mode);
           }),
 
         disposeSession: (sessionId: string): Effect.Effect<void> =>

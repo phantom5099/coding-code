@@ -1,4 +1,4 @@
-import { Layer, Effect, ManagedRuntime } from 'effect';
+import { Context, Layer, Effect, ManagedRuntime } from 'effect';
 import { AgentService } from './agent/agent.js';
 import { SessionService } from './session/store.js';
 import { HookService } from './hooks/registry.js';
@@ -41,37 +41,33 @@ export const ApprovalWaitLayer = ApprovalWaitService.Default;
 export const McpLayer = McpService.Default;
 export const SchedulerLayer = SchedulerService.Default;
 export const ProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, McpLayer, SubagentLayer, RulesLayer))
+  Layer.provide(Layer.mergeAll(HookLayer, McpLayer, SubagentLayer, RulesLayer, SessionLayer))
 );
 export const ApprovalLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
 );
 
-/**
- * Register system hooks for plan/build mode once the HookService is built.
- * System hooks (registered with source: 'system') are not removable by user
- * config and are essential to the plan/build workflow.
- */
-export const SystemHookLayer = Layer.effect(
-  HookService,
-  Effect.gen(function* () {
-    const hooks = (yield* HookService) as HookService;
-    // plan/build 1. submit_plan triggers 3-option approval modal
-    yield* hooks.registerDecision('tool.approval.pre', planApprovalHook, {
-      priority: 1000,
-      source: 'system',
-    });
-    // plan/build 2. plan mode can only dispatch 'explore' subagent
-    yield* hooks.registerDecision('agent.subagent.spawn.before', planSubagentWhitelistHook, {
-      priority: 900,
-      source: 'system',
-    });
-    // plan/build 3. after submit_plan: switch to build profile
-    yield* hooks.register('tool.execute.after', afterPlanSubmittedObserver, {
-      source: 'system',
-    });
-    return hooks;
-  })
+
+export const SystemHookLayer = HookLayer.pipe(
+  Layer.tap((context) =>
+    Effect.gen(function* () {
+      const hooks = Context.get(context, HookService);
+      // plan/build 1. submit_plan triggers 3-option approval modal
+      yield* hooks.registerDecision('tool.approval.pre', planApprovalHook, {
+        priority: 1000,
+        source: 'system',
+      });
+      // plan/build 2. plan mode can only dispatch 'explore' subagent
+      yield* hooks.registerDecision('agent.subagent.spawn.before', planSubagentWhitelistHook, {
+        priority: 900,
+        source: 'system',
+      });
+      // plan/build 3. after submit_plan: switch to build profile
+      yield* hooks.register('tool.execute.after', afterPlanSubmittedObserver, {
+        source: 'system',
+      });
+    })
+  )
 );
 
 /** ToolExecutor depends on HookLayer + ApprovalLayer. */

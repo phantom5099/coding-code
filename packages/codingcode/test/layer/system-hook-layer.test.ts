@@ -1,0 +1,70 @@
+import { describe, it, expect } from 'vitest';
+import { Effect } from 'effect';
+import { HookService } from '../../src/hooks/registry.js';
+import { SystemHookLayer } from '../../src/layer.js';
+
+describe('SystemHookLayer', () => {
+  it('builds without "Service not found: HookService" (regression: was a self-referential Layer.effect)', async () => {
+    // The previous implementation used `Layer.effect(HookService, body-yielding-HookService)`
+    // which Effect-TS does NOT support as a self-referential layer: the runtime
+    // does not place a placeholder HookService in the environment while
+    // building the layer, so the body's first `yield* HookService` would Die
+    // with "Service not found: HookService". This test would fail to even
+    // build the layer before the fix.
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      // touch the service to ensure it's resolvable from the build's output
+      return typeof hooks.register;
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(SystemHookLayer) as any));
+    expect(result).toBe('function');
+  });
+
+  it('registers the plan/build system hooks on the underlying HookService', async () => {
+    // After the layer builds, the system hooks must be reachable via the
+    // standard emit/emitDecision API. We test each one:
+    //
+    //   1. tool.approval.pre        → planApprovalHook (decision)
+    //   2. agent.subagent.spawn.before → planSubagentWhitelistHook (decision)
+    //   3. tool.execute.after       → afterPlanSubmittedObserver (observer)
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+
+      // (1) planApprovalHook returns 'ask' for submit_plan
+      const planDecision = yield* hooks.emitDecision('tool.approval.pre', {
+        toolName: 'submit_plan',
+        args: { plan_content: '## plan' },
+        sessionId: 's',
+        projectPath: '/p',
+      });
+      expect(planDecision).not.toBeNull();
+      expect(planDecision?.decision).toBe('ask');
+
+      // (2) planSubagentWhitelistHook denies non-explore subagents in plan mode
+      const deniedDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
+        profile: 'build',
+        prompt: 'do something',
+        parentSessionId: 'parent-s',
+        parentMainProfile: 'plan',
+      });
+      expect(deniedDecision).not.toBeNull();
+      expect(deniedDecision?.decision).toBe('deny');
+
+      // (3) afterPlanSubmittedObserver is registered; emit should not throw
+      // and an observer registered by us alongside should also fire.
+      let ourObserverRan = false;
+      yield* hooks.register('tool.execute.after', () =>
+        Effect.sync(() => {
+          ourObserverRan = true;
+        })
+      );
+      yield* hooks.emit('tool.execute.after', { sessionId: 's', projectPath: '/p' });
+      expect(ourObserverRan).toBe(true);
+
+      return true;
+    });
+
+    await Effect.runPromise(program.pipe(Effect.provide(SystemHookLayer) as any));
+  });
+});

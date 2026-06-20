@@ -99,4 +99,5 @@ export interface SessionStoreState {
   currentTurnId: number;
   usage: TokenUsage | undefined;
   memorySnapshot: string;
+  activeProfile?: string;
 }
