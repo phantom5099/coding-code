@@ -106,10 +106,17 @@ export function runPipeline(
           return final;
         }
         // 'ask' or no decision → continue to user confirmation
+        const nextRequest: ToolCallRequest = { ...request };
         if (hookResult.modifiedInput) {
-          // Use modified input for user confirmation
-          request = { ...request, input: hookResult.modifiedInput };
+          nextRequest.input = hookResult.modifiedInput;
         }
+        if (hookResult.payload) {
+          nextRequest.context = {
+            ...(nextRequest.context ?? {}),
+            _plan_approval_payload: hookResult.payload,
+          };
+        }
+        request = nextRequest;
       }
     }
 
@@ -126,11 +133,14 @@ export function runPipeline(
         return final;
       }
 
+      const confirmPayload = (request.context as { _plan_approval_payload?: Record<string, unknown> } | undefined)?._plan_approval_payload;
+
       const confirmResult = yield* userConfirmAsync(
         request.tool,
         request.input,
         opts.sessionId,
-        opts.callId ?? ''
+        opts.callId ?? '',
+        confirmPayload
       );
 
       let result: ApprovalDecision;
@@ -149,6 +159,22 @@ export function runPipeline(
           opts.onNever?.(confirmResult.rule);
           result = { type: 'deny', reason: 'Never allow for this tool', source: 'user-confirm' };
           break;
+        case 'modified':
+          // User revised the input (e.g. plan content) — re-execute with new input
+          result = {
+            type: 'modified',
+            input: confirmResult.input,
+            source: 'user-confirm',
+          };
+          break;
+        case 'canceled':
+          // User explicitly canceled the approval (e.g. "Cancel" on plan approval modal)
+          result = {
+            type: 'deny',
+            reason: 'User canceled the plan approval',
+            source: 'user-canceled',
+          };
+          break;
       }
 
       const final = yield* recordAuditAndReturn(hooks, request, result, layers);
@@ -165,15 +191,17 @@ function applyPermissionMode(
 ): ApprovalDecision | null {
   switch (mode) {
     case 'plan':
-      // Plan mode: only read-only tools allowed
-      if (!readonlyTools.has(tool)) {
-        return {
-          type: 'deny',
-          reason: 'Write operations denied in plan mode',
-          source: 'permission-mode',
-        };
+      // Plan mode: the only write operation allowed is submit_plan.
+      // All other writes (write_file / edit_file / execute_command) are denied to
+      // prevent the model from bypassing the submit_plan approval gate.
+      if (tool === 'submit_plan') {
+        return { type: 'allow', source: 'permission-mode-plan-whitelist' };
       }
-      return { type: 'allow', source: 'permission-mode' };
+      return {
+        type: 'deny',
+        reason: 'Write operations denied in plan mode. Use submit_plan to submit a plan.',
+        source: 'permission-mode',
+      };
 
     case 'bypass':
       // Bypass mode: everything allowed (sandbox still restricts at OS level)

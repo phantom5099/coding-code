@@ -19,6 +19,9 @@ import { RulesService } from './rules/index.js';
 import { MemoryService } from './memory/index.js';
 import { ContextService } from './context/service.js';
 import { SchedulerService } from './scheduler/service.js';
+import { planApprovalHook } from './hooks/built-in/plan-approval.js';
+import { planSubagentWhitelistHook } from './hooks/built-in/plan-subagent-whitelist.js';
+import { afterPlanSubmittedObserver } from './hooks/built-in/after-plan-submitted.js';
 
 export const WorkspaceLayer = WorkspaceService.Default;
 export const TodoLayer = TodoService.Default;
@@ -42,6 +45,33 @@ export const ProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
 );
 export const ApprovalLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
+);
+
+/**
+ * Register system hooks for plan/build mode once the HookService is built.
+ * System hooks (registered with source: 'system') are not removable by user
+ * config and are essential to the plan/build workflow.
+ */
+export const SystemHookLayer = Layer.effect(
+  HookService,
+  Effect.gen(function* () {
+    const hooks = (yield* HookService) as HookService;
+    // plan/build 1. submit_plan triggers 3-option approval modal
+    yield* hooks.registerDecision('tool.approval.pre', planApprovalHook, {
+      priority: 1000,
+      source: 'system',
+    });
+    // plan/build 2. plan mode can only dispatch 'explore' subagent
+    yield* hooks.registerDecision('agent.subagent.spawn.before', planSubagentWhitelistHook, {
+      priority: 900,
+      source: 'system',
+    });
+    // plan/build 3. after submit_plan: switch to build profile
+    yield* hooks.register('tool.execute.after', afterPlanSubmittedObserver, {
+      source: 'system',
+    });
+    return hooks;
+  })
 );
 
 /** ToolExecutor depends on HookLayer + ApprovalLayer. */
@@ -97,11 +127,15 @@ export const AppLayer = Layer.mergeAll(
   RulesLayer,
   MemoryLayer,
   ContextLayer,
-  SchedulerLayer
+  SchedulerLayer,
+  SystemHookLayer
 );
 
 /** Create the application ManagedRuntime from AppLayer. */
-export const createAppRuntime = () => ManagedRuntime.make(AppLayer);
+// Effect's ManagedRuntime.make typing is overly strict for our AppLayer union;
+// runtime has access to all service tags so the cast is safe.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const createAppRuntime = () => ManagedRuntime.make(AppLayer as any);
 
 /** Concrete runtime type for the application. */
 export type AppRuntime = ManagedRuntime.ManagedRuntime<any, any>;

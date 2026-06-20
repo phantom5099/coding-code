@@ -110,14 +110,24 @@ describe('SubagentService', () => {
 
   it('should support built-in plan profile', () => {
     expect(PLAN_PROFILE.name).toBe('plan');
-    expect(PLAN_PROFILE.readonly).toBe(true);
+    // Plan mode uses the dedicated "plan" permission mode (not a generic
+    // readonly flag) so the approval pipeline can apply the plan-mode rules
+    // (only submit_plan writes allowed).
+    expect(PLAN_PROFILE.permissionMode).toBe('plan');
+    expect(PLAN_PROFILE.isPrimary).toBe(true);
     expect(PLAN_PROFILE.maxSteps).toBe(180);
     expect(PLAN_PROFILE.tools).toContain('read_file');
     expect(PLAN_PROFILE.tools).toContain('search_files');
     expect(PLAN_PROFILE.tools).toContain('search_code');
-    expect(PLAN_PROFILE.tools).toContain('execute_command');
     expect(PLAN_PROFILE.tools).toContain('fetch_url');
     expect(PLAN_PROFILE.tools).toContain('tool_search');
+    expect(PLAN_PROFILE.tools).toContain('submit_plan');
+    expect(PLAN_PROFILE.tools).toContain('dispatch_agent');
+    // Write tools are intentionally absent — the approval pipeline denies them
+    // via the "plan" permission mode, and the catalog must not advertise them.
+    expect(PLAN_PROFILE.tools).not.toContain('write_file');
+    expect(PLAN_PROFILE.tools).not.toContain('edit_file');
+    expect(PLAN_PROFILE.tools).not.toContain('execute_command');
   });
 
   it('plan profile systemPrompt includes research process and output format', () => {

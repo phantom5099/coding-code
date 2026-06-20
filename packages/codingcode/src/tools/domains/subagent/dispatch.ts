@@ -89,10 +89,17 @@ export function createDispatchAgentTool(): Effect.Effect<
           }
 
           // Emit spawn.before hook (decision hook, can deny)
+          // We pass the parent session's main profile name so the
+          // planSubagentWhitelist system hook can enforce plan-mode restrictions.
+          const parentSessionId = ctx?.sessionId;
+          const parentMainProfile = parentSessionId
+            ? runtime.getSessionProfile(parentSessionId)?.name
+            : undefined;
           const spawnDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
             profile: agentName,
             prompt,
-            parentSessionId: ctx?.sessionId,
+            parentSessionId,
+            parentMainProfile,
           });
           if (spawnDecision && spawnDecision.decision === 'deny') {
             return yield* Effect.fail(

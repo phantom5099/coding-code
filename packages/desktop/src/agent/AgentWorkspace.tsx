@@ -8,6 +8,8 @@ import { setSessionPermissionMode } from '../lib/core-api';
 import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
 import ApprovalPanel from './ApprovalPanel';
+import ModeIndicator from './ModeIndicator';
+import PlanPanel from '../shared/PlanPanel';
 
 // ─── ContextIndicator ──────────────────────────────────────────────────────
 
@@ -206,10 +208,12 @@ function InputBox({
   centered,
   sendMessage,
   abort,
+  onOpenPlanPanel,
 }: {
   centered?: boolean;
   sendMessage: (content: string, cwd?: string) => Promise<void>;
   abort: () => void;
+  onOpenPlanPanel?: () => void;
 }) {
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -336,6 +340,13 @@ function InputBox({
             <span className="text-[var(--text-disabled)] text-[10px]">▾</span>
           </button>
           <div className="ml-auto flex items-center gap-2">
+            {currentThreadId && (
+              <ModeIndicator
+                sessionId={currentThreadId}
+                cwd={workspace.rootPath}
+                onPlanPanelOpen={onOpenPlanPanel}
+              />
+            )}
             {currentThreadId && <ContextIndicator threadId={currentThreadId} />}
             <ModelSelector />
           </div>
@@ -356,6 +367,7 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
   const isCompressing = useAgentStore((s) => s.isCompressing);
   const workspace = useWorkspaceStore();
+  const [planPanelOpen, setPlanPanelOpen] = useState(false);
 
   if (!currentThreadId) {
     return (
@@ -373,19 +385,32 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[var(--bg-panel)]">
-      <MessageStream key={currentThreadId} threadId={currentThreadId} />
-      <ApprovalPanel threadId={currentThreadId} />
-      <TodoPanel threadId={currentThreadId} />
-      {isCompressing && (
-        <div className="shrink-0 px-5 py-1.5 bg-[var(--bg-card)] border-t border-[var(--border-card)] flex items-center gap-2 text-[13px] text-[var(--text-tertiary)]">
-          <span className="w-3 h-3 border-2 border-[var(--text-placeholder)] border-t-transparent rounded-full animate-spin" />
-          <span>正在压缩上下文...</span>
+    <div className="flex-1 flex flex-row overflow-hidden bg-[var(--bg-panel)] min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <MessageStream key={currentThreadId} threadId={currentThreadId} />
+        <ApprovalPanel threadId={currentThreadId} />
+        <TodoPanel threadId={currentThreadId} />
+        {isCompressing && (
+          <div className="shrink-0 px-5 py-1.5 bg-[var(--bg-card)] border-t border-[var(--border-card)] flex items-center gap-2 text-[13px] text-[var(--text-tertiary)]">
+            <span className="w-3 h-3 border-2 border-[var(--text-placeholder)] border-t-transparent rounded-full animate-spin" />
+            <span>正在压缩上下文...</span>
+          </div>
+        )}
+        <div className="shrink-0">
+          <InputBox
+            sendMessage={sendMessage}
+            abort={abort}
+            onOpenPlanPanel={() => setPlanPanelOpen(true)}
+          />
         </div>
-      )}
-      <div className="shrink-0">
-        <InputBox sendMessage={sendMessage} abort={abort} />
       </div>
+      {planPanelOpen && (
+        <PlanPanel
+          sessionId={currentThreadId}
+          cwd={workspace.rootPath}
+          onClose={() => setPlanPanelOpen(false)}
+        />
+      )}
     </div>
   );
 }

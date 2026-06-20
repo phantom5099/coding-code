@@ -12,7 +12,10 @@ export function createApprovalRouter(rt: ManagedRt): Hono {
   router.post('/sessions/:sessionId/approval/:id', async (c) => {
     const id = c.req.param('id');
     const sessionId = c.req.param('sessionId');
-    const { response } = await c.req.json<{ response: string }>();
+    const body = (await c.req.json().catch(() => ({}))) as {
+      response?: string;
+    };
+    const response = typeof body.response === 'string' ? body.response : '';
 
     const result = await rt.runPromise(
       Effect.gen(function* () {

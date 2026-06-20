@@ -10,7 +10,13 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
     case 'ToolStart':
       return { type: 'tool_start', id: event.id, name: event.name, args: event.args };
     case 'ApprovalRequest':
-      return { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
+      return {
+        type: 'approval_request',
+        id: event.id,
+        tool: event.tool,
+        args: event.args,
+        payload: event.payload,
+      };
     case 'ToolResult':
       return {
         type: 'tool_result',

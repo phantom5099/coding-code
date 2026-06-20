@@ -39,6 +39,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
             id: string;
             tool: string;
             args: Record<string, unknown>;
+            payload?: Record<string, unknown>;
           }) => void)
         | null = null;
       const waitService = await rt.runPromise(
@@ -49,8 +50,8 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
       Effect.runSync(
         waitService.registerEmitter(
           resolvedSessionId,
-          (id: string, tool: string, args: Record<string, unknown>) => {
-            notify?.({ type: 'approval_request', id, tool, args });
+          (id: string, tool: string, args: Record<string, unknown>, payload?: Record<string, unknown>) => {
+            notify?.({ type: 'approval_request', id, tool, args, payload });
           }
         )
       );
@@ -65,6 +66,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
             id: string;
             tool: string;
             args: Record<string, unknown>;
+            payload?: Record<string, unknown>;
           }>((resolve) => {
             notify = resolve;
           });

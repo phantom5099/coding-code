@@ -55,6 +55,8 @@ export type AgentEvent =
       readonly id: string;
       readonly tool: string;
       readonly args: Record<string, unknown>;
+      /** Optional payload forwarded to the UI for richer approval UIs (e.g. plan content). */
+      readonly payload?: Record<string, unknown>;
     }
   | {
       readonly _tag: 'ToolResult';

@@ -79,6 +79,11 @@ export interface SessionIndex {
   usage: TokenUsage | undefined;
   permissionMode: string;
   memorySnapshot?: string;
+  /**
+   * Name of the main agent profile currently active for this session
+   * (e.g. 'plan' or 'build'). When undefined, the build profile is implicit.
+   */
+  activeProfile?: string;
 }
 
 export interface SessionStoreState {

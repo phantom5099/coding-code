@@ -49,7 +49,13 @@ export async function* agentEventToStreamChunk(
         yield { type: 'tool_denied', id: event.id, name: event.name, reason: event.reason };
         break;
       case 'ApprovalRequest':
-        yield { type: 'approval_request', id: event.id, tool: event.tool, args: event.args };
+        yield {
+          type: 'approval_request',
+          id: event.id,
+          tool: event.tool,
+          args: event.args,
+          payload: event.payload,
+        };
         break;
       case 'Error':
         yield {
@@ -119,13 +125,14 @@ export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promis
             id: string;
             tool: string;
             args: Record<string, unknown>;
+            payload?: Record<string, unknown>;
           }) => void)
         | null = null;
       Effect.runSync(
         waitService.registerEmitter(
           sessionId,
-          (id: string, tool: string, args: Record<string, unknown>) => {
-            notify?.({ type: 'approval_request', id, tool, args });
+          (id: string, tool: string, args: Record<string, unknown>, payload?: Record<string, unknown>) => {
+            notify?.({ type: 'approval_request', id, tool, args, payload });
           }
         )
       );
@@ -140,6 +147,7 @@ export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promis
             id: string;
             tool: string;
             args: Record<string, unknown>;
+            payload?: Record<string, unknown>;
           }>((resolve) => {
             notify = resolve;
           });

@@ -1,22 +1,35 @@
 import { Effect } from 'effect';
 import type { AgentProfile } from '../subagent/types.js';
-import { EXPLORE_PROFILE, PLAN_PROFILE, SubagentService } from '../subagent/registry.js';
+import {
+  EXPLORE_PROFILE,
+  PLAN_PROFILE,
+  BUILD_PROFILE,
+  SubagentService,
+} from '../subagent/registry.js';
 import * as agentLoader from '../subagent/loader.js';
 import type { ToolVisibilityPolicy } from '../tools/types.js';
 import { HookService } from '../hooks/registry.js';
 import { McpService } from '../mcp/index.js';
 import { RulesService } from '../rules/index.js';
 import { normalizePath } from '../core/path.js';
+import { ApprovalService } from '../approval/index.js';
+import type { PermissionMode } from '../approval/types.js';
 
 /** 构建全局 profile：内置 + ~/.codingcode/agents/ */
 function buildGlobalProfiles(): AgentProfile[] {
-  const profiles: AgentProfile[] = [EXPLORE_PROFILE, PLAN_PROFILE];
+  const profiles: AgentProfile[] = [BUILD_PROFILE, EXPLORE_PROFILE, PLAN_PROFILE];
   for (const p of agentLoader.loadGlobalAgentProfiles()) {
     if (!profiles.find((existing) => existing.name === p.name)) {
       profiles.push(p);
     }
   }
   return profiles;
+}
+
+function profileToPermissionMode(profile: AgentProfile | undefined): PermissionMode {
+  if (profile?.permissionMode) return profile.permissionMode;
+  if (profile?.readonly) return 'bypass';
+  return 'default';
 }
 
 /** 构建项目级 profile：<project>/.codingcode/agents/ */
@@ -33,6 +46,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
       const subagent = yield* SubagentService;
       const rules = yield* RulesService;
       const sessionAgentProfiles = new Map<string, AgentProfile>();
+      const sessionPermissionModes = new Map<string, PermissionMode>();
       const prepared = new Set<string>();
 
       // 启动时注册全局 profile（内置 + ~/.codingcode/agents/），只做一次
@@ -84,16 +98,37 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           allowDeferredTools: false,
         }),
 
-        setSessionProfile: (sessionId: string, profile: AgentProfile): void => {
-          sessionAgentProfiles.set(sessionId, profile);
-        },
+        setSessionProfile: (sessionId: string, profile: AgentProfile): Effect.Effect<void> =>
+          Effect.sync(() => {
+            sessionAgentProfiles.set(sessionId, profile);
+            sessionPermissionModes.set(sessionId, profileToPermissionMode(profile));
+          }),
 
         getSessionProfile: (sessionId: string): AgentProfile | undefined =>
           sessionAgentProfiles.get(sessionId),
 
+        getSessionPermissionMode: (sessionId: string): PermissionMode =>
+          sessionPermissionModes.get(sessionId) ?? 'default',
+
+        restoreSessionProfile: (
+          projectPath: string,
+          sessionId: string,
+          profileName: string | undefined
+        ): Effect.Effect<void> =>
+          Effect.sync(() => {
+            if (!profileName) return;
+            const norm = normalizePath(projectPath);
+            const profile = subagent.get(norm, profileName);
+            if (profile) {
+              sessionAgentProfiles.set(sessionId, profile);
+              sessionPermissionModes.set(sessionId, profileToPermissionMode(profile));
+            }
+          }),
+
         disposeSession: (sessionId: string): Effect.Effect<void> =>
           Effect.sync(() => {
             sessionAgentProfiles.delete(sessionId);
+            sessionPermissionModes.delete(sessionId);
           }),
 
         disposeProject: (projectPath: string): Effect.Effect<void> =>

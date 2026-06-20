@@ -24,6 +24,9 @@ export interface HookDecision {
   injection?: string;
   modifiedInput?: Record<string, unknown>;
   modifiedOutput?: unknown;
+  /** Custom payload propagated through the approval pipeline.
+   *  Receivers downstream (e.g. user confirmation) can read it via request.context. */
+  payload?: Record<string, unknown>;
 }
 
 export type ObserverHandler = (payload: Record<string, unknown>) => void | Promise<void>;

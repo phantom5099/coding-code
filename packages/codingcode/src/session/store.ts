@@ -54,6 +54,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         usage: state.usage,
         permissionMode: current?.permissionMode ?? 'default',
         memorySnapshot: state.memorySnapshot,
+        activeProfile: current?.activeProfile,
       };
       writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8');
     }
@@ -321,6 +322,30 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
     const getPermissionModeFromState = (state: SessionStoreState): Effect.Effect<string> =>
       Effect.sync(() => getPermissionMode(state.indexPath));
 
+    const updateActiveProfile = (
+      state: SessionStoreState,
+      profileName: string
+    ): Effect.Effect<void> =>
+      Effect.sync(() => {
+        const current = readCurrentIndex(state.indexPath);
+        const index: SessionIndex = {
+          sessionId: state.sessionId,
+          projectPath: state.projectPath,
+          cwd: state.cwd,
+          model: state.model,
+          createdAt: state.sessionMeta?.createdAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messageCount: state.messageCount,
+          title: state.title,
+          currentTurnId: state.currentTurnId,
+          usage: state.usage,
+          permissionMode: current?.permissionMode ?? 'default',
+          memorySnapshot: state.memorySnapshot,
+          activeProfile: profileName,
+        };
+        writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8');
+      });
+
     const incrementTurn = (state: SessionStoreState): number => {
       state.currentTurnId += 1;
       updateIndex(state);
@@ -343,6 +368,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       getMessageCount,
       setPermissionMode: setPermissionModeFromState,
       getPermissionMode: getPermissionModeFromState,
+      updateActiveProfile,
       incrementTurn,
       readHistoryFile: (path: string): SessionEvent[] => readHistory(path),
       appendLineProxy: (path: string, event: object): void => appendLine(path, event),

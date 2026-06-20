@@ -27,8 +27,8 @@ export function createSseHandler(rt: ManagedRt) {
           Effect.runSync(
             waitService.registerEmitter(
               sessionId,
-              (id: string, tool: string, args: Record<string, unknown>) => {
-                enqueue({ type: 'approval_request', id, tool, args });
+              (id: string, tool: string, args: Record<string, unknown>, payload?: Record<string, unknown>) => {
+                enqueue({ type: 'approval_request', id, tool, args, payload });
               }
             )
           );
