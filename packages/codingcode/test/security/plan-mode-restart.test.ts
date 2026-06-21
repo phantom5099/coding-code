@@ -148,9 +148,12 @@ describe('plan mode security boundary (cross-restart)', () => {
       })
     );
 
-    const decision = await evaluateAsSession('submit_plan', { plan_content: 'do things' });
-    expect(decision.type).toBe('allow');
-    expect(decision.source).toBe('permission-mode-plan-whitelist');
+    const decision: any = await evaluateAsSession('submit_plan', { plan_content: 'do things' });
+    // After v13: Layer 3 returns null for submit_plan (delegated to Layer 4 hook + Layer 5 user confirm).
+    // In tests there is no emitter, so Layer 5 returns deny with this reason.
+    expect(decision.type).toBe('deny');
+    expect(decision.reason).toMatch(/no UI available/i);
+    expect(decision.source).toBe('system');
   });
 
   it('scenario 4: after restart (state reloaded from disk), plan mode still enforced', async () => {

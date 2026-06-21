@@ -84,7 +84,17 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     }
     const state = result.value as SessionStoreState;
     if (body.initialPermissionMode) {
-      setPermissionMode(state.sessionId, state.indexPath, body.initialPermissionMode);
+      const profile = body.initialPermissionMode === 'plan' ? PLAN_PROFILE : BUILD_PROFILE;
+      const setResult = await runWithLayer(
+        Effect.gen(function* () {
+          const runtime = yield* ProjectRuntimeService;
+          yield* runtime.setSessionProfile(normalizedCwd, state.sessionId, profile);
+        }) as any
+      );
+      if (!setResult.ok) {
+        const { status, body: resp } = errorResponse(setResult.error);
+        return c.json(resp, status as any);
+      }
     }
     return c.json({ sessionId: state.sessionId });
   });

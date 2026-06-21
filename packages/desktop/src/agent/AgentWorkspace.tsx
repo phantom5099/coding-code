@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Square, ShieldAlert, ShieldCheck, Shield, Eye } from 'lucide-react';
+import { Send, Square, ShieldAlert, ShieldCheck, Shield, Eye, FileText } from 'lucide-react';
 import { useAgentStore } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { API_BASE, api } from '../lib/api';
@@ -230,8 +230,9 @@ function InputBox({
   const setApprovalPolicy = useAgentStore((s) => s.setApprovalPolicy);
   const pendingInput = useAgentStore((s) => s.pendingInput);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
-  const { fetchMode: fetchSessionMode } = useAgentMode();
+  const { fetchMode: fetchSessionMode, fetchPlan } = useAgentMode();
   const [isPlanMode, setIsPlanMode] = useState(false);
+  const [planExists, setPlanExists] = useState(false);
   useEffect(() => {
     let cancelled = false;
     if (!currentThreadId) {
@@ -244,13 +245,33 @@ function InputBox({
         setIsPlanMode(m.profileName === 'plan');
       })
       .catch(() => {
-        if (cancelled) return;
+        if (!cancelled) return;
         setIsPlanMode(false);
       });
     return () => {
       cancelled = true;
     };
   }, [currentThreadId, workspace.rootPath, fetchSessionMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentThreadId || !workspace.rootPath) {
+      setPlanExists(false);
+      return;
+    }
+    fetchPlan(currentThreadId, workspace.rootPath)
+      .then((p) => {
+        if (cancelled) return;
+        setPlanExists(p.exists);
+      })
+      .catch(() => {
+        if (!cancelled) return;
+        setPlanExists(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentThreadId, workspace.rootPath, fetchPlan]);
 
   // Consume pendingInput when it's set
   useEffect(() => {
@@ -364,6 +385,18 @@ function InputBox({
           </button>
           )}
           <div className="ml-auto flex items-center gap-2">
+            {planExists && onOpenPlanPanel && (
+              <button
+                type="button"
+                onClick={onOpenPlanPanel}
+                data-testid="view-plan-button"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
+                title="查看当前 plan 详情"
+              >
+                <FileText size={14} strokeWidth={1.5} />
+                <span>查看计划</span>
+              </button>
+            )}
             <ModeIndicator sessionId={currentThreadId} cwd={workspace.rootPath} />
             {currentThreadId && <ContextIndicator threadId={currentThreadId} />}
             <ModelSelector />

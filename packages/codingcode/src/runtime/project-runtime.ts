@@ -102,7 +102,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           projectPath: string,
           sessionId: string,
           profile: AgentProfile
-        ): Effect.Effect<void> =>
+        ): Effect.Effect<void, import('../core/error.js').AgentError> =>
           Effect.gen(function* () {
             sessionAgentProfiles.set(sessionId, profile);
             const mode = profileToPermissionMode(profile);
@@ -123,7 +123,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           projectPath: string,
           sessionId: string,
           profileName: string | undefined
-        ): Effect.Effect<void> =>
+        ): Effect.Effect<void, import('../core/error.js').AgentError> =>
           Effect.gen(function* () {
             if (!profileName) return;
             const norm = normalizePath(projectPath);

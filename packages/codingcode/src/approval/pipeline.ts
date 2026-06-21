@@ -191,11 +191,8 @@ function applyPermissionMode(
 ): ApprovalDecision | null {
   switch (mode) {
     case 'plan':
-      // Plan mode: the only write operation allowed is submit_plan.
-      // All other writes (write_file / edit_file / execute_command) are denied to
-      // prevent the model from bypassing the submit_plan approval gate.
       if (tool === 'submit_plan') {
-        return { type: 'allow', source: 'permission-mode-plan-whitelist' };
+        return null;
       }
       return {
         type: 'deny',

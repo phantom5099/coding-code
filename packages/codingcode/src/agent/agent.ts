@@ -506,6 +506,31 @@ export function agentLoop(
             todoPrinted = true;
           }
         }
+
+        const submittedPlan = allResults.some(
+          (r) =>
+            r.type === 'ok' &&
+            r.name === 'submit_plan' &&
+            typeof r.output === 'string' &&
+            r.output.startsWith('Plan written to ')
+        );
+        if (submittedPlan) {
+          yield* q.offer({
+            _tag: 'Done',
+            content:
+              'Plan submitted and saved. Session switched to build mode — send a new message to execute.',
+          });
+          yield* hooks.emit('agent.turn.end', {
+            sessionId,
+            turnId: state.currentTurnId,
+            status: 'done',
+          });
+          yield* checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
+          memory
+            .flushSessionToMemory(state.sessionId, llm, state.cwd)
+            .catch((e) => logger.error('memory flush failed:', e));
+          return Result.ok('Plan submitted');
+        }
       }
 
       if (overflow) continue;
