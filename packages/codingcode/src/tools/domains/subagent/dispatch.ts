@@ -11,6 +11,7 @@ import { resolveSubagentEnabled, resolveAgentDisabled } from '../../../subagent/
 import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import { SubagentRunnerService } from '../../../subagent/runner-service.js';
+import { checkSubagentAllowedInPlanMode } from '../../../plan/index.js';
 
 export function createDispatchAgentTool(): Effect.Effect<
   ToolDefinition,
@@ -89,17 +90,24 @@ export function createDispatchAgentTool(): Effect.Effect<
           }
 
           // Emit spawn.before hook (decision hook, can deny)
-          // We pass the parent session's main profile name so the
-          // planSubagentWhitelist system hook can enforce plan-mode restrictions.
           const parentSessionId = ctx?.sessionId;
           const parentMainProfile = parentSessionId
             ? runtime.getSessionProfile(parentSessionId)?.name
             : undefined;
+
+          const whitelist = checkSubagentAllowedInPlanMode(
+            parentSessionId,
+            parentMainProfile,
+            agentName
+          );
+          if (!whitelist.allowed) {
+            return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', whitelist.reason));
+          }
+
           const spawnDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
             profile: agentName,
             prompt,
             parentSessionId,
-            parentMainProfile,
           });
           if (spawnDecision && spawnDecision.decision === 'deny') {
             return yield* Effect.fail(

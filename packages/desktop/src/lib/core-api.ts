@@ -65,18 +65,18 @@ export function sendApprovalResponse(
 }
 
 /**
- * Send a structured plan approval decision to the server. The server-side
- * `parseApprovalResponse` understands a JSON envelope with `type` set to one of
- * 'allow' | 'deny' | 'modified' | 'canceled'. For 'modified' the call is
- * re-executed server-side with the provided `input` (typically a revised
- * `plan_content` for submit_plan).
+ * Send a structured plan approval decision to the server. Routed to the
+ * `/api/sessions/:sessionId/plan-approval/:callId` endpoint which is parsed by
+ * `parsePlanApprovalResponse` and resolved by `PlanApprovalService`. The shape
+ * is `allow` | `modified` (with revised `plan_content`) | `canceled`. There is
+ * no `deny` for plan approval — cancel is the user-controlled exit.
  */
 export function sendPlanApproval(
   sessionId: string,
   callId: string,
-  decision: { type: 'allow' } | { type: 'deny' } | { type: 'modified'; input: Record<string, unknown> } | { type: 'canceled' }
+  decision: { type: 'allow' } | { type: 'modified'; input: Record<string, unknown> } | { type: 'canceled' }
 ): Promise<void> {
-  return clients.agent.sendApprovalResponse({
+  return clients.agent.sendPlanApprovalResponse({
     sessionId,
     approvalId: callId,
     response: JSON.stringify(decision),

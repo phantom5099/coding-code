@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { ManagedRuntime } from 'effect';
+import { Layer, ManagedRuntime } from 'effect';
 import { createSseHandler } from '../../src/server/handler.js';
 import { toSseEvents } from '../../src/server/adapter.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { PlanApprovalService } from '../../src/plan/approval-service.js';
 import { AgentError } from '../../src/core/error.js';
 import type { AgentEvent } from '../../src/agent/types.js';
 
-const rt = ManagedRuntime.make(ApprovalWaitService.Default);
+const rt = ManagedRuntime.make(
+  Layer.merge(ApprovalWaitService.Default, PlanApprovalService.Default as any) as any
+);
 
 async function readSSEStream(response: Response): Promise<{ events: any[] }> {
   const reader = response.body!.getReader();

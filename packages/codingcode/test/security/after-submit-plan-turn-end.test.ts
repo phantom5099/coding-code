@@ -1,13 +1,27 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { submitPlanTool } from '../../src/tools/domains/subagent/submit-plan.js';
 import { afterPlanSubmittedObserver } from '../../src/plan/index.js';
+import { PlanApprovalService } from '../../src/plan/approval-service.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
+
+const defaultPlanLayer = Layer.succeed(PlanApprovalService, {
+  requestPlanDecision: () => Effect.succeed({ type: 'allow' as const }) as any,
+  resolvePlanDecision: () => Effect.succeed(false),
+  getPending: () => Effect.succeed([]),
+  registerEmitter: () => Effect.succeed(undefined),
+  unregisterEmitter: () => Effect.succeed(undefined),
+  hasEmitter: () => Effect.succeed(false),
+} as any);
+
+function runWithDefaultPlan<A, E>(eff: Effect.Effect<A, E>) {
+  return Effect.runPromise(eff.pipe(Effect.provide(defaultPlanLayer)));
+}
 
 describe('after submit_plan: observer + turn-end flow (v13 fix)', () => {
   let cwd: string;
@@ -23,11 +37,11 @@ describe('after submit_plan: observer + turn-end flow (v13 fix)', () => {
   });
 
   it('submit_plan writes the plan file with the "Plan written to " prefix', async () => {
-    const result = await Effect.runPromise(
-      submitPlanTool.execute(
-        { plan_content: '# Plan\n- step 1' },
-        { projectPath: cwd, sessionId } as any
-      )
+    const result = await runWithDefaultPlan(
+      submitPlanTool.execute({ plan_content: '# Plan\n- step 1' }, {
+        projectPath: cwd,
+        sessionId,
+      } as any)
     );
     expect(result).toMatch(/^Plan written to /);
     const planPath = result.replace(/^Plan written to /, '');
@@ -63,7 +77,9 @@ describe('v13 turn-end contract: after submit_plan + observer', () => {
     );
     // The fix: a check for allResults containing a successful submit_plan,
     // followed by a return statement.
-    expect(agentSource).toMatch(/allResults\.some\([\s\S]*r\.name === 'submit_plan'[\s\S]*Plan written to/);
+    expect(agentSource).toMatch(
+      /allResults\.some\([\s\S]*r\.name === 'submit_plan'[\s\S]*Plan written to/
+    );
     // And a Result.ok return.
     expect(agentSource).toMatch(/return\s+Result\.ok\('Plan submitted'\)/);
   });

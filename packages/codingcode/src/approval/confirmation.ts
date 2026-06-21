@@ -6,11 +6,7 @@ export type ConfirmResult =
   | { type: 'allow' }
   | { type: 'deny' }
   | { type: 'always'; rule: PermissionRule }
-  | { type: 'never'; rule: PermissionRule }
-  /** User modified the input (e.g. revised plan content) — submit_plan will re-execute with new input. */
-  | { type: 'modified'; input: Record<string, unknown> }
-  /** User canceled the approval (e.g. for submit_plan: chose "Cancel" instead of "Implement"). */
-  | { type: 'canceled' };
+  | { type: 'never'; rule: PermissionRule };
 
 export function userConfirmAsync(
   tool: string,
@@ -25,7 +21,6 @@ export function userConfirmAsync(
 
     yield* waitSvc.emitApprovalRequest(sessionId, id, tool, args, payload);
 
-    // Suspend until resolveConfirm is called
     return yield* waitSvc.waitForConfirm(id, sessionId);
   });
 }

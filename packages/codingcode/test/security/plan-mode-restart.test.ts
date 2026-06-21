@@ -81,12 +81,21 @@ function makeLayer() {
   const SessionTestLayer = SessionService.Default;
   const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
     Layer.provide(
-      Layer.mergeAll(HookTestLayer, McpTestLayer, SubagentTestLayer, RulesTestLayer, SessionTestLayer)
+      Layer.mergeAll(
+        HookTestLayer,
+        McpTestLayer,
+        SubagentTestLayer,
+        RulesTestLayer,
+        SessionTestLayer
+      )
     )
   );
   const ApprovalTestLayer = ApprovalService.Default.pipe(
     Layer.provide(
-      Layer.mergeAll(HookTestLayer, Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any))
+      Layer.mergeAll(
+        HookTestLayer,
+        Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any)
+      )
     )
   );
   const TestLayer = Layer.mergeAll(
@@ -181,7 +190,7 @@ describe('plan mode security boundary (cross-restart)', () => {
     expect(decision.source).toBe('hook');
   });
 
-  it('scenario 3: switch to plan, submit_plan is allowed (in the allowlist) and falls to user confirm', async () => {
+  it('scenario 3: switch to plan, submit_plan is short-circuited by the pipeline (self-handles plan approval)', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -192,11 +201,11 @@ describe('plan mode security boundary (cross-restart)', () => {
 
     const decision: any = await evaluateAsSession('submit_plan', { plan_content: 'do things' });
     // submit_plan is in PLAN_MODE_ALLOWED_TOOLS, so the gate does not fire.
-    // No user emitter registered → pipeline Layer 5 returns deny with
-    // "no UI available" + source 'system'.
-    expect(decision.type).toBe('deny');
-    expect(decision.reason).toMatch(/no UI available/i);
-    expect(decision.source).toBe('system');
+    // The pipeline recognizes submit_plan by name at Layer 5 and short-circuits
+    // to 'allow' with source 'system-plan-self-handles'. The actual plan
+    // modal is driven by submit_plan.execute itself, not by the pipeline.
+    expect(decision.type).toBe('allow');
+    expect(decision.source).toBe('system-plan-self-handles');
   });
 
   it('scenario 4: after restart (state reloaded from disk), plan mode still enforced', async () => {

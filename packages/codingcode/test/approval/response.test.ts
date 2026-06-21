@@ -44,25 +44,12 @@ describe('parseApprovalResponse', () => {
     expect(parseApprovalResponse('{"type":"deny"}')).toEqual({ type: 'deny' });
   });
 
-  it('parses JSON envelope for { type: "canceled" }', () => {
-    expect(parseApprovalResponse('{"type":"canceled"}')).toEqual({ type: 'canceled' });
+  it('falls back to deny for plan-only { type: "canceled" } — tool approval does not handle that', () => {
+    expect(parseApprovalResponse('{"type":"canceled"}')).toEqual({ type: 'deny' });
   });
 
-  it('parses JSON envelope for { type: "modified", input: {...} }', () => {
-    expect(
-      parseApprovalResponse('{"type":"modified","input":{"plan_content":"# v2"}}')
-    ).toEqual({
-      type: 'modified',
-      input: { plan_content: '# v2' },
-    });
-  });
-
-  it('falls back to deny when JSON input is missing for modified', () => {
-    expect(parseApprovalResponse('{"type":"modified"}')).toEqual({ type: 'deny' });
-  });
-
-  it('falls back to deny when JSON input is not an object for modified', () => {
-    expect(parseApprovalResponse('{"type":"modified","input":"oops"}')).toEqual({ type: 'deny' });
+  it('falls back to deny for plan-only { type: "modified" } — tool approval does not handle that', () => {
+    expect(parseApprovalResponse('{"type":"modified","input":{}}')).toEqual({ type: 'deny' });
   });
 
   it('falls back to deny on malformed JSON', () => {

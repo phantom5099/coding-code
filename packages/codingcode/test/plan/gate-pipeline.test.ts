@@ -6,7 +6,6 @@ import { READONLY_TOOL_NAMES } from '../../src/approval/presets.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
 import {
-  planApprovalHook,
   planModeGateHook,
   markSessionPlanMode,
   clearPlanModeSession,
@@ -69,7 +68,6 @@ function runPipelineWithMock(opts: {
   capturedApproval = null;
   decisionHandlers.length = 0;
   decisionHandlers.push(planModeGateHook);
-  decisionHandlers.push(planApprovalHook);
 
   if (opts.planMode) markSessionPlanMode(opts.sessionId, true);
   else markSessionPlanMode(opts.sessionId, false);
@@ -92,28 +90,10 @@ function runPipelineWithMock(opts: {
   );
 }
 
-describe('Plan mode gate + approval hook integration', () => {
+describe('Plan mode gate hook integration (planApprovalHook removed — submit_plan self-handles)', () => {
   beforeEach(() => {
     capturedApproval = null;
     decisionHandlers.length = 0;
-  });
-
-  it('plan mode + submit_plan: gate lets it through, planApprovalHook fires with payload', async () => {
-    const decision: any = await runPipelineWithMock({
-      tool: 'submit_plan',
-      input: { plan_content: '# My plan' },
-      permissionMode: 'default', // plan mode is now a side-channel flag, not PermissionMode
-      sessionId: 's1',
-      planMode: true,
-    });
-    expect(decision.type).toBe('deny'); // mock waitForConfirm returns deny
-    expect(decision.source).toBe('user-confirm');
-    expect(capturedApproval).not.toBeNull();
-    expect(capturedApproval.tool).toBe('submit_plan');
-    expect(capturedApproval.payload.plan_content).toBe('# My plan');
-    expect(capturedApproval.sessionId).toBe('s1');
-
-    clearPlanModeSession('s1');
   });
 
   it('plan mode + write_file: gate denies before reaching user confirmation', async () => {
@@ -147,7 +127,7 @@ describe('Plan mode gate + approval hook integration', () => {
     clearPlanModeSession('s3');
   });
 
-  it('plan mode + dispatch_agent: gate lets it through (subagent-whitelist hook handles further restriction at spawn time)', async () => {
+  it('plan mode + dispatch_agent: gate lets it through (subagent-whitelist inline at dispatch time)', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'dispatch_agent',
       input: { agent: 'build', prompt: 'do something' },
@@ -157,10 +137,8 @@ describe('Plan mode gate + approval hook integration', () => {
     });
     // The gate does not deny dispatch_agent (it's in PLAN_MODE_ALLOWED_TOOLS).
     // The pipeline may short-circuit at Layer 2 (readonly-whitelist) since
-    // dispatch_agent is in READONLY_TOOL_NAMES. The subagent-whitelist hook
-    // (a separate hook on agent.subagent.spawn.before) is what actually
-    // restricts the dispatched profile to 'explore' — that runs later, when
-    // the subagent is spawned, not at approval time.
+    // dispatch_agent is in READONLY_TOOL_NAMES. The subagent-whitelist check
+    // is now inline in dispatch_agent (not a hook) and runs at dispatch time.
     expect(decision.type).toBe('allow');
     expect(decision.type).not.toBe('deny');
 
@@ -182,17 +160,21 @@ describe('Plan mode gate + approval hook integration', () => {
     clearPlanModeSession('s5');
   });
 
-  it('build mode + submit_plan: gate does not fire, planApprovalHook still produces ask+payload (universal trigger)', async () => {
+  it('submit_plan: pipeline short-circuits at Layer 5 (no 2-option modal)', async () => {
+    // The plan approval is no longer triggered by a hook. The pipeline
+    // recognizes submit_plan by name at Layer 5 and short-circuits with
+    // 'allow' + source 'system-plan-self-handles'. The plan modal is
+    // driven by submit_plan.execute itself, not by the pipeline.
     const decision: any = await runPipelineWithMock({
       tool: 'submit_plan',
       input: { plan_content: '# plan' },
       permissionMode: 'default',
       sessionId: 's6',
-      planMode: false,
+      planMode: true,
     });
-    expect(capturedApproval).not.toBeNull();
-    expect(capturedApproval.payload.plan_content).toBe('# plan');
-    expect(decision.source).toBe('user-confirm');
+    expect(decision.type).toBe('allow');
+    expect(decision.source).toBe('system-plan-self-handles');
+    expect(capturedApproval).toBeNull();
 
     clearPlanModeSession('s6');
   });

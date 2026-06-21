@@ -115,12 +115,6 @@ export function runPipeline(
         if (hookResult.modifiedInput) {
           nextRequest.input = hookResult.modifiedInput;
         }
-        if (hookResult.payload) {
-          nextRequest.context = {
-            ...(nextRequest.context ?? {}),
-            _hook_payload: hookResult.payload,
-          };
-        }
         request = nextRequest;
       }
     }
@@ -128,6 +122,16 @@ export function runPipeline(
     // Layer 5: User Confirmation
     {
       layers.push(LAYER_NAMES[4]);
+
+      if (request.tool === 'submit_plan') {
+        const result: ApprovalDecision = {
+          type: 'allow',
+          source: 'system-plan-self-handles',
+        };
+        const final = yield* recordAuditAndReturn(hooks, request, result, layers);
+        return final;
+      }
+
       if (!asyncConfirm) {
         const result: ApprovalDecision = {
           type: 'deny',
@@ -138,14 +142,11 @@ export function runPipeline(
         return final;
       }
 
-      const confirmPayload = (request.context as { _hook_payload?: Record<string, unknown> } | undefined)?._hook_payload;
-
       const confirmResult = yield* userConfirmAsync(
         request.tool,
         request.input,
         opts.sessionId,
-        opts.callId ?? '',
-        confirmPayload
+        opts.callId ?? ''
       );
 
       let result: ApprovalDecision;
@@ -163,22 +164,6 @@ export function runPipeline(
         case 'never':
           opts.onNever?.(confirmResult.rule);
           result = { type: 'deny', reason: 'Never allow for this tool', source: 'user-confirm' };
-          break;
-        case 'modified':
-          // User revised the input (e.g. plan content) — re-execute with new input
-          result = {
-            type: 'modified',
-            input: confirmResult.input,
-            source: 'user-confirm',
-          };
-          break;
-          case 'canceled':
-          // User explicitly canceled the approval
-          result = {
-            type: 'deny',
-            reason: 'User canceled the approval',
-            source: 'user-canceled',
-          };
           break;
       }
 

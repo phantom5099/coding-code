@@ -26,18 +26,8 @@ export interface HookDecision {
   injection?: string;
   modifiedInput?: Record<string, unknown>;
   modifiedOutput?: unknown;
-  /** Custom payload propagated through the approval pipeline.
-   *  Receivers downstream (e.g. user confirmation) can read it via request.context. */
-  payload?: Record<string, unknown>;
 }
 
-// ObserverHandler may return an Effect, a Promise<void>, or nothing. The
-// Effect path lets system observers yield* services in the emit fiber's
-// context (e.g. ProjectRuntimeService); the caller's fiber provides those
-// services at run time, so we don't track them at the type level here.
-// The Promise<void> / void paths are kept for shell-command user hooks and
-// simple synchronous observers; they are normalized into Effect internally
-// by `HookService.emit`.
 export type ObserverHandler = (
   payload: Record<string, unknown>
 ) => Effect.Effect<void, never, any> | void | Promise<void>;

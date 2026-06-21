@@ -12,7 +12,6 @@ const logger = createLogger();
 
 export const PLAN_PROFILE_NAME = 'plan' as const;
 export const BUILD_PROFILE_NAME = 'build' as const;
-export const EXPLORE_PROFILE_NAME = 'explore' as const;
 
 export function isPlanProfile(p: { name: string } | null | undefined): boolean {
   return p?.name === PLAN_PROFILE_NAME;
@@ -40,7 +39,22 @@ export function clearPlanModeSession(sessionId: string): void {
   planModeSessions.delete(sessionId);
 }
 
-// ---- System hooks ----
+// ---- Plan-mode subagent whitelist (called inline by dispatch_agent) ----
+
+export function checkSubagentAllowedInPlanMode(
+  parentSessionId: string | undefined,
+  parentMainProfile: string | undefined,
+  profile: string | undefined
+): { allowed: true } | { allowed: false; reason: string } {
+  if (!parentSessionId) return { allowed: true };
+  if (parentMainProfile !== PLAN_PROFILE_NAME) return { allowed: true };
+  if (!profile) return { allowed: true };
+  if (profile === 'explore') return { allowed: true };
+  return {
+    allowed: false,
+    reason: `Plan mode can only dispatch the 'explore' subagent. Got: '${profile}'`,
+  };
+}
 
 export const planModeGateHook: DecisionHandler = (payload) => {
   const sessionId = payload.sessionId as string | undefined;
@@ -57,40 +71,6 @@ export const planModeGateHook: DecisionHandler = (payload) => {
   };
 };
 
-export const planApprovalHook: DecisionHandler = (payload) => {
-  const toolName = payload.toolName as string | undefined;
-  const args = (payload.args ?? {}) as { plan_content?: string };
-  if (toolName !== 'submit_plan') return null;
-  if (!args.plan_content) return null;
-  return {
-    decision: 'ask',
-    reason: 'plan_approval_required',
-    payload: {
-      plan_content: args.plan_content,
-      session_id: payload.sessionId,
-      project_path: payload.projectPath,
-    },
-  };
-};
-
-const PLAN_WHITELIST: ReadonlySet<string> = new Set([EXPLORE_PROFILE_NAME]);
-
-export const planSubagentWhitelistHook: DecisionHandler = (payload) => {
-  const profile = payload.profile as string | undefined;
-  const parentSessionId = payload.parentSessionId as string | undefined;
-  if (!parentSessionId) return null;
-
-  const parentMainProfile = (payload as { parentMainProfile?: string }).parentMainProfile;
-  if (parentMainProfile !== PLAN_PROFILE_NAME) return null;
-
-  if (!profile) return null;
-  if (PLAN_WHITELIST.has(profile)) return null;
-
-  return {
-    decision: 'deny',
-    reason: `Plan mode can only dispatch the 'explore' subagent. Got: '${profile}'`,
-  };
-};
 
 export const afterPlanSubmittedObserver: ObserverHandler = (payload) =>
   Effect.gen(function* () {

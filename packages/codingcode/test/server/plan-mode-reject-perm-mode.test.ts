@@ -68,17 +68,30 @@ describe('POST /api/agent/permission-mode rejects when session is in plan mode',
     const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
     const SessionTestLayer = SessionService.Default;
     const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
-      Layer.provide(Layer.mergeAll(HookTestLayer, McpTestLayer, SubagentTestLayer, RulesTestLayer, SessionTestLayer))
+      Layer.provide(
+        Layer.mergeAll(
+          HookTestLayer,
+          McpTestLayer,
+          SubagentTestLayer,
+          RulesTestLayer,
+          SessionTestLayer
+        )
+      )
     );
     const ApprovalTestLayer = ApprovalService.Default.pipe(
-      Layer.provide(Layer.mergeAll(HookTestLayer, Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any)))
+      Layer.provide(
+        Layer.mergeAll(
+          HookTestLayer,
+          Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any)
+        )
+      )
     );
     const TestLayer = Layer.mergeAll(
       ProjectRuntimeTestLayer,
       SessionTestLayer,
       HookTestLayer,
       ApprovalTestLayer,
-      Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any),
+      Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any)
     );
     rt = ManagedRuntime.make(TestLayer as any);
     app = new Hono();

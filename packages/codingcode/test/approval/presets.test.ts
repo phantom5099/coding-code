@@ -28,18 +28,18 @@ describe('Presets', () => {
     expect(result!.type).toBe('deny');
   });
 
-  it('should ask for SSH key reads', () => {
+  it('should fall through (null) for SSH key reads so Layer 5 prompts the user', () => {
     const engine = createRuleEngine(DEFAULT_DENY_RULES);
     const result = engine.evaluate('read_file', { path: '/home/user/.ssh/id_rsa' });
-    expect(result).not.toBeNull();
-    expect(result!.type).toBe('ask');
+    // 'ask' is a pass-through — the rule matches, but the engine returns
+    // null so the pipeline reaches the user confirmation layer.
+    expect(result).toBeNull();
   });
 
-  it('should ask for .env file reads', () => {
+  it('should fall through (null) for .env file reads so Layer 5 prompts the user', () => {
     const engine = createRuleEngine(DEFAULT_DENY_RULES);
     const result = engine.evaluate('read_file', { path: '/project/.env.production' });
-    expect(result).not.toBeNull();
-    expect(result!.type).toBe('ask');
+    expect(result).toBeNull();
   });
 
   it('should define read-only tools', () => {

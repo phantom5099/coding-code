@@ -7,6 +7,7 @@ import { submitPlanTool } from '../../src/tools/domains/subagent/submit-plan.js'
 import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
 import { getBuiltinTools } from '../../src/tools/providers.js';
 import { TodoService } from '../../src/agent/todo.js';
+import { PlanApprovalService } from '../../src/plan/approval-service.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
@@ -17,10 +18,21 @@ const mockTodoService = {
   clear: () => undefined,
 } as any;
 
+const mockPlanApprovalService = {
+  requestPlanDecision: () => Effect.succeed({ type: 'allow' as const }) as any,
+  resolvePlanDecision: () => Effect.succeed(false),
+  getPending: () => Effect.succeed([]),
+  registerEmitter: () => Effect.succeed(undefined),
+  unregisterEmitter: () => Effect.succeed(undefined),
+  hasEmitter: () => Effect.succeed(false),
+} as any;
+
 const TodoTestLayer = Layer.succeed(TodoService, mockTodoService);
+const PlanTestLayer = Layer.succeed(PlanApprovalService, mockPlanApprovalService);
+const TestLayer = Layer.mergeAll(TodoTestLayer, PlanTestLayer);
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(TodoTestLayer) as any));
+  return Effect.runPromise(eff.pipe(Effect.provide(TestLayer) as any));
 }
 
 describe('submit_plan tool integration', () => {
@@ -38,10 +50,10 @@ describe('submit_plan tool integration', () => {
 
   it('writes the plan file at the expected path under the project plan directory', async () => {
     const result = await runWithLayer(
-      submitPlanTool.execute(
-        { plan_content: '# Plan v1\n- step 1' },
-        { projectPath: cwd, sessionId } as any
-      )
+      submitPlanTool.execute({ plan_content: '# Plan v1\n- step 1' }, {
+        projectPath: cwd,
+        sessionId,
+      } as any)
     );
     expect(result).toMatch(/^Plan written to /);
 
@@ -51,28 +63,23 @@ describe('submit_plan tool integration', () => {
   });
 
   it('overwrites the plan file on each call (no history)', async () => {
-    await runWithLayer(
-      submitPlanTool.execute(
-        { plan_content: 'v1' },
-        { projectPath: cwd, sessionId } as any
-      )
+    const firstResult = await runWithLayer(
+      submitPlanTool.execute({ plan_content: 'v1' }, { projectPath: cwd, sessionId } as any)
     );
-    await runWithLayer(
-      submitPlanTool.execute(
-        { plan_content: 'v2' },
-        { projectPath: cwd, sessionId } as any
-      )
+    const secondResult = await runWithLayer(
+      submitPlanTool.execute({ plan_content: 'v2' }, { projectPath: cwd, sessionId } as any)
     );
-    const planPath = join(cwd, '.codingcode', 'plans', `${sessionId}.md`);
+    // The path is determined by ~/.codingcode/projects/<encodedCwd>/<sessionId>.md.
+    // We derive it from the first execute's return envelope so this test does
+    // not depend on the exact home-directory layout.
+    const planPath = firstResult.replace(/^Plan written to /, '');
+    expect(secondResult).toMatch(new RegExp(`${planPath.replaceAll('\\', '\\\\')}$`));
     expect(readFileSync(planPath, 'utf8')).toBe('v2');
   });
 
   it('returns output starting with "Plan written to" — afterPlanSubmitted observer matches on this', async () => {
     const result = await runWithLayer(
-      submitPlanTool.execute(
-        { plan_content: 'v1' },
-        { projectPath: cwd, sessionId } as any
-      )
+      submitPlanTool.execute({ plan_content: 'v1' }, { projectPath: cwd, sessionId } as any)
     );
     expect(result.startsWith('Plan written to ')).toBe(true);
   });

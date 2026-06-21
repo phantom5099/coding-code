@@ -1,19 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Effect, Cause } from 'effect';
+import { Effect, Cause, Layer } from 'effect';
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
 import { join, sep } from 'path';
 import { tmpdir } from 'os';
 import { submitPlanTool } from '../../src/tools/domains/subagent/submit-plan';
 import { AgentError } from '../../src/core/error';
+import { PlanApprovalService } from '../../src/plan/approval-service.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
 
-// The plan file lives under ~/.codingcode/projects/<encodedCwd>/<sessionId>.md.
-// We don't depend on the exact home directory layout in the test — only on
-// (1) the file existing at the path the tool returned, and (2) the path
-// ending in <sessionId>.md with the same parent directory across calls.
 const TEST_DIR = join(tmpdir(), 'codingcode-test-submit-plan');
+
+const defaultPlanLayer = Layer.succeed(PlanApprovalService, {
+  requestPlanDecision: () => Effect.succeed({ type: 'allow' as const }) as any,
+  resolvePlanDecision: () => Effect.succeed(false),
+  getPending: () => Effect.succeed([]),
+  registerEmitter: () => Effect.succeed(undefined),
+  unregisterEmitter: () => Effect.succeed(undefined),
+  hasEmitter: () => Effect.succeed(false),
+} as any);
+
+function runWithDefaultPlan<A, E>(eff: Effect.Effect<A, E>) {
+  return Effect.runPromise(eff.pipe(Effect.provide(defaultPlanLayer)));
+}
 
 describe('submitPlanTool', () => {
   beforeEach(() => {
@@ -26,8 +36,6 @@ describe('submitPlanTool', () => {
 
   it('has the canonical name and shape expected by the plan-mode approval pipeline', () => {
     expect(submitPlanTool.name).toBe('submit_plan');
-    // The schema exposes plan_content as the only argument — this is what
-    // the plan-approval system hook reads to populate the modal payload.
     expect(submitPlanTool.parameters).toBeDefined();
   });
 
@@ -35,21 +43,17 @@ describe('submitPlanTool', () => {
     const sessionId = 'sess-001';
     const planContent = '# My Plan\n\n- step 1\n- step 2';
 
-    const result = await Effect.runPromise(
-      submitPlanTool.execute(
-        { plan_content: planContent },
-        { projectPath: TEST_DIR, sessionId } as any
-      )
+    const result = await runWithDefaultPlan(
+      submitPlanTool.execute({ plan_content: planContent }, {
+        projectPath: TEST_DIR,
+        sessionId,
+      } as any)
     );
 
-    // The tool returns a "Plan written to <path>" envelope that the
-    // afterPlanSubmitted observer matches on to switch into build mode.
     expect(result).toMatch(/^Plan written to /);
     const writtenPath = result.replace(/^Plan written to /, '');
     expect(existsSync(writtenPath)).toBe(true);
     expect(readFileSync(writtenPath, 'utf8')).toBe(planContent);
-    // Path layout: the file lives under ~/.codingcode/projects/<encoded-cwd>/
-    // and is named after the session.
     expect(writtenPath.endsWith(`${sep}${sessionId}.md`)).toBe(true);
   });
 
@@ -57,12 +61,12 @@ describe('submitPlanTool', () => {
     const sessionId = 'sess-002';
     const ctx = { projectPath: TEST_DIR, sessionId } as any;
 
-    const firstResult = await Effect.runPromise(
+    const firstResult = await runWithDefaultPlan(
       submitPlanTool.execute({ plan_content: 'first version' }, ctx)
     );
     const firstPath = firstResult.replace(/^Plan written to /, '');
 
-    const secondResult = await Effect.runPromise(
+    const secondResult = await runWithDefaultPlan(
       submitPlanTool.execute({ plan_content: 'second version' }, ctx)
     );
     const secondPath = secondResult.replace(/^Plan written to /, '');
@@ -73,10 +77,7 @@ describe('submitPlanTool', () => {
 
   it('fails with TOOL_EXECUTION_FAILED when projectPath is missing from the tool context', async () => {
     const result = await Effect.runPromiseExit(
-      submitPlanTool.execute(
-        { plan_content: 'x' },
-        { sessionId: 's' } as any
-      )
+      submitPlanTool.execute({ plan_content: 'x' }, { sessionId: 's' } as any)
     );
     expect(result._tag).toBe('Failure');
     if (result._tag === 'Failure') {
@@ -93,10 +94,7 @@ describe('submitPlanTool', () => {
 
   it('fails with TOOL_EXECUTION_FAILED when sessionId is missing from the tool context', async () => {
     const result = await Effect.runPromiseExit(
-      submitPlanTool.execute(
-        { plan_content: 'x' },
-        { projectPath: TEST_DIR } as any
-      )
+      submitPlanTool.execute({ plan_content: 'x' }, { projectPath: TEST_DIR } as any)
     );
     expect(result._tag).toBe('Failure');
     if (result._tag === 'Failure') {

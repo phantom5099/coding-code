@@ -1,20 +1,16 @@
 import type { ConfirmResult } from './confirmation.js';
 
 /**
- * Parses a JSON approval response from the desktop client. The wire format
- * allows a richer vocabulary than the legacy string protocol so that
- * the plan-approval modal can express "implement with this revised content"
- * ({@link ConfirmResult.modified}) and "cancel the approval entirely"
- * ({@link ConfirmResult.canceled}).
+ * Parses a JSON or legacy string approval response from the desktop client.
+ * Tool approval only — the plan-approval modal uses a richer vocabulary
+ * (allow / modified / canceled) and is parsed by `parsePlanApprovalResponse`
+ * in `plan/`. The two wire protocols share the legacy `'allow' | 'deny'`
+ * codes but the plan path is the only one that accepts `modified`/`canceled`.
  */
 export function parseApprovalResponse(raw: string): ConfirmResult {
-  // Try JSON first — new clients send an object describing the decision.
   if (raw && raw.startsWith('{')) {
     try {
-      const obj = JSON.parse(raw) as {
-        type?: string;
-        input?: Record<string, unknown>;
-      };
+      const obj = JSON.parse(raw) as { type?: string };
       switch (obj.type) {
         case 'allow':
           return { type: 'allow' };
@@ -42,13 +38,6 @@ export function parseApprovalResponse(raw: string): ConfirmResult {
               source: 'user',
             },
           };
-        case 'modified':
-          if (obj.input && typeof obj.input === 'object') {
-            return { type: 'modified', input: obj.input };
-          }
-          return { type: 'deny' };
-        case 'canceled':
-          return { type: 'canceled' };
         default:
           return { type: 'deny' };
       }
@@ -57,7 +46,6 @@ export function parseApprovalResponse(raw: string): ConfirmResult {
     }
   }
 
-  // Legacy string protocol — kept for backward compatibility with older clients.
   switch (raw) {
     case 'allow':
       return { type: 'allow' };

@@ -29,16 +29,12 @@ describe('planModeGateHook', () => {
 
   it('allows submit_plan in plan mode', () => {
     markSessionPlanMode('sess', true);
-    expect(
-      planModeGateHook({ toolName: 'submit_plan', sessionId: 'sess' } as any)
-    ).toBeNull();
+    expect(planModeGateHook({ toolName: 'submit_plan', sessionId: 'sess' } as any)).toBeNull();
   });
 
   it('allows dispatch_agent in plan mode (subagent-whitelist hook further restricts)', () => {
     markSessionPlanMode('sess', true);
-    expect(
-      planModeGateHook({ toolName: 'dispatch_agent', sessionId: 'sess' } as any)
-    ).toBeNull();
+    expect(planModeGateHook({ toolName: 'dispatch_agent', sessionId: 'sess' } as any)).toBeNull();
   });
 
   it('denies write_file in plan mode with the plan-mode reason', () => {

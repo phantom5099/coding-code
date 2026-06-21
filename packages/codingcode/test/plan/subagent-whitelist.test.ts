@@ -1,71 +1,46 @@
 import { describe, it, expect } from 'vitest';
-import { planSubagentWhitelistHook } from '../../src/plan/index.js';
+import { checkSubagentAllowedInPlanMode } from '../../src/plan/index.js';
 
-describe('planSubagentWhitelistHook', () => {
-  it('returns null when no parentSessionId is present (top-level dispatch is not in scope)', () => {
-    const result = planSubagentWhitelistHook({
-      profile: 'build',
-      parentSessionId: undefined,
-      parentMainProfile: 'plan',
-    } as any);
-    expect(result).toBeNull();
+describe('checkSubagentAllowedInPlanMode', () => {
+  it('returns allowed when no parentSessionId is present (top-level dispatch is not in scope)', () => {
+    const result = checkSubagentAllowedInPlanMode(undefined, 'plan', 'build');
+    expect(result).toEqual({ allowed: true });
   });
 
-  it('returns null when the parent main profile is not "plan"', () => {
-    const result = planSubagentWhitelistHook({
-      profile: 'build',
-      parentSessionId: 'parent-sess',
-      parentMainProfile: 'build',
-    } as any);
-    expect(result).toBeNull();
+  it('returns allowed when the parent main profile is not "plan"', () => {
+    const result = checkSubagentAllowedInPlanMode('parent-sess', 'build', 'build');
+    expect(result).toEqual({ allowed: true });
   });
 
-  it('returns null when the parent main profile is missing', () => {
-    const result = planSubagentWhitelistHook({
-      profile: 'build',
-      parentSessionId: 'parent-sess',
-    } as any);
-    expect(result).toBeNull();
+  it('returns allowed when the parent main profile is missing', () => {
+    const result = checkSubagentAllowedInPlanMode('parent-sess', undefined, 'build');
+    expect(result).toEqual({ allowed: true });
   });
 
   it('allows dispatching the explore subagent in plan mode', () => {
-    const result = planSubagentWhitelistHook({
-      profile: 'explore',
-      parentSessionId: 'parent-sess',
-      parentMainProfile: 'plan',
-    } as any);
-    expect(result).toBeNull();
+    const result = checkSubagentAllowedInPlanMode('parent-sess', 'plan', 'explore');
+    expect(result).toEqual({ allowed: true });
   });
 
   it('denies dispatching any non-explore subagent in plan mode', () => {
-    const result = planSubagentWhitelistHook({
-      profile: 'build',
-      parentSessionId: 'parent-sess',
-      parentMainProfile: 'plan',
-    } as any);
-    expect(result).toEqual({
-      decision: 'deny',
-      reason: expect.stringMatching(/Plan mode can only dispatch the 'explore' subagent/),
-    });
-    expect(result?.reason).toContain("'build'");
+    const result = checkSubagentAllowedInPlanMode('parent-sess', 'plan', 'build');
+    expect(result.allowed).toBe(false);
+    if (!result.allowed) {
+      expect(result.reason).toMatch(/Plan mode can only dispatch the 'explore' subagent/);
+      expect(result.reason).toContain("'build'");
+    }
   });
 
   it('denies a custom user-defined agent name in plan mode', () => {
-    const result = planSubagentWhitelistHook({
-      profile: 'my-custom-agent',
-      parentSessionId: 'parent-sess',
-      parentMainProfile: 'plan',
-    } as any);
-    expect(result?.decision).toBe('deny');
-    expect(result?.reason).toContain("'my-custom-agent'");
+    const result = checkSubagentAllowedInPlanMode('parent-sess', 'plan', 'my-custom-agent');
+    expect(result.allowed).toBe(false);
+    if (!result.allowed) {
+      expect(result.reason).toContain("'my-custom-agent'");
+    }
   });
 
-  it('returns null when no profile is provided (defensive — let other layers handle)', () => {
-    const result = planSubagentWhitelistHook({
-      profile: undefined,
-      parentSessionId: 'parent-sess',
-      parentMainProfile: 'plan',
-    } as any);
-    expect(result).toBeNull();
+  it('returns allowed when no profile is provided (defensive — let other layers handle)', () => {
+    const result = checkSubagentAllowedInPlanMode('parent-sess', 'plan', undefined);
+    expect(result).toEqual({ allowed: true });
   });
 });

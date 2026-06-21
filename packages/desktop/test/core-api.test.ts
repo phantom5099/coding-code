@@ -16,6 +16,7 @@ const { mockSettings, mockApi, mockAgent } = vi.hoisted(() => {
   const mockApi = vi.fn();
   const mockAgent = {
     sendApprovalResponse: vi.fn(),
+    sendPlanApprovalResponse: vi.fn(),
   };
   return { mockSettings, mockApi, mockAgent };
 });
@@ -299,33 +300,33 @@ describe('setCompactionModel', () => {
 // ---- Plan approval helpers ----
 
 describe('sendPlanApproval', () => {
-  it('serializes "allow" decision as JSON envelope', async () => {
-    mockAgent.sendApprovalResponse.mockResolvedValue(undefined);
+  it('serializes "allow" decision as JSON envelope to plan-approval route', async () => {
+    mockAgent.sendPlanApprovalResponse.mockResolvedValue(undefined);
     await sendPlanApproval('s-1', 'c-1', { type: 'allow' });
-    expect(mockAgent.sendApprovalResponse).toHaveBeenCalledWith({
+    expect(mockAgent.sendPlanApprovalResponse).toHaveBeenCalledWith({
       sessionId: 's-1',
       approvalId: 'c-1',
       response: JSON.stringify({ type: 'allow' }),
     });
   });
 
-  it('serializes "canceled" decision as JSON envelope', async () => {
-    mockAgent.sendApprovalResponse.mockResolvedValue(undefined);
+  it('serializes "canceled" decision as JSON envelope to plan-approval route', async () => {
+    mockAgent.sendPlanApprovalResponse.mockResolvedValue(undefined);
     await sendPlanApproval('s-1', 'c-1', { type: 'canceled' });
-    expect(mockAgent.sendApprovalResponse).toHaveBeenCalledWith({
+    expect(mockAgent.sendPlanApprovalResponse).toHaveBeenCalledWith({
       sessionId: 's-1',
       approvalId: 'c-1',
       response: JSON.stringify({ type: 'canceled' }),
     });
   });
 
-  it('serializes "modified" with the new input payload', async () => {
-    mockAgent.sendApprovalResponse.mockResolvedValue(undefined);
+  it('serializes "modified" with the new input payload to plan-approval route', async () => {
+    mockAgent.sendPlanApprovalResponse.mockResolvedValue(undefined);
     await sendPlanApproval('s-1', 'c-1', {
       type: 'modified',
       input: { plan_content: '# new' },
     });
-    expect(mockAgent.sendApprovalResponse).toHaveBeenCalledWith({
+    expect(mockAgent.sendPlanApprovalResponse).toHaveBeenCalledWith({
       sessionId: 's-1',
       approvalId: 'c-1',
       response: JSON.stringify({ type: 'modified', input: { plan_content: '# new' } }),

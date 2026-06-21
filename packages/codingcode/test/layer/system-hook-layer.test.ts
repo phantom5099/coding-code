@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { HookService } from '../../src/hooks/registry.js';
 import { SystemHookLayer } from '../../src/layer.js';
+import { markSessionPlanMode, clearPlanModeSession } from '../../src/plan/index.js';
 
 describe('SystemHookLayer', () => {
   it('builds without "Service not found: HookService" (regression: was a self-referential Layer.effect)', async () => {
@@ -21,35 +22,42 @@ describe('SystemHookLayer', () => {
     expect(result).toBe('function');
   });
 
-  it('registers the plan/build system hooks on the underlying HookService', async () => {
-    // After the layer builds, the system hooks must be reachable via the
-    // standard emit/emitDecision API. We test each one:
-    //
-    //   1. tool.approval.pre        → planApprovalHook (decision)
-    //   2. agent.subagent.spawn.before → planSubagentWhitelistHook (decision)
-    //   3. tool.execute.after       → afterPlanSubmittedObserver (observer)
+  it('registers the remaining plan-mode system hooks', async () => {
+    // After the plan approval decoupling (option E):
+    //   - planModeGateHook stays — it's the right abstraction for tool-allow
+    //     policy. Registered on tool.approval.pre with priority -1000.
+    //   - afterPlanSubmittedObserver stays — handles plan → build transition.
+    //     Registered on tool.execute.after.
+    //   - planApprovalHook REMOVED — submit_plan tool handles its own 3-option
+    //     approval via ApprovalWaitService directly.
+    //   - planSubagentWhitelistHook REMOVED — now an inline function
+    //     (checkSubagentAllowedInPlanMode) called by dispatch_agent.
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
 
-      // (1) planApprovalHook returns 'ask' for submit_plan
-      const planDecision = yield* hooks.emitDecision('tool.approval.pre', {
+      // (1) planModeGateHook denies write tools in plan mode
+      markSessionPlanMode('s', true);
+      const denied = yield* hooks.emitDecision('tool.approval.pre', {
+        toolName: 'write_file',
+        args: { path: '/x' },
+        sessionId: 's',
+        projectPath: '/p',
+      });
+      expect(denied).not.toBeNull();
+      expect(denied?.decision).toBe('deny');
+      expect(denied?.reason).toMatch(/plan mode/i);
+      clearPlanModeSession('s');
+
+      // (2) planModeGateHook lets submit_plan through
+      markSessionPlanMode('s', true);
+      const allowed = yield* hooks.emitDecision('tool.approval.pre', {
         toolName: 'submit_plan',
         args: { plan_content: '## plan' },
         sessionId: 's',
         projectPath: '/p',
       });
-      expect(planDecision).not.toBeNull();
-      expect(planDecision?.decision).toBe('ask');
-
-      // (2) planSubagentWhitelistHook denies non-explore subagents in plan mode
-      const deniedDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
-        profile: 'build',
-        prompt: 'do something',
-        parentSessionId: 'parent-s',
-        parentMainProfile: 'plan',
-      });
-      expect(deniedDecision).not.toBeNull();
-      expect(deniedDecision?.decision).toBe('deny');
+      expect(allowed).toBeNull();
+      clearPlanModeSession('s');
 
       // (3) afterPlanSubmittedObserver is registered; emit should not throw
       // and an observer registered by us alongside should also fire.
