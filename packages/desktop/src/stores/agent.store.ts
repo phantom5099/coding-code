@@ -39,6 +39,14 @@ interface AgentState {
   currentThreadId: string | null;
   threads: Record<string, Thread>;
   approvalPolicy: 'ask-all' | 'smart-allow' | 'full-allow' | 'read-only';
+  /**
+   * Profile picked at the welcome screen before any session exists. When
+   * the user starts a new session, `pendingProfile` is used as the
+   * initial mode (overrides the permission-policy-derived default when
+   * set to 'plan'). Once a session is created, the live `ModeIndicator`
+   * takes over and the pending value is no longer referenced.
+   */
+  pendingProfile: 'plan' | 'build';
   model: string;
   models: ModelEntry[];
   contextUsage: { used: number; contextWindow: number } | null;
@@ -55,6 +63,7 @@ interface AgentActions {
   setThreadTurns: (threadId: string, turns: Turn[]) => void;
   setThreadCwd: (threadId: string, cwd: string) => void;
   setApprovalPolicy: (policy: AgentState['approvalPolicy']) => void;
+  setPendingProfile: (profile: AgentState['pendingProfile']) => void;
   setModel: (model: string) => void;
   setModels: (models: ModelEntry[]) => void;
   setContextUsage: (usage: { used: number; contextWindow: number } | null) => void;
@@ -88,6 +97,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       currentThreadId: null,
       threads: {},
       approvalPolicy: 'ask-all',
+      pendingProfile: 'build',
       model: '',
       models: [],
       contextUsage: null,
@@ -135,6 +145,11 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setApprovalPolicy: (policy) =>
         set((s) => {
           s.approvalPolicy = policy;
+        }),
+
+      setPendingProfile: (profile) =>
+        set((s) => {
+          s.pendingProfile = profile;
         }),
 
       setModel: (model) =>

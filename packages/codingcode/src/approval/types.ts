@@ -1,4 +1,4 @@
-export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypass';
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
 
 export interface ToolCallRequest {
   tool: string;
@@ -9,10 +9,7 @@ export interface ToolCallRequest {
 
 export type ApprovalDecision =
   | { type: 'deny'; reason: string; source: string }
-  | { type: 'allow'; source: string }
-  | { type: 'ask'; source: string }
-  | { type: 'modified'; input: Record<string, unknown>; source: string }
-  | { type: 'continue' };
+  | { type: 'allow'; source: string };
 
 export type RuleAction = 'deny' | 'allow' | 'ask';
 

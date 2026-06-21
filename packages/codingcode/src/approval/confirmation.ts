@@ -12,15 +12,15 @@ export function userConfirmAsync(
   tool: string,
   args: Record<string, unknown>,
   sessionId: string,
-  callId: string
+  callId: string,
+  payload?: Record<string, unknown>
 ): Effect.Effect<ConfirmResult, never, ApprovalWaitService> {
   return Effect.gen(function* () {
     const waitSvc = yield* ApprovalWaitService;
     const id = callId;
 
-    yield* waitSvc.emitApprovalRequest(sessionId, id, tool, args);
+    yield* waitSvc.emitApprovalRequest(sessionId, id, tool, args, payload);
 
-    // Suspend until resolveConfirm is called
     return yield* waitSvc.waitForConfirm(id, sessionId);
   });
 }

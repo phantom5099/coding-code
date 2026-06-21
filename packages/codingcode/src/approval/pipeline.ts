@@ -16,6 +16,9 @@ export interface PipelineOptions {
   onNever?: (rule: PermissionRule) => void;
   /** Session ID for session-scoped approval routing. */
   sessionId: string;
+  /** Project path for session-scoped approval routing (used by decision hooks
+   *  that need to inspect the session's runtime state). */
+  projectPath?: string;
   /** Optional LLM ToolCall ID to use as approval request ID. */
   callId?: string;
 }
@@ -83,6 +86,8 @@ export function runPipeline(
         const result = yield* hooks.emitDecision('tool.approval.pre', {
           toolName: request.tool,
           args: request.input,
+          sessionId: opts.sessionId,
+          projectPath: opts.projectPath,
         });
         if (result && result.decision === 'continue') {
           return null;
@@ -106,16 +111,27 @@ export function runPipeline(
           return final;
         }
         // 'ask' or no decision → continue to user confirmation
+        const nextRequest: ToolCallRequest = { ...request };
         if (hookResult.modifiedInput) {
-          // Use modified input for user confirmation
-          request = { ...request, input: hookResult.modifiedInput };
+          nextRequest.input = hookResult.modifiedInput;
         }
+        request = nextRequest;
       }
     }
 
     // Layer 5: User Confirmation
     {
       layers.push(LAYER_NAMES[4]);
+
+      if (request.tool === 'submit_plan') {
+        const result: ApprovalDecision = {
+          type: 'allow',
+          source: 'system-plan-self-handles',
+        };
+        const final = yield* recordAuditAndReturn(hooks, request, result, layers);
+        return final;
+      }
+
       if (!asyncConfirm) {
         const result: ApprovalDecision = {
           type: 'deny',
@@ -164,17 +180,6 @@ function applyPermissionMode(
   destructiveTools: Set<string>
 ): ApprovalDecision | null {
   switch (mode) {
-    case 'plan':
-      // Plan mode: only read-only tools allowed
-      if (!readonlyTools.has(tool)) {
-        return {
-          type: 'deny',
-          reason: 'Write operations denied in plan mode',
-          source: 'permission-mode',
-        };
-      }
-      return { type: 'allow', source: 'permission-mode' };
-
     case 'bypass':
       // Bypass mode: everything allowed (sandbox still restricts at OS level)
       return { type: 'allow', source: 'permission-mode' };

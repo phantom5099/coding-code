@@ -1,7 +1,8 @@
-﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
+import { tmpdir } from 'os';
 import { HookService } from '../../src/hooks/registry.js';
 const AppLayer = HookService.Default;
 
@@ -123,10 +124,49 @@ describe('HookService', () => {
     const result = await runWithLayer(program);
     expect(result?.decision).toBe('continue');
   });
+
+  it('runs Effect-returning observers in the emit fiber context (yield* services)', async () => {
+    // The whole reason ObserverHandler is allowed to return an Effect: the
+    // observer should be able to yield* services from the caller's fiber
+    // (e.g. HookService) without resorting to Effect.runFork / default
+    // runtime. This test pins that contract.
+    const sideEffect: { ran: boolean; usedService: boolean } = {
+      ran: false,
+      usedService: false,
+    };
+
+    const observer: import('../../src/hooks/types.js').ObserverHandler = (payload) =>
+      Effect.gen(function* () {
+        // yield* in the observer body — this is the contract under test.
+        // If emit runs the observer on a default runtime (no services),
+        // this line throws "Service not found: HookService".
+        const hooks = yield* HookService;
+        sideEffect.ran = true;
+        sideEffect.usedService = typeof hooks.register === 'function';
+        void payload;
+      });
+
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      yield* hooks.register('tool.execute.after', observer, { source: 'system' });
+      yield* hooks.emit('tool.execute.after', {
+        toolName: 'submit_plan',
+        sessionId: 'sess-1',
+        projectPath: '/proj',
+        args: { plan_content: 'x' },
+        result: { output: 'Plan written to /x' },
+      });
+      return sideEffect;
+    });
+
+    const result = await runWithLayer(program);
+    expect(result.ran).toBe(true);
+    expect(result.usedService).toBe(true);
+  });
 });
 
 describe('HookService.reloadUserHooks', () => {
-  const testDir = resolve(process.cwd(), '.test-hooks-reload');
+  const testDir = resolve(tmpdir(), 'codingcode-test-hooks-reload');
 
   beforeEach(() => {
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });

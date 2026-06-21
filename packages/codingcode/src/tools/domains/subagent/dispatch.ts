@@ -11,6 +11,7 @@ import { resolveSubagentEnabled, resolveAgentDisabled } from '../../../subagent/
 import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import { SubagentRunnerService } from '../../../subagent/runner-service.js';
+import { checkSubagentAllowedInPlanMode } from '../../../plan/index.js';
 
 export function createDispatchAgentTool(): Effect.Effect<
   ToolDefinition,
@@ -89,10 +90,24 @@ export function createDispatchAgentTool(): Effect.Effect<
           }
 
           // Emit spawn.before hook (decision hook, can deny)
+          const parentSessionId = ctx?.sessionId;
+          const parentMainProfile = parentSessionId
+            ? runtime.getSessionProfile(parentSessionId)?.name
+            : undefined;
+
+          const whitelist = checkSubagentAllowedInPlanMode(
+            parentSessionId,
+            parentMainProfile,
+            agentName
+          );
+          if (!whitelist.allowed) {
+            return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', whitelist.reason));
+          }
+
           const spawnDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
             profile: agentName,
             prompt,
-            parentSessionId: ctx?.sessionId,
+            parentSessionId,
           });
           if (spawnDecision && spawnDecision.decision === 'deny') {
             return yield* Effect.fail(
@@ -157,7 +172,12 @@ export function createDispatchAgentTool(): Effect.Effect<
             profile: agentName,
           });
 
-          // Collect events and extract result — wrap AsyncGenerator in Effect
+          // Collect events and extract result — wrap AsyncGenerator in Effect.
+          // The emit is moved out of the Effect.async callback (which runs in a
+          // fresh fiber with no service context) into the surrounding Effect.gen
+          // (which has HookService, SessionService, etc. in scope) so any
+          // observer that yield*'s a service resolves correctly.
+          let didComplete = false;
           const finalContent = yield* Effect.async<string, AgentError>((resume) => {
             let content = '';
             (async () => {
@@ -178,19 +198,11 @@ export function createDispatchAgentTool(): Effect.Effect<
                   }
                 }
 
-                // Cleanup
+                // Cleanup (pure sync Effects — no service context required)
                 await Effect.runPromise(mcp.disposeSession(childUuid));
                 await Effect.runPromise(hooks.disposeSession(childUuid));
 
-                // Emit completion hook
-                await Effect.runPromise(
-                  hooks.emit('agent.subagent.complete', {
-                    childSessionId: childUuid,
-                    profile: agentName,
-                    status: 'done',
-                  })
-                );
-
+                didComplete = true;
                 resume(Effect.succeed(content || '(subagent completed without output)'));
               } catch (e) {
                 // Cleanup on unexpected error
@@ -205,6 +217,19 @@ export function createDispatchAgentTool(): Effect.Effect<
               }
             })();
           });
+
+          // Emit completion hook in the dispatch_agent Effect.gen fiber so
+          // observers can yield* services. Fire-and-forget — observer errors
+          // are swallowed by HookService.emit itself.
+          if (didComplete) {
+            yield* hooks
+              .emit('agent.subagent.complete', {
+                childSessionId: childUuid,
+                profile: agentName,
+                status: 'done',
+              })
+              .pipe(Effect.ignore);
+          }
 
           return finalContent;
         }) as Effect.Effect<string, AgentError>,

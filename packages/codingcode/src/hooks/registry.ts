@@ -130,19 +130,41 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
       emit: (point: HookPoint, payload: Record<string, unknown>): Effect.Effect<void> => {
         const projectPath = payload.projectPath as string | undefined;
         const sessionId = payload.sessionId as string | undefined;
-        return Effect.promise(async () => {
+        // Internally `emit` may run Effect-returning observers that `yield*`
+        // services from the caller's fiber. The declared R is `never` so
+        // existing `Effect.runPromise(emit)` fire-and-forget call sites keep
+        // compiling; observers that need services should only be registered
+        // for hook points emitted from a fiber that provides them
+        // (e.g. `tool.execute.after` from `ToolExecutorService`).
+        return Effect.gen(function* () {
           for (const entry of allHandlers(point, projectPath, sessionId)) {
             if (entry.type === 'observer') {
               const name = entry.id;
               if (isHookDisabled(name, projectPath, sessionId)) continue;
-              try {
-                await (entry.handler as ObserverHandler)(payload);
-              } catch (e) {
-                logger.error(`hook emit error [${point}]:`, e);
+              const result = entry.handler(payload);
+              if (result == null) {
+                continue;
+              }
+              if (typeof (result as { pipe?: unknown }).pipe === 'function') {
+                // Effect-returning observer: run in this fiber's context.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                yield* (result as Effect.Effect<void, never, any>).pipe(
+                  Effect.catchAll((e) =>
+                    Effect.sync(() => logger.error(`hook emit error [${point}]:`, e))
+                  )
+                ) as Effect.Effect<void>;
+              } else {
+                yield* Effect.tryPromise({
+                  try: () => result as Promise<void>,
+                  catch: (e) => logger.error(`hook emit error [${point}]:`, e),
+                }).pipe(Effect.ignore);
               }
             }
           }
-        });
+          // The gen's actual R is `any` (from inner Effects); expose `never`
+          // to keep callers that do `Effect.runPromise(emit)` happy. See the
+          // contract comment on `ObserverHandler` for the runtime guarantee.
+        }) as Effect.Effect<void>;
       },
 
       emitDecision: (
@@ -181,18 +203,26 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
           for (const hc of resolveHookConfigs(projectPath)) {
             if (resolveHookDisabled(projectPath, hc.name)) continue;
             const hookName = hc.name;
+            const observerHandler: ObserverHandler = (payload) => {
+              if (!isHookRuntimeEnabled(hookName)) return;
+              return Effect.tryPromise({
+                try: () => executeHookCommand(hc, payload),
+                catch: (e) => logger.error(`user hook ${hookName} error:`, e),
+              }).pipe(Effect.ignore);
+            };
+            const decisionHandler: DecisionHandler = (payload) => {
+              if (!isHookRuntimeEnabled(hookName)) return null;
+              return Effect.tryPromise({
+                try: () => executeDecisionHookCommand(hc, payload),
+                catch: (e) => {
+                  logger.error(`user decision hook ${hookName} error:`, e);
+                  return null;
+                },
+              }) as unknown as Promise<HookDecision | null>;
+            };
             const entry: HandlerEntry = {
               id: `${hc.type === 'observer' ? 'obs' : 'dec'}-${++entryCounter}`,
-              handler:
-                hc.type === 'observer'
-                  ? (payload: Record<string, unknown>) => {
-                      if (!isHookRuntimeEnabled(hookName)) return;
-                      return executeHookCommand(hc, payload);
-                    }
-                  : (payload: Record<string, unknown>) => {
-                      if (!isHookRuntimeEnabled(hookName)) return null;
-                      return executeDecisionHookCommand(hc, payload);
-                    },
+              handler: hc.type === 'observer' ? observerHandler : decisionHandler,
               priority: hc.priority ?? 0,
               source: 'user',
               type: hc.type,
@@ -218,17 +248,27 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
         Effect.sync(() => {
           const sessionMap = new Map<HookPoint, HandlerEntry[]>();
           for (const hc of hooks) {
+            const observerHandler: ObserverHandler = (payload) =>
+              Effect.tryPromise({
+                try: () =>
+                  executeHookCommand({ command: hc.command, args: hc.args, env: {} }, payload),
+                catch: (e) => logger.error(`session hook ${hc.name} error:`, e),
+              }).pipe(Effect.ignore);
+            const decisionHandler: DecisionHandler = (payload) =>
+              Effect.tryPromise({
+                try: () =>
+                  executeDecisionHookCommand(
+                    { command: hc.command, args: hc.args, env: {} },
+                    payload
+                  ),
+                catch: (e) => {
+                  logger.error(`session decision hook ${hc.name} error:`, e);
+                  return null;
+                },
+              }) as unknown as Promise<HookDecision | null>;
             const entry: HandlerEntry = {
               id: `session-${hc.name}-${++entryCounter}`,
-              handler:
-                hc.type === 'observer'
-                  ? (payload: Record<string, unknown>) =>
-                      executeHookCommand({ command: hc.command, args: hc.args, env: {} }, payload)
-                  : (payload: Record<string, unknown>) =>
-                      executeDecisionHookCommand(
-                        { command: hc.command, args: hc.args, env: {} },
-                        payload
-                      ),
+              handler: hc.type === 'observer' ? observerHandler : decisionHandler,
               priority: hc.priority ?? 0,
               source: 'user',
               type: hc.type,

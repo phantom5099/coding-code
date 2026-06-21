@@ -151,6 +151,7 @@ export const EXPLORE_PROFILE: AgentProfile = {
   name: 'explore',
   description:
     'Read-only code exploration: searching files, reading symbols, understanding structure. No writes.',
+  permissionMode: 'bypass',
   systemPrompt: `You are a read-only code exploration agent. Your role is to help explore and understand codebases through reading files, searching for symbols, and analyzing code structure. You can only read; you cannot write or modify files.
 
 ## Guidelines
@@ -167,13 +168,19 @@ export const EXPLORE_PROFILE: AgentProfile = {
 export const PLAN_PROFILE: AgentProfile = {
   name: 'plan',
   description:
-    'Read-only codebase research for planning. Analyzes project structure, patterns, and dependencies to inform implementation plans. No writes.',
-  systemPrompt: `You are a read-only code research agent. Your role is to analyze codebases and produce implementation plans. You can read files, search code, and run commands to gather information, but you cannot write or modify files.
+    'Planning agent: analyzes the codebase, produces an implementation plan, and submits it via submit_plan for user approval. No business code modifications.',
+  // No `permissionMode` — plan mode is enforced structurally by the
+  // `plan/planModeGateHook` (registered on `tool.approval.pre`) and
+  // detected via `isPlanProfile(profile)`. The approval pipeline itself
+  // does not need to know about this profile.
+  systemPrompt: `You are a planning agent. Your role is to analyze the codebase and produce an implementation plan that the user reviews and approves before any code is written.
 
-## Guidelines
-- Start broad, then narrow down. Use search_files and search_code to get an overview before reading specific files.
-- Call multiple tools in parallel when they are independent.
-- When referencing code, use the format \`file_path:line_number\`.
+You can read files, search code, and dispatch the 'explore' subagent for context-heavy investigation. You can submit a plan via the \`submit_plan\` tool — each call overwrites the previous plan file; use it to revise your plan based on user feedback.
+
+In plan mode, write_file / edit_file / execute_command are denied. The only write operation allowed is \`submit_plan\`.
+
+## Subagent dispatch
+Use \`dispatch_agent({ agent: 'explore', prompt: '...' })\` to investigate large code sections without polluting your main context. The system hook enforces this — only 'explore' is permitted in plan mode; any other agent name will be denied.
 
 ## Research process
 1. Understand the project structure and conventions
@@ -183,22 +190,43 @@ export const PLAN_PROFILE: AgentProfile = {
 5. Check for existing implementations or similar patterns
 
 ## Output format
-Structure your analysis as:
+When ready, call \`submit_plan({ plan_content: "..." })\` with a Markdown plan:
 - **Current state**: What exists today
 - **Key files**: Files that need modification or creation, with line references
 - **Dependencies and risks**: Breaking changes, third-party concerns
 - **Recommended approach**: Step-by-step implementation strategy
-- **Phases**: If the task is complex, break it into ordered phases
+- **Phases**: If complex, break into ordered phases
 
-If you cannot fully understand the codebase, say so and explain what information is missing.`,
+If the user provides modification feedback, revise the plan and call submit_plan again with the updated plan_content.`,
   tools: [
     'read_file',
     'search_files',
     'search_code',
-    'execute_command',
     'fetch_url',
     'tool_search',
+    'submit_plan',
+    'dispatch_agent',
   ],
-  readonly: true,
+  maxSteps: 180,
+};
+
+export const BUILD_PROFILE: AgentProfile = {
+  name: 'build',
+  description:
+    'Default build agent: full read/write access. Implements changes the user has approved.',
+  permissionMode: 'default',
+  tools: [
+    'read_file',
+    'write_file',
+    'edit_file',
+    'execute_command',
+    'search_files',
+    'search_code',
+    'fetch_url',
+    'web_search',
+    'todo_write',
+    'tool_search',
+    'dispatch_agent',
+  ],
   maxSteps: 180,
 };

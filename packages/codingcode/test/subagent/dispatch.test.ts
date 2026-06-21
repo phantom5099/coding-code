@@ -323,6 +323,49 @@ describe('dispatch_agent tool', () => {
     );
   });
 
+  it('observer for agent.subagent.complete can yield* services from dispatch_agent fiber', async () => {
+    // Pin the dispatch.ts fix: `agent.subagent.complete` must be emitted in
+    // the dispatch_agent tool's Effect.gen fiber (not inside the
+    // Effect.async callback's async IIFE), so observers can yield* services
+    // like SessionService. Before the fix the emit was wrapped in
+    // `await Effect.runPromise(emit)`, which jumped to a fresh fiber with
+    // no services and would Die for any observer that yield*'d a service.
+    let observerRan = false;
+    let sessionResolved = false;
+
+    const realHooksLayer = HookService.Default;
+    const customLayer = makeMockLayer({ hooks: realHooksLayer });
+
+    // Register observer, create the tool, and run the tool all in the same
+    // Effect.gen so they share the same HookService instance (a fresh
+    // HookService is built each time a layer is provided, so splitting this
+    // across multiple Effect.runPromise calls would register on one
+    // instance and emit on a different one).
+    const program = Effect.gen(function* () {
+      const hooks = yield* HookService;
+      yield* hooks.register(
+        'agent.subagent.complete',
+        (_payload) =>
+          Effect.gen(function* () {
+            const session = yield* SessionService;
+            observerRan = true;
+            sessionResolved = typeof session.create === 'function';
+          }),
+        { source: 'system' }
+      );
+      const tool = yield* createDispatchAgentTool();
+      return yield* tool.execute(
+        { agent: 'explore', prompt: 'test' },
+        { projectPath: '/test', sessionId: 'parent-1' }
+      ) as Effect.Effect<string, any, any>;
+    });
+
+    await Effect.runPromise(Effect.provide(program, customLayer as any));
+
+    expect(observerRan).toBe(true);
+    expect(sessionResolved).toBe(true);
+  });
+
   it('should pass systemOverride with profile prompt, environment info, and user rules', async () => {
     let capturedSystemOverride: string | undefined;
     mockSubagentRunner.runStream.mockImplementation(async function* (opts: any) {

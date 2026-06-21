@@ -17,7 +17,7 @@ export type StreamChunk =
   | { type: 'turn_id'; turnId: number }
   | { type: 'text'; text: string; messageId?: number }
   | { type: 'message'; id: number; content: string; partial: false }
-  | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown> }
+  | { type: 'approval_request'; id: string; tool: string; args: Record<string, unknown>; payload?: Record<string, unknown> }
   | { type: 'tool_start'; id: string; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean }
   | { type: 'tool_denied'; id: string; name: string; reason: string }
@@ -30,6 +30,7 @@ export type StreamChunk =
 export interface AgentClient {
   sendMessage(input: string, cwd?: string): AsyncGenerator<StreamChunk>;
   sendApprovalResponse(id: string, response: string): Promise<void>;
+  sendPlanApprovalResponse(id: string, response: string): Promise<void>;
   resumeSession(sid: string): Promise<SessionEvent[]>;
   listSessions(): Promise<SessionIndex[]>;
   listModels(): Promise<{ models: SelectableModel[]; activeId: string | null }>;

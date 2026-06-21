@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalService } from '../../approval/index.js';
+import { ProjectRuntimeService } from '../../runtime/project-runtime.js';
+import { isPlanProfile } from '../../plan/index.js';
 import type { PermissionMode } from '../../approval/types.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -8,7 +10,6 @@ type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 const VALID_PERMISSION_MODES = new Set<PermissionMode>([
   'default',
   'acceptEdits',
-  'plan',
   'bypass',
 ]);
 
@@ -25,9 +26,27 @@ export function createAgentRouter(rt: ManagedRt): Hono {
   });
 
   router.post('/permission-mode', async (c) => {
-    const body = (await c.req.json()) as { mode: string };
+    const body = (await c.req.json()) as { mode: string; cwd?: string; sessionId?: string };
     if (!VALID_PERMISSION_MODES.has(body.mode as PermissionMode)) {
       return c.json({ error: `Invalid mode: ${body.mode}` }, 400);
+    }
+    if (body.cwd && body.sessionId) {
+      const result = await rt.runPromise(
+        Effect.gen(function* () {
+          const runtime = yield* ProjectRuntimeService;
+          const profile = runtime.getSessionProfile(body.sessionId!);
+          return profile;
+        })
+      );
+      if (isPlanProfile(result)) {
+        return c.json(
+          {
+            error:
+              'Permission mode is fixed in plan mode. Use /mode to switch to build mode first.',
+          },
+          409
+        );
+      }
     }
     const approval: any = await rt.runPromise(
       Effect.gen(function* () {

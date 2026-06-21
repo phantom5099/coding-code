@@ -62,7 +62,7 @@ export function createRuleEngine(initialRules: PermissionRule[] = []): RuleEngin
         case 'allow':
           return { type: 'allow', source: `rule:${rule.id}` };
         case 'ask':
-          return { type: 'ask', source: `rule:${rule.id}` };
+          continue;
       }
     }
 

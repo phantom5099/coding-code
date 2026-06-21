@@ -13,14 +13,15 @@ import {
 } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
-import { normalizePath, encodeProjectPath } from '../core/path.js';
+import {
+  normalizePath,
+  encodeProjectPath,
+  getProjectBaseDir,
+} from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, SessionIndex, SessionStoreState } from './types.js';
 
-const CODINGCODE_DIR = join(homedir(), '.codingcode');
-const PROJECT_BASE = join(CODINGCODE_DIR, 'project');
-
 export function projectSessionsDir(encodedProjectPath: string): string {
-  return join(PROJECT_BASE, encodedProjectPath, 'sessions');
+  return join(getProjectBaseDir(), encodedProjectPath, 'sessions');
 }
 
 export function sessionJsonlPathFromCwd(cwd: string, sessionId: string): string {
@@ -45,7 +46,8 @@ export function computePaths(
 }
 
 export function ensureDirs(transcriptPath: string): void {
-  if (!existsSync(CODINGCODE_DIR)) mkdirSync(CODINGCODE_DIR, { recursive: true });
+  const codingcodeDir = join(homedir(), '.codingcode');
+  if (!existsSync(codingcodeDir)) mkdirSync(codingcodeDir, { recursive: true });
   const dir = dirname(transcriptPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
@@ -100,13 +102,14 @@ function buildIndexFromMeta(meta: SessionMetaEvent, history: SessionEvent[]): Se
 
 export function listSessions(projectPath?: string): SessionIndex[] {
   const results: SessionIndex[] = [];
+  const projectBase = getProjectBaseDir();
   const encodedDirs = projectPath
     ? [projectPath]
-    : existsSync(PROJECT_BASE)
-      ? readdirSync(PROJECT_BASE)
+    : existsSync(projectBase)
+      ? readdirSync(projectBase)
       : [];
   for (const encoded of encodedDirs) {
-    const sessionsDir = join(PROJECT_BASE, encoded, 'sessions');
+    const sessionsDir = join(projectBase, encoded, 'sessions');
     if (!existsSync(sessionsDir)) continue;
     for (const file of readdirSync(sessionsDir).filter((f) => f.endsWith('.jsonl'))) {
       const jsonlPath = join(sessionsDir, file);

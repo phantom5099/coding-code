@@ -64,6 +64,66 @@ export function sendApprovalResponse(
   return clients.agent.sendApprovalResponse({ sessionId, approvalId: callId, response });
 }
 
+/**
+ * Send a structured plan approval decision to the server. Routed to the
+ * `/api/sessions/:sessionId/plan-approval/:callId` endpoint which is parsed by
+ * `parsePlanApprovalResponse` and resolved by `PlanApprovalService`. The shape
+ * is `allow` | `modified` (with revised `plan_content`) | `canceled`. There is
+ * no `deny` for plan approval — cancel is the user-controlled exit.
+ */
+export function sendPlanApproval(
+  sessionId: string,
+  callId: string,
+  decision: { type: 'allow' } | { type: 'modified'; input: Record<string, unknown> } | { type: 'canceled' }
+): Promise<void> {
+  return clients.agent.sendPlanApprovalResponse({
+    sessionId,
+    approvalId: callId,
+    response: JSON.stringify(decision),
+  });
+}
+
+// ---- Plan file ----
+
+export function getSessionPlan(
+  sessionId: string,
+  cwd: string
+): Promise<{ content: string; path: string; directory: string; exists: boolean }> {
+  return api<{ content: string; path: string; directory: string; exists: boolean }>(
+    `/api/sessions/${sessionId}/plan?cwd=${encodeURIComponent(cwd)}`
+  );
+}
+
+// ---- Plan/Build mode switching ----
+
+export type SessionModeInfo = {
+  profileName: string;
+  permissionMode: 'default' | 'acceptEdits' | 'plan' | 'bypass';
+  cwd: string;
+  available: Array<{ name: string; description: string }>;
+};
+
+export function getSessionMode(sessionId: string, cwd: string): Promise<SessionModeInfo> {
+  return api<SessionModeInfo>(
+    `/api/sessions/${sessionId}/mode?cwd=${encodeURIComponent(cwd)}`
+  );
+}
+
+export function setSessionMode(
+  sessionId: string,
+  cwd: string,
+  profile: 'plan' | 'build'
+): Promise<{ profileName: string; permissionMode: string }> {
+  return api<{ profileName: string; permissionMode: string }>(
+    `/api/sessions/${sessionId}/mode`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd, profile }),
+    }
+  );
+}
+
 // ---- Settings: Memory ----
 
 export function getMemoryConfig(): Promise<{

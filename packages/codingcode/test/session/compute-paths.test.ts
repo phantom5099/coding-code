@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
@@ -11,8 +10,9 @@ import {
   projectSessionsDir,
 } from '../../src/session/file-ops.js';
 import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
@@ -61,7 +61,7 @@ describe('computePaths', () => {
       expect(state.cwd).toBe(expected.cwd);
       expect(existsSync(state.transcriptPath)).toBe(true);
     } finally {
-      rmSync(join(PROJECT_BASE, state.projectPath), { recursive: true, force: true });
+      rmSync(join(base.dir, state.projectPath), { recursive: true, force: true });
     }
   });
 
@@ -92,10 +92,10 @@ describe('computePaths', () => {
         expect(existsSync(childState.transcriptPath)).toBe(true);
         expect(existsSync(childState.indexPath)).toBe(true);
       } finally {
-        rmSync(join(PROJECT_BASE, childState.projectPath), { recursive: true, force: true });
+        rmSync(join(base.dir, childState.projectPath), { recursive: true, force: true });
       }
     } finally {
-      rmSync(join(PROJECT_BASE, state.projectPath), { recursive: true, force: true });
+      rmSync(join(base.dir, state.projectPath), { recursive: true, force: true });
     }
   });
 });

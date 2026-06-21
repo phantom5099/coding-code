@@ -96,15 +96,16 @@ maxSteps: 180
 
 ### plan
 
-只读代码研究 + 规划 Agent，可执行命令来验证环境：
+只读代码研究 + 规划 Agent。**只允许只读工具**和 `submit_plan`（用于提交实现计划等待用户审批），不允许执行命令或写文件。计划提交后 session 会自动切换到 `build` profile。
 
 ```yaml
 name: plan
 description: 只读代码研究和规划
-tools: [read_file, search_files, search_code, execute_command, fetch_url, tool_search]
-readonly: true
+tools: [read_file, search_files, search_code, fetch_url, tool_search, submit_plan, dispatch_agent]
 maxSteps: 180
 ```
+
+> 注意：`plan` profile 自身不设置 `permissionMode`。在 plan 模式下，写工具会被 `plan/planModeGateHook`（注册在 `tool.approval.pre`，priority -1000）拒绝，仅 `submit_plan` 与 `dispatch_agent` 放行。`dispatch_agent` 由 `plan/planSubagentWhitelistHook` 进一步限制为只能派发 `explore` 子代理。
 
 ---
 

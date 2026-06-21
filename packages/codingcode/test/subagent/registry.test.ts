@@ -1,6 +1,11 @@
 import { expect, it, describe } from 'vitest';
 import { Effect } from 'effect';
-import { SubagentService, EXPLORE_PROFILE, PLAN_PROFILE } from '../../src/subagent/registry';
+import {
+  SubagentService,
+  EXPLORE_PROFILE,
+  PLAN_PROFILE,
+  BUILD_PROFILE,
+} from '../../src/subagent/registry';
 import type { AgentProfile } from '../../src/subagent/types';
 
 describe('SubagentService', () => {
@@ -110,14 +115,24 @@ describe('SubagentService', () => {
 
   it('should support built-in plan profile', () => {
     expect(PLAN_PROFILE.name).toBe('plan');
-    expect(PLAN_PROFILE.readonly).toBe(true);
+    // After the plan refactor, PLAN_PROFILE does not set a `permissionMode`.
+    // Plan mode is detected structurally via `isPlanProfile(profile)` and
+    // enforced by the `plan/planModeGateHook` registered on `tool.approval.pre`.
+    // The approval pipeline itself only sees generic permission modes.
+    expect(PLAN_PROFILE.permissionMode).toBeUndefined();
     expect(PLAN_PROFILE.maxSteps).toBe(180);
     expect(PLAN_PROFILE.tools).toContain('read_file');
     expect(PLAN_PROFILE.tools).toContain('search_files');
     expect(PLAN_PROFILE.tools).toContain('search_code');
-    expect(PLAN_PROFILE.tools).toContain('execute_command');
     expect(PLAN_PROFILE.tools).toContain('fetch_url');
     expect(PLAN_PROFILE.tools).toContain('tool_search');
+    expect(PLAN_PROFILE.tools).toContain('submit_plan');
+    expect(PLAN_PROFILE.tools).toContain('dispatch_agent');
+    // Write tools are intentionally absent — the plan-mode gate hook denies
+    // them at approval time, and the catalog must not advertise them.
+    expect(PLAN_PROFILE.tools).not.toContain('write_file');
+    expect(PLAN_PROFILE.tools).not.toContain('edit_file');
+    expect(PLAN_PROFILE.tools).not.toContain('execute_command');
   });
 
   it('plan profile systemPrompt includes research process and output format', () => {
@@ -216,5 +231,25 @@ describe('SubagentService', () => {
     expect(all.projectList.length).toBe(3);
     expect(all.globalList.some((p) => p.name === 'p1')).toBe(false);
     expect(all.projectList.some((p) => p.name === 'p1')).toBe(true);
+  });
+});
+
+describe('built-in profile set', () => {
+  it('exposes exactly {plan, build, explore} as the built-in global profiles', () => {
+    // The current product surface is intentionally limited to two main
+    // entry profiles (plan, build) plus the read-only explore subagent
+    // used by plan via dispatch_agent. The set-equivalence assertion
+    // catches accidental additions or removals during refactors.
+    const builtinNames = [PLAN_PROFILE.name, BUILD_PROFILE.name, EXPLORE_PROFILE.name].sort();
+    expect(builtinNames).toEqual(['build', 'explore', 'plan']);
+  });
+
+  it('does not declare the removed isPrimary field on any built-in profile', () => {
+    // isPrimary was a forward-looking marker that no runtime code read;
+    // the field has been deleted from AgentProfile. This test guards
+    // against a future re-introduction without an actual consumer.
+    expect('isPrimary' in PLAN_PROFILE).toBe(false);
+    expect('isPrimary' in BUILD_PROFILE).toBe(false);
+    expect('isPrimary' in EXPLORE_PROFILE).toBe(false);
   });
 });

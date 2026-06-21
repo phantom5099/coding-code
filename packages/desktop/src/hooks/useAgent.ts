@@ -12,6 +12,7 @@ import {
   createSession as createServerSession,
   deleteSession,
   sendApprovalResponse,
+  sendPlanApproval,
   getCheckpointDiff,
   revertCheckpointFiles,
   previewRollbackDiff,
@@ -21,6 +22,9 @@ import {
   undoLastCodeRollback,
   getRollbackState,
   forkSession,
+  getSessionMode,
+  setSessionMode,
+  getSessionPlan,
 } from '../lib/core-api';
 import type {
   CheckpointDiff,
@@ -62,6 +66,7 @@ export function useAgentCore() {
   const workspace = useWorkspaceStore();
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
   const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
+  const pendingProfile = useAgentStore((s) => s.pendingProfile);
 
   // Load sessions, models, and projects on mount
   useEffect(() => {
@@ -162,6 +167,10 @@ export function useAgentCore() {
             name: event.tool,
             args: event.args,
             status: 'pending',
+            // Forward the server-side payload (e.g. plan_content for submit_plan)
+            // so the UI can render a specialized approval modal without a second
+            // round-trip to fetch the plan file.
+            payload: event.payload,
           };
         case 'tool_result':
           return {
@@ -232,7 +241,10 @@ export function useAgentCore() {
           'full-allow': 'bypass',
           'read-only': 'plan',
         };
-        const initialMode = POLICY_TO_MODE[approvalPolicy] ?? 'default';
+        // pendingProfile ('plan' | 'build') set on the welcome screen
+        // overrides the permission-policy default when it asks for plan.
+        const initialMode =
+          pendingProfile === 'plan' ? 'plan' : (POLICY_TO_MODE[approvalPolicy] ?? 'default');
         const data = await createServerSession(effectiveCwd, initialMode);
         threadId = data.sessionId;
         setCurrentThread(threadId);
@@ -296,6 +308,7 @@ export function useAgentCore() {
       completeTurn,
       workspace.rootPath,
       approvalPolicy,
+      pendingProfile,
       currentThreadId,
     ]
   );
@@ -313,7 +326,12 @@ export function useAgentCore() {
   return { sendMessage, abort };
 }
 
-// ---- useAgentApproval: approveTool + rejectTool ----
+// ---- useAgentApproval: approveTool + rejectTool + submitPlanChoice ----
+
+export type PlanChoice =
+  | { type: 'allow' }
+  | { type: 'modified'; input: Record<string, unknown> }
+  | { type: 'canceled' };
 
 export function useAgentApproval() {
   const updateToolCallStatus = useAgentStore((s) => s.updateToolCallStatus);
@@ -342,7 +360,37 @@ export function useAgentApproval() {
     [updateToolCallStatus]
   );
 
-  return { approveTool, rejectTool };
+  /**
+   * Send a structured plan approval decision. The server interprets the JSON
+   * envelope via `parseApprovalResponse` and either:
+   *  - 'allow'    → writes the plan and switches to build mode
+   *  - 'modified' → re-executes submit_plan with the supplied input
+   *  - 'canceled' → denies the call
+   *
+   * The local UI status is updated so the pending card collapses immediately
+   * instead of waiting for the next stream event.
+   */
+  const submitPlanChoice = useCallback(
+    async (threadId: string, callId: string, choice: PlanChoice) => {
+      const nextStatus =
+        choice.type === 'allow' ? 'approved' : choice.type === 'canceled' ? 'rejected' : 'running';
+      updateToolCallStatus(threadId, callId, nextStatus as any);
+      try {
+        if (choice.type === 'allow') {
+          await sendPlanApproval(threadId, callId, { type: 'allow' });
+        } else if (choice.type === 'canceled') {
+          await sendPlanApproval(threadId, callId, { type: 'canceled' });
+        } else {
+          await sendPlanApproval(threadId, callId, { type: 'modified', input: choice.input });
+        }
+      } catch (e) {
+        console.error('Failed to submit plan choice:', e);
+      }
+    },
+    [updateToolCallStatus]
+  );
+
+  return { approveTool, rejectTool, submitPlanChoice };
 }
 
 // ---- useAgentRollback: all rollback methods ----
@@ -590,4 +638,56 @@ export function useAgent() {
   const approval = useAgentApproval();
   const rollback = useAgentRollback();
   return { ...core, ...approval, ...rollback };
+}
+
+// ---- useAgentMode: plan/build mode switching + plan file access ----
+
+export type SessionModeSnapshot = {
+  profileName: string;
+  permissionMode: 'default' | 'acceptEdits' | 'plan' | 'bypass';
+  cwd: string;
+  available: Array<{ name: string; description: string }>;
+};
+
+export type PlanFileSnapshot = {
+  content: string;
+  path: string;
+  directory: string;
+  exists: boolean;
+};
+
+/**
+ * Hook for interacting with the plan/build mode of a single session, plus
+ * reading the persisted plan file. Each call returns a fresh API to the
+ * server — caching is done in the caller via useEffect / useState.
+ */
+export function useAgentMode() {
+  const workspace = useWorkspaceStore();
+
+  const fetchMode = useCallback(
+    async (sessionId: string, cwd?: string): Promise<SessionModeSnapshot> => {
+      return getSessionMode(sessionId, cwd ?? workspace.rootPath ?? '');
+    },
+    [workspace.rootPath]
+  );
+
+  const switchMode = useCallback(
+    async (
+      sessionId: string,
+      profile: 'plan' | 'build',
+      cwd?: string
+    ): Promise<{ profileName: string; permissionMode: string }> => {
+      return setSessionMode(sessionId, cwd ?? workspace.rootPath ?? '', profile);
+    },
+    [workspace.rootPath]
+  );
+
+  const fetchPlan = useCallback(
+    async (sessionId: string, cwd?: string): Promise<PlanFileSnapshot> => {
+      return getSessionPlan(sessionId, cwd ?? workspace.rootPath ?? '');
+    },
+    [workspace.rootPath]
+  );
+
+  return { fetchMode, switchMode, fetchPlan };
 }

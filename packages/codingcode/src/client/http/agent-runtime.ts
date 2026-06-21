@@ -14,6 +14,12 @@ export interface AgentRuntimeClient {
     response: string;
   }): Promise<void>;
 
+  sendPlanApprovalResponse(input: {
+    sessionId: string;
+    approvalId: string;
+    response: string;
+  }): Promise<void>;
+
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
 }
 
@@ -62,6 +68,7 @@ export function createHttpAgentClient(
               id: data.id as string,
               tool: data.tool as string,
               args: data.args as Record<string, unknown>,
+              payload: data.payload as Record<string, unknown> | undefined,
             };
             break;
           case 'tool_start':
@@ -120,6 +127,10 @@ export function createHttpAgentClient(
 
     async sendApprovalResponse({ sessionId, approvalId, response }) {
       await apiPost(`/api/sessions/${sessionId}/approval/${approvalId}`, { response });
+    },
+
+    async sendPlanApprovalResponse({ sessionId, approvalId, response }) {
+      await apiPost(`/api/sessions/${sessionId}/plan-approval/${approvalId}`, { response });
     },
 
     async compact({ sessionId, cwd }) {

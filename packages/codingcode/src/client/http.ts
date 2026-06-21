@@ -54,6 +54,7 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
               id: data.id as string,
               tool: data.tool as string,
               args: data.args as Record<string, unknown>,
+              payload: data.payload as Record<string, unknown> | undefined,
             };
             break;
           case 'tool_start':
@@ -106,6 +107,15 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     async sendApprovalResponse(id: string, response: string) {
       if (!currentSessionId) return;
       await clients.agent.sendApprovalResponse({
+        sessionId: currentSessionId,
+        approvalId: id,
+        response,
+      });
+    },
+
+    async sendPlanApprovalResponse(id: string, response: string) {
+      if (!currentSessionId) return;
+      await clients.agent.sendPlanApprovalResponse({
         sessionId: currentSessionId,
         approvalId: id,
         response,

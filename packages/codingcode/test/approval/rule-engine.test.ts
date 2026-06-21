@@ -33,7 +33,7 @@ describe('RuleEngine', () => {
     expect(result).toEqual({ type: 'allow', source: 'rule:allow-read' });
   });
 
-  it('should ask for commands matching an ask rule', () => {
+  it('ask rules return null so the pipeline falls through to user confirmation (Layer 5)', () => {
     const rules: PermissionRule[] = [
       {
         id: 'ask-env',
@@ -44,8 +44,10 @@ describe('RuleEngine', () => {
       },
     ];
     const engine = createRuleEngine(rules);
-    const result = engine.evaluate('read_file', { path: '/project/.env.local' });
-    expect(result).toEqual({ type: 'ask', source: 'rule:ask-env' });
+    // 'ask' must NOT produce a terminal decision — the executor has no
+    // 'ask' branch, so returning one would silently auto-allow. Returning
+    // null makes the pipeline reach Layer 5 (user confirmation) instead.
+    expect(engine.evaluate('read_file', { path: '/project/.env.local' })).toBeNull();
   });
 
   it('should respect rule priority (higher priority wins)', () => {

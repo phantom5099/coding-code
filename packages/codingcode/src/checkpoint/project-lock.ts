@@ -1,9 +1,6 @@
 import { openSync, closeSync, unlinkSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { homedir } from 'os';
-import { normalizePath, encodeProjectPath } from '../core/path.js';
-
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+import { normalizePath, encodeProjectPath, getProjectBaseDir } from '../core/path.js';
 
 export class ProjectLock {
   private readonly lockPath: string;
@@ -11,7 +8,7 @@ export class ProjectLock {
 
   constructor(projectPath: string) {
     const encoded = encodeProjectPath(normalizePath(projectPath));
-    this.lockPath = join(PROJECT_BASE, encoded, 'checkpoint', 'repo.lock');
+    this.lockPath = join(getProjectBaseDir(), encoded, 'checkpoint', 'repo.lock');
   }
 
   lock(): void {

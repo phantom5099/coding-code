@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { filterForContext, buildContextMessages } from '../../src/context/service.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import { filterForUI } from '../../src/session/ui-history.js';
 import type { SessionIndex } from '../../src/session/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
-  const dir = join(PROJECT_BASE, slug, 'sessions');
+  const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
@@ -88,7 +88,7 @@ describe('filterForContext', () => {
       const visibleTurnIds = visible.filter((e) => 'turnId' in e).map((e) => (e as any).turnId);
       expect(visibleTurnIds).toEqual([]);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 });
@@ -106,7 +106,7 @@ describe('buildContextMessages with visibility filtering', () => {
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toEqual([]);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 });
@@ -130,7 +130,7 @@ describe('readUIHistory with visibility filtering', () => {
         { type: 'assistant', turnId: 2, content: 'bye', toolCalls: [] },
         { type: 'rollback', throughTurnId: 1, reason: 'test' },
       ];
-      const dir = join(PROJECT_BASE, slug, 'sessions');
+      const dir = join(base.dir, slug, 'sessions');
       mkdirSync(dir, { recursive: true });
       const tp = join(dir, `${sessionId}.jsonl`);
       writeFileSync(tp, events.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
@@ -155,7 +155,7 @@ describe('readUIHistory with visibility filtering', () => {
       const turnIds = visible.filter((e) => 'turnId' in e).map((e) => (e as any).turnId);
       expect(turnIds).toEqual([]);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
@@ -168,7 +168,7 @@ describe('readUIHistory with visibility filtering', () => {
       const turnIds = visible.filter((e) => 'turnId' in e).map((e) => (e as any).turnId);
       expect(new Set(turnIds)).toEqual(new Set([1, 2, 3]));
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 });

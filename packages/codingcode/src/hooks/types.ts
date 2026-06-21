@@ -1,3 +1,5 @@
+import type { Effect } from 'effect';
+
 export type HookPoint =
   | 'tool.execute.before'
   | 'tool.execute.after'
@@ -26,7 +28,9 @@ export interface HookDecision {
   modifiedOutput?: unknown;
 }
 
-export type ObserverHandler = (payload: Record<string, unknown>) => void | Promise<void>;
+export type ObserverHandler = (
+  payload: Record<string, unknown>
+) => Effect.Effect<void, never, any> | void | Promise<void>;
 
 export type DecisionHandler = (
   payload: Record<string, unknown>

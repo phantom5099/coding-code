@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 import { sessionJsonlPathFromCwd, deleteSession } from '../../src/session/file-ops.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
@@ -27,7 +27,7 @@ describe('sessionJsonlPathFromCwd', () => {
       expect(result).toBe(state.transcriptPath);
       expect(existsSync(result)).toBe(true);
     } finally {
-      rmSync(join(PROJECT_BASE, state.projectPath), { recursive: true, force: true });
+      rmSync(join(base.dir, state.projectPath), { recursive: true, force: true });
     }
   });
 
@@ -49,7 +49,7 @@ describe('sessionJsonlPathFromCwd', () => {
       expect(existsSync(state.transcriptPath)).toBe(false);
       expect(existsSync(state.indexPath)).toBe(false);
     } finally {
-      rmSync(join(PROJECT_BASE, state.projectPath), { recursive: true, force: true });
+      rmSync(join(base.dir, state.projectPath), { recursive: true, force: true });
     }
   });
 });

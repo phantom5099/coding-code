@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import {
   loadMcpConfig,
   writeMcpConfig,
@@ -17,35 +17,22 @@ import {
   _setGlobalConfigDir,
 } from '../../src/mcp/config.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const TEST_PROJECT_DIR = join(__dirname, '..', '..', '..', 'test-fixture-mcp-merge');
-const TEST_PROJECT_CODINGCODE = join(TEST_PROJECT_DIR, '.codingcode');
-
-// 模拟全局目录
-const TEST_GLOBAL_DIR = join(__dirname, '..', '..', '..', 'test-fixture-global', '.codingcode');
-const TEST_GLOBAL_PARENT = join(__dirname, '..', '..', '..', 'test-fixture-global');
+let projectDir: string;
+let globalDir: string;
 
 describe('MCP config merge', () => {
   beforeEach(() => {
-    _setGlobalConfigDir(TEST_GLOBAL_PARENT);
-    if (existsSync(TEST_PROJECT_DIR)) rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
-    mkdirSync(TEST_PROJECT_CODINGCODE, { recursive: true });
-    if (existsSync(join(__dirname, '..', '..', '..', 'test-fixture-global')))
-      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global'), {
-        recursive: true,
-        force: true,
-      });
-    mkdirSync(TEST_GLOBAL_DIR, { recursive: true });
+    projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-project-'));
+    globalDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-global-'));
+    mkdirSync(join(projectDir, '.codingcode'), { recursive: true });
+    mkdirSync(join(globalDir, '.codingcode'), { recursive: true });
+    _setGlobalConfigDir(globalDir);
   });
 
   afterEach(() => {
     _setGlobalConfigDir(undefined);
-    if (existsSync(TEST_PROJECT_DIR)) rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
-    if (existsSync(join(__dirname, '..', '..', '..', 'test-fixture-global')))
-      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global'), {
-        recursive: true,
-        force: true,
-      });
+    rmSync(projectDir, { recursive: true, force: true });
+    rmSync(globalDir, { recursive: true, force: true });
   });
 
   it('should merge global and project configs, project overrides global', () => {
@@ -68,7 +55,7 @@ describe('MCP config merge', () => {
     ]);
 
     // Write project config
-    writeMcpConfig(TEST_PROJECT_DIR, [
+    writeMcpConfig(projectDir, [
       {
         name: 'shared-server',
         transport: 'stdio',
@@ -85,7 +72,7 @@ describe('MCP config merge', () => {
       } as any,
     ]);
 
-    const merged = resolveMcpConfig(TEST_PROJECT_DIR);
+    const merged = resolveMcpConfig(projectDir);
 
     // Should have 3 servers: global-server, shared-server (project override), project-server
     expect(merged).toHaveLength(3);
@@ -104,7 +91,7 @@ describe('MCP config merge', () => {
   });
 
   it('should return only project config when no global config', () => {
-    writeMcpConfig(TEST_PROJECT_DIR, [
+    writeMcpConfig(projectDir, [
       {
         name: 'project-server',
         transport: 'stdio',
@@ -114,7 +101,7 @@ describe('MCP config merge', () => {
       } as any,
     ]);
 
-    const merged = resolveMcpConfig(TEST_PROJECT_DIR);
+    const merged = resolveMcpConfig(projectDir);
     expect(merged).toHaveLength(1);
     expect(merged[0]!.name).toBe('project-server');
   });
@@ -130,7 +117,7 @@ describe('MCP config merge', () => {
       } as any,
     ]);
 
-    const merged = resolveMcpConfig(TEST_PROJECT_DIR);
+    const merged = resolveMcpConfig(projectDir);
     expect(merged).toHaveLength(1);
     expect(merged[0]!.name).toBe('global-server');
   });
@@ -140,16 +127,18 @@ describe('MCP disabled state', () => {
   const testServer = '__test_mcp_server__';
 
   beforeEach(() => {
-    _setGlobalConfigDir(TEST_GLOBAL_PARENT);
-    mkdirSync(TEST_PROJECT_CODINGCODE, { recursive: true });
-    if (existsSync(TEST_GLOBAL_DIR)) rmSync(TEST_GLOBAL_DIR, { recursive: true, force: true });
-    mkdirSync(TEST_GLOBAL_DIR, { recursive: true });
+    projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-project-'));
+    globalDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-global-'));
+    mkdirSync(join(projectDir, '.codingcode'), { recursive: true });
+    mkdirSync(join(globalDir, '.codingcode'), { recursive: true });
+    _setGlobalConfigDir(globalDir);
     setGlobalMcpDisabledState(testServer, false);
   });
 
   afterEach(() => {
     _setGlobalConfigDir(undefined);
-    rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
+    rmSync(projectDir, { recursive: true, force: true });
+    rmSync(globalDir, { recursive: true, force: true });
     setGlobalMcpDisabledState(testServer, false);
   });
 
@@ -163,34 +152,34 @@ describe('MCP disabled state', () => {
   });
 
   it('should return undefined when project has no config', () => {
-    expect(getProjectMcpDisabledState(TEST_PROJECT_DIR, testServer)).toBe(undefined);
+    expect(getProjectMcpDisabledState(projectDir, testServer)).toBe(undefined);
   });
 
   it('should persist project-level disabled state', () => {
-    setProjectMcpDisabledState(TEST_PROJECT_DIR, testServer, true);
-    expect(getProjectMcpDisabledState(TEST_PROJECT_DIR, testServer)).toBe(true);
+    setProjectMcpDisabledState(projectDir, testServer, true);
+    expect(getProjectMcpDisabledState(projectDir, testServer)).toBe(true);
   });
 
   it('should reset project-level disabled state', () => {
-    setProjectMcpDisabledState(TEST_PROJECT_DIR, testServer, true);
-    resetProjectMcpDisabledState(TEST_PROJECT_DIR, testServer);
-    expect(getProjectMcpDisabledState(TEST_PROJECT_DIR, testServer)).toBe(undefined);
+    setProjectMcpDisabledState(projectDir, testServer, true);
+    resetProjectMcpDisabledState(projectDir, testServer);
+    expect(getProjectMcpDisabledState(projectDir, testServer)).toBe(undefined);
   });
 
   it('resolveMcpDisabled should use project-level when set', () => {
     setGlobalMcpDisabledState(testServer, false);
-    setProjectMcpDisabledState(TEST_PROJECT_DIR, testServer, true);
-    expect(resolveMcpDisabled(TEST_PROJECT_DIR, testServer)).toBe(true);
+    setProjectMcpDisabledState(projectDir, testServer, true);
+    expect(resolveMcpDisabled(projectDir, testServer)).toBe(true);
   });
 
   it('resolveMcpDisabled should fall back to global when project not set', () => {
     setGlobalMcpDisabledState(testServer, true);
-    expect(resolveMcpDisabled(TEST_PROJECT_DIR, testServer)).toBe(true);
+    expect(resolveMcpDisabled(projectDir, testServer)).toBe(true);
   });
 
   it('resolveMcpDisabled should use project-level enabled over global disabled', () => {
     setGlobalMcpDisabledState(testServer, true);
-    setProjectMcpDisabledState(TEST_PROJECT_DIR, testServer, false);
-    expect(resolveMcpDisabled(TEST_PROJECT_DIR, testServer)).toBe(false);
+    setProjectMcpDisabledState(projectDir, testServer, false);
+    expect(resolveMcpDisabled(projectDir, testServer)).toBe(false);
   });
 });

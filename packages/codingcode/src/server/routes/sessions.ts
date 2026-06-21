@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import type { SessionStoreState } from '../../session/types.js';
 import { SessionService } from '../../session/store.js';
 import {
@@ -16,6 +17,10 @@ import { WorkspaceService } from '../../core/workspace.js';
 import { LLMFactoryService } from '../../llm/factory.js';
 import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
+import { encodeProjectPath, getProjectPlansBaseDir } from '../../core/path.js';
+import { ProjectRuntimeService } from '../../runtime/project-runtime.js';
+import { BUILD_PROFILE, PLAN_PROFILE } from '../../subagent/registry.js';
+import type { PermissionMode } from '../../approval/types.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
@@ -80,7 +85,17 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     }
     const state = result.value as SessionStoreState;
     if (body.initialPermissionMode) {
-      setPermissionMode(state.sessionId, state.indexPath, body.initialPermissionMode);
+      const profile = body.initialPermissionMode === 'plan' ? PLAN_PROFILE : BUILD_PROFILE;
+      const setResult = await runWithLayer(
+        Effect.gen(function* () {
+          const runtime = yield* ProjectRuntimeService;
+          yield* runtime.setSessionProfile(normalizedCwd, state.sessionId, profile);
+        }) as any
+      );
+      if (!setResult.ok) {
+        const { status, body: resp } = errorResponse(setResult.error);
+        return c.json(resp, status as any);
+      }
     }
     return c.json({ sessionId: state.sessionId });
   });
@@ -159,6 +174,116 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     if (!cwd) return c.json({ error: 'cwd required' }, 400);
     const turns = readUIHistory(sessionId, cwd);
     return c.json(turns);
+  });
+
+  // ---- Plan file: read the current plan document for a session ----
+  router.get('/:id/plan', async (c) => {
+    const sessionId = c.req.param('id');
+    const cwd = await rt.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* WorkspaceService;
+        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
+      })
+    );
+    const planDir = join(getProjectPlansBaseDir(), encodeProjectPath(cwd));
+    const planPath = join(planDir, `${sessionId}.md`);
+    if (!existsSync(planPath)) {
+      return c.json({
+        content: '',
+        path: planPath,
+        directory: planDir,
+        exists: false,
+      });
+    }
+    try {
+      const content = readFileSync(planPath, 'utf8');
+      return c.json({
+        content,
+        path: planPath,
+        directory: planDir,
+        exists: true,
+      });
+    } catch (e) {
+      return c.json({ error: `Failed to read plan: ${String(e)}` }, 500);
+    }
+  });
+
+  // ---- Plan/Build mode switching ----
+  router.get('/:id/mode', async (c) => {
+    const sessionId = c.req.param('id');
+    const cwd = await rt.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* WorkspaceService;
+        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
+      })
+    );
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const runtime = yield* ProjectRuntimeService;
+        const profile = runtime.getSessionProfile(sessionId);
+        return {
+          profileName: profile?.name ?? BUILD_PROFILE.name,
+          permissionMode: runtime.getSessionPermissionMode(sessionId),
+        };
+      })
+    );
+    if (!result.ok) {
+      const { status, body } = errorResponse(result.error);
+      return c.json(body, status as any);
+    }
+    return c.json({
+      ...result.value,
+      cwd,
+      available: [
+        { name: PLAN_PROFILE.name, description: PLAN_PROFILE.description },
+        { name: BUILD_PROFILE.name, description: BUILD_PROFILE.description },
+      ],
+    });
+  });
+
+  router.post('/:id/mode', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = (await c.req.json()) as { cwd?: string; profile?: string };
+    const cwd = await rt.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* WorkspaceService;
+        return ws.resolveWorkspaceCwd(body.cwd);
+      })
+    );
+    const profileName = body.profile ?? BUILD_PROFILE.name;
+    if (profileName !== PLAN_PROFILE.name && profileName !== BUILD_PROFILE.name) {
+      return c.json({ error: `Unsupported mode: ${profileName}` }, 400);
+    }
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const runtime = yield* ProjectRuntimeService;
+        const session = yield* SessionService;
+        const target = runtime.resolveSubagentProfile(cwd, profileName) ??
+          (profileName === PLAN_PROFILE.name ? PLAN_PROFILE : BUILD_PROFILE);
+        yield* runtime.setSessionProfile(cwd, sessionId, target);
+        try {
+          const state = yield* session.load(cwd, sessionId);
+          yield* session.updateActiveProfile(state, target.name);
+        } catch {
+          /* session not created yet — ignore */
+        }
+        return {
+          profileName: target.name,
+          permissionMode: runtime.getSessionPermissionMode(sessionId),
+        };
+      })
+    );
+    if (!result.ok) {
+      const { status, body: errBody } = errorResponse(result.error);
+      return c.json(errBody, status as any);
+    }
+    // Sync the live approval pipeline's permission mode (best-effort).
+    const handle = activeApprovalForks.get(sessionId);
+    if (handle) {
+      const permMode: PermissionMode = result.value.permissionMode;
+      Promise.resolve(handle.setPermissionMode(permMode)).catch(() => undefined);
+    }
+    return c.json(result.value);
   });
 
   router.get('/:id/permission-mode', async (c) => {

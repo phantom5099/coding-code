@@ -3,6 +3,9 @@ import { Effect, Layer } from 'effect';
 import { ContextService } from '../../../src/context/service.js';
 import { SessionService } from '../../../src/session/store.js';
 import { LLMFactoryService } from '../../../src/llm/factory.js';
+import { useTempProjectBase } from '../../helpers/project-base.js';
+
+useTempProjectBase();
 
 const { mockLLM } = vi.hoisted(() => ({
   mockLLM: {
