@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { planModeGateHook } from '../../src/plan/gate.js';
 import {
+  planModeGateHook,
   markSessionPlanMode,
   clearPlanModeSession,
-} from '../../src/plan/active-sessions.js';
+} from '../../src/plan/index.js';
 
 describe('planModeGateHook', () => {
   beforeEach(() => {

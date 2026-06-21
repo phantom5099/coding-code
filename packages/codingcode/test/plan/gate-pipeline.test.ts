@@ -5,12 +5,12 @@ import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { READONLY_TOOL_NAMES } from '../../src/approval/presets.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { planApprovalHook } from '../../src/plan/hooks.js';
-import { planModeGateHook } from '../../src/plan/gate.js';
 import {
+  planApprovalHook,
+  planModeGateHook,
   markSessionPlanMode,
   clearPlanModeSession,
-} from '../../src/plan/active-sessions.js';
+} from '../../src/plan/index.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
 
 const decisionHandlers: DecisionHandler[] = [];

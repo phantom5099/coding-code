@@ -4,7 +4,7 @@ import {
   PLAN_PROFILE_NAME,
   BUILD_PROFILE_NAME,
   EXPLORE_PROFILE_NAME,
-} from '../../src/plan/is-plan-profile.js';
+} from '../../src/plan/index.js';
 
 describe('isPlanProfile', () => {
   it('returns true for a profile named "plan"', () => {

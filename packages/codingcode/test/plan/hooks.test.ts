@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planApprovalHook } from '../../src/plan/hooks.js';
+import { planApprovalHook } from '../../src/plan/index.js';
 
 describe('planApprovalHook', () => {
   it('returns null for tools other than submit_plan', () => {

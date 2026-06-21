@@ -3,7 +3,7 @@ import {
   markSessionPlanMode,
   isSessionInPlanMode,
   clearPlanModeSession,
-} from '../../src/plan/active-sessions.js';
+} from '../../src/plan/index.js';
 
 describe('plan/active-sessions side channel', () => {
   beforeEach(() => {

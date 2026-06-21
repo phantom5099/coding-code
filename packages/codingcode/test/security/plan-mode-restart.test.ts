@@ -11,12 +11,12 @@ import { SubagentService } from '../../src/subagent/registry.js';
 import { RulesService } from '../../src/rules/index.js';
 import { ApprovalService } from '../../src/approval/index.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { planModeGateHook } from '../../src/plan/gate.js';
 import {
+  planModeGateHook,
   markSessionPlanMode,
   clearPlanModeSession,
   isSessionInPlanMode,
-} from '../../src/plan/active-sessions.js';
+} from '../../src/plan/index.js';
 import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
 

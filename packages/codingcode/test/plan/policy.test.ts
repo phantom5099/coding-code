@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PLAN_MODE_ALLOWED_TOOLS } from '../../src/plan/policy.js';
+import { PLAN_MODE_ALLOWED_TOOLS } from '../../src/plan/index.js';
 
 describe('PLAN_MODE_ALLOWED_TOOLS', () => {
   it('contains submit_plan', () => {
