@@ -1,12 +1,5 @@
 import type { ConfirmResult } from './confirmation.js';
 
-/**
- * Parses a JSON or legacy string approval response from the desktop client.
- * Tool approval only — the plan-approval modal uses a richer vocabulary
- * (allow / modified / canceled) and is parsed by `parsePlanApprovalResponse`
- * in `plan/`. The two wire protocols share the legacy `'allow' | 'deny'`
- * codes but the plan path is the only one that accepts `modified`/`canceled`.
- */
 export function parseApprovalResponse(raw: string): ConfirmResult {
   if (raw && raw.startsWith('{')) {
     try {

@@ -130,12 +130,6 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
       emit: (point: HookPoint, payload: Record<string, unknown>): Effect.Effect<void> => {
         const projectPath = payload.projectPath as string | undefined;
         const sessionId = payload.sessionId as string | undefined;
-        // Internally `emit` may run Effect-returning observers that `yield*`
-        // services from the caller's fiber. The declared R is `never` so
-        // existing `Effect.runPromise(emit)` fire-and-forget call sites keep
-        // compiling; observers that need services should only be registered
-        // for hook points emitted from a fiber that provides them
-        // (e.g. `tool.execute.after` from `ToolExecutorService`).
         return Effect.gen(function* () {
           for (const entry of allHandlers(point, projectPath, sessionId)) {
             if (entry.type === 'observer') {
@@ -146,8 +140,6 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
                 continue;
               }
               if (typeof (result as { pipe?: unknown }).pipe === 'function') {
-                // Effect-returning observer: run in this fiber's context.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 yield* (result as Effect.Effect<void, never, any>).pipe(
                   Effect.catchAll((e) =>
                     Effect.sync(() => logger.error(`hook emit error [${point}]:`, e))
@@ -161,9 +153,6 @@ export class HookService extends Effect.Service<HookService>()('HookService', {
               }
             }
           }
-          // The gen's actual R is `any` (from inner Effects); expose `never`
-          // to keep callers that do `Effect.runPromise(emit)` happy. See the
-          // contract comment on `ObserverHandler` for the runtime guarantee.
         }) as Effect.Effect<void>;
       },
 

@@ -1,11 +1,6 @@
 import type { UserHookConfig } from '../hooks/types.js';
 import type { PermissionMode } from '../approval/types.js';
 
-/**
- * Permission modes that may be declared on an `AgentProfile`. The `'plan'`
- * mode lives in the `plan/` module and is detected structurally via
- * `isPlanProfile(profile)` rather than via this field.
- */
 export type ProfilePermissionMode = Exclude<PermissionMode, 'plan'>;
 
 export interface AgentProfile {

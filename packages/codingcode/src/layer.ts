@@ -119,9 +119,6 @@ export const AppLayer = Layer.mergeAll(
 );
 
 /** Create the application ManagedRuntime from AppLayer. */
-// Effect's ManagedRuntime.make typing is overly strict for our AppLayer union;
-// runtime has access to all service tags so the cast is safe.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const createAppRuntime = () => ManagedRuntime.make(AppLayer as any);
 
 /** Concrete runtime type for the application. */

@@ -112,9 +112,6 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
             sessionAgentProfiles.set(sessionId, profile);
             const mode = profileToPermissionMode(profile);
             sessionPermissionModes.set(sessionId, mode);
-            // Keep the plan-mode side channel in sync so synchronous decision
-            // hooks (planModeGateHook) can answer "is this session in plan mode?"
-            // without reaching back into the Effect runtime.
             markSessionPlanMode(sessionId, isPlanProfile(profile));
             // 写盘：跨重启恢复时 messages.ts 从 idx 读 permissionMode + activeProfile
             const state = yield* session.load(projectPath, sessionId);

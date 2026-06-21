@@ -172,11 +172,6 @@ export function createDispatchAgentTool(): Effect.Effect<
             profile: agentName,
           });
 
-          // Collect events and extract result — wrap AsyncGenerator in Effect.
-          // The emit is moved out of the Effect.async callback (which runs in a
-          // fresh fiber with no service context) into the surrounding Effect.gen
-          // (which has HookService, SessionService, etc. in scope) so any
-          // observer that yield*'s a service resolves correctly.
           let didComplete = false;
           const finalContent = yield* Effect.async<string, AgentError>((resume) => {
             let content = '';
@@ -218,9 +213,6 @@ export function createDispatchAgentTool(): Effect.Effect<
             })();
           });
 
-          // Emit completion hook in the dispatch_agent Effect.gen fiber so
-          // observers can yield* services. Fire-and-forget — observer errors
-          // are swallowed by HookService.emit itself.
           if (didComplete) {
             yield* hooks
               .emit('agent.subagent.complete', {
