@@ -14,6 +14,9 @@ import { ApprovalService } from '../../src/approval/index.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
 import { createAgentRouter } from '../../src/server/routes/agent.js';
 import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
+
+useTempProjectBase();
 
 const mockHookService = {
   register: () => Effect.succeed(() => {}),

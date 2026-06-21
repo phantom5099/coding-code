@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
@@ -9,15 +8,16 @@ import { estimatePromptTokens } from '../../src/context/service.js';
 import { estimateTokensForContent } from '../../src/core/util.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 function makeFixture(
   sessionId: string,
   slug: string,
   usage?: { prompt: number; completion: number; total: number }
 ) {
-  const dir = join(PROJECT_BASE, slug, 'sessions');
+  const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
@@ -117,7 +117,7 @@ describe('promptEstimate', () => {
       const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
       expect(idx.usage).toEqual(usage);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
@@ -151,7 +151,7 @@ describe('promptEstimate', () => {
       expect(idx.sessionId).toBe(newSessionId);
       expect(estimatePromptTokens(join(fx.dir, `${newSessionId}.jsonl`))).toBeGreaterThan(0);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 });
@@ -166,7 +166,7 @@ describe('token estimation', () => {
 describe('SessionService create sets model', () => {
   it('create sets state.model and persists it to index', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
     try {
       const state = await run(
@@ -181,7 +181,7 @@ describe('SessionService create sets model', () => {
       expect(idx.model).toBe('my-test-model');
     } finally {
       await new Promise((r) => setTimeout(r, 50));
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });
       rmSync(dir, { recursive: true, force: true });
     }
   });

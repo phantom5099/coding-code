@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
-import { mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
@@ -93,11 +93,18 @@ describe('tools/domains/fs projectPath isolation', () => {
   });
 
   it('falls back to process.cwd() when ctx.projectPath is absent', async () => {
-    const cwd = process.cwd();
+    const cwd = mkdtempSync(join(tmpdir(), 'codingcode-test-fallback-cwd-'));
+    const originalCwd = process.cwd();
+    process.chdir(cwd);
     writeFileSync(join(cwd, 'h-test.txt'), 'fallback', 'utf8');
-    const result = await Effect.runPromise(
-      readFileTool.execute({ path: 'h-test.txt', offset: 1, limit: 200 }, undefined)
-    );
-    expect(result).toContain('fallback');
+    try {
+      const result = await Effect.runPromise(
+        readFileTool.execute({ path: 'h-test.txt', offset: 1, limit: 200 }, undefined)
+      );
+      expect(result).toContain('fallback');
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });

@@ -19,6 +19,9 @@ import {
 } from '../../src/plan/index.js';
 import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
+
+useTempProjectBase();
 
 const decisionHandlers: DecisionHandler[] = [];
 

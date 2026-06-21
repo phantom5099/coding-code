@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
 import { ContextService } from '../../../src/context/service.js';
@@ -13,8 +12,9 @@ import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/sess
 import { filterForContext, buildContextMessages } from '../../../src/context/service.js';
 import { readHistory } from '../../../src/session/file-ops.js';
 import { estimateTokens } from '../../../src/core/util.js';
+import { useTempProjectBase } from '../../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 interface FixtureOptions {
   numTurns: number;
@@ -26,7 +26,7 @@ interface FixtureOptions {
 function makeFixture(opts: FixtureOptions) {
   const sessionId = randomUUID();
   const slug = randomUUID();
-  const dir = join(PROJECT_BASE, slug, 'sessions');
+  const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
@@ -84,7 +84,7 @@ function makeFixture(opts: FixtureOptions) {
 }
 
 function cleanup(slug: string) {
-  const dir = join(PROJECT_BASE, slug);
+  const dir = join(base.dir, slug);
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
 }
 

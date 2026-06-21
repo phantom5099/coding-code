@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { mkdtempSync, mkdirSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import {
   loadHookConfigs,
   writeHookConfigs,
@@ -14,39 +14,25 @@ import {
   setProjectHookDisabledState,
   resetProjectHookDisabledState,
   resolveHookDisabled,
+  _setGlobalConfigDir,
 } from '../../src/hooks/config.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const TEST_PROJECT_DIR = join(__dirname, '..', '..', '..', 'test-fixture-hooks-merge');
-const TEST_PROJECT_CODINGCODE = join(TEST_PROJECT_DIR, '.codingcode');
-const TEST_GLOBAL_DIR = join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  'test-fixture-global-hooks',
-  '.codingcode'
-);
+let projectDir: string;
+let globalDir: string;
 
 describe('Hooks config merge', () => {
   beforeEach(() => {
-    if (existsSync(TEST_PROJECT_DIR)) rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
-    mkdirSync(TEST_PROJECT_CODINGCODE, { recursive: true });
-    if (existsSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks')))
-      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks'), {
-        recursive: true,
-        force: true,
-      });
-    mkdirSync(TEST_GLOBAL_DIR, { recursive: true });
+    projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-hooks-merge-project-'));
+    globalDir = mkdtempSync(join(tmpdir(), 'codingcode-test-hooks-merge-global-'));
+    mkdirSync(join(projectDir, '.codingcode'), { recursive: true });
+    mkdirSync(join(globalDir, '.codingcode'), { recursive: true });
+    _setGlobalConfigDir(globalDir);
   });
 
   afterEach(() => {
-    if (existsSync(TEST_PROJECT_DIR)) rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
-    if (existsSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks')))
-      rmSync(join(__dirname, '..', '..', '..', 'test-fixture-global-hooks'), {
-        recursive: true,
-        force: true,
-      });
+    _setGlobalConfigDir(undefined);
+    rmSync(projectDir, { recursive: true, force: true });
+    rmSync(globalDir, { recursive: true, force: true });
   });
 
   it('should merge global and project hooks, project overrides global', () => {
@@ -86,9 +72,9 @@ describe('Hooks config merge', () => {
         enabled: true,
       },
     ];
-    writeHookConfigs(TEST_PROJECT_DIR, projectHooks);
+    writeHookConfigs(projectDir, projectHooks);
 
-    const merged = resolveHookConfigs(TEST_PROJECT_DIR);
+    const merged = resolveHookConfigs(projectDir);
 
     expect(merged).toHaveLength(3);
 
@@ -110,12 +96,18 @@ describe('Hook disabled state', () => {
   const testHook = '__test_hook__';
 
   beforeEach(() => {
-    mkdirSync(TEST_PROJECT_CODINGCODE, { recursive: true });
+    projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-hooks-merge-project-'));
+    globalDir = mkdtempSync(join(tmpdir(), 'codingcode-test-hooks-merge-global-'));
+    mkdirSync(join(projectDir, '.codingcode'), { recursive: true });
+    mkdirSync(join(globalDir, '.codingcode'), { recursive: true });
+    _setGlobalConfigDir(globalDir);
     setGlobalHookDisabledState(testHook, false);
   });
 
   afterEach(() => {
-    rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
+    _setGlobalConfigDir(undefined);
+    rmSync(projectDir, { recursive: true, force: true });
+    rmSync(globalDir, { recursive: true, force: true });
     setGlobalHookDisabledState(testHook, false);
   });
 
@@ -129,34 +121,34 @@ describe('Hook disabled state', () => {
   });
 
   it('should return undefined when project has no config', () => {
-    expect(getProjectHookDisabledState(TEST_PROJECT_DIR, testHook)).toBe(undefined);
+    expect(getProjectHookDisabledState(projectDir, testHook)).toBe(undefined);
   });
 
   it('should persist project-level disabled state', () => {
-    setProjectHookDisabledState(TEST_PROJECT_DIR, testHook, true);
-    expect(getProjectHookDisabledState(TEST_PROJECT_DIR, testHook)).toBe(true);
+    setProjectHookDisabledState(projectDir, testHook, true);
+    expect(getProjectHookDisabledState(projectDir, testHook)).toBe(true);
   });
 
   it('should reset project-level disabled state', () => {
-    setProjectHookDisabledState(TEST_PROJECT_DIR, testHook, true);
-    resetProjectHookDisabledState(TEST_PROJECT_DIR, testHook);
-    expect(getProjectHookDisabledState(TEST_PROJECT_DIR, testHook)).toBe(undefined);
+    setProjectHookDisabledState(projectDir, testHook, true);
+    resetProjectHookDisabledState(projectDir, testHook);
+    expect(getProjectHookDisabledState(projectDir, testHook)).toBe(undefined);
   });
 
   it('resolveHookDisabled should use project-level when set', () => {
     setGlobalHookDisabledState(testHook, false);
-    setProjectHookDisabledState(TEST_PROJECT_DIR, testHook, true);
-    expect(resolveHookDisabled(TEST_PROJECT_DIR, testHook)).toBe(true);
+    setProjectHookDisabledState(projectDir, testHook, true);
+    expect(resolveHookDisabled(projectDir, testHook)).toBe(true);
   });
 
   it('resolveHookDisabled should fall back to global when project not set', () => {
     setGlobalHookDisabledState(testHook, true);
-    expect(resolveHookDisabled(TEST_PROJECT_DIR, testHook)).toBe(true);
+    expect(resolveHookDisabled(projectDir, testHook)).toBe(true);
   });
 
   it('resolveHookDisabled should use project-level enabled over global disabled', () => {
     setGlobalHookDisabledState(testHook, true);
-    setProjectHookDisabledState(TEST_PROJECT_DIR, testHook, false);
-    expect(resolveHookDisabled(TEST_PROJECT_DIR, testHook)).toBe(false);
+    setProjectHookDisabledState(projectDir, testHook, false);
+    expect(resolveHookDisabled(projectDir, testHook)).toBe(false);
   });
 });

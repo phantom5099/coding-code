@@ -3,6 +3,9 @@ import { existsSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ProjectLock } from '../../src/checkpoint/project-lock.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
+
+useTempProjectBase();
 
 describe('ProjectLock', () => {
   const dirs: string[] = [];

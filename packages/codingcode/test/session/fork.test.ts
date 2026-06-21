@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 import { filterForContext, buildContextMessages } from '../../src/context/service.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 function makeFixture(sessionId: string, slug: string) {
-  const dir = join(PROJECT_BASE, slug, 'sessions');
+  const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
@@ -143,7 +143,7 @@ describe('forkSession', () => {
       expect((newEvents[2] as any).content).toBe('reply1');
       expect((newEvents[3] as any).content).toBe('second');
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
@@ -197,7 +197,7 @@ describe('forkSession', () => {
       expect(forkedToolResult).toBeDefined();
       expect(forkedToolResult!.toolCallId).toBe(forkedAssistant!.toolCalls[0]!.id);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
@@ -261,7 +261,7 @@ describe('forkSession', () => {
       const forkUserContents = forkMessages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(forkUserContents).toEqual(['first']);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
@@ -301,14 +301,14 @@ describe('forkSession', () => {
       expect(idx.permissionMode).toBe('default');
       expect(idx.model).toBe('test');
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
   it('fork preserves summary/compact uuid (no regeneration)', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug, 'sessions');
+    const dir = join(base.dir, slug, 'sessions');
     mkdirSync(dir, { recursive: true });
     const transcriptPath = join(dir, `${sessionId}.jsonl`);
     const indexPath = join(dir, `${sessionId}.index.json`);
@@ -379,7 +379,7 @@ describe('forkSession', () => {
       expect((forkedSummary! as any).uuid).toBe(fixedSummaryUuid);
       expect((forkedCompact! as any).uuid).toBe(fixedCompactUuid);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 });

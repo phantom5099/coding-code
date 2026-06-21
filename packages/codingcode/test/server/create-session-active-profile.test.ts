@@ -12,6 +12,9 @@ import { SubagentService } from '../../src/subagent/registry.js';
 import { RulesService } from '../../src/rules/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
 import { createSessionsRouter } from '../../src/server/routes/sessions.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
+
+useTempProjectBase();
 
 const mockHookService = {
   register: () => Effect.succeed(() => {}),

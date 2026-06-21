@@ -7,6 +7,9 @@ import { submitPlanTool } from '../../src/tools/domains/subagent/submit-plan.js'
 import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
 import { getBuiltinTools } from '../../src/tools/providers.js';
 import { TodoService } from '../../src/agent/todo.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
+
+useTempProjectBase();
 
 const mockTodoService = {
   read: () => [],

@@ -5,6 +5,9 @@ import { join, sep } from 'path';
 import { tmpdir } from 'os';
 import { submitPlanTool } from '../../src/tools/domains/subagent/submit-plan';
 import { AgentError } from '../../src/core/error';
+import { useTempProjectBase } from '../helpers/project-base.js';
+
+useTempProjectBase();
 
 // The plan file lives under ~/.codingcode/projects/<encodedCwd>/<sessionId>.md.
 // We don't depend on the exact home directory layout in the test — only on

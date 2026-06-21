@@ -5,6 +5,9 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { submitPlanTool } from '../../src/tools/domains/subagent/submit-plan.js';
 import { afterPlanSubmittedObserver } from '../../src/plan/index.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
+
+useTempProjectBase();
 
 describe('after submit_plan: observer + turn-end flow (v13 fix)', () => {
   let cwd: string;
