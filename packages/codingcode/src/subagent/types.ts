@@ -20,5 +20,4 @@ export interface AgentProfile {
   model?: string;
   hooks?: UserHookConfig[];
   disabled?: boolean;
-  isPrimary?: boolean;
 }

@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
+import { join } from 'path';
+import { homedir } from 'os';
+import { writeFileSync, mkdirSync } from 'fs';
 import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition, ToolExecCtx } from '../../types.js';
-import { getPlanFilePath, getPlanDirectory } from '../../../config/plan-config.js';
-import { writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { encodeProjectPath } from '../../../core/path.js';
 
 export const submitPlanTool: ToolDefinition = {
   name: 'submit_plan',
@@ -31,10 +32,9 @@ export const submitPlanTool: ToolDefinition = {
         );
       }
       try {
-        const planDir = getPlanDirectory(projectPath);
+        const planDir = join(homedir(), '.codingcode', 'projects', encodeProjectPath(projectPath));
         mkdirSync(planDir, { recursive: true });
-        const planPath = getPlanFilePath(projectPath, sessionId);
-        mkdirSync(dirname(planPath), { recursive: true });
+        const planPath = join(planDir, `${sessionId}.md`);
         writeFileSync(planPath, plan_content, 'utf8');
         return `Plan written to ${planPath}`;
       } catch (err) {

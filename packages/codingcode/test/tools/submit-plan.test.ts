@@ -1,14 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Cause } from 'effect';
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
-import { join } from 'path';
+import { join, sep } from 'path';
 import { tmpdir } from 'os';
 import { submitPlanTool } from '../../src/tools/domains/subagent/submit-plan';
 import { AgentError } from '../../src/core/error';
-import { getPlanFilePath } from '../../src/config/plan-config';
 
-// Use the OS temp dir so a crashed/interrupted test run never leaves artifacts
-// in the project workspace root.
+// The plan file lives under ~/.codingcode/projects/<encodedCwd>/<sessionId>.md.
+// We don't depend on the exact home directory layout in the test — only on
+// (1) the file existing at the path the tool returned, and (2) the path
+// ending in <sessionId>.md with the same parent directory across calls.
 const TEST_DIR = join(tmpdir(), 'codingcode-test-submit-plan');
 
 describe('submitPlanTool', () => {
@@ -27,7 +28,7 @@ describe('submitPlanTool', () => {
     expect(submitPlanTool.parameters).toBeDefined();
   });
 
-  it('persists the plan content to the per-session plan file under the project plan dir', async () => {
+  it('persists the plan content and reports the absolute path it wrote to', async () => {
     const sessionId = 'sess-001';
     const planContent = '# My Plan\n\n- step 1\n- step 2';
 
@@ -42,24 +43,29 @@ describe('submitPlanTool', () => {
     // afterPlanSubmitted observer matches on to switch into build mode.
     expect(result).toMatch(/^Plan written to /);
     const writtenPath = result.replace(/^Plan written to /, '');
-    expect(writtenPath).toBe(getPlanFilePath(TEST_DIR, sessionId));
     expect(existsSync(writtenPath)).toBe(true);
     expect(readFileSync(writtenPath, 'utf8')).toBe(planContent);
+    // Path layout: the file lives under ~/.codingcode/projects/<encoded-cwd>/
+    // and is named after the session.
+    expect(writtenPath.endsWith(`${sep}${sessionId}.md`)).toBe(true);
   });
 
   it('overwrites the plan file on subsequent calls (no history retained)', async () => {
     const sessionId = 'sess-002';
     const ctx = { projectPath: TEST_DIR, sessionId } as any;
 
-    await Effect.runPromise(
+    const firstResult = await Effect.runPromise(
       submitPlanTool.execute({ plan_content: 'first version' }, ctx)
     );
-    await Effect.runPromise(
+    const firstPath = firstResult.replace(/^Plan written to /, '');
+
+    const secondResult = await Effect.runPromise(
       submitPlanTool.execute({ plan_content: 'second version' }, ctx)
     );
+    const secondPath = secondResult.replace(/^Plan written to /, '');
 
-    const planPath = getPlanFilePath(TEST_DIR, sessionId);
-    expect(readFileSync(planPath, 'utf8')).toBe('second version');
+    expect(secondPath).toBe(firstPath);
+    expect(readFileSync(secondPath, 'utf8')).toBe('second version');
   });
 
   it('fails with TOOL_EXECUTION_FAILED when projectPath is missing from the tool context', async () => {
@@ -71,7 +77,6 @@ describe('submitPlanTool', () => {
     );
     expect(result._tag).toBe('Failure');
     if (result._tag === 'Failure') {
-      // Use Cause.failureOption to safely extract the original error.
       const failureOption = Cause.failureOption(result.cause);
       expect(failureOption._tag).toBe('Some');
       if (failureOption._tag === 'Some') {

@@ -1,6 +1,11 @@
 import { expect, it, describe } from 'vitest';
 import { Effect } from 'effect';
-import { SubagentService, EXPLORE_PROFILE, PLAN_PROFILE } from '../../src/subagent/registry';
+import {
+  SubagentService,
+  EXPLORE_PROFILE,
+  PLAN_PROFILE,
+  BUILD_PROFILE,
+} from '../../src/subagent/registry';
 import type { AgentProfile } from '../../src/subagent/types';
 
 describe('SubagentService', () => {
@@ -115,7 +120,6 @@ describe('SubagentService', () => {
     // enforced by the `plan/planModeGateHook` registered on `tool.approval.pre`.
     // The approval pipeline itself only sees generic permission modes.
     expect(PLAN_PROFILE.permissionMode).toBeUndefined();
-    expect(PLAN_PROFILE.isPrimary).toBe(true);
     expect(PLAN_PROFILE.maxSteps).toBe(180);
     expect(PLAN_PROFILE.tools).toContain('read_file');
     expect(PLAN_PROFILE.tools).toContain('search_files');
@@ -227,5 +231,25 @@ describe('SubagentService', () => {
     expect(all.projectList.length).toBe(3);
     expect(all.globalList.some((p) => p.name === 'p1')).toBe(false);
     expect(all.projectList.some((p) => p.name === 'p1')).toBe(true);
+  });
+});
+
+describe('built-in profile set', () => {
+  it('exposes exactly {plan, build, explore} as the built-in global profiles', () => {
+    // The current product surface is intentionally limited to two main
+    // entry profiles (plan, build) plus the read-only explore subagent
+    // used by plan via dispatch_agent. The set-equivalence assertion
+    // catches accidental additions or removals during refactors.
+    const builtinNames = [PLAN_PROFILE.name, BUILD_PROFILE.name, EXPLORE_PROFILE.name].sort();
+    expect(builtinNames).toEqual(['build', 'explore', 'plan']);
+  });
+
+  it('does not declare the removed isPrimary field on any built-in profile', () => {
+    // isPrimary was a forward-looking marker that no runtime code read;
+    // the field has been deleted from AgentProfile. This test guards
+    // against a future re-introduction without an actual consumer.
+    expect('isPrimary' in PLAN_PROFILE).toBe(false);
+    expect('isPrimary' in BUILD_PROFILE).toBe(false);
+    expect('isPrimary' in EXPLORE_PROFILE).toBe(false);
   });
 });

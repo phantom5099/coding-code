@@ -169,7 +169,6 @@ export const PLAN_PROFILE: AgentProfile = {
   name: 'plan',
   description:
     'Planning agent: analyzes the codebase, produces an implementation plan, and submits it via submit_plan for user approval. No business code modifications.',
-  isPrimary: true,
   // No `permissionMode` — plan mode is enforced structurally by the
   // `plan/planModeGateHook` (registered on `tool.approval.pre`) and
   // detected via `isPlanProfile(profile)`. The approval pipeline itself
@@ -215,7 +214,6 @@ export const BUILD_PROFILE: AgentProfile = {
   name: 'build',
   description:
     'Default build agent: full read/write access. Implements changes the user has approved.',
-  isPrimary: true,
   permissionMode: 'default',
   tools: [
     'read_file',

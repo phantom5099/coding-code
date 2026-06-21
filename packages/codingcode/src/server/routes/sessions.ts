@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import type { SessionStoreState } from '../../session/types.js';
 import { SessionService } from '../../session/store.js';
 import {
@@ -16,7 +18,7 @@ import { WorkspaceService } from '../../core/workspace.js';
 import { LLMFactoryService } from '../../llm/factory.js';
 import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
-import { getPlanFilePath, getPlanDirectory } from '../../config/plan-config.js';
+import { encodeProjectPath } from '../../core/path.js';
 import { ProjectRuntimeService } from '../../runtime/project-runtime.js';
 import { BUILD_PROFILE, PLAN_PROFILE } from '../../subagent/registry.js';
 import type { PermissionMode } from '../../approval/types.js';
@@ -184,12 +186,13 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         return ws.resolveWorkspaceCwd(c.req.query('cwd'));
       })
     );
-    const planPath = getPlanFilePath(cwd, sessionId);
+    const planDir = join(homedir(), '.codingcode', 'projects', encodeProjectPath(cwd));
+    const planPath = join(planDir, `${sessionId}.md`);
     if (!existsSync(planPath)) {
       return c.json({
         content: '',
         path: planPath,
-        directory: getPlanDirectory(cwd),
+        directory: planDir,
         exists: false,
       });
     }
@@ -198,7 +201,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
       return c.json({
         content,
         path: planPath,
-        directory: getPlanDirectory(cwd),
+        directory: planDir,
         exists: true,
       });
     } catch (e) {

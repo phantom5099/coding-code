@@ -6,10 +6,6 @@ describe('PLAN_PROFILE', () => {
     expect(PLAN_PROFILE.name).toBe('plan');
   });
 
-  it('is marked as the primary plan/build profile', () => {
-    expect(PLAN_PROFILE.isPrimary).toBe(true);
-  });
-
   it('does NOT set a permissionMode (plan mode is enforced structurally by the plan-mode gate hook)', () => {
     // After the plan refactor, the approval pipeline no longer special-cases
     // a 'plan' PermissionMode. Plan mode is detected via `isPlanProfile(profile)`
@@ -60,10 +56,6 @@ describe('PLAN_PROFILE', () => {
 describe('BUILD_PROFILE', () => {
   it('has name "build"', () => {
     expect(BUILD_PROFILE.name).toBe('build');
-  });
-
-  it('is marked as the primary plan/build profile', () => {
-    expect(BUILD_PROFILE.isPrimary).toBe(true);
   });
 
   it('uses the default permission mode (full read/write)', () => {
