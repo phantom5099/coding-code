@@ -19,9 +19,12 @@ import { RulesService } from './rules/index.js';
 import { MemoryService } from './memory/index.js';
 import { ContextService } from './context/service.js';
 import { SchedulerService } from './scheduler/service.js';
-import { planApprovalHook } from './hooks/built-in/plan-approval.js';
-import { planSubagentWhitelistHook } from './hooks/built-in/plan-subagent-whitelist.js';
-import { afterPlanSubmittedObserver } from './hooks/built-in/after-plan-submitted.js';
+import {
+  planApprovalHook,
+  planSubagentWhitelistHook,
+  afterPlanSubmittedObserver,
+  planModeGateHook,
+} from './plan/index.js';
 
 export const WorkspaceLayer = WorkspaceService.Default;
 export const TodoLayer = TodoService.Default;
@@ -52,17 +55,21 @@ export const SystemHookLayer = HookLayer.pipe(
   Layer.tap((context) =>
     Effect.gen(function* () {
       const hooks = Context.get(context, HookService);
-      // plan/build 1. submit_plan triggers 3-option approval modal
+      yield* hooks.registerDecision('tool.approval.pre', planModeGateHook, {
+        priority: -1000,
+        source: 'system',
+      });
+      // plan 2. submit_plan triggers 3-option approval modal
       yield* hooks.registerDecision('tool.approval.pre', planApprovalHook, {
         priority: 1000,
         source: 'system',
       });
-      // plan/build 2. plan mode can only dispatch 'explore' subagent
+      // plan 3. plan mode can only dispatch 'explore' subagent
       yield* hooks.registerDecision('agent.subagent.spawn.before', planSubagentWhitelistHook, {
         priority: 900,
         source: 'system',
       });
-      // plan/build 3. after submit_plan: switch to build profile
+      // plan 4. after submit_plan: switch to build profile
       yield* hooks.register('tool.execute.after', afterPlanSubmittedObserver, {
         source: 'system',
       });

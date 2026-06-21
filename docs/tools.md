@@ -108,7 +108,7 @@ interface ToolVisibilityPolicy {
 |------|------|------|
 | 1 | **RuleEngine** | 规则引擎匹配，支持 glob 模式匹配工具名和参数，按优先级排序 |
 | 2 | **ReadonlyWhitelist** | 只读工具自动放行（read_file, search_code, search_files, fetch_url, web_search, dispatch_agent, todo_write） |
-| 3 | **PermissionMode** | 权限模式判断：`plan`（只允许只读）、`bypass`（全部放行）、`acceptEdits`（非破坏性工具放行）、`default`（继续下一层） |
+| 3 | **PermissionMode** | 权限模式判断：`bypass`（全部放行）、`acceptEdits`（非破坏性工具放行）、`default`（继续下一层）。`plan` 模式由独立的 `plan/planModeGateHook` 在 Layer 4 强制，不在此层处理 |
 | 4 | **HookPreToolUse** | 钩子决策，可返回 allow/deny/ask/continue，支持 `modifiedInput` 修改参数 |
 | 5 | **UserConfirmation** | 异步用户确认，支持 allow/deny/always/never 四种响应，always/never 会持久化为规则 |
 | 6 | **AuditLog** | 每一层决策后记录审计日志，通过 `tool.approval.post` 钩子发出 |
@@ -132,13 +132,14 @@ interface ToolVisibilityPolicy {
 ### 权限模式
 
 ```typescript
-type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypass';
+type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
 ```
 
 - `default`：逐层审批，危险操作需用户确认
 - `acceptEdits`：非破坏性工具自动放行，减少确认弹窗
-- `plan`：只允许只读工具，适合纯分析场景
 - `bypass`：全部放行，跳过所有审批（慎用）
+
+> `plan` 不再是 `PermissionMode` 的成员。plan 模式通过 `AgentProfile.name === 'plan'` 结构化识别，由 `plan/planModeGateHook` 在 `tool.approval.pre` 阶段（priority -1000）强制拒绝非白名单工具。白名单见 `plan/policy.ts` 的 `PLAN_MODE_ALLOWED_TOOLS`。
 
 ### OS 级沙箱（预留）
 

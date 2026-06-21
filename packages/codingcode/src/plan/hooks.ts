@@ -1,4 +1,4 @@
-import type { HookDecision, DecisionHandler } from '../types.js';
+import type { DecisionHandler } from '../hooks/types.js';
 
 /**
  * System hook: triggers a 3-option approval modal (Implement / Modify / Cancel)

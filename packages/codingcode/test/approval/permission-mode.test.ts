@@ -63,7 +63,7 @@ describe('Global permission mode state', () => {
   });
 
   it('can be set to all valid modes', async () => {
-    const modes = ['default', 'acceptEdits', 'plan', 'bypass'] as const;
+    const modes = ['default', 'acceptEdits', 'bypass'] as const;
     for (const mode of modes) {
       await run((svc) => svc.setPermissionMode(mode));
       const current = await run((svc) => Effect.succeed(svc.getPermissionMode()));
@@ -72,11 +72,11 @@ describe('Global permission mode state', () => {
   });
 
   it('is shared across multiple reads (module-level singleton)', async () => {
-    await run((svc) => svc.setPermissionMode('plan'));
+    await run((svc) => svc.setPermissionMode('bypass'));
     const mode1 = await run((svc) => Effect.succeed(svc.getPermissionMode()));
     const mode2 = await run((svc) => Effect.succeed(svc.getPermissionMode()));
     // Both reads return the same value — no per-call isolation
-    expect(mode1).toBe('plan');
-    expect(mode2).toBe('plan');
+    expect(mode1).toBe('bypass');
+    expect(mode2).toBe('bypass');
   });
 });

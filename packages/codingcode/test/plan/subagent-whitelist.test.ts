@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planSubagentWhitelistHook } from '../../../src/hooks/built-in/plan-subagent-whitelist';
+import { planSubagentWhitelistHook } from '../../src/plan/subagent-whitelist.js';
 
 describe('planSubagentWhitelistHook', () => {
   it('returns null when no parentSessionId is present (top-level dispatch is not in scope)', () => {

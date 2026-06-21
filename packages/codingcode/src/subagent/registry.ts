@@ -170,7 +170,10 @@ export const PLAN_PROFILE: AgentProfile = {
   description:
     'Planning agent: analyzes the codebase, produces an implementation plan, and submits it via submit_plan for user approval. No business code modifications.',
   isPrimary: true,
-  permissionMode: 'plan',
+  // No `permissionMode` — plan mode is enforced structurally by the
+  // `plan/planModeGateHook` (registered on `tool.approval.pre`) and
+  // detected via `isPlanProfile(profile)`. The approval pipeline itself
+  // does not need to know about this profile.
   systemPrompt: `You are a planning agent. Your role is to analyze the codebase and produce an implementation plan that the user reviews and approves before any code is written.
 
 You can read files, search code, and dispatch the 'explore' subagent for context-heavy investigation. You can submit a plan via the \`submit_plan\` tool — each call overwrites the previous plan file; use it to revise your plan based on user feedback.

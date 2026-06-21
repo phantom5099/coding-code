@@ -76,6 +76,9 @@ describe('ProjectRuntimeService.setSessionProfile', () => {
   });
 
   it('writes idx.permissionMode AND idx.activeProfile when switching to plan', async () => {
+    // After the plan refactor, `permissionMode` is no longer a plan-specific
+    // value. The plan-mode signal lives in `activeProfile`; the approval
+    // pipeline itself only sees a generic permission mode.
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -85,7 +88,7 @@ describe('ProjectRuntimeService.setSessionProfile', () => {
 
     expect(existsSync(indexPath)).toBe(true);
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.permissionMode).toBe('plan');
+    expect(idx.permissionMode).toBe('default');
     expect(idx.activeProfile).toBe('plan');
   });
 
@@ -109,7 +112,10 @@ describe('ProjectRuntimeService.setSessionProfile', () => {
         yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
         const profile = runtime.getSessionProfile(sessionId);
         expect(profile?.name).toBe('plan');
-        expect(runtime.getSessionPermissionMode(sessionId)).toBe('plan');
+        // The approval-side permission mode is now 'default' (the pipeline
+        // is plan-blind). The plan-mode signal is structural via the
+        // profile's name + the `plan/active-sessions` side channel.
+        expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
       })
     );
   });

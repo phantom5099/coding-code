@@ -5,7 +5,12 @@ import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { READONLY_TOOL_NAMES } from '../../src/approval/presets.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { planApprovalHook } from '../../src/hooks/built-in/plan-approval.js';
+import { planApprovalHook } from '../../src/plan/hooks.js';
+import { planModeGateHook } from '../../src/plan/gate.js';
+import {
+  markSessionPlanMode,
+  clearPlanModeSession,
+} from '../../src/plan/active-sessions.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
 
 const decisionHandlers: DecisionHandler[] = [];
@@ -40,8 +45,6 @@ let capturedApproval: any = null;
 
 function makeMockApprovalWait() {
   return {
-    // waitForConfirm returns a deny (we don't need a real user response — the
-    // tests only care about the chain up to the user confirm).
     waitForConfirm: () => Effect.succeed({ type: 'deny' }) as any,
     resolveConfirm: () => Effect.succeed(false),
     getPending: () => Effect.succeed([]),
@@ -52,7 +55,6 @@ function makeMockApprovalWait() {
     registerEmitter: () => Effect.succeed(undefined),
     delegateEmitter: () => Effect.succeed(undefined),
     unregisterEmitter: () => Effect.succeed(undefined),
-    // hasEmitter returns true so the pipeline proceeds to userConfirmAsync
     hasEmitter: () => Effect.succeed(true),
   };
 }
@@ -60,12 +62,18 @@ function makeMockApprovalWait() {
 function runPipelineWithMock(opts: {
   tool: string;
   input: any;
-  permissionMode: 'plan' | 'default' | 'bypass' | 'acceptEdits';
+  permissionMode: 'default' | 'acceptEdits' | 'bypass';
   sessionId: string;
+  planMode: boolean;
 }) {
   capturedApproval = null;
   decisionHandlers.length = 0;
+  decisionHandlers.push(planModeGateHook);
   decisionHandlers.push(planApprovalHook);
+
+  if (opts.planMode) markSessionPlanMode(opts.sessionId, true);
+  else markSessionPlanMode(opts.sessionId, false);
+
   const mockWait = makeMockApprovalWait();
   const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
   const WaitTestLayer = Layer.succeed(ApprovalWaitService, mockWait as any);
@@ -84,82 +92,108 @@ function runPipelineWithMock(opts: {
   );
 }
 
-describe('Approval Pipeline — plan mode submit_plan (v13 改 2)', () => {
-  it('Layer 3 returns null for submit_plan in plan mode (delegates to Layer 4/5)', async () => {
+describe('Plan mode gate + approval hook integration', () => {
+  beforeEach(() => {
+    capturedApproval = null;
+    decisionHandlers.length = 0;
+  });
+
+  it('plan mode + submit_plan: gate lets it through, planApprovalHook fires with payload', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'submit_plan',
       input: { plan_content: '# My plan' },
-      permissionMode: 'plan',
+      permissionMode: 'default', // plan mode is now a side-channel flag, not PermissionMode
       sessionId: 's1',
+      planMode: true,
     });
-    // Layer 3 returns null. Layer 4 returns ask. Layer 5 calls emitApprovalRequest,
-    // then waitForConfirm returns { type: 'deny' } from the mock. The switch
-    // maps deny → { source: 'user-confirm' }.
-    expect(decision.type).toBe('deny');
+    expect(decision.type).toBe('deny'); // mock waitForConfirm returns deny
     expect(decision.source).toBe('user-confirm');
-    // Crucially, the decision is NOT 'allow' with source 'permission-mode-plan-whitelist'
-    // (which was the old buggy behavior where Layer 3 short-circuited).
-    expect(decision.source).not.toBe('permission-mode-plan-whitelist');
-  });
-
-  it('Layer 4 planApprovalHook fires and propagates plan_content payload to Layer 5', async () => {
-    const decision: any = await runPipelineWithMock({
-      tool: 'submit_plan',
-      input: { plan_content: '# Plan v1' },
-      permissionMode: 'plan',
-      sessionId: 's2',
-    });
-    // Layer 4 hook returned { decision: 'ask', payload: { plan_content, ... } }.
-    // Layer 5 then called emitApprovalRequest with that payload.
     expect(capturedApproval).not.toBeNull();
     expect(capturedApproval.tool).toBe('submit_plan');
-    expect(capturedApproval.args).toEqual({ plan_content: '# Plan v1' });
-    expect(capturedApproval.payload).toBeDefined();
-    expect(capturedApproval.payload.plan_content).toBe('# Plan v1');
-    // Session and call id propagated
-    expect(capturedApproval.sessionId).toBe('s2');
-    expect(capturedApproval.id).toBeDefined();
-    // Result is still deny (from waitForConfirm mock)
-    expect(decision.type).toBe('deny');
+    expect(capturedApproval.payload.plan_content).toBe('# My plan');
+    expect(capturedApproval.sessionId).toBe('s1');
+
+    clearPlanModeSession('s1');
   });
 
-  it('Layer 3 still denies write_file in plan mode (other writes are blocked)', async () => {
+  it('plan mode + write_file: gate denies before reaching user confirmation', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'write_file',
       input: { path: '/tmp/x', content: 'foo' },
-      permissionMode: 'plan',
-      sessionId: 's3',
+      permissionMode: 'default',
+      sessionId: 's2',
+      planMode: true,
     });
+    // Gate denied, so no user confirmation fired.
     expect(decision.type).toBe('deny');
     expect(decision.reason).toMatch(/plan mode/i);
-    expect(decision.source).toBe('permission-mode');
+    expect(capturedApproval).toBeNull();
+
+    clearPlanModeSession('s2');
   });
 
-  it('Layer 3 still denies execute_command in plan mode', async () => {
+  it('plan mode + execute_command: gate denies with plan-mode reason', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'execute_command',
       input: { command: 'rm -rf /' },
-      permissionMode: 'plan',
-      sessionId: 's4',
+      permissionMode: 'default',
+      sessionId: 's3',
+      planMode: true,
     });
     expect(decision.type).toBe('deny');
     expect(decision.reason).toMatch(/plan mode/i);
-    expect(decision.source).toBe('permission-mode');
+    expect(capturedApproval).toBeNull();
+
+    clearPlanModeSession('s3');
   });
 
-  it('submit_plan in default mode: Layer 4 still fires (hook is universal for submit_plan)', async () => {
+  it('plan mode + dispatch_agent: gate lets it through (subagent-whitelist hook handles further restriction at spawn time)', async () => {
+    const decision: any = await runPipelineWithMock({
+      tool: 'dispatch_agent',
+      input: { agent: 'build', prompt: 'do something' },
+      permissionMode: 'default',
+      sessionId: 's4',
+      planMode: true,
+    });
+    // The gate does not deny dispatch_agent (it's in PLAN_MODE_ALLOWED_TOOLS).
+    // The pipeline may short-circuit at Layer 2 (readonly-whitelist) since
+    // dispatch_agent is in READONLY_TOOL_NAMES. The subagent-whitelist hook
+    // (a separate hook on agent.subagent.spawn.before) is what actually
+    // restricts the dispatched profile to 'explore' — that runs later, when
+    // the subagent is spawned, not at approval time.
+    expect(decision.type).toBe('allow');
+    expect(decision.type).not.toBe('deny');
+
+    clearPlanModeSession('s4');
+  });
+
+  it('build mode + write_file: gate does not fire, pipeline falls through normally', async () => {
+    const decision: any = await runPipelineWithMock({
+      tool: 'write_file',
+      input: { path: '/tmp/x', content: 'foo' },
+      permissionMode: 'default',
+      sessionId: 's5',
+      planMode: false,
+    });
+    // build mode: write_file is not in any allowlist, pipeline reaches user confirm
+    expect(capturedApproval).not.toBeNull();
+    expect(decision.source).toBe('user-confirm');
+
+    clearPlanModeSession('s5');
+  });
+
+  it('build mode + submit_plan: gate does not fire, planApprovalHook still produces ask+payload (universal trigger)', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'submit_plan',
       input: { plan_content: '# plan' },
       permissionMode: 'default',
-      sessionId: 's5',
+      sessionId: 's6',
+      planMode: false,
     });
-    // In default mode, Layer 3 returns null. Layer 4 (planApprovalHook) fires
-    // and returns ask with payload. Layer 5 calls emitApprovalRequest.
     expect(capturedApproval).not.toBeNull();
     expect(capturedApproval.payload.plan_content).toBe('# plan');
-    // Result is deny (from waitForConfirm mock)
-    expect(decision.type).toBe('deny');
     expect(decision.source).toBe('user-confirm');
+
+    clearPlanModeSession('s6');
   });
 });

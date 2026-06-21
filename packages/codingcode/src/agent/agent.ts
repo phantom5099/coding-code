@@ -28,6 +28,7 @@ import { getBuiltinTools } from '../tools/providers.js';
 import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
 import { canonicalizeSchema } from '../tools/utils/canonicalize-schema.js';
 import { normalizePath } from '../core/path.js';
+import { isPlanProfile } from '../plan/index.js';
 
 const REACTIVE_COMPACT_MAX_RETRIES = 3;
 import { RulesService } from '../rules/index.js';
@@ -241,10 +242,9 @@ export function agentLoop(
     const enabledAgentProfiles = resolveSubagentEnabled(projectPath)
       ? allAgentProfiles.filter((p) => !resolveAgentDisabled(projectPath, p.name))
       : [];
-    const visibleAgentProfiles =
-      profile?.name === 'plan'
-        ? enabledAgentProfiles.filter((p) => p.name === 'explore')
-        : enabledAgentProfiles;
+    const visibleAgentProfiles = isPlanProfile(profile)
+      ? enabledAgentProfiles.filter((p) => p.name === 'explore')
+      : enabledAgentProfiles;
     const basePrompt =
       opts.systemOverride ??
       buildSystemPrompt({
@@ -290,7 +290,7 @@ export function agentLoop(
         let allToolDefs: ToolDefinition[] = [...builtinTools, ...(opts.mcpTools ?? [])];
         if (opts.dispatchTool && resolveSubagentEnabled(projectPath))
           allToolDefs = [...allToolDefs, opts.dispatchTool];
-        if (profile?.name === 'plan') allToolDefs = [...allToolDefs, submitPlanTool];
+        if (isPlanProfile(profile)) allToolDefs = [...allToolDefs, submitPlanTool];
 
         const allowedByPolicy = opts.toolPolicy?.allowedTools;
         let filteredDefs = allToolDefs;

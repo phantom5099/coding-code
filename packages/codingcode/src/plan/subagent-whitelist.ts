@@ -1,4 +1,4 @@
-import type { DecisionHandler } from '../types.js';
+import type { DecisionHandler } from '../hooks/types.js';
 
 /**
  * System hook: in plan mode, the planning agent can only dispatch the 'explore'

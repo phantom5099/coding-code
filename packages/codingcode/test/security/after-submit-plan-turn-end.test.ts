@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { submitPlanTool } from '../../src/tools/domains/subagent/submit-plan.js';
-import { afterPlanSubmittedObserver } from '../../src/hooks/built-in/after-plan-submitted.js';
+import { afterPlanSubmittedObserver } from '../../src/plan/after-submit.js';
 
 describe('after submit_plan: observer + turn-end flow (v13 fix)', () => {
   let cwd: string;

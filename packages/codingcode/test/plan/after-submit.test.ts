@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { afterPlanSubmittedObserver } from '../../../src/hooks/built-in/after-plan-submitted';
+import { afterPlanSubmittedObserver } from '../../src/plan/after-submit.js';
 
 async function runObserver(payload: Record<string, unknown>): Promise<unknown> {
   const result = afterPlanSubmittedObserver(payload as any);

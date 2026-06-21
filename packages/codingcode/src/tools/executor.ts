@@ -45,6 +45,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           input: args as Record<string, unknown>,
           callId: opts?.callId,
           sessionId: opts?.sessionId ?? 'default',
+          projectPath: opts?.projectPath,
         });
 
         if (decision.type === 'deny') {

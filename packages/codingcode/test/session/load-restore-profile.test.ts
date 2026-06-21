@@ -85,7 +85,9 @@ describe('SessionStoreState.activeProfile persistence', () => {
   it('state.activeProfile is set when index has activeProfile field', async () => {
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
     idx.activeProfile = 'plan';
-    idx.permissionMode = 'plan';
+    // After the plan refactor, `permissionMode` no longer encodes plan-mode.
+    // Set it to 'default' to match what the runtime now writes.
+    idx.permissionMode = 'default';
     writeFileSync(indexPath, JSON.stringify(idx, null, 2));
 
     const state = await rt.runPromise(
@@ -100,7 +102,7 @@ describe('SessionStoreState.activeProfile persistence', () => {
   it('runtime.getSessionProfile reflects restored profile after restoreSessionProfile', async () => {
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
     idx.activeProfile = 'plan';
-    idx.permissionMode = 'plan';
+    idx.permissionMode = 'default';
     writeFileSync(indexPath, JSON.stringify(idx, null, 2));
 
     await rt.runPromise(
@@ -113,7 +115,8 @@ describe('SessionStoreState.activeProfile persistence', () => {
         yield* runtime.restoreSessionProfile(cwd, sessionId, state.activeProfile);
         const profile = runtime.getSessionProfile(sessionId);
         expect(profile?.name).toBe('plan');
-        expect(runtime.getSessionPermissionMode(sessionId)).toBe('plan');
+        // Approval-side permission mode is 'default' (pipeline is plan-blind).
+        expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
       })
     );
   });

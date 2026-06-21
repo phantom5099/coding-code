@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalService } from '../../approval/index.js';
 import { ProjectRuntimeService } from '../../runtime/project-runtime.js';
+import { isPlanProfile } from '../../plan/index.js';
 import type { PermissionMode } from '../../approval/types.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -9,7 +10,6 @@ type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 const VALID_PERMISSION_MODES = new Set<PermissionMode>([
   'default',
   'acceptEdits',
-  'plan',
   'bypass',
 ]);
 
@@ -35,10 +35,10 @@ export function createAgentRouter(rt: ManagedRt): Hono {
         Effect.gen(function* () {
           const runtime = yield* ProjectRuntimeService;
           const profile = runtime.getSessionProfile(body.sessionId!);
-          return profile?.name;
+          return profile;
         })
       );
-      if (result === 'plan') {
+      if (isPlanProfile(result)) {
         return c.json(
           {
             error:

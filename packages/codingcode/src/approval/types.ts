@@ -1,4 +1,4 @@
-export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypass';
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
 
 export interface ToolCallRequest {
   tool: string;

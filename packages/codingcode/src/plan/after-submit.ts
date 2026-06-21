@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
-import type { ObserverHandler } from '../types.js';
-import { ApprovalService } from '../../approval/index.js';
-import { ProjectRuntimeService } from '../../runtime/project-runtime.js';
-import { SessionService } from '../../session/store.js';
+import type { ObserverHandler } from '../hooks/types.js';
+import { ApprovalService } from '../approval/index.js';
+import { ProjectRuntimeService } from '../runtime/project-runtime.js';
+import { SessionService } from '../session/store.js';
 import { createLogger } from '@codingcode/infra/logger';
-import { BUILD_PROFILE } from '../../subagent/registry.js';
+import { BUILD_PROFILE } from '../subagent/registry.js';
 
 const logger = createLogger();
 

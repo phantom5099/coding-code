@@ -10,8 +10,13 @@ describe('PLAN_PROFILE', () => {
     expect(PLAN_PROFILE.isPrimary).toBe(true);
   });
 
-  it('uses the "plan" permission mode so the approval pipeline can deny writes', () => {
-    expect(PLAN_PROFILE.permissionMode).toBe('plan');
+  it('does NOT set a permissionMode (plan mode is enforced structurally by the plan-mode gate hook)', () => {
+    // After the plan refactor, the approval pipeline no longer special-cases
+    // a 'plan' PermissionMode. Plan mode is detected via `isPlanProfile(profile)`
+    // and enforced by the `plan/planModeGateHook` registered on
+    // `tool.approval.pre`. The profile intentionally has no `permissionMode`
+    // field so the approval pipeline treats it like any other profile.
+    expect(PLAN_PROFILE.permissionMode).toBeUndefined();
   });
 
   it('has maxSteps set to 180', () => {
@@ -23,7 +28,7 @@ describe('PLAN_PROFILE', () => {
     expect(PLAN_PROFILE.systemPrompt!.length).toBeGreaterThan(50);
   });
 
-  it('excludes write tools (the approval pipeline enforces this via permission mode)', () => {
+  it('excludes write tools (the plan-mode gate hook enforces this at approval time)', () => {
     const writeTools = ['write_file', 'edit_file', 'execute_command'];
     for (const wt of writeTools) {
       expect(PLAN_PROFILE.tools).not.toContain(wt);

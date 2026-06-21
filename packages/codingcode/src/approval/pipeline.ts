@@ -16,6 +16,9 @@ export interface PipelineOptions {
   onNever?: (rule: PermissionRule) => void;
   /** Session ID for session-scoped approval routing. */
   sessionId: string;
+  /** Project path for session-scoped approval routing (used by decision hooks
+   *  that need to inspect the session's runtime state). */
+  projectPath?: string;
   /** Optional LLM ToolCall ID to use as approval request ID. */
   callId?: string;
 }
@@ -83,6 +86,8 @@ export function runPipeline(
         const result = yield* hooks.emitDecision('tool.approval.pre', {
           toolName: request.tool,
           args: request.input,
+          sessionId: opts.sessionId,
+          projectPath: opts.projectPath,
         });
         if (result && result.decision === 'continue') {
           return null;
@@ -113,7 +118,7 @@ export function runPipeline(
         if (hookResult.payload) {
           nextRequest.context = {
             ...(nextRequest.context ?? {}),
-            _plan_approval_payload: hookResult.payload,
+            _hook_payload: hookResult.payload,
           };
         }
         request = nextRequest;
@@ -133,7 +138,7 @@ export function runPipeline(
         return final;
       }
 
-      const confirmPayload = (request.context as { _plan_approval_payload?: Record<string, unknown> } | undefined)?._plan_approval_payload;
+      const confirmPayload = (request.context as { _hook_payload?: Record<string, unknown> } | undefined)?._hook_payload;
 
       const confirmResult = yield* userConfirmAsync(
         request.tool,
@@ -167,11 +172,11 @@ export function runPipeline(
             source: 'user-confirm',
           };
           break;
-        case 'canceled':
-          // User explicitly canceled the approval (e.g. "Cancel" on plan approval modal)
+          case 'canceled':
+          // User explicitly canceled the approval
           result = {
             type: 'deny',
-            reason: 'User canceled the plan approval',
+            reason: 'User canceled the approval',
             source: 'user-canceled',
           };
           break;
@@ -190,16 +195,6 @@ function applyPermissionMode(
   destructiveTools: Set<string>
 ): ApprovalDecision | null {
   switch (mode) {
-    case 'plan':
-      if (tool === 'submit_plan') {
-        return null;
-      }
-      return {
-        type: 'deny',
-        reason: 'Write operations denied in plan mode. Use submit_plan to submit a plan.',
-        source: 'permission-mode',
-      };
-
     case 'bypass':
       // Bypass mode: everything allowed (sandbox still restricts at OS level)
       return { type: 'allow', source: 'permission-mode' };

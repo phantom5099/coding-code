@@ -84,6 +84,9 @@ describe('POST /api/sessions — activeProfile persistence (v13 改 1)', () => {
   });
 
   it('writes idx.permissionMode AND idx.activeProfile when initialPermissionMode=plan', async () => {
+    // After the plan refactor, `permissionMode` is no longer a plan-specific
+    // value. The plan-mode signal lives in `activeProfile`; the approval
+    // pipeline itself only sees a generic permission mode.
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -102,7 +105,7 @@ describe('POST /api/sessions — activeProfile persistence (v13 改 1)', () => {
     );
 
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.permissionMode).toBe('plan');
+    expect(idx.permissionMode).toBe('default');
     expect(idx.activeProfile).toBe('plan');
   });
 
@@ -168,7 +171,10 @@ describe('POST /api/sessions — activeProfile persistence (v13 改 1)', () => {
         yield* runtime.restoreSessionProfile(cwd, sessionId, state.activeProfile);
         const profile = runtime.getSessionProfile(sessionId);
         expect(profile?.name).toBe('plan');
-        expect(runtime.getSessionPermissionMode(sessionId)).toBe('plan');
+        // The approval-side permission mode is 'default' (pipeline is
+        // plan-blind); plan-mode is enforced structurally by the
+        // `plan/planModeGateHook`.
+        expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
       })
     );
   });

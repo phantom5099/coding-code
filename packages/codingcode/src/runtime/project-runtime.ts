@@ -15,6 +15,11 @@ import { SessionService } from '../session/store.js';
 import { normalizePath } from '../core/path.js';
 import { ApprovalService } from '../approval/index.js';
 import type { PermissionMode } from '../approval/types.js';
+import {
+  isPlanProfile,
+  markSessionPlanMode,
+  clearPlanModeSession,
+} from '../plan/index.js';
 
 /** 构建全局 profile：内置 + ~/.codingcode/agents/ */
 function buildGlobalProfiles(): AgentProfile[] {
@@ -107,6 +112,10 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
             sessionAgentProfiles.set(sessionId, profile);
             const mode = profileToPermissionMode(profile);
             sessionPermissionModes.set(sessionId, mode);
+            // Keep the plan-mode side channel in sync so synchronous decision
+            // hooks (planModeGateHook) can answer "is this session in plan mode?"
+            // without reaching back into the Effect runtime.
+            markSessionPlanMode(sessionId, isPlanProfile(profile));
             // 写盘：跨重启恢复时 messages.ts 从 idx 读 permissionMode + activeProfile
             const state = yield* session.load(projectPath, sessionId);
             yield* session.setPermissionMode(state, mode);
@@ -132,6 +141,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
             sessionAgentProfiles.set(sessionId, profile);
             const mode = profileToPermissionMode(profile);
             sessionPermissionModes.set(sessionId, mode);
+            markSessionPlanMode(sessionId, isPlanProfile(profile));
             // 写盘：保持 idx 状态与内存态一致
             const state = yield* session.load(projectPath, sessionId);
             yield* session.setPermissionMode(state, mode);
@@ -141,6 +151,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           Effect.sync(() => {
             sessionAgentProfiles.delete(sessionId);
             sessionPermissionModes.delete(sessionId);
+            clearPlanModeSession(sessionId);
           }),
 
         disposeProject: (projectPath: string): Effect.Effect<void> =>

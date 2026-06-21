@@ -110,10 +110,11 @@ describe('SubagentService', () => {
 
   it('should support built-in plan profile', () => {
     expect(PLAN_PROFILE.name).toBe('plan');
-    // Plan mode uses the dedicated "plan" permission mode (not a generic
-    // readonly flag) so the approval pipeline can apply the plan-mode rules
-    // (only submit_plan writes allowed).
-    expect(PLAN_PROFILE.permissionMode).toBe('plan');
+    // After the plan refactor, PLAN_PROFILE does not set a `permissionMode`.
+    // Plan mode is detected structurally via `isPlanProfile(profile)` and
+    // enforced by the `plan/planModeGateHook` registered on `tool.approval.pre`.
+    // The approval pipeline itself only sees generic permission modes.
+    expect(PLAN_PROFILE.permissionMode).toBeUndefined();
     expect(PLAN_PROFILE.isPrimary).toBe(true);
     expect(PLAN_PROFILE.maxSteps).toBe(180);
     expect(PLAN_PROFILE.tools).toContain('read_file');
@@ -123,8 +124,8 @@ describe('SubagentService', () => {
     expect(PLAN_PROFILE.tools).toContain('tool_search');
     expect(PLAN_PROFILE.tools).toContain('submit_plan');
     expect(PLAN_PROFILE.tools).toContain('dispatch_agent');
-    // Write tools are intentionally absent — the approval pipeline denies them
-    // via the "plan" permission mode, and the catalog must not advertise them.
+    // Write tools are intentionally absent — the plan-mode gate hook denies
+    // them at approval time, and the catalog must not advertise them.
     expect(PLAN_PROFILE.tools).not.toContain('write_file');
     expect(PLAN_PROFILE.tools).not.toContain('edit_file');
     expect(PLAN_PROFILE.tools).not.toContain('execute_command');
