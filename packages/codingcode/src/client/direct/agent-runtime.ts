@@ -2,8 +2,6 @@ import { Effect } from 'effect';
 import { sendMessage } from '../../agent/agent.js';
 import { ApprovalWaitService } from '../../approval/async-confirm.js';
 import { parseApprovalResponse } from '../../approval/response.js';
-import { PlanApprovalService } from '../../plan/approval-service.js';
-import { parsePlanApprovalResponse } from '../../plan/parse-plan-approval.js';
 import { ContextService } from '../../context/service.js';
 import type { StreamChunk } from '../types.js';
 import { agentEventToStreamChunk } from '../direct.js';
@@ -17,12 +15,6 @@ export interface AgentRuntimeClient {
   ): AsyncGenerator<StreamChunk>;
 
   sendApprovalResponse(input: {
-    sessionId: string;
-    approvalId: string;
-    response: string;
-  }): Promise<void>;
-
-  sendPlanApprovalResponse(input: {
     sessionId: string;
     approvalId: string;
     response: string;
@@ -55,21 +47,8 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
           return yield* ApprovalWaitService;
         })
       );
-      const planService = await rt.runPromise(
-        Effect.gen(function* () {
-          return yield* PlanApprovalService;
-        })
-      );
       Effect.runSync(
         waitService.registerEmitter(
-          resolvedSessionId,
-          (id: string, tool: string, args: Record<string, unknown>, payload?: Record<string, unknown>) => {
-            notify?.({ type: 'approval_request', id, tool, args, payload });
-          }
-        )
-      );
-      Effect.runSync(
-        planService.registerEmitter(
           resolvedSessionId,
           (id: string, tool: string, args: Record<string, unknown>, payload?: Record<string, unknown>) => {
             notify?.({ type: 'approval_request', id, tool, args, payload });
@@ -114,7 +93,6 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
         }
       } finally {
         Effect.runSync(waitService.unregisterEmitter(resolvedSessionId));
-        Effect.runSync(planService.unregisterEmitter(resolvedSessionId));
       }
     },
 
@@ -124,16 +102,6 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
         Effect.gen(function* () {
           const svc = yield* ApprovalWaitService;
           return yield* svc.resolveConfirm(approvalId, sessionId, result);
-        })
-      );
-    },
-
-    async sendPlanApprovalResponse({ sessionId, approvalId, response }) {
-      const result = parsePlanApprovalResponse(response);
-      await rt.runPromise(
-        Effect.gen(function* () {
-          const svc = yield* PlanApprovalService;
-          return yield* svc.resolvePlanDecision(approvalId, sessionId, result);
         })
       );
     },

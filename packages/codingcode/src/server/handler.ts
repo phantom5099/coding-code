@@ -1,7 +1,6 @@
 import type { Context } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalWaitService } from '../approval/async-confirm.js';
-import { PlanApprovalService } from '../plan/approval-service.js';
 import type { SseEvent } from './types.js';
 import { AgentError } from '../core/error.js';
 
@@ -12,7 +11,7 @@ export function createSseHandler(rt: ManagedRt) {
     createGenerator: () => AsyncGenerator<SseEvent, void, unknown>,
     opts?: { initialEvents?: SseEvent[]; sessionId?: string; onDone?: () => void }
   ): (c: Context) => Promise<Response> {
-    return async (c: Context) => {
+    return async (c) => {
       const sessionId = opts?.sessionId ?? c.req.param('id') ?? 'default';
       const stream = new ReadableStream({
         async start(controller) {
@@ -25,21 +24,8 @@ export function createSseHandler(rt: ManagedRt) {
               return yield* ApprovalWaitService;
             })
           );
-          const planService = await rt.runPromise(
-            Effect.gen(function* () {
-              return yield* PlanApprovalService;
-            })
-          );
           Effect.runSync(
             waitService.registerEmitter(
-              sessionId,
-              (id: string, tool: string, args: Record<string, unknown>, payload?: Record<string, unknown>) => {
-                enqueue({ type: 'approval_request', id, tool, args, payload });
-              }
-            )
-          );
-          Effect.runSync(
-            planService.registerEmitter(
               sessionId,
               (id: string, tool: string, args: Record<string, unknown>, payload?: Record<string, unknown>) => {
                 enqueue({ type: 'approval_request', id, tool, args, payload });
@@ -67,7 +53,6 @@ export function createSseHandler(rt: ManagedRt) {
             });
           } finally {
             Effect.runSync(waitService.unregisterEmitter(sessionId));
-            Effect.runSync(planService.unregisterEmitter(sessionId));
             opts?.onDone?.();
           }
           controller.close();

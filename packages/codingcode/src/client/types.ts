@@ -30,7 +30,6 @@ export type StreamChunk =
 export interface AgentClient {
   sendMessage(input: string, cwd?: string): AsyncGenerator<StreamChunk>;
   sendApprovalResponse(id: string, response: string): Promise<void>;
-  sendPlanApprovalResponse(id: string, response: string): Promise<void>;
   resumeSession(sid: string): Promise<SessionEvent[]>;
   listSessions(): Promise<SessionIndex[]>;
   listModels(): Promise<{ models: SelectableModel[]; activeId: string | null }>;

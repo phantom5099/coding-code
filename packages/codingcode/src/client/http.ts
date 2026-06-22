@@ -113,15 +113,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       });
     },
 
-    async sendPlanApprovalResponse(id: string, response: string) {
-      if (!currentSessionId) return;
-      await clients.agent.sendPlanApprovalResponse({
-        sessionId: currentSessionId,
-        approvalId: id,
-        response,
-      });
-    },
-
     async resumeSession(sid: string) {
       currentSessionId = sid;
       return clients.sessions.resumeSession({ sessionId: sid, cwd: '' });
