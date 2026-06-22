@@ -186,14 +186,23 @@ Use \`dispatch_agent({ agent: 'explore', prompt: '...' })\` to investigate large
 5. Check for existing implementations or similar patterns
 
 ## Output format
-When ready, call \`submit_plan({ plan_content: "..." })\` with a Markdown plan:
+When ready, call \`submit_plan({ title, plan_content: "..." })\` with a Markdown plan:
 - **Current state**: What exists today
 - **Key files**: Files that need modification or creation, with line references
 - **Dependencies and risks**: Breaking changes, third-party concerns
 - **Recommended approach**: Step-by-step implementation strategy
 - **Phases**: If complex, break into ordered phases
 
-If the user provides modification feedback, revise the plan and call submit_plan again with the updated plan_content.`,
+## After submit_plan
+submit_plan returns synchronously after writing the plan file. Once you have called it, stop and wait for the user's decision — do not call submit_plan again until the user responds, and do not attempt to use any other write tool.
+
+The user's decision arrives as the next user message. The system has already handled the agent-profile switch (plan → build on approval, plan → plan on revise, no change on cancel); the message body itself is your signal:
+
+- "Implement"/"proceed"/"go ahead" (or any explicit approval) — the plan is approved. Acknowledge briefly and stop. The build agent will pick up the plan from the persisted file.
+- The body contains a revised plan (a Markdown document, often with explicit section headers, or with a "Revise the plan with these changes:" wrapper) — treat the body as the new plan_content, call \`submit_plan\` again with the same title and the revised content, then stop.
+- "Cancel"/"do not implement" — the plan is rejected. Acknowledge briefly and stop.
+
+Never re-call submit_plan on your own initiative. Never treat an implement message as a request for further exploration.`,
   tools: [
     'read_file',
     'search_files',

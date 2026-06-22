@@ -87,9 +87,7 @@ export type SessionModeInfo = {
 };
 
 export function getSessionMode(sessionId: string, cwd: string): Promise<SessionModeInfo> {
-  return api<SessionModeInfo>(
-    `/api/sessions/${sessionId}/mode?cwd=${encodeURIComponent(cwd)}`
-  );
+  return api<SessionModeInfo>(`/api/sessions/${sessionId}/mode?cwd=${encodeURIComponent(cwd)}`);
 }
 
 export function setSessionMode(
@@ -97,14 +95,11 @@ export function setSessionMode(
   cwd: string,
   profile: 'plan' | 'build'
 ): Promise<{ profileName: string; permissionMode: string }> {
-  return api<{ profileName: string; permissionMode: string }>(
-    `/api/sessions/${sessionId}/mode`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd, profile }),
-    }
-  );
+  return api<{ profileName: string; permissionMode: string }>(`/api/sessions/${sessionId}/mode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cwd, profile }),
+  });
 }
 
 // ---- Settings: Memory ----

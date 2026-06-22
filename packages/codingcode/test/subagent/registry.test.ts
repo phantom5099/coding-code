@@ -143,6 +143,19 @@ describe('SubagentService', () => {
     expect(PLAN_PROFILE.systemPrompt).toContain('Recommended approach');
   });
 
+  it('plan profile systemPrompt teaches the LLM how to interpret post-submit user messages', () => {
+    // The plan refactor moved user decisions onto plain user messages
+    // (no async JSON envelope). The LLM has to know how to read them so
+    // it does not re-call submit_plan on its own initiative and does not
+    // ignore a revised-plan body.
+    expect(PLAN_PROFILE.systemPrompt).toContain('After submit_plan');
+    expect(PLAN_PROFILE.systemPrompt).toContain('Implement');
+    expect(PLAN_PROFILE.systemPrompt).toContain('Cancel');
+    expect(PLAN_PROFILE.systemPrompt).toContain('submit_plan');
+    expect(PLAN_PROFILE.systemPrompt).toMatch(/proceed/i);
+    expect(PLAN_PROFILE.systemPrompt).toMatch(/revised plan/i);
+  });
+
   it('should list profiles with project override', async () => {
     const globalProfile: AgentProfile = {
       name: 'agent1',
