@@ -5,6 +5,8 @@ const clients = createHttpClients(API_BASE);
 
 export const agentClient: AgentRuntimeClient = clients.agent;
 
+export type { AgentRuntimeClient };
+
 // ---- Models ----
 
 export function listModels(): Promise<{
@@ -62,25 +64,6 @@ export function sendApprovalResponse(
   response: string
 ): Promise<void> {
   return clients.agent.sendApprovalResponse({ sessionId, approvalId: callId, response });
-}
-
-/**
- * Send a structured plan approval decision to the server. Routed to the
- * `/api/sessions/:sessionId/plan-approval/:callId` endpoint which is parsed by
- * `parsePlanApprovalResponse` and resolved by `PlanApprovalService`. The shape
- * is `allow` | `modified` (with revised `plan_content`) | `canceled`. There is
- * no `deny` for plan approval — cancel is the user-controlled exit.
- */
-export function sendPlanApproval(
-  sessionId: string,
-  callId: string,
-  decision: { type: 'allow' } | { type: 'modified'; input: Record<string, unknown> } | { type: 'canceled' }
-): Promise<void> {
-  return clients.agent.sendPlanApprovalResponse({
-    sessionId,
-    approvalId: callId,
-    response: JSON.stringify(decision),
-  });
 }
 
 // ---- Plan file ----

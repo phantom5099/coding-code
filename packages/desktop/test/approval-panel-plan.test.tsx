@@ -7,7 +7,8 @@ import '@testing-library/jest-dom/vitest';
 import { useAgentStore } from '../src/stores/agent.store';
 import ApprovalPanel from '../src/agent/ApprovalPanel';
 
-const submitPlanChoiceMock = vi.fn();
+const sendMessageMock = vi.fn();
+const sendPlanDecisionMock = vi.fn();
 const approveToolMock = vi.fn();
 const rejectToolMock = vi.fn();
 
@@ -15,7 +16,19 @@ vi.mock('../src/hooks/useAgent', () => ({
   useAgentApproval: () => ({
     approveTool: (...args: unknown[]) => approveToolMock(...args),
     rejectTool: (...args: unknown[]) => rejectToolMock(...args),
-    submitPlanChoice: (...args: unknown[]) => submitPlanChoiceMock(...args),
+    sendPlanDecision: (
+      threadId: string,
+      callId: string,
+      message: string,
+      sendMessage: (m: string) => Promise<void>
+    ) => {
+      useAgentStore.getState().setPendingPlan(threadId, null);
+      return sendPlanDecisionMock(threadId, callId, message, sendMessage);
+    },
+  }),
+  useAgentCore: () => ({
+    sendMessage: sendMessageMock,
+    abort: vi.fn(),
   }),
 }));
 
@@ -25,33 +38,13 @@ vi.mock('../src/hooks/useCopyToClipboard', () => ({
 
 const PLAN = '# 计划\n\n正文';
 
-function seedSubmitPlan(threadId: string) {
+function seedPendingPlan(threadId: string) {
   act(() => {
-    useAgentStore.setState((s) => {
-      s.threads[threadId] = {
-        id: threadId,
-        projectId: '',
-        title: 't',
-        cwd: '/test/cwd',
-        turns: [
-          {
-            id: 'turn-1',
-            status: 'running',
-            items: [
-              {
-                id: 'plan-1',
-                type: 'tool_call',
-                name: 'submit_plan',
-                args: { plan_content: PLAN },
-                status: 'pending',
-                payload: { plan_content: PLAN, path: '/tmp/.codingcode/plans/abc.md' },
-              } as any,
-            ],
-          },
-        ],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+    useAgentStore.getState().setPendingPlan(threadId, {
+      sessionId: threadId,
+      title: '测试计划',
+      path: '/tmp/.codingcode/plans/abc.md',
+      content: PLAN,
     });
   });
 }
@@ -86,21 +79,24 @@ function seedRegularApproval(threadId: string) {
   });
 }
 
-describe('ApprovalPanel — submit_plan handling', () => {
+describe('ApprovalPanel — pendingPlan handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAgentStore.setState({
-      currentThreadId: null,
-      threads: {},
-      approvalPolicy: 'ask-all',
-      model: '',
-      models: [],
-      contextUsage: null,
-      todoByThreadId: {},
-      pendingInput: null,
-      usageByThreadId: {},
-      isCompressing: false,
-      automations: [],
+    act(() => {
+      useAgentStore.setState({
+        currentThreadId: null,
+        threads: {},
+        approvalPolicy: 'ask-all',
+        model: '',
+        models: [],
+        contextUsage: null,
+        todoByThreadId: {},
+        pendingInput: null,
+        pendingPlanByThreadId: {},
+        usageByThreadId: {},
+        isCompressing: false,
+        automations: [],
+      });
     });
   });
 
@@ -108,47 +104,69 @@ describe('ApprovalPanel — submit_plan handling', () => {
     cleanup();
   });
 
-  it('renders the PlanApprovalModal when a submit_plan is pending', () => {
-    seedSubmitPlan('t-1');
+  it('renders the PlanApprovalModal when pendingPlan is set', () => {
+    seedPendingPlan('t-1');
     const { getByTestId, getByText } = render(<ApprovalPanel threadId="t-1" />);
     expect(getByTestId('plan-approval-modal')).toBeInTheDocument();
-    // Should display plan file path from payload
     expect(getByText(/计划文件/)).toBeInTheDocument();
   });
 
-  it('dispatches "allow" to submitPlanChoice on implement', () => {
-    seedSubmitPlan('t-1');
+  it('clears pendingPlan and sends an implement message on implement', async () => {
+    seedPendingPlan('t-1');
     const { getByTestId } = render(<ApprovalPanel threadId="t-1" />);
-    fireEvent.click(getByTestId('plan-implement'));
-    expect(submitPlanChoiceMock).toHaveBeenCalledWith('t-1', 'plan-1', { type: 'allow' });
+    await act(async () => {
+      fireEvent.click(getByTestId('plan-implement'));
+      // wait microtasks for the async chain
+      await Promise.resolve();
+    });
+    expect(sendPlanDecisionMock).toHaveBeenCalledWith(
+      't-1',
+      't-1',
+      expect.stringContaining('proceed with implementing'),
+      sendMessageMock
+    );
+    expect(useAgentStore.getState().pendingPlanByThreadId['t-1']).toBeUndefined();
   });
 
-  it('dispatches "canceled" to submitPlanChoice on cancel', () => {
-    seedSubmitPlan('t-1');
+  it('clears pendingPlan and sends a cancel message on cancel', async () => {
+    seedPendingPlan('t-1');
     const { getByTestId } = render(<ApprovalPanel threadId="t-1" />);
-    fireEvent.click(getByTestId('plan-cancel'));
-    expect(submitPlanChoiceMock).toHaveBeenCalledWith('t-1', 'plan-1', { type: 'canceled' });
+    await act(async () => {
+      fireEvent.click(getByTestId('plan-cancel'));
+      await Promise.resolve();
+    });
+    expect(sendPlanDecisionMock).toHaveBeenCalledWith(
+      't-1',
+      't-1',
+      expect.stringContaining('Cancel the plan'),
+      sendMessageMock
+    );
+    expect(useAgentStore.getState().pendingPlanByThreadId['t-1']).toBeUndefined();
   });
 
-  it('dispatches "modified" with the revised content', () => {
-    seedSubmitPlan('t-1');
+  it('sends a modified message with the revised content', async () => {
+    seedPendingPlan('t-1');
     const { getByTestId, getByRole } = render(<ApprovalPanel threadId="t-1" />);
     fireEvent.click(getByTestId('plan-modify-tab'));
     act(() => {
       fireEvent.change(getByRole('textbox'), { target: { value: '# 新计划' } });
     });
-    fireEvent.click(getByTestId('plan-modify-submit'));
-    expect(submitPlanChoiceMock).toHaveBeenCalledWith('t-1', 'plan-1', {
-      type: 'modified',
-      input: { plan_content: '# 新计划' },
+    await act(async () => {
+      fireEvent.click(getByTestId('plan-modify-submit'));
+      await Promise.resolve();
     });
+    expect(sendPlanDecisionMock).toHaveBeenCalledWith(
+      't-1',
+      't-1',
+      expect.stringContaining('# 新计划'),
+      sendMessageMock
+    );
   });
 
-  it('falls back to the regular approval card list for non-submit_plan tools', () => {
+  it('falls back to the regular approval card list when only tool_calls are pending', () => {
     seedRegularApproval('t-2');
     const { queryByTestId, getByText } = render(<ApprovalPanel threadId="t-2" />);
     expect(queryByTestId('plan-approval-modal')).not.toBeInTheDocument();
-    // The ToolCallCard should render the tool name
     expect(getByText('bash')).toBeInTheDocument();
   });
 

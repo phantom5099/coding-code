@@ -30,9 +30,15 @@ export interface Automation {
   projectCwd: string;
   runOnce: boolean;
   createdAt: number;
-  updatedAt: number;
   lastRunAt: number | null;
   lastSessionId: string | null;
+}
+
+export interface PendingPlan {
+  sessionId: string;
+  title: string;
+  path: string;
+  content: string;
 }
 
 interface AgentState {
@@ -52,6 +58,7 @@ interface AgentState {
   contextUsage: { used: number; contextWindow: number } | null;
   todoByThreadId: Record<string, TodoPanelState>;
   pendingInput: string | null;
+  pendingPlanByThreadId: Record<string, PendingPlan | null>;
   usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>;
   isCompressing: boolean;
   automations: Automation[];
@@ -78,6 +85,7 @@ interface AgentActions {
     callId: string,
     status: 'pending' | 'approved' | 'rejected' | 'running'
   ) => void;
+  setPendingPlan: (threadId: string, plan: PendingPlan | null) => void;
   startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void;
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void;
   updateTurnId: (threadId: string, oldTurnId: string, newTurnId: string) => void;
@@ -103,6 +111,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       contextUsage: null,
       todoByThreadId: {},
       pendingInput: null,
+      pendingPlanByThreadId: {},
       usageByThreadId: {},
       isCompressing: false,
       automations: [],
@@ -354,6 +363,15 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setPendingInput: (input) =>
         set((s) => {
           s.pendingInput = input;
+        }),
+
+      setPendingPlan: (threadId, plan) =>
+        set((s) => {
+          if (plan === null) {
+            delete s.pendingPlanByThreadId[threadId];
+          } else {
+            s.pendingPlanByThreadId[threadId] = plan;
+          }
         }),
 
       clearRunningTurns: (threadId) =>

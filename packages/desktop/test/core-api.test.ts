@@ -16,7 +16,6 @@ const { mockSettings, mockApi, mockAgent } = vi.hoisted(() => {
   const mockApi = vi.fn();
   const mockAgent = {
     sendApprovalResponse: vi.fn(),
-    sendPlanApprovalResponse: vi.fn(),
   };
   return { mockSettings, mockApi, mockAgent };
 });
@@ -51,7 +50,6 @@ import {
   getAgentConfig,
   setAgentConfig,
   setCompactionModel,
-  sendPlanApproval,
   getSessionPlan,
   getSessionMode,
   setSessionMode,
@@ -297,43 +295,6 @@ describe('setCompactionModel', () => {
   });
 });
 
-// ---- Plan approval helpers ----
-
-describe('sendPlanApproval', () => {
-  it('serializes "allow" decision as JSON envelope to plan-approval route', async () => {
-    mockAgent.sendPlanApprovalResponse.mockResolvedValue(undefined);
-    await sendPlanApproval('s-1', 'c-1', { type: 'allow' });
-    expect(mockAgent.sendPlanApprovalResponse).toHaveBeenCalledWith({
-      sessionId: 's-1',
-      approvalId: 'c-1',
-      response: JSON.stringify({ type: 'allow' }),
-    });
-  });
-
-  it('serializes "canceled" decision as JSON envelope to plan-approval route', async () => {
-    mockAgent.sendPlanApprovalResponse.mockResolvedValue(undefined);
-    await sendPlanApproval('s-1', 'c-1', { type: 'canceled' });
-    expect(mockAgent.sendPlanApprovalResponse).toHaveBeenCalledWith({
-      sessionId: 's-1',
-      approvalId: 'c-1',
-      response: JSON.stringify({ type: 'canceled' }),
-    });
-  });
-
-  it('serializes "modified" with the new input payload to plan-approval route', async () => {
-    mockAgent.sendPlanApprovalResponse.mockResolvedValue(undefined);
-    await sendPlanApproval('s-1', 'c-1', {
-      type: 'modified',
-      input: { plan_content: '# new' },
-    });
-    expect(mockAgent.sendPlanApprovalResponse).toHaveBeenCalledWith({
-      sessionId: 's-1',
-      approvalId: 'c-1',
-      response: JSON.stringify({ type: 'modified', input: { plan_content: '# new' } }),
-    });
-  });
-});
-
 // ---- Plan file API ----
 
 describe('getSessionPlan', () => {
@@ -357,7 +318,9 @@ describe('getSessionMode', () => {
       available: [],
     });
     await getSessionMode('s-1', '/tmp');
-    expect(mockApi).toHaveBeenCalledWith('/api/sessions/s-1/mode?cwd=' + encodeURIComponent('/tmp'));
+    expect(mockApi).toHaveBeenCalledWith(
+      '/api/sessions/s-1/mode?cwd=' + encodeURIComponent('/tmp')
+    );
   });
 });
 

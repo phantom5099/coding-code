@@ -12,7 +12,6 @@ import {
   createSession as createServerSession,
   deleteSession,
   sendApprovalResponse,
-  sendPlanApproval,
   getCheckpointDiff,
   revertCheckpointFiles,
   previewRollbackDiff,
@@ -53,6 +52,7 @@ export function useAgentCore() {
   const updateTurnId = useAgentStore((s) => s.updateTurnId);
   const completeTurn = useAgentStore((s) => s.completeTurn);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
+  const setPendingPlan = useAgentStore((s) => s.setPendingPlan);
   const clearRunningTurns = useAgentStore((s) => s.clearRunningTurns);
   const applyTodoUpdate = useAgentStore((s) => s.applyTodoUpdate);
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
@@ -172,6 +172,11 @@ export function useAgentCore() {
             // round-trip to fetch the plan file.
             payload: event.payload,
           };
+        case 'plan_ready':
+          // The server's plan.ready SSE event drives the plan-approval
+          // modal directly. We don't write a tool_call item — the modal
+          // renders from this payload via useAgentStore's pendingPlan.
+          return null;
         case 'tool_result':
           return {
             id: randomId(),
@@ -277,6 +282,15 @@ export function useAgentCore() {
             hasError = true;
           }
 
+          if (event.type === 'plan_ready') {
+            setPendingPlan(threadId, {
+              sessionId: event.sessionId,
+              title: event.title,
+              path: event.path,
+              content: event.content,
+            });
+          }
+
           const item = streamChunkToItem(event, threadId, assistantMessageId, turnId);
           if (item) {
             applyChunk(threadId, turnId, item);
@@ -306,6 +320,7 @@ export function useAgentCore() {
       streamChunkToItem,
       applyChunk,
       completeTurn,
+      setPendingPlan,
       workspace.rootPath,
       approvalPolicy,
       pendingProfile,
@@ -326,7 +341,7 @@ export function useAgentCore() {
   return { sendMessage, abort };
 }
 
-// ---- useAgentApproval: approveTool + rejectTool + submitPlanChoice ----
+// ---- useAgentApproval: approveTool + rejectTool + sendPlanDecision ----
 
 export type PlanChoice =
   | { type: 'allow' }
@@ -335,6 +350,7 @@ export type PlanChoice =
 
 export function useAgentApproval() {
   const updateToolCallStatus = useAgentStore((s) => s.updateToolCallStatus);
+  const setPendingPlan = useAgentStore((s) => s.setPendingPlan);
 
   const approveTool = useCallback(
     async (threadId: string, callId: string) => {
@@ -361,36 +377,28 @@ export function useAgentApproval() {
   );
 
   /**
-   * Send a structured plan approval decision. The server interprets the JSON
-   * envelope via `parseApprovalResponse` and either:
-   *  - 'allow'    → writes the plan and switches to build mode
-   *  - 'modified' → re-executes submit_plan with the supplied input
-   *  - 'canceled' → denies the call
+   * Apply the user's plan-mode decision by sending it as a new user
+   * message. The async PlanApprovalService is gone; the LLM (or build
+   * agent) picks up the chosen follow-up as the next turn. The pending
+   * plan UI is closed locally so the chat resumes immediately.
    *
-   * The local UI status is updated so the pending card collapses immediately
-   * instead of waiting for the next stream event.
+   * `sendMessage` is injected to avoid pulling the model/list init
+   * effects of useAgentCore into this hook.
    */
-  const submitPlanChoice = useCallback(
-    async (threadId: string, callId: string, choice: PlanChoice) => {
-      const nextStatus =
-        choice.type === 'allow' ? 'approved' : choice.type === 'canceled' ? 'rejected' : 'running';
-      updateToolCallStatus(threadId, callId, nextStatus as any);
-      try {
-        if (choice.type === 'allow') {
-          await sendPlanApproval(threadId, callId, { type: 'allow' });
-        } else if (choice.type === 'canceled') {
-          await sendPlanApproval(threadId, callId, { type: 'canceled' });
-        } else {
-          await sendPlanApproval(threadId, callId, { type: 'modified', input: choice.input });
-        }
-      } catch (e) {
-        console.error('Failed to submit plan choice:', e);
-      }
+  const sendPlanDecision = useCallback(
+    async (
+      threadId: string,
+      _callId: string,
+      message: string,
+      sendMessage: (content: string, cwd?: string) => Promise<void>
+    ) => {
+      setPendingPlan(threadId, null);
+      await sendMessage(message, threadId);
     },
-    [updateToolCallStatus]
+    [setPendingPlan]
   );
 
-  return { approveTool, rejectTool, submitPlanChoice };
+  return { approveTool, rejectTool, sendPlanDecision };
 }
 
 // ---- useAgentRollback: all rollback methods ----
