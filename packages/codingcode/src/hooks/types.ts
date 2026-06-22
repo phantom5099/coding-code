@@ -18,7 +18,8 @@ export type HookPoint =
   | 'agent.turn.end'
   | 'agent.subagent.spawn.before'
   | 'agent.subagent.spawn.after'
-  | 'agent.subagent.complete';
+  | 'agent.subagent.complete'
+  | 'plan.ready';
 
 export interface HookDecision {
   decision?: 'allow' | 'deny' | 'ask' | 'continue';

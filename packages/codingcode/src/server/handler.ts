@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalWaitService } from '../approval/async-confirm.js';
+import { HookService } from '../hooks/registry.js';
 import type { SseEvent } from './types.js';
 import { AgentError } from '../core/error.js';
 
@@ -24,6 +25,11 @@ export function createSseHandler(rt: ManagedRt) {
               return yield* ApprovalWaitService;
             })
           );
+          const hookService = await rt.runPromise(
+            Effect.gen(function* () {
+              return yield* HookService;
+            })
+          );
           Effect.runSync(
             waitService.registerEmitter(
               sessionId,
@@ -31,6 +37,33 @@ export function createSseHandler(rt: ManagedRt) {
                 enqueue({ type: 'approval_request', id, tool, args, payload });
               }
             )
+          );
+
+          // plan.ready hook → SSE plan_ready event. The observer fires from
+          // the agent's fiber (where afterPlanSubmittedObserver runs), but
+          // the enqueue sink lives here. We register a per-session handler
+          // that closes over enqueue; the agent emits the hook with
+          // sessionId in the payload, but HookService.emit fans out to
+          // every registered handler regardless of session, so the
+          // unregister at the end cleans up the subscription.
+          const unregisterPlanReady = Effect.runSync(
+            hookService.register('plan.ready', (payload) => {
+              const p = payload as {
+                sessionId?: string;
+                projectPath?: string;
+                title?: string;
+                path?: string;
+                content?: string;
+              };
+              if (p.sessionId !== sessionId) return;
+              enqueue({
+                type: 'plan_ready',
+                sessionId: p.sessionId,
+                title: p.title ?? '',
+                path: p.path ?? '',
+                content: p.content ?? '',
+              });
+            })
           );
 
           try {
@@ -52,6 +85,7 @@ export function createSseHandler(rt: ManagedRt) {
               ...(e instanceof AgentError ? { code: e.code } : {}),
             });
           } finally {
+            unregisterPlanReady();
             Effect.runSync(waitService.unregisterEmitter(sessionId));
             opts?.onDone?.();
           }

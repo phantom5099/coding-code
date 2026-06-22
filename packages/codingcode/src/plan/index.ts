@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { DecisionHandler, ObserverHandler } from '../hooks/types.js';
-import { ApprovalService } from '../approval/index.js';
+import { HookService } from '../hooks/registry.js';
 import { ProjectRuntimeService } from '../runtime/project-runtime.js';
 import { SessionService } from '../session/store.js';
 import { createLogger } from '@codingcode/infra/logger';
@@ -80,13 +80,14 @@ export const afterPlanSubmittedObserver: ObserverHandler = (payload) =>
     if (!result?.output?.startsWith('Plan written to ')) return;
     const sessionId = payload.sessionId as string | undefined;
     const projectPath = payload.projectPath as string | undefined;
-    const args = (payload.args ?? {}) as { plan_content?: string };
+    const args = (payload.args ?? {}) as { plan_content?: string; title?: string };
     if (!sessionId || !projectPath) return;
     if (!args.plan_content) return;
 
     yield* Effect.gen(function* () {
       const runtime = yield* ProjectRuntimeService;
       const session = yield* SessionService;
+      const hooks = yield* HookService;
 
       // Switch to build profile (resolve build from runtime, fallback to built-in)
       const buildProfile =
@@ -103,9 +104,17 @@ export const afterPlanSubmittedObserver: ObserverHandler = (payload) =>
         logger.warn('afterPlanSubmitted: failed to persist activeProfile:', err);
       }
 
-      // Sync approval permission mode
-      const approval = yield* ApprovalService;
-      yield* approval.setPermissionMode(buildProfile.permissionMode ?? 'default');
+      // The plan mode's user-confirmation now rides on a plan.ready hook
+      // event consumed by the SSE handler (which forwards it to the
+      // desktop). Output path is the suffix after the prefix marker.
+      const planPath = result.output!.slice('Plan written to '.length).trim();
+      yield* hooks.emit('plan.ready', {
+        sessionId,
+        projectPath,
+        title: args.title ?? '',
+        path: planPath,
+        content: args.plan_content,
+      });
     }).pipe(
       Effect.catchAll((err) => Effect.sync(() => logger.error('afterPlanSubmitted error:', err)))
     );
