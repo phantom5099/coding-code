@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import type { SessionStoreState } from '../../session/types.js';
 import { SessionService } from '../../session/store.js';
@@ -17,7 +17,7 @@ import { WorkspaceService } from '../../core/workspace.js';
 import { LLMFactoryService } from '../../llm/factory.js';
 import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
-import { encodeProjectPath, getProjectPlansBaseDir } from '../../core/path.js';
+import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
 import { ProjectRuntimeService } from '../../runtime/project-runtime.js';
 import { BUILD_PROFILE, PLAN_PROFILE } from '../../subagent/registry.js';
 import type { PermissionMode } from '../../approval/types.js';
@@ -177,29 +177,47 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
   });
 
   // ---- Plan file: read the current plan document for a session ----
+  // submit_plan writes a <slug(title)>.md file per submission, so the
+  // "current" plan is whichever .md has the most recent mtime in the
+  // project's plan directory.
   router.get('/:id/plan', async (c) => {
-    const sessionId = c.req.param('id');
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
         const ws = yield* WorkspaceService;
         return ws.resolveWorkspaceCwd(c.req.query('cwd'));
       })
     );
-    const planDir = join(getProjectPlansBaseDir(), encodeProjectPath(cwd));
-    const planPath = join(planDir, `${sessionId}.md`);
-    if (!existsSync(planPath)) {
+    const planDir = join(getProjectBaseDir(), encodeProjectPath(cwd));
+    if (!existsSync(planDir)) {
       return c.json({
         content: '',
-        path: planPath,
+        path: '',
+        directory: planDir,
+        exists: false,
+      });
+    }
+    let latest: { path: string; mtime: number } | null = null;
+    for (const name of readdirSync(planDir)) {
+      if (!name.endsWith('.md')) continue;
+      const full = join(planDir, name);
+      const mtime = statSync(full).mtimeMs;
+      if (latest === null || mtime > latest.mtime) {
+        latest = { path: full, mtime };
+      }
+    }
+    if (latest === null) {
+      return c.json({
+        content: '',
+        path: '',
         directory: planDir,
         exists: false,
       });
     }
     try {
-      const content = readFileSync(planPath, 'utf8');
+      const content = readFileSync(latest.path, 'utf8');
       return c.json({
         content,
-        path: planPath,
+        path: latest.path,
         directory: planDir,
         exists: true,
       });
@@ -258,7 +276,8 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
         const session = yield* SessionService;
-        const target = runtime.resolveSubagentProfile(cwd, profileName) ??
+        const target =
+          runtime.resolveSubagentProfile(cwd, profileName) ??
           (profileName === PLAN_PROFILE.name ? PLAN_PROFILE : BUILD_PROFILE);
         yield* runtime.setSessionProfile(cwd, sessionId, target);
         try {
