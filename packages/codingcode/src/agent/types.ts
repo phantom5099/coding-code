@@ -28,6 +28,7 @@ export interface SystemPromptOptions {
   skillInstruction?: string;
   agentProfiles?: AgentProfile[];
   rules?: string;
+  profileSystemPrompt?: string;
 }
 
 export interface ResolvedConfig {
@@ -49,12 +50,6 @@ export type AgentEvent =
       readonly id: string;
       readonly name: string;
       readonly reason: string;
-    }
-  | {
-      readonly _tag: 'ApprovalRequest';
-      readonly id: string;
-      readonly tool: string;
-      readonly args: Record<string, unknown>;
     }
   | {
       readonly _tag: 'ToolResult';
@@ -90,6 +85,7 @@ export type AgentEvent =
 export interface RunStreamOptions {
   state: SessionStoreState;
   llm: LLMClient;
+  profile?: AgentProfile;
   skillInstruction?: string;
   systemPromptVariant?: SystemPromptVariant;
   systemOverride?: string;

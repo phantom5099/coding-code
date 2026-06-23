@@ -44,3 +44,10 @@ dist-test/
 # Desktop sub-package residual workspace files
 packages/desktop/pnpm-lock.yaml  
 packages/desktop/pnpm-workspace.yaml 
+
+# Defensive: ignore any stray test temp dirs that may slip into the workspace.
+.test-*
+# OS / editor cruft
+Thumbs.db
+.idea/
+.vscode/

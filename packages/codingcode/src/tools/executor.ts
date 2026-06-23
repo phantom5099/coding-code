@@ -45,6 +45,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           input: args as Record<string, unknown>,
           callId: opts?.callId,
           sessionId: opts?.sessionId ?? 'default',
+          projectPath: opts?.projectPath,
         });
 
         if (decision.type === 'deny') {
@@ -57,9 +58,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
           return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', decision.reason));
         }
 
-        // Use modified input from pipeline if present
-        const finalArgs: Record<string, unknown> =
-          decision.type === 'modified' ? decision.input : (args as Record<string, unknown>);
+        const finalArgs = args as Record<string, unknown>;
 
         // 2. Notification hook — use callId for consistent pairing
         const callId = opts?.callId;

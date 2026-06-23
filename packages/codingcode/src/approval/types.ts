@@ -1,4 +1,10 @@
-export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypass';
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
+
+export const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'bypass'] as const;
+
+export function isPermissionMode(value: unknown): value is PermissionMode {
+  return typeof value === 'string' && (PERMISSION_MODES as readonly string[]).includes(value);
+}
 
 export interface ToolCallRequest {
   tool: string;
@@ -9,10 +15,7 @@ export interface ToolCallRequest {
 
 export type ApprovalDecision =
   | { type: 'deny'; reason: string; source: string }
-  | { type: 'allow'; source: string }
-  | { type: 'ask'; source: string }
-  | { type: 'modified'; input: Record<string, unknown>; source: string }
-  | { type: 'continue' };
+  | { type: 'allow'; source: string };
 
 export type RuleAction = 'deny' | 'allow' | 'ask';
 

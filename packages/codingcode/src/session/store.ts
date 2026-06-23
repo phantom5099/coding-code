@@ -4,8 +4,10 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { AgentError } from '../core/error.js';
 import { encodeProjectPath } from '../core/path.js';
+import type { PermissionMode } from '../approval/types.js';
 import type {
   SessionMetaEvent,
+  SessionMode,
   UserEvent,
   AssistantEvent,
   ToolResultEvent,
@@ -52,15 +54,21 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         title: state.title,
         currentTurnId: state.currentTurnId,
         usage: state.usage,
-        permissionMode: current?.permissionMode ?? 'default',
+        mode: state.mode,
+        permissionMode: state.permissionMode,
         memorySnapshot: state.memorySnapshot,
+        activeProfile: current?.activeProfile,
       };
       writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8');
     }
 
     const create = (
       cwd: string,
-      model: string,
+      options: {
+        model: string;
+        mode: SessionMode;
+        permissionMode: PermissionMode;
+      },
       opts?: { parentSessionId?: string; agentName?: string }
     ): Effect.Effect<SessionStoreState, AgentError> =>
       Effect.try({
@@ -72,7 +80,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             ...paths,
             messageCount: 0,
             sessionMeta: null,
-            model,
+            model: options.model,
+            mode: options.mode,
+            permissionMode: options.permissionMode,
             title: paths.sessionId.slice(0, 8),
             currentTurnId: 0,
             usage: undefined,
@@ -85,6 +95,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             projectPath: state.projectPath,
             cwd: state.cwd,
             createdAt: new Date().toISOString(),
+            mode: options.mode,
+            permissionMode: options.permissionMode,
             ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
             ...(opts?.agentName && { agentName: opts.agentName }),
           };
@@ -114,10 +126,13 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             messageCount: 0,
             sessionMeta: null,
             model: idx?.model ?? '',
+            mode: idx?.mode ?? 'build',
+            permissionMode: idx?.permissionMode ?? 'default',
             title: paths.sessionId.slice(0, 8),
             currentTurnId: idx?.currentTurnId ?? 0,
             usage: idx?.usage ?? undefined,
             memorySnapshot: idx?.memorySnapshot ?? '',
+            activeProfile: idx?.activeProfile,
           };
 
           if (existsSync(state.transcriptPath)) {
@@ -128,6 +143,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             if (meta) {
               state.sessionMeta = meta;
               state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
+              if (meta.mode) state.mode = meta.mode;
+              if (meta.permissionMode) state.permissionMode = meta.permissionMode;
             }
             const firstUser = findFirstUserContent(history);
             if (firstUser) state.title = truncateTitle(firstUser);
@@ -312,14 +329,43 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
 
     const setPermissionModeFromState = (
       state: SessionStoreState,
-      mode: string
+      mode: PermissionMode
     ): Effect.Effect<void> =>
       Effect.sync(() => {
         setPermissionMode(state.sessionId, state.indexPath, mode);
       });
 
-    const getPermissionModeFromState = (state: SessionStoreState): Effect.Effect<string> =>
-      Effect.sync(() => getPermissionMode(state.indexPath));
+    const getPermissionModeFromState = (state: SessionStoreState): Effect.Effect<PermissionMode> =>
+      Effect.sync(() => {
+        const raw = getPermissionMode(state.indexPath);
+        if (raw === 'default' || raw === 'acceptEdits' || raw === 'bypass') return raw;
+        return 'default';
+      });
+
+    const updateActiveProfile = (
+      state: SessionStoreState,
+      profileName: string
+    ): Effect.Effect<void> =>
+      Effect.sync(() => {
+        const current = readCurrentIndex(state.indexPath);
+        const index: SessionIndex = {
+          sessionId: state.sessionId,
+          projectPath: state.projectPath,
+          cwd: state.cwd,
+          model: state.model,
+          createdAt: state.sessionMeta?.createdAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messageCount: state.messageCount,
+          title: state.title,
+          currentTurnId: state.currentTurnId,
+          usage: state.usage,
+          mode: state.mode,
+          permissionMode: state.permissionMode,
+          memorySnapshot: state.memorySnapshot,
+          activeProfile: profileName,
+        };
+        writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8');
+      });
 
     const incrementTurn = (state: SessionStoreState): number => {
       state.currentTurnId += 1;
@@ -343,6 +389,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       getMessageCount,
       setPermissionMode: setPermissionModeFromState,
       getPermissionMode: getPermissionModeFromState,
+      updateActiveProfile,
       incrementTurn,
       readHistoryFile: (path: string): SessionEvent[] => readHistory(path),
       appendLineProxy: (path: string, event: object): void => appendLine(path, event),
@@ -392,13 +439,15 @@ function forkSessionImpl(sourceJsonlPath: string, atTurnId: number): string {
   const sourceIdxPath = sourceJsonlPath.replace('.jsonl', '.index.json');
   let title = newSessionId.slice(0, 8);
   let usage: TokenUsage | undefined = undefined;
-  let permissionMode = 'default';
+  let mode: SessionMode = 'build';
+  let permissionMode: PermissionMode = 'default';
   let srcIdx: SessionIndex | undefined;
   if (existsSync(sourceIdxPath)) {
     try {
       srcIdx = JSON.parse(readFileSync(sourceIdxPath, 'utf8')) as SessionIndex;
       title = srcIdx.title;
       usage = srcIdx.usage ?? undefined;
+      mode = srcIdx.mode ?? 'build';
       permissionMode = srcIdx.permissionMode ?? 'default';
     } catch {
       /* corrupt */
@@ -417,6 +466,7 @@ function forkSessionImpl(sourceJsonlPath: string, atTurnId: number): string {
     title,
     currentTurnId: turnId,
     usage,
+    mode,
     permissionMode,
   };
   writeFileSync(newIndexPath, JSON.stringify(newIdx, null, 2), 'utf8');

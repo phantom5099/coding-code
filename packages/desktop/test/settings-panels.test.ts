@@ -583,3 +583,181 @@ describe('SkillPanel - source tag and cwd', () => {
     expect(calls[0]).toEqual({ name: 'skill1', enabled: true, cwd: '/project/path' });
   });
 });
+
+// --- SubagentsPanel - built-in detection (drives edit/delete button visibility) ---
+
+function isBuiltInAgent(a: AgentEntry): boolean {
+  return a.source === 'builtin';
+}
+
+function shouldShowAgentActions(a: AgentEntry): boolean {
+  return !isBuiltInAgent(a);
+}
+
+describe('SubagentsPanel - built-in detection', () => {
+  it('explore with source=builtin is detected as built-in', () => {
+    const a: AgentEntry = { name: 'explore', description: 'Explore', source: 'builtin' };
+    expect(isBuiltInAgent(a)).toBe(true);
+    expect(shouldShowAgentActions(a)).toBe(false);
+  });
+
+  it('plan with source=builtin is detected as built-in (regression: BUILT_IN set was missing plan)', () => {
+    const a: AgentEntry = { name: 'plan', description: 'Plan', source: 'builtin' };
+    expect(isBuiltInAgent(a)).toBe(true);
+    expect(shouldShowAgentActions(a)).toBe(false);
+  });
+
+  it('custom agent with source=project is not built-in and shows actions', () => {
+    const a: AgentEntry = { name: 'my-agent', description: 'Mine', source: 'project' };
+    expect(isBuiltInAgent(a)).toBe(false);
+    expect(shouldShowAgentActions(a)).toBe(true);
+  });
+
+  it('custom agent with source=global is not built-in and shows actions', () => {
+    const a: AgentEntry = { name: 'global-agent', description: 'Global', source: 'global' };
+    expect(isBuiltInAgent(a)).toBe(false);
+    expect(shouldShowAgentActions(a)).toBe(true);
+  });
+
+  it('agent with no source is treated as non-built-in and shows actions', () => {
+    const a: AgentEntry = { name: 'legacy', description: 'No source field' };
+    expect(isBuiltInAgent(a)).toBe(false);
+    expect(shouldShowAgentActions(a)).toBe(true);
+  });
+
+  it('detection is driven by source field, not by name matching a hardcoded set', () => {
+    const namedPlanButNotBuiltin: AgentEntry = {
+      name: 'plan',
+      description: 'User copy named plan',
+      source: 'project',
+    };
+    expect(isBuiltInAgent(namedPlanButNotBuiltin)).toBe(false);
+    expect(shouldShowAgentActions(namedPlanButNotBuiltin)).toBe(true);
+  });
+});
+
+// --- SubagentsPanel - mutation gate matrix (project view vs global view) ---
+
+function canMutateAgent(a: AgentEntry, isGlobal: boolean): boolean {
+  return a.source === (isGlobal ? 'global' : 'project');
+}
+
+describe('SubagentsPanel - mutation gate (project view)', () => {
+  it('builtin agent (explore) is read-only', () => {
+    const a: AgentEntry = { name: 'explore', description: 'Explore', source: 'builtin' };
+    expect(canMutateAgent(a, false)).toBe(false);
+  });
+
+  it('global agent is read-only in project view', () => {
+    const a: AgentEntry = { name: 'global-agent', description: 'G', source: 'global' };
+    expect(canMutateAgent(a, false)).toBe(false);
+  });
+
+  it('project agent can be edited and deleted in project view', () => {
+    const a: AgentEntry = { name: 'project-agent', description: 'P', source: 'project' };
+    expect(canMutateAgent(a, false)).toBe(true);
+  });
+
+  it('project agent overriding global can be edited (regression for L2 source fix)', () => {
+    const a: AgentEntry = {
+      name: 'overridden',
+      description: 'Project overrides global',
+      source: 'project',
+      hasProjectOverride: true,
+    };
+    expect(canMutateAgent(a, false)).toBe(true);
+  });
+});
+
+describe('SubagentsPanel - mutation gate (global view)', () => {
+  it('builtin agent (plan) is read-only in global view', () => {
+    const a: AgentEntry = { name: 'plan', description: 'Plan', source: 'builtin' };
+    expect(canMutateAgent(a, true)).toBe(false);
+  });
+
+  it('global agent can be edited and deleted in global view', () => {
+    const a: AgentEntry = { name: 'global-agent', description: 'G', source: 'global' };
+    expect(canMutateAgent(a, true)).toBe(true);
+  });
+
+  it('project agent should never appear in global view (defense in depth)', () => {
+    const a: AgentEntry = { name: 'project-agent', description: 'P', source: 'project' };
+    expect(canMutateAgent(a, true)).toBe(false);
+  });
+});
+
+// --- McpPanel - mutation gate matrix ---
+
+interface McpEntryForGate {
+  name: string;
+  source?: 'global' | 'project';
+  hasProjectOverride?: boolean;
+}
+
+function canMutateMcp(s: McpEntryForGate, isGlobal: boolean): boolean {
+  return s.source === (isGlobal ? 'global' : 'project');
+}
+
+describe('McpPanel - mutation gate (project view)', () => {
+  it('global MCP is read-only in project view', () => {
+    expect(canMutateMcp({ name: 'g', source: 'global' }, false)).toBe(false);
+  });
+
+  it('project MCP can be edited and deleted', () => {
+    expect(canMutateMcp({ name: 'p', source: 'project' }, false)).toBe(true);
+  });
+
+  it('project MCP overriding global can be edited (regression for L2 source fix)', () => {
+    expect(canMutateMcp({ name: 'o', source: 'project', hasProjectOverride: true }, false)).toBe(
+      true
+    );
+  });
+});
+
+describe('McpPanel - mutation gate (global view)', () => {
+  it('global MCP can be edited and deleted', () => {
+    expect(canMutateMcp({ name: 'g', source: 'global' }, true)).toBe(true);
+  });
+
+  it('project MCP should never appear in global view', () => {
+    expect(canMutateMcp({ name: 'p', source: 'project' }, true)).toBe(false);
+  });
+});
+
+// --- HooksPanel - mutation gate matrix ---
+
+interface HookEntryForGate {
+  name: string;
+  source?: 'global' | 'project';
+  hasProjectOverride?: boolean;
+}
+
+function canMutateHook(h: HookEntryForGate, isGlobal: boolean): boolean {
+  return h.source === (isGlobal ? 'global' : 'project');
+}
+
+describe('HooksPanel - mutation gate (project view)', () => {
+  it('global hook is read-only in project view', () => {
+    expect(canMutateHook({ name: 'g', source: 'global' }, false)).toBe(false);
+  });
+
+  it('project hook can be edited and deleted', () => {
+    expect(canMutateHook({ name: 'p', source: 'project' }, false)).toBe(true);
+  });
+
+  it('project hook overriding global can be edited (regression for L2 source fix)', () => {
+    expect(canMutateHook({ name: 'o', source: 'project', hasProjectOverride: true }, false)).toBe(
+      true
+    );
+  });
+});
+
+describe('HooksPanel - mutation gate (global view)', () => {
+  it('global hook can be edited and deleted', () => {
+    expect(canMutateHook({ name: 'g', source: 'global' }, true)).toBe(true);
+  });
+
+  it('project hook should never appear in global view', () => {
+    expect(canMutateHook({ name: 'p', source: 'project' }, true)).toBe(false);
+  });
+});

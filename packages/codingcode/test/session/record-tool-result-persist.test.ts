@@ -2,8 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 
+import { useTempProjectBase } from '../helpers/project-base.js';
+
+useTempProjectBase();
+
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+        return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
 }
 
 describe('recordToolResult', () => {
@@ -11,7 +15,11 @@ describe('recordToolResult', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create('/tmp/persist-test', 'test-model');
+        return yield* svc.create('/tmp/persist-test', {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
       })
     );
 
@@ -40,7 +48,11 @@ describe('recordToolResult', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create('/tmp/persist-test-small', 'test-model');
+        return yield* svc.create('/tmp/persist-test-small', {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
       })
     );
 

@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
+
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
@@ -23,7 +24,7 @@ function makeFixture(
     usage: { prompt: number; completion: number; total: number } | undefined;
   }>
 ) {
-  const dir = join(PROJECT_BASE, slug, 'sessions');
+  const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
@@ -116,7 +117,7 @@ describe('SessionService.appendSummary - state.usage reset (used by tryCompactio
       const idx = JSON.parse(readFileSync(fx.indexPath, 'utf8')) as SessionIndex;
       expect(idx.usage).toBeUndefined();
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
@@ -136,7 +137,7 @@ describe('SessionService.appendSummary - state.usage reset (used by tryCompactio
       const idx = JSON.parse(readFileSync(fx.indexPath, 'utf8')) as SessionIndex;
       expect(idx.usage).toBeUndefined();
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 });

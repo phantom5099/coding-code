@@ -1,36 +1,41 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 import { AgentError } from '../../src/core/error.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+
+const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
 }
 
 function cleanup(dir: string) {
-  rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+  rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });
   rmSync(dir, { recursive: true, force: true });
 }
 
 describe('load — restores model from disk, not overwritten', () => {
   it('load restores model from index.json, not overwritten by caller', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'gpt-4o');
+          return yield* svc.create(dir, {
+            model: 'gpt-4o',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       const sid = created.sessionId;
@@ -52,14 +57,18 @@ describe('load — restores model from disk, not overwritten', () => {
 
   it('load then rollbackToTurn preserves real model in index.json', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'claude-3-5-sonnet');
+          return yield* svc.create(dir, {
+            model: 'claude-3-5-sonnet',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       const sid = created.sessionId;
@@ -92,7 +101,7 @@ describe('load — restores model from disk, not overwritten', () => {
 
   it('load nonexistent session fails with SESSION_NOT_FOUND', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
@@ -115,16 +124,20 @@ describe('load — restores model from disk, not overwritten', () => {
 
   it('load mismatched workspace fails with SESSION_WORKSPACE_MISMATCH', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
-    const otherDir = join(PROJECT_BASE, randomUUID());
+    const otherDir = join(base.dir, randomUUID());
     mkdirSync(otherDir, { recursive: true });
 
     try {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'gpt-4o');
+          return yield* svc.create(dir, {
+            model: 'gpt-4o',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -150,14 +163,18 @@ describe('load — restores model from disk, not overwritten', () => {
 describe('create — generates sessionId internally', () => {
   it('create without sessionId generates a new UUID', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -172,14 +189,18 @@ describe('create — generates sessionId internally', () => {
 
   it('create writes model to index.json immediately', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'my-special-model');
+          return yield* svc.create(dir, {
+            model: 'my-special-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -192,14 +213,18 @@ describe('create — generates sessionId internally', () => {
 
   it('create returns default values for persisted fields', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -215,14 +240,18 @@ describe('create — generates sessionId internally', () => {
 describe('load restores persisted fields', () => {
   it('load restores currentTurnId from index.json', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       const sid = created.sessionId;
@@ -262,14 +291,18 @@ describe('load restores persisted fields', () => {
 
   it('load restores usage from index.json', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       const sid = created.sessionId;

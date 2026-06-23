@@ -32,6 +32,11 @@ export function parseWorkspaceArgs(argv: string[]): { workspaceCwd?: string; arg
   return { workspaceCwd, args };
 }
 
+/** Returns true when the given cwd refers to the global (home) config rather than a project. */
+export function isGlobalCwd(cwd: string | undefined): boolean {
+  return !cwd || cwd === '' || cwd === 'global';
+}
+
 export class WorkspaceService extends Effect.Service<WorkspaceService>()('Workspace', {
   sync: () => {
     let processRoot = process.cwd();

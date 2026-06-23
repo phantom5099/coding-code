@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
 import { ContextService } from '../../src/context/service.js';
 import { SessionService } from '../../src/session/store.js';
 import { LLMFactoryService } from '../../src/llm/factory.js';
 import type { SessionEvent } from '../../src/session/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 const TestLayer = Layer.merge(
   SessionService.Default,
@@ -40,7 +40,7 @@ describe('assemblePayload integration', () => {
 
   beforeEach(() => {
     sessionId = randomUUID();
-    sessionDir = join(PROJECT_BASE, projectSlug, 'sessions');
+    sessionDir = join(base.dir, projectSlug, 'sessions');
     mkdirSync(sessionDir, { recursive: true });
     jsonlPath = join(sessionDir, `${sessionId}.jsonl`);
     indexPath = join(sessionDir, `${sessionId}.index.json`);
@@ -98,13 +98,13 @@ describe('assemblePayload integration', () => {
   });
 
   afterEach(() => {
-    const dir = join(PROJECT_BASE, projectSlug);
+    const dir = join(base.dir, projectSlug);
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
   it('returns messages and compactedEvents', async () => {
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(sessionId, projectSlug, 128000);
+    const result = ctx.assemblePayload(jsonlPath, 128000);
 
     expect(result.messages.length).toBeGreaterThan(0);
     expect(Array.isArray(result.compactedEvents)).toBe(true);
@@ -114,7 +114,7 @@ describe('assemblePayload integration', () => {
 
   it('returns currentTurnId from session index', async () => {
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(sessionId, projectSlug, 128000);
+    const result = ctx.assemblePayload(jsonlPath, 128000);
     expect(result.currentTurnId).toBe(1);
   });
 });

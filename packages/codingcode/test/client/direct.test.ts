@@ -88,53 +88,7 @@ describe('createDirectClient model operations', () => {
   });
 });
 
-describe('agentEventToStreamChunk - approval interleaving', () => {
-  it('yields approval_request chunks without blocking on subsequent events', async () => {
-    async function* source() {
-      yield { _tag: 'LlmChunk' as const, text: 'before' };
-      yield {
-        _tag: 'ApprovalRequest' as const,
-        id: 'apr-1',
-        tool: 'bash',
-        args: { command: 'ls' },
-      };
-      yield { _tag: 'LlmChunk' as const, text: 'after' };
-      yield { _tag: 'Done' as const, content: 'done' };
-    }
-
-    const chunks: any[] = [];
-    for await (const chunk of agentEventToStreamChunk(source())) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks[0]).toEqual({ type: 'text', text: 'before', messageId: 0 });
-    expect(chunks[1]).toEqual({
-      type: 'approval_request',
-      id: 'apr-1',
-      tool: 'bash',
-      args: { command: 'ls' },
-    });
-    expect(chunks[2]).toEqual({ type: 'text', text: 'after', messageId: 0 });
-    expect(chunks[3]).toEqual({ type: 'done' });
-  });
-
-  it('yields multiple sequential approval_request chunks', async () => {
-    async function* source() {
-      yield { _tag: 'ApprovalRequest' as const, id: 'apr-1', tool: 'bash', args: {} };
-      yield { _tag: 'ApprovalRequest' as const, id: 'apr-2', tool: 'write_file', args: {} };
-      yield { _tag: 'Done' as const, content: '' };
-    }
-
-    const chunks: any[] = [];
-    for await (const chunk of agentEventToStreamChunk(source())) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks[0]).toMatchObject({ type: 'approval_request', id: 'apr-1' });
-    expect(chunks[1]).toMatchObject({ type: 'approval_request', id: 'apr-2' });
-    expect(chunks[2]).toEqual({ type: 'done' });
-  });
-
+describe('agentEventToStreamChunk', () => {
   it('yields usage chunks', async () => {
     async function* source() {
       yield { _tag: 'Step' as const, step: 1, max: 10 };

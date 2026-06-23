@@ -21,12 +21,16 @@ import { ContextService } from '../context/service.js';
 import { MemoryService } from '../memory/index.js';
 import { createLogger } from '@codingcode/infra/logger';
 import { resolveSubagentEnabled, resolveAgentDisabled } from '../subagent/registry.js';
-import { ProjectRuntimeService } from '../runtime/project-runtime.js';
+import { ProjectRuntimeService, modeToProfile } from '../runtime/project-runtime.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { getBuiltinTools } from '../tools/providers.js';
+import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
 import { canonicalizeSchema } from '../tools/utils/canonicalize-schema.js';
 import { normalizePath } from '../core/path.js';
+import { isPlanProfile } from '../plan/index.js';
+import type { SessionMode } from '../session/types.js';
+import type { PermissionMode } from '../approval/types.js';
 
 const REACTIVE_COMPACT_MAX_RETRIES = 3;
 import { RulesService } from '../rules/index.js';
@@ -116,9 +120,12 @@ export const sendMessage = (
   input: string,
   cwd: string,
   llm: LLMClient,
-  options?: {
+  options: {
     signal?: AbortSignal;
     approvalOverride?: any;
+    mode: SessionMode;
+    permissionMode: PermissionMode;
+    model: string;
   }
 ) =>
   Effect.gen(function* () {
@@ -140,10 +147,30 @@ export const sendMessage = (
     yield* runtime.prepareProject(normalizedCwd);
     yield* skills.evictProject(normalizedCwd);
 
-    const state = sessionId
-      ? yield* session.load(normalizedCwd, sessionId)
-      : yield* session.create(normalizedCwd, llm.modelInfo.model);
-    state.model = llm.modelInfo.model;
+    if (!sessionId) {
+      const created = yield* session.create(normalizedCwd, {
+        model: options.model,
+        mode: options.mode,
+        permissionMode: options.permissionMode,
+      });
+      const profile = modeToProfile(options.mode);
+      yield* runtime.setSessionProfile(
+        normalizedCwd,
+        created.sessionId,
+        profile,
+        options.permissionMode
+      );
+      sessionId = created.sessionId;
+    }
+    const state = yield* session.load(normalizedCwd, sessionId);
+    if (state.activeProfile) {
+      yield* runtime.restoreSessionProfile(
+        normalizedCwd,
+        state.sessionId,
+        state.activeProfile,
+        state.permissionMode
+      );
+    }
     state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
     const sid = state.sessionId;
 
@@ -160,9 +187,7 @@ export const sendMessage = (
       }
     }
     const effectiveMaxSteps = profile?.maxSteps;
-    const effectiveApproval: any = profile?.readonly
-      ? { permissionMode: 'bypass' }
-      : options?.approvalOverride;
+    const effectiveApproval: any = options?.approvalOverride;
 
     if (profile?.hooks?.length) {
       yield* hooks.attachSessionHooks(sid, profile.hooks);
@@ -187,6 +212,7 @@ export const sendMessage = (
     const stream = agent.runStream({
       state,
       llm: activeLlm,
+      profile,
       toolPolicy: policy,
       maxStepsOverride: effectiveMaxSteps,
       approvalOverride: effectiveApproval,
@@ -221,6 +247,7 @@ export function agentLoop(
 > {
   const state = opts.state;
   const llm = opts.llm;
+  const profile = opts.profile;
   const sessionId = state.sessionId;
   const projectPath = state.cwd;
 
@@ -234,9 +261,12 @@ export function agentLoop(
     const { skillInstruction, systemPromptVariant, rulesText } = opts;
 
     const allAgentProfiles = runtime.listAgentProfiles(projectPath);
-    const agentProfiles = resolveSubagentEnabled(projectPath)
+    const enabledAgentProfiles = resolveSubagentEnabled(projectPath)
       ? allAgentProfiles.filter((p) => !resolveAgentDisabled(projectPath, p.name))
       : [];
+    const visibleAgentProfiles = isPlanProfile(profile)
+      ? enabledAgentProfiles.filter((p) => p.name === 'explore')
+      : enabledAgentProfiles;
     const basePrompt =
       opts.systemOverride ??
       buildSystemPrompt({
@@ -245,8 +275,9 @@ export function agentLoop(
         shell: process.env.SHELL || process.env.ComSpec || 'bash',
         variant: systemPromptVariant ?? 'default',
         skillInstruction,
-        agentProfiles,
+        agentProfiles: visibleAgentProfiles,
         rules: rulesText,
+        profileSystemPrompt: profile?.systemPrompt,
       });
 
     const memoryBlock = state.memorySnapshot;
@@ -260,10 +291,11 @@ export function agentLoop(
     const effectiveMaxStopContinuations = opts.maxStopContinuations ?? maxStopContinuations;
 
     let messages: Message[] = [];
+    let submittedPlanTitle: string | null = null;
 
     for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
       const payload = yield* Effect.sync(() =>
-        context.assemblePayload(state.sessionId, state.projectPath, llm.modelInfo.maxTokens)
+        context.assemblePayload(state.transcriptPath, llm.modelInfo.maxTokens)
       );
       messages = payload.messages;
 
@@ -281,6 +313,7 @@ export function agentLoop(
         let allToolDefs: ToolDefinition[] = [...builtinTools, ...(opts.mcpTools ?? [])];
         if (opts.dispatchTool && resolveSubagentEnabled(projectPath))
           allToolDefs = [...allToolDefs, opts.dispatchTool];
+        if (isPlanProfile(profile)) allToolDefs = [...allToolDefs, submitPlanTool];
 
         const allowedByPolicy = opts.toolPolicy?.allowedTools;
         let filteredDefs = allToolDefs;
@@ -303,8 +336,7 @@ export function agentLoop(
         const compressResult = yield* Effect.tryPromise({
           try: () =>
             context.compactIfNeeded(
-              state.sessionId,
-              state.projectPath,
+              state.transcriptPath,
               messages,
               llm.modelInfo.maxTokens,
               llm
@@ -354,8 +386,7 @@ export function agentLoop(
             const compressResult = yield* Effect.tryPromise({
               try: () =>
                 context.compactWithLLM(
-                  state.sessionId,
-                  state.projectPath,
+                  state.transcriptPath,
                   llm.modelInfo.maxTokens,
                   llm,
                   undefined
@@ -438,6 +469,15 @@ export function agentLoop(
             continue;
           }
 
+          if (submittedPlanTitle !== null) {
+            yield* hooks.emit('plan.ready', {
+              sessionId,
+              projectPath,
+              title: submittedPlanTitle,
+            });
+            submittedPlanTitle = null;
+          }
+
           yield* q.offer({ _tag: 'Done', content: resp.content });
           lastResult = Result.ok(resp.content);
           yield* hooks.emit('agent.turn.end', {
@@ -496,6 +536,14 @@ export function agentLoop(
             todoPrinted = true;
           }
         }
+
+        const submitPlanCall = toolCalls?.find((tc) => tc.name === 'submit_plan');
+        const submitPlanResult = allResults.find(
+          (r) => r.name === 'submit_plan' && r.type === 'ok'
+        );
+        if (submitPlanCall && submitPlanResult && submittedPlanTitle === null) {
+          submittedPlanTitle = String(submitPlanCall.arguments?.title ?? '');
+        }
       }
 
       if (overflow) continue;
@@ -530,18 +578,19 @@ export function agentLoop(
   }).pipe(
     Effect.interruptible,
     Effect.onInterrupt(() =>
-      Effect.sync(() => {
-        Effect.runSync(
-          q.offer({ _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') })
-        );
-        hooks
+      Effect.gen(function* () {
+        yield* Effect.sync(() => {
+          Effect.runSync(
+            q.offer({ _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') })
+          );
+        });
+        yield* hooks
           .emit('agent.turn.end', {
             sessionId,
             turnId: state.currentTurnId,
             status: 'aborted',
           })
-          .pipe(Effect.runPromise)
-          .catch(() => {});
+          .pipe(Effect.ignore);
       })
     ),
     Effect.ensuring(

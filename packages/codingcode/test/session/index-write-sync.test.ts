@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
+
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
@@ -17,14 +18,18 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 describe('index write is synchronous', () => {
   it('recordUser immediately updates index file', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -44,21 +49,25 @@ describe('index write is synchronous', () => {
       expect(after.messageCount).toBe(2);
       expect(after.title).toBe('hello');
     } finally {
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
   it('recordAssistant immediately updates index file', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     try {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -83,7 +92,7 @@ describe('index write is synchronous', () => {
       const updated = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
       expect(updated.messageCount).toBe(3);
     } finally {
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });
       rmSync(dir, { recursive: true, force: true });
     }
   });

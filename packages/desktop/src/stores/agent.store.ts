@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { Thread, Turn, Item, TodoItem } from '@shared/types';
+import type { SessionMode } from '@codingcode/core/session/types';
+import type { PermissionMode } from '@codingcode/core/approval/types';
 import { buildToolDiff } from '../lib/diff-compute';
 import { createDebouncedStorage, normalizeCwd } from './storage';
 import { useRollbackStore } from './rollback.store';
@@ -30,31 +32,59 @@ export interface Automation {
   projectCwd: string;
   runOnce: boolean;
   createdAt: number;
-  updatedAt: number;
   lastRunAt: number | null;
   lastSessionId: string | null;
+}
+
+export interface PendingPlan {
+  sessionId: string;
+  title: string;
+}
+
+export interface StoredMode {
+  mode: SessionMode;
+  permissionMode: PermissionMode;
+  fetchedAt: number;
+  optimistic: boolean;
 }
 
 interface AgentState {
   currentThreadId: string | null;
   threads: Record<string, Thread>;
   approvalPolicy: 'ask-all' | 'smart-allow' | 'full-allow' | 'read-only';
+  pendingProfile: 'plan' | 'build';
   model: string;
   models: ModelEntry[];
   contextUsage: { used: number; contextWindow: number } | null;
   todoByThreadId: Record<string, TodoPanelState>;
   pendingInput: string | null;
+  pendingPlanByThreadId: Record<string, PendingPlan | null>;
   usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>;
+  modeByThreadId: Record<string, StoredMode>;
   isCompressing: boolean;
   automations: Automation[];
 }
 
 interface AgentActions {
   setCurrentThread: (id: string | null) => void;
+  setCurrentThreadWithMode: (
+    id: string,
+    info: { mode: SessionMode; permissionMode: PermissionMode; optimistic?: boolean }
+  ) => void;
+  setModeForThread: (
+    id: string,
+    info: { mode: SessionMode; permissionMode: PermissionMode; requestedAt?: number }
+  ) => void;
+  setOptimisticModeForThread: (
+    id: string,
+    info: { mode: SessionMode; permissionMode: PermissionMode }
+  ) => void;
+  removeThread: (id: string) => void;
   upsertThread: (thread: Thread) => void;
   setThreadTurns: (threadId: string, turns: Turn[]) => void;
   setThreadCwd: (threadId: string, cwd: string) => void;
   setApprovalPolicy: (policy: AgentState['approvalPolicy']) => void;
+  setPendingProfile: (profile: AgentState['pendingProfile']) => void;
   setModel: (model: string) => void;
   setModels: (models: ModelEntry[]) => void;
   setContextUsage: (usage: { used: number; contextWindow: number } | null) => void;
@@ -69,6 +99,8 @@ interface AgentActions {
     callId: string,
     status: 'pending' | 'approved' | 'rejected' | 'running'
   ) => void;
+  setPendingPlan: (threadId: string, plan: PendingPlan | null) => void;
+  clearPendingPlan: (threadId: string) => void;
   startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void;
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void;
   updateTurnId: (threadId: string, oldTurnId: string, newTurnId: string) => void;
@@ -88,12 +120,15 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       currentThreadId: null,
       threads: {},
       approvalPolicy: 'ask-all',
+      pendingProfile: 'build',
       model: '',
       models: [],
       contextUsage: null,
       todoByThreadId: {},
       pendingInput: null,
+      pendingPlanByThreadId: {},
       usageByThreadId: {},
+      modeByThreadId: {},
       isCompressing: false,
       automations: [],
 
@@ -111,6 +146,67 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           } else {
             s.contextUsage = null;
           }
+        }),
+
+      setCurrentThreadWithMode: (id, info) =>
+        set((s) => {
+          s.currentThreadId = id;
+          s.modeByThreadId[id] = {
+            mode: info.mode,
+            permissionMode: info.permissionMode,
+            fetchedAt: Date.now(),
+            optimistic: info.optimistic ?? false,
+          };
+          if (id) {
+            const usage = s.usageByThreadId[id];
+            const model = s.models.find((m) => m.id === s.model);
+            if (usage && model) {
+              s.contextUsage = { used: usage.total, contextWindow: model.context_window };
+            } else {
+              s.contextUsage = null;
+            }
+          } else {
+            s.contextUsage = null;
+          }
+        }),
+
+      setModeForThread: (id, info) =>
+        set((s) => {
+          const current = s.modeByThreadId[id];
+          if (
+            current &&
+            info.requestedAt !== undefined &&
+            current.fetchedAt > info.requestedAt
+          ) {
+            return;
+          }
+          s.modeByThreadId[id] = {
+            mode: info.mode,
+            permissionMode: info.permissionMode,
+            fetchedAt: Date.now(),
+            optimistic: false,
+          };
+        }),
+
+      setOptimisticModeForThread: (id, info) =>
+        set((s) => {
+          const current = s.modeByThreadId[id];
+          if (current && !current.optimistic) return;
+          s.modeByThreadId[id] = {
+            mode: info.mode,
+            permissionMode: info.permissionMode,
+            fetchedAt: 0,
+            optimistic: true,
+          };
+        }),
+
+      removeThread: (id) =>
+        set((s) => {
+          delete s.threads[id];
+          delete s.usageByThreadId[id];
+          delete s.todoByThreadId[id];
+          delete s.pendingPlanByThreadId[id];
+          delete s.modeByThreadId[id];
         }),
 
       upsertThread: (thread) =>
@@ -135,6 +231,11 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setApprovalPolicy: (policy) =>
         set((s) => {
           s.approvalPolicy = policy;
+        }),
+
+      setPendingProfile: (profile) =>
+        set((s) => {
+          s.pendingProfile = profile;
         }),
 
       setModel: (model) =>
@@ -184,6 +285,11 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           for (const id of Object.keys(s.todoByThreadId)) {
             if (!incomingIds.has(id)) {
               delete s.todoByThreadId[id];
+            }
+          }
+          for (const id of Object.keys(s.modeByThreadId)) {
+            if (!incomingIds.has(id)) {
+              delete s.modeByThreadId[id];
             }
           }
         });
@@ -341,6 +447,20 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           s.pendingInput = input;
         }),
 
+      setPendingPlan: (threadId, plan) =>
+        set((s) => {
+          if (plan === null) {
+            delete s.pendingPlanByThreadId[threadId];
+          } else {
+            s.pendingPlanByThreadId[threadId] = plan;
+          }
+        }),
+
+      clearPendingPlan: (threadId) =>
+        set((s) => {
+          delete s.pendingPlanByThreadId[threadId];
+        }),
+
       clearRunningTurns: (threadId) =>
         set((s) => {
           const thread = s.threads[threadId];
@@ -402,6 +522,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       partialize: (state) => ({
         approvalPolicy: state.approvalPolicy,
         model: state.model,
+        pendingProfile: state.pendingProfile,
       }),
       merge: (persisted, current) => {
         const p = persisted as any;
@@ -416,10 +537,12 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           ...current,
           ...p,
           approvalPolicy: migratedPolicy ?? current.approvalPolicy,
+          pendingProfile: p?.pendingProfile === 'plan' ? 'plan' : 'build',
           threads: {},
           todoByThreadId: {},
           contextUsage: null,
           usageByThreadId: {},
+          modeByThreadId: {},
         };
       },
     }

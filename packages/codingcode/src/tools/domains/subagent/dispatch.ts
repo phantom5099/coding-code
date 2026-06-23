@@ -7,10 +7,13 @@ import { ApprovalService } from '../../../approval/index.js';
 import { HookService } from '../../../hooks/registry.js';
 import { McpService } from '../../../mcp/index.js';
 import { LLMFactoryService } from '../../../llm/factory.js';
-import { resolveSubagentEnabled, resolveAgentDisabled } from '../../../subagent/registry.js';
+import { resolveSubagentEnabled, resolveAgentDisabled, BUILD_PROFILE } from '../../../subagent/registry.js';
 import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import { SubagentRunnerService } from '../../../subagent/runner-service.js';
+import { checkSubagentAllowedInPlanMode } from '../../../plan/index.js';
+import type { SessionMode } from '../../../session/types.js';
+import type { PermissionMode } from '../../../approval/types.js';
 
 export function createDispatchAgentTool(): Effect.Effect<
   ToolDefinition,
@@ -89,10 +92,24 @@ export function createDispatchAgentTool(): Effect.Effect<
           }
 
           // Emit spawn.before hook (decision hook, can deny)
+          const parentSessionId = ctx?.sessionId;
+          const parentMainProfile = parentSessionId
+            ? runtime.getSessionProfile(parentSessionId)?.name
+            : undefined;
+
+          const whitelist = checkSubagentAllowedInPlanMode(
+            parentSessionId,
+            parentMainProfile,
+            agentName
+          );
+          if (!whitelist.allowed) {
+            return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', whitelist.reason));
+          }
+
           const spawnDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
             profile: agentName,
             prompt,
-            parentSessionId: ctx?.sessionId,
+            parentSessionId,
           });
           if (spawnDecision && spawnDecision.decision === 'deny') {
             return yield* Effect.fail(
@@ -104,10 +121,31 @@ export function createDispatchAgentTool(): Effect.Effect<
           }
 
           // Create subagent transcript nested under parent session
-          const childState = yield* session.create(projectPath, (ctx as any)?.model ?? 'subagent', {
-            parentSessionId: ctx?.sessionId,
-            agentName: agentName,
-          });
+          const subagentProfile = runtime.resolveSubagentProfile(projectPath, agentName);
+          const childMode: SessionMode = 'build';
+          const childPermissionMode: PermissionMode =
+            (subagentProfile?.permissionMode as PermissionMode | undefined) ?? 'default';
+          const childModel: string = subagentProfile?.model ?? llm.modelInfo.model;
+
+          const childState = yield* session.create(
+            projectPath,
+            {
+              model: childModel,
+              mode: childMode,
+              permissionMode: childPermissionMode,
+            },
+            {
+              parentSessionId: ctx?.sessionId,
+              agentName: agentName,
+            }
+          );
+          yield* runtime.setSessionProfile(
+            projectPath,
+            childState.sessionId,
+            subagentProfile ?? BUILD_PROFILE,
+            childPermissionMode,
+            ctx?.sessionId
+          );
           const childUuid = childState.sessionId;
           session.incrementTurn(childState);
           yield* session.recordUser(childState, prompt);
@@ -157,7 +195,7 @@ export function createDispatchAgentTool(): Effect.Effect<
             profile: agentName,
           });
 
-          // Collect events and extract result — wrap AsyncGenerator in Effect
+          let didComplete = false;
           const finalContent = yield* Effect.async<string, AgentError>((resume) => {
             let content = '';
             (async () => {
@@ -178,19 +216,11 @@ export function createDispatchAgentTool(): Effect.Effect<
                   }
                 }
 
-                // Cleanup
+                // Cleanup (pure sync Effects — no service context required)
                 await Effect.runPromise(mcp.disposeSession(childUuid));
                 await Effect.runPromise(hooks.disposeSession(childUuid));
 
-                // Emit completion hook
-                await Effect.runPromise(
-                  hooks.emit('agent.subagent.complete', {
-                    childSessionId: childUuid,
-                    profile: agentName,
-                    status: 'done',
-                  })
-                );
-
+                didComplete = true;
                 resume(Effect.succeed(content || '(subagent completed without output)'));
               } catch (e) {
                 // Cleanup on unexpected error
@@ -205,6 +235,16 @@ export function createDispatchAgentTool(): Effect.Effect<
               }
             })();
           });
+
+          if (didComplete) {
+            yield* hooks
+              .emit('agent.subagent.complete', {
+                childSessionId: childUuid,
+                profile: agentName,
+                status: 'done',
+              })
+              .pipe(Effect.ignore);
+          }
 
           return finalContent;
         }) as Effect.Effect<string, AgentError>,

@@ -1,10 +1,8 @@
 import { spawnSync } from 'child_process';
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
 import { join } from 'path';
-import { normalizePath, encodeProjectPath } from '../core/path.js';
+import { normalizePath, encodeProjectPath, getProjectBaseDir } from '../core/path.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
 const NULL_DEVICE = process.platform === 'win32' ? 'NUL' : '/dev/null';
 
 const IGNORE_RULES = [
@@ -32,7 +30,7 @@ export class ShadowGit {
     // Normalize path so same dir always produces same encoding (forward slash + lowercase drive)
     this.projectPath = normalizePath(projectPath);
     const encoded = encodeProjectPath(this.projectPath);
-    this.gitDir = join(PROJECT_BASE, encoded, 'checkpoint', 'repo.git');
+    this.gitDir = join(getProjectBaseDir(), encoded, 'checkpoint', 'repo.git');
   }
 
   init(): void {

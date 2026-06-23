@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import type { AgentProfile } from './types.js';
 import { createLogger } from '@codingcode/infra/logger';
+import { NotFoundError } from '../core/error.js';
 
 const logger = createLogger();
 
@@ -185,7 +186,10 @@ export function updateAgentProfile(
 
 export function deleteAgentProfile(projectCwd: string, name: string): void {
   const filePath = findAgentFile(projectCwd, name);
-  if (filePath) unlinkSync(filePath);
+  if (!filePath) {
+    throw new NotFoundError(`Agent '${name}' not found in project config`);
+  }
+  unlinkSync(filePath);
 }
 
 function loadAgentProfilesFromDir(dirPath: string): AgentProfile[] {

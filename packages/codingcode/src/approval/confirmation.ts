@@ -20,7 +20,6 @@ export function userConfirmAsync(
 
     yield* waitSvc.emitApprovalRequest(sessionId, id, tool, args);
 
-    // Suspend until resolveConfirm is called
     return yield* waitSvc.waitForConfirm(id, sessionId);
   });
 }

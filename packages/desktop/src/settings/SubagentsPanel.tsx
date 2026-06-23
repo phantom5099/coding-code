@@ -65,8 +65,6 @@ const EMPTY_FORM: AgentForm = {
   model: '',
 };
 
-const BUILT_IN = new Set(['explore', 'general']);
-
 export default function SubagentsPanel({ global: isGlobal }: { global?: boolean }) {
   const [agents, setAgents] = useState<AgentEntry[]>([]);
   const [enabled, setEnabled] = useState(true);
@@ -294,7 +292,7 @@ export default function SubagentsPanel({ global: isGlobal }: { global?: boolean 
                 </div>
               );
             }
-            const isBuiltIn = BUILT_IN.has(a.name);
+            const canMutate = a.source === (isGlobal ? 'global' : 'project');
             return (
               <div
                 key={a.name}
@@ -364,7 +362,7 @@ export default function SubagentsPanel({ global: isGlobal }: { global?: boolean 
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {!isBuiltIn && (
+                    {canMutate && (
                       <>
                         <button
                           title="编辑"

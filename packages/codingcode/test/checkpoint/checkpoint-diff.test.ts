@@ -4,8 +4,9 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { spawnSync } from 'child_process';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+useTempProjectBase();
 
 function setupTempRepo(): { projectPath: string; slug: string } {
   const slug = `test-${randomUUID()}`;

@@ -1,3 +1,5 @@
+import type { Effect } from 'effect';
+
 export type HookPoint =
   | 'tool.execute.before'
   | 'tool.execute.after'
@@ -16,7 +18,8 @@ export type HookPoint =
   | 'agent.turn.end'
   | 'agent.subagent.spawn.before'
   | 'agent.subagent.spawn.after'
-  | 'agent.subagent.complete';
+  | 'agent.subagent.complete'
+  | 'plan.ready';
 
 export interface HookDecision {
   decision?: 'allow' | 'deny' | 'ask' | 'continue';
@@ -26,7 +29,9 @@ export interface HookDecision {
   modifiedOutput?: unknown;
 }
 
-export type ObserverHandler = (payload: Record<string, unknown>) => void | Promise<void>;
+export type ObserverHandler = (
+  payload: Record<string, unknown>
+) => Effect.Effect<void, never, any> | void | Promise<void>;
 
 export type DecisionHandler = (
   payload: Record<string, unknown>

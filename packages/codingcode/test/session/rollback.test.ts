@@ -1,16 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, appendFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { filterForContext, buildContextMessages } from '../../src/context/service.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionIndex } from '../../src/session/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 function makeFixture(sessionId: string, slug: string) {
-  const dir = join(PROJECT_BASE, slug, 'sessions');
+  const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
@@ -84,7 +84,7 @@ describe('rollback', () => {
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toEqual([]);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
@@ -104,7 +104,7 @@ describe('rollback', () => {
       const userContents = messages.filter((m) => m.role === 'user').map((m) => m.content);
       expect(userContents).toEqual(['hello']);
     } finally {
-      rmSync(join(PROJECT_BASE, slug), { recursive: true, force: true });
+      rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 });

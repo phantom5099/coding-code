@@ -18,7 +18,7 @@ export interface SettingsClient {
   getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
   setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
   resetSubagentEnabled(body: { cwd: string }): Promise<void>;
-  getMcpStatus(): Promise<McpStatus[]>;
+  getMcpStatus(input: { cwd: string }): Promise<McpStatus[]>;
   setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
   createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
@@ -95,8 +95,8 @@ export function createHttpSettingsClient(
       await apiPost(`/api/settings/subagent/enabled/reset${qsCwd(cwd)}`, {});
     },
 
-    async getMcpStatus() {
-      return apiGet<McpStatus[]>('/api/settings/mcp');
+    async getMcpStatus({ cwd }) {
+      return apiGet<McpStatus[]>(`/api/settings/mcp${qsCwd(cwd)}`);
     },
 
     async setMcpDisabled({ name, disabled, cwd }) {

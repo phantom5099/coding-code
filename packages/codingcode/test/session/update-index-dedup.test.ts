@@ -1,14 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
+
 import { encodeProjectPath } from '../../src/core/path.js';
 import * as fileOps from '../../src/session/file-ops.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
@@ -17,7 +18,7 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 describe('updateIndex deduplication after removing appendEvent', () => {
   it('recordUser calls readCurrentIndex exactly once', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     const spy = vi.spyOn(fileOps, 'readCurrentIndex');
@@ -26,7 +27,11 @@ describe('updateIndex deduplication after removing appendEvent', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       spy.mockClear();
@@ -41,14 +46,14 @@ describe('updateIndex deduplication after removing appendEvent', () => {
       expect(spy).toHaveBeenCalledTimes(1);
     } finally {
       spy.mockRestore();
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
   it('recordAssistant calls readCurrentIndex exactly once', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     const spy = vi.spyOn(fileOps, 'readCurrentIndex');
@@ -57,7 +62,11 @@ describe('updateIndex deduplication after removing appendEvent', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       spy.mockClear();
@@ -72,14 +81,14 @@ describe('updateIndex deduplication after removing appendEvent', () => {
       expect(spy).toHaveBeenCalledTimes(1);
     } finally {
       spy.mockRestore();
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
   it('rollbackToTurn calls readCurrentIndex exactly once', async () => {
     const slug = randomUUID();
-    const dir = join(PROJECT_BASE, slug);
+    const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
 
     const spy = vi.spyOn(fileOps, 'readCurrentIndex');
@@ -88,7 +97,11 @@ describe('updateIndex deduplication after removing appendEvent', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       spy.mockClear();
@@ -103,7 +116,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
       expect(spy).toHaveBeenCalledTimes(1);
     } finally {
       spy.mockRestore();
-      rmSync(join(PROJECT_BASE, encodeProjectPath(dir)), { recursive: true, force: true });
+      rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });
       rmSync(dir, { recursive: true, force: true });
     }
   });

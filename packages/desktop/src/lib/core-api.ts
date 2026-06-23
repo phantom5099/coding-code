@@ -1,9 +1,13 @@
 import { API_BASE, api } from './api';
 import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client/http-clients';
+import type { PermissionMode } from '@codingcode/core/approval/types';
+import type { SessionMode } from '@codingcode/core/session/types';
 
 const clients = createHttpClients(API_BASE);
 
 export const agentClient: AgentRuntimeClient = clients.agent;
+
+export type { AgentRuntimeClient };
 
 // ---- Models ----
 
@@ -26,9 +30,9 @@ export function listSessions(cwd?: string): Promise<any[]> {
 
 export function createSession(
   cwd: string,
-  initialPermissionMode?: string
+  params: { mode: SessionMode; permissionMode: PermissionMode; model: string }
 ): Promise<{ sessionId: string }> {
-  return clients.sessions.createSession({ cwd, initialPermissionMode });
+  return clients.sessions.createSession({ cwd, ...params });
 }
 
 export function deleteSession(sessionId: string, cwd: string): Promise<void> {
@@ -51,9 +55,9 @@ export function resumeSession(sessionId: string, cwd: string): Promise<any> {
 export function setSessionPermissionMode(
   sessionId: string,
   cwd: string,
-  mode: string
+  mode: PermissionMode
 ): Promise<void> {
-  return clients.sessions.setSessionPermissionMode({ sessionId, cwd, mode: mode as any });
+  return clients.sessions.setSessionPermissionMode({ sessionId, cwd, mode });
 }
 
 export function sendApprovalResponse(
@@ -62,6 +66,45 @@ export function sendApprovalResponse(
   response: string
 ): Promise<void> {
   return clients.agent.sendApprovalResponse({ sessionId, approvalId: callId, response });
+}
+
+// ---- Plan file ----
+
+export function getSessionPlan(
+  sessionId: string,
+  cwd: string
+): Promise<{ content: string; path: string; directory: string; exists: boolean }> {
+  return api<{ content: string; path: string; directory: string; exists: boolean }>(
+    `/api/sessions/${sessionId}/plan?cwd=${encodeURIComponent(cwd)}`
+  );
+}
+
+// ---- Plan/Build mode switching ----
+
+export type SessionModeInfo = {
+  mode: SessionMode;
+  permissionMode: PermissionMode;
+  cwd: string;
+  available: Array<{ name: string; description: string }>;
+};
+
+export function getSessionMode(sessionId: string, cwd: string): Promise<SessionModeInfo> {
+  return api<SessionModeInfo>(`/api/sessions/${sessionId}/mode?cwd=${encodeURIComponent(cwd)}`);
+}
+
+export function setSessionMode(
+  sessionId: string,
+  cwd: string,
+  mode: SessionMode
+): Promise<{ mode: SessionMode; permissionMode: PermissionMode }> {
+  return api<{ mode: SessionMode; permissionMode: PermissionMode }>(
+    `/api/sessions/${sessionId}/mode`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd, mode }),
+    }
+  );
 }
 
 // ---- Settings: Memory ----
@@ -139,8 +182,8 @@ export async function setCompactionModel(
 
 // ---- Settings: MCP ----
 
-export function listMcpServers(_cwd?: string): Promise<any[]> {
-  return clients.settings.getMcpStatus();
+export function listMcpServers(cwd?: string): Promise<any[]> {
+  return clients.settings.getMcpStatus({ cwd: cwd ?? '' });
 }
 
 export function setMcpDisabled(name: string, disabled: boolean, cwd?: string): Promise<void> {

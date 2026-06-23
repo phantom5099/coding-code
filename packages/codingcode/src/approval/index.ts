@@ -29,6 +29,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
           context?: Record<string, unknown>;
           callId?: string;
           sessionId: string;
+          projectPath?: string;
         }): Effect.Effect<ApprovalDecision> =>
           runPipeline(
             {
@@ -45,6 +46,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
               onAlways: (rule) => engine.addRule(rule),
               onNever: (rule) => engine.addRule(rule),
               sessionId: request.sessionId,
+              projectPath: request.projectPath,
               callId: request.callId,
             }
           ).pipe(
@@ -97,6 +99,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
         context?: Record<string, unknown>;
         callId?: string;
         sessionId: string;
+        projectPath?: string;
       }): Effect.Effect<ApprovalDecision> =>
         runPipeline(
           {
@@ -113,6 +116,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
             onAlways: (rule) => ruleEngine.addRule(rule),
             onNever: (rule) => ruleEngine.addRule(rule),
             sessionId: request.sessionId,
+            projectPath: request.projectPath,
             callId: request.callId,
           }
         ).pipe(

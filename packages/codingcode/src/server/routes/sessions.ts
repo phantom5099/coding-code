@@ -1,22 +1,27 @@
 import { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { existsSync } from 'fs';
-import type { SessionStoreState } from '../../session/types.js';
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
+import type { SessionStoreState, SessionMode } from '../../session/types.js';
 import { SessionService } from '../../session/store.js';
 import {
   sessionJsonlPathFromCwd,
   getPermissionMode,
   setPermissionMode,
-  readHistory,
   deleteSession,
 } from '../../session/file-ops.js';
-import type { SessionEvent, SummaryEvent, CompactEvent } from '../../session/types.js';
+import { readUIHistory, findUserMessageForTurn } from '../../session/ui-history.js';
 import { ContextService, estimatePromptTokens } from '../../context/service.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
 import { WorkspaceService } from '../../core/workspace.js';
 import { LLMFactoryService } from '../../llm/factory.js';
 import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
+import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
+import { ProjectRuntimeService, modeToProfile } from '../../runtime/project-runtime.js';
+import { BUILD_PROFILE, PLAN_PROFILE } from '../../subagent/registry.js';
+import { isPermissionMode, type PermissionMode } from '../../approval/types.js';
+import { isPlanProfile } from '../../plan/index.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
@@ -24,145 +29,6 @@ export const activeApprovalForks = new Map<
   string,
   { setPermissionMode: (mode: any) => Promise<void> | void }
 >();
-
-// --- UI history functions (moved from messages.ts) ---
-
-function filterForUI(events: SessionEvent[]): SessionEvent[] {
-  const rollbackHiddenTurnIds = new Set<number>();
-  const rollbackHiddenOpUuids = new Set<string>();
-
-  for (const ev of events) {
-    if (ev.type !== 'rollback') continue;
-    for (const prior of events) {
-      if (prior === ev) break;
-      if ('turnId' in prior && prior.turnId >= ev.throughTurnId) {
-        rollbackHiddenTurnIds.add(prior.turnId);
-      }
-      if (prior.type === 'summary' || prior.type === 'compact') {
-        if ((prior as SummaryEvent | CompactEvent).endTurnId >= ev.throughTurnId) {
-          rollbackHiddenOpUuids.add((prior as SummaryEvent | CompactEvent).uuid);
-        }
-      }
-    }
-  }
-
-  return events.filter((ev) => {
-    if (ev.type === 'rollback') return false;
-    if (ev.type === 'summary' && rollbackHiddenOpUuids.has((ev as SummaryEvent).uuid)) return false;
-    if (ev.type === 'compact' && rollbackHiddenOpUuids.has((ev as CompactEvent).uuid)) return false;
-    if ('turnId' in ev && rollbackHiddenTurnIds.has(ev.turnId)) return false;
-    return true;
-  }) as SessionEvent[];
-}
-
-function createTurnScopedIdGenerator() {
-  const counters = new Map<string, number>();
-  return (prefix: string, turnId: number): string => {
-    const key = `${prefix}:${turnId}`;
-    const next = (counters.get(key) ?? 0) + 1;
-    counters.set(key, next);
-    return `${prefix}-${turnId}-${next}`;
-  };
-}
-
-function sessionEventsToTurns(
-  events: SessionEvent[]
-): Array<{ id: string; items: object[]; status: string }> {
-  const turnsMap = new Map<number, { id: string; items: object[]; status: string }>();
-  const nextId = createTurnScopedIdGenerator();
-
-  for (const event of events) {
-    if (event.type === 'session_meta') continue;
-    if (event.type === 'compact' || event.type === 'rollback') continue;
-
-    if (event.type === 'summary') {
-      let turn = turnsMap.get(event.endTurnId);
-      if (!turn) {
-        turn = { id: String(event.endTurnId), items: [], status: 'completed' };
-        turnsMap.set(event.endTurnId, turn);
-      }
-      turn.items.push({
-        id: `summary-${event.uuid}`,
-        type: 'summary',
-        content: event.summaryText,
-        startTurnId: event.startTurnId,
-        endTurnId: event.endTurnId,
-      });
-      continue;
-    }
-
-    let turn = turnsMap.get(event.turnId);
-    if (!turn) {
-      turn = { id: String(event.turnId), items: [], status: 'completed' };
-      turnsMap.set(event.turnId, turn);
-    }
-    switch (event.type) {
-      case 'user':
-        turn.items.push({
-          id: nextId('user', event.turnId),
-          type: 'message',
-          role: 'user',
-          content: event.content,
-        });
-        break;
-      case 'assistant':
-        if (event.content) {
-          turn.items.push({
-            id: nextId('assistant', event.turnId),
-            type: 'message',
-            role: 'assistant',
-            content: event.content,
-          });
-        }
-        for (const tc of event.toolCalls ?? []) {
-          const args = tc.arguments ?? {};
-          turn.items.push({
-            id: tc.id,
-            type: 'tool_call',
-            name: tc.name,
-            args,
-            status: 'approved',
-          });
-        }
-        break;
-      case 'tool_result': {
-        const item: Record<string, unknown> = {
-          id: `result-${event.toolCallId}`,
-          type: 'tool_result',
-          callId: event.toolCallId,
-          name: event.toolName,
-          output: event.output,
-        };
-        turn.items.push(item);
-        break;
-      }
-    }
-  }
-  return [...turnsMap.values()].sort((a, b) => Number(a.id) - Number(b.id));
-}
-
-function readUIHistory(
-  sessionId: string,
-  cwd: string
-): Array<{ id: string; items: object[]; status: string }> {
-  const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
-  if (!existsSync(jsonlPath)) return [];
-  const events = readHistory(jsonlPath);
-  const visibleEvents = filterForUI(events);
-  return sessionEventsToTurns(visibleEvents);
-}
-
-function findUserMessageForTurn(sessionId: string, turnId: number, cwd: string): string {
-  const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
-  if (!existsSync(jsonlPath)) return '';
-  const rawEvents = readHistory(jsonlPath);
-  for (const ev of rawEvents) {
-    if (ev.type === 'user' && (ev as any).turnId === turnId) {
-      return (ev as any).content ?? '';
-    }
-  }
-  return '';
-}
 
 export function createSessionsRouter(rt: ManagedRt): Hono {
   const router = new Hono();
@@ -201,7 +67,24 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
   });
 
   router.post('/', async (c) => {
-    const body = (await c.req.json()) as { cwd: string; initialPermissionMode?: string };
+    const body = (await c.req.json()) as {
+      cwd: string;
+      mode: SessionMode;
+      permissionMode: PermissionMode;
+      model: string;
+    };
+    if (body.mode !== 'plan' && body.mode !== 'build') {
+      return c.json({ error: `Invalid mode: ${body.mode}` }, 400);
+    }
+    if (!isPermissionMode(body.permissionMode)) {
+      return c.json({ error: `Invalid permissionMode: ${body.permissionMode}` }, 400);
+    }
+    if (body.mode === 'plan' && body.permissionMode !== 'default') {
+      return c.json({ error: 'Plan mode requires permissionMode "default"' }, 400);
+    }
+    if (!body.model) {
+      return c.json({ error: 'model required' }, 400);
+    }
     const normalizedCwd = await rt.runPromise(
       Effect.gen(function* () {
         const ws = yield* WorkspaceService;
@@ -211,18 +94,27 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        return yield* session.create(normalizedCwd, 'unknown');
+        const runtime = yield* ProjectRuntimeService;
+        const state = yield* session.create(normalizedCwd, {
+          model: body.model,
+          mode: body.mode,
+          permissionMode: body.permissionMode,
+        });
+        const profile = modeToProfile(body.mode);
+        yield* runtime.setSessionProfile(
+          normalizedCwd,
+          state.sessionId,
+          profile,
+          body.permissionMode
+        );
+        return state;
       }) as any
     );
     if (!result.ok) {
       const { status, body: resp } = errorResponse(result.error);
       return c.json(resp, status as any);
     }
-    const state = result.value as SessionStoreState;
-    if (body.initialPermissionMode) {
-      setPermissionMode(state.sessionId, state.indexPath, body.initialPermissionMode);
-    }
-    return c.json({ sessionId: state.sessionId });
+    return c.json({ sessionId: (result.value as SessionStoreState).sessionId });
   });
 
   router.post('/:id/resume', async (c) => {
@@ -274,7 +166,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const maxTokens = llm?.modelInfo.maxTokens ?? 128000;
 
         return yield* Effect.promise(() =>
-          context.compactWithLLM(state.sessionId, state.projectPath, maxTokens, llm)
+          context.compactWithLLM(state.transcriptPath, maxTokens, llm)
         );
       })
     );
@@ -301,6 +193,135 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(turns);
   });
 
+  // ---- Plan file: read the current plan document for a session ----
+  // submit_plan writes a <slug(title)>.md file per submission, so the
+  // "current" plan is whichever .md has the most recent mtime in the
+  // project's plan directory.
+  router.get('/:id/plan', async (c) => {
+    const cwd = await rt.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* WorkspaceService;
+        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
+      })
+    );
+    const planDir = join(getProjectBaseDir(), encodeProjectPath(cwd));
+    if (!existsSync(planDir)) {
+      return c.json({
+        content: '',
+        path: '',
+        directory: planDir,
+        exists: false,
+      });
+    }
+    let latest: { path: string; mtime: number } | null = null;
+    for (const name of readdirSync(planDir)) {
+      if (!name.endsWith('.md')) continue;
+      const full = join(planDir, name);
+      const mtime = statSync(full).mtimeMs;
+      if (latest === null || mtime > latest.mtime) {
+        latest = { path: full, mtime };
+      }
+    }
+    if (latest === null) {
+      return c.json({
+        content: '',
+        path: '',
+        directory: planDir,
+        exists: false,
+      });
+    }
+    try {
+      const content = readFileSync(latest.path, 'utf8');
+      return c.json({
+        content,
+        path: latest.path,
+        directory: planDir,
+        exists: true,
+      });
+    } catch (e) {
+      return c.json({ error: `Failed to read plan: ${String(e)}` }, 500);
+    }
+  });
+
+  // ---- Plan/Build mode switching ----
+  router.get('/:id/mode', async (c) => {
+    const sessionId = c.req.param('id');
+    const cwd = await rt.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* WorkspaceService;
+        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
+      })
+    );
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        const runtime = yield* ProjectRuntimeService;
+        const state = yield* session.load(cwd, sessionId);
+        return {
+          mode: state.mode,
+          permissionMode: runtime.getSessionPermissionMode(sessionId),
+        };
+      })
+    );
+    if (!result.ok) {
+      const { status, body } = errorResponse(result.error);
+      return c.json(body, status as any);
+    }
+    return c.json({
+      ...result.value,
+      cwd,
+      available: [
+        { name: PLAN_PROFILE.name, description: PLAN_PROFILE.description },
+        { name: BUILD_PROFILE.name, description: BUILD_PROFILE.description },
+      ],
+    });
+  });
+
+  router.post('/:id/mode', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = (await c.req.json()) as { cwd?: string; mode: SessionMode };
+    const cwd = await rt.runPromise(
+      Effect.gen(function* () {
+        const ws = yield* WorkspaceService;
+        return ws.resolveWorkspaceCwd(body.cwd);
+      })
+    );
+    const mode = body.mode ?? 'build';
+    if (mode !== 'plan' && mode !== 'build') {
+      return c.json({ error: `Invalid mode: ${mode}` }, 400);
+    }
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const runtime = yield* ProjectRuntimeService;
+        const session = yield* SessionService;
+        const profile =
+          runtime.resolveSubagentProfile(cwd, mode) ?? modeToProfile(mode);
+        const state = yield* session.load(cwd, sessionId);
+        yield* runtime.setSessionProfile(cwd, sessionId, profile, state.permissionMode);
+        if (!isPlanProfile(profile)) {
+          yield* session.updateActiveProfile(state, profile.name);
+          state.mode = 'build';
+        } else {
+          state.mode = 'plan';
+        }
+        return {
+          mode: state.mode,
+          permissionMode: runtime.getSessionPermissionMode(sessionId),
+        };
+      })
+    );
+    if (!result.ok) {
+      const { status, body: errBody } = errorResponse(result.error);
+      return c.json(errBody, status as any);
+    }
+    const handle = activeApprovalForks.get(sessionId);
+    if (handle) {
+      const permMode: PermissionMode = result.value.permissionMode;
+      Promise.resolve(handle.setPermissionMode(permMode)).catch(() => undefined);
+    }
+    return c.json(result.value);
+  });
+
   router.get('/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
@@ -313,10 +334,34 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
 
   router.put('/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
-    const { cwd, mode } = await c.req.json<{ cwd: string; mode: string }>();
+    const { cwd, mode } = await c.req.json<{ cwd: string; mode: PermissionMode }>();
     if (!cwd) return c.json({ error: 'cwd required' }, 400);
-    const idxPath = sessionJsonlPathFromCwd(cwd, sessionId).replace('.jsonl', '.index.json');
-    setPermissionMode(sessionId, idxPath, mode);
+    if (!isPermissionMode(mode)) {
+      return c.json({ error: `Invalid permissionMode: ${mode}` }, 400);
+    }
+    const setResult = await runWithLayer(
+      Effect.gen(function* () {
+        const runtime = yield* ProjectRuntimeService;
+        const session = yield* SessionService;
+        const state = yield* session.load(cwd, sessionId);
+        const profileName = runtime.getSessionProfile(sessionId)?.name;
+        if (profileName === PLAN_PROFILE.name && mode !== 'default') {
+          return yield* Effect.fail(
+            new Error('Plan mode requires permissionMode "default"')
+          );
+        }
+        const profile =
+          profileName === PLAN_PROFILE.name
+            ? PLAN_PROFILE
+            : runtime.getSessionProfile(sessionId) ?? BUILD_PROFILE;
+        yield* runtime.setSessionProfile(cwd, sessionId, profile, mode);
+        return { ok: true };
+      }) as any
+    );
+    if (!setResult.ok) {
+      const { status, body: errBody } = errorResponse(setResult.error);
+      return c.json(errBody, status as any);
+    }
     const handle = activeApprovalForks.get(sessionId);
     if (handle) handle.setPermissionMode(mode);
     return c.json({ ok: true });

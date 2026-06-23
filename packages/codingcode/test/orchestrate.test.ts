@@ -198,14 +198,16 @@ vi.mock('../src/runtime/project-runtime.js', () => ({
     allowToolSearch: true,
     allowDeferredTools: false,
   })),
-  setSessionProfile: vi.fn(),
+  setSessionProfile: vi.fn(() => Effect.void),
+  restoreSessionProfile: vi.fn(() => Effect.void),
   getSessionProfile: vi.fn(() => undefined),
   disposeSession: vi.fn(() => Effect.void),
   disposeProject: vi.fn(() => Effect.void),
 }));
 
 const MockSessionLayer = Layer.succeed(SessionService, {
-  create: (_cwd: string, _model: string) => Effect.succeed({ ...mockState }),
+  create: (_cwd: string, _options: any) => Effect.succeed({ ...mockState }),
+  load: (_cwd: string, _sid: string) => Effect.succeed({ ...mockState }),
   recordUser: () =>
     Effect.succeed({
       type: 'user' as const,
@@ -321,8 +323,23 @@ const AllDeps = Layer.mergeAll(
 const TestLayer = Layer.mergeAll(AgentLayer, AllDeps);
 
 describe('sendMessage stream', () => {
+  async function setupSession(): Promise<string> {
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        const state = yield* session.create('/tmp/test', {
+          model: 'mock-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
+        return state.sessionId;
+      }).pipe(Effect.provide(TestLayer) as any)
+    );
+  }
+
   it('should yield AgentEvent chunks from LLM', async () => {
-    const program = sendMessage(undefined, 'hi', '/tmp/test', mockLlm);
+    const sessionId = await setupSession();
+    const program = sendMessage(sessionId, 'hi', '/tmp/test', mockLlm);
     const { stream } = (await Effect.runPromise(
       program.pipe(Effect.provide(TestLayer) as any)
     )) as any;
@@ -337,7 +354,8 @@ describe('sendMessage stream', () => {
   });
 
   it('should not return empty event stream for normal LLM response', async () => {
-    const program = sendMessage(undefined, 'hi', '/tmp/test', mockLlm);
+    const sessionId = await setupSession();
+    const program = sendMessage(sessionId, 'hi', '/tmp/test', mockLlm);
     const { stream } = (await Effect.runPromise(
       program.pipe(Effect.provide(TestLayer) as any)
     )) as any;

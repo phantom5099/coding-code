@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Item } from '@shared/types';
 import { useAgentStore } from '../stores/agent.store';
-import { useAgentApproval } from '../hooks/useAgent';
+import { useAgentApproval, useAgentCore, useAgentMode } from '../hooks/useAgent';
 import ToolCallCard from '../shared/ToolCallCard';
+import PlanApprovalModal from '../shared/PlanApprovalModal';
+import { useWorkspaceStore } from '../stores/workspace.store';
 
 interface ApprovalPanelProps {
   threadId: string;
@@ -11,8 +13,40 @@ interface ApprovalPanelProps {
 export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { approveTool, rejectTool } = useAgentApproval();
+  const { sendMessage } = useAgentCore();
+  const { fetchPlan, switchMode } = useAgentMode();
+  const workspace = useWorkspaceStore();
 
-  // Stable string key: only changes when pending item IDs change, not on every content update
+  const pendingPlan = useAgentStore((s) => s.pendingPlanByThreadId[threadId] ?? null);
+  const clearPendingPlan = useAgentStore((s) => s.clearPendingPlan);
+
+  const [planContent, setPlanContent] = useState('');
+  const [planPath, setPlanPath] = useState<string | undefined>();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!pendingPlan) return;
+    let cancelled = false;
+    setLoading(true);
+    fetchPlan(pendingPlan.sessionId, workspace.rootPath ?? '')
+      .then((snap) => {
+        if (cancelled) return;
+        setPlanContent(snap.content);
+        setPlanPath(snap.path);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPlanContent('');
+        setPlanPath(undefined);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingPlan, fetchPlan, workspace.rootPath]);
+
   const pendingKey = useAgentStore((s) => {
     const thread = s.threads[threadId];
     if (!thread) return '';
@@ -23,7 +57,6 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
       .join(',');
   });
 
-  // Only compute pending items when the key changes
   const pendingItems = useMemo(() => {
     if (!pendingKey) return [];
     const thread = useAgentStore.getState().threads[threadId];
@@ -34,6 +67,44 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
       )
     );
   }, [pendingKey, threadId]);
+
+  const handleImplement = useCallback(async () => {
+    if (!pendingPlan) return;
+    const sessionId = pendingPlan.sessionId;
+    clearPendingPlan(threadId);
+    await switchMode(sessionId, 'build', workspace.rootPath ?? '');
+    await sendMessage('Plan approved. Please start implementing it.', workspace.rootPath ?? '');
+  }, [pendingPlan, clearPendingPlan, threadId, switchMode, sendMessage, workspace.rootPath]);
+
+  const handleSubmitOpinion = useCallback(
+    async (opinion: string) => {
+      if (!pendingPlan) return;
+      clearPendingPlan(threadId);
+      await sendMessage(
+        `Please revise the plan based on this feedback:\n\n${opinion}`,
+        workspace.rootPath ?? ''
+      );
+    },
+    [pendingPlan, clearPendingPlan, threadId, sendMessage, workspace.rootPath]
+  );
+
+  const handleCancel = useCallback(() => {
+    clearPendingPlan(threadId);
+  }, [clearPendingPlan, threadId]);
+
+  if (pendingPlan) {
+    return (
+      <PlanApprovalModal
+        planContent={planContent}
+        planPath={planPath}
+        sessionId={pendingPlan.sessionId}
+        loading={loading}
+        onImplement={() => void handleImplement()}
+        onSubmitOpinion={(op) => void handleSubmitOpinion(op)}
+        onCancel={() => void handleCancel()}
+      />
+    );
+  }
 
   if (pendingItems.length === 0) return null;
 

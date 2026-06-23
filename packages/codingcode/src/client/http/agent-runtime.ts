@@ -13,7 +13,6 @@ export interface AgentRuntimeClient {
     approvalId: string;
     response: string;
   }): Promise<void>;
-
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
 }
 
@@ -62,6 +61,13 @@ export function createHttpAgentClient(
               id: data.id as string,
               tool: data.tool as string,
               args: data.args as Record<string, unknown>,
+            };
+            break;
+          case 'plan_ready':
+            yield {
+              type: 'plan_ready',
+              sessionId: data.sessionId as string,
+              title: data.title as string,
             };
             break;
           case 'tool_start':

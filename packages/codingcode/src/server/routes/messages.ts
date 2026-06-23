@@ -68,7 +68,13 @@ export function createMessagesRouter(rt: ManagedRt): Hono {
       input,
       normalizedCwd,
       llm,
-      { signal: c.req.raw.signal, approvalOverride }
+      {
+        signal: c.req.raw.signal,
+        approvalOverride,
+        mode: 'build',
+        permissionMode: 'default',
+        model: llm.modelInfo.model,
+      }
     );
 
     const result = await rt.runPromise(

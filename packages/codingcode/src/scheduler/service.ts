@@ -53,6 +53,9 @@ export class SchedulerService extends Effect.Service<SchedulerService>()('Schedu
           sendMessage(undefined, auto.description, auto.projectCwd, llm, {
             signal: controller.signal,
             approvalOverride: { permissionMode: 'bypass' },
+            mode: 'build',
+            permissionMode: 'bypass',
+            model: llm.modelInfo.model,
           })
         );
 
@@ -182,6 +185,9 @@ export class SchedulerService extends Effect.Service<SchedulerService>()('Schedu
             sendMessage(undefined, auto.description, auto.projectCwd, llm, {
               signal: controller.signal,
               approvalOverride: { permissionMode: 'bypass' },
+              mode: 'build',
+              permissionMode: 'bypass',
+              model: llm.modelInfo.model,
             })
           );
 

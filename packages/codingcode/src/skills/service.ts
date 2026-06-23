@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { discoverSkillDirs, resolveSkillDisabled, setProjectSkillDisabledState } from './config.js';
+import { discoverSkillDirs, resolveSkillDisabled, setProjectSkillDisabledState } from './source.js';
 import { loadSkill } from './loader.js';
 import type { Skill } from './types.js';
 

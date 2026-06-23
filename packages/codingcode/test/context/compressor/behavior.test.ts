@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
 import { ContextService } from '../../../src/context/service.js';
@@ -13,8 +12,9 @@ import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/sess
 import { filterForContext, buildContextMessages } from '../../../src/context/service.js';
 import { readHistory } from '../../../src/session/file-ops.js';
 import { estimateTokens } from '../../../src/core/util.js';
+import { useTempProjectBase } from '../../helpers/project-base.js';
 
-const PROJECT_BASE = join(homedir(), '.codingcode', 'project');
+const base = useTempProjectBase();
 
 interface FixtureOptions {
   numTurns: number;
@@ -26,7 +26,7 @@ interface FixtureOptions {
 function makeFixture(opts: FixtureOptions) {
   const sessionId = randomUUID();
   const slug = randomUUID();
-  const dir = join(PROJECT_BASE, slug, 'sessions');
+  const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
   const indexPath = join(dir, `${sessionId}.index.json`);
@@ -84,7 +84,7 @@ function makeFixture(opts: FixtureOptions) {
 }
 
 function cleanup(slug: string) {
-  const dir = join(PROJECT_BASE, slug);
+  const dir = join(base.dir, slug);
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
 }
 
@@ -145,7 +145,7 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
         const ctx = await getCtxService();
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
+        await ctx.compactWithLLM(fx.transcriptPath, llm.modelInfo.maxTokens, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
@@ -160,7 +160,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
         const ctx = await getCtxService();
-        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, 1000, null);
+        const result = await ctx.compactWithLLM(fx.transcriptPath, 1000, null);
         expect(result.didCompress).toBe(false);
         expect(result.messages).toBeUndefined();
         const summaries = readSummaryEvents(fx.transcriptPath);
@@ -179,7 +179,7 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
         const ctx = await getCtxService();
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
+        await ctx.compactWithLLM(fx.transcriptPath, llm.modelInfo.maxTokens, llm);
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
@@ -204,8 +204,7 @@ describe('compressor behavior', () => {
         );
         const ctx = await getCtxService();
         const result = await ctx.compactWithLLM(
-          fx.sessionId,
-          fx.slug,
+          fx.transcriptPath,
           llm.modelInfo.maxTokens,
           llm
         );

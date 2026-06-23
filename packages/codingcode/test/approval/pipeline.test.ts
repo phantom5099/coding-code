@@ -79,39 +79,6 @@ describe('Approval Pipeline', () => {
     expect((decision as any).source).toBe('readonly-whitelist');
   });
 
-  it('Layer 3: Plan mode should deny write tools', async () => {
-    const decision = await runWithLayer(
-      runPipeline(
-        { tool: 'write_file', input: { path: '/test.txt', content: 'data' } },
-        {
-          ruleEngine: createRuleEngine(),
-          readonlyTools: readonlyTools,
-          destructiveTools: new Set(['Bash']),
-          permissionMode: 'plan',
-          sessionId: 'test',
-        }
-      )
-    );
-    expect((decision as any).type).toBe('deny');
-    expect((decision as any).reason).toContain('plan mode');
-  });
-
-  it('Layer 3: Plan mode should allow read-only tools', async () => {
-    const decision = await runWithLayer(
-      runPipeline(
-        { tool: 'read_file', input: { path: '/test.txt' } },
-        {
-          ruleEngine: createRuleEngine(),
-          readonlyTools: readonlyTools,
-          destructiveTools: new Set(),
-          permissionMode: 'plan',
-          sessionId: 'test',
-        }
-      )
-    );
-    expect((decision as any).type).toBe('allow');
-  });
-
   it('Layer 3: Bypass mode should allow everything', async () => {
     const decision = await runWithLayer(
       runPipeline(

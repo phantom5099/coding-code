@@ -3,6 +3,8 @@ import { sendMessage } from '../../agent/agent.js';
 import { ApprovalWaitService } from '../../approval/async-confirm.js';
 import { parseApprovalResponse } from '../../approval/response.js';
 import { ContextService } from '../../context/service.js';
+import { HookService } from '../../hooks/registry.js';
+import { SessionService } from '../../session/store.js';
 import type { StreamChunk } from '../types.js';
 import { agentEventToStreamChunk } from '../direct.js';
 import type { AppRuntime } from '../../layer.js';
@@ -26,70 +28,104 @@ export interface AgentRuntimeClient {
 export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRuntimeClient {
   return {
     async *sendMessage(input, { sessionId, cwd }) {
-      const program = sendMessage(sessionId || undefined, input, cwd, llm);
+      const program = sendMessage(sessionId || undefined, input, cwd, llm, {
+        mode: 'build',
+        permissionMode: 'default',
+        model: llm.modelInfo.model,
+      });
       const { stream: agentGen, sessionId: resolvedSessionId } = (await rt.runPromise(
         program
       )) as any;
 
       yield { type: 'session_id', sessionId: resolvedSessionId };
 
-      let notify:
-        | ((req: {
-            type: 'approval_request';
-            id: string;
-            tool: string;
-            args: Record<string, unknown>;
-          }) => void)
-        | null = null;
+      let notifyApproval: ((req: StreamChunk) => void) | null = null;
+      let notifyPlan: ((req: StreamChunk) => void) | null = null;
       const waitService = await rt.runPromise(
         Effect.gen(function* () {
           return yield* ApprovalWaitService;
+        })
+      );
+      const hookService = await rt.runPromise(
+        Effect.gen(function* () {
+          return yield* HookService;
         })
       );
       Effect.runSync(
         waitService.registerEmitter(
           resolvedSessionId,
           (id: string, tool: string, args: Record<string, unknown>) => {
-            notify?.({ type: 'approval_request', id, tool, args });
+            notifyApproval?.({ type: 'approval_request', id, tool, args });
           }
         )
+      );
+      const unregisterPlanReady = Effect.runSync(
+        hookService.register('plan.ready', (payload) => {
+          const p = payload as {
+            sessionId?: string;
+            title?: string;
+          };
+          if (p.sessionId !== resolvedSessionId) return;
+          notifyPlan?.({
+            type: 'plan_ready',
+            sessionId: p.sessionId ?? '',
+            title: p.title ?? '',
+          });
+        })
       );
 
       try {
         const gen = agentEventToStreamChunk(agentGen);
         let pending = gen.next();
+        let currentApprovalPromise = new Promise<StreamChunk>((resolve) => {
+          notifyApproval = resolve;
+        });
+        let currentPlanPromise = new Promise<StreamChunk>((resolve) => {
+          notifyPlan = resolve;
+        });
 
         while (true) {
-          const approvalPromise = new Promise<{
-            type: 'approval_request';
-            id: string;
-            tool: string;
-            args: Record<string, unknown>;
-          }>((resolve) => {
-            notify = resolve;
-          });
-
+          const approvalPromise = currentApprovalPromise;
+          const planPromise = currentPlanPromise;
           const winner = await Promise.race([
             pending.then((c): { tag: 'chunk'; value: IteratorResult<StreamChunk, void> } => ({
               tag: 'chunk',
               value: c,
             })),
-            approvalPromise.then((req): { tag: 'approval'; value: typeof req } => ({
+            approvalPromise.then((req): { tag: 'approval'; value: StreamChunk } => ({
               tag: 'approval',
+              value: req,
+            })),
+            planPromise.then((req): { tag: 'plan'; value: StreamChunk } => ({
+              tag: 'plan',
               value: req,
             })),
           ]);
 
           if (winner.tag === 'chunk') {
-            notify = null;
             if (winner.value.done) break;
             yield winner.value.value;
+            currentApprovalPromise = new Promise<StreamChunk>((resolve) => {
+              notifyApproval = resolve;
+            });
+            currentPlanPromise = new Promise<StreamChunk>((resolve) => {
+              notifyPlan = resolve;
+            });
             pending = gen.next();
+          } else if (winner.tag === 'approval') {
+            yield winner.value;
+            currentApprovalPromise = new Promise<StreamChunk>((resolve) => {
+              notifyApproval = resolve;
+            });
           } else {
             yield winner.value;
+            currentPlanPromise = new Promise<StreamChunk>((resolve) => {
+              notifyPlan = resolve;
+            });
           }
         }
       } finally {
+        unregisterPlanReady();
         Effect.runSync(waitService.unregisterEmitter(resolvedSessionId));
       }
     },
@@ -107,9 +143,11 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
     async compact({ sessionId, cwd }) {
       await rt.runPromise(
         Effect.gen(function* () {
+          const session = yield* SessionService;
           const context = yield* ContextService;
+          const state = yield* session.load(cwd, sessionId);
           return yield* Effect.promise(() =>
-            context.compactWithLLM(sessionId, cwd, llm.modelInfo.maxTokens, null)
+            context.compactWithLLM(state.transcriptPath, llm.modelInfo.maxTokens, null)
           );
         })
       );
