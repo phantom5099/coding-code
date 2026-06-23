@@ -4,6 +4,8 @@ import { useWorkspaceStore } from '../stores/workspace.store';
 import { useRollbackStore } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import type { StreamChunk } from '@codingcode/core/client/types';
+import type { SessionMode } from '@codingcode/core/session/types';
+import type { PermissionMode } from '@codingcode/core/approval/types';
 import { ApiError } from '../lib/api';
 import {
   listModels,
@@ -41,12 +43,62 @@ function randomId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 11);
 }
 
-// Module-level abort controllers — shared across hooks (singleton pattern)
-const abortControllers = new Map<string, AbortController>();
+const MAX_INFLIGHT_CONTROLLERS = 100;
+const inflightControllers = new Map<string, AbortController>();
+
+function abortAndClear(threadId: string): void {
+  const c = inflightControllers.get(threadId);
+  if (c) {
+    try {
+      c.abort();
+    } catch {
+      /* ignore */
+    }
+    inflightControllers.delete(threadId);
+  }
+}
+
+function abortAndClearAll(): void {
+  for (const c of inflightControllers.values()) {
+    try {
+      c.abort();
+    } catch {
+      /* ignore */
+    }
+  }
+  inflightControllers.clear();
+}
+
+function registerInflight(threadId: string, controller: AbortController): void {
+  abortAndClear(threadId);
+  inflightControllers.set(threadId, controller);
+  while (inflightControllers.size > MAX_INFLIGHT_CONTROLLERS) {
+    const oldestKey = inflightControllers.keys().next().value;
+    if (oldestKey === undefined) break;
+    const oldest = inflightControllers.get(oldestKey);
+    inflightControllers.delete(oldestKey);
+    try {
+      oldest?.abort();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export const APPROVAL_POLICY_TO_PERMISSION_MODE: Record<
+  'ask-all' | 'smart-allow' | 'full-allow' | 'read-only',
+  PermissionMode
+> = {
+  'ask-all': 'default',
+  'smart-allow': 'acceptEdits',
+  'full-allow': 'bypass',
+  'read-only': 'default',
+};
 
 // ---- useAgentCore: sendMessage + abort + initialization ----
 
 export function useAgentCore() {
+  const lastRootRef = useRef<string | null>(null);
   const startTurn = useAgentStore((s) => s.startTurn);
   const applyChunk = useAgentStore((s) => s.applyChunk);
   const updateTurnId = useAgentStore((s) => s.updateTurnId);
@@ -56,6 +108,7 @@ export function useAgentCore() {
   const clearRunningTurns = useAgentStore((s) => s.clearRunningTurns);
   const applyTodoUpdate = useAgentStore((s) => s.applyTodoUpdate);
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
+  const setCurrentThreadWithMode = useAgentStore((s) => s.setCurrentThreadWithMode);
   const loadThreads = useAgentStore((s) => s.loadThreads);
   const setThreadTurns = useAgentStore((s) => s.setThreadTurns);
   const setModel = useAgentStore((s) => s.setModel);
@@ -67,6 +120,16 @@ export function useAgentCore() {
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
   const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
   const pendingProfile = useAgentStore((s) => s.pendingProfile);
+  const modelId = useAgentStore((s) => s.model);
+
+  // Abort all in-flight streams when the workspace root changes (project switch).
+  useEffect(() => {
+    const lastRoot = lastRootRef.current;
+    if (lastRoot !== null && lastRoot !== workspace.rootPath) {
+      abortAndClearAll();
+    }
+    lastRootRef.current = workspace.rootPath;
+  }, [workspace.rootPath]);
 
   // Load sessions, models, and projects on mount
   useEffect(() => {
@@ -240,22 +303,25 @@ export function useAgentCore() {
 
       let threadId = currentThreadId;
       if (!threadId) {
-        const POLICY_TO_MODE: Record<string, string> = {
-          'ask-all': 'default',
-          'smart-allow': 'acceptEdits',
-          'full-allow': 'bypass',
-          'read-only': 'plan',
-        };
-        // pendingProfile ('plan' | 'build') set on the welcome screen
-        // overrides the permission-policy default when it asks for plan.
-        const initialMode =
-          pendingProfile === 'plan' ? 'plan' : (POLICY_TO_MODE[approvalPolicy] ?? 'default');
-        const data = await createServerSession(effectiveCwd, initialMode);
+        const mode: SessionMode = pendingProfile;
+        const permissionMode: PermissionMode =
+          pendingProfile === 'plan'
+            ? 'default'
+            : APPROVAL_POLICY_TO_PERMISSION_MODE[approvalPolicy] ?? 'default';
+        const model = modelId;
+        if (!model) {
+          throw new Error('No model selected. Please select a model first.');
+        }
+        const data = await createServerSession(effectiveCwd, {
+          mode,
+          permissionMode,
+          model,
+        });
         threadId = data.sessionId;
-        setCurrentThread(threadId);
+        setCurrentThreadWithMode(threadId, { mode, permissionMode, optimistic: true });
       }
 
-      if (abortControllers.has(threadId)) return;
+      if (inflightControllers.has(threadId)) return;
 
       let turnId = randomId();
       let assistantMessageId = randomId();
@@ -265,7 +331,7 @@ export function useAgentCore() {
       startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) });
 
       const controller = new AbortController();
-      abortControllers.set(threadId, controller);
+      registerInflight(threadId, controller);
 
       try {
         const stream = agentClient.sendMessage(content, {
@@ -309,12 +375,12 @@ export function useAgentCore() {
         applyChunk(threadId, turnId, { id: randomId(), type: 'error', message: msg });
         completeTurn(threadId, turnId, 'error');
       } finally {
-        abortControllers.delete(threadId);
+        abortAndClear(threadId);
       }
     },
     [
       startTurn,
-      setCurrentThread,
+      setCurrentThreadWithMode,
       streamChunkToItem,
       applyChunk,
       completeTurn,
@@ -322,6 +388,7 @@ export function useAgentCore() {
       workspace.rootPath,
       approvalPolicy,
       pendingProfile,
+      modelId,
       currentThreadId,
     ]
   );
@@ -329,11 +396,7 @@ export function useAgentCore() {
   const abort = useCallback(() => {
     const threadId = currentThreadId;
     if (!threadId) return;
-    const controller = abortControllers.get(threadId);
-    if (controller) {
-      controller.abort();
-      abortControllers.delete(threadId);
-    }
+    abortAndClear(threadId);
   }, [currentThreadId]);
 
   return { sendMessage, abort };
@@ -555,6 +618,7 @@ export function useAgentRollback() {
 
   const deleteThread = useCallback(
     async (threadId: string) => {
+      abortAndClear(threadId);
       const currentCwd = useWorkspaceStore.getState().rootPath;
       const wasCurrent = useAgentStore.getState().currentThreadId === threadId;
       try {
@@ -562,35 +626,12 @@ export function useAgentRollback() {
       } catch (e) {
         console.error('Failed to delete session:', e);
       }
-      if (currentCwd) {
-        const sessions = await listSessions(currentCwd).catch(() => []);
-        if (sessions) {
-          const threads = sessions.map((s: any) => ({
-            id: s.sessionId,
-            projectId: '',
-            title: s.title ?? s.sessionId.slice(0, 8),
-            cwd: normalizeCwd(s.cwd ?? ''),
-            turns: [],
-            createdAt: new Date(s.createdAt).getTime(),
-            updatedAt: new Date(s.updatedAt).getTime(),
-          }));
-          loadThreads(threads);
-          for (const s of sessions) {
-            if (s.usage) {
-              setThreadUsage(s.sessionId, {
-                prompt: s.usage.prompt,
-                completion: s.usage.completion,
-                total: s.usage.total,
-              });
-            }
-          }
-        }
-      }
+      useAgentStore.getState().removeThread(threadId);
       if (wasCurrent) {
         useAgentStore.getState().setCurrentThread(null);
       }
     },
-    [loadThreads, setThreadUsage]
+    []
   );
 
   return {
@@ -621,8 +662,8 @@ export function useAgent() {
 // ---- useAgentMode: plan/build mode switching + plan file access ----
 
 export type SessionModeSnapshot = {
-  profileName: string;
-  permissionMode: 'default' | 'acceptEdits' | 'plan' | 'bypass';
+  mode: SessionMode;
+  permissionMode: PermissionMode;
   cwd: string;
   available: Array<{ name: string; description: string }>;
 };
@@ -652,10 +693,10 @@ export function useAgentMode() {
   const switchMode = useCallback(
     async (
       sessionId: string,
-      profile: 'plan' | 'build',
+      mode: SessionMode,
       cwd?: string
-    ): Promise<{ profileName: string; permissionMode: string }> => {
-      return setSessionMode(sessionId, cwd ?? workspace.rootPath ?? '', profile);
+    ): Promise<{ mode: SessionMode; permissionMode: PermissionMode }> => {
+      return setSessionMode(sessionId, cwd ?? workspace.rootPath ?? '', mode);
     },
     [workspace.rootPath]
   );

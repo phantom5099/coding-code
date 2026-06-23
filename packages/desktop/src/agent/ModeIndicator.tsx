@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Eye, Hammer, Loader2 } from 'lucide-react';
-import { useAgentMode, type SessionModeSnapshot } from '../hooks/useAgent';
+import { useAgentMode } from '../hooks/useAgent';
 import { useAgentStore } from '../stores/agent.store';
+import type { SessionMode } from '@codingcode/core/session/types';
 
 interface ModeIndicatorProps {
   sessionId: string | null;
   cwd: string;
 }
 
-type ModeValue = 'plan' | 'build';
-
-const MODE_META: Record<ModeValue, { label: string; color: string; Icon: typeof Eye }> = {
+const MODE_META: Record<SessionMode, { label: string; color: string; Icon: typeof Eye }> = {
   plan: {
     label: '计划模式',
     color: 'text-[var(--accent-warning)] bg-[var(--tag-info-bg)]',
@@ -27,61 +26,72 @@ const MODE_META: Record<ModeValue, { label: string; color: string; Icon: typeof 
  * Compact status-bar pill that shows the current plan/build mode.
  *
  * Two modes of operation:
- *  - `sessionId !== null` — fetches the live mode for that session and
+ *  - `sessionId !== null` — reads the live mode from the agent store and
  *    toggles by calling `switchMode` (server round-trip).
  *  - `sessionId === null` — welcome screen / no session yet. Shows the
  *    `pendingProfile` from the agent store and toggles it locally; the
  *    value is used as the initial mode when the user starts a session.
- *
- * The popover variant was clipped by the chat input box, so the pill is
- * a direct toggle (no popover).
  */
 export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
   const { fetchMode, switchMode } = useAgentMode();
-  const [mode, setMode] = useState<SessionModeSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const mode = useAgentStore((s) =>
+    sessionId ? (s.modeByThreadId[sessionId] ?? null) : null
+  );
   const pendingProfile = useAgentStore((s) => s.pendingProfile);
   const setPendingProfile = useAgentStore((s) => s.setPendingProfile);
+  const setModeForThread = useAgentStore((s) => s.setModeForThread);
+  const setOptimisticModeForThread = useAgentStore((s) => s.setOptimisticModeForThread);
 
-  // Fetch on sessionId / cwd change
   useEffect(() => {
     let cancelled = false;
-    if (!sessionId) {
-      setMode(null);
-      return;
+    if (!sessionId) return;
+
+    const existing = useAgentStore.getState().modeByThreadId[sessionId];
+    if (existing && !existing.optimistic) return;
+
+    if (!existing) {
+      const permissionMode: 'default' = 'default';
+      setOptimisticModeForThread(sessionId, {
+        mode: pendingProfile,
+        permissionMode,
+      });
     }
+
     setLoading(true);
+    const requestedAt = Date.now();
     fetchMode(sessionId, cwd)
-      .then((m) => {
+      .then((info) => {
         if (cancelled) return;
-        setMode(m);
+        setModeForThread(sessionId, {
+          mode: info.mode,
+          permissionMode: info.permissionMode,
+          requestedAt,
+        });
       })
       .catch((e) => {
-        console.error('Failed to fetch session mode:', e);
         if (cancelled) return;
-        setMode(null);
+        console.error('Failed to fetch session mode:', e);
       })
       .finally(() => {
         if (cancelled) return;
         setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [sessionId, cwd, fetchMode]);
+  }, [sessionId, cwd, fetchMode, pendingProfile, setModeForThread, setOptimisticModeForThread]);
 
-  // Welcome-screen mode: derive from the pending profile (no live session).
-  const current: ModeValue =
-    sessionId === null ? pendingProfile : mode?.profileName === 'plan' ? 'plan' : 'build';
-  const target: ModeValue = current === 'plan' ? 'build' : 'plan';
+  const current: SessionMode =
+    sessionId === null ? pendingProfile : (mode?.mode ?? 'build');
+  const target: SessionMode = current === 'plan' ? 'build' : 'plan';
 
   const handleToggle = async () => {
     if (busy) return;
 
-    // Welcome screen: persist the pending profile locally. The next
-    // session created will pick it up as the initial mode.
     if (sessionId === null) {
       setPendingProfile(target);
       return;
@@ -89,9 +99,11 @@ export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
 
     setBusy(true);
     try {
-      await switchMode(sessionId, target, cwd);
-      const m = await fetchMode(sessionId, cwd);
-      setMode(m);
+      const result = await switchMode(sessionId, target, cwd);
+      setModeForThread(sessionId, {
+        mode: result.mode,
+        permissionMode: result.permissionMode,
+      });
     } catch (e) {
       console.error('Failed to switch mode:', e);
     } finally {
@@ -101,9 +113,6 @@ export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
 
   const meta = MODE_META[current];
   const Icon = meta.Icon;
-  // On the welcome screen, the pill is purely UI — no async fetch, so
-  // `loading` is meaningless. `busy` is also only meaningful with a
-  // live session.
   const disabled = sessionId === null ? false : loading || busy;
 
   return (

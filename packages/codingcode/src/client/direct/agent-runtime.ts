@@ -28,7 +28,11 @@ export interface AgentRuntimeClient {
 export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRuntimeClient {
   return {
     async *sendMessage(input, { sessionId, cwd }) {
-      const program = sendMessage(sessionId || undefined, input, cwd, llm);
+      const program = sendMessage(sessionId || undefined, input, cwd, llm, {
+        mode: 'build',
+        permissionMode: 'default',
+        model: llm.modelInfo.model,
+      });
       const { stream: agentGen, sessionId: resolvedSessionId } = (await rt.runPromise(
         program
       )) as any;

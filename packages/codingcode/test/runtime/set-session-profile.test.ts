@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs';
-import { tmpdir } from 'os';
+import { existsSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
@@ -12,7 +11,7 @@ import { RulesService } from '../../src/rules/index.js';
 import { BUILD_PROFILE, PLAN_PROFILE, EXPLORE_PROFILE } from '../../src/subagent/registry.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
-useTempProjectBase();
+const base = useTempProjectBase();
 
 const mockHookService = {
   register: () => Effect.succeed(() => {}),
@@ -58,14 +57,19 @@ describe('ProjectRuntimeService.setSessionProfile', () => {
   let rt: ManagedRuntime.ManagedRuntime<any, any>;
 
   beforeEach(async () => {
-    cwd = mkdtempSync(join(tmpdir(), 'codingcode-runtime-test-'));
+    cwd = join(base.dir, 'set-session-profile');
+    mkdirSync(cwd, { recursive: true });
     rt = ManagedRuntime.make(makeLayer() as any);
     const result = await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
         const session = yield* SessionService;
         yield* runtime.prepareProject(cwd);
-        const state = yield* session.create(cwd, 'test-model');
+        const state = yield* session.create(cwd, {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
         return { sessionId: state.sessionId, indexPath: state.indexPath };
       })
     );
@@ -75,13 +79,12 @@ describe('ProjectRuntimeService.setSessionProfile', () => {
 
   afterEach(async () => {
     await rt.dispose();
-    rmSync(cwd, { recursive: true, force: true });
   });
 
-  it('writes idx.permissionMode AND idx.activeProfile when switching to plan', async () => {
-    // After the plan refactor, `permissionMode` is no longer a plan-specific
-    // value. The plan-mode signal lives in `activeProfile`; the approval
-    // pipeline itself only sees a generic permission mode.
+  it('does NOT write idx.permissionMode when switching to plan (preserves build preference)', async () => {
+    // Plan mode: in-memory map is forced to 'default', but the on-disk
+    // SessionIndex.permissionMode is left untouched so the build preference
+    // survives plan→build transitions.
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -91,20 +94,27 @@ describe('ProjectRuntimeService.setSessionProfile', () => {
 
     expect(existsSync(indexPath)).toBe(true);
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
+    // build preference (default from create) is preserved on disk
     expect(idx.permissionMode).toBe('default');
-    expect(idx.activeProfile).toBe('plan');
+    // runtime memory is forced to 'default'
+    await rt.runPromise(
+      Effect.gen(function* () {
+        const runtime = yield* ProjectRuntimeService;
+        expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
+      })
+    );
   });
 
   it('writes idx.permissionMode AND idx.activeProfile when switching to build', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
-        yield* runtime.setSessionProfile(cwd, sessionId, BUILD_PROFILE);
+        yield* runtime.setSessionProfile(cwd, sessionId, BUILD_PROFILE, 'bypass');
       })
     );
 
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.permissionMode).toBe('default');
+    expect(idx.permissionMode).toBe('bypass');
     expect(idx.activeProfile).toBe('build');
   });
 
@@ -115,9 +125,6 @@ describe('ProjectRuntimeService.setSessionProfile', () => {
         yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
         const profile = runtime.getSessionProfile(sessionId);
         expect(profile?.name).toBe('plan');
-        // The approval-side permission mode is now 'default' (the pipeline
-        // is plan-blind). The plan-mode signal is structural via the
-        // profile's name + the `plan/active-sessions` side channel.
         expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
       })
     );

@@ -16,7 +16,6 @@ const { deleteSessionMock, listSessionsMock } = vi.hoisted(() => ({
 vi.mock('../src/lib/core-api', () => ({
   deleteSession: deleteSessionMock,
   listSessions: listSessionsMock,
-  // other named exports are stubs (useAgentRollback only uses these two in deleteThread)
   getCheckpointDiff: vi.fn(),
   revertFile: vi.fn(),
   revertFiles: vi.fn(),
@@ -82,6 +81,7 @@ function resetStores({ rootPath = '/test/cwd' }: { rootPath?: string } = {}) {
     todoByThreadId: {},
     pendingInput: null,
     usageByThreadId: {},
+    modeByThreadId: {},
     isCompressing: false,
     automations: [],
   });
@@ -116,24 +116,36 @@ describe('useAgentRollback().deleteThread', () => {
     expect(deleteSessionMock).toHaveBeenCalledWith('thread-1', '/test/cwd');
   });
 
-  it('refreshes the thread list after a successful delete', async () => {
-    listSessionsMock.mockResolvedValue([
-      {
-        sessionId: 's-1',
-        title: 'one',
-        cwd: '/test/cwd',
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-02',
-      },
-    ]);
+  it('removes the thread locally without calling listSessions', async () => {
+    act(() => {
+      useAgentStore.setState((s) => {
+        s.threads['thread-1'] = {
+          id: 'thread-1',
+          projectId: '',
+          title: 'one',
+          cwd: '/test/cwd',
+          turns: [],
+          createdAt: 0,
+          updatedAt: 0,
+        };
+        s.usageByThreadId['thread-1'] = { prompt: 1, completion: 1, total: 2 };
+        s.modeByThreadId['thread-1'] = {
+          mode: 'build',
+          permissionMode: 'default',
+          fetchedAt: 0,
+          optimistic: false,
+        };
+      });
+    });
     const { result } = renderHook(() => useAgentRollback());
     await act(async () => {
       await result.current.deleteThread('thread-1');
     });
-    expect(listSessionsMock).toHaveBeenCalledWith('/test/cwd');
-    const threads = useAgentStore.getState().threads;
-    expect(Object.keys(threads)).toEqual(['s-1']);
-    expect(threads['s-1']?.title).toBe('one');
+    expect(listSessionsMock).not.toHaveBeenCalled();
+    const state = useAgentStore.getState();
+    expect(state.threads['thread-1']).toBeUndefined();
+    expect(state.usageByThreadId['thread-1']).toBeUndefined();
+    expect(state.modeByThreadId['thread-1']).toBeUndefined();
   });
 
   it('does not call listSessions when rootPath is empty', async () => {
@@ -189,24 +201,14 @@ describe('useAgentRollback().deleteThread', () => {
     errSpy.mockRestore();
   });
 
-  it('still refreshes the list even if the server delete fails', async () => {
+  it('does not call listSessions even if the server delete fails', async () => {
     deleteSessionMock.mockRejectedValueOnce(new Error('network down'));
-    listSessionsMock.mockResolvedValue([
-      {
-        sessionId: 's-2',
-        title: 'two',
-        cwd: '/test/cwd',
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-02',
-      },
-    ]);
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { result } = renderHook(() => useAgentRollback());
     await act(async () => {
       await result.current.deleteThread('thread-1');
     });
-    expect(listSessionsMock).toHaveBeenCalled();
-    expect(Object.keys(useAgentStore.getState().threads)).toEqual(['s-2']);
+    expect(listSessionsMock).not.toHaveBeenCalled();
     errSpy.mockRestore();
   });
 });

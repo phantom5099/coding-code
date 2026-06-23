@@ -9,7 +9,7 @@ import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
 import ApprovalPanel from './ApprovalPanel';
 import ModeIndicator from './ModeIndicator';
-import { useAgentMode } from '../hooks/useAgent';
+import { APPROVAL_POLICY_TO_PERMISSION_MODE } from '../hooks/useAgent';
 import PlanPanel from '../shared/PlanPanel';
 
 // ─── ContextIndicator ──────────────────────────────────────────────────────
@@ -230,48 +230,17 @@ function InputBox({
   const setApprovalPolicy = useAgentStore((s) => s.setApprovalPolicy);
   const pendingInput = useAgentStore((s) => s.pendingInput);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
-  const { fetchMode: fetchSessionMode, fetchPlan } = useAgentMode();
-  const [isPlanMode, setIsPlanMode] = useState(false);
-  const [planExists, setPlanExists] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    if (!currentThreadId) {
-      setIsPlanMode(false);
-      return;
-    }
-    fetchSessionMode(currentThreadId, workspace.rootPath)
-      .then((m) => {
-        if (cancelled) return;
-        setIsPlanMode(m.profileName === 'plan');
-      })
-      .catch(() => {
-        if (!cancelled) return;
-        setIsPlanMode(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [currentThreadId, workspace.rootPath, fetchSessionMode]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!currentThreadId || !workspace.rootPath) {
-      setPlanExists(false);
-      return;
+  const isPlanMode = useAgentStore((s) => {
+    if (!s.currentThreadId) {
+      return s.pendingProfile === 'plan';
     }
-    fetchPlan(currentThreadId, workspace.rootPath)
-      .then((p) => {
-        if (cancelled) return;
-        setPlanExists(p.exists);
-      })
-      .catch(() => {
-        if (!cancelled) return;
-        setPlanExists(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [currentThreadId, workspace.rootPath, fetchPlan]);
+    return s.modeByThreadId[s.currentThreadId]?.mode === 'plan';
+  });
+  const planExists = useAgentStore((s) => {
+    if (!s.currentThreadId) return false;
+    return s.pendingPlanByThreadId[s.currentThreadId] != null;
+  });
 
   // Consume pendingInput when it's set
   useEffect(() => {
@@ -362,16 +331,10 @@ function InputBox({
               const next = POLICY_NEXT[approvalPolicy] ?? 'ask-all';
               setApprovalPolicy(next);
               if (currentThreadId) {
-                const POLICY_TO_CORE_MODE: Record<string, string> = {
-                  'ask-all': 'default',
-                  'smart-allow': 'acceptEdits',
-                  'full-allow': 'bypass',
-                  'read-only': 'plan',
-                };
                 setSessionPermissionMode(
                   currentThreadId,
                   workspace.rootPath || '',
-                  POLICY_TO_CORE_MODE[next] ?? 'default'
+                  APPROVAL_POLICY_TO_PERMISSION_MODE[next] ?? 'default'
                 ).catch((e) => {
                   console.error('Failed to sync permission mode:', e);
                 });

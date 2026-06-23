@@ -107,8 +107,8 @@ const mockModelEntry = {
   base_url: 'https://api.b.com',
   api_key_env: 'API_KEY_B',
 };
-const mockSubagentLlm = { _tag: 'subagent-llm' };
-const mockDefaultLlm = { _tag: 'default-llm' };
+const mockSubagentLlm = { _tag: 'subagent-llm', modelInfo: { model: 'subagent-model' } };
+const mockDefaultLlm = { _tag: 'default-llm', modelInfo: { model: 'default-model' } };
 
 const mockLLMFactory = {
   listModels: vi.fn(() => Effect.succeed([])),
@@ -157,7 +157,8 @@ const mockProjectRuntime = {
     allowToolSearch: true,
     allowDeferredTools: false,
   })),
-  setSessionProfile: vi.fn(),
+  setSessionProfile: vi.fn(() => Effect.void),
+  restoreSessionProfile: vi.fn(() => Effect.void),
   getSessionProfile: vi.fn(),
   disposeSession: vi.fn(() => Effect.void),
   disposeProject: vi.fn(() => Effect.void),
@@ -490,7 +491,13 @@ describe('dispatch_agent tool', () => {
     );
     expect(createFn).toHaveBeenCalledWith(
       '/test',
-      expect.any(String),
+      expect.objectContaining({
+        model: expect.any(String),
+        mode: 'build',
+        // EXPLORE_PROFILE.permissionMode === 'bypass', which the dispatch
+        // tool now reads from the subagent's own profile.
+        permissionMode: 'bypass',
+      }),
       expect.objectContaining({ parentSessionId: 'parent-1', agentName: 'explore' })
     );
   });

@@ -9,6 +9,7 @@ import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
+
 const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
@@ -30,7 +31,11 @@ describe('load — restores model from disk, not overwritten', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'gpt-4o');
+          return yield* svc.create(dir, {
+            model: 'gpt-4o',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       const sid = created.sessionId;
@@ -59,7 +64,11 @@ describe('load — restores model from disk, not overwritten', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'claude-3-5-sonnet');
+          return yield* svc.create(dir, {
+            model: 'claude-3-5-sonnet',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       const sid = created.sessionId;
@@ -124,7 +133,11 @@ describe('load — restores model from disk, not overwritten', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'gpt-4o');
+          return yield* svc.create(dir, {
+            model: 'gpt-4o',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -157,7 +170,11 @@ describe('create — generates sessionId internally', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -179,7 +196,11 @@ describe('create — generates sessionId internally', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'my-special-model');
+          return yield* svc.create(dir, {
+            model: 'my-special-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -199,7 +220,11 @@ describe('create — generates sessionId internally', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -222,7 +247,11 @@ describe('load restores persisted fields', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       const sid = created.sessionId;
@@ -269,7 +298,11 @@ describe('load restores persisted fields', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       const sid = created.sessionId;

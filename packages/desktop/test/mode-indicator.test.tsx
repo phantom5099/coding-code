@@ -10,8 +10,6 @@ import { useAgentStore } from '../src/stores/agent.store';
 const fetchModeMock = vi.fn();
 const switchModeMock = vi.fn();
 
-// Stable references — the hook returns these on every render so the
-// component's useEffect doesn't loop on a changed `fetchMode` identity.
 const stableFetchMode = (...args: unknown[]) => fetchModeMock(...args);
 const stableSwitchMode = (...args: unknown[]) => switchModeMock(...args);
 
@@ -24,8 +22,8 @@ vi.mock('../src/hooks/useAgent', () => ({
 }));
 
 const baseMode = {
-  profileName: 'build',
-  permissionMode: 'default',
+  mode: 'build' as const,
+  permissionMode: 'default' as const,
   cwd: '/tmp',
   available: [
     { name: 'plan', description: 'plan agent' },
@@ -37,9 +35,8 @@ describe('ModeIndicator (with live session)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fetchModeMock.mockResolvedValue(baseMode);
-    switchModeMock.mockResolvedValue({ profileName: 'plan', permissionMode: 'plan' });
-    // Reset pendingProfile between tests
-    useAgentStore.setState({ pendingProfile: 'build' });
+    switchModeMock.mockResolvedValue({ mode: 'plan', permissionMode: 'default' });
+    useAgentStore.setState({ pendingProfile: 'build', modeByThreadId: {} });
   });
 
   afterEach(() => {
@@ -55,11 +52,11 @@ describe('ModeIndicator (with live session)', () => {
     expect(getByText('构建模式')).toBeInTheDocument();
   });
 
-  it('shows the plan label when the current profile is plan', async () => {
+  it('shows the plan label when the current mode is plan', async () => {
     fetchModeMock.mockResolvedValue({
       ...baseMode,
-      profileName: 'plan',
-      permissionMode: 'plan',
+      mode: 'plan',
+      permissionMode: 'default',
     });
     const { getByTestId, getByText } = render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
@@ -83,8 +80,8 @@ describe('ModeIndicator (with live session)', () => {
   it('toggles from plan to build when current is plan', async () => {
     fetchModeMock.mockResolvedValue({
       ...baseMode,
-      profileName: 'plan',
-      permissionMode: 'plan',
+      mode: 'plan',
+      permissionMode: 'default',
     });
     const { getByTestId } = render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
@@ -96,21 +93,18 @@ describe('ModeIndicator (with live session)', () => {
     });
   });
 
-  it('refetches mode after a successful switch and updates the label', async () => {
-    fetchModeMock
-      .mockResolvedValueOnce(baseMode)
-      .mockResolvedValueOnce({ ...baseMode, profileName: 'plan', permissionMode: 'plan' });
+  it('updates the label from switchMode response without refetching', async () => {
+    fetchModeMock.mockResolvedValue(baseMode);
+    switchModeMock.mockResolvedValue({ mode: 'plan', permissionMode: 'default' });
     const { getByTestId } = render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
       expect(getByTestId('mode-indicator')).toHaveTextContent('构建模式');
     });
     fireEvent.click(getByTestId('mode-indicator'));
     await waitFor(() => {
-      expect(fetchModeMock).toHaveBeenCalledTimes(2);
-    });
-    await waitFor(() => {
       expect(getByTestId('mode-indicator')).toHaveTextContent('计划模式');
     });
+    expect(fetchModeMock).toHaveBeenCalledTimes(1);
   });
 
   it('ignores clicks while a switch is in flight', async () => {
@@ -123,21 +117,45 @@ describe('ModeIndicator (with live session)', () => {
     fireEvent.click(getByTestId('mode-indicator'));
     fireEvent.click(getByTestId('mode-indicator'));
     expect(switchModeMock).toHaveBeenCalledTimes(1);
-    resolveSwitch({ profileName: 'plan' });
+    resolveSwitch({ mode: 'plan', permissionMode: 'default' });
+  });
+
+  it('renders optimistically from pendingProfile while fetch is in flight', async () => {
+    useAgentStore.setState({ pendingProfile: 'plan' });
+    let resolveFetch!: (v: unknown) => void;
+    fetchModeMock.mockReturnValue(new Promise((res) => (resolveFetch = res)));
+    const { getByTestId } = render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
+    expect(getByTestId('mode-indicator')).toHaveTextContent('计划模式');
+    resolveFetch(baseMode);
+  });
+
+  it('skips fetch when a real mode is already in the store', () => {
+    useAgentStore.setState({
+      modeByThreadId: {
+        's-1': {
+          mode: 'plan',
+          permissionMode: 'default',
+          fetchedAt: Date.now(),
+          optimistic: false,
+        },
+      },
+    });
+    render(<ModeIndicator sessionId="s-1" cwd="/tmp" />);
+    expect(fetchModeMock).not.toHaveBeenCalled();
   });
 });
 
 describe('ModeIndicator (welcome screen, no session)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAgentStore.setState({ pendingProfile: 'build' });
+    useAgentStore.setState({ pendingProfile: 'build', modeByThreadId: {} });
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it('renders the pill even when sessionId is null (regression: previously returned null)', () => {
+  it('renders the pill even when sessionId is null', () => {
     const { getByTestId } = render(<ModeIndicator sessionId={null} cwd="/tmp" />);
     expect(getByTestId('mode-indicator')).toBeInTheDocument();
   });

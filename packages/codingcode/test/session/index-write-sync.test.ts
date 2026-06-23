@@ -4,6 +4,7 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
+
 import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
@@ -24,7 +25,11 @@ describe('index write is synchronous', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 
@@ -58,7 +63,11 @@ describe('index write is synchronous', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'test-model');
+          return yield* svc.create(dir, {
+            model: 'test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
 

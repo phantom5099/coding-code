@@ -15,6 +15,9 @@ import { SessionService } from '../session/store.js';
 import { normalizePath } from '../core/path.js';
 import { ApprovalService } from '../approval/index.js';
 import type { PermissionMode } from '../approval/types.js';
+import type { SessionMode } from '../session/types.js';
+import { computePaths, readCurrentIndex, setPermissionMode } from '../session/file-ops.js';
+import { writeFileSync } from 'fs';
 import {
   isPlanProfile,
   markSessionPlanMode,
@@ -32,13 +35,13 @@ function buildGlobalProfiles(): AgentProfile[] {
   return profiles;
 }
 
-function profileToPermissionMode(profile: AgentProfile | undefined): PermissionMode {
-  return profile?.permissionMode ?? 'default';
-}
-
 /** 构建项目级 profile：<project>/.codingcode/agents/ */
 function buildProjectProfiles(projectPath: string): AgentProfile[] {
   return agentLoader.loadAgentProfiles(projectPath);
+}
+
+export function modeToProfile(mode: SessionMode): AgentProfile {
+  return mode === 'plan' ? PLAN_PROFILE : BUILD_PROFILE;
 }
 
 export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>()(
@@ -106,17 +109,35 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
         setSessionProfile: (
           projectPath: string,
           sessionId: string,
-          profile: AgentProfile
+          profile: AgentProfile,
+          permissionModeOverride?: PermissionMode,
+          parentSessionId?: string
         ): Effect.Effect<void, import('../core/error.js').AgentError> =>
           Effect.gen(function* () {
             sessionAgentProfiles.set(sessionId, profile);
-            const mode = profileToPermissionMode(profile);
-            sessionPermissionModes.set(sessionId, mode);
             markSessionPlanMode(sessionId, isPlanProfile(profile));
-            // 写盘：跨重启恢复时 messages.ts 从 idx 读 permissionMode + activeProfile
-            const state = yield* session.load(projectPath, sessionId);
-            yield* session.setPermissionMode(state, mode);
-            yield* session.updateActiveProfile(state, profile.name);
+
+            if (isPlanProfile(profile)) {
+              // Plan 模式:内存 map 强制 'default',SessionIndex.permissionMode 不写盘(保留 build 偏好)
+              sessionPermissionModes.set(sessionId, 'default');
+              return;
+            }
+
+            const effectivePermissionMode: PermissionMode =
+              permissionModeOverride ?? profile.permissionMode ?? 'default';
+            sessionPermissionModes.set(sessionId, effectivePermissionMode);
+            const paths = computePaths(projectPath, sessionId, parentSessionId);
+            setPermissionMode(sessionId, paths.indexPath, effectivePermissionMode);
+            // Update activeProfile in the same index file.
+            const current = readCurrentIndex(paths.indexPath);
+            if (current) {
+              const index = {
+                ...current,
+                activeProfile: profile.name,
+                updatedAt: new Date().toISOString(),
+              };
+              writeFileSync(paths.indexPath, JSON.stringify(index, null, 2), 'utf8');
+            }
           }),
 
         getSessionProfile: (sessionId: string): AgentProfile | undefined =>
@@ -128,7 +149,9 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
         restoreSessionProfile: (
           projectPath: string,
           sessionId: string,
-          profileName: string | undefined
+          profileName: string | undefined,
+          permissionModeOverride?: PermissionMode,
+          parentSessionId?: string
         ): Effect.Effect<void, import('../core/error.js').AgentError> =>
           Effect.gen(function* () {
             if (!profileName) return;
@@ -136,12 +159,19 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
             const profile = subagent.get(norm, profileName);
             if (!profile) return;
             sessionAgentProfiles.set(sessionId, profile);
-            const mode = profileToPermissionMode(profile);
-            sessionPermissionModes.set(sessionId, mode);
             markSessionPlanMode(sessionId, isPlanProfile(profile));
-            // 写盘：保持 idx 状态与内存态一致
-            const state = yield* session.load(projectPath, sessionId);
-            yield* session.setPermissionMode(state, mode);
+
+            if (isPlanProfile(profile)) {
+              sessionPermissionModes.set(sessionId, 'default');
+              return;
+            }
+
+            const effectivePermissionMode: PermissionMode =
+              permissionModeOverride ?? profile.permissionMode ?? 'default';
+            sessionPermissionModes.set(sessionId, effectivePermissionMode);
+            // Direct write — see setSessionProfile above.
+            const paths = computePaths(projectPath, sessionId, parentSessionId);
+            setPermissionMode(sessionId, paths.indexPath, effectivePermissionMode);
           }),
 
         disposeSession: (sessionId: string): Effect.Effect<void> =>

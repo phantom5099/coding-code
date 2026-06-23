@@ -3,6 +3,7 @@ import { rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
+
 import { sessionJsonlPathFromCwd, deleteSession } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -18,7 +19,11 @@ describe('sessionJsonlPathFromCwd', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, 'test-model');
+        return yield* svc.create(cwd, {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
       })
     );
 
@@ -36,7 +41,11 @@ describe('sessionJsonlPathFromCwd', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, 'test-model');
+        return yield* svc.create(cwd, {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
       })
     );
 

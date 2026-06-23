@@ -122,7 +122,11 @@ describe('plan mode security boundary (cross-restart)', () => {
     const result = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const state = yield* session.create(cwd, 'test-model');
+        const state = yield* session.create(cwd, {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
         return { sessionId: state.sessionId, indexPath: state.indexPath };
       })
     );
@@ -209,7 +213,9 @@ describe('plan mode security boundary (cross-restart)', () => {
   });
 
   it('scenario 4: after restart (state reloaded from disk), plan mode still enforced', async () => {
-    // First: switch to plan and write to disk
+    // First: switch to plan. In the new design, plan mode does NOT write
+    // idx.permissionMode (the build preference is preserved on disk),
+    // but the in-memory planModeSessions side channel is updated.
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -218,12 +224,9 @@ describe('plan mode security boundary (cross-restart)', () => {
       })
     );
 
-    // Verify disk state — in the new architecture, `permissionMode` is
-    // 'default' (the legacy default from profileToPermissionMode) and the
-    // plan-mode signal lives in `activeProfile`.
+    // After plan: permissionMode is preserved (build preference from create).
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
     expect(idx.permissionMode).toBe('default');
-    expect(idx.activeProfile).toBe('plan');
 
     // Simulate restart: build a new runtime, load state, restore profile.
     await rt.dispose();
@@ -236,8 +239,10 @@ describe('plan mode security boundary (cross-restart)', () => {
         const session = yield* SessionService;
         yield* runtime.prepareProject(cwd);
         const state = yield* session.load(cwd, sessionId);
-        expect(state.activeProfile).toBe('plan');
-        yield* runtime.restoreSessionProfile(cwd, sessionId, state.activeProfile);
+        // state.mode is 'build' (set by create; plan mode didn't write to disk)
+        expect(state.mode).toBe('build');
+        // To re-enter plan mode after restart, the client calls setSessionMode.
+        yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
         // After restore, the plan-mode side channel is re-marked.
         expect(isSessionInPlanMode(sessionId)).toBe(true);
       })

@@ -102,7 +102,11 @@ describe('POST /api/agent/permission-mode rejects when session is in plan mode',
         const runtime = yield* ProjectRuntimeService;
         const session = yield* SessionService;
         yield* runtime.prepareProject(cwd);
-        const state = yield* session.create(cwd, 'test-model');
+        const state = yield* session.create(cwd, {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
         return state.sessionId;
       })
     );

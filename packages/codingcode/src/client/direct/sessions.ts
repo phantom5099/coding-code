@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 import { SessionService } from '../../session/store.js';
+import { ProjectRuntimeService, modeToProfile } from '../../runtime/project-runtime.js';
 import { deleteSession } from '../../session/file-ops.js';
 import type { PermissionMode } from '../../approval/types.js';
 import type {
@@ -9,13 +10,15 @@ import type {
   RollbackPreviewDiff,
   RollbackState,
 } from '../../checkpoint/types.js';
-import type { SessionEvent, SessionIndex } from '../../session/types.js';
+import type { SessionEvent, SessionIndex, SessionMode } from '../../session/types.js';
 import type { AppRuntime } from '../../layer.js';
 
 export interface SessionClient {
   createSession(input: {
     cwd: string;
-    initialPermissionMode?: string;
+    mode: SessionMode;
+    permissionMode: PermissionMode;
+    model: string;
   }): Promise<{ sessionId: string }>;
   resumeSession(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
   listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
@@ -75,11 +78,14 @@ export interface SessionClient {
 
 export function createDirectSessionClient(rt: AppRuntime): SessionClient {
   return {
-    async createSession({ cwd }) {
+    async createSession({ cwd, mode, permissionMode, model }) {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.create(cwd, 'unknown');
+          const runtime = yield* ProjectRuntimeService;
+          const state = yield* session.create(cwd, { model, mode, permissionMode });
+          const profile = modeToProfile(mode);
+          yield* runtime.setSessionProfile(cwd, state.sessionId, profile, permissionMode);
           return { sessionId: state.sessionId };
         })
       );

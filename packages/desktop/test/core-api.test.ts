@@ -312,7 +312,7 @@ describe('getSessionPlan', () => {
 describe('getSessionMode', () => {
   it('encodes cwd and hits the mode GET endpoint', async () => {
     mockApi.mockResolvedValue({
-      profileName: 'build',
+      mode: 'build',
       permissionMode: 'default',
       cwd: '/tmp',
       available: [],
@@ -325,13 +325,13 @@ describe('getSessionMode', () => {
 });
 
 describe('setSessionMode', () => {
-  it('POSTs the profile name to the mode endpoint', async () => {
-    mockApi.mockResolvedValue({ profileName: 'plan', permissionMode: 'plan' });
+  it('POSTs the mode to the mode endpoint', async () => {
+    mockApi.mockResolvedValue({ mode: 'plan', permissionMode: 'default' });
     await setSessionMode('s-1', '/tmp', 'plan');
     expect(mockApi).toHaveBeenCalledWith('/api/sessions/s-1/mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: '/tmp', profile: 'plan' }),
+      body: JSON.stringify({ cwd: '/tmp', mode: 'plan' }),
     });
   });
 });

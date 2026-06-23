@@ -115,7 +115,11 @@ export async function createDirectClient(llm: LLMClient, rt: AppRuntime): Promis
           return yield* ApprovalWaitService;
         })
       );
-      const program = sendMessage(currentSessionId || undefined, input, cwd(), activeLlm);
+      const program = sendMessage(currentSessionId || undefined, input, cwd(), activeLlm, {
+        mode: 'build',
+        permissionMode: 'default',
+        model: activeLlm.modelInfo.model,
+      });
       const { stream: agentGen, sessionId } = (await runWithLayer(program)) as any;
       currentSessionId = sessionId;
 

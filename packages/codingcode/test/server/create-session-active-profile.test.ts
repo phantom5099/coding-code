@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { Hono } from 'hono';
-import { mkdtempSync, rmSync, readFileSync } from 'fs';
+import { mkdtempSync, rmSync, readFileSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
@@ -14,7 +14,7 @@ import { WorkspaceService } from '../../src/core/workspace.js';
 import { createSessionsRouter } from '../../src/server/routes/sessions.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
-useTempProjectBase();
+const base = useTempProjectBase();
 
 const mockHookService = {
   register: () => Effect.succeed(() => {}),
@@ -27,7 +27,7 @@ const mockHookService = {
   enableHook: () => Effect.succeed(undefined),
   disposeSession: () => Effect.succeed(undefined),
   disposeProject: () => Effect.succeed(undefined),
-};
+} as any;
 
 const mockMcpService = {
   syncConnections: () => Effect.succeed(undefined),
@@ -42,7 +42,7 @@ const mockRulesService = {
 } as any;
 
 function makeLayer() {
-  const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
+  const HookTestLayer = Layer.succeed(HookService, mockHookService);
   const McpTestLayer = Layer.succeed(McpService, mockMcpService);
   const SubagentTestLayer = SubagentService.Default;
   const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
@@ -63,13 +63,14 @@ function makeLayer() {
   return Layer.mergeAll(ProjectRuntimeTestLayer, SessionTestLayer, WorkspaceTestLayer);
 }
 
-describe('POST /api/sessions — activeProfile persistence (v13 改 1)', () => {
+describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
   let cwd: string;
   let rt: ManagedRuntime.ManagedRuntime<any, any>;
   let app: Hono;
 
   beforeEach(async () => {
-    cwd = mkdtempSync(join(tmpdir(), 'codingcode-create-session-test-'));
+    cwd = join(base.dir, 'create-session-active-profile');
+    mkdirSync(cwd, { recursive: true });
     rt = ManagedRuntime.make(makeLayer() as any);
     app = new Hono();
     app.route('/api/sessions', createSessionsRouter(rt));
@@ -83,22 +84,22 @@ describe('POST /api/sessions — activeProfile persistence (v13 改 1)', () => {
 
   afterEach(async () => {
     await rt.dispose();
-    rmSync(cwd, { recursive: true, force: true });
   });
 
-  it('writes idx.permissionMode AND idx.activeProfile when initialPermissionMode=plan', async () => {
-    // After the plan refactor, `permissionMode` is no longer a plan-specific
-    // value. The plan-mode signal lives in `activeProfile`; the approval
-    // pipeline itself only sees a generic permission mode.
+  it('writes idx.mode=plan and idx.permissionMode=default when mode=plan', async () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cwd, initialPermissionMode: 'plan' }),
+      body: JSON.stringify({
+        cwd,
+        mode: 'plan',
+        permissionMode: 'default',
+        model: 'gpt-4',
+      }),
     });
     expect(res.status).toBe(200);
     const { sessionId } = await res.json();
 
-    // Load state to get indexPath
     const indexPath = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -108,15 +109,20 @@ describe('POST /api/sessions — activeProfile persistence (v13 改 1)', () => {
     );
 
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
+    expect(idx.mode).toBe('plan');
     expect(idx.permissionMode).toBe('default');
-    expect(idx.activeProfile).toBe('plan');
   });
 
-  it('writes idx.activeProfile=build when initialPermissionMode=default (build)', async () => {
+  it('writes idx.mode=build and idx.permissionMode=bypass when build+bypass', async () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cwd, initialPermissionMode: 'default' }),
+      body: JSON.stringify({
+        cwd,
+        mode: 'build',
+        permissionMode: 'bypass',
+        model: 'gpt-4',
+      }),
     });
     expect(res.status).toBe(200);
     const { sessionId } = await res.json();
@@ -130,53 +136,65 @@ describe('POST /api/sessions — activeProfile persistence (v13 改 1)', () => {
     );
 
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.permissionMode).toBe('default');
-    expect(idx.activeProfile).toBe('build');
+    expect(idx.mode).toBe('build');
+    expect(idx.permissionMode).toBe('bypass');
   });
 
-  it('does not write activeProfile when no initialPermissionMode is provided', async () => {
+  it('rejects plan mode with non-default permissionMode', async () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cwd }),
+      body: JSON.stringify({
+        cwd,
+        mode: 'plan',
+        permissionMode: 'bypass',
+        model: 'gpt-4',
+      }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects missing model', async () => {
+    const res = await app.request('/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cwd, mode: 'build', permissionMode: 'default' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects missing mode', async () => {
+    const res = await app.request('/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ cwd, permissionMode: 'default', model: 'gpt-4' }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('new session with plan: state.mode is set, getSessionPermissionMode returns default', async () => {
+    const res = await app.request('/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        cwd,
+        mode: 'plan',
+        permissionMode: 'default',
+        model: 'gpt-4',
+      }),
     });
     expect(res.status).toBe(200);
     const { sessionId } = await res.json();
 
-    const indexPath = await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        const state = yield* session.load(cwd, sessionId);
-        return state.indexPath;
-      })
-    );
-
-    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.activeProfile).toBeUndefined();
-  });
-
-  it('new session with plan: state.activeProfile is set, restoreSessionProfile succeeds', async () => {
-    const res = await app.request('/api/sessions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cwd, initialPermissionMode: 'plan' }),
-    });
-    expect(res.status).toBe(200);
-    const { sessionId } = await res.json();
-
-    // Simulate the agent.sendMessage flow: load + restore
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        expect(state.activeProfile).toBe('plan');
-        yield* runtime.restoreSessionProfile(cwd, sessionId, state.activeProfile);
+        expect(state.mode).toBe('plan');
         const profile = runtime.getSessionProfile(sessionId);
         expect(profile?.name).toBe('plan');
-        // The approval-side permission mode is 'default' (pipeline is
-        // plan-blind); plan-mode is enforced structurally by the
-        // `plan/planModeGateHook`.
+        // plan-mode forces in-memory permissionMode to 'default'
         expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
       })
     );

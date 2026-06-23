@@ -1,5 +1,7 @@
 import { API_BASE, api } from './api';
 import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client/http-clients';
+import type { PermissionMode } from '@codingcode/core/approval/types';
+import type { SessionMode } from '@codingcode/core/session/types';
 
 const clients = createHttpClients(API_BASE);
 
@@ -28,9 +30,9 @@ export function listSessions(cwd?: string): Promise<any[]> {
 
 export function createSession(
   cwd: string,
-  initialPermissionMode?: string
+  params: { mode: SessionMode; permissionMode: PermissionMode; model: string }
 ): Promise<{ sessionId: string }> {
-  return clients.sessions.createSession({ cwd, initialPermissionMode });
+  return clients.sessions.createSession({ cwd, ...params });
 }
 
 export function deleteSession(sessionId: string, cwd: string): Promise<void> {
@@ -53,9 +55,9 @@ export function resumeSession(sessionId: string, cwd: string): Promise<any> {
 export function setSessionPermissionMode(
   sessionId: string,
   cwd: string,
-  mode: string
+  mode: PermissionMode
 ): Promise<void> {
-  return clients.sessions.setSessionPermissionMode({ sessionId, cwd, mode: mode as any });
+  return clients.sessions.setSessionPermissionMode({ sessionId, cwd, mode });
 }
 
 export function sendApprovalResponse(
@@ -80,8 +82,8 @@ export function getSessionPlan(
 // ---- Plan/Build mode switching ----
 
 export type SessionModeInfo = {
-  profileName: string;
-  permissionMode: 'default' | 'acceptEdits' | 'plan' | 'bypass';
+  mode: SessionMode;
+  permissionMode: PermissionMode;
   cwd: string;
   available: Array<{ name: string; description: string }>;
 };
@@ -93,13 +95,16 @@ export function getSessionMode(sessionId: string, cwd: string): Promise<SessionM
 export function setSessionMode(
   sessionId: string,
   cwd: string,
-  profile: 'plan' | 'build'
-): Promise<{ profileName: string; permissionMode: string }> {
-  return api<{ profileName: string; permissionMode: string }>(`/api/sessions/${sessionId}/mode`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cwd, profile }),
-  });
+  mode: SessionMode
+): Promise<{ mode: SessionMode; permissionMode: PermissionMode }> {
+  return api<{ mode: SessionMode; permissionMode: PermissionMode }>(
+    `/api/sessions/${sessionId}/mode`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd, mode }),
+    }
+  );
 }
 
 // ---- Settings: Memory ----

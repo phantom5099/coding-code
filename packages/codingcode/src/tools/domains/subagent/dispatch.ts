@@ -7,11 +7,13 @@ import { ApprovalService } from '../../../approval/index.js';
 import { HookService } from '../../../hooks/registry.js';
 import { McpService } from '../../../mcp/index.js';
 import { LLMFactoryService } from '../../../llm/factory.js';
-import { resolveSubagentEnabled, resolveAgentDisabled } from '../../../subagent/registry.js';
+import { resolveSubagentEnabled, resolveAgentDisabled, BUILD_PROFILE } from '../../../subagent/registry.js';
 import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import { SubagentRunnerService } from '../../../subagent/runner-service.js';
 import { checkSubagentAllowedInPlanMode } from '../../../plan/index.js';
+import type { SessionMode } from '../../../session/types.js';
+import type { PermissionMode } from '../../../approval/types.js';
 
 export function createDispatchAgentTool(): Effect.Effect<
   ToolDefinition,
@@ -119,10 +121,31 @@ export function createDispatchAgentTool(): Effect.Effect<
           }
 
           // Create subagent transcript nested under parent session
-          const childState = yield* session.create(projectPath, (ctx as any)?.model ?? 'subagent', {
-            parentSessionId: ctx?.sessionId,
-            agentName: agentName,
-          });
+          const subagentProfile = runtime.resolveSubagentProfile(projectPath, agentName);
+          const childMode: SessionMode = 'build';
+          const childPermissionMode: PermissionMode =
+            (subagentProfile?.permissionMode as PermissionMode | undefined) ?? 'default';
+          const childModel: string = subagentProfile?.model ?? llm.modelInfo.model;
+
+          const childState = yield* session.create(
+            projectPath,
+            {
+              model: childModel,
+              mode: childMode,
+              permissionMode: childPermissionMode,
+            },
+            {
+              parentSessionId: ctx?.sessionId,
+              agentName: agentName,
+            }
+          );
+          yield* runtime.setSessionProfile(
+            projectPath,
+            childState.sessionId,
+            subagentProfile ?? BUILD_PROFILE,
+            childPermissionMode,
+            ctx?.sessionId
+          );
           const childUuid = childState.sessionId;
           session.incrementTurn(childState);
           yield* session.recordUser(childState, prompt);

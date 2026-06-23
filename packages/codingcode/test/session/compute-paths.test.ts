@@ -12,6 +12,7 @@ import {
 import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
+
 const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
@@ -49,7 +50,11 @@ describe('computePaths', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, 'test-model');
+        return yield* svc.create(cwd, {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
       })
     );
 
@@ -70,7 +75,11 @@ describe('computePaths', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, 'test-model');
+        return yield* svc.create(cwd, {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
       })
     );
 
@@ -78,7 +87,11 @@ describe('computePaths', () => {
       const childState = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(cwd, 'subagent-model', {
+          return yield* svc.create(cwd, {
+            model: 'subagent-model',
+            mode: 'build',
+            permissionMode: 'default',
+          }, {
             parentSessionId: state.sessionId,
           });
         })

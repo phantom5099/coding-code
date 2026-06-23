@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs';
-import { tmpdir } from 'os';
+import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
+import { BUILD_PROFILE } from '../../src/subagent/registry.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { SubagentService } from '../../src/subagent/registry.js';
 import { RulesService } from '../../src/rules/index.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
-useTempProjectBase();
+const base = useTempProjectBase();
 
 const mockHookService = {
   register: () => Effect.succeed(() => {}),
@@ -57,12 +57,17 @@ describe('SessionStoreState.activeProfile persistence', () => {
   let rt: ManagedRuntime.ManagedRuntime<any, any>;
 
   beforeEach(async () => {
-    cwd = mkdtempSync(join(tmpdir(), 'codingcode-session-load-test-'));
+    cwd = join(base.dir, 'load-restore-profile');
+    mkdirSync(cwd, { recursive: true });
     rt = ManagedRuntime.make(makeLayer() as any);
     const result = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const state = yield* session.create(cwd, 'test-model');
+        const state = yield* session.create(cwd, {
+          model: 'test-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
         return { sessionId: state.sessionId, indexPath: state.indexPath };
       })
     );
@@ -72,17 +77,33 @@ describe('SessionStoreState.activeProfile persistence', () => {
 
   afterEach(async () => {
     await rt.dispose();
-    rmSync(cwd, { recursive: true, force: true });
   });
 
-  it('state.activeProfile is undefined for new sessions', async () => {
-    const state = await rt.runPromise(
+  it('state.activeProfile is undefined for new sessions (set by setSessionProfile)', async () => {
+    // session.create() no longer writes activeProfile. After explicitly
+    // calling setSessionProfile, activeProfile is written to disk.
+    const stateBefore = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
         return yield* session.load(cwd, sessionId);
       })
     );
-    expect(state.activeProfile).toBeUndefined();
+    expect(stateBefore.activeProfile).toBeUndefined();
+
+    await rt.runPromise(
+      Effect.gen(function* () {
+        const runtime = yield* ProjectRuntimeService;
+        yield* runtime.setSessionProfile(cwd, sessionId, BUILD_PROFILE);
+      })
+    );
+
+    const stateAfter = await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        return yield* session.load(cwd, sessionId);
+      })
+    );
+    expect(stateAfter.activeProfile).toBe('build');
   });
 
   it('state.activeProfile is set when index has activeProfile field', async () => {

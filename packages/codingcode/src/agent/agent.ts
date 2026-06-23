@@ -21,7 +21,7 @@ import { ContextService } from '../context/service.js';
 import { MemoryService } from '../memory/index.js';
 import { createLogger } from '@codingcode/infra/logger';
 import { resolveSubagentEnabled, resolveAgentDisabled } from '../subagent/registry.js';
-import { ProjectRuntimeService } from '../runtime/project-runtime.js';
+import { ProjectRuntimeService, modeToProfile } from '../runtime/project-runtime.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { getBuiltinTools } from '../tools/providers.js';
@@ -29,6 +29,8 @@ import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
 import { canonicalizeSchema } from '../tools/utils/canonicalize-schema.js';
 import { normalizePath } from '../core/path.js';
 import { isPlanProfile } from '../plan/index.js';
+import type { SessionMode } from '../session/types.js';
+import type { PermissionMode } from '../approval/types.js';
 
 const REACTIVE_COMPACT_MAX_RETRIES = 3;
 import { RulesService } from '../rules/index.js';
@@ -118,9 +120,12 @@ export const sendMessage = (
   input: string,
   cwd: string,
   llm: LLMClient,
-  options?: {
+  options: {
     signal?: AbortSignal;
     approvalOverride?: any;
+    mode: SessionMode;
+    permissionMode: PermissionMode;
+    model: string;
   }
 ) =>
   Effect.gen(function* () {
@@ -142,13 +147,30 @@ export const sendMessage = (
     yield* runtime.prepareProject(normalizedCwd);
     yield* skills.evictProject(normalizedCwd);
 
-    const state = sessionId
-      ? yield* session.load(normalizedCwd, sessionId)
-      : yield* session.create(normalizedCwd, llm.modelInfo.model);
-    if (state.activeProfile) {
-      yield* runtime.restoreSessionProfile(normalizedCwd, state.sessionId, state.activeProfile);
+    if (!sessionId) {
+      const created = yield* session.create(normalizedCwd, {
+        model: options.model,
+        mode: options.mode,
+        permissionMode: options.permissionMode,
+      });
+      const profile = modeToProfile(options.mode);
+      yield* runtime.setSessionProfile(
+        normalizedCwd,
+        created.sessionId,
+        profile,
+        options.permissionMode
+      );
+      sessionId = created.sessionId;
     }
-    state.model = llm.modelInfo.model;
+    const state = yield* session.load(normalizedCwd, sessionId);
+    if (state.activeProfile) {
+      yield* runtime.restoreSessionProfile(
+        normalizedCwd,
+        state.sessionId,
+        state.activeProfile,
+        state.permissionMode
+      );
+    }
     state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
     const sid = state.sessionId;
 

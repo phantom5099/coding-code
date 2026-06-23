@@ -4,6 +4,7 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
+
 import { estimatePromptTokens } from '../../src/context/service.js';
 import { estimateTokensForContent } from '../../src/core/util.js';
 import { encodeProjectPath } from '../../src/core/path.js';
@@ -172,7 +173,11 @@ describe('SessionService create sets model', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, 'my-test-model');
+          return yield* svc.create(dir, {
+            model: 'my-test-model',
+            mode: 'build',
+            permissionMode: 'default',
+          });
         })
       );
       expect(state.model).toBe('my-test-model');

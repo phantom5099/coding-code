@@ -72,7 +72,11 @@ describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
         const runtime = yield* ProjectRuntimeService;
 
         yield* runtime.prepareProject(cwd);
-        const parent = yield* session.create(cwd, 'parent-model');
+        const parent = yield* session.create(cwd, {
+          model: 'parent-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
 
         const dispatchTool = yield* createDispatchAgentTool();
         const output = yield* dispatchTool.execute(
@@ -124,7 +128,11 @@ describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
         const session = yield* SessionService;
         const runtime = yield* ProjectRuntimeService;
         yield* runtime.prepareProject(cwd);
-        const parent = yield* session.create(cwd, 'parent-model');
+        const parent = yield* session.create(cwd, {
+          model: 'parent-model',
+          mode: 'build',
+          permissionMode: 'default',
+        });
         const dispatchTool = yield* createDispatchAgentTool();
         yield* dispatchTool.execute(
           { agent: 'explore', prompt: 'p' },

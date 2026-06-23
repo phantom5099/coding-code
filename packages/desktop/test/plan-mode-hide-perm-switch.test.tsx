@@ -9,29 +9,25 @@ function sourceContent(relativePath: string): string {
 describe('Desktop: hide permission switcher in plan mode', () => {
   const agentWorkspaceSource = sourceContent('agent/AgentWorkspace.tsx');
 
-  it('imports useAgentMode hook for fetching the session mode', () => {
-    expect(agentWorkspaceSource).toMatch(/import\s+\{[^}]*useAgentMode[^}]*\}\s+from\s+['"]\.\.\/hooks\/useAgent/);
+  it('derives isPlanMode from the agent store', () => {
+    expect(agentWorkspaceSource).toMatch(/isPlanMode/);
+    expect(agentWorkspaceSource).toMatch(
+      /modeByThreadId\[s\.currentThreadId\]\?\.mode\s*===\s*['"]plan['"]/
+    );
   });
 
-  it('tracks isPlanMode state and fetches it for the current session', () => {
-    expect(agentWorkspaceSource).toMatch(/setIsPlanMode/);
-    expect(agentWorkspaceSource).toMatch(/fetchSessionMode/);
-    expect(agentWorkspaceSource).toMatch(/setIsPlanMode\(m\.profileName === ['"]plan['"]\)/);
+  it('does not fetch session mode on session switch (no useAgentMode in AgentWorkspace)', () => {
+    expect(agentWorkspaceSource).not.toMatch(/useAgentMode\(\)/);
+    expect(agentWorkspaceSource).not.toMatch(/fetchSessionMode/);
   });
 
   it('gates the permission switcher button behind !isPlanMode', () => {
-    // The button onClick that contains POLICY_TO_CORE_MODE must be inside a
-    // {!isPlanMode && (...)} block.
-    const blockMatches = [
-      /\{!isPlanMode\s*&&/,
-      /\{isPlanMode\s*\?\s*null\s*:/,
-    ];
+    const blockMatches = [/\{!isPlanMode\s*&&/];
     const hasGate = blockMatches.some((re) => re.test(agentWorkspaceSource));
     expect(hasGate).toBe(true);
   });
 
   it('does NOT silently remove the switcher for build sessions (still rendered)', () => {
-    // The button text and onClick should still exist in source.
     expect(agentWorkspaceSource).toContain('POLICY_NEXT[approvalPolicy]');
     expect(agentWorkspaceSource).toContain("POLICY_LABELS[approvalPolicy] ?? '全部询问'");
   });

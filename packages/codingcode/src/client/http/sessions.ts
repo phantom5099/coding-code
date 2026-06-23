@@ -6,13 +6,15 @@ import type {
   RollbackPreviewDiff,
   RollbackState,
 } from '../../checkpoint/types.js';
-import type { SessionEvent, SessionIndex } from '../../session/types.js';
+import type { SessionEvent, SessionIndex, SessionMode } from '../../session/types.js';
 import type { createRequestHelpers } from './request.js';
 
 export interface SessionClient {
   createSession(input: {
     cwd: string;
-    initialPermissionMode?: string;
+    mode: SessionMode;
+    permissionMode: PermissionMode;
+    model: string;
   }): Promise<{ sessionId: string }>;
   resumeSession(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
   listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
@@ -75,8 +77,8 @@ export function createHttpSessionClient(
   const { apiGet, apiPost, apiPut, apiDelete } = request;
 
   return {
-    async createSession({ cwd, initialPermissionMode }) {
-      return apiPost('/api/sessions', { cwd, initialPermissionMode });
+    async createSession({ cwd, mode, permissionMode, model }) {
+      return apiPost('/api/sessions', { cwd, mode, permissionMode, model });
     },
 
     async resumeSession({ sessionId, cwd }) {
