@@ -53,7 +53,7 @@ export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
     if (existing && !existing.optimistic) return;
 
     if (!existing) {
-      const permissionMode: 'default' = 'default';
+      const permissionMode = 'default' as const;
       setOptimisticModeForThread(sessionId, {
         mode: pendingProfile,
         permissionMode,
