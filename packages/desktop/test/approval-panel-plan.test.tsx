@@ -8,44 +8,38 @@ import { useAgentStore } from '../src/stores/agent.store';
 import ApprovalPanel from '../src/agent/ApprovalPanel';
 
 const sendMessageMock = vi.fn();
-const sendPlanDecisionMock = vi.fn();
-const approveToolMock = vi.fn();
-const rejectToolMock = vi.fn();
+const switchModeMock = vi.fn();
+const fetchPlanMock = vi.fn();
 
 vi.mock('../src/hooks/useAgent', () => ({
   useAgentApproval: () => ({
-    approveTool: (...args: unknown[]) => approveToolMock(...args),
-    rejectTool: (...args: unknown[]) => rejectToolMock(...args),
-    sendPlanDecision: (
-      threadId: string,
-      callId: string,
-      message: string,
-      sendMessage: (m: string) => Promise<void>
-    ) => {
-      useAgentStore.getState().setPendingPlan(threadId, null);
-      return sendPlanDecisionMock(threadId, callId, message, sendMessage);
-    },
+    approveTool: vi.fn(),
+    rejectTool: vi.fn(),
   }),
   useAgentCore: () => ({
     sendMessage: sendMessageMock,
     abort: vi.fn(),
   }),
-}));
-
-vi.mock('../src/hooks/useCopyToClipboard', () => ({
-  useCopyToClipboard: () => ({ copiedId: null, copy: vi.fn() }),
+  useAgentMode: () => ({
+    switchMode: switchModeMock,
+    fetchPlan: fetchPlanMock,
+  }),
 }));
 
 const PLAN = '# 计划\n\n正文';
 
-function seedPendingPlan(threadId: string) {
+function seedPendingPlan(threadId: string, title = '测试计划') {
   act(() => {
     useAgentStore.getState().setPendingPlan(threadId, {
       sessionId: threadId,
-      title: '测试计划',
-      path: '/tmp/.codingcode/plans/abc.md',
-      content: PLAN,
+      title,
     });
+  });
+  // Default: fetchPlan returns the test plan content
+  fetchPlanMock.mockResolvedValue({
+    content: PLAN,
+    path: '/tmp/.codingcode/plans/abc.md',
+    directory: '/tmp/.codingcode/plans',
   });
 }
 
@@ -104,63 +98,72 @@ describe('ApprovalPanel — pendingPlan handling', () => {
     cleanup();
   });
 
-  it('renders the PlanApprovalModal when pendingPlan is set', () => {
+  it('renders the PlanApprovalModal when pendingPlan is set', async () => {
     seedPendingPlan('t-1');
-    const { getByTestId, getByText } = render(<ApprovalPanel threadId="t-1" />);
-    expect(getByTestId('plan-approval-modal')).toBeInTheDocument();
-    expect(getByText(/计划文件/)).toBeInTheDocument();
+    const { findByTestId } = render(<ApprovalPanel threadId="t-1" />);
+    const modal = await findByTestId('plan-approval-modal');
+    expect(modal).toBeInTheDocument();
   });
 
-  it('clears pendingPlan and sends an implement message on implement', async () => {
+  it('clears pendingPlan and sends an implement message on execute', async () => {
     seedPendingPlan('t-1');
-    const { getByTestId } = render(<ApprovalPanel threadId="t-1" />);
+    const { findByTestId } = render(<ApprovalPanel threadId="t-1" />);
+    const implementBtn = await findByTestId('plan-implement');
     await act(async () => {
-      fireEvent.click(getByTestId('plan-implement'));
-      // wait microtasks for the async chain
+      fireEvent.click(implementBtn);
+      await Promise.resolve();
       await Promise.resolve();
     });
-    expect(sendPlanDecisionMock).toHaveBeenCalledWith(
-      't-1',
-      't-1',
-      expect.stringContaining('proceed with implementing'),
-      sendMessageMock
+    expect(switchModeMock).toHaveBeenCalledWith('t-1', 'build', expect.any(String));
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.stringContaining('Plan approved'),
+      expect.any(String)
     );
     expect(useAgentStore.getState().pendingPlanByThreadId['t-1']).toBeUndefined();
   });
 
-  it('clears pendingPlan and sends a cancel message on cancel', async () => {
+  it('clears pendingPlan without sending any message on cancel', async () => {
     seedPendingPlan('t-1');
-    const { getByTestId } = render(<ApprovalPanel threadId="t-1" />);
+    const { findByTestId } = render(<ApprovalPanel threadId="t-1" />);
+    const cancelBtn = await findByTestId('plan-cancel');
     await act(async () => {
-      fireEvent.click(getByTestId('plan-cancel'));
+      fireEvent.click(cancelBtn);
       await Promise.resolve();
     });
-    expect(sendPlanDecisionMock).toHaveBeenCalledWith(
-      't-1',
-      't-1',
-      expect.stringContaining('Cancel the plan'),
-      sendMessageMock
-    );
+    expect(sendMessageMock).not.toHaveBeenCalled();
+    expect(switchModeMock).not.toHaveBeenCalled();
     expect(useAgentStore.getState().pendingPlanByThreadId['t-1']).toBeUndefined();
   });
 
-  it('sends a modified message with the revised content', async () => {
+  it('sends the opinion text as a new message on submit-opinion', async () => {
     seedPendingPlan('t-1');
-    const { getByTestId, getByRole } = render(<ApprovalPanel threadId="t-1" />);
-    fireEvent.click(getByTestId('plan-modify-tab'));
+    const { findByTestId, findByRole } = render(<ApprovalPanel threadId="t-1" />);
+    const textarea = (await findByRole('textbox')) as HTMLTextAreaElement;
     act(() => {
-      fireEvent.change(getByRole('textbox'), { target: { value: '# 新计划' } });
+      fireEvent.change(textarea, { target: { value: '请加上错误处理' } });
     });
+    const submitBtn = await findByTestId('plan-submit-opinion');
     await act(async () => {
-      fireEvent.click(getByTestId('plan-modify-submit'));
+      fireEvent.click(submitBtn);
+      await Promise.resolve();
       await Promise.resolve();
     });
-    expect(sendPlanDecisionMock).toHaveBeenCalledWith(
-      't-1',
-      't-1',
-      expect.stringContaining('# 新计划'),
-      sendMessageMock
+    expect(switchModeMock).not.toHaveBeenCalled();
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.stringContaining('请加上错误处理'),
+      expect.any(String)
     );
+    expect(useAgentStore.getState().pendingPlanByThreadId['t-1']).toBeUndefined();
+  });
+
+  it('does not call switchMode on cancel (profile stays in plan)', async () => {
+    seedPendingPlan('t-1');
+    const { findByTestId } = render(<ApprovalPanel threadId="t-1" />);
+    await act(async () => {
+      fireEvent.click(await findByTestId('plan-cancel'));
+      await Promise.resolve();
+    });
+    expect(switchModeMock).not.toHaveBeenCalled();
   });
 
   it('falls back to the regular approval card list when only tool_calls are pending', () => {

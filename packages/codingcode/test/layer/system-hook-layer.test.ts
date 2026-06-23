@@ -23,11 +23,11 @@ describe('SystemHookLayer', () => {
   });
 
   it('registers the remaining plan-mode system hooks', async () => {
-    // After the plan approval decoupling (option E):
+    // After the plan approval decoupling:
     //   - planModeGateHook stays — it's the right abstraction for tool-allow
     //     policy. Registered on tool.approval.pre with priority -1000.
-    //   - afterPlanSubmittedObserver stays — handles plan → build transition.
-    //     Registered on tool.execute.after.
+    //   - afterPlanSubmittedObserver REMOVED — plan.ready is now emitted by
+    //     agentLoop on turn-end, not by an observer on tool.execute.after.
     //   - planApprovalHook REMOVED — submit_plan tool handles its own 3-option
     //     approval via ApprovalWaitService directly.
     //   - planSubagentWhitelistHook REMOVED — now an inline function
@@ -58,17 +58,6 @@ describe('SystemHookLayer', () => {
       });
       expect(allowed).toBeNull();
       clearPlanModeSession('s');
-
-      // (3) afterPlanSubmittedObserver is registered; emit should not throw
-      // and an observer registered by us alongside should also fire.
-      let ourObserverRan = false;
-      yield* hooks.register('tool.execute.after', () =>
-        Effect.sync(() => {
-          ourObserverRan = true;
-        })
-      );
-      yield* hooks.emit('tool.execute.after', { sessionId: 's', projectPath: '/p' });
-      expect(ourObserverRan).toBe(true);
 
       return true;
     });

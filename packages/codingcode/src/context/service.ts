@@ -1,12 +1,11 @@
 import { Effect } from 'effect';
 import { randomUUID } from 'crypto';
-import { join } from 'path';
 import { readFileSync, existsSync } from 'fs';
 import { loadConfig } from '@codingcode/infra/config';
 import type { Message } from '../core/types.js';
 import { SessionService } from '../session/store.js';
 import { estimateTokens, estimateMessageTokens } from '../core/util.js';
-import { projectSessionsDir, appendLine, readHistory } from '../session/file-ops.js';
+import { appendLine, readHistory } from '../session/file-ops.js';
 import { resolveLLM } from '../llm/llm-resolver.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
@@ -191,16 +190,12 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
   effect: Effect.gen(function* () {
     const session = yield* SessionService;
     const factory = yield* LLMFactoryService;
-    const assemblePayload = (
-      sessionId: string,
-      encodedProjectPath: string,
-      contextWindow: number
-    ): BuildResult => {
-      const jsonlPath = join(projectSessionsDir(encodedProjectPath), `${sessionId}.jsonl`);
+    const assemblePayload = (transcriptPath: string, contextWindow: number): BuildResult => {
+      const jsonlPath = transcriptPath;
       let events = session.readHistoryFile(jsonlPath);
 
       let currentTurnId = 0;
-      const idxPath = join(projectSessionsDir(encodedProjectPath), `${sessionId}.index.json`);
+      const idxPath = transcriptPath.replace('.jsonl', '.index.json');
       if (existsSync(idxPath)) {
         try {
           const idx = JSON.parse(readFileSync(idxPath, 'utf8'));
@@ -280,8 +275,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
     }
 
     const compactIfNeeded = async (
-      sessionId: string,
-      encodedProjectPath: string,
+      transcriptPath: string,
       messages: Message[],
       modelMaxTokens: number,
       llm: LLMClient | null
@@ -292,20 +286,13 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         return { didCompress: false, released: 0, promptEstimate };
       }
 
-      const result = await compactWithLLM(
-        sessionId,
-        encodedProjectPath,
-        modelMaxTokens,
-        llm,
-        promptEstimate
-      );
+      const result = await compactWithLLM(transcriptPath, modelMaxTokens, llm, promptEstimate);
 
       return result;
     };
 
     const compactWithLLM = async (
-      sessionId: string,
-      encodedProjectPath: string,
+      transcriptPath: string,
       modelMaxTokens: number,
       llm: LLMClient | null,
       usage?: number
@@ -316,11 +303,10 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const threshold = modelMaxTokens * COMPACTION_THRESHOLD;
       if (usage === undefined || usage - released > threshold) {
         const { compactedEvents, currentTurnId, compactedTurnIds, promptEstimate } =
-          assemblePayload(sessionId, encodedProjectPath, modelMaxTokens);
+          assemblePayload(transcriptPath, modelMaxTokens);
         preEstimate = promptEstimate;
         released += await tryCompaction(
-          sessionId,
-          encodedProjectPath,
+          transcriptPath,
           llm,
           compactedEvents,
           currentTurnId,
@@ -336,7 +322,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
         };
       }
 
-      const postPayload = assemblePayload(sessionId, encodedProjectPath, modelMaxTokens);
+      const postPayload = assemblePayload(transcriptPath, modelMaxTokens);
       return {
         didCompress: true,
         released,
@@ -346,8 +332,7 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
     };
 
     async function tryCompaction(
-      sessionId: string,
-      encodedProjectPath: string,
+      transcriptPath: string,
       llm: LLMClient | null,
       compactedEvents: SessionEvent[],
       currentTurnId: number,
@@ -387,8 +372,14 @@ export class ContextService extends Effect.Service<ContextService>()('Context', 
       const startTurnId = Math.min(...turnIds);
       const endTurnId = Math.max(...turnIds);
 
-      const state = await Effect.runPromise(session.load(encodedProjectPath, sessionId));
-      await Effect.runPromise(session.appendSummary(state, summary, startTurnId, endTurnId));
+      const summaryEvent: SummaryEvent = {
+        type: 'summary',
+        uuid: randomUUID(),
+        startTurnId,
+        endTurnId,
+        summaryText: summary,
+      };
+      appendLine(transcriptPath, summaryEvent);
 
       const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
       return Math.max(0, totalTokens - estimateMessageTokens(summaryMsg));

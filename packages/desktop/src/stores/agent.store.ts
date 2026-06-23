@@ -37,8 +37,6 @@ export interface Automation {
 export interface PendingPlan {
   sessionId: string;
   title: string;
-  path: string;
-  content: string;
 }
 
 interface AgentState {
@@ -86,6 +84,7 @@ interface AgentActions {
     status: 'pending' | 'approved' | 'rejected' | 'running'
   ) => void;
   setPendingPlan: (threadId: string, plan: PendingPlan | null) => void;
+  clearPendingPlan: (threadId: string) => void;
   startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void;
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void;
   updateTurnId: (threadId: string, oldTurnId: string, newTurnId: string) => void;
@@ -372,6 +371,11 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           } else {
             s.pendingPlanByThreadId[threadId] = plan;
           }
+        }),
+
+      clearPendingPlan: (threadId) =>
+        set((s) => {
+          delete s.pendingPlanByThreadId[threadId];
         }),
 
       clearRunningTurns: (threadId) =>

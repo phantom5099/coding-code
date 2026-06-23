@@ -101,7 +101,7 @@ describe('compactIfNeeded', () => {
   it('returns didCompress=false when promptEstimate is below threshold', async () => {
     (estimateTokens as any).mockReturnValue(100);
     const ctx = await getCtxService();
-    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, null);
+    const result = await ctx.compactIfNeeded('/tmp/s1.jsonl', [], 10000, null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
     expect(result.promptEstimate).toBe(100);
@@ -110,7 +110,7 @@ describe('compactIfNeeded', () => {
   it('returns didCompress=false when promptEstimate equals threshold', async () => {
     (estimateTokens as any).mockReturnValue(5000);
     const ctx = await getCtxService();
-    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, null);
+    const result = await ctx.compactIfNeeded('/tmp/s1.jsonl', [], 10000, null);
     expect(result.didCompress).toBe(false);
     expect(result.released).toBe(0);
   });
@@ -120,8 +120,7 @@ describe('compactIfNeeded', () => {
     (estimateMessageTokens as any).mockReturnValue(50);
     const ctx = await getCtxService();
     const result = await ctx.compactIfNeeded(
-      's1',
-      'proj',
+      '/tmp/s1.jsonl',
       [
         { type: 'user', content: 'a'.repeat(200), turnId: 1 },
         { type: 'assistant', content: 'b'.repeat(200), turnId: 1 },
@@ -144,7 +143,7 @@ describe('compactIfNeeded', () => {
   it('does not return restoredFiles field (removed)', async () => {
     (estimateTokens as any).mockReturnValue(10000);
     const ctx = await getCtxService();
-    const result = await ctx.compactIfNeeded('s1', 'proj', [], 10000, null);
+    const result = await ctx.compactIfNeeded('/tmp/s1.jsonl', [], 10000, null);
     expect('restoredFiles' in result).toBe(false);
   });
 });

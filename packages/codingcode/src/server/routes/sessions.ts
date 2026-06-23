@@ -149,7 +149,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const maxTokens = llm?.modelInfo.maxTokens ?? 128000;
 
         return yield* Effect.promise(() =>
-          context.compactWithLLM(state.sessionId, state.projectPath, maxTokens, llm)
+          context.compactWithLLM(state.transcriptPath, maxTokens, llm)
         );
       })
     );

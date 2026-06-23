@@ -286,8 +286,6 @@ export function useAgentCore() {
             setPendingPlan(threadId, {
               sessionId: event.sessionId,
               title: event.title,
-              path: event.path,
-              content: event.content,
             });
           }
 
@@ -341,16 +339,10 @@ export function useAgentCore() {
   return { sendMessage, abort };
 }
 
-// ---- useAgentApproval: approveTool + rejectTool + sendPlanDecision ----
-
-export type PlanChoice =
-  | { type: 'allow' }
-  | { type: 'modified'; input: Record<string, unknown> }
-  | { type: 'canceled' };
+// ---- useAgentApproval: approveTool + rejectTool ----
 
 export function useAgentApproval() {
   const updateToolCallStatus = useAgentStore((s) => s.updateToolCallStatus);
-  const setPendingPlan = useAgentStore((s) => s.setPendingPlan);
 
   const approveTool = useCallback(
     async (threadId: string, callId: string) => {
@@ -376,29 +368,7 @@ export function useAgentApproval() {
     [updateToolCallStatus]
   );
 
-  /**
-   * Apply the user's plan-mode decision by sending it as a new user
-   * message. The async PlanApprovalService is gone; the LLM (or build
-   * agent) picks up the chosen follow-up as the next turn. The pending
-   * plan UI is closed locally so the chat resumes immediately.
-   *
-   * `sendMessage` is injected to avoid pulling the model/list init
-   * effects of useAgentCore into this hook.
-   */
-  const sendPlanDecision = useCallback(
-    async (
-      threadId: string,
-      _callId: string,
-      message: string,
-      sendMessage: (content: string, cwd?: string) => Promise<void>
-    ) => {
-      setPendingPlan(threadId, null);
-      await sendMessage(message, threadId);
-    },
-    [setPendingPlan]
-  );
-
-  return { approveTool, rejectTool, sendPlanDecision };
+  return { approveTool, rejectTool };
 }
 
 // ---- useAgentRollback: all rollback methods ----

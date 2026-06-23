@@ -50,18 +50,13 @@ export function createSseHandler(rt: ManagedRt) {
             hookService.register('plan.ready', (payload) => {
               const p = payload as {
                 sessionId?: string;
-                projectPath?: string;
                 title?: string;
-                path?: string;
-                content?: string;
               };
               if (p.sessionId !== sessionId) return;
               enqueue({
                 type: 'plan_ready',
                 sessionId: p.sessionId,
                 title: p.title ?? '',
-                path: p.path ?? '',
-                content: p.content ?? '',
               });
             })
           );

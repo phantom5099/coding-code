@@ -145,7 +145,7 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         const llm = makeMockLLM(summary);
         const ctx = await getCtxService();
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
+        await ctx.compactWithLLM(fx.transcriptPath, llm.modelInfo.maxTokens, llm);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
@@ -160,7 +160,7 @@ describe('compressor behavior', () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
         const ctx = await getCtxService();
-        const result = await ctx.compactWithLLM(fx.sessionId, fx.slug, 1000, null);
+        const result = await ctx.compactWithLLM(fx.transcriptPath, 1000, null);
         expect(result.didCompress).toBe(false);
         expect(result.messages).toBeUndefined();
         const summaries = readSummaryEvents(fx.transcriptPath);
@@ -179,7 +179,7 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
         );
         const ctx = await getCtxService();
-        await ctx.compactWithLLM(fx.sessionId, fx.slug, llm.modelInfo.maxTokens, llm);
+        await ctx.compactWithLLM(fx.transcriptPath, llm.modelInfo.maxTokens, llm);
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
@@ -204,8 +204,7 @@ describe('compressor behavior', () => {
         );
         const ctx = await getCtxService();
         const result = await ctx.compactWithLLM(
-          fx.sessionId,
-          fx.slug,
+          fx.transcriptPath,
           llm.modelInfo.maxTokens,
           llm
         );

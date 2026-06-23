@@ -217,9 +217,9 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
     expect(mockCompactWithLLM).toHaveBeenCalledTimes(1);
 
     const args = mockCompactWithLLM.mock.calls[0];
-    // args[3] is the llm parameter — should not be null
-    expect(args?.[3]).not.toBeNull();
-    expect(args?.[3].modelInfo.model).toBe('deepseek-chat');
+    // args[2] is the llm parameter — should not be null
+    expect(args?.[2]).not.toBeNull();
+    expect(args?.[2].modelInfo.model).toBe('deepseek-chat');
   });
 
   it('should return CompressResult from the API', async () => {
@@ -279,6 +279,6 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
     expect(mockCompactWithLLM).toHaveBeenCalledTimes(1);
 
     const args = mockCompactWithLLM.mock.calls[0];
-    expect(args?.[3]).toBeNull();
+    expect(args?.[2]).toBeNull();
   });
 });

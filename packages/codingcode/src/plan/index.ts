@@ -1,12 +1,4 @@
-import { Effect } from 'effect';
-import type { DecisionHandler, ObserverHandler } from '../hooks/types.js';
-import { HookService } from '../hooks/registry.js';
-import { ProjectRuntimeService } from '../runtime/project-runtime.js';
-import { SessionService } from '../session/store.js';
-import { createLogger } from '@codingcode/infra/logger';
-import { BUILD_PROFILE } from '../subagent/registry.js';
-
-const logger = createLogger();
+import type { DecisionHandler } from '../hooks/types.js';
 
 // ---- Profile name constants + structural helper ----
 
@@ -71,51 +63,3 @@ export const planModeGateHook: DecisionHandler = (payload) => {
   };
 };
 
-
-export const afterPlanSubmittedObserver: ObserverHandler = (payload) =>
-  Effect.gen(function* () {
-    const toolName = payload.toolName as string | undefined;
-    if (toolName !== 'submit_plan') return;
-    const result = payload.result as { output?: string } | undefined;
-    if (!result?.output?.startsWith('Plan written to ')) return;
-    const sessionId = payload.sessionId as string | undefined;
-    const projectPath = payload.projectPath as string | undefined;
-    const args = (payload.args ?? {}) as { plan_content?: string; title?: string };
-    if (!sessionId || !projectPath) return;
-    if (!args.plan_content) return;
-
-    yield* Effect.gen(function* () {
-      const runtime = yield* ProjectRuntimeService;
-      const session = yield* SessionService;
-      const hooks = yield* HookService;
-
-      // Switch to build profile (resolve build from runtime, fallback to built-in)
-      const buildProfile =
-        runtime.resolveSubagentProfile(projectPath, BUILD_PROFILE_NAME) ??
-        runtime.resolveSubagentProfile(projectPath, BUILD_PROFILE.name) ??
-        BUILD_PROFILE;
-      yield* runtime.setSessionProfile(projectPath, sessionId, buildProfile);
-
-      // Persist activeProfile in the session index
-      try {
-        const state = yield* session.load(projectPath, sessionId);
-        session.updateActiveProfile(state, buildProfile.name);
-      } catch (err) {
-        logger.warn('afterPlanSubmitted: failed to persist activeProfile:', err);
-      }
-
-      // The plan mode's user-confirmation now rides on a plan.ready hook
-      // event consumed by the SSE handler (which forwards it to the
-      // desktop). Output path is the suffix after the prefix marker.
-      const planPath = result.output!.slice('Plan written to '.length).trim();
-      yield* hooks.emit('plan.ready', {
-        sessionId,
-        projectPath,
-        title: args.title ?? '',
-        path: planPath,
-        content: args.plan_content,
-      });
-    }).pipe(
-      Effect.catchAll((err) => Effect.sync(() => logger.error('afterPlanSubmitted error:', err)))
-    );
-  });

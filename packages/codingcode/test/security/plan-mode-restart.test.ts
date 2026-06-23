@@ -202,8 +202,8 @@ describe('plan mode security boundary (cross-restart)', () => {
     const decision: any = await evaluateAsSession('submit_plan', { plan_content: 'do things' });
     // submit_plan is in PLAN_MODE_ALLOWED_TOOLS, so the gate does not fire.
     // The pipeline recognizes submit_plan by name at Layer 5 and short-circuits
-    // to 'allow' with source 'system-plan-self-handles'. The actual plan
-    // modal is driven by submit_plan.execute itself, not by the pipeline.
+    // to 'allow' with source 'system-plan-self-handles'. The plan modal is
+    // driven by agentLoop emitting plan.ready on turn-end, not by the pipeline.
     expect(decision.type).toBe('allow');
     expect(decision.source).toBe('system-plan-self-handles');
   });

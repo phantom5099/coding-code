@@ -19,7 +19,7 @@ import { RulesService } from './rules/index.js';
 import { MemoryService } from './memory/index.js';
 import { ContextService } from './context/service.js';
 import { SchedulerService } from './scheduler/service.js';
-import { afterPlanSubmittedObserver, planModeGateHook } from './plan/index.js';
+import { planModeGateHook } from './plan/index.js';
 
 export const WorkspaceLayer = WorkspaceService.Default;
 export const TodoLayer = TodoService.Default;
@@ -51,10 +51,6 @@ export const SystemHookLayer = HookLayer.pipe(
       const hooks = Context.get(context, HookService);
       yield* hooks.registerDecision('tool.approval.pre', planModeGateHook, {
         priority: -1000,
-        source: 'system',
-      });
-      // plan mode: after submit_plan: switch to build profile
-      yield* hooks.register('tool.execute.after', afterPlanSubmittedObserver, {
         source: 'system',
       });
     })

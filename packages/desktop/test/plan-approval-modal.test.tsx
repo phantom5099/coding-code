@@ -6,20 +6,16 @@ import { act, render, cleanup, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import PlanApprovalModal from '../src/shared/PlanApprovalModal';
 
-vi.mock('../src/hooks/useCopyToClipboard', () => ({
-  useCopyToClipboard: () => ({ copiedId: null, copy: vi.fn() }),
-}));
-
 const PLAN = '# 计划\n\n- 步骤 1\n- 步骤 2';
 
 describe('PlanApprovalModal', () => {
   let onImplement: ReturnType<typeof vi.fn>;
-  let onModify: ReturnType<typeof vi.fn>;
+  let onSubmitOpinion: ReturnType<typeof vi.fn>;
   let onCancel: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     onImplement = vi.fn();
-    onModify = vi.fn();
+    onSubmitOpinion = vi.fn();
     onCancel = vi.fn();
   });
 
@@ -27,18 +23,15 @@ describe('PlanApprovalModal', () => {
     cleanup();
   });
 
-  it('renders the plan content as Markdown in preview view', () => {
-    const { getByText, container } = render(
+  it('renders the plan content as Markdown', () => {
+    const { getByText } = render(
       <PlanApprovalModal
         planContent={PLAN}
-        onImplement={() => onImplement()}
-        onModify={onModify}
+        onImplement={onImplement}
+        onSubmitOpinion={onSubmitOpinion}
         onCancel={onCancel}
       />
     );
-    // The header should mention the plan length
-    expect(container.textContent).toMatch(/计划审批/);
-    // The plan heading should be rendered via MarkdownRenderer
     expect(getByText('计划')).toBeInTheDocument();
     expect(getByText('步骤 1')).toBeInTheDocument();
   });
@@ -48,26 +41,39 @@ describe('PlanApprovalModal', () => {
       <PlanApprovalModal
         planContent={PLAN}
         planPath="/tmp/.codingcode/plans/abc.md"
-        onImplement={() => onImplement()}
-        onModify={onModify}
+        onImplement={onImplement}
+        onSubmitOpinion={onSubmitOpinion}
         onCancel={onCancel}
       />
     );
     expect(getByText(/计划文件/)).toBeInTheDocument();
   });
 
-  it('triggers onImplement when the implement button is clicked', () => {
+  it('shows loading placeholder when content is empty and loading=true', () => {
+    const { getByText } = render(
+      <PlanApprovalModal
+        planContent=""
+        loading
+        onImplement={onImplement}
+        onSubmitOpinion={onSubmitOpinion}
+        onCancel={onCancel}
+      />
+    );
+    expect(getByText(/加载中/)).toBeInTheDocument();
+  });
+
+  it('triggers onImplement when the execute button is clicked', () => {
     const { getByTestId } = render(
       <PlanApprovalModal
         planContent={PLAN}
-        onImplement={() => onImplement()}
-        onModify={onModify}
+        onImplement={onImplement}
+        onSubmitOpinion={onSubmitOpinion}
         onCancel={onCancel}
       />
     );
     fireEvent.click(getByTestId('plan-implement'));
     expect(onImplement).toHaveBeenCalledTimes(1);
-    expect(onModify).not.toHaveBeenCalled();
+    expect(onSubmitOpinion).not.toHaveBeenCalled();
     expect(onCancel).not.toHaveBeenCalled();
   });
 
@@ -75,8 +81,8 @@ describe('PlanApprovalModal', () => {
     const { getByTestId } = render(
       <PlanApprovalModal
         planContent={PLAN}
-        onImplement={() => onImplement()}
-        onModify={onModify}
+        onImplement={onImplement}
+        onSubmitOpinion={onSubmitOpinion}
         onCancel={onCancel}
       />
     );
@@ -84,74 +90,51 @@ describe('PlanApprovalModal', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('triggers onModify with the new draft content', () => {
-    const { getByTestId, getByRole } = render(
+  it('disables submit-opinion when opinion is empty', () => {
+    const { getByTestId } = render(
       <PlanApprovalModal
         planContent={PLAN}
-        onImplement={() => onImplement()}
-        onModify={(c) => onModify(c)}
+        onImplement={onImplement}
+        onSubmitOpinion={onSubmitOpinion}
         onCancel={onCancel}
       />
     );
-    // Switch to edit view via the "提出修改" tab button
-    fireEvent.click(getByTestId('plan-modify-tab'));
-    // Now find the modify-submit button
-    const submit = getByTestId('plan-modify-submit');
-    // Replace the draft
+    const submit = getByTestId('plan-submit-opinion') as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+  });
+
+  it('triggers onSubmitOpinion with the opinion text when submitted', () => {
+    const { getByTestId, getByRole } = render(
+      <PlanApprovalModal
+        planContent={PLAN}
+        onImplement={onImplement}
+        onSubmitOpinion={(c) => onSubmitOpinion(c)}
+        onCancel={onCancel}
+      />
+    );
     const textarea = getByRole('textbox') as HTMLTextAreaElement;
     act(() => {
-      fireEvent.change(textarea, { target: { value: '# 修改后的计划' } });
+      fireEvent.change(textarea, { target: { value: '请加上错误处理' } });
     });
-    fireEvent.click(submit);
-    expect(onModify).toHaveBeenCalledWith('# 修改后的计划');
+    fireEvent.click(getByTestId('plan-submit-opinion'));
+    expect(onSubmitOpinion).toHaveBeenCalledWith('请加上错误处理');
     expect(onImplement).not.toHaveBeenCalled();
   });
 
-  it('treats unchanged draft as implement (no-op modify)', () => {
+  it('disables all action buttons while submitting', () => {
     const { getByTestId, getByRole } = render(
       <PlanApprovalModal
         planContent={PLAN}
-        onImplement={() => onImplement()}
-        onModify={(c) => onModify(c)}
+        onImplement={onImplement}
+        onSubmitOpinion={onSubmitOpinion}
         onCancel={onCancel}
       />
     );
-    fireEvent.click(getByTestId('plan-modify-tab'));
-    // Do NOT change the draft
-    const submit = getByTestId('plan-modify-submit');
-    expect((getByRole('textbox') as HTMLTextAreaElement).value).toBe(PLAN);
-    fireEvent.click(submit);
-    expect(onImplement).toHaveBeenCalledTimes(1);
-    expect(onModify).not.toHaveBeenCalled();
-  });
-
-  it('triggers onCancel when pressing Escape', () => {
-    const { container } = render(
-      <PlanApprovalModal
-        planContent={PLAN}
-        onImplement={() => onImplement()}
-        onModify={onModify}
-        onCancel={onCancel}
-      />
-    );
-    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
     act(() => {
-      window.dispatchEvent(event);
+      fireEvent.change(getByRole('textbox'), { target: { value: 'feedback' } });
     });
-    expect(onCancel).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows line/char count derived from plan content', () => {
-    const { container } = render(
-      <PlanApprovalModal
-        planContent={'line1\nline2\nline3'}
-        onImplement={() => onImplement()}
-        onModify={onModify}
-        onCancel={onCancel}
-      />
-    );
-    // 3 lines (split by \n), 17 chars (5+1+5+1+5)
-    expect(container.textContent).toMatch(/3 行/);
-    expect(container.textContent).toMatch(/17 字符/);
+    fireEvent.click(getByTestId('plan-submit-opinion'));
+    expect((getByTestId('plan-cancel') as HTMLButtonElement).disabled).toBe(true);
+    expect((getByTestId('plan-implement') as HTMLButtonElement).disabled).toBe(true);
   });
 });

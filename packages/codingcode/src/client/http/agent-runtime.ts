@@ -69,8 +69,6 @@ export function createHttpAgentClient(
               type: 'plan_ready',
               sessionId: data.sessionId as string,
               title: data.title as string,
-              path: data.path as string,
-              content: data.content as string,
             };
             break;
           case 'tool_start':

@@ -269,10 +269,11 @@ export function agentLoop(
     const effectiveMaxStopContinuations = opts.maxStopContinuations ?? maxStopContinuations;
 
     let messages: Message[] = [];
+    let submittedPlanTitle: string | null = null;
 
     for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
       const payload = yield* Effect.sync(() =>
-        context.assemblePayload(state.sessionId, state.projectPath, llm.modelInfo.maxTokens)
+        context.assemblePayload(state.transcriptPath, llm.modelInfo.maxTokens)
       );
       messages = payload.messages;
 
@@ -313,8 +314,7 @@ export function agentLoop(
         const compressResult = yield* Effect.tryPromise({
           try: () =>
             context.compactIfNeeded(
-              state.sessionId,
-              state.projectPath,
+              state.transcriptPath,
               messages,
               llm.modelInfo.maxTokens,
               llm
@@ -364,8 +364,7 @@ export function agentLoop(
             const compressResult = yield* Effect.tryPromise({
               try: () =>
                 context.compactWithLLM(
-                  state.sessionId,
-                  state.projectPath,
+                  state.transcriptPath,
                   llm.modelInfo.maxTokens,
                   llm,
                   undefined
@@ -448,6 +447,15 @@ export function agentLoop(
             continue;
           }
 
+          if (submittedPlanTitle !== null) {
+            yield* hooks.emit('plan.ready', {
+              sessionId,
+              projectPath,
+              title: submittedPlanTitle,
+            });
+            submittedPlanTitle = null;
+          }
+
           yield* q.offer({ _tag: 'Done', content: resp.content });
           lastResult = Result.ok(resp.content);
           yield* hooks.emit('agent.turn.end', {
@@ -507,29 +515,12 @@ export function agentLoop(
           }
         }
 
-        const submittedPlan = allResults.some(
-          (r) =>
-            r.type === 'ok' &&
-            r.name === 'submit_plan' &&
-            typeof r.output === 'string' &&
-            r.output.startsWith('Plan written to ')
+        const submitPlanCall = toolCalls?.find((tc) => tc.name === 'submit_plan');
+        const submitPlanResult = allResults.find(
+          (r) => r.name === 'submit_plan' && r.type === 'ok'
         );
-        if (submittedPlan) {
-          yield* q.offer({
-            _tag: 'Done',
-            content:
-              'Plan submitted and saved. Session switched to build mode — send a new message to execute.',
-          });
-          yield* hooks.emit('agent.turn.end', {
-            sessionId,
-            turnId: state.currentTurnId,
-            status: 'done',
-          });
-          yield* checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
-          memory
-            .flushSessionToMemory(state.sessionId, llm, state.cwd)
-            .catch((e) => logger.error('memory flush failed:', e));
-          return Result.ok('Plan submitted');
+        if (submitPlanCall && submitPlanResult && submittedPlanTitle === null) {
+          submittedPlanTitle = String(submitPlanCall.arguments?.title ?? '');
         }
       }
 

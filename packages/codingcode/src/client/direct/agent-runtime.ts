@@ -4,6 +4,7 @@ import { ApprovalWaitService } from '../../approval/async-confirm.js';
 import { parseApprovalResponse } from '../../approval/response.js';
 import { ContextService } from '../../context/service.js';
 import { HookService } from '../../hooks/registry.js';
+import { SessionService } from '../../session/store.js';
 import type { StreamChunk } from '../types.js';
 import { agentEventToStreamChunk } from '../direct.js';
 import type { AppRuntime } from '../../layer.js';
@@ -64,16 +65,12 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
           const p = payload as {
             sessionId?: string;
             title?: string;
-            path?: string;
-            content?: string;
           };
           if (p.sessionId !== resolvedSessionId) return;
           notifyPlan?.({
             type: 'plan_ready',
             sessionId: p.sessionId ?? '',
             title: p.title ?? '',
-            path: p.path ?? '',
-            content: p.content ?? '',
           });
         })
       );
@@ -147,9 +144,11 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
     async compact({ sessionId, cwd }) {
       await rt.runPromise(
         Effect.gen(function* () {
+          const session = yield* SessionService;
           const context = yield* ContextService;
+          const state = yield* session.load(cwd, sessionId);
           return yield* Effect.promise(() =>
-            context.compactWithLLM(sessionId, cwd, llm.modelInfo.maxTokens, null)
+            context.compactWithLLM(state.transcriptPath, llm.modelInfo.maxTokens, null)
           );
         })
       );

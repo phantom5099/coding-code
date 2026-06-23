@@ -104,7 +104,7 @@ describe('assemblePayload integration', () => {
 
   it('returns messages and compactedEvents', async () => {
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(sessionId, projectSlug, 128000);
+    const result = ctx.assemblePayload(jsonlPath, 128000);
 
     expect(result.messages.length).toBeGreaterThan(0);
     expect(Array.isArray(result.compactedEvents)).toBe(true);
@@ -114,7 +114,7 @@ describe('assemblePayload integration', () => {
 
   it('returns currentTurnId from session index', async () => {
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(sessionId, projectSlug, 128000);
+    const result = ctx.assemblePayload(jsonlPath, 128000);
     expect(result.currentTurnId).toBe(1);
   });
 });
