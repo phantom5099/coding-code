@@ -61,7 +61,6 @@ export function createHttpAgentClient(
               id: data.id as string,
               tool: data.tool as string,
               args: data.args as Record<string, unknown>,
-              payload: data.payload as Record<string, unknown> | undefined,
             };
             break;
           case 'plan_ready':

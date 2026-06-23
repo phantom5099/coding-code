@@ -41,9 +41,6 @@ function streamChunkToItem(
         name: event.tool,
         args: event.args,
         status: 'pending',
-        // mirror production: payload is forwarded to the tool_call item so the
-        // PlanApprovalModal can render the plan without a second round-trip
-        payload: event.payload,
       };
     case 'tool_result':
       return {
@@ -149,31 +146,6 @@ describe('streamChunkToItem after StreamChunk refactor', () => {
       name: 'write_file',
       args: { path: 'x' },
       status: 'pending',
-      payload: undefined,
-    });
-  });
-
-  it('forwards payload on approval_request (e.g. plan_content for submit_plan)', () => {
-    const planPayload = { plan_content: '# Plan', session_id: 's1' };
-    const item = streamChunkToItem(
-      {
-        type: 'approval_request',
-        id: 'apr-plan',
-        tool: 'submit_plan',
-        args: { plan_content: '# Plan' },
-        payload: planPayload,
-      },
-      't1',
-      'a1',
-      'turn1'
-    );
-    expect(item).toEqual({
-      id: 'apr-plan',
-      type: 'tool_call',
-      name: 'submit_plan',
-      args: { plan_content: '# Plan' },
-      status: 'pending',
-      payload: planPayload,
     });
   });
 

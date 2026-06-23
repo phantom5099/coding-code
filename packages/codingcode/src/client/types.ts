@@ -22,7 +22,6 @@ export type StreamChunk =
       id: string;
       tool: string;
       args: Record<string, unknown>;
-      payload?: Record<string, unknown>;
     }
   | { type: 'plan_ready'; sessionId: string; title: string }
   | { type: 'tool_start'; id: string; name: string; args: Record<string, unknown> }

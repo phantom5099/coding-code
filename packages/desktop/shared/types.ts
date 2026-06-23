@@ -9,12 +9,6 @@ export type Item =
       name: string;
       args: object;
       status: 'pending' | 'approved' | 'rejected' | 'running';
-      /**
-       * Optional payload forwarded by the agent (e.g. plan content for submit_plan).
-       * The Plan Approval modal uses this to render the plan preview without
-       * needing a separate file fetch.
-       */
-      payload?: Record<string, unknown>;
     }
   | {
       id: string;

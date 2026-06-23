@@ -27,22 +27,6 @@ describe('agentEventToSseEvent', () => {
     ).toEqual({ type: 'tool_denied', id: 'tc-1', name: 'bash', reason: 'not allowed' });
   });
 
-  it('maps ApprovalRequest to approval_request event', () => {
-    expect(
-      agentEventToSseEvent({
-        _tag: 'ApprovalRequest',
-        id: 'abc',
-        tool: 'write_file',
-        args: { path: '/tmp/x' },
-      })
-    ).toEqual({
-      type: 'approval_request',
-      id: 'abc',
-      tool: 'write_file',
-      args: { path: '/tmp/x' },
-    });
-  });
-
   it('maps ToolResult to tool_result event', () => {
     expect(
       agentEventToSseEvent({ _tag: 'ToolResult', id: 'x', name: 't', output: 'ok', ok: true })

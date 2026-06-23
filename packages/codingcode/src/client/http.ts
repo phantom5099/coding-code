@@ -54,7 +54,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
               id: data.id as string,
               tool: data.tool as string,
               args: data.args as Record<string, unknown>,
-              payload: data.payload as Record<string, unknown> | undefined,
             };
             break;
           case 'tool_start':

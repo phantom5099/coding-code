@@ -230,10 +230,6 @@ export function useAgentCore() {
             name: event.tool,
             args: event.args,
             status: 'pending',
-            // Forward the server-side payload (e.g. plan_content for submit_plan)
-            // so the UI can render a specialized approval modal without a second
-            // round-trip to fetch the plan file.
-            payload: event.payload,
           };
         case 'plan_ready':
           // The server's plan.ready SSE event drives the plan-approval

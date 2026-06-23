@@ -54,13 +54,8 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
       Effect.runSync(
         waitService.registerEmitter(
           resolvedSessionId,
-          (
-            id: string,
-            tool: string,
-            args: Record<string, unknown>,
-            payload?: Record<string, unknown>
-          ) => {
-            notifyApproval?.({ type: 'approval_request', id, tool, args, payload });
+          (id: string, tool: string, args: Record<string, unknown>) => {
+            notifyApproval?.({ type: 'approval_request', id, tool, args });
           }
         )
       );

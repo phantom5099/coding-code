@@ -33,19 +33,12 @@ export function createSseHandler(rt: ManagedRt) {
           Effect.runSync(
             waitService.registerEmitter(
               sessionId,
-              (id: string, tool: string, args: Record<string, unknown>, payload?: Record<string, unknown>) => {
-                enqueue({ type: 'approval_request', id, tool, args, payload });
+              (id: string, tool: string, args: Record<string, unknown>) => {
+                enqueue({ type: 'approval_request', id, tool, args });
               }
             )
           );
 
-          // plan.ready hook → SSE plan_ready event. The observer fires from
-          // the agent's fiber (where afterPlanSubmittedObserver runs), but
-          // the enqueue sink lives here. We register a per-session handler
-          // that closes over enqueue; the agent emits the hook with
-          // sessionId in the payload, but HookService.emit fans out to
-          // every registered handler regardless of session, so the
-          // unregister at the end cleans up the subscription.
           const unregisterPlanReady = Effect.runSync(
             hookService.register('plan.ready', (payload) => {
               const p = payload as {

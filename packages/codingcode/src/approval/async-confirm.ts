@@ -11,12 +11,7 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
     const pendingConfirmations = new Map<string, PendingEntry>();
     const approvalEmitters = new Map<
       string,
-      (
-        id: string,
-        tool: string,
-        args: Record<string, unknown>,
-        payload?: Record<string, unknown>
-      ) => void
+      (id: string, tool: string, args: Record<string, unknown>) => void
     >();
 
     return {
@@ -54,21 +49,15 @@ export class ApprovalWaitService extends Effect.Service<ApprovalWaitService>()('
         sessionId: string,
         id: string,
         tool: string,
-        args: Record<string, unknown>,
-        payload?: Record<string, unknown>
+        args: Record<string, unknown>
       ): Effect.Effect<void> =>
         Effect.sync(() => {
-          approvalEmitters.get(sessionId)?.(id, tool, args, payload);
+          approvalEmitters.get(sessionId)?.(id, tool, args);
         }),
 
       registerEmitter: (
         sessionId: string,
-        fn: (
-          id: string,
-          tool: string,
-          args: Record<string, unknown>,
-          payload?: Record<string, unknown>
-        ) => void
+        fn: (id: string, tool: string, args: Record<string, unknown>) => void
       ): Effect.Effect<void> =>
         Effect.sync(() => {
           approvalEmitters.set(sessionId, fn);
