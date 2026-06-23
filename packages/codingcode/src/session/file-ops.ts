@@ -158,7 +158,7 @@ export function readCurrentIndex(indexPath: string): Partial<SessionIndex> | nul
   }
 }
 
-export function setPermissionMode(sessionId: string, indexPath: string, mode: string): void {
+export function setPermissionMode(sessionId: string, indexPath: string, mode: import('../approval/types.js').PermissionMode): void {
   let index: SessionIndex | null = null;
   if (existsSync(indexPath)) {
     try {
