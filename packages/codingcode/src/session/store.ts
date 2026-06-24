@@ -31,7 +31,7 @@ import {
   truncateTitle,
   findFirstUserContent,
 } from './file-ops.js';
-import { computePaths, sessionJsonlPathFromCwd } from '../core/paths.js';
+import { computePaths, sessionJsonlPathFromCwd } from '../core/path.js';
 import { modeToProfile } from '../runtime/project-runtime.js';
 
 function assertResumeWorkspace(cwd: string, sessionId: string): void {

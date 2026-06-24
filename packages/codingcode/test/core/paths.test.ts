@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
-import { computePaths, projectSessionsDir, sessionJsonlPathFromCwd } from '../../src/core/paths.js';
+import { computePaths, projectSessionsDir, sessionJsonlPathFromCwd } from '../../src/core/path.js';
 
-describe('core/paths.ts is the single source of truth for path computation', () => {
+describe('core/path.ts contains path computation functions', () => {
   it('does not import from session/types — no core→session dependency', () => {
     const src = readFileSync(
-      'C:/Users/10116/Desktop/agent/coding code/packages/codingcode/src/core/paths.ts',
+      'C:/Users/10116/Desktop/agent/coding code/packages/codingcode/src/core/path.ts',
       'utf8'
     );
     expect(src).not.toMatch(/from\s+['"]\.\.\/session\//);
@@ -26,6 +26,6 @@ describe('session/file-ops.ts re-exports paths from core', () => {
     );
     expect(src).not.toMatch(/export function computePaths\s*\(/);
     expect(src).not.toMatch(/export function projectSessionsDir\s*\(/);
-    expect(src).toMatch(/from\s+['"]\.\.\/core\/paths\.js['"]/);
+    expect(src).toMatch(/from\s+['"]\.\.\/core\/path\.js['"]/);
   });
 });

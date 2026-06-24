@@ -16,7 +16,6 @@
     "./session/types": "./src/session/types.ts",
     "./session/messages": "./src/session/messages.ts",
     "./core/path": "./src/core/path.ts",
-    "./core/paths": "./src/core/paths.ts",
     "./core/workspace": "./src/core/workspace.ts",
     "./core/error": "./src/core/error.ts",
     "./core/result": "./src/core/result.ts",

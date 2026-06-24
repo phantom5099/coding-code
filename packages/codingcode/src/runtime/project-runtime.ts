@@ -16,7 +16,7 @@ import { normalizePath } from '../core/path.js';
 import type { PermissionMode } from '../approval/types.js';
 import type { SessionMode } from '../session/types.js';
 import { readCurrentIndex } from '../session/file-ops.js';
-import { computePaths } from '../core/paths.js';
+import { computePaths } from '../core/path.js';
 
 function buildGlobalProfiles(): AgentProfile[] {
   const profiles: AgentProfile[] = [BUILD_PROFILE, EXPLORE_PROFILE, PLAN_PROFILE];

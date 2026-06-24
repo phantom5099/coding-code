@@ -14,7 +14,7 @@ import {
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import { getProjectBaseDir } from '../core/path.js';
-import { computePaths, projectSessionsDir, sessionJsonlPathFromCwd } from '../core/paths.js';
+import { computePaths, projectSessionsDir, sessionJsonlPathFromCwd } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, SessionIndex, SessionStoreState } from './types.js';
 
 export { computePaths, projectSessionsDir, sessionJsonlPathFromCwd };

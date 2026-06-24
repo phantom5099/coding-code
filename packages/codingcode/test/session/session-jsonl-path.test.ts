@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 
 import { deleteSession } from '../../src/session/file-ops.js';
-import { sessionJsonlPathFromCwd } from '../../src/core/paths.js';
+import { sessionJsonlPathFromCwd } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();

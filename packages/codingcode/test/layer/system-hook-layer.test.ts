@@ -5,7 +5,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { HookService } from '../../src/hooks/registry.js';
 import { SystemHookLayer } from '../../src/layer.js';
-import { computePaths } from '../../src/core/paths.js';
+import { computePaths } from '../../src/core/path.js';
 
 describe('SystemHookLayer', () => {
   it('builds without "Service not found: HookService" (regression: was a self-referential Layer.effect)', async () => {

@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import type { DecisionHandler } from '../hooks/types.js';
-import { computePaths } from '../core/paths.js';
+import { computePaths } from '../core/path.js';
 
 // ---- Profile name constants + structural helper ----
 

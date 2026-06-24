@@ -5,7 +5,7 @@ import { WorkspaceService } from '../../core/workspace.js';
 import { toSseEvents } from '../adapter.js';
 import { ApprovalService } from '../../approval/index.js';
 import { getPermissionMode } from '../../session/file-ops.js';
-import { computePaths } from '../../core/paths.js';
+import { computePaths } from '../../core/path.js';
 import { existsSync } from 'fs';
 import type { PermissionMode } from '../../approval/types.js';
 import { LLMFactoryService } from '../../llm/factory.js';

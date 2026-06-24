@@ -17,7 +17,7 @@ import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import { SubagentRunnerService } from '../../../subagent/runner-service.js';
 import { checkSubagentAllowedInPlanMode } from '../../../plan/index.js';
 import { readCurrentIndex } from '../../../session/file-ops.js';
-import { computePaths } from '../../../core/paths.js';
+import { computePaths } from '../../../core/path.js';
 import type { SessionMode } from '../../../session/types.js';
 import type { PermissionMode } from '../../../approval/types.js';
 

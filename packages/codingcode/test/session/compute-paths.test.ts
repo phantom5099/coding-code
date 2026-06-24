@@ -8,7 +8,7 @@ import {
   computePaths,
   sessionJsonlPathFromCwd,
   projectSessionsDir,
-} from '../../src/core/paths.js';
+} from '../../src/core/path.js';
 import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 

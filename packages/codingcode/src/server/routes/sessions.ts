@@ -8,7 +8,7 @@ import {
   getPermissionMode,
   deleteSession,
 } from '../../session/file-ops.js';
-import { computePaths } from '../../core/paths.js';
+import { computePaths } from '../../core/path.js';
 import { readUIHistory, findUserMessageForTurn } from '../../session/ui-history.js';
 import { ContextService, estimatePromptTokens } from '../../context/service.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';

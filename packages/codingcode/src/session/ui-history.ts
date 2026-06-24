@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
 import { readHistory } from './file-ops.js';
-import { sessionJsonlPathFromCwd } from '../core/paths.js';
+import { sessionJsonlPathFromCwd } from '../core/path.js';
 import type { SessionEvent, SummaryEvent, CompactEvent } from './types.js';
 
 export function filterForUI(events: SessionEvent[]): SessionEvent[] {
