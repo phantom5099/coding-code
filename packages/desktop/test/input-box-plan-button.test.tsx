@@ -15,9 +15,7 @@ describe('Desktop: InputBox "查看计划" button', () => {
 
   it('derives planExists from the agent store', () => {
     expect(agentWorkspaceSource).toMatch(/planExists/);
-    expect(agentWorkspaceSource).toMatch(
-      /pendingPlanByThreadId\[s\.currentThreadId\]\s*!=\s*null/
-    );
+    expect(agentWorkspaceSource).toMatch(/pendingPlanByThreadId\[s\.currentThreadId\]\s*!=\s*null/);
   });
 
   it('does not call useAgentMode in AgentWorkspace', () => {

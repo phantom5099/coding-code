@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { createDirectSettingsClient } from '../../../src/client/direct/settings.js';
+import { createDirectSettingsClient } from '../../../src/direct/settings.js';
 import { SkillService } from '../../../src/skills/service.js';
 import { MemoryService } from '../../../src/memory/index.js';
 import { McpService } from '../../../src/mcp/index.js';

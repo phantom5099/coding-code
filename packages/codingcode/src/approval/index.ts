@@ -13,7 +13,6 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
     const ruleEngine: RuleEngine = createRuleEngine(DEFAULT_DENY_RULES);
     const destructiveTools = new Set(DANGEROUS_TOOL_NAMES);
     const readonlyTools = new Set(READONLY_TOOL_NAMES);
-    let _globalPermissionMode: PermissionMode = 'default';
 
     function makeForkedService(
       engine: RuleEngine,
@@ -64,6 +63,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
         fork: (opts?: {
           extraDenyRules?: PermissionRule[];
           readonly?: boolean;
+          permissionMode?: PermissionMode;
         }): Effect.Effect<ApprovalService> =>
           Effect.sync(() => {
             const nextEngine = createRuleEngine(engine.getAllRules());
@@ -84,7 +84,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
             }
             return makeForkedService(
               nextEngine,
-              currentPermMode,
+              opts?.permissionMode ?? currentPermMode,
               new Set(roTools),
               new Set(destTools)
             );
@@ -112,7 +112,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
             ruleEngine,
             readonlyTools,
             destructiveTools,
-            permissionMode: _globalPermissionMode,
+            permissionMode: 'default',
             onAlways: (rule) => ruleEngine.addRule(rule),
             onNever: (rule) => ruleEngine.addRule(rule),
             sessionId: request.sessionId,
@@ -129,16 +129,17 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
 
       removeRule: (id: string): Effect.Effect<void> => Effect.sync(() => ruleEngine.removeRule(id)),
 
-      setPermissionMode: (mode: PermissionMode): Effect.Effect<void> =>
+      setPermissionMode: (_mode: PermissionMode): Effect.Effect<void> =>
         Effect.sync(() => {
-          _globalPermissionMode = mode;
+          /* no-op at root; only fork children maintain their own currentPermMode */
         }),
 
-      getPermissionMode: (): PermissionMode => _globalPermissionMode,
+      getPermissionMode: (): PermissionMode => 'default',
 
       fork: (opts?: {
         extraDenyRules?: PermissionRule[];
         readonly?: boolean;
+        permissionMode?: PermissionMode;
       }): Effect.Effect<ApprovalService> =>
         Effect.sync(() => {
           const parentRules = ruleEngine.getAllRules();
@@ -161,7 +162,7 @@ export class ApprovalService extends Effect.Service<ApprovalService>()('Approval
           }
           return makeForkedService(
             childEngine,
-            _globalPermissionMode,
+            opts?.permissionMode ?? 'default',
             new Set(readonlyTools),
             new Set(destructiveTools)
           );

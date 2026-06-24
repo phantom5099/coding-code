@@ -37,9 +37,7 @@ export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const mode = useAgentStore((s) =>
-    sessionId ? (s.modeByThreadId[sessionId] ?? null) : null
-  );
+  const mode = useAgentStore((s) => (sessionId ? (s.modeByThreadId[sessionId] ?? null) : null));
   const pendingProfile = useAgentStore((s) => s.pendingProfile);
   const setPendingProfile = useAgentStore((s) => s.setPendingProfile);
   const setModeForThread = useAgentStore((s) => s.setModeForThread);
@@ -85,8 +83,7 @@ export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
     };
   }, [sessionId, cwd, fetchMode, pendingProfile, setModeForThread, setOptimisticModeForThread]);
 
-  const current: SessionMode =
-    sessionId === null ? pendingProfile : (mode?.mode ?? 'build');
+  const current: SessionMode = sessionId === null ? pendingProfile : (mode?.mode ?? 'build');
   const target: SessionMode = current === 'plan' ? 'build' : 'plan';
 
   const handleToggle = async () => {

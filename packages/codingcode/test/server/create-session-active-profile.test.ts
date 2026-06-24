@@ -140,7 +140,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     expect(idx.permissionMode).toBe('bypass');
   });
 
-  it('rejects plan mode with non-default permissionMode', async () => {
+  it('allows plan mode with any permissionMode (plan no longer overrides perm)', async () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -151,7 +151,19 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
         model: 'gpt-4',
       }),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    const { sessionId } = await res.json();
+    const indexPath = await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        const state = yield* session.load(cwd, sessionId);
+        return state.indexPath;
+      })
+    );
+    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
+    expect(idx.mode).toBe('plan');
+    expect(idx.permissionMode).toBe('bypass');
+    expect(idx.activeProfile).toBe('plan');
   });
 
   it('rejects missing model', async () => {
@@ -172,7 +184,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     expect(res.status).toBe(400);
   });
 
-  it('new session with plan: state.mode is set, getSessionPermissionMode returns default', async () => {
+  it('new session with plan: state.mode, activeProfile, permissionMode are all on disk', async () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -188,14 +200,11 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
 
     await rt.runPromise(
       Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
         expect(state.mode).toBe('plan');
-        const profile = runtime.getSessionProfile(sessionId);
-        expect(profile?.name).toBe('plan');
-        // plan-mode forces in-memory permissionMode to 'default'
-        expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
+        expect(state.permissionMode).toBe('default');
+        expect(state.activeProfile).toBe('plan');
       })
     );
   });

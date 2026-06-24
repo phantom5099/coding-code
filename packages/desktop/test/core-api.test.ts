@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockSettings, mockApi, mockAgent } = vi.hoisted(() => {
+const { mockSettings, mockApi, mockAgent, mockSessions } = vi.hoisted(() => {
   const mockSettings = {
     getSubagentEnabled: vi.fn(),
     setSubagentEnabled: vi.fn(),
@@ -12,12 +12,22 @@ const { mockSettings, mockApi, mockAgent } = vi.hoisted(() => {
     setHookDisabled: vi.fn(),
     resetHookDisabled: vi.fn(),
     toggleSkill: vi.fn(),
+    getMemoryConfig: vi.fn(),
+    setMemoryModel: vi.fn(),
+    getAgentConfig: vi.fn(),
+    setCompactionModel: vi.fn(),
   };
   const mockApi = vi.fn();
   const mockAgent = {
     sendApprovalResponse: vi.fn(),
   };
-  return { mockSettings, mockApi, mockAgent };
+  const mockSessions = {
+    listSessions: vi.fn(),
+    getSessionMode: vi.fn(),
+    setSessionMode: vi.fn(),
+    getSessionPlan: vi.fn(),
+  };
+  return { mockSettings, mockApi, mockAgent, mockSessions };
 });
 
 vi.mock('../src/lib/api', () => ({
@@ -29,7 +39,7 @@ vi.mock('@codingcode/core/client/http-clients', () => ({
   createHttpClients: () => ({
     settings: mockSettings,
     models: { listModels: vi.fn(), switchModel: vi.fn() },
-    sessions: { listSessions: vi.fn() },
+    sessions: mockSessions,
     agent: mockAgent,
   }),
 }));
@@ -244,30 +254,28 @@ describe('toggleSkill', () => {
 // ---- New config API functions ----
 
 describe('getMemoryConfig', () => {
-  it('calls api with correct path', async () => {
-    mockApi.mockResolvedValue({ enabled: false, types: [], model: '' });
-    await getMemoryConfig();
-    expect(mockApi).toHaveBeenCalledWith('/api/settings/memory/config');
+  it('calls clients.settings.getMemoryConfig', async () => {
+    mockSettings.getMemoryConfig.mockResolvedValue({ enabled: false, types: [], model: '' });
+    const result = await getMemoryConfig();
+    expect(mockSettings.getMemoryConfig).toHaveBeenCalled();
+    expect(result).toEqual({ enabled: false, types: [], model: '' });
   });
 });
 
 describe('setMemoryModel', () => {
-  it('calls api with correct POST body', async () => {
-    mockApi.mockResolvedValue({ model: 'gpt-4o' });
+  it('calls clients.settings.setMemoryModel', async () => {
+    mockSettings.setMemoryModel.mockResolvedValue({ model: 'gpt-4o' });
     await setMemoryModel('gpt-4o');
-    expect(mockApi).toHaveBeenCalledWith('/api/settings/memory/model', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'gpt-4o' }),
-    });
+    expect(mockSettings.setMemoryModel).toHaveBeenCalledWith('gpt-4o');
   });
 });
 
 describe('getAgentConfig', () => {
-  it('calls api with correct path', async () => {
-    mockApi.mockResolvedValue({ maxSteps: 200, maxStopContinuations: 2 });
-    await getAgentConfig();
-    expect(mockApi).toHaveBeenCalledWith('/api/settings/agent/config');
+  it('calls clients.settings.getAgentConfig', async () => {
+    mockSettings.getAgentConfig.mockResolvedValue({ maxSteps: 200, maxStopContinuations: 2 });
+    const result = await getAgentConfig();
+    expect(mockSettings.getAgentConfig).toHaveBeenCalled();
+    expect(result.maxSteps).toBe(200);
   });
 });
 
@@ -284,54 +292,58 @@ describe('setAgentConfig', () => {
 });
 
 describe('setCompactionModel', () => {
-  it('calls api with compactionModel', async () => {
-    mockApi.mockResolvedValue({ compactionModel: 'gpt-4o-mini' });
+  it('calls clients.settings.setCompactionModel', async () => {
+    mockSettings.setCompactionModel.mockResolvedValue({ compactionModel: 'gpt-4o-mini' });
     await setCompactionModel('gpt-4o-mini');
-    expect(mockApi).toHaveBeenCalledWith('/api/settings/context/compaction-model', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ compactionModel: 'gpt-4o-mini' }),
-    });
+    expect(mockSettings.setCompactionModel).toHaveBeenCalledWith('gpt-4o-mini');
   });
 });
 
 // ---- Plan file API ----
 
 describe('getSessionPlan', () => {
-  it('encodes cwd and hits the plan endpoint', async () => {
-    mockApi.mockResolvedValue({ content: '', path: '/x', directory: '/x', exists: false });
+  it('calls clients.sessions.getSessionPlan with sessionId and cwd', async () => {
+    mockSessions.getSessionPlan.mockResolvedValue({
+      content: '',
+      path: '/x',
+      directory: '/x',
+      exists: false,
+    });
     await getSessionPlan('s-1', '/some path with space');
-    expect(mockApi).toHaveBeenCalledWith(
-      '/api/sessions/s-1/plan?cwd=' + encodeURIComponent('/some path with space')
-    );
+    expect(mockSessions.getSessionPlan).toHaveBeenCalledWith({
+      sessionId: 's-1',
+      cwd: '/some path with space',
+    });
   });
 });
 
 // ---- Mode switching API ----
 
 describe('getSessionMode', () => {
-  it('encodes cwd and hits the mode GET endpoint', async () => {
-    mockApi.mockResolvedValue({
+  it('delegates to clients.sessions.getSessionMode', async () => {
+    mockSessions.getSessionMode.mockResolvedValue({
       mode: 'build',
       permissionMode: 'default',
       cwd: '/tmp',
       available: [],
     });
-    await getSessionMode('s-1', '/tmp');
-    expect(mockApi).toHaveBeenCalledWith(
-      '/api/sessions/s-1/mode?cwd=' + encodeURIComponent('/tmp')
-    );
+    const result = await getSessionMode('s-1', '/tmp');
+    expect(mockSessions.getSessionMode).toHaveBeenCalledWith({
+      sessionId: 's-1',
+      cwd: '/tmp',
+    });
+    expect(result.mode).toBe('build');
   });
 });
 
 describe('setSessionMode', () => {
-  it('POSTs the mode to the mode endpoint', async () => {
-    mockApi.mockResolvedValue({ mode: 'plan', permissionMode: 'default' });
+  it('delegates to clients.sessions.setSessionMode', async () => {
+    mockSessions.setSessionMode.mockResolvedValue({ mode: 'plan', permissionMode: 'default' });
     await setSessionMode('s-1', '/tmp', 'plan');
-    expect(mockApi).toHaveBeenCalledWith('/api/sessions/s-1/mode', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: '/tmp', mode: 'plan' }),
+    expect(mockSessions.setSessionMode).toHaveBeenCalledWith({
+      sessionId: 's-1',
+      cwd: '/tmp',
+      mode: 'plan',
     });
   });
 });

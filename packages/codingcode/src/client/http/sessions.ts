@@ -20,12 +20,27 @@ export interface SessionClient {
   listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
   getSessionHistory(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
   deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
+  getSessionMode(input: { sessionId: string; cwd: string }): Promise<{
+    mode: SessionMode;
+    permissionMode: PermissionMode;
+    cwd: string;
+    available: Array<{ name: string; description: string }>;
+  }>;
+  setSessionMode(input: {
+    sessionId: string;
+    cwd: string;
+    mode: SessionMode;
+  }): Promise<{ mode: SessionMode; permissionMode: PermissionMode }>;
   getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
   setSessionPermissionMode(input: {
     sessionId: string;
     cwd: string;
     mode: PermissionMode;
   }): Promise<void>;
+  getSessionPlan(input: {
+    sessionId: string;
+    cwd: string;
+  }): Promise<{ content: string; path: string; directory: string; exists: boolean }>;
 
   getCheckpointDiff(input: {
     sessionId: string;
@@ -100,6 +115,14 @@ export function createHttpSessionClient(
       await apiDelete(`/api/sessions/${sessionId}?cwd=${encodeURIComponent(cwd)}`);
     },
 
+    async getSessionMode({ sessionId, cwd }) {
+      return apiGet(`/api/sessions/${sessionId}/mode?cwd=${encodeURIComponent(cwd)}`);
+    },
+
+    async setSessionMode({ sessionId, cwd, mode }) {
+      return apiPost(`/api/sessions/${sessionId}/mode`, { cwd, mode });
+    },
+
     async getSessionPermissionMode({ sessionId, cwd }) {
       const data = await apiGet<{ mode: PermissionMode }>(
         `/api/sessions/${sessionId}/permission-mode?cwd=${encodeURIComponent(cwd)}`
@@ -109,6 +132,12 @@ export function createHttpSessionClient(
 
     async setSessionPermissionMode({ sessionId, cwd, mode }) {
       await apiPut(`/api/sessions/${sessionId}/permission-mode`, { cwd, mode });
+    },
+
+    async getSessionPlan({ sessionId, cwd }) {
+      return apiGet(
+        `/api/sessions/${sessionId}/plan?cwd=${encodeURIComponent(cwd)}`
+      );
     },
 
     async getCheckpointDiff({ sessionId, cwd, turnId }) {

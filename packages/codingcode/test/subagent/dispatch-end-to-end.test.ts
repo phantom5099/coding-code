@@ -13,17 +13,14 @@ import { encodeProjectPath, normalizePath, setProjectBaseDir } from '../../src/c
 import type { LLMClient } from '../../src/llm/client.js';
 import { Result } from '../../src/core/result.js';
 
-const TestLLMLayer = Layer.succeed(
-  LLMFactoryService,
-  ({
-    listModels: () => Effect.succeed([]),
-    findModel: () => Effect.succeed(null),
-    getActiveEntry: () => Effect.fail(new Error('no active')),
-    switchModel: () => Effect.fail(new Error('no models')),
-    getLLMClient: () => Effect.succeed(makeMockLLM('subagent final answer')),
-    createClient: () => Effect.succeed(makeMockLLM('subagent final answer')),
-  } as any)
-);
+const TestLLMLayer = Layer.succeed(LLMFactoryService, {
+  listModels: () => Effect.succeed([]),
+  findModel: () => Effect.succeed(null),
+  getActiveEntry: () => Effect.fail(new Error('no active')),
+  switchModel: () => Effect.fail(new Error('no models')),
+  getLLMClient: () => Effect.succeed(makeMockLLM('subagent final answer')),
+  createClient: () => Effect.succeed(makeMockLLM('subagent final answer')),
+} as any);
 
 function makeMockLLM(content: string): LLMClient {
   return {
@@ -90,11 +87,7 @@ describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
     expect(typeof result.output).toBe('string');
     expect(result.output.length).toBeGreaterThan(0);
 
-    const sessionsRoot = join(
-      projectBase,
-      encodeProjectPath(normalizePath(cwd)),
-      'sessions'
-    );
+    const sessionsRoot = join(projectBase, encodeProjectPath(normalizePath(cwd)), 'sessions');
     const subagentDir = join(sessionsRoot, result.parentId, 'subagents');
     expect(existsSync(subagentDir)).toBe(true);
 
@@ -134,19 +127,15 @@ describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
           permissionMode: 'default',
         });
         const dispatchTool = yield* createDispatchAgentTool();
-        yield* dispatchTool.execute(
-          { agent: 'explore', prompt: 'p' },
-          { projectPath: cwd, sessionId: parent.sessionId } as any
-        );
+        yield* dispatchTool.execute({ agent: 'explore', prompt: 'p' }, {
+          projectPath: cwd,
+          sessionId: parent.sessionId,
+        } as any);
         return { parentId: parent.sessionId };
       })
     );
 
-    const sessionsRoot = join(
-      projectBase,
-      encodeProjectPath(normalizePath(cwd)),
-      'sessions'
-    );
+    const sessionsRoot = join(projectBase, encodeProjectPath(normalizePath(cwd)), 'sessions');
     const subagentDir = join(sessionsRoot, result.parentId, 'subagents');
     const childFiles = readdirSync(subagentDir).filter((f) => f.endsWith('.jsonl'));
     const childId = childFiles[0]!.replace('.jsonl', '');

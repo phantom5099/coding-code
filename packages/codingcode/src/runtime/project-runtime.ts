@@ -13,18 +13,11 @@ import { McpService } from '../mcp/index.js';
 import { RulesService } from '../rules/index.js';
 import { SessionService } from '../session/store.js';
 import { normalizePath } from '../core/path.js';
-import { ApprovalService } from '../approval/index.js';
 import type { PermissionMode } from '../approval/types.js';
 import type { SessionMode } from '../session/types.js';
-import { computePaths, readCurrentIndex, setPermissionMode } from '../session/file-ops.js';
-import { writeFileSync } from 'fs';
-import {
-  isPlanProfile,
-  markSessionPlanMode,
-  clearPlanModeSession,
-} from '../plan/index.js';
+import { readCurrentIndex } from '../session/file-ops.js';
+import { computePaths } from '../core/paths.js';
 
-/** 构建全局 profile：内置 + ~/.codingcode/agents/ */
 function buildGlobalProfiles(): AgentProfile[] {
   const profiles: AgentProfile[] = [BUILD_PROFILE, EXPLORE_PROFILE, PLAN_PROFILE];
   for (const p of agentLoader.loadGlobalAgentProfiles()) {
@@ -35,7 +28,6 @@ function buildGlobalProfiles(): AgentProfile[] {
   return profiles;
 }
 
-/** 构建项目级 profile：<project>/.codingcode/agents/ */
 function buildProjectProfiles(projectPath: string): AgentProfile[] {
   return agentLoader.loadAgentProfiles(projectPath);
 }
@@ -53,11 +45,8 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
       const subagent = yield* SubagentService;
       const rules = yield* RulesService;
       const session = yield* SessionService;
-      const sessionAgentProfiles = new Map<string, AgentProfile>();
-      const sessionPermissionModes = new Map<string, PermissionMode>();
       const prepared = new Set<string>();
 
-      // 启动时注册全局 profile（内置 + ~/.codingcode/agents/），只做一次
       subagent.registerGlobal(buildGlobalProfiles());
 
       return {
@@ -76,9 +65,10 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           projectPath: string,
           sessionId: string
         ): AgentProfile | undefined => {
-          const sessionOverride = sessionAgentProfiles.get(sessionId);
-          if (sessionOverride) return sessionOverride;
-          return agentLoader.loadMainAgentProfile(projectPath);
+          const idx = readCurrentIndex(computePaths(projectPath, sessionId).indexPath);
+          const name = idx?.activeProfile;
+          if (!name) return agentLoader.loadMainAgentProfile(projectPath);
+          return subagent.get(projectPath, name) ?? agentLoader.loadMainAgentProfile(projectPath);
         },
 
         resolveSubagentProfile: (projectPath: string, name: string): AgentProfile | undefined => {
@@ -110,76 +100,52 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           projectPath: string,
           sessionId: string,
           profile: AgentProfile,
-          permissionModeOverride?: PermissionMode,
-          parentSessionId?: string
+          permissionModeOverride?: PermissionMode
         ): Effect.Effect<void, import('../core/error.js').AgentError> =>
           Effect.gen(function* () {
-            sessionAgentProfiles.set(sessionId, profile);
-            markSessionPlanMode(sessionId, isPlanProfile(profile));
-
-            if (isPlanProfile(profile)) {
-              // Plan 模式:内存 map 强制 'default',SessionIndex.permissionMode 不写盘(保留 build 偏好)
-              sessionPermissionModes.set(sessionId, 'default');
-              return;
-            }
-
-            const effectivePermissionMode: PermissionMode =
+            const mode: SessionMode = profile.name === 'plan' ? 'plan' : 'build';
+            const effectivePerm: PermissionMode =
               permissionModeOverride ?? profile.permissionMode ?? 'default';
-            sessionPermissionModes.set(sessionId, effectivePermissionMode);
-            const paths = computePaths(projectPath, sessionId, parentSessionId);
-            setPermissionMode(sessionId, paths.indexPath, effectivePermissionMode);
-            // Update activeProfile in the same index file.
-            const current = readCurrentIndex(paths.indexPath);
-            if (current) {
-              const index = {
-                ...current,
-                activeProfile: profile.name,
-                updatedAt: new Date().toISOString(),
-              };
-              writeFileSync(paths.indexPath, JSON.stringify(index, null, 2), 'utf8');
-            }
+            yield* session.setModeOnDisk(projectPath, sessionId, mode);
+            yield* session.setPermissionModeOnDisk(projectPath, sessionId, effectivePerm);
+            yield* session.setActiveProfile(projectPath, sessionId, profile.name);
           }),
 
-        getSessionProfile: (sessionId: string): AgentProfile | undefined =>
-          sessionAgentProfiles.get(sessionId),
+        getSessionProfile: (
+          sessionId: string,
+          projectPath: string
+        ): Effect.Effect<AgentProfile | undefined, import('../core/error.js').AgentError> =>
+          Effect.gen(function* () {
+            const name = yield* session.getActiveProfile(projectPath, sessionId);
+            if (!name) return undefined;
+            return subagent.get(projectPath, name);
+          }),
 
-        getSessionPermissionMode: (sessionId: string): PermissionMode =>
-          sessionPermissionModes.get(sessionId) ?? 'default',
+        getSessionPermissionMode: (
+          sessionId: string,
+          projectPath: string
+        ): Effect.Effect<PermissionMode, import('../core/error.js').AgentError> =>
+          session.getPermissionModeFromDisk(projectPath, sessionId),
 
         restoreSessionProfile: (
           projectPath: string,
           sessionId: string,
           profileName: string | undefined,
-          permissionModeOverride?: PermissionMode,
-          parentSessionId?: string
+          permissionModeOverride?: PermissionMode
         ): Effect.Effect<void, import('../core/error.js').AgentError> =>
           Effect.gen(function* () {
             if (!profileName) return;
-            const norm = normalizePath(projectPath);
-            const profile = subagent.get(norm, profileName);
+            const profile = subagent.get(projectPath, profileName);
             if (!profile) return;
-            sessionAgentProfiles.set(sessionId, profile);
-            markSessionPlanMode(sessionId, isPlanProfile(profile));
-
-            if (isPlanProfile(profile)) {
-              sessionPermissionModes.set(sessionId, 'default');
-              return;
-            }
-
-            const effectivePermissionMode: PermissionMode =
+            const mode: SessionMode = profile.name === 'plan' ? 'plan' : 'build';
+            const effectivePerm: PermissionMode =
               permissionModeOverride ?? profile.permissionMode ?? 'default';
-            sessionPermissionModes.set(sessionId, effectivePermissionMode);
-            // Direct write — see setSessionProfile above.
-            const paths = computePaths(projectPath, sessionId, parentSessionId);
-            setPermissionMode(sessionId, paths.indexPath, effectivePermissionMode);
+            yield* session.setModeOnDisk(projectPath, sessionId, mode);
+            yield* session.setPermissionModeOnDisk(projectPath, sessionId, effectivePerm);
+            yield* session.setActiveProfile(projectPath, sessionId, profile.name);
           }),
 
-        disposeSession: (sessionId: string): Effect.Effect<void> =>
-          Effect.sync(() => {
-            sessionAgentProfiles.delete(sessionId);
-            sessionPermissionModes.delete(sessionId);
-            clearPlanModeSession(sessionId);
-          }),
+        disposeSession: (_sessionId: string): Effect.Effect<void> => Effect.void,
 
         disposeProject: (projectPath: string): Effect.Effect<void> =>
           Effect.sync(() => {

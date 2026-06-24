@@ -1,6 +1,10 @@
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
 
-export const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'bypass'] as const;
+export const PERMISSION_MODES: readonly PermissionMode[] = [
+  'default',
+  'acceptEdits',
+  'bypass',
+] as const;
 
 export function isPermissionMode(value: unknown): value is PermissionMode {
   return typeof value === 'string' && (PERMISSION_MODES as readonly string[]).includes(value);

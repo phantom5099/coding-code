@@ -25,7 +25,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         sessionId?: string;
         turnId?: number;
         projectPath?: string;
-        approval?: any;
+        approval?: import('../approval/index.js').ApprovalService;
         callId?: string;
         toolLookup?: ToolLookup;
       }
@@ -132,7 +132,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         turnId?: number;
         projectPath?: string;
         signal?: AbortSignal;
-        approval?: any;
+        approval?: import('../approval/index.js').ApprovalService;
         toolLookup?: ToolLookup;
       }
     ): Effect.Effect<ToolResultUnion, never, any> {
@@ -182,7 +182,7 @@ export class ToolExecutorService extends Effect.Service<ToolExecutorService>()('
         turnId?: number;
         projectPath?: string;
         signal?: AbortSignal;
-        approval?: any;
+        approval?: import('../approval/index.js').ApprovalService;
         toolLookup?: ToolLookup;
       }
     ): Effect.Effect<ToolResultUnion[], never, any> {

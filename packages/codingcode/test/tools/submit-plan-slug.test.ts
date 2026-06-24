@@ -28,9 +28,7 @@ describe('slug()', () => {
   });
 
   it('preserves CJK characters in the slug', () => {
-    expect(slug('写一篇《如果AI有了工资》幽默短文')).toBe(
-      '写一篇-如果ai有了工资-幽默短文'
-    );
+    expect(slug('写一篇《如果AI有了工资》幽默短文')).toBe('写一篇-如果ai有了工资-幽默短文');
   });
 
   it('preserves mixed CJK + ASCII', () => {

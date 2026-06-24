@@ -80,7 +80,10 @@ export default function PlanPanel({ sessionId, cwd, onClose }: PlanPanelProps) {
         </button>
       </div>
       {plan?.path && (
-        <div className="px-4 py-1.5 text-[11px] text-[var(--text-muted)] border-b border-[var(--border-card)] truncate" title={plan.path}>
+        <div
+          className="px-4 py-1.5 text-[11px] text-[var(--text-muted)] border-b border-[var(--border-card)] truncate"
+          title={plan.path}
+        >
           {plan.path}
         </div>
       )}

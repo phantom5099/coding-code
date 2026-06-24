@@ -5,11 +5,10 @@ import { join } from 'path';
 import type { SessionStoreState, SessionMode } from '../../session/types.js';
 import { SessionService } from '../../session/store.js';
 import {
-  sessionJsonlPathFromCwd,
   getPermissionMode,
-  setPermissionMode,
   deleteSession,
 } from '../../session/file-ops.js';
+import { computePaths } from '../../core/paths.js';
 import { readUIHistory, findUserMessageForTurn } from '../../session/ui-history.js';
 import { ContextService, estimatePromptTokens } from '../../context/service.js';
 import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
@@ -18,17 +17,11 @@ import { LLMFactoryService } from '../../llm/factory.js';
 import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
 import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
-import { ProjectRuntimeService, modeToProfile } from '../../runtime/project-runtime.js';
+import { modeToProfile } from '../../runtime/project-runtime.js';
 import { BUILD_PROFILE, PLAN_PROFILE } from '../../subagent/registry.js';
 import { isPermissionMode, type PermissionMode } from '../../approval/types.js';
-import { isPlanProfile } from '../../plan/index.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
-
-export const activeApprovalForks = new Map<
-  string,
-  { setPermissionMode: (mode: any) => Promise<void> | void }
->();
 
 export function createSessionsRouter(rt: ManagedRt): Hono {
   const router = new Hono();
@@ -79,9 +72,6 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     if (!isPermissionMode(body.permissionMode)) {
       return c.json({ error: `Invalid permissionMode: ${body.permissionMode}` }, 400);
     }
-    if (body.mode === 'plan' && body.permissionMode !== 'default') {
-      return c.json({ error: 'Plan mode requires permissionMode "default"' }, 400);
-    }
     if (!body.model) {
       return c.json({ error: 'model required' }, 400);
     }
@@ -94,19 +84,11 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const runtime = yield* ProjectRuntimeService;
-        const state = yield* session.create(normalizedCwd, {
+        const state = yield* session.createSessionWithProfile(normalizedCwd, {
           model: body.model,
           mode: body.mode,
           permissionMode: body.permissionMode,
         });
-        const profile = modeToProfile(body.mode);
-        yield* runtime.setSessionProfile(
-          normalizedCwd,
-          state.sessionId,
-          profile,
-          body.permissionMode
-        );
         return state;
       }) as any
     );
@@ -255,11 +237,10 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const runtime = yield* ProjectRuntimeService;
         const state = yield* session.load(cwd, sessionId);
         return {
           mode: state.mode,
-          permissionMode: runtime.getSessionPermissionMode(sessionId),
+          permissionMode: state.permissionMode,
         };
       })
     );
@@ -292,32 +273,20 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     }
     const result = await runWithLayer(
       Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
         const session = yield* SessionService;
-        const profile =
-          runtime.resolveSubagentProfile(cwd, mode) ?? modeToProfile(mode);
+        yield* session.setModeOnDisk(cwd, sessionId, mode);
+        const profile = modeToProfile(mode);
+        yield* session.setActiveProfile(cwd, sessionId, profile.name);
         const state = yield* session.load(cwd, sessionId);
-        yield* runtime.setSessionProfile(cwd, sessionId, profile, state.permissionMode);
-        if (!isPlanProfile(profile)) {
-          yield* session.updateActiveProfile(state, profile.name);
-          state.mode = 'build';
-        } else {
-          state.mode = 'plan';
-        }
         return {
           mode: state.mode,
-          permissionMode: runtime.getSessionPermissionMode(sessionId),
+          permissionMode: state.permissionMode,
         };
       })
     );
     if (!result.ok) {
       const { status, body: errBody } = errorResponse(result.error);
       return c.json(errBody, status as any);
-    }
-    const handle = activeApprovalForks.get(sessionId);
-    if (handle) {
-      const permMode: PermissionMode = result.value.permissionMode;
-      Promise.resolve(handle.setPermissionMode(permMode)).catch(() => undefined);
     }
     return c.json(result.value);
   });
@@ -326,7 +295,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ mode: 'default' });
-    const idxPath = sessionJsonlPathFromCwd(cwd, sessionId).replace('.jsonl', '.index.json');
+    const idxPath = computePaths(cwd, sessionId).indexPath;
     if (!existsSync(idxPath)) return c.json({ mode: 'default' });
     const mode = getPermissionMode(idxPath);
     return c.json({ mode });
@@ -341,20 +310,8 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     }
     const setResult = await runWithLayer(
       Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
         const session = yield* SessionService;
-        const state = yield* session.load(cwd, sessionId);
-        const profileName = runtime.getSessionProfile(sessionId)?.name;
-        if (profileName === PLAN_PROFILE.name && mode !== 'default') {
-          return yield* Effect.fail(
-            new Error('Plan mode requires permissionMode "default"')
-          );
-        }
-        const profile =
-          profileName === PLAN_PROFILE.name
-            ? PLAN_PROFILE
-            : runtime.getSessionProfile(sessionId) ?? BUILD_PROFILE;
-        yield* runtime.setSessionProfile(cwd, sessionId, profile, mode);
+        yield* session.setPermissionModeOnDisk(cwd, sessionId, mode);
         return { ok: true };
       }) as any
     );
@@ -362,8 +319,6 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
       const { status, body: errBody } = errorResponse(setResult.error);
       return c.json(errBody, status as any);
     }
-    const handle = activeApprovalForks.get(sessionId);
-    if (handle) handle.setPermissionMode(mode);
     return c.json({ ok: true });
   });
 
@@ -658,7 +613,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const state = yield* session.load(cwd, sessionId);
         const newSessionId = yield* session.forkSession(state, atTurnId);
         const turns = readUIHistory(newSessionId, cwd);
-        const newJsonlPath = sessionJsonlPathFromCwd(cwd, newSessionId);
+        const newJsonlPath = computePaths(cwd, newSessionId).transcriptPath;
         const promptEstimate = estimatePromptTokens(newJsonlPath);
         return { sessionId: newSessionId, turns, promptEstimate };
       }) as any

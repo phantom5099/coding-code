@@ -9,12 +9,16 @@ export interface SettingsClient {
   getMemoryConfig(): Promise<{
     enabled: boolean;
     types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
+    model: string;
   }>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
   setMemoryTypeDisabled(name: string, disabled: boolean): Promise<void>;
   addMemoryExtraType(type: { name: string; description: string }): Promise<void>;
   updateMemoryExtraType(name: string, type: { name: string; description: string }): Promise<void>;
   deleteMemoryExtraType(name: string): Promise<void>;
+  setMemoryModel(model: string): Promise<{ model: string }>;
+  getAgentConfig(): Promise<{ maxSteps: number; maxStopContinuations: number }>;
+  setCompactionModel(compactionModel: string): Promise<{ compactionModel: string }>;
   getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
   setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
   resetSubagentEnabled(body: { cwd: string }): Promise<void>;
@@ -38,8 +42,12 @@ export interface SettingsClient {
   deleteHook(input: { cwd: string; name: string }): Promise<void>;
   setHookDisabled(input: { cwd: string; name: string; disabled: boolean }): Promise<void>;
   resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;
-  getGlobalPermissionMode(): Promise<PermissionMode>;
-  setGlobalPermissionMode(mode: PermissionMode): Promise<void>;
+  getGlobalPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
+  setGlobalPermissionMode(input: {
+    sessionId: string;
+    cwd: string;
+    mode: PermissionMode;
+  }): Promise<void>;
 }
 
 export function createHttpSettingsClient(
@@ -59,6 +67,18 @@ export function createHttpSettingsClient(
 
     async getMemoryConfig() {
       return apiGet('/api/settings/memory/config');
+    },
+
+    async setMemoryModel(model) {
+      return apiPost('/api/settings/memory/model', { model });
+    },
+
+    async getAgentConfig() {
+      return apiGet('/api/settings/agent/config');
+    },
+
+    async setCompactionModel(compactionModel) {
+      return apiPost('/api/settings/context/compaction-model', { compactionModel });
     },
 
     async setMemoryEnabled(enabled) {
@@ -190,13 +210,22 @@ export function createHttpSettingsClient(
       );
     },
 
-    async getGlobalPermissionMode() {
-      const data = await apiGet<{ mode: PermissionMode }>('/api/agent/permission-mode');
+    async getGlobalPermissionMode(input: {
+      sessionId: string;
+      cwd: string;
+    }): Promise<PermissionMode> {
+      const data = await apiGet<{ mode: PermissionMode }>(
+        `/api/sessions/${input.sessionId}/permission-mode?cwd=${encodeURIComponent(input.cwd)}`
+      );
       return data.mode;
     },
 
-    async setGlobalPermissionMode(mode) {
-      await apiPost('/api/agent/permission-mode', { mode });
+    async setGlobalPermissionMode(input: {
+      sessionId: string;
+      cwd: string;
+      mode: PermissionMode;
+    }): Promise<void> {
+      await apiPut(`/api/sessions/${input.sessionId}/permission-mode`, input);
     },
   };
 }

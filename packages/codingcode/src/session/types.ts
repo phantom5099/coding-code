@@ -85,6 +85,7 @@ export interface SessionIndex {
   permissionMode: import('../approval/types.js').PermissionMode;
   memorySnapshot?: string;
   activeProfile?: string;
+  parentSessionId?: string;
 }
 
 export interface SessionStoreState {
@@ -103,4 +104,5 @@ export interface SessionStoreState {
   usage: TokenUsage | undefined;
   memorySnapshot: string;
   activeProfile?: string;
+  parentSessionId?: string;
 }

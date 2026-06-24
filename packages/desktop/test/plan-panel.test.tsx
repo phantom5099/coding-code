@@ -38,9 +38,7 @@ describe('PlanPanel', () => {
       directory: '/tmp/.codingcode/plans',
       exists: true,
     });
-    const { getByText } = render(
-      <PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />
-    );
+    const { getByText } = render(<PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />);
     expect(fetchPlanMock).toHaveBeenCalledWith('s-1', '/tmp');
     await waitFor(() => {
       expect(getByText('Hello')).toBeInTheDocument();
@@ -55,9 +53,7 @@ describe('PlanPanel', () => {
       directory: '/tmp',
       exists: true,
     });
-    const { getByText } = render(
-      <PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />
-    );
+    const { getByText } = render(<PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />);
     await waitFor(() => {
       expect(getByText('/tmp/plan.md')).toBeInTheDocument();
     });
@@ -70,9 +66,7 @@ describe('PlanPanel', () => {
       directory: '/tmp/.codingcode/plans',
       exists: false,
     });
-    const { getByText } = render(
-      <PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />
-    );
+    const { getByText } = render(<PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />);
     await waitFor(() => {
       expect(getByText(/暂无计划/)).toBeInTheDocument();
     });
@@ -80,9 +74,7 @@ describe('PlanPanel', () => {
 
   it('renders an error message when fetchPlan rejects', async () => {
     fetchPlanMock.mockRejectedValue(new Error('boom'));
-    const { getByText } = render(
-      <PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />
-    );
+    const { getByText } = render(<PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />);
     await waitFor(() => {
       expect(getByText(/加载失败/)).toBeInTheDocument();
     });
@@ -96,18 +88,13 @@ describe('PlanPanel', () => {
       directory: '/tmp',
       exists: true,
     });
-    const { getByLabelText } = render(
-      <PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />
-    );
+    const { getByLabelText } = render(<PlanPanel sessionId="s-1" cwd="/tmp" onClose={() => {}} />);
     // Wait for the initial mount fetch to land
     await waitFor(() => expect(fetchPlanMock).toHaveBeenCalledTimes(1));
     // Click refresh; the component should re-invoke fetchPlan even though
     // sessionId/cwd haven't changed.
     fireEvent.click(getByLabelText('刷新计划'));
-    await waitFor(
-      () => expect(fetchPlanMock).toHaveBeenCalledTimes(2),
-      { timeout: 2000 }
-    );
+    await waitFor(() => expect(fetchPlanMock).toHaveBeenCalledTimes(2), { timeout: 2000 });
   });
 
   it('invokes onClose when the close button is clicked', async () => {
@@ -118,9 +105,7 @@ describe('PlanPanel', () => {
       exists: true,
     });
     const onClose = vi.fn();
-    const { getByLabelText } = render(
-      <PlanPanel sessionId="s-1" cwd="/tmp" onClose={onClose} />
-    );
+    const { getByLabelText } = render(<PlanPanel sessionId="s-1" cwd="/tmp" onClose={onClose} />);
     fireEvent.click(getByLabelText('关闭计划面板'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });

@@ -35,5 +35,4 @@ describe('parseApprovalResponse', () => {
 
     vi.useRealTimers();
   });
-
 });

@@ -173,11 +173,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setModeForThread: (id, info) =>
         set((s) => {
           const current = s.modeByThreadId[id];
-          if (
-            current &&
-            info.requestedAt !== undefined &&
-            current.fetchedAt > info.requestedAt
-          ) {
+          if (current && info.requestedAt !== undefined && current.fetchedAt > info.requestedAt) {
             return;
           }
           s.modeByThreadId[id] = {

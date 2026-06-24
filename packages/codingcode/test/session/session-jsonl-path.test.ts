@@ -4,7 +4,8 @@ import { join } from 'path';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 
-import { sessionJsonlPathFromCwd, deleteSession } from '../../src/session/file-ops.js';
+import { deleteSession } from '../../src/session/file-ops.js';
+import { sessionJsonlPathFromCwd } from '../../src/core/paths.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();

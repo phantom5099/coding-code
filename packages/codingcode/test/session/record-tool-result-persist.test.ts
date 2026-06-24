@@ -7,7 +7,7 @@ import { useTempProjectBase } from '../helpers/project-base.js';
 useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-        return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
 }
 
 describe('recordToolResult', () => {

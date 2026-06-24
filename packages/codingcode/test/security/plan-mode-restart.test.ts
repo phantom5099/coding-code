@@ -11,12 +11,7 @@ import { SubagentService } from '../../src/subagent/registry.js';
 import { RulesService } from '../../src/rules/index.js';
 import { ApprovalService } from '../../src/approval/index.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import {
-  planModeGateHook,
-  markSessionPlanMode,
-  clearPlanModeSession,
-  isSessionInPlanMode,
-} from '../../src/plan/index.js';
+import { planModeGateHook, isSessionInPlanMode } from '../../src/plan/index.js';
 import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
@@ -108,7 +103,7 @@ function makeLayer() {
   return TestLayer;
 }
 
-describe('plan mode security boundary (cross-restart)', () => {
+describe('plan mode security boundary (cross-restart, disk only)', () => {
   let cwd: string;
   let sessionId: string;
   let indexPath: string;
@@ -137,21 +132,17 @@ describe('plan mode security boundary (cross-restart)', () => {
   afterEach(async () => {
     await rt.dispose();
     rmSync(cwd, { recursive: true, force: true });
-    clearPlanModeSession(sessionId);
   });
 
-  // Helper: simulate the real sendMessage path — fork approval, set the
-  // session's permission mode (from the runtime's in-memory map), then evaluate.
-  // The plan-mode side channel is kept in sync by `setSessionProfile`, so the
-  // gate hook fires correctly even via the approval pipeline.
   async function evaluateAsSession(tool: string, input: any): Promise<any> {
     return rt.runPromise(
       Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
         const approval = yield* ApprovalService;
-        const mode = runtime.getSessionPermissionMode(sessionId);
-        const forked = yield* approval.fork({});
-        yield* forked.setPermissionMode(mode);
+        const mode = yield* Effect.sync(() => {
+          const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
+          return idx.permissionMode;
+        });
+        const forked = yield* approval.fork({ permissionMode: mode });
         return yield* forked.evaluate({
           tool,
           input,
@@ -170,8 +161,7 @@ describe('plan mode security boundary (cross-restart)', () => {
         yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
       })
     );
-    // setSessionProfile also marks the plan-mode side channel
-    expect(isSessionInPlanMode(sessionId)).toBe(true);
+    expect(isSessionInPlanMode(sessionId, cwd)).toBe(true);
 
     const decision = await evaluateAsSession('write_file', { path: '/tmp/x', content: 'foo' });
     expect(decision.type).toBe('deny');
@@ -194,7 +184,7 @@ describe('plan mode security boundary (cross-restart)', () => {
     expect(decision.source).toBe('hook');
   });
 
-  it('scenario 3: switch to plan, submit_plan is short-circuited by the pipeline (self-handles plan approval)', async () => {
+  it('scenario 3: switch to plan, submit_plan is short-circuited by the pipeline', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -204,18 +194,11 @@ describe('plan mode security boundary (cross-restart)', () => {
     );
 
     const decision: any = await evaluateAsSession('submit_plan', { plan_content: 'do things' });
-    // submit_plan is in PLAN_MODE_ALLOWED_TOOLS, so the gate does not fire.
-    // The pipeline recognizes submit_plan by name at Layer 5 and short-circuits
-    // to 'allow' with source 'system-plan-self-handles'. The plan modal is
-    // driven by agentLoop emitting plan.ready on turn-end, not by the pipeline.
     expect(decision.type).toBe('allow');
     expect(decision.source).toBe('system-plan-self-handles');
   });
 
   it('scenario 4: after restart (state reloaded from disk), plan mode still enforced', async () => {
-    // First: switch to plan. In the new design, plan mode does NOT write
-    // idx.permissionMode (the build preference is preserved on disk),
-    // but the in-memory planModeSessions side channel is updated.
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -224,27 +207,19 @@ describe('plan mode security boundary (cross-restart)', () => {
       })
     );
 
-    // After plan: permissionMode is preserved (build preference from create).
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.permissionMode).toBe('default');
+    expect(idx.mode).toBe('plan');
 
-    // Simulate restart: build a new runtime, load state, restore profile.
     await rt.dispose();
     decisionHandlers.length = 0;
     decisionHandlers.push(planModeGateHook);
     rt = ManagedRuntime.make(makeLayer() as any);
     await rt.runPromise(
       Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
         const session = yield* SessionService;
-        yield* runtime.prepareProject(cwd);
         const state = yield* session.load(cwd, sessionId);
-        // state.mode is 'build' (set by create; plan mode didn't write to disk)
-        expect(state.mode).toBe('build');
-        // To re-enter plan mode after restart, the client calls setSessionMode.
-        yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
-        // After restore, the plan-mode side channel is re-marked.
-        expect(isSessionInPlanMode(sessionId)).toBe(true);
+        expect(state.mode).toBe('plan');
+        expect(isSessionInPlanMode(sessionId, cwd)).toBe(true);
       })
     );
 
@@ -262,11 +237,9 @@ describe('plan mode security boundary (cross-restart)', () => {
         yield* runtime.setSessionProfile(cwd, sessionId, BUILD_PROFILE);
       })
     );
-    // After switching to build, the plan-mode side channel is cleared.
-    expect(isSessionInPlanMode(sessionId)).toBe(false);
+    expect(isSessionInPlanMode(sessionId, cwd)).toBe(false);
 
     const decision: any = await evaluateAsSession('write_file', { path: '/tmp/x', content: 'foo' });
-    // Gate no longer fires; pipeline falls through to user confirm (no emitter → system deny).
     if (decision.type === 'deny') {
       expect(decision.source).not.toBe('hook');
       expect(decision.reason).not.toMatch(/plan mode/i);

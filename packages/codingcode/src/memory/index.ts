@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { LLMClient } from '../llm/client.js';
-import { sessionJsonlPathFromCwd } from '../session/file-ops.js';
+import { sessionJsonlPathFromCwd } from '../core/paths.js';
 import type { SessionEvent } from '../session/types.js';
 import {
   readMemoryFile,

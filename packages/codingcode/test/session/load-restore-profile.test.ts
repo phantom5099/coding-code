@@ -45,12 +45,20 @@ function makeLayer() {
   const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
   const SessionTestLayer = SessionService.Default;
   const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
-    Layer.provide(Layer.mergeAll(HookTestLayer, McpTestLayer, SubagentTestLayer, RulesTestLayer, SessionTestLayer))
+    Layer.provide(
+      Layer.mergeAll(
+        HookTestLayer,
+        McpTestLayer,
+        SubagentTestLayer,
+        RulesTestLayer,
+        SessionTestLayer
+      )
+    )
   );
   return Layer.mergeAll(ProjectRuntimeTestLayer, SessionTestLayer);
 }
 
-describe('SessionStoreState.activeProfile persistence', () => {
+describe('SessionStoreState.activeProfile persistence (disk only)', () => {
   let cwd: string;
   let sessionId: string;
   let indexPath: string;
@@ -79,9 +87,7 @@ describe('SessionStoreState.activeProfile persistence', () => {
     await rt.dispose();
   });
 
-  it('state.activeProfile is undefined for new sessions (set by setSessionProfile)', async () => {
-    // session.create() no longer writes activeProfile. After explicitly
-    // calling setSessionProfile, activeProfile is written to disk.
+  it('state.activeProfile is undefined for new sessions', async () => {
     const stateBefore = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -89,7 +95,9 @@ describe('SessionStoreState.activeProfile persistence', () => {
       })
     );
     expect(stateBefore.activeProfile).toBeUndefined();
+  });
 
+  it('state.activeProfile is set when setSessionProfile writes to disk', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -106,11 +114,9 @@ describe('SessionStoreState.activeProfile persistence', () => {
     expect(stateAfter.activeProfile).toBe('build');
   });
 
-  it('state.activeProfile is set when index has activeProfile field', async () => {
+  it('state.activeProfile is set when index file has activeProfile field', async () => {
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
     idx.activeProfile = 'plan';
-    // After the plan refactor, `permissionMode` no longer encodes plan-mode.
-    // Set it to 'default' to match what the runtime now writes.
     idx.permissionMode = 'default';
     writeFileSync(indexPath, JSON.stringify(idx, null, 2));
 
@@ -123,25 +129,15 @@ describe('SessionStoreState.activeProfile persistence', () => {
     expect(state.activeProfile).toBe('plan');
   });
 
-  it('runtime.getSessionProfile reflects restored profile after restoreSessionProfile', async () => {
-    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    idx.activeProfile = 'plan';
-    idx.permissionMode = 'default';
-    writeFileSync(indexPath, JSON.stringify(idx, null, 2));
-
+  it('restoreSessionProfile writes the profile to disk', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
-        const session = yield* SessionService;
         yield* runtime.prepareProject(cwd);
-        const state = yield* session.load(cwd, sessionId);
-        expect(state.activeProfile).toBe('plan');
-        yield* runtime.restoreSessionProfile(cwd, sessionId, state.activeProfile);
-        const profile = runtime.getSessionProfile(sessionId);
-        expect(profile?.name).toBe('plan');
-        // Approval-side permission mode is 'default' (pipeline is plan-blind).
-        expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
+        yield* runtime.restoreSessionProfile(cwd, sessionId, 'plan');
       })
     );
+    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
+    expect(idx.activeProfile).toBe('plan');
   });
 });

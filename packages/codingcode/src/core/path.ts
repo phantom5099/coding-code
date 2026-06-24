@@ -16,7 +16,6 @@ export function encodeProjectPath(p: string): string {
     .toLowerCase();
 }
 
-
 let _projectBaseOverride: string | undefined;
 let _projectPlansBaseOverride: string | undefined;
 

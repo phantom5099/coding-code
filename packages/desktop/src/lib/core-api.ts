@@ -74,9 +74,7 @@ export function getSessionPlan(
   sessionId: string,
   cwd: string
 ): Promise<{ content: string; path: string; directory: string; exists: boolean }> {
-  return api<{ content: string; path: string; directory: string; exists: boolean }>(
-    `/api/sessions/${sessionId}/plan?cwd=${encodeURIComponent(cwd)}`
-  );
+  return clients.sessions.getSessionPlan({ sessionId, cwd });
 }
 
 // ---- Plan/Build mode switching ----
@@ -89,7 +87,7 @@ export type SessionModeInfo = {
 };
 
 export function getSessionMode(sessionId: string, cwd: string): Promise<SessionModeInfo> {
-  return api<SessionModeInfo>(`/api/sessions/${sessionId}/mode?cwd=${encodeURIComponent(cwd)}`);
+  return clients.sessions.getSessionMode({ sessionId, cwd });
 }
 
 export function setSessionMode(
@@ -97,14 +95,7 @@ export function setSessionMode(
   cwd: string,
   mode: SessionMode
 ): Promise<{ mode: SessionMode; permissionMode: PermissionMode }> {
-  return api<{ mode: SessionMode; permissionMode: PermissionMode }>(
-    `/api/sessions/${sessionId}/mode`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd, mode }),
-    }
-  );
+  return clients.sessions.setSessionMode({ sessionId, cwd, mode });
 }
 
 // ---- Settings: Memory ----
@@ -114,7 +105,7 @@ export function getMemoryConfig(): Promise<{
   types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
   model: string;
 }> {
-  return api('/api/settings/memory/config');
+  return clients.settings.getMemoryConfig();
 }
 
 export function setMemoryEnabled(enabled: boolean): Promise<void> {
@@ -141,11 +132,7 @@ export function deleteMemoryExtraType(name: string): Promise<void> {
 }
 
 export function setMemoryModel(model: string): Promise<{ model: string }> {
-  return api('/api/settings/memory/model', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model }),
-  });
+  return clients.settings.setMemoryModel(model);
 }
 
 // ---- Settings: Agent config ----
@@ -154,7 +141,7 @@ export async function getAgentConfig(): Promise<{
   maxSteps: number;
   maxStopContinuations: number;
 }> {
-  return api('/api/settings/agent/config');
+  return clients.settings.getAgentConfig();
 }
 
 export async function setAgentConfig(partial: {
@@ -173,11 +160,7 @@ export async function setAgentConfig(partial: {
 export async function setCompactionModel(
   compactionModel: string
 ): Promise<{ compactionModel: string }> {
-  return api('/api/settings/context/compaction-model', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ compactionModel }),
-  });
+  return clients.settings.setCompactionModel(compactionModel);
 }
 
 // ---- Settings: MCP ----

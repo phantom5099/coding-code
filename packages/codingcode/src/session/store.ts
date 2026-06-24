@@ -26,12 +26,13 @@ import {
   setPermissionMode,
   getPermissionMode,
   readCurrentIndex,
+  writeIndexAtomic,
   countNonMetaEvents,
   truncateTitle,
   findFirstUserContent,
-  sessionJsonlPathFromCwd,
-  computePaths,
 } from './file-ops.js';
+import { computePaths, sessionJsonlPathFromCwd } from '../core/paths.js';
+import { modeToProfile } from '../runtime/project-runtime.js';
 
 function assertResumeWorkspace(cwd: string, sessionId: string): void {
   const expectedPath = sessionJsonlPathFromCwd(cwd, sessionId);
@@ -58,6 +59,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         permissionMode: state.permissionMode,
         memorySnapshot: state.memorySnapshot,
         activeProfile: current?.activeProfile,
+        parentSessionId: state.parentSessionId,
       };
       writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8');
     }
@@ -69,7 +71,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         mode: SessionMode;
         permissionMode: PermissionMode;
       },
-      opts?: { parentSessionId?: string; agentName?: string }
+      opts?: { parentSessionId?: string; agentName?: string; activeProfile?: string }
     ): Effect.Effect<SessionStoreState, AgentError> =>
       Effect.try({
         try: () => {
@@ -87,6 +89,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             currentTurnId: 0,
             usage: undefined,
             memorySnapshot: '',
+            activeProfile: opts?.activeProfile,
+            parentSessionId: opts?.parentSessionId,
           };
 
           const meta: SessionMetaEvent = {
@@ -104,6 +108,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           appendLine(state.transcriptPath, meta);
           state.messageCount++;
           updateIndex(state);
+          if (state.activeProfile) {
+            writeIndexAtomic(state.indexPath, { activeProfile: state.activeProfile });
+          }
           return state;
         },
         catch: (e) =>
@@ -143,8 +150,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             if (meta) {
               state.sessionMeta = meta;
               state.messageCount = history.filter((e) => e.type !== 'session_meta').length;
-              if (meta.mode) state.mode = meta.mode;
-              if (meta.permissionMode) state.permissionMode = meta.permissionMode;
             }
             const firstUser = findFirstUserContent(history);
             if (firstUser) state.title = truncateTitle(firstUser);
@@ -373,8 +378,83 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       return state.currentTurnId;
     };
 
+    const setModeOnDisk = (
+      cwd: string,
+      sessionId: string,
+      mode: SessionMode
+    ): Effect.Effect<void, AgentError> =>
+      Effect.sync(() => {
+        const paths = computePaths(cwd, sessionId);
+        writeIndexAtomic(paths.indexPath, { mode });
+      });
+
+    const setPermissionModeOnDisk = (
+      cwd: string,
+      sessionId: string,
+      mode: import('../approval/types.js').PermissionMode
+    ): Effect.Effect<void, AgentError> =>
+      Effect.sync(() => {
+        const paths = computePaths(cwd, sessionId);
+        setPermissionMode(sessionId, paths.indexPath, mode);
+      });
+
+    const setActiveProfile = (
+      cwd: string,
+      sessionId: string,
+      profile: string
+    ): Effect.Effect<void, AgentError> =>
+      Effect.sync(() => {
+        const paths = computePaths(cwd, sessionId);
+        writeIndexAtomic(paths.indexPath, { activeProfile: profile });
+      });
+
+    const getModeFromDisk = (
+      cwd: string,
+      sessionId: string
+    ): Effect.Effect<SessionMode, AgentError> =>
+      Effect.sync(() => {
+        const paths = computePaths(cwd, sessionId);
+        const idx = readCurrentIndex(paths.indexPath);
+        return (idx?.mode as SessionMode) ?? 'build';
+      });
+
+    const getPermissionModeFromDisk = (
+      cwd: string,
+      sessionId: string
+    ): Effect.Effect<import('../approval/types.js').PermissionMode, AgentError> =>
+      Effect.sync(() => {
+        const paths = computePaths(cwd, sessionId);
+        const raw = getPermissionMode(paths.indexPath);
+        if (raw === 'default' || raw === 'acceptEdits' || raw === 'bypass') return raw;
+        return 'default';
+      });
+
+    const getActiveProfile = (
+      cwd: string,
+      sessionId: string
+    ): Effect.Effect<string | undefined, AgentError> =>
+      Effect.sync(() => {
+        const paths = computePaths(cwd, sessionId);
+        const idx = readCurrentIndex(paths.indexPath);
+        return idx?.activeProfile;
+      });
+
+    const createSessionWithProfile = (
+      cwd: string,
+      options: {
+        model: string;
+        mode: SessionMode;
+        permissionMode: PermissionMode;
+      },
+      opts?: { parentSessionId?: string; agentName?: string; activeProfile?: string }
+    ): Effect.Effect<SessionStoreState, AgentError> => {
+      const activeProfile = opts?.activeProfile ?? modeToProfile(options.mode).name;
+      return create(cwd, options, { ...opts, activeProfile });
+    };
+
     return {
       create,
+      createSessionWithProfile,
       load,
       recordUser,
       recordAssistant,
@@ -393,6 +473,12 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       incrementTurn,
       readHistoryFile: (path: string): SessionEvent[] => readHistory(path),
       appendLineProxy: (path: string, event: object): void => appendLine(path, event),
+      setModeOnDisk,
+      setPermissionModeOnDisk,
+      setActiveProfile,
+      getModeFromDisk,
+      getPermissionModeFromDisk,
+      getActiveProfile,
     };
   }),
 }) {}
