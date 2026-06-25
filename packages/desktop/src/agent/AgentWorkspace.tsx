@@ -325,27 +325,27 @@ function InputBox({
         {/* Row 2: toolbar */}
         <div className="flex items-center gap-2 px-3 pb-3 pt-0">
           {!isPlanMode && (
-          <button
-            type="button"
-            onClick={() => {
-              const next = POLICY_NEXT[approvalPolicy] ?? 'ask-all';
-              setApprovalPolicy(next);
-              if (currentThreadId) {
-                setSessionPermissionMode(
-                  currentThreadId,
-                  workspace.rootPath || '',
-                  APPROVAL_POLICY_TO_PERMISSION_MODE[next] ?? 'default'
-                ).catch((e) => {
-                  console.error('Failed to sync permission mode:', e);
-                });
-              }
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
-          >
-            <span className="text-[var(--accent-primary)]">{POLICY_ICONS[approvalPolicy]}</span>
-            <span>{POLICY_LABELS[approvalPolicy] ?? '全部询问'}</span>
-            <span className="text-[var(--text-disabled)] text-[10px]">▾</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                const next = POLICY_NEXT[approvalPolicy] ?? 'ask-all';
+                setApprovalPolicy(next);
+                if (currentThreadId) {
+                  setSessionPermissionMode(
+                    currentThreadId,
+                    workspace.rootPath || '',
+                    APPROVAL_POLICY_TO_PERMISSION_MODE[next] ?? 'default'
+                  ).catch((e) => {
+                    console.error('Failed to sync permission mode:', e);
+                  });
+                }
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
+            >
+              <span className="text-[var(--accent-primary)]">{POLICY_ICONS[approvalPolicy]}</span>
+              <span>{POLICY_LABELS[approvalPolicy] ?? '全部询问'}</span>
+              <span className="text-[var(--text-disabled)] text-[10px]">▾</span>
+            </button>
           )}
           <div className="ml-auto flex items-center gap-2">
             {planExists && onOpenPlanPanel && (

@@ -45,12 +45,20 @@ function makeLayer() {
   const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
   const SessionTestLayer = SessionService.Default;
   const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
-    Layer.provide(Layer.mergeAll(HookTestLayer, McpTestLayer, SubagentTestLayer, RulesTestLayer, SessionTestLayer))
+    Layer.provide(
+      Layer.mergeAll(
+        HookTestLayer,
+        McpTestLayer,
+        SubagentTestLayer,
+        RulesTestLayer,
+        SessionTestLayer
+      )
+    )
   );
   return Layer.mergeAll(ProjectRuntimeTestLayer, SessionTestLayer);
 }
 
-describe('ProjectRuntimeService.setSessionProfile', () => {
+describe('ProjectRuntimeService.setSessionProfile (disk-only)', () => {
   let cwd: string;
   let sessionId: string;
   let indexPath: string;
@@ -81,64 +89,42 @@ describe('ProjectRuntimeService.setSessionProfile', () => {
     await rt.dispose();
   });
 
-  it('does NOT write idx.permissionMode when switching to plan (preserves build preference)', async () => {
-    // Plan mode: in-memory map is forced to 'default', but the on-disk
-    // SessionIndex.permissionMode is left untouched so the build preference
-    // survives plan→build transitions.
+  it('writes mode + permissionMode + activeProfile when switching to plan', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
         yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
       })
     );
-
     expect(existsSync(indexPath)).toBe(true);
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    // build preference (default from create) is preserved on disk
+    expect(idx.mode).toBe('plan');
     expect(idx.permissionMode).toBe('default');
-    // runtime memory is forced to 'default'
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
-        expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
-      })
-    );
+    expect(idx.activeProfile).toBe('plan');
   });
 
-  it('writes idx.permissionMode AND idx.activeProfile when switching to build', async () => {
+  it('writes mode + permissionMode + activeProfile when switching to build (with override)', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
         yield* runtime.setSessionProfile(cwd, sessionId, BUILD_PROFILE, 'bypass');
       })
     );
-
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
+    expect(idx.mode).toBe('build');
     expect(idx.permissionMode).toBe('bypass');
     expect(idx.activeProfile).toBe('build');
   });
 
-  it('records profile in runtime memory (getSessionProfile returns it)', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
-        yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
-        const profile = runtime.getSessionProfile(sessionId);
-        expect(profile?.name).toBe('plan');
-        expect(runtime.getSessionPermissionMode(sessionId)).toBe('default');
-      })
-    );
-  });
-
-  it('explore profile (with explicit permissionMode=bypass) writes correctly', async () => {
+  it('writes activeProfile when switching to explore', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
         yield* runtime.setSessionProfile(cwd, sessionId, EXPLORE_PROFILE);
-        const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-        expect(idx.permissionMode).toBe('bypass');
-        expect(idx.activeProfile).toBe('explore');
       })
     );
+    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
+    expect(idx.permissionMode).toBe('bypass');
+    expect(idx.activeProfile).toBe('explore');
   });
 });

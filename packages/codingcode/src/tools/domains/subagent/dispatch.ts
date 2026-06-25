@@ -7,11 +7,17 @@ import { ApprovalService } from '../../../approval/index.js';
 import { HookService } from '../../../hooks/registry.js';
 import { McpService } from '../../../mcp/index.js';
 import { LLMFactoryService } from '../../../llm/factory.js';
-import { resolveSubagentEnabled, resolveAgentDisabled, BUILD_PROFILE } from '../../../subagent/registry.js';
+import {
+  resolveSubagentEnabled,
+  resolveAgentDisabled,
+  BUILD_PROFILE,
+} from '../../../subagent/registry.js';
 import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import { SubagentRunnerService } from '../../../subagent/runner-service.js';
 import { checkSubagentAllowedInPlanMode } from '../../../plan/index.js';
+import { readCurrentIndex } from '../../../session/file-ops.js';
+import { computePaths } from '../../../core/path.js';
 import type { SessionMode } from '../../../session/types.js';
 import type { PermissionMode } from '../../../approval/types.js';
 
@@ -93,9 +99,11 @@ export function createDispatchAgentTool(): Effect.Effect<
 
           // Emit spawn.before hook (decision hook, can deny)
           const parentSessionId = ctx?.sessionId;
-          const parentMainProfile = parentSessionId
-            ? runtime.getSessionProfile(parentSessionId)?.name
-            : undefined;
+          const parentMainProfile =
+            parentSessionId && projectPath
+              ? readCurrentIndex(computePaths(projectPath, parentSessionId).indexPath)
+                  ?.activeProfile
+              : undefined;
 
           const whitelist = checkSubagentAllowedInPlanMode(
             parentSessionId,
@@ -123,11 +131,21 @@ export function createDispatchAgentTool(): Effect.Effect<
           // Create subagent transcript nested under parent session
           const subagentProfile = runtime.resolveSubagentProfile(projectPath, agentName);
           const childMode: SessionMode = 'build';
+
+          // Read parent session's permissionMode for inheritance (priority: profile > parent > 'default')
+          let parentPermissionMode: PermissionMode | undefined;
+          if (ctx?.sessionId) {
+            const loaded = session.load(projectPath, ctx.sessionId);
+            const parentState = yield* loaded;
+            parentPermissionMode = parentState.permissionMode;
+          }
           const childPermissionMode: PermissionMode =
-            (subagentProfile?.permissionMode as PermissionMode | undefined) ?? 'default';
+            (subagentProfile?.permissionMode as PermissionMode | undefined) ??
+            parentPermissionMode ??
+            'default';
           const childModel: string = subagentProfile?.model ?? llm.modelInfo.model;
 
-          const childState = yield* session.create(
+          const childState = yield* session.createSessionWithProfile(
             projectPath,
             {
               model: childModel,
@@ -137,24 +155,18 @@ export function createDispatchAgentTool(): Effect.Effect<
             {
               parentSessionId: ctx?.sessionId,
               agentName: agentName,
+              activeProfile: (subagentProfile ?? BUILD_PROFILE).name,
             }
-          );
-          yield* runtime.setSessionProfile(
-            projectPath,
-            childState.sessionId,
-            subagentProfile ?? BUILD_PROFILE,
-            childPermissionMode,
-            ctx?.sessionId
           );
           const childUuid = childState.sessionId;
           session.incrementTurn(childState);
           yield* session.recordUser(childState, prompt);
 
-          // Approval: bypass for readonly, fork without delegateEmitter for non-readonly
-          let childApproval;
-          if (!profile.readonly) {
-            childApproval = yield* approval.fork({ readonly: false });
-          }
+          // Approval: always fork with permissionMode closure (no longer omitted for readonly)
+          const childApproval = yield* approval.fork({
+            readonly: profile.readonly ?? false,
+            permissionMode: childPermissionMode,
+          });
 
           // Attach subagent hooks
           if (profile.hooks && profile.hooks.length > 0) {

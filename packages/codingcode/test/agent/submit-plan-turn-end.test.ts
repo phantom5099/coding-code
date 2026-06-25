@@ -178,7 +178,9 @@ describe('agentLoop plan.ready emission on turn-end', () => {
         callCount++;
         return {
           stream: (async function* () {})(),
-          response: Promise.resolve(Result.ok({ content: 'Just a regular response', toolCalls: [] })),
+          response: Promise.resolve(
+            Result.ok({ content: 'Just a regular response', toolCalls: [] })
+          ),
         };
       }),
     };

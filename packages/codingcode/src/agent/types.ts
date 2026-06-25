@@ -98,6 +98,6 @@ export interface RunStreamOptions {
   agentName?: string;
   maxStepsOverride?: number;
   maxStopContinuations?: number;
-  approvalOverride?: any;
+  approvalOverride?: import('../approval/index.js').ApprovalService;
   rulesText?: string;
 }

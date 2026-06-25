@@ -1,4 +1,6 @@
+import { readFileSync } from 'fs';
 import type { DecisionHandler } from '../hooks/types.js';
+import { computePaths } from '../core/path.js';
 
 // ---- Profile name constants + structural helper ----
 
@@ -14,21 +16,18 @@ export const PLAN_MODE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   'dispatch_agent',
 ]);
 
-// ---- Plan-mode side channel ----
+// ---- Plan-mode state: read from .index.json (disk is single source of truth) ----
 
-const planModeSessions = new Set<string>();
-
-export function markSessionPlanMode(sessionId: string, isPlanMode: boolean): void {
-  if (isPlanMode) planModeSessions.add(sessionId);
-  else planModeSessions.delete(sessionId);
-}
-
-export function isSessionInPlanMode(sessionId: string): boolean {
-  return planModeSessions.has(sessionId);
-}
-
-export function clearPlanModeSession(sessionId: string): void {
-  planModeSessions.delete(sessionId);
+export function isSessionInPlanMode(sessionId: string, cwd: string): boolean {
+  try {
+    const paths = computePaths(cwd, sessionId);
+    const idx = JSON.parse(readFileSync(paths.indexPath, 'utf8')) as {
+      mode?: string;
+    };
+    return idx?.mode === 'plan';
+  } catch {
+    return false;
+  }
 }
 
 // ---- Plan-mode subagent whitelist (called inline by dispatch_agent) ----
@@ -50,8 +49,9 @@ export function checkSubagentAllowedInPlanMode(
 
 export const planModeGateHook: DecisionHandler = (payload) => {
   const sessionId = payload.sessionId as string | undefined;
-  if (!sessionId) return null;
-  if (!isSessionInPlanMode(sessionId)) return null;
+  const projectPath = payload.projectPath as string | undefined;
+  if (!sessionId || !projectPath) return null;
+  if (!isSessionInPlanMode(sessionId, projectPath)) return null;
 
   const toolName = payload.toolName as string | undefined;
   if (!toolName) return null;
@@ -62,4 +62,3 @@ export const planModeGateHook: DecisionHandler = (payload) => {
     reason: 'Write operations denied in plan mode. Use submit_plan to submit a plan.',
   };
 };
-

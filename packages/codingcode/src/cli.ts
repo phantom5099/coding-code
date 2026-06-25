@@ -38,9 +38,12 @@ async function main() {
 
     if (tuiOnly) {
       const tuiPath = '../../tui/src/index.js';
-      const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
+      const { runTui, createTuiClientFromFacades } = yield* Effect.tryPromise(() =>
+        import(tuiPath)
+      );
       const llm = yield* llmFactory.getLLMClient();
-      runTui({ llm, rt });
+      const client = createTuiClientFromFacades(llm, rt);
+      runTui({ client });
       return;
     }
 
@@ -50,9 +53,12 @@ async function main() {
 
     if (!serveOnly) {
       const tuiPath = '../../tui/src/index.js';
-      const { runTui } = yield* Effect.tryPromise(() => import(tuiPath));
+      const { runTui, createTuiClientFromFacades } = yield* Effect.tryPromise(() =>
+        import(tuiPath)
+      );
       const llm = yield* llmFactory.getLLMClient();
-      runTui({ llm, rt });
+      const client = createTuiClientFromFacades(llm, rt);
+      runTui({ client });
     }
   });
 

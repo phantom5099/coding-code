@@ -1,17 +1,20 @@
 import { Effect } from 'effect';
-import { SessionService } from '../../session/store.js';
-import { ProjectRuntimeService, modeToProfile } from '../../runtime/project-runtime.js';
-import { deleteSession } from '../../session/file-ops.js';
-import type { PermissionMode } from '../../approval/types.js';
+import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
+import { join } from 'path';
+import { SessionService } from '../session/store.js';
+import { ProjectRuntimeService, modeToProfile } from '../runtime/project-runtime.js';
+import { deleteSession } from '../session/file-ops.js';
+import { encodeProjectPath, getProjectBaseDir } from '../core/path.js';
+import type { PermissionMode } from '../approval/types.js';
 import type {
   CheckpointDiff,
   CodeRollbackResult,
   CodeRollbackUndoResult,
   RollbackPreviewDiff,
   RollbackState,
-} from '../../checkpoint/types.js';
-import type { SessionEvent, SessionIndex, SessionMode } from '../../session/types.js';
-import type { AppRuntime } from '../../layer.js';
+} from '../checkpoint/types.js';
+import type { SessionEvent, SessionIndex, SessionMode } from '../session/types.js';
+import type { AppRuntime } from '../layer.js';
 
 export interface SessionClient {
   createSession(input: {
@@ -25,12 +28,27 @@ export interface SessionClient {
   getSessionHistory(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
 
   deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
+  getSessionMode(input: { sessionId: string; cwd: string }): Promise<{
+    mode: SessionMode;
+    permissionMode: PermissionMode;
+    cwd: string;
+    available: Array<{ name: string; description: string }>;
+  }>;
+  setSessionMode(input: {
+    sessionId: string;
+    cwd: string;
+    mode: SessionMode;
+  }): Promise<{ mode: SessionMode; permissionMode: PermissionMode }>;
   getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
   setSessionPermissionMode(input: {
     sessionId: string;
     cwd: string;
     mode: PermissionMode;
   }): Promise<void>;
+  getSessionPlan(input: {
+    sessionId: string;
+    cwd: string;
+  }): Promise<{ content: string; path: string; directory: string; exists: boolean }>;
 
   getCheckpointDiff(input: {
     sessionId: string;
@@ -82,10 +100,11 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const runtime = yield* ProjectRuntimeService;
-          const state = yield* session.create(cwd, { model, mode, permissionMode });
-          const profile = modeToProfile(mode);
-          yield* runtime.setSessionProfile(cwd, state.sessionId, profile, permissionMode);
+          const state = yield* session.createSessionWithProfile(cwd, {
+            model,
+            mode,
+            permissionMode,
+          });
           return { sessionId: state.sessionId };
         })
       );
@@ -124,6 +143,37 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       deleteSession(sessionId, cwd);
     },
 
+    async getSessionMode({ sessionId, cwd }) {
+      return rt.runPromise(
+        Effect.gen(function* () {
+          const session = yield* SessionService;
+          const state = yield* session.load(cwd, sessionId);
+          return {
+            mode: state.mode,
+            permissionMode: state.permissionMode,
+            cwd,
+            available: [
+              { name: 'plan', description: 'Planning agent' },
+              { name: 'build', description: 'Default build agent' },
+            ],
+          };
+        })
+      );
+    },
+
+    async setSessionMode({ sessionId, cwd, mode }) {
+      return rt.runPromise(
+        Effect.gen(function* () {
+          const session = yield* SessionService;
+          yield* session.setModeOnDisk(cwd, sessionId, mode);
+          const profile = modeToProfile(mode);
+          yield* session.setActiveProfile(cwd, sessionId, profile.name);
+          const state = yield* session.load(cwd, sessionId);
+          return { mode: state.mode, permissionMode: state.permissionMode };
+        })
+      );
+    },
+
     async getSessionPermissionMode({ sessionId, cwd }): Promise<PermissionMode> {
       const mode = await rt.runPromise(
         Effect.gen(function* () {
@@ -143,6 +193,27 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
           yield* session.setPermissionMode(state, mode);
         })
       );
+    },
+
+    async getSessionPlan({ cwd }) {
+      const planDir = join(getProjectBaseDir(), encodeProjectPath(cwd));
+      if (!existsSync(planDir)) {
+        return { content: '', path: '', directory: planDir, exists: false };
+      }
+      let latest: { path: string; mtime: number } | null = null;
+      for (const name of readdirSync(planDir)) {
+        if (!name.endsWith('.md')) continue;
+        const full = join(planDir, name);
+        const mtime = statSync(full).mtimeMs;
+        if (latest === null || mtime > latest.mtime) {
+          latest = { path: full, mtime };
+        }
+      }
+      if (latest === null) {
+        return { content: '', path: '', directory: planDir, exists: false };
+      }
+      const content = readFileSync(latest.path, 'utf8');
+      return { content, path: latest.path, directory: planDir, exists: true };
     },
 
     async getCheckpointDiff() {

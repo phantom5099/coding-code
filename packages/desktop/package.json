@@ -9,6 +9,7 @@
     "bundle:backend": "pnpm --filter @codingcode/core run bundle",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "clean:out": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\"",
     "verify": "electron-vite build && node scripts/verify.mjs",
     "test": "vitest run",
     "pack": "electron-builder --dir",

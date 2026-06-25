@@ -303,7 +303,7 @@ export function useAgentCore() {
         const permissionMode: PermissionMode =
           pendingProfile === 'plan'
             ? 'default'
-            : APPROVAL_POLICY_TO_PERMISSION_MODE[approvalPolicy] ?? 'default';
+            : (APPROVAL_POLICY_TO_PERMISSION_MODE[approvalPolicy] ?? 'default');
         const model = modelId;
         if (!model) {
           throw new Error('No model selected. Please select a model first.');
@@ -612,23 +612,20 @@ export function useAgentRollback() {
     [workspace.rootPath, setRollbackState, initRevertedFilesFromState]
   );
 
-  const deleteThread = useCallback(
-    async (threadId: string) => {
-      abortAndClear(threadId);
-      const currentCwd = useWorkspaceStore.getState().rootPath;
-      const wasCurrent = useAgentStore.getState().currentThreadId === threadId;
-      try {
-        await deleteSession(threadId, currentCwd);
-      } catch (e) {
-        console.error('Failed to delete session:', e);
-      }
-      useAgentStore.getState().removeThread(threadId);
-      if (wasCurrent) {
-        useAgentStore.getState().setCurrentThread(null);
-      }
-    },
-    []
-  );
+  const deleteThread = useCallback(async (threadId: string) => {
+    abortAndClear(threadId);
+    const currentCwd = useWorkspaceStore.getState().rootPath;
+    const wasCurrent = useAgentStore.getState().currentThreadId === threadId;
+    try {
+      await deleteSession(threadId, currentCwd);
+    } catch (e) {
+      console.error('Failed to delete session:', e);
+    }
+    useAgentStore.getState().removeThread(threadId);
+    if (wasCurrent) {
+      useAgentStore.getState().setCurrentThread(null);
+    }
+  }, []);
 
   return {
     loadCheckpointDiff,

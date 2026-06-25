@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { agentEventToStreamChunk } from '../../src/client/direct.js';
+import { agentEventToStreamChunk } from '../../src/agent/stream-adapter.js';
 
 describe('agentEventToStreamChunk with TodoUpdate', () => {
   it('should map TodoUpdate to todo_update chunk', async () => {

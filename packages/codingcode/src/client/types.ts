@@ -56,13 +56,19 @@ export interface AgentClient {
   }>;
   undoLastCodeRollback(force?: boolean, files?: string[]): Promise<CodeRollbackUndoResult>;
   getRollbackState(): Promise<RollbackState>;
-  forkSession(atTurnId?: number): Promise<string>;
+  forkSession(
+    atTurnId?: number
+  ): Promise<{
+    sessionId: string;
+    turns: Array<{ id: string; items: object[]; status: string }>;
+  }>;
   compact(): Promise<void>;
   getMemoryEnabled(): Promise<boolean>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
   getMemoryConfig(): Promise<{
     enabled: boolean;
     types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
+    model: string;
   }>;
   setTypeDisabled(name: string, disabled: boolean): Promise<void>;
   addExtraType(type: { name: string; description: string }): Promise<void>;
@@ -102,6 +108,6 @@ export interface AgentClient {
   createHook(hook: UserHookConfig, query: { cwd: string }): Promise<void>;
   updateHook(name: string, hook: UserHookConfig, query: { cwd: string }): Promise<void>;
   deleteHook(name: string, query: { cwd: string }): Promise<void>;
-  getPermissionMode(): Promise<PermissionMode>;
-  setPermissionMode(mode: PermissionMode): Promise<void>;
+  getPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
+  setPermissionMode(input: { sessionId: string; cwd: string; mode: PermissionMode }): Promise<void>;
 }

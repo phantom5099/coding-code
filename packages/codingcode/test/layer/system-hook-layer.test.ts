@@ -1,20 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { HookService } from '../../src/hooks/registry.js';
 import { SystemHookLayer } from '../../src/layer.js';
-import { markSessionPlanMode, clearPlanModeSession } from '../../src/plan/index.js';
+import { computePaths } from '../../src/core/path.js';
 
 describe('SystemHookLayer', () => {
   it('builds without "Service not found: HookService" (regression: was a self-referential Layer.effect)', async () => {
-    // The previous implementation used `Layer.effect(HookService, body-yielding-HookService)`
-    // which Effect-TS does NOT support as a self-referential layer: the runtime
-    // does not place a placeholder HookService in the environment while
-    // building the layer, so the body's first `yield* HookService` would Die
-    // with "Service not found: HookService". This test would fail to even
-    // build the layer before the fix.
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;
-      // touch the service to ensure it's resolvable from the build's output
       return typeof hooks.register;
     });
 
@@ -23,45 +19,55 @@ describe('SystemHookLayer', () => {
   });
 
   it('registers the remaining plan-mode system hooks', async () => {
-    // After the plan approval decoupling:
-    //   - planModeGateHook stays — it's the right abstraction for tool-allow
-    //     policy. Registered on tool.approval.pre with priority -1000.
-    //   - afterPlanSubmittedObserver REMOVED — plan.ready is now emitted by
-    //     agentLoop on turn-end, not by an observer on tool.execute.after.
-    //   - planApprovalHook REMOVED — submit_plan tool handles its own 3-option
-    //     approval via ApprovalWaitService directly.
-    //   - planSubagentWhitelistHook REMOVED — now an inline function
-    //     (checkSubagentAllowedInPlanMode) called by dispatch_agent.
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-
-      // (1) planModeGateHook denies write tools in plan mode
-      markSessionPlanMode('s', true);
-      const denied = yield* hooks.emitDecision('tool.approval.pre', {
-        toolName: 'write_file',
-        args: { path: '/x' },
+    const cwd = mkdtempSync(join(tmpdir(), 'codingcode-syshook-'));
+    try {
+      const paths = computePaths(cwd, 's');
+      mkdirSync(paths.transcriptPath.replace(/\.jsonl$/, ''), { recursive: true });
+      const idx = {
         sessionId: 's',
-        projectPath: '/p',
+        projectPath: paths.projectPath,
+        cwd: paths.cwd,
+        model: 'test',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messageCount: 0,
+        title: 's',
+        currentTurnId: 0,
+        usage: undefined,
+        mode: 'plan',
+        permissionMode: 'default',
+      };
+      writeFileSync(paths.indexPath, JSON.stringify(idx, null, 2), 'utf8');
+
+      const program = Effect.gen(function* () {
+        const hooks = yield* HookService;
+
+        // (1) planModeGateHook denies write tools in plan mode
+        const denied = yield* hooks.emitDecision('tool.approval.pre', {
+          toolName: 'write_file',
+          args: { path: '/x' },
+          sessionId: 's',
+          projectPath: cwd,
+        });
+        expect(denied).not.toBeNull();
+        expect(denied?.decision).toBe('deny');
+        expect(denied?.reason).toMatch(/plan mode/i);
+
+        // (2) planModeGateHook lets submit_plan through
+        const allowed = yield* hooks.emitDecision('tool.approval.pre', {
+          toolName: 'submit_plan',
+          args: { plan_content: '## plan' },
+          sessionId: 's',
+          projectPath: cwd,
+        });
+        expect(allowed).toBeNull();
+
+        return true;
       });
-      expect(denied).not.toBeNull();
-      expect(denied?.decision).toBe('deny');
-      expect(denied?.reason).toMatch(/plan mode/i);
-      clearPlanModeSession('s');
 
-      // (2) planModeGateHook lets submit_plan through
-      markSessionPlanMode('s', true);
-      const allowed = yield* hooks.emitDecision('tool.approval.pre', {
-        toolName: 'submit_plan',
-        args: { plan_content: '## plan' },
-        sessionId: 's',
-        projectPath: '/p',
-      });
-      expect(allowed).toBeNull();
-      clearPlanModeSession('s');
-
-      return true;
-    });
-
-    await Effect.runPromise(program.pipe(Effect.provide(SystemHookLayer) as any));
+      await Effect.runPromise(program.pipe(Effect.provide(SystemHookLayer) as any));
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });

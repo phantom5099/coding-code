@@ -7,6 +7,7 @@ import { readAutomations, writeAutomations } from './store.js';
 import { sendMessage } from '../agent/agent.js';
 import type { AgentEvent } from '../agent/types.js';
 import { LLMFactoryService } from '../llm/factory.js';
+import { ApprovalService } from '../approval/index.js';
 import { AgentError } from '../core/error.js';
 
 const logger = createLogger();
@@ -48,11 +49,18 @@ export class SchedulerService extends Effect.Service<SchedulerService>()('Schedu
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+      const approval = await _rt.runPromise(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalService;
+          return yield* svc.fork({ permissionMode: 'bypass' });
+        })
+      );
+
       try {
         const { stream, sessionId } = await _rt.runPromise(
           sendMessage(undefined, auto.description, auto.projectCwd, llm, {
             signal: controller.signal,
-            approvalOverride: { permissionMode: 'bypass' },
+            approvalOverride: approval,
             mode: 'build',
             permissionMode: 'bypass',
             model: llm.modelInfo.model,
@@ -180,18 +188,25 @@ export class SchedulerService extends Effect.Service<SchedulerService>()('Schedu
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-        try {
-          const { stream, sessionId } = await _rt.runPromise(
-            sendMessage(undefined, auto.description, auto.projectCwd, llm, {
-              signal: controller.signal,
-              approvalOverride: { permissionMode: 'bypass' },
-              mode: 'build',
-              permissionMode: 'bypass',
-              model: llm.modelInfo.model,
-            })
-          );
+      const approval = await _rt.runPromise(
+        Effect.gen(function* () {
+          const svc = yield* ApprovalService;
+          return yield* svc.fork({ permissionMode: 'bypass' });
+        })
+      );
 
-          for await (const event of stream) {
+      try {
+        const { stream, sessionId } = await _rt.runPromise(
+          sendMessage(undefined, auto.description, auto.projectCwd, llm, {
+            signal: controller.signal,
+            approvalOverride: approval,
+            mode: 'build',
+            permissionMode: 'bypass',
+            model: llm.modelInfo.model,
+          })
+        );
+
+        for await (const event of stream) {
             if (event._tag === 'Error') {
               logger.error(`Manual run for ${id} agent error:`, event.error);
             }

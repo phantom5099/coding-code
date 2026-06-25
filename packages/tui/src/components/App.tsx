@@ -4,7 +4,7 @@ import { useAgentRunner } from '../hooks/useAgentRunner.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
 import { generateId, historyToUIMessages } from '../utils.js';
 import type { PanelState } from '../types.js';
-import type { StreamChunk, AgentClient } from '../index.js';
+import type { StreamChunk, TuiClient } from '../index.js';
 import { MessageItem } from './MessageItem.js';
 import { InputBox } from './InputBox.js';
 import { LoadingIndicator } from './LoadingIndicator.js';
@@ -24,7 +24,7 @@ const PERMISSION_MODE_LABELS: Record<string, string> = {
   bypass: '完全放行',
 };
 interface AppProps {
-  client: AgentClient;
+  client: TuiClient;
 }
 
 export function App({ client }: AppProps) {
@@ -61,10 +61,6 @@ export function App({ client }: AppProps) {
       },
     ]);
     setActiveMessages([]);
-    client
-      .getPermissionMode()
-      .then(setPermissionMode)
-      .catch(() => {});
   }, []); // only on mount
 
   useEffect(() => {
@@ -260,7 +256,7 @@ export function App({ client }: AppProps) {
       }
       if (parsed.name === 'mcp') {
         try {
-          const servers = await client.getMcpStatus();
+          const servers = await client.getMcpStatus({ cwd: '' });
           setPanel({ type: 'mcp', servers });
         } catch (e: any) {
           setStaticMessages((prev) => [
@@ -294,7 +290,8 @@ export function App({ client }: AppProps) {
       }
       if (parsed.name === 'approve') {
         try {
-          const mode = await client.getPermissionMode();
+          const sid = client.getSessionId();
+          const mode = await client.getPermissionMode({ sessionId: sid, cwd: '' });
           setPermissionMode(mode);
           setPanel({ type: 'permission', currentMode: mode });
         } catch (e: any) {
@@ -471,7 +468,7 @@ export function App({ client }: AppProps) {
               } else {
                 await client.setMcpDisabled({ name: value, disabled: true, cwd: '' });
               }
-              const updated = await client.getMcpStatus();
+              const updated = await client.getMcpStatus({ cwd: '' });
               setPanel({ type: 'mcp', servers: updated });
             } catch {
               setPanel({ type: 'none' });
@@ -530,7 +527,8 @@ export function App({ client }: AppProps) {
           onSelect={async (value) => {
             if (!value) return;
             try {
-              await client.setPermissionMode(value as any);
+              const sid = client.getSessionId();
+              await client.setPermissionMode({ sessionId: sid, cwd: '', mode: value as any });
               setPermissionMode(value);
             } catch {
               /* ignore */

@@ -13,37 +13,11 @@ import {
 } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
-import {
-  normalizePath,
-  encodeProjectPath,
-  getProjectBaseDir,
-} from '../core/path.js';
+import { getProjectBaseDir } from '../core/path.js';
+import { computePaths, projectSessionsDir, sessionJsonlPathFromCwd } from '../core/path.js';
 import type { SessionEvent, SessionMetaEvent, SessionIndex, SessionStoreState } from './types.js';
 
-export function projectSessionsDir(encodedProjectPath: string): string {
-  return join(getProjectBaseDir(), encodedProjectPath, 'sessions');
-}
-
-export function sessionJsonlPathFromCwd(cwd: string, sessionId: string): string {
-  const projectPath = encodeProjectPath(normalizePath(cwd));
-  const sessionsDir = projectSessionsDir(projectPath);
-  return join(sessionsDir, `${sessionId}.jsonl`);
-}
-
-export function computePaths(
-  cwd: string,
-  sessionId: string,
-  parentSessionId?: string
-): Pick<SessionStoreState, 'sessionId' | 'cwd' | 'projectPath' | 'transcriptPath' | 'indexPath'> {
-  const normalizedCwd = normalizePath(cwd);
-  const projectPath = encodeProjectPath(normalizedCwd);
-  const sessionsDir = projectSessionsDir(projectPath);
-  const transcriptPath = parentSessionId
-    ? join(sessionsDir, parentSessionId, 'subagents', `${sessionId}.jsonl`)
-    : join(sessionsDir, `${sessionId}.jsonl`);
-  const indexPath = transcriptPath.replace('.jsonl', '.index.json');
-  return { sessionId, cwd: normalizedCwd, projectPath, transcriptPath, indexPath };
-}
+export { computePaths, projectSessionsDir, sessionJsonlPathFromCwd };
 
 export function ensureDirs(transcriptPath: string): void {
   const codingcodeDir = join(homedir(), '.codingcode');
@@ -158,7 +132,24 @@ export function readCurrentIndex(indexPath: string): Partial<SessionIndex> | nul
   }
 }
 
-export function setPermissionMode(sessionId: string, indexPath: string, mode: import('../approval/types.js').PermissionMode): void {
+export function writeIndexAtomic(indexPath: string, patch: Partial<SessionIndex>): void {
+  let current: Partial<SessionIndex> = {};
+  if (existsSync(indexPath)) {
+    try {
+      current = JSON.parse(readFileSync(indexPath, 'utf8'));
+    } catch {
+      /* corrupt */
+    }
+  }
+  const merged = { ...current, ...patch, updatedAt: new Date().toISOString() };
+  writeFileSync(indexPath, JSON.stringify(merged, null, 2), 'utf8');
+}
+
+export function setPermissionMode(
+  sessionId: string,
+  indexPath: string,
+  mode: import('../approval/types.js').PermissionMode
+): void {
   let index: SessionIndex | null = null;
   if (existsSync(indexPath)) {
     try {

@@ -33,9 +33,7 @@ const TestLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any))
 );
 
-// Build the service once so state is shared across all run() calls
 let _service: ApprovalService | null = null;
-
 async function getService(): Promise<ApprovalService> {
   if (!_service) {
     _service = await Effect.runPromise(
@@ -47,36 +45,46 @@ async function getService(): Promise<ApprovalService> {
   return _service!;
 }
 
-function run<T>(eff: (svc: ApprovalService) => Effect.Effect<T, any, any>): Promise<T> {
-  return getService().then((svc) => Effect.runPromise(eff(svc) as any));
+function run<T>(eff: (svc: ApprovalService) => Promise<T>): Promise<T> {
+  return getService().then(eff);
 }
 
-describe('Global permission mode state', () => {
+describe('approval.fork({ permissionMode }) closure', () => {
   beforeEach(async () => {
-    // Reset to default between tests
-    await run((svc) => svc.setPermissionMode('default'));
+    _service = null;
   });
 
-  it('starts as default', async () => {
-    const mode = await run((svc) => Effect.succeed(svc.getPermissionMode()));
+  it('fork with permissionMode: bypass creates a child whose getPermissionMode returns bypass', async () => {
+    const mode = await run(async (svc) => {
+      const child = await Effect.runPromise(svc.fork({ permissionMode: 'bypass' }));
+      return child.getPermissionMode();
+    });
+    expect(mode).toBe('bypass');
+  });
+
+  it('fork with permissionMode: acceptEdits creates a child with acceptEdits', async () => {
+    const mode = await run(async (svc) => {
+      const child = await Effect.runPromise(svc.fork({ permissionMode: 'acceptEdits' }));
+      return child.getPermissionMode();
+    });
+    expect(mode).toBe('acceptEdits');
+  });
+
+  it('fork without permissionMode defaults to "default"', async () => {
+    const mode = await run(async (svc) => {
+      const child = await Effect.runPromise(svc.fork({}));
+      return child.getPermissionMode();
+    });
     expect(mode).toBe('default');
   });
 
-  it('can be set to all valid modes', async () => {
-    const modes = ['default', 'acceptEdits', 'bypass'] as const;
-    for (const mode of modes) {
-      await run((svc) => svc.setPermissionMode(mode));
-      const current = await run((svc) => Effect.succeed(svc.getPermissionMode()));
-      expect(current).toBe(mode);
-    }
-  });
-
-  it('is shared across multiple reads (module-level singleton)', async () => {
-    await run((svc) => svc.setPermissionMode('bypass'));
-    const mode1 = await run((svc) => Effect.succeed(svc.getPermissionMode()));
-    const mode2 = await run((svc) => Effect.succeed(svc.getPermissionMode()));
-    // Both reads return the same value — no per-call isolation
-    expect(mode1).toBe('bypass');
-    expect(mode2).toBe('bypass');
+  it('two forks with different permissionMode are isolated', async () => {
+    const result = await run(async (svc) => {
+      const a = await Effect.runPromise(svc.fork({ permissionMode: 'bypass' }));
+      const b = await Effect.runPromise(svc.fork({ permissionMode: 'default' }));
+      return { a: a.getPermissionMode(), b: b.getPermissionMode() };
+    });
+    expect(result.a).toBe('bypass');
+    expect(result.b).toBe('default');
   });
 });

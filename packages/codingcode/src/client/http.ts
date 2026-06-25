@@ -134,84 +134,52 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
     },
 
     async getCheckpoints() {
-      return [];
+      return clients.agent.getCheckpoints();
     },
-    async getCheckpointDiff() {
-      return { turnId: 0, files: [] };
+    async getCheckpointDiff(turnId?: number) {
+      return clients.agent.getCheckpointDiff(turnId);
     },
-    async revertCheckpointFiles() {
+    async revertCheckpointFiles(turnId: number, files: string[]) {
+      return clients.agent.revertCheckpointFiles(turnId, files);
+    },
+    async previewRollbackDiff(throughTurnId: number) {
+      return clients.agent.previewRollbackDiff(throughTurnId);
+    },
+    async rollbackCodeToTurn(throughTurnId: number) {
+      return clients.agent.rollbackCodeToTurn(throughTurnId);
+    },
+    async rollbackContext(throughTurnId: number) {
+      const res = await clients.agent.rollbackContext(throughTurnId);
       return {
-        reverted: false,
-        throughTurnId: 0,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
+        turns: (res as any).turns ?? [],
+        rollbackState:
+          (res as any).rollbackState ?? { active: false, currentThroughTurnId: null },
       };
     },
-    async previewRollbackDiff() {
-      return { throughTurnId: 0, affectedTurns: [], diff: '' };
-    },
-    async rollbackCodeToTurn() {
+    async rollbackBothToTurn(throughTurnId: number) {
+      const res = await clients.agent.rollbackBothToTurn(throughTurnId);
       return {
-        reverted: false,
-        throughTurnId: 0,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      };
-    },
-    async rollbackContext() {
-      return {
-        turns: [] as SessionEvent[],
-        rollbackState: {
-          context: { active: false, currentThroughTurnId: null },
-          code: {
-            canUndoLast: false,
-            lastEntry: null,
-            revertedFiles: [] as string[],
-            lastEntryId: null,
+        turns: (res as any).turns ?? [],
+        codeResult:
+          (res as any).codeResult ?? {
+            reverted: false,
+            throughTurnId,
+            affectedTurns: [],
+            selectedFiles: [],
+            restoreEntry: null,
           },
-        } as RollbackState,
+        rollbackState:
+          (res as any).rollbackState ?? { active: false, currentThroughTurnId: null },
       };
     },
-    async rollbackBothToTurn() {
-      return {
-        turns: [] as SessionEvent[],
-        codeResult: {
-          reverted: false,
-          throughTurnId: 0,
-          affectedTurns: [],
-          selectedFiles: [],
-          restoreEntry: null,
-        },
-        rollbackState: {
-          context: { active: false, currentThroughTurnId: null },
-          code: {
-            canUndoLast: false,
-            lastEntry: null,
-            revertedFiles: [] as string[],
-            lastEntryId: null,
-          },
-        } as RollbackState,
-      };
-    },
-    async undoLastCodeRollback() {
-      return {
-        restored: false,
-        conflict: false,
-        conflictFiles: [],
-        restoredFiles: [],
-        remainingRolledBack: [],
-      };
+    async undoLastCodeRollback(force?: boolean, files?: string[]) {
+      return clients.agent.undoLastCodeRollback(force, files);
     },
     async getRollbackState() {
-      return {
-        context: { active: false, currentThroughTurnId: null },
-        code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null },
-      };
+      return clients.agent.getRollbackState();
     },
-    async forkSession(_atTurnId?: number) {
-      return '';
+    async forkSession(atTurnId?: number) {
+      return clients.agent.forkSession(atTurnId);
     },
 
     async compact() {
@@ -340,12 +308,12 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       await clients.settings.deleteHook({ cwd, name });
     },
 
-    async getPermissionMode() {
-      return clients.settings.getGlobalPermissionMode();
+    async getPermissionMode(input: { sessionId: string; cwd: string }) {
+      return clients.settings.getGlobalPermissionMode(input);
     },
 
-    async setPermissionMode(mode: PermissionMode) {
-      await clients.settings.setGlobalPermissionMode(mode);
+    async setPermissionMode(input: { sessionId: string; cwd: string; mode: PermissionMode }) {
+      await clients.settings.setGlobalPermissionMode(input);
     },
   };
 }

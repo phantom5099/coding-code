@@ -8,10 +8,9 @@ import {
   computePaths,
   sessionJsonlPathFromCwd,
   projectSessionsDir,
-} from '../../src/session/file-ops.js';
+} from '../../src/core/path.js';
 import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
-
 
 const base = useTempProjectBase();
 
@@ -87,13 +86,17 @@ describe('computePaths', () => {
       const childState = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(cwd, {
-            model: 'subagent-model',
-            mode: 'build',
-            permissionMode: 'default',
-          }, {
-            parentSessionId: state.sessionId,
-          });
+          return yield* svc.create(
+            cwd,
+            {
+              model: 'subagent-model',
+              mode: 'build',
+              permissionMode: 'default',
+            },
+            {
+              parentSessionId: state.sessionId,
+            }
+          );
         })
       );
 

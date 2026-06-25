@@ -1,16 +1,19 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer } from 'effect';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { runPipeline } from '../../src/approval/pipeline.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { READONLY_TOOL_NAMES } from '../../src/approval/presets.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import {
-  planModeGateHook,
-  markSessionPlanMode,
-  clearPlanModeSession,
-} from '../../src/plan/index.js';
+import { planModeGateHook } from '../../src/plan/index.js';
+import { computePaths } from '../../src/core/path.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
+import { useTempProjectBase } from '../helpers/project-base.js';
+
+const base = useTempProjectBase();
 
 const decisionHandlers: DecisionHandler[] = [];
 
@@ -39,7 +42,6 @@ const mockHookService = {
   disposeProject: () => Effect.succeed(undefined),
 };
 
-// Capture the payload of emitApprovalRequest so we can verify the Layer 4 → Layer 5 handoff
 let capturedApproval: any = null;
 
 function makeMockApprovalWait() {
@@ -58,19 +60,40 @@ function makeMockApprovalWait() {
   };
 }
 
+function makeIndex(cwd: string, sessionId: string, mode: 'plan' | 'build') {
+  const paths = computePaths(cwd, sessionId);
+  mkdirSync(paths.transcriptPath.replace(/\.jsonl$/, ''), { recursive: true });
+  const idx = {
+    sessionId,
+    projectPath: paths.projectPath,
+    cwd: paths.cwd,
+    model: 'test',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    messageCount: 0,
+    title: sessionId.slice(0, 8),
+    currentTurnId: 0,
+    usage: undefined,
+    mode,
+    permissionMode: 'default',
+  };
+  writeFileSync(paths.indexPath, JSON.stringify(idx, null, 2), 'utf8');
+}
+
 function runPipelineWithMock(opts: {
   tool: string;
   input: any;
   permissionMode: 'default' | 'acceptEdits' | 'bypass';
   sessionId: string;
   planMode: boolean;
+  cwd: string;
 }) {
   capturedApproval = null;
   decisionHandlers.length = 0;
   decisionHandlers.push(planModeGateHook);
 
-  if (opts.planMode) markSessionPlanMode(opts.sessionId, true);
-  else markSessionPlanMode(opts.sessionId, false);
+  if (opts.planMode) makeIndex(opts.cwd, opts.sessionId, 'plan');
+  else makeIndex(opts.cwd, opts.sessionId, 'build');
 
   const mockWait = makeMockApprovalWait();
   const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
@@ -85,15 +108,21 @@ function runPipelineWithMock(opts: {
         destructiveTools: new Set(),
         permissionMode: opts.permissionMode,
         sessionId: opts.sessionId,
+        projectPath: opts.cwd,
       }
     ).pipe(Effect.provide(TestLayer) as any)
   );
 }
 
-describe('Plan mode gate hook integration (planApprovalHook removed — submit_plan self-handles)', () => {
+describe('Plan mode gate hook integration', () => {
+  let cwd: string;
   beforeEach(() => {
+    cwd = mkdtempSync(join(tmpdir(), 'codingcode-gate-pipeline-'));
     capturedApproval = null;
     decisionHandlers.length = 0;
+  });
+  afterEach(() => {
+    rmSync(cwd, { recursive: true, force: true });
   });
 
   it('plan mode + write_file: gate denies before reaching user confirmation', async () => {
@@ -103,13 +132,11 @@ describe('Plan mode gate hook integration (planApprovalHook removed — submit_p
       permissionMode: 'default',
       sessionId: 's2',
       planMode: true,
+      cwd,
     });
-    // Gate denied, so no user confirmation fired.
     expect(decision.type).toBe('deny');
     expect(decision.reason).toMatch(/plan mode/i);
     expect(capturedApproval).toBeNull();
-
-    clearPlanModeSession('s2');
   });
 
   it('plan mode + execute_command: gate denies with plan-mode reason', async () => {
@@ -119,30 +146,24 @@ describe('Plan mode gate hook integration (planApprovalHook removed — submit_p
       permissionMode: 'default',
       sessionId: 's3',
       planMode: true,
+      cwd,
     });
     expect(decision.type).toBe('deny');
     expect(decision.reason).toMatch(/plan mode/i);
     expect(capturedApproval).toBeNull();
-
-    clearPlanModeSession('s3');
   });
 
-  it('plan mode + dispatch_agent: gate lets it through (subagent-whitelist inline at dispatch time)', async () => {
+  it('plan mode + dispatch_agent: gate lets it through', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'dispatch_agent',
       input: { agent: 'build', prompt: 'do something' },
       permissionMode: 'default',
       sessionId: 's4',
       planMode: true,
+      cwd,
     });
-    // The gate does not deny dispatch_agent (it's in PLAN_MODE_ALLOWED_TOOLS).
-    // The pipeline may short-circuit at Layer 2 (readonly-whitelist) since
-    // dispatch_agent is in READONLY_TOOL_NAMES. The subagent-whitelist check
-    // is now inline in dispatch_agent (not a hook) and runs at dispatch time.
     expect(decision.type).toBe('allow');
     expect(decision.type).not.toBe('deny');
-
-    clearPlanModeSession('s4');
   });
 
   it('build mode + write_file: gate does not fire, pipeline falls through normally', async () => {
@@ -152,30 +173,23 @@ describe('Plan mode gate hook integration (planApprovalHook removed — submit_p
       permissionMode: 'default',
       sessionId: 's5',
       planMode: false,
+      cwd,
     });
-    // build mode: write_file is not in any allowlist, pipeline reaches user confirm
     expect(capturedApproval).not.toBeNull();
     expect(decision.source).toBe('user-confirm');
-
-    clearPlanModeSession('s5');
   });
 
-  it('submit_plan: pipeline short-circuits at Layer 5 (no 2-option modal)', async () => {
-    // The plan approval is no longer triggered by a hook. The pipeline
-    // recognizes submit_plan by name at Layer 5 and short-circuits with
-    // 'allow' + source 'system-plan-self-handles'. The plan modal is
-    // driven by submit_plan.execute itself, not by the pipeline.
+  it('submit_plan: pipeline short-circuits at Layer 5', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'submit_plan',
       input: { plan_content: '# plan' },
       permissionMode: 'default',
       sessionId: 's6',
       planMode: true,
+      cwd,
     });
     expect(decision.type).toBe('allow');
     expect(decision.source).toBe('system-plan-self-handles');
     expect(capturedApproval).toBeNull();
-
-    clearPlanModeSession('s6');
   });
 });

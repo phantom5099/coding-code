@@ -122,10 +122,10 @@ export const sendMessage = (
   llm: LLMClient,
   options: {
     signal?: AbortSignal;
-    approvalOverride?: any;
-    mode: SessionMode;
-    permissionMode: PermissionMode;
-    model: string;
+    approvalOverride?: import('../approval/index.js').ApprovalService;
+    mode?: SessionMode;
+    permissionMode?: PermissionMode;
+    model?: string;
   }
 ) =>
   Effect.gen(function* () {
@@ -148,18 +148,19 @@ export const sendMessage = (
     yield* skills.evictProject(normalizedCwd);
 
     if (!sessionId) {
-      const created = yield* session.create(normalizedCwd, {
+      if (!options.mode || !options.permissionMode || !options.model) {
+        return yield* Effect.fail(
+          new AgentError(
+            'CONFIG_MISSING',
+            'new session requires mode, permissionMode, and model'
+          )
+        );
+      }
+      const created = yield* session.createSessionWithProfile(normalizedCwd, {
         model: options.model,
         mode: options.mode,
         permissionMode: options.permissionMode,
       });
-      const profile = modeToProfile(options.mode);
-      yield* runtime.setSessionProfile(
-        normalizedCwd,
-        created.sessionId,
-        profile,
-        options.permissionMode
-      );
       sessionId = created.sessionId;
     }
     const state = yield* session.load(normalizedCwd, sessionId);
@@ -335,12 +336,7 @@ export function agentLoop(
 
         const compressResult = yield* Effect.tryPromise({
           try: () =>
-            context.compactIfNeeded(
-              state.transcriptPath,
-              messages,
-              llm.modelInfo.maxTokens,
-              llm
-            ),
+            context.compactIfNeeded(state.transcriptPath, messages, llm.modelInfo.maxTokens, llm),
           catch: (e) => new AgentError('LLM_FAILED', String(e)),
         });
         if (compressResult.didCompress && compressResult.messages) {

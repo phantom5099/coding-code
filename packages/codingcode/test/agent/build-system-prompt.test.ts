@@ -86,6 +86,6 @@ describe('buildSystemPrompt', () => {
     });
     expect(prompt).toContain('submit_plan');
     expect(prompt).toContain("dispatch the 'explore' subagent");
-    expect(prompt).toContain("write_file / edit_file / execute_command are denied");
+    expect(prompt).toContain('write_file / edit_file / execute_command are denied');
   });
 });

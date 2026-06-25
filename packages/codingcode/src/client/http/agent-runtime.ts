@@ -14,13 +14,48 @@ export interface AgentRuntimeClient {
     response: string;
   }): Promise<void>;
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
+
+  getCheckpoints(): Promise<Array<{ turnId: number; title: string; files: string[] }>>;
+  getCheckpointDiff(turnId?: number): Promise<import('../../checkpoint/types.js').CheckpointDiff>;
+  revertCheckpointFiles(
+    turnId: number,
+    files: string[]
+  ): Promise<import('../../checkpoint/types.js').CodeRollbackResult>;
+  previewRollbackDiff(
+    throughTurnId: number
+  ): Promise<import('../../checkpoint/types.js').RollbackPreviewDiff>;
+  rollbackCodeToTurn(
+    throughTurnId: number
+  ): Promise<import('../../checkpoint/types.js').CodeRollbackResult>;
+  rollbackContext(
+    throughTurnId: number
+  ): Promise<{
+    turns: Array<{ id: string; items: object[]; status: string }>;
+    rollbackState: import('../../checkpoint/types.js').RollbackState;
+  }>;
+  rollbackBothToTurn(throughTurnId: number): Promise<{
+    turns: Array<{ id: string; items: object[]; status: string }>;
+    codeResult: import('../../checkpoint/types.js').CodeRollbackResult;
+    rollbackState: import('../../checkpoint/types.js').RollbackState;
+  }>;
+  undoLastCodeRollback(
+    force?: boolean,
+    files?: string[]
+  ): Promise<import('../../checkpoint/types.js').CodeRollbackUndoResult>;
+  getRollbackState(): Promise<import('../../checkpoint/types.js').RollbackState>;
+  forkSession(
+    atTurnId?: number
+  ): Promise<{
+    sessionId: string;
+    turns: Array<{ id: string; items: object[]; status: string }>;
+  }>;
 }
 
 export function createHttpAgentClient(
   baseUrl: string,
   request: ReturnType<typeof createRequestHelpers>
 ): AgentRuntimeClient {
-  const { apiPost } = request;
+  const { apiPost, apiGet } = request;
 
   return {
     async *sendMessage(input, { sessionId, cwd, signal }) {
@@ -130,6 +165,50 @@ export function createHttpAgentClient(
 
     async compact({ sessionId, cwd }) {
       await apiPost(`/api/sessions/${sessionId}/compact`, { cwd });
+    },
+
+    async getCheckpoints() {
+      return apiGet('/api/checkpoints');
+    },
+
+    async getCheckpointDiff(turnId?: number) {
+      const segment = turnId != null ? String(turnId) : 'latest';
+      return apiGet(`/api/sessions/_/checkpoints/${segment}/diff?cwd=_`);
+    },
+
+    async revertCheckpointFiles(turnId: number, files: string[]) {
+      return apiPost(`/api/sessions/_/checkpoints/latest/revert-files?cwd=_`, {
+        turnId,
+        files,
+      });
+    },
+
+    async previewRollbackDiff(throughTurnId: number) {
+      return apiGet(`/api/sessions/_/rollback-preview?cwd=_&throughTurnId=${throughTurnId}`);
+    },
+
+    async rollbackCodeToTurn(throughTurnId: number) {
+      return apiPost(`/api/sessions/_/rollback-code-to-turn?cwd=_`, { throughTurnId });
+    },
+
+    async rollbackContext(throughTurnId: number) {
+      return apiPost(`/api/sessions/_/rollback-context?cwd=_`, { throughTurnId });
+    },
+
+    async rollbackBothToTurn(throughTurnId: number) {
+      return apiPost(`/api/sessions/_/rollback-both-to-turn?cwd=_`, { throughTurnId });
+    },
+
+    async undoLastCodeRollback(force?: boolean, files?: string[]) {
+      return apiPost(`/api/sessions/_/undo-code-rollback?cwd=_`, { force, files });
+    },
+
+    async getRollbackState() {
+      return apiGet('/api/sessions/_/rollback-state?cwd=_');
+    },
+
+    async forkSession(atTurnId?: number) {
+      return apiPost('/api/sessions/_/fork?cwd=_', { atTurnId });
     },
   };
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 
-import { createDirectClient, agentEventToStreamChunk } from '../../src/client/direct.js';
+import { createDirectModelClient } from '../../src/direct/models.js';
+import { agentEventToStreamChunk } from '../../src/agent/stream-adapter.js';
 import type { LLMClient } from '../../src/llm/client.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
 import { AgentError } from '../../src/core/error.js';
@@ -62,10 +63,10 @@ const noopLlm: LLMClient = {
   },
 };
 
-describe('createDirectClient model operations', () => {
+describe('createDirectModelClient operations', () => {
   it('lists models from the local model catalog without HTTP', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    const client = await createDirectClient(noopLlm, rt);
+    const client = createDirectModelClient(rt);
 
     const result = await client.listModels();
 
@@ -79,9 +80,9 @@ describe('createDirectClient model operations', () => {
 
   it('rejects unknown model switches without contacting server', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    const client = await createDirectClient(noopLlm, rt);
+    const client = createDirectModelClient(rt);
 
-    await expect(client.switchModel('missing-model@MISSING_KEY')).rejects.toThrow('not found');
+    await expect(client.switchModel({ id: 'missing-model@MISSING_KEY' })).rejects.toThrow('not found');
 
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
