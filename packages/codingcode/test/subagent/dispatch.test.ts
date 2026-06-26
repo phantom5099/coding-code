@@ -15,7 +15,13 @@ import type { AgentEvent } from '../../src/agent/types.js';
 import type { LLMClient } from '../../src/llm/client.js';
 
 const mockLlm: Partial<LLMClient> = {
-  modelInfo: { model: 'test-model', provider: 'test', maxTokens: 8192, displayName: 'test' },
+  modelInfo: {
+    model: 'test-model',
+    provider: 'test',
+    maxTokens: 8192,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
 };
 
 function makeMockSession(parentPermissionMode: 'default' | 'bypass' | 'acceptEdits' = 'default') {

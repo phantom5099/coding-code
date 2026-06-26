@@ -76,7 +76,8 @@ function makeFixture(
     title: 'fixture',
     currentTurnId: 2,
     usage: usage ?? undefined,
-    permissionMode: 'default',
+    mode: 'build' as const,
+    permissionMode: 'default' as const,
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
@@ -104,6 +105,8 @@ describe('promptEstimate', () => {
         currentTurnId: 2,
         sessionMeta: null,
         model: 'test-model',
+        mode: 'build' as const,
+        permissionMode: 'default' as const,
         title: 'fixture',
         usage,
         memorySnapshot: '',
@@ -137,6 +140,8 @@ describe('promptEstimate', () => {
         currentTurnId: 2,
         sessionMeta: null,
         model: 'test-model',
+        mode: 'build' as const,
+        permissionMode: 'default' as const,
         title: 'fixture',
         usage: undefined,
         memorySnapshot: '',

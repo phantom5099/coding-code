@@ -93,6 +93,8 @@ const mockState = {
   sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
   model: 'test-model',
   title: 'concurrent',
+  mode: 'build' as const,
+  permissionMode: 'default' as const,
   usage: undefined,
   memorySnapshot: '',
 };

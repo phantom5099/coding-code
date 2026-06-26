@@ -84,6 +84,8 @@ const mockState = {
   model: 'test-model',
   title: 'test',
   usage: undefined,
+  mode: 'build' as const,
+  permissionMode: 'default' as const,
   projectPath: 'test-project',
   transcriptPath: '/tmp/test.jsonl',
   indexPath: '/tmp/test.index.json',

@@ -15,7 +15,9 @@ describe('scheduler uses real forked ApprovalService', () => {
       'C:/Users/10116/Desktop/agent/coding code/packages/codingcode/src/scheduler/service.ts',
       'utf8'
     );
-    expect(src).toMatch(/import\s*\{[^}]*ApprovalService[^}]*\}\s*from\s*['"]\.\.\/approval\/index\.js['"]/);
+    expect(src).toMatch(
+      /import\s*\{[^}]*ApprovalService[^}]*\}\s*from\s*['"]\.\.\/approval\/index\.js['"]/
+    );
   });
 
   it('scheduler resolves ApprovalService and forks with bypass', () => {

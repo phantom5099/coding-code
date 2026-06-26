@@ -56,6 +56,7 @@ function makeFixture(sessionId: string, slug: string) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
+    mode: 'build',
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');

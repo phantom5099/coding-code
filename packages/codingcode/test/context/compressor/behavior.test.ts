@@ -76,6 +76,7 @@ function makeFixture(opts: FixtureOptions) {
     title: 'fixture',
     currentTurnId: opts.currentTurnId ?? opts.numTurns,
     usage: undefined,
+    mode: 'build',
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');

@@ -15,6 +15,8 @@ describe('SessionStoreState export', () => {
       title: '',
       currentTurnId: 0,
       usage: undefined,
+      mode: 'build',
+      permissionMode: 'default',
       memorySnapshot: '',
     };
     expect(state.sessionId).toBe('test-sid');

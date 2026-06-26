@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import { filterForContext, buildContextMessages } from '../../src/context/service.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import { filterForUI } from '../../src/session/ui-history.js';
-import type { SessionIndex } from '../../src/session/types.js';
+import type { SessionEvent, SessionIndex } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -58,6 +58,7 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
+    mode: 'build',
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -70,16 +71,18 @@ describe('filterForContext', () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     try {
-      const events = [
+      const events: SessionEvent[] = [
         {
-          type: 'session_meta' as const,
+          type: 'session_meta',
           sessionId,
           projectPath: slug,
           cwd: '/tmp',
           createdAt: new Date().toISOString(),
+          mode: 'build',
+          permissionMode: 'default',
         },
-        { type: 'user' as const, turnId: 1, content: 'hello' },
-        { type: 'assistant' as const, turnId: 1, content: 'hi', toolCalls: [] },
+        { type: 'user', turnId: 1, content: 'hello' },
+        { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },
         { type: 'user' as const, turnId: 2, content: 'bye' },
         { type: 'assistant' as const, turnId: 2, content: 'bye', toolCalls: [] },
         { type: 'rollback' as const, throughTurnId: 1, reason: 'test' },
@@ -123,6 +126,8 @@ describe('readUIHistory with visibility filtering', () => {
           projectPath: slug,
           cwd: '/tmp',
           createdAt: new Date().toISOString(),
+          mode: 'build',
+          permissionMode: 'default',
         },
         { type: 'user', turnId: 1, content: 'hello' },
         { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },
@@ -147,6 +152,7 @@ describe('readUIHistory with visibility filtering', () => {
           title: 'test',
           currentTurnId: 2,
           usage: undefined,
+          mode: 'build',
           permissionMode: 'default',
         })
       );

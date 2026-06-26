@@ -63,6 +63,7 @@ function makeFixture(
     title: 'fixture',
     currentTurnId: turns.length,
     usage: turns[turns.length - 1]?.usage,
+    mode: 'build',
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -91,8 +92,12 @@ function buildState(
       projectPath: encodeProjectPath('/tmp/test'),
       cwd: '/tmp/test',
       createdAt: new Date().toISOString(),
+      mode: 'build' as const,
+      permissionMode: 'default' as const,
     },
     model: 'test-model',
+    mode: 'build' as const,
+    permissionMode: 'default' as const,
     title: 'fixture',
     usage: initialUsage,
     memorySnapshot: '',

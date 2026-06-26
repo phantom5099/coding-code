@@ -7,7 +7,9 @@ describe('desktop core-api uses clients.* not raw api() for the 5 settings/sessi
       'C:/Users/10116/Desktop/agent/coding code/packages/desktop/src/lib/core-api.ts',
       'utf8'
     );
-    expect(src).toMatch(/function getMemoryConfig[\s\S]*return clients\.settings\.getMemoryConfig\(\)/);
+    expect(src).toMatch(
+      /function getMemoryConfig[\s\S]*return clients\.settings\.getMemoryConfig\(\)/
+    );
   });
 
   it('setMemoryModel delegates to clients.settings.setMemoryModel', () => {
@@ -31,7 +33,9 @@ describe('desktop core-api uses clients.* not raw api() for the 5 settings/sessi
       'C:/Users/10116/Desktop/agent/coding code/packages/desktop/src/lib/core-api.ts',
       'utf8'
     );
-    expect(src).toMatch(/function setCompactionModel[\s\S]*return clients\.settings\.setCompactionModel/);
+    expect(src).toMatch(
+      /function setCompactionModel[\s\S]*return clients\.settings\.setCompactionModel/
+    );
   });
 
   it('getSessionPlan delegates to clients.sessions.getSessionPlan', () => {
