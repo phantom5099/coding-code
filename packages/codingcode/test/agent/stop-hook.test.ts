@@ -87,6 +87,8 @@ describe('agentLoop stop hook', () => {
     model: 'test-model',
     title: 'test',
     usage: undefined,
+    mode: 'build' as const,
+    permissionMode: 'default' as const,
     projectPath: '',
     transcriptPath: '',
     indexPath: '',

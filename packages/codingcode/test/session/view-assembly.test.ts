@@ -15,6 +15,8 @@ function makeEvents(extra: SessionEvent[] = []): SessionEvent[] {
       projectPath: 'p',
       cwd: '/tmp',
       createdAt: new Date().toISOString(),
+      mode: 'build',
+      permissionMode: 'default',
     },
     { type: 'user', turnId: 1, content: 'hello' },
     {
@@ -108,6 +110,8 @@ describe('buildContextMessages', () => {
         projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
+        mode: 'build',
+        permissionMode: 'default',
       },
       {
         type: 'user',
@@ -134,6 +138,8 @@ describe('buildContextMessages', () => {
         projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
+        mode: 'build',
+        permissionMode: 'default',
       },
       {
         type: 'user',
@@ -182,6 +188,8 @@ describe('buildContextMessages', () => {
         projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
+        mode: 'build',
+        permissionMode: 'default',
       },
       {
         type: 'user',
@@ -235,6 +243,8 @@ describe('buildContextMessages', () => {
         projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
+        mode: 'build',
+        permissionMode: 'default',
       },
       {
         type: 'user',
@@ -278,6 +288,8 @@ describe('buildContextMessages', () => {
         projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
+        mode: 'build',
+        permissionMode: 'default',
       },
       {
         type: 'user',
@@ -320,6 +332,8 @@ describe('buildContextMessages', () => {
         projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
+        mode: 'build',
+        permissionMode: 'default',
       },
       { type: 'user', turnId: 1, content: 'q1' },
       {

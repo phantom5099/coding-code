@@ -58,6 +58,8 @@ const mockState = {
   sessionMeta: null,
   model: 'test',
   title: 'test-sess',
+  mode: 'build' as const,
+  permissionMode: 'default' as const,
   usage: undefined,
   memorySnapshot: '',
 };
@@ -339,7 +341,7 @@ describe('sendMessage stream', () => {
 
   it('should yield AgentEvent chunks from LLM', async () => {
     const sessionId = await setupSession();
-    const program = sendMessage(sessionId, 'hi', '/tmp/test', mockLlm);
+    const program = sendMessage(sessionId, 'hi', '/tmp/test', mockLlm, {});
     const { stream } = (await Effect.runPromise(
       program.pipe(Effect.provide(TestLayer) as any)
     )) as any;
@@ -355,7 +357,7 @@ describe('sendMessage stream', () => {
 
   it('should not return empty event stream for normal LLM response', async () => {
     const sessionId = await setupSession();
-    const program = sendMessage(sessionId, 'hi', '/tmp/test', mockLlm);
+    const program = sendMessage(sessionId, 'hi', '/tmp/test', mockLlm, {});
     const { stream } = (await Effect.runPromise(
       program.pipe(Effect.provide(TestLayer) as any)
     )) as any;

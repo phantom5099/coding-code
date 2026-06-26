@@ -4,11 +4,7 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
-import {
-  computePaths,
-  sessionJsonlPathFromCwd,
-  projectSessionsDir,
-} from '../../src/core/path.js';
+import { computePaths, sessionJsonlPathFromCwd, projectSessionsDir } from '../../src/core/path.js';
 import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 

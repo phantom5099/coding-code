@@ -13,9 +13,9 @@ describe('getSessionPlan: http + direct both implement', () => {
   it('http calls GET /api/sessions/:id/plan?cwd=...', async () => {
     const calls: string[] = [];
     const c = createHttpSessionClient({
-      apiGet: async (p) => {
+      apiGet: async <T>(p: string) => {
         calls.push(p);
-        return { content: 'plan', path: '/p', directory: '/d', exists: true };
+        return { content: 'plan', path: '/p', directory: '/d', exists: true } as T;
       },
       apiPost: async () => null as any,
       apiPut: async () => null as any,
@@ -34,7 +34,10 @@ describe('getSessionPlan: http + direct both implement', () => {
     writeFileSync(join(projectDir, 'second.md'), '# second');
     setProjectBaseDir(base);
     try {
-      const TestLayer = Layer.mergeAll(SessionService.Default, ProjectRuntimeService.Default);
+      const TestLayer = Layer.mergeAll(
+        SessionService.Default,
+        ProjectRuntimeService.Default
+      ) as Layer.Layer<SessionService | ProjectRuntimeService>;
       const rt = ManagedRuntime.make(TestLayer);
       const c = createDirectSessionClient(rt as any);
       const res = await c.getSessionPlan({ sessionId: 's1', cwd: '/my/cwd' });

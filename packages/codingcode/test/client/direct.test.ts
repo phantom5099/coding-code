@@ -82,7 +82,9 @@ describe('createDirectModelClient operations', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const client = createDirectModelClient(rt);
 
-    await expect(client.switchModel({ id: 'missing-model@MISSING_KEY' })).rejects.toThrow('not found');
+    await expect(client.switchModel({ id: 'missing-model@MISSING_KEY' })).rejects.toThrow(
+      'not found'
+    );
 
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();

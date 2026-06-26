@@ -58,16 +58,20 @@ const TestLayer = Layer.mergeAll(
   ApprovalWaitService.Default
 );
 
-const rt = ManagedRuntime.make(TestLayer);
+const rt = ManagedRuntime.make(
+  TestLayer as Layer.Layer<
+    SkillService | HookService | ApprovalService | McpService | ApprovalWaitService | MemoryService
+  >
+);
 
 describe('setMemoryModel: http + direct both implement', () => {
   it('http calls POST /api/settings/memory/model', async () => {
     const calls: Array<{ path: string; body: unknown }> = [];
     const c = createHttpSettingsClient({
       apiGet: async () => null as any,
-      apiPost: async (p, b) => {
+      apiPost: async <T>(p: string, b?: unknown) => {
         calls.push({ path: p, body: b });
-        return { model: (b as { model: string }).model };
+        return { model: (b as { model: string }).model } as T;
       },
       apiPut: async () => null as any,
       apiDelete: async () => undefined,
@@ -90,9 +94,9 @@ describe('getAgentConfig: http + direct both implement', () => {
   it('http calls GET /api/settings/agent/config', async () => {
     const calls: string[] = [];
     const c = createHttpSettingsClient({
-      apiGet: async (p) => {
+      apiGet: async <T>(p: string) => {
         calls.push(p);
-        return { maxSteps: 100, maxStopContinuations: 3 };
+        return { maxSteps: 100, maxStopContinuations: 3 } as T;
       },
       apiPost: async () => null as any,
       apiPut: async () => null as any,
@@ -116,9 +120,9 @@ describe('setCompactionModel: http + direct both implement', () => {
     const calls: Array<{ path: string; body: unknown }> = [];
     const c = createHttpSettingsClient({
       apiGet: async () => null as any,
-      apiPost: async (p, b) => {
+      apiPost: async <T>(p: string, b?: unknown) => {
         calls.push({ path: p, body: b });
-        return { compactionModel: (b as { compactionModel: string }).compactionModel };
+        return { compactionModel: (b as { compactionModel: string }).compactionModel } as T;
       },
       apiPut: async () => null as any,
       apiDelete: async () => undefined,
@@ -139,7 +143,7 @@ describe('setCompactionModel: http + direct both implement', () => {
 describe('getMemoryConfig returns model field', () => {
   it('http typed return includes model', async () => {
     const c = createHttpSettingsClient({
-      apiGet: async () => ({ enabled: true, types: [], model: 'm' }),
+      apiGet: async <T>() => ({ enabled: true, types: [], model: 'm' }) as T,
       apiPost: async () => null as any,
       apiPut: async () => null as any,
       apiDelete: async () => undefined,

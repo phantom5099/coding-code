@@ -68,7 +68,8 @@ function makeFixture(sessionId: string, slug: string) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
-    permissionMode: 'default',
+    mode: 'build' as const,
+    permissionMode: 'default' as const,
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
@@ -120,6 +121,8 @@ describe('forkSession', () => {
         model: 'test',
         title: 'fixture',
         usage: undefined,
+        mode: 'build' as const,
+        permissionMode: 'default' as const,
         memorySnapshot: '',
       };
 
@@ -162,6 +165,8 @@ describe('forkSession', () => {
         currentTurnId: 3,
         sessionMeta: null,
         model: 'test',
+        mode: 'build' as const,
+        permissionMode: 'default' as const,
         title: 'fixture',
         usage: undefined,
         memorySnapshot: '',
@@ -216,6 +221,8 @@ describe('forkSession', () => {
         currentTurnId: 3,
         sessionMeta: null,
         model: 'test',
+        mode: 'build' as const,
+        permissionMode: 'default' as const,
         title: 'fixture',
         usage: undefined,
         memorySnapshot: '',
@@ -280,6 +287,8 @@ describe('forkSession', () => {
         currentTurnId: 3,
         sessionMeta: null,
         model: 'test',
+        mode: 'build' as const,
+        permissionMode: 'default' as const,
         title: 'fixture',
         usage: undefined,
         memorySnapshot: '',
@@ -343,7 +352,8 @@ describe('forkSession', () => {
       title: 'uuid-fixture',
       currentTurnId: 2,
       usage: undefined,
-      permissionMode: 'default',
+      mode: 'build' as const,
+      permissionMode: 'default' as const,
     };
     writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
@@ -358,6 +368,8 @@ describe('forkSession', () => {
         currentTurnId: 2,
         sessionMeta: null,
         model: 'test',
+        mode: 'build' as const,
+        permissionMode: 'default' as const,
         title: 'uuid-fixture',
         usage: undefined,
         memorySnapshot: '',

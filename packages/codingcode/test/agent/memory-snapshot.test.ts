@@ -100,6 +100,8 @@ function makeState(memorySnapshot: string = '') {
     model: 'test-model',
     title: 'memory-test',
     usage: undefined,
+    mode: 'build' as const,
+    permissionMode: 'default' as const,
     memorySnapshot,
   };
 }

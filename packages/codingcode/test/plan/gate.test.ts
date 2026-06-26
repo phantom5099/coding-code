@@ -86,9 +86,9 @@ describe('planModeGateHook', () => {
     });
   });
 
-  it('denies execute_command in plan mode', () => {
+  it('denies execute_command in plan mode', async () => {
     makeSessionIndex(cwd, sessionId, 'plan');
-    const result = planModeGateHook({
+    const result = await planModeGateHook({
       toolName: 'execute_command',
       sessionId,
       projectPath: cwd,
@@ -97,9 +97,9 @@ describe('planModeGateHook', () => {
     expect(result?.reason).toMatch(/plan mode/i);
   });
 
-  it('denies edit_file in plan mode', () => {
+  it('denies edit_file in plan mode', async () => {
     makeSessionIndex(cwd, sessionId, 'plan');
-    const result = planModeGateHook({
+    const result = await planModeGateHook({
       toolName: 'edit_file',
       sessionId,
       projectPath: cwd,

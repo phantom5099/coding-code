@@ -11,6 +11,8 @@ describe('sessionEventsToTurns', () => {
         projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
+        mode: 'build',
+        permissionMode: 'default',
       },
       {
         type: 'user',
@@ -60,6 +62,8 @@ describe('sessionEventsToTurns', () => {
         projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
+        mode: 'build',
+        permissionMode: 'default',
       },
       {
         type: 'user',
@@ -107,6 +111,8 @@ describe('sessionEventsToTurns', () => {
         projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
+        mode: 'build',
+        permissionMode: 'default',
       },
       {
         type: 'user',
