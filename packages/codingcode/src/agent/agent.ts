@@ -31,7 +31,6 @@ import type { PermissionMode } from '../approval/types.js';
 
 const REACTIVE_COMPACT_MAX_RETRIES = 3;
 import { RulesService } from '../rules/index.js';
-import type { MainAgentProfile } from '../subagent/loader.js';
 
 const logger = createLogger();
 
@@ -187,11 +186,6 @@ export const sendMessage = (
 
     if (profile?.hooks?.length) {
       yield* hooks.attachSessionHooks(sid, profile.hooks);
-    }
-
-    const mainProfile = profile as MainAgentProfile | undefined;
-    if (mainProfile?.mcpServers?.length) {
-      yield* mcp.connectServers(normalizedCwd, sid, mainProfile.mcpServers);
     }
 
     const mcpTools = mcp.listProjectMcpTools(normalizedCwd);

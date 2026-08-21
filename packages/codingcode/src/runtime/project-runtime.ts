@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 import type { AgentProfile } from '../subagent/types.js';
 import { PLAN_PROFILE, BUILD_PROFILE, SubagentService } from '../subagent/registry.js';
-import { loadMainAgentProfile } from '../subagent/loader.js';
 import type { ToolVisibilityPolicy } from '../tools/types.js';
 import { HookService } from '../hooks/registry.js';
 import { McpService } from '../mcp/index.js';
@@ -48,8 +47,8 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
         ): AgentProfile | undefined => {
           const idx = readCurrentIndex(computePaths(projectPath, sessionId).indexPath);
           const name = idx?.activeProfile;
-          if (!name) return loadMainAgentProfile(projectPath);
-          return subagent.get(projectPath, name) ?? loadMainAgentProfile(projectPath);
+          if (!name) return undefined;
+          return subagent.get(projectPath, name);
         },
 
         resolveSubagentProfile: (projectPath: string, name: string): AgentProfile | undefined => {

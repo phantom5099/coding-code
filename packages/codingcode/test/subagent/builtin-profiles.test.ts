@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
 import { PLAN_MODE_ALLOWED_TOOLS } from '../../src/plan/index.js';
-import * as loader from '../../src/subagent/loader.js';
 
 describe('built-in subagent profiles', () => {
   it('keeps only build and plan as built-in names', () => {
@@ -14,9 +13,5 @@ describe('built-in subagent profiles', () => {
     expect(PLAN_MODE_ALLOWED_TOOLS).toEqual(
       new Set(['read_file', 'search_files', 'search_code', 'fetch_url', 'submit_plan'])
     );
-  });
-
-  it('does not export subagent profile file operations', () => {
-    expect(Object.keys(loader)).toEqual(['loadMainAgentProfile']);
   });
 });
