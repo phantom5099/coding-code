@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 
 export const webFetchTool: ToolDefinition = {
   name: 'fetch_url',
@@ -16,7 +16,7 @@ export const webFetchTool: ToolDefinition = {
       .default(100_000)
       .describe('Maximum characters to return (default 100k, max 500k)'),
   }),
-  execute: (args: unknown, _ctx?: ToolExecCtx) =>
+  execute: (args) =>
     Effect.gen(function* () {
       const { url, max_length } = args as any;
       const controller = new AbortController();

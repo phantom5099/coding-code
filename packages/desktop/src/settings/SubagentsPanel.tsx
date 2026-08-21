@@ -25,7 +25,6 @@ const AVAILABLE_TOOLS = [
   'fetch_url',
   'web_search',
   'todo_write',
-  'tool_search',
   'dispatch_agent',
 ];
 

@@ -48,10 +48,12 @@ describe('tool JSON Schema auto-generation', () => {
   }
 });
 
-describe('tool jsonSchema override', () => {
-  it('should not have hand-written jsonSchema on built-in tools', () => {
+describe('tool parameter schemas', () => {
+  it('should expose parameters through generated JSON Schema', () => {
     for (const tool of allTools) {
-      expect(tool.jsonSchema).toBeUndefined();
+      const schema = z.toJSONSchema(tool.parameters) as Record<string, unknown>;
+      expect(schema.type).toBe('object');
+      expect(schema.properties).toBeDefined();
     }
   });
 });

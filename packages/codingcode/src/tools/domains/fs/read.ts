@@ -3,7 +3,7 @@ import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 
 export const readFileTool: ToolDefinition = {
   name: 'read_file',
@@ -19,7 +19,7 @@ export const readFileTool: ToolDefinition = {
       .default(200)
       .describe('Maximum number of lines to read'),
   }),
-  execute: (args: unknown, ctx?: ToolExecCtx) =>
+  execute: (args, ctx) =>
     Effect.gen(function* () {
       const { path, offset, limit } = args as any;
       const filePath = resolve(ctx?.projectPath ?? process.cwd(), path);

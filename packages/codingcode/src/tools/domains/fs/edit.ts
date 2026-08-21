@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'fs/promises';
 import { resolve } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 
 export const editFileTool: ToolDefinition = {
   name: 'edit_file',
@@ -17,7 +17,7 @@ export const editFileTool: ToolDefinition = {
       .describe('Exact text to replace — must match exactly one location in the file'),
     new_string: z.string().describe('Text to replace it with'),
   }),
-  execute: (args: unknown, ctx?: ToolExecCtx) =>
+  execute: (args, ctx) =>
     Effect.gen(function* () {
       const { path, old_string, new_string } = args as {
         path: string;

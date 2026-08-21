@@ -104,7 +104,7 @@ describe('SubagentService', () => {
     expect(EXPLORE_PROFILE.tools).toContain('search_files');
     expect(EXPLORE_PROFILE.tools).toContain('search_code');
     expect(EXPLORE_PROFILE.tools).toContain('fetch_url');
-    expect(EXPLORE_PROFILE.tools).toContain('tool_search');
+    expect(EXPLORE_PROFILE.tools).not.toContain('tool_search');
   });
 
   it('explore profile systemPrompt includes guidelines', () => {
@@ -125,7 +125,7 @@ describe('SubagentService', () => {
     expect(PLAN_PROFILE.tools).toContain('search_files');
     expect(PLAN_PROFILE.tools).toContain('search_code');
     expect(PLAN_PROFILE.tools).toContain('fetch_url');
-    expect(PLAN_PROFILE.tools).toContain('tool_search');
+    expect(PLAN_PROFILE.tools).not.toContain('tool_search');
     expect(PLAN_PROFILE.tools).toContain('submit_plan');
     expect(PLAN_PROFILE.tools).toContain('dispatch_agent');
     // Write tools are intentionally absent — the plan-mode gate hook denies

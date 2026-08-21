@@ -34,7 +34,6 @@ Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本�
 | 工具 | 功能 | 关键参数 |
 |---|---|---|
 | `todo_write` | 修改代理的任务列表 | `plan: Array<{ step: string, status: 'pending' \| 'in_progress' \| 'completed' }>`（最大条目数有限制） |
-| `tool_search` | 发现和加载可用工具 | `query: string`（搜索关键词，至少 1 字符） |
 
 ### 子智能体
 
@@ -46,13 +45,12 @@ Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本�
 
 ## 工具加载机制
 
-工具按加载时机分为三类：
+工具按加载时机分为两类：
 
 - **Core 工具**：始终可用，在启动时注册。包括上述所有内置工具。
-- **Deferred 工具**：按需加载，通过 `tool_search` 发现后动态加载。这类工具标记了 `deferred: true`，不会在初始工具列表中暴露给 LLM，只有当 LLM 主动调用 `tool_search` 查询后才会加载。
 - **MCP 工具**：从 MCP 服务自动导入和注册。名称空间化为 `serverName:toolName` 格式，避免不同服务间的工具名冲突。
 
-工具解析流程：`createSessionToolResolver()` 合并 builtin + project MCP + tool_search + dispatch_agent，根据 `AgentProfile.tools` 和 `ToolVisibilityPolicy` 过滤后提供给 Agent。
+Agent 在一次运行开始时将内置工具、项目 MCP 工具和 `dispatch_agent` 注册到 `ToolRegistry`。每轮通过注册表按 `AgentProfile.tools` 和 `ToolVisibilityPolicy` 过滤，并生成 LLM 工具描述与执行查找结果。
 
 ---
 
@@ -64,10 +62,7 @@ Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本�
 interface ToolDefinition {
   name: string;
   description: string;
-  shortDescription?: string;       // 简短描述，用于工具列表展示
-  deferred?: boolean;               // 是否延迟加载
   parameters: z.ZodTypeAny;         // Zod schema 定义参数
-  jsonSchema?: Record<string, unknown>;  // 可选的 JSON Schema 覆盖
   execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, never>;
 }
 
@@ -79,6 +74,8 @@ interface ToolExecCtx {
 }
 ```
 
+`execute` 保留在 `ToolDefinition` 中，因为执行器需要通过同一个定义完成参数校验、审批、取消和 hook，再调用工具的实际实现。`ToolExecCtx` 中，`signal` 用于取消；`sessionId` 用于会话级工具状态和子智能体关联，`projectPath` 用于限定工作目录，`turnId` 只用于执行 hook 的轮次追踪。
+
 在 `cli.ts` 中向 `ToolService` 注册新工具，Agent 会自动将其暴露给 LLM。
 
 ### 工具可见性策略
@@ -89,8 +86,6 @@ interface ToolExecCtx {
 interface ToolVisibilityPolicy {
   allowedTools?: Set<string>;        // 允许的工具白名单
   allowedMcpServers?: Set<string>;   // 允许的 MCP 服务白名单
-  allowToolSearch?: boolean;         // 是否允许 tool_search
-  allowDeferredTools?: boolean;      // 是否允许延迟工具
 }
 ```
 

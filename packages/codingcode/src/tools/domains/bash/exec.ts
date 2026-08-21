@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { spawn } from 'child_process';
 import { Effect } from 'effect';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 
 import { AgentError } from '../../../core/error.js';
 
@@ -14,7 +14,7 @@ export const bashTool: ToolDefinition = {
     cwd: z.string().optional().describe('Working directory (defaults to project root)'),
     timeout_ms: z.number().int().default(30000).describe('Timeout in milliseconds'),
   }),
-  execute: (args: unknown, ctx?: ToolExecCtx) => {
+  execute: (args, ctx) => {
     const { command, cwd, timeout_ms } = args as any;
     const workDir = cwd || ctx?.projectPath || process.cwd();
     return Effect.async<string, AgentError>((resume) => {

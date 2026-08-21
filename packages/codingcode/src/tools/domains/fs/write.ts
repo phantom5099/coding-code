@@ -3,7 +3,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { dirname, relative, resolve } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 
 export const writeFileTool: ToolDefinition = {
   name: 'write_file',
@@ -13,7 +13,7 @@ export const writeFileTool: ToolDefinition = {
     path: z.string().describe('Path to the file'),
     content: z.string().describe('Content to write'),
   }),
-  execute: (args: unknown, ctx?: ToolExecCtx) =>
+  execute: (args, ctx) =>
     Effect.gen(function* () {
       const { path, content } = args as any;
       const base = ctx?.projectPath ?? process.cwd();

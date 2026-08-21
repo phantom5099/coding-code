@@ -23,7 +23,6 @@
     "./context/context": "./src/context/context.ts",
     "./hooks/registry": "./src/hooks/registry.ts",
     "./tools/executor": "./src/tools/executor.ts",
-    "./tools/tool-search-service": "./src/tools/tool-search-service.ts",
     "./mcp/client": "./src/mcp/client.ts",
     "./mcp/types": "./src/mcp/types.ts",
     "./skills/types": "./src/skills/types.ts",

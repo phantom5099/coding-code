@@ -160,7 +160,7 @@ export const EXPLORE_PROFILE: AgentProfile = {
 - When referencing code, use the format \`file_path:line_number\`.
 - Be thorough but concise in your findings. Focus on what the user asked for — structure your answer around the question, not around the files you read.
 - If you cannot find the answer, say so clearly rather than guessing.`,
-  tools: ['read_file', 'search_files', 'search_code', 'fetch_url', 'tool_search'],
+  tools: ['read_file', 'search_files', 'search_code', 'fetch_url'],
   readonly: true,
   maxSteps: 180,
 };
@@ -208,7 +208,6 @@ Never re-call submit_plan on your own initiative. Never treat an implement messa
     'search_files',
     'search_code',
     'fetch_url',
-    'tool_search',
     'submit_plan',
     'dispatch_agent',
   ],
@@ -230,7 +229,6 @@ export const BUILD_PROFILE: AgentProfile = {
     'fetch_url',
     'web_search',
     'todo_write',
-    'tool_search',
     'dispatch_agent',
   ],
   maxSteps: 180,

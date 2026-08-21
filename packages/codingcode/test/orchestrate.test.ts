@@ -197,8 +197,6 @@ vi.mock('../src/runtime/project-runtime.js', () => ({
   getToolPolicy: vi.fn(() => ({
     allowedTools: undefined,
     allowedMcpServers: undefined,
-    allowToolSearch: true,
-    allowDeferredTools: false,
   })),
   setSessionProfile: vi.fn(() => Effect.void),
   restoreSessionProfile: vi.fn(() => Effect.void),
@@ -251,8 +249,6 @@ const MockProjectRuntimeLayer = Layer.succeed(ProjectRuntimeService, {
   getToolPolicy: () => ({
     allowedTools: undefined,
     allowedMcpServers: undefined,
-    allowToolSearch: true,
-    allowDeferredTools: false,
   }),
   setSessionProfile: () => {},
   getSessionProfile: () => undefined,

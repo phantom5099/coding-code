@@ -12,7 +12,6 @@ import { ProjectRuntimeService } from './runtime/project-runtime.js';
 import { LLMFactoryService } from './llm/factory.js';
 import { WorkspaceService } from './core/workspace.js';
 import { TodoService } from './agent/todo.js';
-import { ToolSearchService } from './tools/tool-search-service.js';
 import { SubagentService } from './subagent/registry.js';
 import { SubagentRunnerService } from './subagent/runner-service.js';
 import { RulesService } from './rules/index.js';
@@ -23,7 +22,6 @@ import { planModeGateHook } from './plan/index.js';
 
 export const WorkspaceLayer = WorkspaceService.Default;
 export const TodoLayer = TodoService.Default;
-export const ToolSearchLayer = ToolSearchService.Default;
 export const SubagentLayer = SubagentService.Default;
 export const RulesLayer = RulesService.Default;
 export const SessionLayer = SessionService.Default;
@@ -105,7 +103,6 @@ export const AppLayer = Layer.mergeAll(
   LLMFactoryLayer,
   WorkspaceLayer,
   TodoLayer,
-  ToolSearchLayer,
   SubagentLayer,
   RulesLayer,
   MemoryLayer,

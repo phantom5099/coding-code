@@ -92,8 +92,6 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
         getToolPolicy: (profile: AgentProfile | undefined): ToolVisibilityPolicy => ({
           allowedTools: profile?.tools ? new Set(profile.tools) : undefined,
           allowedMcpServers: profile?.mcpServers ? new Set(profile.mcpServers) : undefined,
-          allowToolSearch: true,
-          allowDeferredTools: false,
         }),
 
         setSessionProfile: (

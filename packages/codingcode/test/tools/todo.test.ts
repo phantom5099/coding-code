@@ -8,9 +8,9 @@ async function makeTodoTool() {
 }
 
 describe('todo_write tool', () => {
-  it('is a core tool (not deferred)', async () => {
+  it('does not expose a deferred flag', async () => {
     const tool = await makeTodoTool();
-    expect(tool.deferred).not.toBe(true);
+    expect('deferred' in tool).toBe(false);
   });
 
   it('returns pending/in_progress/completed counts', async () => {
