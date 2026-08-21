@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
 import { resolveMcpConfig, resolveMcpDisabled } from './config.js';
-import { McpClient, McpError } from './client.js';
+import { McpClient } from './client.js';
 import type { McpServerConfig, McpStatus } from './types.js';
-import type { ToolDefinition, ToolExecCtx } from '../tools/types.js';
+import type { ToolDefinition } from '../tools/types.js';
 import { createLogger } from '@codingcode/infra/logger';
 import { AgentError } from '../core/error.js';
 
@@ -31,7 +31,7 @@ type ProjectPath = string;
 type ServerName = string;
 
 export class McpService extends Effect.Service<McpService>()('Mcp', {
-  effect: Effect.gen(function* () {
+  effect: Effect.sync(() => {
     const clientsByProject = new Map<ProjectPath, Map<ServerName, ServerEntry>>();
     const leasesBySession = new Map<string, Set<LeaseEntry>>();
     const disabledMcpByProject = new Map<ProjectPath, Set<ServerName>>();
@@ -334,9 +334,8 @@ function mcpToolToDefinition(
   return {
     name: `${serverName}:${mcpTool.name}`,
     description: `[MCP:${serverName}] ${mcpTool.description || mcpTool.name}`,
-    parameters: z.object({}).passthrough(),
-    jsonSchema: mcpTool.inputSchema,
-    execute: (args: unknown, _ctx?: ToolExecCtx) => {
+    parameters: z.fromJSONSchema(mcpTool.inputSchema),
+    execute: (args) => {
       if (isDisabledFn())
         return Effect.fail(
           new AgentError('TOOL_EXECUTION_FAILED', `MCP server '${serverName}' is disabled`)

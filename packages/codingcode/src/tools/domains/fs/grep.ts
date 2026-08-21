@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { globby } from 'globby';
 import { readFile } from 'fs/promises';
-import { relative, resolve } from 'path';
+import { relative } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 
 export const searchTool: ToolDefinition = {
   name: 'search_code',
@@ -24,7 +24,7 @@ export const searchTool: ToolDefinition = {
       .default(30)
       .describe('Maximum number of matches to return'),
   }),
-  execute: (args: unknown, ctx?: ToolExecCtx) =>
+  execute: (args, ctx) =>
     Effect.gen(function* () {
       const { pattern, glob, max_results } = args as any;
       const base = ctx?.projectPath ?? process.cwd();

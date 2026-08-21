@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 
 interface SearchResult {
   title: string;
@@ -156,7 +156,7 @@ export const webSearchTool: ToolDefinition = {
       .default(8)
       .describe('Maximum number of results to return'),
   }),
-  execute: (args: unknown, _ctx?: ToolExecCtx) =>
+  execute: (args) =>
     Effect.gen(function* () {
       const { query, max_results } = args as { query: string; max_results: number };
 

@@ -29,35 +29,10 @@ vi.mock('@codingcode/infra/config', () => ({
   }),
 }));
 
-const mockToolRegistry = {
-  describeAll: () => [],
-  filter: () => [],
-  get: () => null,
-  register: () => Effect.succeed(undefined),
-  allCore: () => [],
-  allDeferred: () => [],
-  getDef: () => undefined,
-};
-
-const mockToolSearch = {
-  isLoaded: () => false,
-  listLoaded: () => [],
-  listUnloadedDeferred: () => [],
-  search: () => [],
-  reset: () => {},
-};
-
 const mockAgentService = {
   runStream: () => {
     throw new Error('not implemented');
   },
-};
-
-const mockSession = {
-  recordAssistant: (_state: any, _content: string, _toolCalls: any) => Effect.succeed({}),
-  recordToolResult: (_state: any, _toolName: string, _toolCallId: string, _output: string) =>
-    Effect.succeed({}),
-  recordUser: (_state: any, _content: string) => Effect.succeed({}),
 };
 
 const mockState = {
@@ -156,8 +131,6 @@ const AllMockLayer = Layer.mergeAll(
     getToolPolicy: () => ({
       allowedTools: undefined,
       allowedMcpServers: undefined,
-      allowToolSearch: true,
-      allowDeferredTools: false,
     }),
     setSessionProfile: () => {},
     getSessionProfile: () => undefined,
@@ -262,17 +235,6 @@ describe('agentLoop', () => {
       }),
     };
 
-    const toolRegistryWithBash = {
-      ...mockToolRegistry,
-      describeAll: () => [
-        {
-          name: 'execute_command',
-          description: 'Run shell command',
-          parameters: { type: 'object' },
-        },
-      ],
-    };
-
     const mockExecutor = {
       execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
         Effect.succeed('On branch main\nnothing to commit'),
@@ -326,13 +288,6 @@ describe('agentLoop', () => {
           })
         ),
       }),
-    };
-
-    const toolRegistryWithTool = {
-      ...mockToolRegistry,
-      describeAll: () => [
-        { name: 'readFile', description: 'Read a file', parameters: { type: 'object' } },
-      ],
     };
 
     const mockExecutor = {

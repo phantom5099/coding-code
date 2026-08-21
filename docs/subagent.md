@@ -89,7 +89,7 @@ You are a code search specialist. Your job is to find specific code patterns, fu
 ```yaml
 name: explore
 description: 只读代码探索
-tools: [read_file, search_files, search_code, fetch_url, tool_search]
+tools: [read_file, search_files, search_code, fetch_url]
 readonly: true
 maxSteps: 180
 ```
@@ -101,7 +101,7 @@ maxSteps: 180
 ```yaml
 name: plan
 description: 只读代码研究和规划
-tools: [read_file, search_files, search_code, fetch_url, tool_search, submit_plan, dispatch_agent]
+tools: [read_file, search_files, search_code, fetch_url, submit_plan, dispatch_agent]
 maxSteps: 180
 ```
 

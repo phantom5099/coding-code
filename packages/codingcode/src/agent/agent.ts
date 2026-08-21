@@ -1,9 +1,7 @@
 import { Effect, Queue, Stream, Fiber } from 'effect';
-import { z } from 'zod';
 import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
-import type { ToolDescription, ToolDefinition } from '../tools/types.js';
 import type { LLMClient } from '../llm/client.js';
 import { ToolExecutorService, type ToolLookup } from '../tools/executor.js';
 import { SessionService } from '../session/store.js';
@@ -24,9 +22,9 @@ import { resolveSubagentEnabled, resolveAgentDisabled } from '../subagent/regist
 import { ProjectRuntimeService, modeToProfile } from '../runtime/project-runtime.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { LLMFactoryService } from '../llm/factory.js';
-import { getBuiltinTools } from '../tools/providers.js';
+import { registerBuiltinTools } from '../tools/builtin-tools.js';
+import { ToolRegistry } from '../tools/registry.js';
 import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
-import { canonicalizeSchema } from '../tools/utils/canonicalize-schema.js';
 import { normalizePath } from '../core/path.js';
 import { isPlanProfile } from '../plan/index.js';
 import type { SessionMode } from '../session/types.js';
@@ -291,6 +289,12 @@ export function agentLoop(
     let stopContinuations = 0;
     const effectiveMaxStopContinuations = opts.maxStopContinuations ?? maxStopContinuations;
 
+    const registry = new ToolRegistry();
+    yield* registerBuiltinTools(registry);
+    registry.register(...(opts.mcpTools ?? []));
+    if (opts.dispatchTool && resolveSubagentEnabled(projectPath)) registry.register(opts.dispatchTool);
+    if (isPlanProfile(profile)) registry.register(submitPlanTool);
+
     let messages: Message[] = [];
     let submittedPlanTitle: string | null = null;
 
@@ -310,25 +314,9 @@ export function agentLoop(
       for (let step = 0; step < effectiveMaxSteps; step++) {
         yield* q.offer({ _tag: 'Step', step: step + 1, max: effectiveMaxSteps });
 
-        const builtinTools = yield* getBuiltinTools();
-        let allToolDefs: ToolDefinition[] = [...builtinTools, ...(opts.mcpTools ?? [])];
-        if (opts.dispatchTool && resolveSubagentEnabled(projectPath))
-          allToolDefs = [...allToolDefs, opts.dispatchTool];
-        if (isPlanProfile(profile)) allToolDefs = [...allToolDefs, submitPlanTool];
-
         const allowedByPolicy = opts.toolPolicy?.allowedTools;
-        let filteredDefs = allToolDefs;
-        if (allowedByPolicy) filteredDefs = filteredDefs.filter((t) => allowedByPolicy.has(t.name));
-
-        const tools: ToolDescription[] = filteredDefs.map((t) => ({
-          name: t.name,
-          description: t.description,
-          parameters:
-            t.jsonSchema ??
-            (canonicalizeSchema(z.toJSONSchema(t.parameters)) as Record<string, unknown>),
-        }));
-
-        const toolLookup: ToolLookup = (name: string) => filteredDefs.find((t) => t.name === name);
+        const tools = registry.describe(allowedByPolicy);
+        const toolLookup: ToolLookup = (name: string) => registry.get(name, allowedByPolicy);
         const systemWithCatalog = system;
 
         const stepBeforePayload = { sessionId, step: step + 1 };

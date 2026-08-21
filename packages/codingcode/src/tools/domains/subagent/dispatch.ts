@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 import { SessionService } from '../../../session/store.js';
 import { ApprovalService } from '../../../approval/index.js';
 import { HookService } from '../../../hooks/registry.js';
@@ -47,12 +47,11 @@ export function createDispatchAgentTool(): Effect.Effect<
       name: 'dispatch_agent',
       description:
         'Spawn an isolated subagent to handle specialized tasks. See "Available Subagents" in the system prompt for available profiles and their capabilities.',
-      shortDescription: 'Spawn isolated subagent',
       parameters: z.object({
         agent: z.string().describe('subagent profile name'),
         prompt: z.string().min(1).describe('task description for the subagent'),
       }),
-      execute: (args: unknown, ctx?: ToolExecCtx): Effect.Effect<string, AgentError> =>
+      execute: (args, ctx) =>
         Effect.gen(function* () {
           const { agent: agentName, prompt } = args as { agent: string; prompt: string };
 

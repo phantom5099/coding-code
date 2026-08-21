@@ -44,8 +44,6 @@ const AllMockLayer = Layer.mergeAll(
     getToolPolicy: () => ({
       allowedTools: undefined,
       allowedMcpServers: undefined,
-      allowToolSearch: true,
-      allowDeferredTools: false,
     }),
     setSessionProfile: () => {},
     getSessionProfile: () => undefined,
@@ -247,8 +245,6 @@ describe('agentLoop plan.ready emission on turn-end', () => {
       getToolPolicy: () => ({
         allowedTools: undefined,
         allowedMcpServers: undefined,
-        allowToolSearch: true,
-        allowDeferredTools: false,
       }),
       setSessionProfile: (...args: any[]) => {
         setProfileCalls.push(args);

@@ -200,7 +200,6 @@ const AVAILABLE_TOOLS = [
   'fetch_url',
   'web_search',
   'todo_write',
-  'tool_search',
   'dispatch_agent',
 ];
 
@@ -244,10 +243,11 @@ function toggleTool(selected: string[], tool: string): string[] {
 }
 
 describe('SubagentsPanel - tool multi-select form logic', () => {
-  it('AVAILABLE_TOOLS contains all 11 expected tools', () => {
-    expect(AVAILABLE_TOOLS).toHaveLength(11);
+  it('AVAILABLE_TOOLS contains all 10 expected tools', () => {
+    expect(AVAILABLE_TOOLS).toHaveLength(10);
     expect(AVAILABLE_TOOLS).toContain('read_file');
     expect(AVAILABLE_TOOLS).toContain('dispatch_agent');
+    expect(AVAILABLE_TOOLS).not.toContain('tool_search');
   });
 
   it('startEdit populates tools as array directly (no join)', () => {

@@ -56,8 +56,6 @@ const BaseMockLayer = Layer.mergeAll(
     getToolPolicy: () => ({
       allowedTools: undefined,
       allowedMcpServers: undefined,
-      allowToolSearch: true,
-      allowDeferredTools: false,
     }),
     setSessionProfile: () => {},
     getSessionProfile: () => undefined,

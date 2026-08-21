@@ -135,8 +135,6 @@ const mockProjectRuntime = {
   getToolPolicy: () => ({
     allowedTools: undefined,
     allowedMcpServers: undefined,
-    allowToolSearch: true,
-    allowDeferredTools: false,
   }),
   setSessionProfile: () => Effect.void,
   restoreSessionProfile: () => Effect.void,

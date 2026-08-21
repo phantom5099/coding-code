@@ -13,17 +13,11 @@ export interface ToolExecCtx {
 export interface ToolDefinition {
   name: string;
   description: string;
-  shortDescription?: string;
-  deferred?: boolean;
   parameters: z.ZodTypeAny;
-  /** Optional JSON Schema override. When absent, the schema is auto-generated from `parameters`. */
-  jsonSchema?: Record<string, unknown>;
   execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, never>;
 }
 
 export interface ToolVisibilityPolicy {
   allowedTools?: Set<string>;
   allowedMcpServers?: Set<string>;
-  allowToolSearch?: boolean;
-  allowDeferredTools?: boolean;
 }

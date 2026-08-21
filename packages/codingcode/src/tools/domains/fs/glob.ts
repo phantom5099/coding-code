@@ -3,7 +3,7 @@ import { globby } from 'globby';
 import { relative, resolve } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 
 export const globTool: ToolDefinition = {
   name: 'search_files',
@@ -23,7 +23,7 @@ export const globTool: ToolDefinition = {
       .default(50)
       .describe('Maximum number of file paths to return'),
   }),
-  execute: (args: unknown, ctx?: ToolExecCtx) =>
+  execute: (args, ctx) =>
     Effect.gen(function* () {
       const { pattern, path, max_results } = args as {
         pattern: string;

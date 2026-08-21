@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { join } from 'path';
 import { writeFileSync, mkdirSync } from 'fs';
 import { AgentError } from '../../../core/error.js';
-import type { ToolDefinition, ToolExecCtx } from '../../types.js';
+import type { ToolDefinition } from '../../types.js';
 import { encodeProjectPath, getProjectBaseDir } from '../../../core/path.js';
 import { createLogger } from '@codingcode/infra/logger';
 
@@ -44,7 +44,6 @@ export const submitPlanTool: ToolDefinition = {
   name: 'submit_plan',
   description:
     'Submit (or update) the implementation plan for the current session. The only write operation allowed in plan mode. The file is written immediately and the tool returns synchronously; the user is then shown a plan approval modal in the UI. The user’s next message will contain their decision (implement / revised content / cancel).',
-  shortDescription: 'Submit plan',
   parameters: z.object({
     title: z
       .string()
@@ -60,7 +59,7 @@ export const submitPlanTool: ToolDefinition = {
         'Full Markdown implementation plan. Must contain the sections: Goal, Current state, Out of scope, Approach, Key files, Dependencies and risks, Verification. Phases is optional.'
       ),
   }),
-  execute: (args: unknown, ctx?: ToolExecCtx): Effect.Effect<string, AgentError> =>
+  execute: (args, ctx) =>
     Effect.gen(function* () {
       const { title, plan_content: rawContent } = args as {
         title: string;

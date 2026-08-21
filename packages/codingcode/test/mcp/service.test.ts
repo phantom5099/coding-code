@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer } from 'effect';
+import { z } from 'zod';
 import { McpService } from '../../src/mcp/index.js';
 import { HookService } from '../../src/hooks/registry.js';
 
@@ -180,6 +181,43 @@ describe('McpService granular methods', () => {
       const mcp = yield* McpService;
       const names = mcp.getServerToolNames(TEST_PROJECT, 'nonexistent');
       expect(names).toEqual([]);
+    });
+
+    await run(program);
+  });
+
+  it('converts MCP inputSchema into the tool parameters schema', async () => {
+    mockConfigs = [
+      {
+        name: 'typed',
+        command: 'echo',
+        _mockTools: [
+          {
+            name: 'query',
+            description: 'Query',
+            inputSchema: {
+              type: 'object',
+              properties: { text: { type: 'string' } },
+              required: ['text'],
+            },
+          },
+        ],
+      },
+    ];
+
+    const program = Effect.gen(function* () {
+      const mcp = yield* McpService;
+      yield* mcp.connectServers(TEST_PROJECT, TEST_SESSION, ['typed']);
+      const [tool] = mcp.listProjectMcpTools(TEST_PROJECT);
+
+      expect(tool).toBeDefined();
+      expect(z.toJSONSchema(tool!.parameters)).toMatchObject({
+        type: 'object',
+        properties: { text: { type: 'string' } },
+        required: ['text'],
+      });
+      expect(() => tool!.parameters.parse({})).toThrow();
+      expect(tool!.parameters.parse({ text: 'hello' })).toEqual({ text: 'hello' });
     });
 
     await run(program);
