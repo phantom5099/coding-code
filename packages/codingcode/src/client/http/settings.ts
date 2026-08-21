@@ -1,6 +1,5 @@
 import type { PermissionMode } from '../../approval/types.js';
 import type { McpServerConfig, McpStatus } from '../../mcp/types.js';
-import type { AgentProfile } from '../../subagent/types.js';
 import type { UserHookConfig } from '../../hooks/types.js';
 import type { createRequestHelpers } from './request.js';
 
@@ -30,12 +29,6 @@ export interface SettingsClient {
   deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
-  listAgents(input: { cwd: string }): Promise<any[]>;
-  createAgent(input: { cwd: string; profile: AgentProfile }): Promise<void>;
-  updateAgent(input: { cwd: string; name: string; profile: AgentProfile }): Promise<void>;
-  deleteAgent(input: { cwd: string; name: string }): Promise<void>;
-  setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
-  resetAgentDisabled(body: { name: string; cwd: string }): Promise<void>;
   listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
   createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
   updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
@@ -150,35 +143,6 @@ export function createHttpSettingsClient(
 
     async toggleSkill({ name, enabled, cwd }) {
       await apiPost(`/api/settings/skills${qsCwd(cwd)}`, { name, enabled });
-    },
-
-    async listAgents({ cwd }) {
-      return apiGet(`/api/settings/agents${qsCwd(cwd)}`);
-    },
-
-    async createAgent({ cwd, profile }) {
-      await apiPost(`/api/settings/agents${qsCwd(cwd)}`, profile);
-    },
-
-    async updateAgent({ cwd, name, profile }) {
-      await apiPut(`/api/settings/agents/${encodeURIComponent(name)}${qsCwd(cwd)}`, profile);
-    },
-
-    async deleteAgent({ cwd, name }) {
-      await apiDelete(`/api/settings/agents/${encodeURIComponent(name)}${qsCwd(cwd)}`);
-    },
-
-    async setAgentDisabled({ name, disabled, cwd }) {
-      await apiPost(`/api/settings/agents/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, {
-        disabled,
-      });
-    },
-
-    async resetAgentDisabled({ name, cwd }) {
-      await apiPost(
-        `/api/settings/agents/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`,
-        {}
-      );
     },
 
     async listHooks({ cwd }) {

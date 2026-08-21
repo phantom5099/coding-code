@@ -8,7 +8,6 @@ import {
   createMcpServer,
   updateMcpServer,
   deleteMcpServer,
-  listAgents,
 } from '../lib/core-api';
 
 interface McpEntry {
@@ -141,21 +140,6 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
       if (isCreating) {
         await createMcpServer(cwd, server);
       } else if (editingName) {
-        if (editingName !== form.name) {
-          const agents = await listAgents(cwd);
-          const dependent = agents.filter((a: { mcpServers?: string[] }) =>
-            a.mcpServers?.includes(editingName)
-          );
-          if (dependent.length > 0) {
-            const names = dependent.map((a: { name: string }) => a.name).join(', ');
-            if (
-              !confirm(
-                `以下智能体引用了此 MCP 服务器：${names}\n重命名后需要手动更新它们的配置。是否继续？`
-              )
-            )
-              return;
-          }
-        }
         await updateMcpServer(cwd, editingName, server);
       }
       cancelForm();
@@ -168,19 +152,6 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
   const confirmDelete = async () => {
     if (!deletingName) return;
     try {
-      const agents = await listAgents(cwd);
-      const dependent = agents.filter((a: { mcpServers?: string[] }) =>
-        a.mcpServers?.includes(deletingName)
-      );
-      if (dependent.length > 0) {
-        const names = dependent.map((a: { name: string }) => a.name).join(', ');
-        if (
-          !confirm(
-            `以下智能体引用了此 MCP 服务器：${names}\n删除后需要手动更新它们的配置。是否继续？`
-          )
-        )
-          return;
-      }
       await deleteMcpServer(cwd, deletingName);
       setDeletingName(null);
       await load();

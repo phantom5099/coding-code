@@ -12,8 +12,11 @@ export function isPlanProfile(p: { name: string } | null | undefined): boolean {
 }
 
 export const PLAN_MODE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
+  'read_file',
+  'search_files',
+  'search_code',
+  'fetch_url',
   'submit_plan',
-  'dispatch_agent',
 ]);
 
 // ---- Plan-mode state: read from .index.json (disk is single source of truth) ----
@@ -28,23 +31,6 @@ export function isSessionInPlanMode(sessionId: string, cwd: string): boolean {
   } catch {
     return false;
   }
-}
-
-// ---- Plan-mode subagent whitelist (called inline by dispatch_agent) ----
-
-export function checkSubagentAllowedInPlanMode(
-  parentSessionId: string | undefined,
-  parentMainProfile: string | undefined,
-  profile: string | undefined
-): { allowed: true } | { allowed: false; reason: string } {
-  if (!parentSessionId) return { allowed: true };
-  if (parentMainProfile !== PLAN_PROFILE_NAME) return { allowed: true };
-  if (!profile) return { allowed: true };
-  if (profile === 'explore') return { allowed: true };
-  return {
-    allowed: false,
-    reason: `Plan mode can only dispatch the 'explore' subagent. Got: '${profile}'`,
-  };
 }
 
 export const planModeGateHook: DecisionHandler = (payload) => {

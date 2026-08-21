@@ -1,6 +1,5 @@
 import type { AgentProfile } from './types.js';
 import { loadConfig, getUserConfigPath } from '@codingcode/infra/config';
-import { createDisabledStore } from '@codingcode/infra/disabled-store';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { dirname, join } from 'path';
@@ -79,91 +78,23 @@ export function resolveSubagentEnabled(projectCwd: string): boolean {
   return getSubagentEnabledState();
 }
 
-// ---- Agent disabled 状态：复用 createDisabledStore ----
-
-const agentDisabledStore = createDisabledStore({
-  globalKeyPath: ['subagent', 'disabledAgents'],
-});
-
-export const getGlobalAgentDisabledState = agentDisabledStore.getGlobal;
-export const setGlobalAgentDisabledState = agentDisabledStore.setGlobal;
-export const getProjectAgentDisabledState = agentDisabledStore.getProject;
-export const setProjectAgentDisabledState = agentDisabledStore.setProject;
-export const resetProjectAgentDisabledState = agentDisabledStore.resetProject;
-export const resolveAgentDisabled = agentDisabledStore.resolve;
-
-// ---- SubagentService: Effect.Service with global + project-level registries ----
+// ---- SubagentService: in-memory built-in registry ----
 
 export class SubagentService extends Effect.Service<SubagentService>()('Subagent', {
   sync: () => {
-    // 全局层：内置 profile + 全局 ~/.codingcode/agents/ profile
     const globalRegistry = new Map<string, AgentProfile>();
-    // 项目层：按 projectPath 隔离，项目 profile 覆盖同名全局 profile
-    const projectRegistries = new Map<string, Map<string, AgentProfile>>();
 
     return {
-      /** 注册全局 profile（内置 + ~/.codingcode/agents/），只在启动时调用一次 */
       registerGlobal(profiles: AgentProfile[]): void {
         for (const p of profiles) globalRegistry.set(p.name, p);
       },
 
-      /** 注册项目级 profile，覆盖同名全局 profile */
-      registerProject(projectPath: string, profiles: AgentProfile[]): void {
-        let projectMap = projectRegistries.get(projectPath);
-        if (!projectMap) {
-          projectMap = new Map();
-          projectRegistries.set(projectPath, projectMap);
-        }
-        for (const p of profiles) projectMap.set(p.name, p);
-      },
-
-      /** 查找 profile：项目级优先，回退到全局级 */
-      get(projectPath: string, name: string): AgentProfile | undefined {
-        const projectMap = projectRegistries.get(projectPath);
-        if (projectMap) {
-          const fromProject = projectMap.get(name);
-          if (fromProject) return fromProject;
-        }
+      get(_projectPath: string, name: string): AgentProfile | undefined {
         return globalRegistry.get(name);
-      },
-
-      /** 列出某项目的全部 profile：项目级覆盖同名全局级 */
-      list(projectPath: string): AgentProfile[] {
-        const result = new Map<string, AgentProfile>(globalRegistry);
-        const projectMap = projectRegistries.get(projectPath);
-        if (projectMap) {
-          for (const [name, profile] of projectMap) {
-            result.set(name, profile);
-          }
-        }
-        return Array.from(result.values());
-      },
-
-      /** 清除某项目的注册，不影响其他项目 */
-      resetProject(projectPath: string): void {
-        projectRegistries.delete(projectPath);
       },
     };
   },
 }) {}
-
-export const EXPLORE_PROFILE: AgentProfile = {
-  name: 'explore',
-  description:
-    'Read-only code exploration: searching files, reading symbols, understanding structure. No writes.',
-  permissionMode: 'bypass',
-  systemPrompt: `You are a read-only code exploration agent. Your role is to help explore and understand codebases through reading files, searching for symbols, and analyzing code structure. You can only read; you cannot write or modify files.
-
-## Guidelines
-- Start broad, then narrow down. Use search_files and search_code to get an overview before reading specific files.
-- Call multiple tools in parallel when they are independent — for example, searching with different patterns at once, or reading several files simultaneously.
-- When referencing code, use the format \`file_path:line_number\`.
-- Be thorough but concise in your findings. Focus on what the user asked for — structure your answer around the question, not around the files you read.
-- If you cannot find the answer, say so clearly rather than guessing.`,
-  tools: ['read_file', 'search_files', 'search_code', 'fetch_url'],
-  readonly: true,
-  maxSteps: 180,
-};
 
 export const PLAN_PROFILE: AgentProfile = {
   name: 'plan',
@@ -171,12 +102,9 @@ export const PLAN_PROFILE: AgentProfile = {
     'Planning agent: analyzes the codebase, produces an implementation plan, and submits it via submit_plan for user approval. No business code modifications.',
   systemPrompt: `You are a planning agent. Your role is to analyze the codebase and produce an implementation plan that the user reviews and approves before any code is written.
 
-You can read files, search code, and dispatch the 'explore' subagent for context-heavy investigation. You can submit a plan via the \`submit_plan\` tool — each call overwrites the previous plan file; use it to revise your plan based on user feedback.
+You can read files and search code. You can submit a plan via the \`submit_plan\` tool — each call overwrites the previous plan file; use it to revise your plan based on user feedback.
 
 In plan mode, write_file / edit_file / execute_command are denied. The only write operation allowed is \`submit_plan\`.
-
-## Subagent dispatch
-Use \`dispatch_agent({ agent: 'explore', prompt: '...' })\` to investigate large code sections without polluting your main context. The system hook enforces this — only 'explore' is permitted in plan mode; any other agent name will be denied.
 
 ## Research process
 1. Understand the project structure and conventions
@@ -203,14 +131,6 @@ The user's decision arrives as the next user message. The system has already han
 - "Cancel"/"do not implement" — the plan is rejected. Acknowledge briefly and stop.
 
 Never re-call submit_plan on your own initiative. Never treat an implement message as a request for further exploration.`,
-  tools: [
-    'read_file',
-    'search_files',
-    'search_code',
-    'fetch_url',
-    'submit_plan',
-    'dispatch_agent',
-  ],
   maxSteps: 180,
 };
 
@@ -219,17 +139,5 @@ export const BUILD_PROFILE: AgentProfile = {
   description:
     'Default build agent: full read/write access. Implements changes the user has approved.',
   permissionMode: 'default',
-  tools: [
-    'read_file',
-    'write_file',
-    'edit_file',
-    'execute_command',
-    'search_files',
-    'search_code',
-    'fetch_url',
-    'web_search',
-    'todo_write',
-    'dispatch_agent',
-  ],
   maxSteps: 180,
 };

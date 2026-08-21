@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildSystemPrompt } from '../../src/agent/prompt.js';
-import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
+import { PLAN_PROFILE } from '../../src/subagent/registry.js';
 
 describe('buildSystemPrompt', () => {
   it('uses DEFAULT_BEHAVIOR_PROMPT when profileSystemPrompt is not provided', () => {
@@ -43,18 +43,6 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('{{shell}}');
   });
 
-  it('appends agent catalog when agentProfiles is provided', () => {
-    const prompt = buildSystemPrompt({
-      cwd: '/x',
-      platform: 'linux',
-      shell: 'bash',
-      agentProfiles: [BUILD_PROFILE, PLAN_PROFILE],
-    });
-    expect(prompt).toContain('## Available Subagents');
-    expect(prompt).toContain('### build');
-    expect(prompt).toContain('### plan');
-  });
-
   it('appends user-defined rules when provided', () => {
     const prompt = buildSystemPrompt({
       cwd: '/x',
@@ -77,7 +65,7 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('When reviewing code, focus on security.');
   });
 
-  it('plan profile prompt mentions submit_plan and dispatch_agent for explore only', () => {
+  it('plan profile prompt limits implementation work to submit_plan', () => {
     const prompt = buildSystemPrompt({
       cwd: '/x',
       platform: 'linux',
@@ -85,7 +73,6 @@ describe('buildSystemPrompt', () => {
       profileSystemPrompt: PLAN_PROFILE.systemPrompt,
     });
     expect(prompt).toContain('submit_plan');
-    expect(prompt).toContain("dispatch the 'explore' subagent");
     expect(prompt).toContain('write_file / edit_file / execute_command are denied');
   });
 });

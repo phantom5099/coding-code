@@ -10,8 +10,8 @@ describe('isPlanProfile', () => {
     expect(isPlanProfile({ name: 'build' })).toBe(false);
   });
 
-  it('returns false for an arbitrary subagent name (e.g. "explore")', () => {
-    expect(isPlanProfile({ name: 'explore' })).toBe(false);
+  it('returns false for an arbitrary profile name', () => {
+    expect(isPlanProfile({ name: 'custom' })).toBe(false);
   });
 
   it('returns false for null/undefined', () => {

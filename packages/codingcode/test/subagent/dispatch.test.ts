@@ -7,7 +7,7 @@ import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { LLMFactoryService } from '../../src/llm/factory.js';
 import { RulesService } from '../../src/rules/index.js';
-import { SubagentService, EXPLORE_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
+import { SubagentService, BUILD_PROFILE } from '../../src/subagent/registry.js';
 import { SubagentRunnerService } from '../../src/subagent/runner-service.js';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import type { ToolDefinition, ToolExecCtx } from '../../src/tools/types.js';
@@ -116,22 +116,21 @@ const mockRules = {
 
 const mockSubagent = {
   registerGlobal: () => undefined,
-  registerProject: () => undefined,
   get: (_p: string, name: string) => {
-    if (name === 'explore') return EXPLORE_PROFILE;
     if (name === 'build') return BUILD_PROFILE;
-    if (name === 'custom') return { name: 'custom', description: 'custom agent' } as any;
+    if (name === 'custom') {
+      return { name: 'custom', description: 'custom agent', permissionMode: 'bypass' } as any;
+    }
+    if (name === 'custom-default') return { name, description: 'custom agent' } as any;
     return undefined;
   },
-  list: () => [EXPLORE_PROFILE, BUILD_PROFILE],
-  resetProject: () => undefined,
+  list: () => [BUILD_PROFILE],
 };
 
 const mockProjectRuntime = {
   prepareProject: () => Effect.void,
   resolveMainAgentProfile: () => undefined,
   resolveSubagentProfile: (_p: string, name: string) => mockSubagent.get(_p, name),
-  listAgentProfiles: () => [EXPLORE_PROFILE, BUILD_PROFILE],
   getToolPolicy: () => ({
     allowedTools: undefined,
     allowedMcpServers: undefined,
@@ -207,7 +206,7 @@ async function dispatchTool(
 
 describe('dispatch_agent permission-mode priority (profile > parent > default)', () => {
   it('case 1: profile has explicit permissionMode → child uses profile value', async () => {
-    const perm = await dispatchTool('default', 'explore', {
+    const perm = await dispatchTool('default', 'custom', {
       projectPath: '/test',
       sessionId: 'parent-1',
     } as ToolExecCtx);
@@ -215,7 +214,7 @@ describe('dispatch_agent permission-mode priority (profile > parent > default)',
   });
 
   it('case 2: profile has no permissionMode + parent has bypass → child uses parent value', async () => {
-    const perm = await dispatchTool('bypass', 'custom', {
+    const perm = await dispatchTool('bypass', 'custom-default', {
       projectPath: '/test',
       sessionId: 'parent-1',
     } as ToolExecCtx);
@@ -223,7 +222,7 @@ describe('dispatch_agent permission-mode priority (profile > parent > default)',
   });
 
   it('case 3: profile has no permissionMode + no parent (top-level) → child uses default', async () => {
-    const perm = await dispatchTool('default', 'custom', {
+    const perm = await dispatchTool('default', 'custom-default', {
       projectPath: '/test',
     } as ToolExecCtx);
     expect(perm).toBe('default');

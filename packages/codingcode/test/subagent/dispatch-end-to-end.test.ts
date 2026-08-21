@@ -77,7 +77,7 @@ describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
 
         const dispatchTool = yield* createDispatchAgentTool();
         const output = yield* dispatchTool.execute(
-          { agent: 'explore', prompt: 'analyze this code' },
+          { agent: 'build', prompt: 'analyze this code' },
           { projectPath: cwd, sessionId: parent.sessionId } as any
         );
         return { output, parentId: parent.sessionId };
@@ -127,7 +127,7 @@ describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
           permissionMode: 'default',
         });
         const dispatchTool = yield* createDispatchAgentTool();
-        yield* dispatchTool.execute({ agent: 'explore', prompt: 'p' }, {
+        yield* dispatchTool.execute({ agent: 'build', prompt: 'p' }, {
           projectPath: cwd,
           sessionId: parent.sessionId,
         } as any);

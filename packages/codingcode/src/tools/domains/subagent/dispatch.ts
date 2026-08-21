@@ -7,17 +7,10 @@ import { ApprovalService } from '../../../approval/index.js';
 import { HookService } from '../../../hooks/registry.js';
 import { McpService } from '../../../mcp/index.js';
 import { LLMFactoryService } from '../../../llm/factory.js';
-import {
-  resolveSubagentEnabled,
-  resolveAgentDisabled,
-  BUILD_PROFILE,
-} from '../../../subagent/registry.js';
+import { resolveSubagentEnabled, BUILD_PROFILE } from '../../../subagent/registry.js';
 import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import { SubagentRunnerService } from '../../../subagent/runner-service.js';
-import { checkSubagentAllowedInPlanMode } from '../../../plan/index.js';
-import { readCurrentIndex } from '../../../session/file-ops.js';
-import { computePaths } from '../../../core/path.js';
 import type { SessionMode } from '../../../session/types.js';
 import type { PermissionMode } from '../../../approval/types.js';
 
@@ -75,13 +68,6 @@ export function createDispatchAgentTool(): Effect.Effect<
             );
           }
 
-          // Check individual agent disabled state
-          if (resolveAgentDisabled(projectPath, agentName)) {
-            return yield* Effect.fail(
-              new AgentError('TOOL_EXECUTION_FAILED', `Subagent '${agentName}' is disabled`)
-            );
-          }
-
           let llm = yield* factory.getLLMClient();
           if (profile.model) {
             const entry = yield* factory.findModel(profile.model);
@@ -98,21 +84,6 @@ export function createDispatchAgentTool(): Effect.Effect<
 
           // Emit spawn.before hook (decision hook, can deny)
           const parentSessionId = ctx?.sessionId;
-          const parentMainProfile =
-            parentSessionId && projectPath
-              ? readCurrentIndex(computePaths(projectPath, parentSessionId).indexPath)
-                  ?.activeProfile
-              : undefined;
-
-          const whitelist = checkSubagentAllowedInPlanMode(
-            parentSessionId,
-            parentMainProfile,
-            agentName
-          );
-          if (!whitelist.allowed) {
-            return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', whitelist.reason));
-          }
-
           const spawnDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
             profile: agentName,
             prompt,
@@ -172,13 +143,7 @@ export function createDispatchAgentTool(): Effect.Effect<
             yield* hooks.attachSessionHooks(childUuid, profile.hooks);
           }
 
-          // Connect MCP servers (session lease)
-          const mcpServers = profile.mcpServers;
-          if (mcpServers?.length) {
-            yield* mcp.connectServers(projectPath, childUuid, mcpServers);
-          }
-
-          // Build tool policy from profile
+          // Build the plan-only tool policy from the active profile.
           const childPolicy = runtime.getToolPolicy(profile);
 
           // Get MCP tools for subagent

@@ -99,18 +99,6 @@ MCP 连接使用 lease 机制管理会话级生命周期：
 
 ---
 
-## MCP 工具白名单
+## 子智能体
 
-在子智能体 profile 中通过 `mcpServers` 字段指定允许的 MCP 服务：
-
-```yaml
-# .codingcode/agents/my-agent.md
----
-name: my-agent
-description: 使用特定 MCP 服务的 Agent
-tools: ["read_file", "search_code"]
-mcpServers: ["filesystem"]     # 只允许使用 filesystem 服务的工具
----
-```
-
-在 `ToolVisibilityPolicy` 中通过 `allowedMcpServers` 控制可见的 MCP 服务。
+子智能体不再通过 profile 文件配置 MCP 服务或工具白名单。MCP 工具由当前项目的 MCP 配置提供；`plan` 模式仅由其独立工具策略限制。

@@ -1,26 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PLAN_MODE_ALLOWED_TOOLS } from '../../src/plan/index.js';
 
 describe('PLAN_MODE_ALLOWED_TOOLS', () => {
-  it('contains submit_plan', () => {
-    expect(PLAN_MODE_ALLOWED_TOOLS.has('submit_plan')).toBe(true);
+  it('contains only read tools and submit_plan', () => {
+    expect(PLAN_MODE_ALLOWED_TOOLS).toEqual(
+      new Set(['read_file', 'search_files', 'search_code', 'fetch_url', 'submit_plan'])
+    );
   });
 
-  it('contains dispatch_agent (further restricted by subagent-whitelist hook)', () => {
-    expect(PLAN_MODE_ALLOWED_TOOLS.has('dispatch_agent')).toBe(true);
-  });
-
-  it('does NOT contain write tools', () => {
+  it('does not expose write tools', () => {
     expect(PLAN_MODE_ALLOWED_TOOLS.has('write_file')).toBe(false);
     expect(PLAN_MODE_ALLOWED_TOOLS.has('edit_file')).toBe(false);
     expect(PLAN_MODE_ALLOWED_TOOLS.has('execute_command')).toBe(false);
-  });
-
-  it('does NOT contain read tools (they reach the pipeline as readonly whitelist, not as plan-mode bypass)', () => {
-    // Read-only tools are handled by Layer 2 of the approval pipeline, not by
-    // the plan-mode gate. The gate is a deny-list for non-allowed writes; it
-    // only short-circuits tools that *would* fail the gate.
-    expect(PLAN_MODE_ALLOWED_TOOLS.has('read_file')).toBe(false);
-    expect(PLAN_MODE_ALLOWED_TOOLS.has('search_files')).toBe(false);
   });
 });

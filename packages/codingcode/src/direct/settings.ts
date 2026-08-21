@@ -3,7 +3,6 @@ import { McpService } from '../mcp/index.js';
 import type { McpServerConfig, McpStatus } from '../mcp/types.js';
 import { SkillService } from '../skills/service.js';
 import type { PermissionMode } from '../approval/types.js';
-import type { AgentProfile } from '../subagent/types.js';
 import type { UserHookConfig } from '../hooks/types.js';
 import { isGlobalCwd } from '../core/workspace.js';
 import {
@@ -11,36 +10,17 @@ import {
   writeMcpConfig,
   loadGlobalMcpConfig,
   writeGlobalMcpConfig,
-  resolveMcpDisabled,
   getGlobalMcpDisabledState,
   setGlobalMcpDisabledState,
   setProjectMcpDisabledState,
   resetProjectMcpDisabledState,
 } from '../mcp/config.js';
 import {
-  loadAgentProfiles,
-  writeAgentProfile,
-  updateAgentProfile,
-  deleteAgentProfile,
-  loadGlobalAgentProfiles,
-  writeGlobalAgentProfile,
-  updateGlobalAgentProfile,
-  deleteGlobalAgentProfile,
-} from '../subagent/loader.js';
-import {
-  EXPLORE_PROFILE,
-  PLAN_PROFILE,
   setSubagentEnabledState,
   resolveSubagentEnabled,
   getProjectSubagentEnabledState,
   setProjectSubagentEnabledState,
   resetProjectSubagentEnabledState,
-  getGlobalAgentDisabledState,
-  setGlobalAgentDisabledState,
-  setProjectAgentDisabledState,
-  resetProjectAgentDisabledState,
-  resolveAgentDisabled,
-  getProjectAgentDisabledState,
 } from '../subagent/registry.js';
 import {
   loadHookConfigs,
@@ -48,7 +28,6 @@ import {
   loadGlobalHookConfigs,
   writeGlobalHookConfigs,
   resolveHookConfigs,
-  resolveHookDisabled,
   setGlobalHookDisabledState,
   setProjectHookDisabledState,
   resetProjectHookDisabledState,
@@ -98,12 +77,6 @@ export interface SettingsClient {
   deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
-  listAgents(input: { cwd: string }): Promise<any[]>;
-  createAgent(input: { cwd: string; profile: AgentProfile }): Promise<void>;
-  updateAgent(input: { cwd: string; name: string; profile: AgentProfile }): Promise<void>;
-  deleteAgent(input: { cwd: string; name: string }): Promise<void>;
-  setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
-  resetAgentDisabled(body: { name: string; cwd: string }): Promise<void>;
   listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
   createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
   updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
@@ -119,157 +92,6 @@ export interface SettingsClient {
 }
 
 // ---- Helpers with validation ----
-
-function agentsList(cwd: string): Array<{
-  name: string;
-  description: string;
-  tools?: string[];
-  mcpServers?: string[];
-  readonly?: boolean;
-  maxSteps?: number;
-  model?: string;
-  disabled: boolean;
-  source: 'builtin' | 'global' | 'project';
-  hasProjectOverride?: boolean;
-  projectDisabled?: boolean;
-}> {
-  if (isGlobalCwd(cwd)) {
-    const custom = loadGlobalAgentProfiles();
-    return [EXPLORE_PROFILE, PLAN_PROFILE, ...custom].map((a) => {
-      const disabled = getGlobalAgentDisabledState(a.name);
-      return {
-        name: a.name,
-        description: a.description,
-        tools: a.tools,
-        mcpServers: a.mcpServers,
-        readonly: a.readonly,
-        maxSteps: a.maxSteps,
-        model: a.model,
-        disabled,
-        source:
-          a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name
-            ? ('builtin' as const)
-            : ('global' as const),
-      };
-    });
-  }
-  const globalCustom = loadGlobalAgentProfiles();
-  const projectCustom = loadAgentProfiles(cwd);
-  const globalNames = new Set(globalCustom.map((a) => a.name));
-  const projectNames = new Set(projectCustom.map((a) => a.name));
-
-  const result: Array<{
-    name: string;
-    description: string;
-    tools?: string[];
-    mcpServers?: string[];
-    readonly?: boolean;
-    maxSteps?: number;
-    model?: string;
-    disabled: boolean;
-    source: 'builtin' | 'global' | 'project';
-    hasProjectOverride?: boolean;
-    projectDisabled?: boolean;
-  }> = [];
-
-  for (const a of [EXPLORE_PROFILE, PLAN_PROFILE]) {
-    const projectVal = getProjectAgentDisabledState(cwd, a.name);
-    result.push({
-      name: a.name,
-      description: a.description,
-      tools: a.tools,
-      mcpServers: a.mcpServers,
-      readonly: a.readonly,
-      maxSteps: a.maxSteps,
-      model: a.model,
-      disabled: resolveAgentDisabled(cwd, a.name),
-      source: 'builtin',
-      hasProjectOverride: projectVal !== undefined,
-      projectDisabled: projectVal,
-    });
-  }
-
-  for (const a of globalCustom) {
-    if (projectNames.has(a.name)) continue;
-    const projectVal = getProjectAgentDisabledState(cwd, a.name);
-    result.push({
-      name: a.name,
-      description: a.description,
-      tools: a.tools,
-      mcpServers: a.mcpServers,
-      readonly: a.readonly,
-      maxSteps: a.maxSteps,
-      model: a.model,
-      disabled: resolveAgentDisabled(cwd, a.name),
-      source: 'global',
-      hasProjectOverride: projectVal !== undefined,
-      projectDisabled: projectVal,
-    });
-  }
-
-  for (const a of projectCustom) {
-    const projectVal = getProjectAgentDisabledState(cwd, a.name);
-    result.push({
-      name: a.name,
-      description: a.description,
-      tools: a.tools,
-      mcpServers: a.mcpServers,
-      readonly: a.readonly,
-      maxSteps: a.maxSteps,
-      model: a.model,
-      disabled: resolveAgentDisabled(cwd, a.name),
-      source: 'project',
-      hasProjectOverride: globalNames.has(a.name),
-      projectDisabled: projectVal,
-    });
-  }
-
-  return result;
-}
-
-function agentsCreate(cwd: string, profile: AgentProfile): void {
-  if (isGlobalCwd(cwd)) {
-    const existing = loadGlobalAgentProfiles();
-    if (existing.some((a) => a.name === profile.name)) {
-      throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
-    }
-    writeGlobalAgentProfile(profile);
-    return;
-  }
-  const existing = loadAgentProfiles(cwd);
-  if (existing.some((a) => a.name === profile.name)) {
-    throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
-  }
-  writeAgentProfile(cwd, profile);
-}
-
-function agentsUpdate(cwd: string, name: string, profile: AgentProfile): void {
-  if (isGlobalCwd(cwd)) {
-    const existing = loadGlobalAgentProfiles();
-    if (!existing.some((a) => a.name === name)) {
-      throw new NotFoundError(`Agent '${name}' not found`);
-    }
-    if (profile.name !== name && existing.some((a) => a.name === profile.name)) {
-      throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
-    }
-    updateGlobalAgentProfile(name, profile);
-    return;
-  }
-  const existing = loadAgentProfiles(cwd);
-  if (!existing.some((a) => a.name === name)) throw new NotFoundError(`Agent '${name}' not found`);
-  if (profile.name !== name && existing.some((a) => a.name === profile.name)) {
-    throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
-  }
-  updateAgentProfile(cwd, name, profile);
-}
-
-function agentsDelete(cwd: string, name: string): void {
-  if (isGlobalCwd(cwd)) {
-    deleteGlobalAgentProfile(name);
-    return;
-  }
-  deleteAgentProfile(cwd, name);
-}
 
 function mcpCreateServer(cwd: string, server: McpServerConfig): void {
   if (isGlobalCwd(cwd)) {
@@ -610,34 +432,6 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
           }
         })
       );
-    },
-
-    async listAgents({ cwd }) {
-      return agentsList(cwd);
-    },
-
-    async createAgent({ cwd, profile }) {
-      agentsCreate(cwd, profile);
-    },
-
-    async updateAgent({ cwd, name, profile }) {
-      agentsUpdate(cwd, name, profile);
-    },
-
-    async deleteAgent({ cwd, name }) {
-      agentsDelete(cwd, name);
-    },
-
-    async setAgentDisabled({ name, disabled, cwd }) {
-      if (isGlobalCwd(cwd)) {
-        setGlobalAgentDisabledState(name, disabled);
-      } else {
-        setProjectAgentDisabledState(cwd, name, disabled);
-      }
-    },
-
-    async resetAgentDisabled({ name, cwd }) {
-      resetProjectAgentDisabledState(cwd, name);
     },
 
     async listHooks({ cwd }) {

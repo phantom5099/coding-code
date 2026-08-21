@@ -17,7 +17,7 @@ const DEFAULT_BEHAVIOR_PROMPT = `You are a coding assistant —an AI agent that 
 7. For complex or broad tasks (understanding a whole module, cross-file analysis, comprehensive search):
    a. Briefly assess the task scope using your own reasoning —do not use tools for exploration at this stage, as that would consume your limited context window.
    b. If you can clearly handle it without extensive file reading or searching, proceed yourself.
-   c. Otherwise, delegate to dispatch_agent with the original task and your assessment of what needs to be explored. The subagent handles discovery in its own separate context, keeping your main context clean for coordination.
+   c. Otherwise, delegate the discovery task with dispatch_agent when a runtime-configured subagent is available.
 
 ## Using your tools
 - **Prefer dedicated tools over shell commands.** Use read_file instead of cat, edit_file instead of sed, search_code instead of grep. Dedicated tools give the user better visibility into your work.
@@ -87,52 +87,6 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   const rules = opts.rules;
   if (rules) {
     prompt += `\n\n## User-defined Rules\n\nThe following rules MUST be followed at all times. They override any conflicting instructions above.\n\n${rules}`;
-  }
-
-  if (opts.agentProfiles && opts.agentProfiles.length > 0) {
-    const enabledProfiles = opts.agentProfiles.filter((p) => !p.disabled);
-    if (enabledProfiles.length > 0) {
-      prompt += '\n\n## Available Subagents\n';
-      prompt += 'You can dispatch subagents using the dispatch_agent tool. Available profiles:\n';
-      for (const p of enabledProfiles) {
-        prompt += `\n### ${p.name}\n${p.description}`;
-        if (p.tools && p.tools.length > 0) {
-          prompt += `\nTools: ${p.tools.join(', ')}`;
-        }
-      }
-
-      prompt += `
-
-### When to dispatch
-
-Dispatch a subagent when the task involves extensively reading files, searching across the codebase, or analyzing a whole module. A subagent runs in an independent context window —all of its tool calls (read_file, search_code, etc.) consume only the subagent\'s own context. Only the final result comes back to you.
-
-**Dispatch = protect your context window.** If you do the same work yourself, all the raw content goes directly into your context.
-
-### When NOT to dispatch
-
-- The task needs only a small amount of information —do it yourself.
-- You already know the exact file path and what to look for —use read_file / search_code directly.
-
-### Rules
-
-1. Once you dispatch a subagent, do **NOT** also perform the same searches yourself.
-2. **Do NOT peek** —the subagent runs independently. Do not try to read its intermediate output, as that defeats the context protection.
-3. When the subagent returns, relay its conclusion to the user concisely.
-
-### Example
-
-\`\`\`
-User: "Find all API route definitions in this project."
-
-Thinking: This requires searching multiple directories broadly. If I grep and read files myself, all the raw output piles into my context. I should dispatch explore.
-
-dispatch_agent({
-  agent: "explore",
-  prompt: "Search the entire project for API route definitions..."
-})
-\`\`\``;
-    }
   }
 
   if (opts.skillInstruction) {

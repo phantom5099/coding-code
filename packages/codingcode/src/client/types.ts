@@ -1,6 +1,5 @@
 import type { PermissionMode } from '../approval/types.js';
 import type { McpServerConfig, McpStatus } from '../mcp/types.js';
-import type { AgentProfile } from '../subagent/types.js';
 import type { UserHookConfig } from '../hooks/types.js';
 import type { SessionEvent, SessionIndex } from '../session/types.js';
 import type { SelectableModel } from '../llm/factory.js';
@@ -56,9 +55,7 @@ export interface AgentClient {
   }>;
   undoLastCodeRollback(force?: boolean, files?: string[]): Promise<CodeRollbackUndoResult>;
   getRollbackState(): Promise<RollbackState>;
-  forkSession(
-    atTurnId?: number
-  ): Promise<{
+  forkSession(atTurnId?: number): Promise<{
     sessionId: string;
     turns: Array<{ id: string; items: object[]; status: string }>;
   }>;
@@ -85,23 +82,6 @@ export interface AgentClient {
   resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
   toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
-  listAgents(query: { cwd: string }): Promise<
-    Array<{
-      name: string;
-      description: string;
-      tools?: string[];
-      mcpServers?: string[];
-      readonly?: boolean;
-      maxSteps?: number;
-      model?: string;
-      disabled?: boolean;
-    }>
-  >;
-  createAgent(profile: AgentProfile, query: { cwd: string }): Promise<void>;
-  updateAgent(name: string, profile: AgentProfile, query: { cwd: string }): Promise<void>;
-  deleteAgent(name: string, query: { cwd: string }): Promise<void>;
-  setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
-  resetAgentDisabled(body: { name: string; cwd: string }): Promise<void>;
   listHooks(query: { cwd: string }): Promise<UserHookConfig[]>;
   setHookDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;

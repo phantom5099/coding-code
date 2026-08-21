@@ -1,12 +1,7 @@
 import { Effect } from 'effect';
 import type { AgentProfile } from '../subagent/types.js';
-import {
-  EXPLORE_PROFILE,
-  PLAN_PROFILE,
-  BUILD_PROFILE,
-  SubagentService,
-} from '../subagent/registry.js';
-import * as agentLoader from '../subagent/loader.js';
+import { PLAN_PROFILE, BUILD_PROFILE, SubagentService } from '../subagent/registry.js';
+import { loadMainAgentProfile } from '../subagent/loader.js';
 import type { ToolVisibilityPolicy } from '../tools/types.js';
 import { HookService } from '../hooks/registry.js';
 import { McpService } from '../mcp/index.js';
@@ -17,20 +12,7 @@ import type { PermissionMode } from '../approval/types.js';
 import type { SessionMode } from '../session/types.js';
 import { readCurrentIndex } from '../session/file-ops.js';
 import { computePaths } from '../core/path.js';
-
-function buildGlobalProfiles(): AgentProfile[] {
-  const profiles: AgentProfile[] = [BUILD_PROFILE, EXPLORE_PROFILE, PLAN_PROFILE];
-  for (const p of agentLoader.loadGlobalAgentProfiles()) {
-    if (!profiles.find((existing) => existing.name === p.name)) {
-      profiles.push(p);
-    }
-  }
-  return profiles;
-}
-
-function buildProjectProfiles(projectPath: string): AgentProfile[] {
-  return agentLoader.loadAgentProfiles(projectPath);
-}
+import { isPlanProfile, PLAN_MODE_ALLOWED_TOOLS } from '../plan/index.js';
 
 export function modeToProfile(mode: SessionMode): AgentProfile {
   return mode === 'plan' ? PLAN_PROFILE : BUILD_PROFILE;
@@ -47,7 +29,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
       const session = yield* SessionService;
       const prepared = new Set<string>();
 
-      subagent.registerGlobal(buildGlobalProfiles());
+      subagent.registerGlobal([BUILD_PROFILE, PLAN_PROFILE]);
 
       return {
         prepareProject: (projectPath: string): Effect.Effect<void> =>
@@ -58,7 +40,6 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
             rules.evictProjectRules(norm);
             yield* hooks.reloadUserHooks(norm).pipe(Effect.catchAll(() => Effect.void));
             yield* mcp.syncConnections(norm).pipe(Effect.catchAll(() => Effect.void));
-            subagent.registerProject(norm, buildProjectProfiles(norm));
           }),
 
         resolveMainAgentProfile: (
@@ -67,31 +48,19 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
         ): AgentProfile | undefined => {
           const idx = readCurrentIndex(computePaths(projectPath, sessionId).indexPath);
           const name = idx?.activeProfile;
-          if (!name) return agentLoader.loadMainAgentProfile(projectPath);
-          return subagent.get(projectPath, name) ?? agentLoader.loadMainAgentProfile(projectPath);
+          if (!name) return loadMainAgentProfile(projectPath);
+          return subagent.get(projectPath, name) ?? loadMainAgentProfile(projectPath);
         },
 
         resolveSubagentProfile: (projectPath: string, name: string): AgentProfile | undefined => {
           const norm = normalizePath(projectPath);
-          if (!prepared.has(norm)) {
-            subagent.registerProject(norm, buildProjectProfiles(norm));
-            prepared.add(norm);
-          }
+          if (!prepared.has(norm)) prepared.add(norm);
           return subagent.get(norm, name);
         },
 
-        listAgentProfiles: (projectPath: string): AgentProfile[] => {
-          const normalized = normalizePath(projectPath);
-          if (!prepared.has(normalized)) {
-            subagent.registerProject(normalized, buildProjectProfiles(normalized));
-            prepared.add(normalized);
-          }
-          return subagent.list(normalized);
-        },
-
         getToolPolicy: (profile: AgentProfile | undefined): ToolVisibilityPolicy => ({
-          allowedTools: profile?.tools ? new Set(profile.tools) : undefined,
-          allowedMcpServers: profile?.mcpServers ? new Set(profile.mcpServers) : undefined,
+          allowedTools: isPlanProfile(profile) ? new Set(PLAN_MODE_ALLOWED_TOOLS) : undefined,
+          allowedMcpServers: undefined,
         }),
 
         setSessionProfile: (
@@ -149,7 +118,6 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           Effect.sync(() => {
             const norm = normalizePath(projectPath);
             prepared.delete(norm);
-            subagent.resetProject(norm);
             rules.evictProjectRules(norm);
           }),
       };

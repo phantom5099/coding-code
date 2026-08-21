@@ -13,7 +13,6 @@ Coding Code 的核心哲学是所有行为都可配置。本文档详细介绍�
 | `rules.md` | `~/.codingcode/rules.md` + `./AGENTS.md` | 全局 + 项目级规则 | 本文档 |
 | `mcp.yaml` | `~/.codingcode/mcp.yaml` + `.codingcode/mcp.yaml` | MCP 服务配置 | [→ mcp.md](mcp.md) |
 | `hooks.yaml` | `~/.codingcode/hooks.yaml` + `.codingcode/hooks.yaml` | 钩子配置 | [→ hooks.md](hooks.md) |
-| `agents/*.md` | `~/.codingcode/agents/` + `.codingcode/agents/` | 子智能体 profile | [→ subagent.md](subagent.md) |
 | `memory.md` | `./.codingcode/memory.md` | 长期记忆（项目级） | [→ memory.md](memory.md) |
 
 ---

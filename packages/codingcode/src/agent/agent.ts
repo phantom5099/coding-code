@@ -18,13 +18,12 @@ import { McpService } from '../mcp/index.js';
 import { ContextService } from '../context/service.js';
 import { MemoryService } from '../memory/index.js';
 import { createLogger } from '@codingcode/infra/logger';
-import { resolveSubagentEnabled, resolveAgentDisabled } from '../subagent/registry.js';
-import { ProjectRuntimeService, modeToProfile } from '../runtime/project-runtime.js';
-import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
+import { ProjectRuntimeService } from '../runtime/project-runtime.js';
 import { LLMFactoryService } from '../llm/factory.js';
 import { registerBuiltinTools } from '../tools/builtin-tools.js';
 import { ToolRegistry } from '../tools/registry.js';
 import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
+import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { normalizePath } from '../core/path.js';
 import { isPlanProfile } from '../plan/index.js';
 import type { SessionMode } from '../session/types.js';
@@ -32,6 +31,7 @@ import type { PermissionMode } from '../approval/types.js';
 
 const REACTIVE_COMPACT_MAX_RETRIES = 3;
 import { RulesService } from '../rules/index.js';
+import type { MainAgentProfile } from '../subagent/loader.js';
 
 const logger = createLogger();
 
@@ -148,10 +148,7 @@ export const sendMessage = (
     if (!sessionId) {
       if (!options.mode || !options.permissionMode || !options.model) {
         return yield* Effect.fail(
-          new AgentError(
-            'CONFIG_MISSING',
-            'new session requires mode, permissionMode, and model'
-          )
+          new AgentError('CONFIG_MISSING', 'new session requires mode, permissionMode, and model')
         );
       }
       const created = yield* session.createSessionWithProfile(normalizedCwd, {
@@ -192,8 +189,9 @@ export const sendMessage = (
       yield* hooks.attachSessionHooks(sid, profile.hooks);
     }
 
-    if (profile?.mcpServers?.length) {
-      yield* mcp.connectServers(normalizedCwd, sid, profile.mcpServers);
+    const mainProfile = profile as MainAgentProfile | undefined;
+    if (mainProfile?.mcpServers?.length) {
+      yield* mcp.connectServers(normalizedCwd, sid, mainProfile.mcpServers);
     }
 
     const mcpTools = mcp.listProjectMcpTools(normalizedCwd);
@@ -215,11 +213,11 @@ export const sendMessage = (
       toolPolicy: policy,
       maxStepsOverride: effectiveMaxSteps,
       approvalOverride: effectiveApproval,
-      dispatchTool,
       mcpTools,
       skillInstruction: matchedSkill?.instruction,
       abortSignal: options?.signal,
       rulesText,
+      dispatchTool,
     });
 
     return { stream, sessionId: sid };
@@ -259,13 +257,6 @@ export function agentLoop(
     const memory = yield* MemoryService;
     const { skillInstruction, systemPromptVariant, rulesText } = opts;
 
-    const allAgentProfiles = runtime.listAgentProfiles(projectPath);
-    const enabledAgentProfiles = resolveSubagentEnabled(projectPath)
-      ? allAgentProfiles.filter((p) => !resolveAgentDisabled(projectPath, p.name))
-      : [];
-    const visibleAgentProfiles = isPlanProfile(profile)
-      ? enabledAgentProfiles.filter((p) => p.name === 'explore')
-      : enabledAgentProfiles;
     const basePrompt =
       opts.systemOverride ??
       buildSystemPrompt({
@@ -274,7 +265,6 @@ export function agentLoop(
         shell: process.env.SHELL || process.env.ComSpec || 'bash',
         variant: systemPromptVariant ?? 'default',
         skillInstruction,
-        agentProfiles: visibleAgentProfiles,
         rules: rulesText,
         profileSystemPrompt: profile?.systemPrompt,
       });
@@ -292,7 +282,7 @@ export function agentLoop(
     const registry = new ToolRegistry();
     yield* registerBuiltinTools(registry);
     registry.register(...(opts.mcpTools ?? []));
-    if (opts.dispatchTool && resolveSubagentEnabled(projectPath)) registry.register(opts.dispatchTool);
+    if (opts.dispatchTool) registry.register(opts.dispatchTool);
     if (isPlanProfile(profile)) registry.register(submitPlanTool);
 
     let messages: Message[] = [];

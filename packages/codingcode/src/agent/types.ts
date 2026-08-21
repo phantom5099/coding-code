@@ -26,7 +26,6 @@ export interface SystemPromptOptions {
   shell: string;
   variant?: SystemPromptVariant;
   skillInstruction?: string;
-  agentProfiles?: AgentProfile[];
   rules?: string;
   profileSystemPrompt?: string;
 }

@@ -196,39 +196,6 @@ export function deleteMcpServer(cwd: string | undefined, name: string): Promise<
   return clients.settings.deleteMcpServer({ cwd: cwd ?? '', name });
 }
 
-// ---- Settings: Agents ----
-
-export function listAgents(cwd?: string): Promise<any[]> {
-  return clients.settings.listAgents({ cwd: cwd ?? '' });
-}
-
-export function setAgentDisabled(name: string, disabled: boolean, cwd?: string): Promise<void> {
-  return clients.settings.setAgentDisabled({ name, disabled, cwd: cwd ?? '' });
-}
-
-export function resetAgentDisabled(name: string, cwd: string): Promise<void> {
-  return clients.settings.resetAgentDisabled({ name, cwd });
-}
-
-export function createAgent(
-  cwd: string | undefined,
-  profile: Record<string, unknown>
-): Promise<void> {
-  return clients.settings.createAgent({ cwd: cwd ?? '', profile: profile as any });
-}
-
-export function updateAgent(
-  cwd: string | undefined,
-  name: string,
-  profile: Record<string, unknown>
-): Promise<void> {
-  return clients.settings.updateAgent({ cwd: cwd ?? '', name, profile: profile as any });
-}
-
-export function deleteAgent(cwd: string | undefined, name: string): Promise<void> {
-  return clients.settings.deleteAgent({ cwd: cwd ?? '', name });
-}
-
 // ---- Settings: Subagent enabled ----
 
 export async function getSubagentEnabled(

@@ -66,11 +66,11 @@ describe('planModeGateHook', () => {
     ).toBeNull();
   });
 
-  it('allows dispatch_agent in plan mode', () => {
+  it('denies dispatch_agent in plan mode', () => {
     makeSessionIndex(cwd, sessionId, 'plan');
     expect(
       planModeGateHook({ toolName: 'dispatch_agent', sessionId, projectPath: cwd } as any)
-    ).toBeNull();
+    ).toMatchObject({ decision: 'deny' });
   });
 
   it('denies write_file in plan mode with the plan-mode reason', () => {

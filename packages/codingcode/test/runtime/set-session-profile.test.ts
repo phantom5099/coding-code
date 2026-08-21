@@ -8,7 +8,7 @@ import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { SubagentService } from '../../src/subagent/registry.js';
 import { RulesService } from '../../src/rules/index.js';
-import { BUILD_PROFILE, PLAN_PROFILE, EXPLORE_PROFILE } from '../../src/subagent/registry.js';
+import { BUILD_PROFILE, PLAN_PROFILE } from '../../src/subagent/registry.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -116,15 +116,4 @@ describe('ProjectRuntimeService.setSessionProfile (disk-only)', () => {
     expect(idx.activeProfile).toBe('build');
   });
 
-  it('writes activeProfile when switching to explore', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
-        yield* runtime.setSessionProfile(cwd, sessionId, EXPLORE_PROFILE);
-      })
-    );
-    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.permissionMode).toBe('bypass');
-    expect(idx.activeProfile).toBe('explore');
-  });
 });

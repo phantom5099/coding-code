@@ -127,7 +127,7 @@ describe('SessionService disk setter/getter consistency', () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setActiveProfile(cwd, sessionId, 'explore');
+        yield* session.setActiveProfile(cwd, sessionId, 'custom-profile');
       })
     );
     const state = await rt.runPromise(
@@ -138,6 +138,6 @@ describe('SessionService disk setter/getter consistency', () => {
     );
     expect(existsSync(state.indexPath)).toBe(true);
     const idx = JSON.parse(readFileSync(state.indexPath, 'utf8'));
-    expect(idx.activeProfile).toBe('explore');
+    expect(idx.activeProfile).toBe('custom-profile');
   });
 });
