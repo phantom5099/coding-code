@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { planModeGateHook, isSessionInPlanMode } from '../../src/plan/index.js';
+import { planModeGateHook, isSessionInPlanMode } from '../../src/agent/mode.js';
 import { computePaths } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -66,11 +66,11 @@ describe('planModeGateHook', () => {
     ).toBeNull();
   });
 
-  it('allows dispatch_agent in plan mode', () => {
+  it('denies dispatch_agent in plan mode', () => {
     makeSessionIndex(cwd, sessionId, 'plan');
     expect(
       planModeGateHook({ toolName: 'dispatch_agent', sessionId, projectPath: cwd } as any)
-    ).toBeNull();
+    ).toMatchObject({ decision: 'deny' });
   });
 
   it('denies write_file in plan mode with the plan-mode reason', () => {

@@ -39,7 +39,7 @@ Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本�
 
 | 工具 | 功能 | 关键参数 |
 |---|---|---|
-| `dispatch_agent` | 将任务委派给子智能体 | `agent: string`（子智能体名称），`prompt: string`（任务描述，至少 1 字符） |
+| `dispatch_agent` | 将任务委派给运行时注册的子智能体 | `agent: string`, `prompt: string` |
 
 ---
 
@@ -50,7 +50,7 @@ Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本�
 - **Core 工具**：始终可用，在启动时注册。包括上述所有内置工具。
 - **MCP 工具**：从 MCP 服务自动导入和注册。名称空间化为 `serverName:toolName` 格式，避免不同服务间的工具名冲突。
 
-Agent 在一次运行开始时将内置工具、项目 MCP 工具和 `dispatch_agent` 注册到 `ToolRegistry`。每轮通过注册表按 `AgentProfile.tools` 和 `ToolVisibilityPolicy` 过滤，并生成 LLM 工具描述与执行查找结果。
+Agent 在一次运行开始时注册内置工具、项目 MCP 工具和 `dispatch_agent`。plan 模式通过独立的 `PLAN_MODE_ALLOWED_TOOLS` 策略过滤工具。
 
 ---
 
@@ -103,7 +103,7 @@ interface ToolVisibilityPolicy {
 |------|------|------|
 | 1 | **RuleEngine** | 规则引擎匹配，支持 glob 模式匹配工具名和参数，按优先级排序 |
 | 2 | **ReadonlyWhitelist** | 只读工具自动放行（read_file, search_code, search_files, fetch_url, web_search, dispatch_agent, todo_write） |
-| 3 | **PermissionMode** | 权限模式判断：`bypass`（全部放行）、`acceptEdits`（非破坏性工具放行）、`default`（继续下一层）。`plan` 模式由独立的 `plan/planModeGateHook` 在 Layer 4 强制，不在此层处理 |
+| 3 | **PermissionMode** | 权限模式判断：`bypass`（全部放行）、`acceptEdits`（非破坏性工具放行）、`default`（继续下一层）。`plan` 模式由独立的 `agent/mode.ts` 中的 `planModeGateHook` 在 Layer 4 强制，不在此层处理 |
 | 4 | **HookPreToolUse** | 钩子决策，可返回 allow/deny/ask/continue，支持 `modifiedInput` 修改参数 |
 | 5 | **UserConfirmation** | 异步用户确认，支持 allow/deny/always/never 四种响应，always/never 会持久化为规则 |
 | 6 | **AuditLog** | 每一层决策后记录审计日志，通过 `tool.approval.post` 钩子发出 |
@@ -134,7 +134,7 @@ type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
 - `acceptEdits`：非破坏性工具自动放行，减少确认弹窗
 - `bypass`：全部放行，跳过所有审批（慎用）
 
-> `plan` 不再是 `PermissionMode` 的成员。plan 模式通过 `AgentProfile.name === 'plan'` 结构化识别，由 `plan/planModeGateHook` 在 `tool.approval.pre` 阶段（priority -1000）强制拒绝非白名单工具。白名单见 `plan/policy.ts` 的 `PLAN_MODE_ALLOWED_TOOLS`。
+> `plan` 不再是 `PermissionMode` 的成员。plan 模式通过 `AgentProfile.name === 'plan'` 结构化识别，由 `agent/mode.ts` 的 `planModeGateHook` 和 `PLAN_MODE_ALLOWED_TOOLS` 共同限制工具。
 
 ### OS 级沙箱（预留）
 

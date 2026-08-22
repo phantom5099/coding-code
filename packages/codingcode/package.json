@@ -42,8 +42,6 @@
     "./checkpoint/checkpoint-service": "./src/checkpoint/checkpoint-service.ts",
     "./checkpoint/shadow-git": "./src/checkpoint/shadow-git.ts",
     "./checkpoint/bootstrap": "./src/checkpoint/bootstrap.ts",
-    "./subagent/registry": "./src/subagent/registry.ts",
-    "./subagent/loader": "./src/subagent/loader.ts",
     "./llm/factory": "./src/llm/factory.ts",
     "./llm/client": "./src/llm/client.ts",
     "./layer": "./src/layer.ts"

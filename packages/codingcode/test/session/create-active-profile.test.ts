@@ -71,12 +71,12 @@ describe('create writes activeProfile in one updateIndex', () => {
     await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        yield* svc.setActiveProfile(cwd, state.sessionId, 'explore');
+        yield* svc.setActiveProfile(cwd, state.sessionId, 'custom-profile');
       })
     );
 
     const after = JSON.parse(readFileSync(state.indexPath, 'utf8'));
-    expect(after.activeProfile).toBe('explore');
+    expect(after.activeProfile).toBe('custom-profile');
 
     await run(
       Effect.gen(function* () {
@@ -86,6 +86,6 @@ describe('create writes activeProfile in one updateIndex', () => {
     );
 
     const afterRecord = JSON.parse(readFileSync(state.indexPath, 'utf8'));
-    expect(afterRecord.activeProfile).toBe('explore');
+    expect(afterRecord.activeProfile).toBe('custom-profile');
   });
 });

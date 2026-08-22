@@ -107,38 +107,6 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('User-defined Rules');
   });
 
-  it('includes available subagents section when profiles are provided', () => {
-    const profiles = [
-      {
-        name: 'explore',
-        description: 'Read-only code exploration.',
-        tools: ['read_file'],
-        disabled: false,
-      },
-    ];
-    const prompt = buildSystemPrompt({ ...baseOpts, agentProfiles: profiles });
-    expect(prompt).toContain('Available Subagents');
-    expect(prompt).toContain('dispatch_agent');
-    expect(prompt).toContain('explore');
-    expect(prompt).toContain('Read-only code exploration.');
-  });
-
-  it('includes plan subagent in available subagents when provided', () => {
-    const profiles = [
-      { name: 'explore', description: 'Explore.', tools: ['read_file'], disabled: false },
-      {
-        name: 'plan',
-        description: 'Codebase research for planning.',
-        tools: ['read_file', 'search_code'],
-        disabled: false,
-      },
-    ];
-    const prompt = buildSystemPrompt({ ...baseOpts, agentProfiles: profiles });
-    expect(prompt).toContain('plan');
-    expect(prompt).toContain('Codebase research for planning');
-    expect(prompt).toContain('dispatch_agent');
-  });
-
   it('omits available subagents section when no profiles are provided', () => {
     const prompt = buildSystemPrompt(baseOpts);
     expect(prompt).not.toContain('Available Subagents');

@@ -1,22 +1,34 @@
 import { readFileSync } from 'fs';
 import type { DecisionHandler } from '../hooks/types.js';
 import { computePaths } from '../core/path.js';
-
-// ---- Profile name constants + structural helper ----
+import type { AgentProfile } from '../subagent/types.js';
+import { BUILD_PROMPT, PLAN_PROMPT } from './prompt.js';
 
 export const PLAN_PROFILE_NAME = 'plan' as const;
 export const BUILD_PROFILE_NAME = 'build' as const;
+
+export const PLAN_PROFILE: AgentProfile = {
+  name: PLAN_PROFILE_NAME,
+  systemPrompt: PLAN_PROMPT,
+  maxSteps: 180,
+};
+
+export const BUILD_PROFILE: AgentProfile = {
+  name: BUILD_PROFILE_NAME,
+  systemPrompt: BUILD_PROMPT,
+};
 
 export function isPlanProfile(p: { name: string } | null | undefined): boolean {
   return p?.name === PLAN_PROFILE_NAME;
 }
 
 export const PLAN_MODE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
+  'read_file',
+  'search_files',
+  'search_code',
+  'fetch_url',
   'submit_plan',
-  'dispatch_agent',
 ]);
-
-// ---- Plan-mode state: read from .index.json (disk is single source of truth) ----
 
 export function isSessionInPlanMode(sessionId: string, cwd: string): boolean {
   try {
@@ -28,23 +40,6 @@ export function isSessionInPlanMode(sessionId: string, cwd: string): boolean {
   } catch {
     return false;
   }
-}
-
-// ---- Plan-mode subagent whitelist (called inline by dispatch_agent) ----
-
-export function checkSubagentAllowedInPlanMode(
-  parentSessionId: string | undefined,
-  parentMainProfile: string | undefined,
-  profile: string | undefined
-): { allowed: true } | { allowed: false; reason: string } {
-  if (!parentSessionId) return { allowed: true };
-  if (parentMainProfile !== PLAN_PROFILE_NAME) return { allowed: true };
-  if (!profile) return { allowed: true };
-  if (profile === 'explore') return { allowed: true };
-  return {
-    allowed: false,
-    reason: `Plan mode can only dispatch the 'explore' subagent. Got: '${profile}'`,
-  };
 }
 
 export const planModeGateHook: DecisionHandler = (payload) => {

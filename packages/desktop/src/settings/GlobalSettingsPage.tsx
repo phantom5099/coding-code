@@ -3,18 +3,16 @@ import { useUIStore } from '../stores/ui.store';
 import { useState } from 'react';
 import McpPanel from './McpPanel';
 import HooksPanel from './HooksPanel';
-import SubagentsPanel from './SubagentsPanel';
 import SkillPanel from './SkillPanel';
 import AgentConfigPanel from './AgentConfigPanel';
 
-type Section = 'theme' | 'mcp' | 'hooks' | 'agents' | 'skills' | 'agent-config';
+type Section = 'theme' | 'mcp' | 'hooks' | 'skills' | 'agent-config';
 
 const NAV_ITEMS: { id: Section; label: string }[] = [
   { id: 'theme', label: '主题' },
   { id: 'agent-config', label: '执行配置' },
   { id: 'mcp', label: 'MCP 服务器' },
   { id: 'hooks', label: '钩子' },
-  { id: 'agents', label: '子智能体' },
   { id: 'skills', label: 'Skills' },
 ];
 
@@ -89,7 +87,6 @@ export default function GlobalSettingsPage() {
           {section === 'agent-config' && <AgentConfigPanel />}
           {section === 'mcp' && <McpPanel global />}
           {section === 'hooks' && <HooksPanel global />}
-          {section === 'agents' && <SubagentsPanel global />}
           {section === 'skills' && <SkillPanel global />}
         </div>
       </div>

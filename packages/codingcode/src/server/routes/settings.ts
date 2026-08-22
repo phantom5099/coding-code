@@ -4,7 +4,6 @@ import { SkillService } from '../../skills/service.js';
 import { WorkspaceService, isGlobalCwd } from '../../core/workspace.js';
 import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
 import type { McpServerConfig } from '../../mcp/types.js';
-import type { AgentProfile } from '../../subagent/types.js';
 import type { UserHookConfig } from '../../hooks/types.js';
 import {
   loadMcpConfig,
@@ -18,32 +17,6 @@ import {
   setProjectMcpDisabledState,
   resetProjectMcpDisabledState,
 } from '../../mcp/config.js';
-import {
-  loadAgentProfiles,
-  writeAgentProfile,
-  updateAgentProfile,
-  deleteAgentProfile,
-  loadGlobalAgentProfiles,
-  writeGlobalAgentProfile,
-  updateGlobalAgentProfile,
-  deleteGlobalAgentProfile,
-} from '../../subagent/loader.js';
-import {
-  EXPLORE_PROFILE,
-  PLAN_PROFILE,
-  resolveSubagentEnabled,
-  getProjectSubagentEnabledState,
-  setProjectSubagentEnabledState,
-  resetProjectSubagentEnabledState,
-  getGlobalAgentDisabledState,
-  setGlobalAgentDisabledState,
-  getProjectAgentDisabledState,
-  setProjectAgentDisabledState,
-  resetProjectAgentDisabledState,
-  resolveAgentDisabled,
-  getSubagentEnabledState,
-  setSubagentEnabledState,
-} from '../../subagent/registry.js';
 import {
   loadHookConfigs,
   writeHookConfigs,
@@ -78,7 +51,7 @@ import {
   updateMemoryModel,
 } from '@codingcode/infra/config';
 import { MemoryService } from '../../memory/index.js';
-import { createRunWithLayer, errorResponse } from '../util.js';
+import { createRunWithLayer } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
@@ -123,128 +96,6 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
       cwd,
       servers.filter((s) => s.name !== name)
     );
-  }
-
-  function agentsList(cwd: string): Array<{
-    name: string;
-    description: string;
-    tools?: string[];
-    mcpServers?: string[];
-    readonly?: boolean;
-    maxSteps?: number;
-    model?: string;
-    disabled: boolean;
-    source: 'builtin' | 'global' | 'project';
-    hasProjectOverride?: boolean;
-    projectDisabled?: boolean;
-  }> {
-    const globalCustom = loadGlobalAgentProfiles();
-    const projectCustom = loadAgentProfiles(cwd);
-    const globalNames = new Set(globalCustom.map((a) => a.name));
-    const projectNames = new Set(projectCustom.map((a) => a.name));
-
-    const result: Array<{
-      name: string;
-      description: string;
-      tools?: string[];
-      mcpServers?: string[];
-      readonly?: boolean;
-      maxSteps?: number;
-      model?: string;
-      disabled: boolean;
-      source: 'builtin' | 'global' | 'project';
-      hasProjectOverride?: boolean;
-      projectDisabled?: boolean;
-    }> = [];
-
-    // builtin: EXPLORE_PROFILE
-    const exploreProjectVal = getProjectAgentDisabledState(cwd, EXPLORE_PROFILE.name);
-    result.push({
-      name: EXPLORE_PROFILE.name,
-      description: EXPLORE_PROFILE.description,
-      tools: EXPLORE_PROFILE.tools,
-      mcpServers: EXPLORE_PROFILE.mcpServers,
-      readonly: EXPLORE_PROFILE.readonly,
-      maxSteps: EXPLORE_PROFILE.maxSteps,
-      model: EXPLORE_PROFILE.model,
-      disabled: resolveAgentDisabled(cwd, EXPLORE_PROFILE.name),
-      source: 'builtin',
-      hasProjectOverride: exploreProjectVal !== undefined,
-      projectDisabled: exploreProjectVal,
-    });
-
-    // builtin: PLAN_PROFILE
-    const planProjectVal = getProjectAgentDisabledState(cwd, PLAN_PROFILE.name);
-    result.push({
-      name: PLAN_PROFILE.name,
-      description: PLAN_PROFILE.description,
-      tools: PLAN_PROFILE.tools,
-      mcpServers: PLAN_PROFILE.mcpServers,
-      readonly: PLAN_PROFILE.readonly,
-      maxSteps: PLAN_PROFILE.maxSteps,
-      model: PLAN_PROFILE.model,
-      disabled: resolveAgentDisabled(cwd, PLAN_PROFILE.name),
-      source: 'builtin',
-      hasProjectOverride: planProjectVal !== undefined,
-      projectDisabled: planProjectVal,
-    });
-
-    // global agents (not overridden by project)
-    for (const a of globalCustom) {
-      if (projectNames.has(a.name)) continue;
-      const projectVal = getProjectAgentDisabledState(cwd, a.name);
-      result.push({
-        name: a.name,
-        description: a.description,
-        tools: a.tools,
-        mcpServers: a.mcpServers,
-        readonly: a.readonly,
-        maxSteps: a.maxSteps,
-        model: a.model,
-        disabled: resolveAgentDisabled(cwd, a.name),
-        source: 'global',
-        hasProjectOverride: projectVal !== undefined,
-        projectDisabled: projectVal,
-      });
-    }
-
-    // project agents
-    for (const a of projectCustom) {
-      const projectVal = getProjectAgentDisabledState(cwd, a.name);
-      result.push({
-        name: a.name,
-        description: a.description,
-        tools: a.tools,
-        mcpServers: a.mcpServers,
-        readonly: a.readonly,
-        maxSteps: a.maxSteps,
-        model: a.model,
-        disabled: resolveAgentDisabled(cwd, a.name),
-        source: globalNames.has(a.name) ? 'global' : 'project',
-        hasProjectOverride: projectVal !== undefined,
-        projectDisabled: projectVal,
-      });
-    }
-
-    return result;
-  }
-
-  function agentsCreate(cwd: string, profile: AgentProfile): void {
-    const existing = loadAgentProfiles(cwd);
-    if (existing.some((a) => a.name === profile.name)) {
-      throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
-    }
-    writeAgentProfile(cwd, profile);
-  }
-
-  function agentsUpdate(cwd: string, name: string, profile: AgentProfile): void {
-    const existing = loadAgentProfiles(cwd);
-    if (!existing.some((a) => a.name === name))
-      throw new NotFoundError(`Agent '${name}' not found`);
-    if (profile.name !== name && existing.some((a) => a.name === profile.name)) {
-      throw new AlreadyExistsError(`Agent '${profile.name}' already exists`);
-    }
-    updateAgentProfile(cwd, name, profile);
   }
 
   function hooksCreate(cwd: string, hook: UserHookConfig): void {
@@ -376,98 +227,6 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     const body = (await c.req.json()) as { compactionModel: string };
     updateContextCompactionModel(body.compactionModel);
     return c.json({ compactionModel: body.compactionModel });
-  });
-
-  // ---- Agents ----
-  settingsRouter.get('/agents', (c) => {
-    const rawCwd = c.req.query('cwd');
-    if (isGlobalCwd(rawCwd)) {
-      const custom = loadGlobalAgentProfiles();
-      return c.json(
-        [EXPLORE_PROFILE, PLAN_PROFILE, ...custom].map((a) => ({
-          name: a.name,
-          description: a.description,
-          tools: a.tools,
-          mcpServers: a.mcpServers,
-          readonly: a.readonly,
-          maxSteps: a.maxSteps,
-          model: a.model,
-          disabled: getGlobalAgentDisabledState(a.name),
-          source:
-            a.name === EXPLORE_PROFILE.name || a.name === PLAN_PROFILE.name ? 'builtin' : 'global',
-        }))
-      );
-    }
-    const cwd = resolveWorkspaceCwd(rawCwd);
-    return c.json(agentsList(cwd));
-  });
-
-  settingsRouter.post('/agents', async (c) => {
-    const rawCwd = c.req.query('cwd');
-    const body = (await c.req.json()) as AgentProfile;
-    try {
-      if (isGlobalCwd(rawCwd)) {
-        const existing = loadGlobalAgentProfiles();
-        if (existing.some((a) => a.name === body.name)) {
-          throw new AlreadyExistsError(`Agent '${body.name}' already exists`);
-        }
-        writeGlobalAgentProfile(body);
-      } else {
-        agentsCreate(resolveWorkspaceCwd(rawCwd), body);
-      }
-      return c.json({ ok: true });
-    } catch (e) {
-      if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
-      throw e;
-    }
-  });
-
-  settingsRouter.put('/agents/:name', async (c) => {
-    const name = c.req.param('name');
-    const rawCwd = c.req.query('cwd');
-    const body = (await c.req.json()) as AgentProfile;
-    try {
-      if (isGlobalCwd(rawCwd)) {
-        updateGlobalAgentProfile(name, body);
-      } else {
-        agentsUpdate(resolveWorkspaceCwd(rawCwd), name, body);
-      }
-      return c.json({ ok: true });
-    } catch (e) {
-      if (e instanceof NotFoundError) return c.json({ error: e.message }, 404);
-      if (e instanceof AlreadyExistsError) return c.json({ error: e.message }, 409);
-      throw e;
-    }
-  });
-
-  settingsRouter.delete('/agents/:name', async (c) => {
-    const name = c.req.param('name');
-    const rawCwd = c.req.query('cwd');
-    if (isGlobalCwd(rawCwd)) {
-      deleteGlobalAgentProfile(name);
-    } else {
-      deleteAgentProfile(resolveWorkspaceCwd(rawCwd), name);
-    }
-    return c.json({ ok: true });
-  });
-
-  settingsRouter.post('/agents/:name/disabled', async (c) => {
-    const name = c.req.param('name');
-    const rawCwd = c.req.query('cwd');
-    const body = (await c.req.json()) as { disabled: boolean };
-    if (isGlobalCwd(rawCwd)) {
-      setGlobalAgentDisabledState(name, body.disabled);
-    } else {
-      setProjectAgentDisabledState(resolveWorkspaceCwd(rawCwd), name, body.disabled);
-    }
-    return c.json({ ok: true });
-  });
-
-  settingsRouter.post('/agents/:name/disabled/reset', async (c) => {
-    const name = c.req.param('name');
-    const rawCwd = c.req.query('cwd');
-    resetProjectAgentDisabledState(resolveWorkspaceCwd(rawCwd), name);
-    return c.json({ ok: true });
   });
 
   // ---- Hooks ----
@@ -758,37 +517,6 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     }
     const cwd = resolveWorkspaceCwd(rawCwd);
     setProjectSkillDisabledState(cwd, body.name, !body.enabled);
-    return c.json({ ok: true });
-  });
-
-  // ---- Subagent enabled ----
-  settingsRouter.get('/subagent/enabled', (c) => {
-    const rawCwd = c.req.query('cwd');
-    if (isGlobalCwd(rawCwd)) {
-      return c.json({ enabled: getSubagentEnabledState(), source: 'global' });
-    }
-    const cwd = resolveWorkspaceCwd(rawCwd);
-    const projectVal = getProjectSubagentEnabledState(cwd);
-    return c.json({
-      enabled: resolveSubagentEnabled(cwd),
-      source: projectVal !== undefined ? 'project' : 'global',
-    });
-  });
-
-  settingsRouter.post('/subagent/enabled', async (c) => {
-    const body = (await c.req.json()) as { enabled: boolean };
-    const rawCwd = c.req.query('cwd');
-    if (isGlobalCwd(rawCwd)) {
-      setSubagentEnabledState(body.enabled);
-    } else {
-      setProjectSubagentEnabledState(resolveWorkspaceCwd(rawCwd), body.enabled);
-    }
-    return c.json({ ok: true });
-  });
-
-  settingsRouter.post('/subagent/enabled/reset', async (c) => {
-    const rawCwd = c.req.query('cwd');
-    resetProjectSubagentEnabledState(resolveWorkspaceCwd(rawCwd));
     return c.json({ ok: true });
   });
 

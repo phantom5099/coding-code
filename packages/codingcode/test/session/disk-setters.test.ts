@@ -5,7 +5,6 @@ import { join } from 'path';
 import { SessionService } from '../../src/session/store.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
-import { SubagentService } from '../../src/subagent/registry.js';
 import { RulesService } from '../../src/rules/index.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -42,7 +41,6 @@ function makeLayer() {
       Layer.mergeAll(
         Layer.succeed(HookService, mockHookService as any),
         Layer.succeed(McpService, mockMcpService),
-        SubagentService.Default,
         Layer.succeed(RulesService, mockRulesService)
       )
     )
@@ -127,7 +125,7 @@ describe('SessionService disk setter/getter consistency', () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setActiveProfile(cwd, sessionId, 'explore');
+        yield* session.setActiveProfile(cwd, sessionId, 'custom-profile');
       })
     );
     const state = await rt.runPromise(
@@ -138,6 +136,6 @@ describe('SessionService disk setter/getter consistency', () => {
     );
     expect(existsSync(state.indexPath)).toBe(true);
     const idx = JSON.parse(readFileSync(state.indexPath, 'utf8'));
-    expect(idx.activeProfile).toBe('explore');
+    expect(idx.activeProfile).toBe('custom-profile');
   });
 });

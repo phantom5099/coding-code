@@ -18,15 +18,10 @@ export interface TodoCounts {
   completed: number;
 }
 
-export type SystemPromptVariant = 'default';
-
 export interface SystemPromptOptions {
   cwd: string;
   platform: string;
   shell: string;
-  variant?: SystemPromptVariant;
-  skillInstruction?: string;
-  agentProfiles?: AgentProfile[];
   rules?: string;
   profileSystemPrompt?: string;
 }
@@ -86,8 +81,6 @@ export interface RunStreamOptions {
   state: SessionStoreState;
   llm: LLMClient;
   profile?: AgentProfile;
-  skillInstruction?: string;
-  systemPromptVariant?: SystemPromptVariant;
   systemOverride?: string;
   coreAllowlist?: ReadonlySet<string>;
   toolPolicy?: ToolVisibilityPolicy;

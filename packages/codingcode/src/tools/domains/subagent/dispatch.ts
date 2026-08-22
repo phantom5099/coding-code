@@ -7,17 +7,10 @@ import { ApprovalService } from '../../../approval/index.js';
 import { HookService } from '../../../hooks/registry.js';
 import { McpService } from '../../../mcp/index.js';
 import { LLMFactoryService } from '../../../llm/factory.js';
-import {
-  resolveSubagentEnabled,
-  resolveAgentDisabled,
-  BUILD_PROFILE,
-} from '../../../subagent/registry.js';
+import { BUILD_PROFILE } from '../../../agent/mode.js';
 import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import { SubagentRunnerService } from '../../../subagent/runner-service.js';
-import { checkSubagentAllowedInPlanMode } from '../../../plan/index.js';
-import { readCurrentIndex } from '../../../session/file-ops.js';
-import { computePaths } from '../../../core/path.js';
 import type { SessionMode } from '../../../session/types.js';
 import type { PermissionMode } from '../../../approval/types.js';
 
@@ -57,16 +50,6 @@ export function createDispatchAgentTool(): Effect.Effect<
 
           const projectPath = ctx?.projectPath || process.cwd();
 
-          // Check global subagent switch
-          if (!resolveSubagentEnabled(projectPath)) {
-            return yield* Effect.fail(
-              new AgentError(
-                'TOOL_EXECUTION_FAILED',
-                'Subagent dispatch is disabled in global settings'
-              )
-            );
-          }
-
           // Get profile
           const profile = runtime.resolveSubagentProfile(projectPath, agentName);
           if (!profile) {
@@ -75,44 +58,10 @@ export function createDispatchAgentTool(): Effect.Effect<
             );
           }
 
-          // Check individual agent disabled state
-          if (resolveAgentDisabled(projectPath, agentName)) {
-            return yield* Effect.fail(
-              new AgentError('TOOL_EXECUTION_FAILED', `Subagent '${agentName}' is disabled`)
-            );
-          }
-
           let llm = yield* factory.getLLMClient();
-          if (profile.model) {
-            const entry = yield* factory.findModel(profile.model);
-            if (!entry) {
-              return yield* Effect.fail(
-                new AgentError(
-                  'TOOL_EXECUTION_FAILED',
-                  `Subagent profile "${agentName}" specifies unknown model: ${profile.model}`
-                )
-              );
-            }
-            llm = yield* factory.createClient(entry);
-          }
 
           // Emit spawn.before hook (decision hook, can deny)
           const parentSessionId = ctx?.sessionId;
-          const parentMainProfile =
-            parentSessionId && projectPath
-              ? readCurrentIndex(computePaths(projectPath, parentSessionId).indexPath)
-                  ?.activeProfile
-              : undefined;
-
-          const whitelist = checkSubagentAllowedInPlanMode(
-            parentSessionId,
-            parentMainProfile,
-            agentName
-          );
-          if (!whitelist.allowed) {
-            return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', whitelist.reason));
-          }
-
           const spawnDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
             profile: agentName,
             prompt,
@@ -138,11 +87,8 @@ export function createDispatchAgentTool(): Effect.Effect<
             const parentState = yield* loaded;
             parentPermissionMode = parentState.permissionMode;
           }
-          const childPermissionMode: PermissionMode =
-            (subagentProfile?.permissionMode as PermissionMode | undefined) ??
-            parentPermissionMode ??
-            'default';
-          const childModel: string = subagentProfile?.model ?? llm.modelInfo.model;
+          const childPermissionMode: PermissionMode = parentPermissionMode ?? 'default';
+          const childModel: string = llm.modelInfo.model;
 
           const childState = yield* session.createSessionWithProfile(
             projectPath,
@@ -163,22 +109,10 @@ export function createDispatchAgentTool(): Effect.Effect<
 
           // Approval: always fork with permissionMode closure (no longer omitted for readonly)
           const childApproval = yield* approval.fork({
-            readonly: profile.readonly ?? false,
             permissionMode: childPermissionMode,
           });
 
-          // Attach subagent hooks
-          if (profile.hooks && profile.hooks.length > 0) {
-            yield* hooks.attachSessionHooks(childUuid, profile.hooks);
-          }
-
-          // Connect MCP servers (session lease)
-          const mcpServers = profile.mcpServers;
-          if (mcpServers?.length) {
-            yield* mcp.connectServers(projectPath, childUuid, mcpServers);
-          }
-
-          // Build tool policy from profile
+          // Build the plan-only tool policy from the active profile.
           const childPolicy = runtime.getToolPolicy(profile);
 
           // Get MCP tools for subagent

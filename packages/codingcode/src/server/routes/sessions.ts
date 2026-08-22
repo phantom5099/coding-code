@@ -4,10 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import type { SessionStoreState, SessionMode } from '../../session/types.js';
 import { SessionService } from '../../session/store.js';
-import {
-  getPermissionMode,
-  deleteSession,
-} from '../../session/file-ops.js';
+import { getPermissionMode, deleteSession } from '../../session/file-ops.js';
 import { computePaths } from '../../core/path.js';
 import { readUIHistory, findUserMessageForTurn } from '../../session/ui-history.js';
 import { ContextService, estimatePromptTokens } from '../../context/service.js';
@@ -18,7 +15,7 @@ import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
 import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
 import { modeToProfile } from '../../runtime/project-runtime.js';
-import { BUILD_PROFILE, PLAN_PROFILE } from '../../subagent/registry.js';
+import { BUILD_PROFILE, PLAN_PROFILE } from '../../agent/mode.js';
 import { isPermissionMode, type PermissionMode } from '../../approval/types.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -251,10 +248,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json({
       ...result.value,
       cwd,
-      available: [
-        { name: PLAN_PROFILE.name, description: PLAN_PROFILE.description },
-        { name: BUILD_PROFILE.name, description: BUILD_PROFILE.description },
-      ],
+      available: [{ name: PLAN_PROFILE.name }, { name: BUILD_PROFILE.name }],
     });
   });
 

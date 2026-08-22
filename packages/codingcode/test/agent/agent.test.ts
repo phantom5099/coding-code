@@ -326,7 +326,7 @@ describe('agentLoop', () => {
     expect(textEvents.map((e: any) => e.text)).toEqual(['\n[Using: readFile]\n']);
   });
 
-  it('should pass skillInstruction into the system prompt sent to LLM', async () => {
+  it('should not pass skill instructions into the system prompt sent to LLM', async () => {
     let capturedSystem: string | undefined;
     const mockLlm = {
       completeStream: (params: any) => {
@@ -342,8 +342,8 @@ describe('agentLoop', () => {
     const opts = {
       state: mockState,
       llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-      skillInstruction: 'Use strict TypeScript',
-    };
+    } as any;
+    opts.skillInstruction = 'Use strict TypeScript';
     const q = Effect.runSync(Queue.unbounded<AgentEvent>());
     const effect = agentLoop(
       deps.executor,
@@ -355,7 +355,8 @@ describe('agentLoop', () => {
     );
     await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
 
-    expect(capturedSystem).toContain('Use strict TypeScript');
+    expect(capturedSystem).not.toContain('## Skill Instructions');
+    expect(capturedSystem).not.toContain('Use strict TypeScript');
   });
 
   it('should yield a single maxSteps error and a single turn.end hook when maxSteps is exhausted', async () => {

@@ -18,8 +18,6 @@ export interface TuiClient {
   compact(): Promise<void>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
   getMemoryEnabled(): Promise<boolean>;
-  setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
-  getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
   listModels(): Promise<{ models: any[]; activeId: string | null }>;
   switchModel(id: string): Promise<void>;
   listSessions(): Promise<any[]>;
@@ -63,8 +61,6 @@ export function createTuiClientFromFacades(llm: LLMClient, rt: AppRuntime): TuiC
     compact: () => agent.compact({ sessionId: currentSessionId, cwd: '' }),
     setMemoryEnabled: (enabled) => settings.setMemoryEnabled(enabled),
     getMemoryEnabled: () => settings.getMemoryEnabled(),
-    setSubagentEnabled: (body) => settings.setSubagentEnabled(body),
-    getSubagentEnabled: (query) => settings.getSubagentEnabled(query),
     listModels: () => models.listModels(),
     switchModel: (id) => models.switchModel({ id }),
     listSessions: () => sessions.listSessions({ cwd: '' }),

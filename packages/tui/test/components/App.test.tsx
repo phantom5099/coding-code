@@ -41,8 +41,6 @@ const client = {
   compact: vi.fn(),
   setMemoryEnabled: vi.fn(),
   getMemoryEnabled: vi.fn(),
-  setSubagentEnabled: vi.fn(),
-  getSubagentEnabled: vi.fn(),
   listModels: vi.fn(),
   switchModel: vi.fn(),
   listSessions: vi.fn(),

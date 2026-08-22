@@ -1,10 +1,7 @@
 import type { AgentClient, StreamChunk } from './types.js';
 import type { McpServerConfig } from '../mcp/types.js';
-import type { AgentProfile } from '../subagent/types.js';
 import type { UserHookConfig } from '../hooks/types.js';
 import type { PermissionMode } from '../approval/types.js';
-import type { SessionEvent } from '../session/types.js';
-import type { RollbackState } from '../checkpoint/types.js';
 import { parseSseStream } from './sse.js';
 import { createHttpClients } from './http/index.js';
 
@@ -152,24 +149,21 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       const res = await clients.agent.rollbackContext(throughTurnId);
       return {
         turns: (res as any).turns ?? [],
-        rollbackState:
-          (res as any).rollbackState ?? { active: false, currentThroughTurnId: null },
+        rollbackState: (res as any).rollbackState ?? { active: false, currentThroughTurnId: null },
       };
     },
     async rollbackBothToTurn(throughTurnId: number) {
       const res = await clients.agent.rollbackBothToTurn(throughTurnId);
       return {
         turns: (res as any).turns ?? [],
-        codeResult:
-          (res as any).codeResult ?? {
-            reverted: false,
-            throughTurnId,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          },
-        rollbackState:
-          (res as any).rollbackState ?? { active: false, currentThroughTurnId: null },
+        codeResult: (res as any).codeResult ?? {
+          reverted: false,
+          throughTurnId,
+          affectedTurns: [],
+          selectedFiles: [],
+          restoreEntry: null,
+        },
+        rollbackState: (res as any).rollbackState ?? { active: false, currentThroughTurnId: null },
       };
     },
     async undoLastCodeRollback(force?: boolean, files?: string[]) {
@@ -216,18 +210,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       await clients.settings.deleteMemoryExtraType(name);
     },
 
-    async getSubagentEnabled({ cwd }: { cwd: string }) {
-      return clients.settings.getSubagentEnabled({ cwd });
-    },
-
-    async setSubagentEnabled(body: { enabled: boolean; cwd: string }) {
-      await clients.settings.setSubagentEnabled(body);
-    },
-
-    async resetSubagentEnabled(body: { cwd: string }) {
-      await clients.settings.resetSubagentEnabled(body);
-    },
-
     async getMcpStatus({ cwd }: { cwd: string }) {
       return clients.settings.getMcpStatus({ cwd });
     },
@@ -258,30 +240,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
 
     async deleteMcpServer(name: string, { cwd }: { cwd: string }) {
       await clients.settings.deleteMcpServer({ cwd, name });
-    },
-
-    async listAgents({ cwd }: { cwd: string }) {
-      return clients.settings.listAgents({ cwd });
-    },
-
-    async createAgent(profile: AgentProfile, { cwd }: { cwd: string }) {
-      await clients.settings.createAgent({ cwd, profile });
-    },
-
-    async updateAgent(name: string, profile: AgentProfile, { cwd }: { cwd: string }) {
-      await clients.settings.updateAgent({ cwd, name, profile });
-    },
-
-    async deleteAgent(name: string, { cwd }: { cwd: string }) {
-      await clients.settings.deleteAgent({ cwd, name });
-    },
-
-    async setAgentDisabled(body: { name: string; disabled: boolean; cwd: string }) {
-      await clients.settings.setAgentDisabled(body);
-    },
-
-    async resetAgentDisabled(body: { name: string; cwd: string }) {
-      await clients.settings.resetAgentDisabled(body);
     },
 
     async listHooks({ cwd }: { cwd: string }) {

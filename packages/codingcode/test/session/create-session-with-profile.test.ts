@@ -34,11 +34,11 @@ describe('createSessionWithProfile helper', () => {
         return yield* svc.createSessionWithProfile(
           cwd,
           { model: 'gpt-4o', mode: 'build', permissionMode: 'default' },
-          { activeProfile: 'explore' }
+          { activeProfile: 'custom-profile' }
         );
       })
     );
-    expect(state.activeProfile).toBe('explore');
+    expect(state.activeProfile).toBe('custom-profile');
     expect(state.mode).toBe('build');
   });
 });

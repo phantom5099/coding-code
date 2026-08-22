@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isPlanProfile, PLAN_PROFILE_NAME, BUILD_PROFILE_NAME } from '../../src/plan/index.js';
+import { isPlanProfile, PLAN_PROFILE_NAME, BUILD_PROFILE_NAME } from '../../src/agent/mode.js';
 
 describe('isPlanProfile', () => {
   it('returns true for a profile named "plan"', () => {
@@ -10,8 +10,8 @@ describe('isPlanProfile', () => {
     expect(isPlanProfile({ name: 'build' })).toBe(false);
   });
 
-  it('returns false for an arbitrary subagent name (e.g. "explore")', () => {
-    expect(isPlanProfile({ name: 'explore' })).toBe(false);
+  it('returns false for an arbitrary profile name', () => {
+    expect(isPlanProfile({ name: 'custom' })).toBe(false);
   });
 
   it('returns false for null/undefined', () => {

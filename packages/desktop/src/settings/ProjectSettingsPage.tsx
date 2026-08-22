@@ -3,16 +3,14 @@ import { useUIStore } from '../stores/ui.store';
 import { useState } from 'react';
 import McpPanel from './McpPanel';
 import HooksPanel from './HooksPanel';
-import SubagentsPanel from './SubagentsPanel';
 import SkillPanel from './SkillPanel';
 import MemoryPanel from './MemoryPanel';
 
-type Section = 'mcp' | 'hooks' | 'agents' | 'skills' | 'memory';
+type Section = 'mcp' | 'hooks' | 'skills' | 'memory';
 
 const NAV_ITEMS: { id: Section; label: string }[] = [
   { id: 'mcp', label: 'MCP 服务器' },
   { id: 'hooks', label: '钩子' },
-  { id: 'agents', label: '子智能体' },
   { id: 'skills', label: 'Skills' },
   { id: 'memory', label: '记忆模式' },
 ];
@@ -58,7 +56,6 @@ export default function ProjectSettingsPage() {
         <div className="flex-1 min-w-0 overflow-y-auto select-text">
           {section === 'mcp' && <McpPanel />}
           {section === 'hooks' && <HooksPanel />}
-          {section === 'agents' && <SubagentsPanel />}
           {section === 'skills' && <SkillPanel />}
           {section === 'memory' && <MemoryPanel />}
         </div>
