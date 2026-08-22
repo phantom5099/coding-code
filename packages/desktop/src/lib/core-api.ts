@@ -196,22 +196,6 @@ export function deleteMcpServer(cwd: string | undefined, name: string): Promise<
   return clients.settings.deleteMcpServer({ cwd: cwd ?? '', name });
 }
 
-// ---- Settings: Subagent enabled ----
-
-export async function getSubagentEnabled(
-  cwd?: string
-): Promise<{ enabled: boolean; source: string }> {
-  return clients.settings.getSubagentEnabled({ cwd: cwd ?? '' });
-}
-
-export function setSubagentEnabled(enabled: boolean, cwd?: string): Promise<void> {
-  return clients.settings.setSubagentEnabled({ enabled, cwd: cwd ?? '' });
-}
-
-export function resetSubagentEnabled(cwd: string): Promise<void> {
-  return clients.settings.resetSubagentEnabled({ cwd });
-}
-
 // ---- Settings: Skills ----
 
 export function listSkills(

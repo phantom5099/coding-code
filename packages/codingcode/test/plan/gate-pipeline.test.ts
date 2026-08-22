@@ -8,7 +8,7 @@ import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { READONLY_TOOL_NAMES } from '../../src/approval/presets.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { planModeGateHook } from '../../src/plan/index.js';
+import { planModeGateHook } from '../../src/agent/mode.js';
 import { computePaths } from '../../src/core/path.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';

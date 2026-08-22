@@ -16,13 +16,6 @@ import {
   resetProjectMcpDisabledState,
 } from '../mcp/config.js';
 import {
-  setSubagentEnabledState,
-  resolveSubagentEnabled,
-  getProjectSubagentEnabledState,
-  setProjectSubagentEnabledState,
-  resetProjectSubagentEnabledState,
-} from '../subagent/registry.js';
-import {
   loadHookConfigs,
   writeHookConfigs,
   loadGlobalHookConfigs,
@@ -66,9 +59,6 @@ export interface SettingsClient {
   setMemoryModel(model: string): Promise<{ model: string }>;
   getAgentConfig(): Promise<{ maxSteps: number; maxStopContinuations: number }>;
   setCompactionModel(compactionModel: string): Promise<{ compactionModel: string }>;
-  getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
-  setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
-  resetSubagentEnabled(body: { cwd: string }): Promise<void>;
   getMcpStatus(input: { cwd: string }): Promise<McpStatus[]>;
   setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
@@ -294,26 +284,6 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
 
     async deleteMemoryExtraType(name) {
       _deleteMemoryExtraType(name);
-    },
-
-    async getSubagentEnabled({ cwd }) {
-      const projectVal = getProjectSubagentEnabledState(cwd);
-      return {
-        enabled: resolveSubagentEnabled(cwd),
-        source: projectVal !== undefined ? 'project' : 'global',
-      };
-    },
-
-    async setSubagentEnabled({ enabled, cwd }) {
-      if (isGlobalCwd(cwd)) {
-        setSubagentEnabledState(enabled);
-      } else {
-        setProjectSubagentEnabledState(cwd, enabled);
-      }
-    },
-
-    async resetSubagentEnabled({ cwd }) {
-      resetProjectSubagentEnabledState(cwd);
     },
 
     async getMcpStatus({ cwd }) {

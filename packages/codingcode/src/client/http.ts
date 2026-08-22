@@ -210,18 +210,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       await clients.settings.deleteMemoryExtraType(name);
     },
 
-    async getSubagentEnabled({ cwd }: { cwd: string }) {
-      return clients.settings.getSubagentEnabled({ cwd });
-    },
-
-    async setSubagentEnabled(body: { enabled: boolean; cwd: string }) {
-      await clients.settings.setSubagentEnabled(body);
-    },
-
-    async resetSubagentEnabled(body: { cwd: string }) {
-      await clients.settings.resetSubagentEnabled(body);
-    },
-
     async getMcpStatus({ cwd }: { cwd: string }) {
       return clients.settings.getMcpStatus({ cwd });
     },

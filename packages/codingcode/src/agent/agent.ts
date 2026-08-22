@@ -19,13 +19,12 @@ import { ContextService } from '../context/service.js';
 import { MemoryService } from '../memory/index.js';
 import { createLogger } from '@codingcode/infra/logger';
 import { ProjectRuntimeService } from '../runtime/project-runtime.js';
-import { LLMFactoryService } from '../llm/factory.js';
 import { registerBuiltinTools } from '../tools/builtin-tools.js';
 import { ToolRegistry } from '../tools/registry.js';
 import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { normalizePath } from '../core/path.js';
-import { isPlanProfile } from '../plan/index.js';
+import { isPlanProfile } from './mode.js';
 import type { SessionMode } from '../session/types.js';
 import type { PermissionMode } from '../approval/types.js';
 
@@ -138,7 +137,6 @@ export const sendMessage = (
     const rules = yield* RulesService;
     const context = yield* ContextService;
     const memory = yield* MemoryService;
-    const factory = yield* LLMFactoryService;
 
     const normalizedCwd = normalizePath(cwd);
     yield* runtime.prepareProject(normalizedCwd);
@@ -174,24 +172,14 @@ export const sendMessage = (
 
     const dispatchTool = yield* createDispatchAgentTool();
 
-    let activeLlm = llm;
-    if (profile?.model) {
-      const entry = yield* factory.findModel(profile.model);
-      if (entry) {
-        activeLlm = yield* factory.createClient(entry);
-      }
-    }
+    const activeLlm = llm;
     const effectiveMaxSteps = profile?.maxSteps;
     const effectiveApproval: any = options?.approvalOverride;
-
-    if (profile?.hooks?.length) {
-      yield* hooks.attachSessionHooks(sid, profile.hooks);
-    }
 
     const mcpTools = mcp.listProjectMcpTools(normalizedCwd);
 
     const turnId = session.incrementTurn(state);
-    const [matchedSkill, actualInput] = yield* skills.extractSkill(state.cwd, input);
+    const [, actualInput] = yield* skills.extractSkill(state.cwd, input);
 
     yield* session.recordUser(state, actualInput);
 
@@ -208,7 +196,6 @@ export const sendMessage = (
       maxStepsOverride: effectiveMaxSteps,
       approvalOverride: effectiveApproval,
       mcpTools,
-      skillInstruction: matchedSkill?.instruction,
       abortSignal: options?.signal,
       rulesText,
       dispatchTool,
@@ -249,7 +236,7 @@ export function agentLoop(
     const todo = yield* TodoService;
     const context = yield* ContextService;
     const memory = yield* MemoryService;
-    const { skillInstruction, systemPromptVariant, rulesText } = opts;
+    const { rulesText } = opts;
 
     const basePrompt =
       opts.systemOverride ??
@@ -257,8 +244,6 @@ export function agentLoop(
         cwd: projectPath,
         platform: process.platform,
         shell: process.env.SHELL || process.env.ComSpec || 'bash',
-        variant: systemPromptVariant ?? 'default',
-        skillInstruction,
         rules: rulesText,
         profileSystemPrompt: profile?.systemPrompt,
       });

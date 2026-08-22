@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
-import { PLAN_MODE_ALLOWED_TOOLS } from '../../src/plan/index.js';
+import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/agent/mode.js';
+import { PLAN_MODE_ALLOWED_TOOLS } from '../../src/agent/mode.js';
 
 describe('built-in subagent profiles', () => {
   it('keeps only build and plan as built-in names', () => {

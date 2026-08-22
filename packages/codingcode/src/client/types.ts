@@ -71,9 +71,6 @@ export interface AgentClient {
   addExtraType(type: { name: string; description: string }): Promise<void>;
   updateExtraType(name: string, type: { name: string; description: string }): Promise<void>;
   deleteExtraType(name: string): Promise<void>;
-  getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
-  setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
-  resetSubagentEnabled(body: { cwd: string }): Promise<void>;
   getMcpStatus(query: { cwd: string }): Promise<McpStatus[]>;
   createMcpServer(server: McpServerConfig, query: { cwd: string }): Promise<void>;
   updateMcpServer(name: string, server: McpServerConfig, query: { cwd: string }): Promise<void>;

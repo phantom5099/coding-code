@@ -18,14 +18,6 @@ import {
   resetProjectMcpDisabledState,
 } from '../../mcp/config.js';
 import {
-  resolveSubagentEnabled,
-  getProjectSubagentEnabledState,
-  setProjectSubagentEnabledState,
-  resetProjectSubagentEnabledState,
-  getSubagentEnabledState,
-  setSubagentEnabledState,
-} from '../../subagent/registry.js';
-import {
   loadHookConfigs,
   writeHookConfigs,
   loadGlobalHookConfigs,
@@ -525,37 +517,6 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     }
     const cwd = resolveWorkspaceCwd(rawCwd);
     setProjectSkillDisabledState(cwd, body.name, !body.enabled);
-    return c.json({ ok: true });
-  });
-
-  // ---- Subagent enabled ----
-  settingsRouter.get('/subagent/enabled', (c) => {
-    const rawCwd = c.req.query('cwd');
-    if (isGlobalCwd(rawCwd)) {
-      return c.json({ enabled: getSubagentEnabledState(), source: 'global' });
-    }
-    const cwd = resolveWorkspaceCwd(rawCwd);
-    const projectVal = getProjectSubagentEnabledState(cwd);
-    return c.json({
-      enabled: resolveSubagentEnabled(cwd),
-      source: projectVal !== undefined ? 'project' : 'global',
-    });
-  });
-
-  settingsRouter.post('/subagent/enabled', async (c) => {
-    const body = (await c.req.json()) as { enabled: boolean };
-    const rawCwd = c.req.query('cwd');
-    if (isGlobalCwd(rawCwd)) {
-      setSubagentEnabledState(body.enabled);
-    } else {
-      setProjectSubagentEnabledState(resolveWorkspaceCwd(rawCwd), body.enabled);
-    }
-    return c.json({ ok: true });
-  });
-
-  settingsRouter.post('/subagent/enabled/reset', async (c) => {
-    const rawCwd = c.req.query('cwd');
-    resetProjectSubagentEnabledState(resolveWorkspaceCwd(rawCwd));
     return c.json({ ok: true });
   });
 

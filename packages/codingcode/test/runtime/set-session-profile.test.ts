@@ -6,9 +6,8 @@ import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
-import { SubagentService } from '../../src/subagent/registry.js';
 import { RulesService } from '../../src/rules/index.js';
-import { BUILD_PROFILE, PLAN_PROFILE } from '../../src/subagent/registry.js';
+import { BUILD_PROFILE, PLAN_PROFILE } from '../../src/agent/mode.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -41,7 +40,6 @@ const mockRulesService = {
 function makeLayer() {
   const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
   const McpTestLayer = Layer.succeed(McpService, mockMcpService);
-  const SubagentTestLayer = SubagentService.Default;
   const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
   const SessionTestLayer = SessionService.Default;
   const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
@@ -49,7 +47,6 @@ function makeLayer() {
       Layer.mergeAll(
         HookTestLayer,
         McpTestLayer,
-        SubagentTestLayer,
         RulesTestLayer,
         SessionTestLayer
       )

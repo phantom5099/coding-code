@@ -8,7 +8,6 @@ import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
-import { SubagentService } from '../../src/subagent/registry.js';
 import { RulesService } from '../../src/rules/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
 import { createSessionsRouter } from '../../src/server/routes/sessions.js';
@@ -44,7 +43,6 @@ const mockRulesService = {
 function makeLayer() {
   const HookTestLayer = Layer.succeed(HookService, mockHookService);
   const McpTestLayer = Layer.succeed(McpService, mockMcpService);
-  const SubagentTestLayer = SubagentService.Default;
   const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
   const SessionTestLayer = SessionService.Default;
   const WorkspaceTestLayer = WorkspaceService.Default;
@@ -53,7 +51,6 @@ function makeLayer() {
       Layer.mergeAll(
         HookTestLayer,
         McpTestLayer,
-        SubagentTestLayer,
         RulesTestLayer,
         SessionTestLayer,
         WorkspaceTestLayer

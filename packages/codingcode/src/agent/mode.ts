@@ -1,11 +1,22 @@
 import { readFileSync } from 'fs';
 import type { DecisionHandler } from '../hooks/types.js';
 import { computePaths } from '../core/path.js';
-
-// ---- Profile name constants + structural helper ----
+import type { AgentProfile } from '../subagent/types.js';
+import { BUILD_PROMPT, PLAN_PROMPT } from './prompt.js';
 
 export const PLAN_PROFILE_NAME = 'plan' as const;
 export const BUILD_PROFILE_NAME = 'build' as const;
+
+export const PLAN_PROFILE: AgentProfile = {
+  name: PLAN_PROFILE_NAME,
+  systemPrompt: PLAN_PROMPT,
+  maxSteps: 180,
+};
+
+export const BUILD_PROFILE: AgentProfile = {
+  name: BUILD_PROFILE_NAME,
+  systemPrompt: BUILD_PROMPT,
+};
 
 export function isPlanProfile(p: { name: string } | null | undefined): boolean {
   return p?.name === PLAN_PROFILE_NAME;
@@ -18,8 +29,6 @@ export const PLAN_MODE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   'fetch_url',
   'submit_plan',
 ]);
-
-// ---- Plan-mode state: read from .index.json (disk is single source of truth) ----
 
 export function isSessionInPlanMode(sessionId: string, cwd: string): boolean {
   try {

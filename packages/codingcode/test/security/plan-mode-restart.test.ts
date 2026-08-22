@@ -7,12 +7,11 @@ import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
-import { SubagentService } from '../../src/subagent/registry.js';
 import { RulesService } from '../../src/rules/index.js';
 import { ApprovalService } from '../../src/approval/index.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { planModeGateHook, isSessionInPlanMode } from '../../src/plan/index.js';
-import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/subagent/registry.js';
+import { planModeGateHook, isSessionInPlanMode } from '../../src/agent/mode.js';
+import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/agent/mode.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -71,7 +70,6 @@ const mockApprovalWaitService = {
 function makeLayer() {
   const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
   const McpTestLayer = Layer.succeed(McpService, mockMcpService);
-  const SubagentTestLayer = SubagentService.Default;
   const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
   const SessionTestLayer = SessionService.Default;
   const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
@@ -79,7 +77,6 @@ function makeLayer() {
       Layer.mergeAll(
         HookTestLayer,
         McpTestLayer,
-        SubagentTestLayer,
         RulesTestLayer,
         SessionTestLayer
       )

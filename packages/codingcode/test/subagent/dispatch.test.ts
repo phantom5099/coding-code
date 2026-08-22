@@ -7,7 +7,7 @@ import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { LLMFactoryService } from '../../src/llm/factory.js';
 import { RulesService } from '../../src/rules/index.js';
-import { SubagentService, BUILD_PROFILE } from '../../src/subagent/registry.js';
+import { BUILD_PROFILE } from '../../src/agent/mode.js';
 import { SubagentRunnerService } from '../../src/subagent/runner-service.js';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import type { ToolDefinition, ToolExecCtx } from '../../src/tools/types.js';
@@ -119,9 +119,9 @@ const mockSubagent = {
   get: (_p: string, name: string) => {
     if (name === 'build') return BUILD_PROFILE;
     if (name === 'custom') {
-      return { name: 'custom', description: 'custom agent', permissionMode: 'bypass' } as any;
+      return { name: 'custom' } as any;
     }
-    if (name === 'custom-default') return { name, description: 'custom agent' } as any;
+    if (name === 'custom-default') return { name } as any;
     return undefined;
   },
   list: () => [BUILD_PROFILE],
@@ -161,7 +161,6 @@ function makeLayers(parentPermissionMode: 'default' | 'bypass' | 'acceptEdits' =
     Layer.succeed(McpService, McpService.make(mockMcp as any)),
     Layer.succeed(LLMFactoryService, mockLlmFactory as any),
     Layer.succeed(RulesService, mockRules as any),
-    Layer.succeed(SubagentService, mockSubagent as any),
     Layer.succeed(ProjectRuntimeService, ProjectRuntimeService.make(mockProjectRuntime as any)),
     Layer.succeed(SubagentRunnerService, subagentRunner as any)
   );
@@ -191,7 +190,6 @@ async function dispatchTool(
     Layer.succeed(McpService, McpService.make(mockMcp as any)),
     Layer.succeed(LLMFactoryService, mockLlmFactory as any),
     Layer.succeed(RulesService, mockRules as any),
-    Layer.succeed(SubagentService, mockSubagent as any),
     Layer.succeed(ProjectRuntimeService, ProjectRuntimeService.make(mockProjectRuntime as any)),
     Layer.succeed(SubagentRunnerService, {
       runStream: vi.fn().mockReturnValue(makeRunStream()),
@@ -204,13 +202,13 @@ async function dispatchTool(
   return capturePerm.value;
 }
 
-describe('dispatch_agent permission-mode priority (profile > parent > default)', () => {
-  it('case 1: profile has explicit permissionMode → child uses profile value', async () => {
+describe('dispatch_agent permission-mode priority (parent > default)', () => {
+  it('case 1: child uses default when profile has no permissionMode', async () => {
     const perm = await dispatchTool('default', 'custom', {
       projectPath: '/test',
       sessionId: 'parent-1',
     } as ToolExecCtx);
-    expect(perm).toBe('bypass');
+    expect(perm).toBe('default');
   });
 
   it('case 2: profile has no permissionMode + parent has bypass → child uses parent value', async () => {

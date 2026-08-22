@@ -18,9 +18,6 @@ export interface SettingsClient {
   setMemoryModel(model: string): Promise<{ model: string }>;
   getAgentConfig(): Promise<{ maxSteps: number; maxStopContinuations: number }>;
   setCompactionModel(compactionModel: string): Promise<{ compactionModel: string }>;
-  getSubagentEnabled(query: { cwd: string }): Promise<{ enabled: boolean; source: string }>;
-  setSubagentEnabled(body: { enabled: boolean; cwd: string }): Promise<void>;
-  resetSubagentEnabled(body: { cwd: string }): Promise<void>;
   getMcpStatus(input: { cwd: string }): Promise<McpStatus[]>;
   setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
@@ -92,20 +89,6 @@ export function createHttpSettingsClient(
 
     async deleteMemoryExtraType(name) {
       await apiDelete(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`);
-    },
-
-    async getSubagentEnabled({ cwd }) {
-      return apiGet<{ enabled: boolean; source: string }>(
-        `/api/settings/subagent/enabled${qsCwd(cwd)}`
-      );
-    },
-
-    async setSubagentEnabled({ enabled, cwd }) {
-      await apiPost(`/api/settings/subagent/enabled${qsCwd(cwd)}`, { enabled });
-    },
-
-    async resetSubagentEnabled({ cwd }) {
-      await apiPost(`/api/settings/subagent/enabled/reset${qsCwd(cwd)}`, {});
     },
 
     async getMcpStatus({ cwd }) {

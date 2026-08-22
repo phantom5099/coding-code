@@ -175,46 +175,6 @@ export function App({ client }: AppProps) {
           }
           return;
         }
-        if (parsed.name === 'subagent') {
-          try {
-            const arg = parsed.args.trim().toLowerCase();
-            if (arg === 'on' || arg === 'off') {
-              await client.setSubagentEnabled({ enabled: arg === 'on', cwd: '' });
-              setStaticMessages((prev) => [
-                ...prev,
-                {
-                  id: generateId(),
-                  timestamp: Date.now(),
-                  role: 'system' as const,
-                  content: `[Subagent] 已${arg === 'on' ? '开启' : '关闭'}`,
-                },
-              ]);
-            } else {
-              const result = await client.getSubagentEnabled({ cwd: '' });
-              const enabled = result.enabled;
-              setStaticMessages((prev) => [
-                ...prev,
-                {
-                  id: generateId(),
-                  timestamp: Date.now(),
-                  role: 'system' as const,
-                  content: `[Subagent] 当前: ${enabled ? '开启' : '关闭'}  用法: /subagent on|off`,
-                },
-              ]);
-            }
-          } catch (e: any) {
-            setStaticMessages((prev) => [
-              ...prev,
-              {
-                id: generateId(),
-                timestamp: Date.now(),
-                role: 'system' as const,
-                content: `[Subagent Error] ${e.message || e}`,
-              },
-            ]);
-          }
-          return;
-        }
         return;
       }
 

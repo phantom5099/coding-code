@@ -12,17 +12,15 @@ import { ProjectRuntimeService } from './runtime/project-runtime.js';
 import { LLMFactoryService } from './llm/factory.js';
 import { WorkspaceService } from './core/workspace.js';
 import { TodoService } from './agent/todo.js';
-import { SubagentService } from './subagent/registry.js';
 import { SubagentRunnerService } from './subagent/runner-service.js';
 import { RulesService } from './rules/index.js';
 import { MemoryService } from './memory/index.js';
 import { ContextService } from './context/service.js';
 import { SchedulerService } from './scheduler/service.js';
-import { planModeGateHook } from './plan/index.js';
+import { planModeGateHook } from './agent/mode.js';
 
 export const WorkspaceLayer = WorkspaceService.Default;
 export const TodoLayer = TodoService.Default;
-export const SubagentLayer = SubagentService.Default;
 export const RulesLayer = RulesService.Default;
 export const SessionLayer = SessionService.Default;
 export const LLMFactoryLayer = LLMFactoryService.Default.pipe(Layer.provide(WorkspaceLayer));
@@ -37,7 +35,7 @@ export const ApprovalWaitLayer = ApprovalWaitService.Default;
 export const McpLayer = McpService.Default;
 export const SchedulerLayer = SchedulerService.Default;
 export const ProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, McpLayer, SubagentLayer, RulesLayer, SessionLayer))
+  Layer.provide(Layer.mergeAll(HookLayer, McpLayer, RulesLayer, SessionLayer))
 );
 export const ApprovalLayer = ApprovalService.Default.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
@@ -103,7 +101,6 @@ export const AppLayer = Layer.mergeAll(
   LLMFactoryLayer,
   WorkspaceLayer,
   TodoLayer,
-  SubagentLayer,
   RulesLayer,
   MemoryLayer,
   ContextLayer,
