@@ -65,8 +65,7 @@ export interface SettingsClient {
   createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
   updateMcpServer(input: { cwd: string; name: string; server: McpServerConfig }): Promise<void>;
   deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
-  listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
-  toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
+  listSkills(): Promise<Array<{ name: string; description: string; skillPath: string }>>;
   listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
   createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
   updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
@@ -385,21 +384,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
       return rt.runPromise(
         Effect.gen(function* () {
           const skill = yield* SkillService;
-          return yield* skill.listWithStatus(process.cwd());
-        })
-      );
-    },
-
-    async toggleSkill({ name, enabled, cwd }) {
-      const skillCwd = cwd || process.cwd();
-      await rt.runPromise(
-        Effect.gen(function* () {
-          const skill = yield* SkillService;
-          if (enabled) {
-            yield* skill.enableSkill(skillCwd, name);
-          } else {
-            yield* skill.disableSkill(skillCwd, name);
-          }
+          return yield* skill.getAll(process.cwd());
         })
       );
     },

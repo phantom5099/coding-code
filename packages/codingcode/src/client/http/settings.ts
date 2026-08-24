@@ -24,8 +24,7 @@ export interface SettingsClient {
   createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
   updateMcpServer(input: { cwd: string; name: string; server: McpServerConfig }): Promise<void>;
   deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
-  listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
-  toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
+  listSkills(): Promise<Array<{ name: string; description: string; skillPath: string }>>;
   listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
   createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
   updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
@@ -122,10 +121,6 @@ export function createHttpSettingsClient(
 
     async listSkills() {
       return apiGet('/api/settings/skills');
-    },
-
-    async toggleSkill({ name, enabled, cwd }) {
-      await apiPost(`/api/settings/skills${qsCwd(cwd)}`, { name, enabled });
     },
 
     async listHooks({ cwd }) {

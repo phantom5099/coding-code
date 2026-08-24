@@ -445,24 +445,14 @@ export function App({ client }: AppProps) {
             panel.skills.length === 0
               ? [{ label: '无已加载的 Skill', value: '' }]
               : panel.skills.map((s) => ({
-                  label: `${s.enabled ? '✓' : '✗'} ${s.name}  ${s.description}`,
+                  label: `${s.name}  ${s.description}`,
                   value: s.name,
+                  description: s.skillPath,
                 }))
           }
-          onSelect={async (value) => {
-            if (!value) return;
-            const skill = panel.skills.find((s) => s.name === value);
-            if (!skill) return;
-            try {
-              await client.toggleSkill({ name: value, enabled: !skill.enabled, cwd: '' });
-              const updated = await client.listSkills();
-              setPanel({ type: 'skill', skills: updated });
-            } catch {
-              setPanel({ type: 'none' });
-            }
-          }}
+          onSelect={() => setPanel({ type: 'none' })}
           onCancel={() => setPanel({ type: 'none' })}
-          width={Math.min(70, width - 4)}
+          width={Math.min(80, width - 4)}
         />
       )}
       {panel.type === 'permission' && (

@@ -29,12 +29,7 @@ import {
   resetProjectHookDisabledState,
 } from '../../hooks/config.js';
 import { setHookRuntimeEnabled } from '../../hooks/executor.js';
-import {
-  setGlobalSkillDisabledState,
-  setProjectSkillDisabledState,
-  discoverGlobalSkillDirs,
-  discoverProjectSkillDirs,
-} from '../../skills/source.js';
+import { discoverGlobalSkillDirs, discoverProjectSkillDirs } from '../../skills/source.js';
 import {
   getMemoryConfig,
   getAllTypesWithStatus,
@@ -471,7 +466,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
       const result = await runWithLayer(
         Effect.gen(function* () {
           const skill = yield* SkillService;
-          return yield* skill.listWithStatus(cwd);
+          return yield* skill.getAll(cwd);
         })
       );
       const skills = result.ok ? result.value : [];
@@ -490,7 +485,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const skill = yield* SkillService;
-        return yield* skill.listWithStatus(cwd);
+        return yield* skill.getAll(cwd);
       })
     );
     const skills = result.ok ? result.value : [];
@@ -506,18 +501,6 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
         };
       })
     );
-  });
-
-  settingsRouter.post('/skills', async (c) => {
-    const body = (await c.req.json()) as { name: string; enabled: boolean };
-    const rawCwd = c.req.query('cwd');
-    if (isGlobalCwd(rawCwd)) {
-      setGlobalSkillDisabledState(body.name, !body.enabled);
-      return c.json({ ok: true });
-    }
-    const cwd = resolveWorkspaceCwd(rawCwd);
-    setProjectSkillDisabledState(cwd, body.name, !body.enabled);
-    return c.json({ ok: true });
   });
 
   return settingsRouter;

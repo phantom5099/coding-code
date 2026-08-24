@@ -6,12 +6,9 @@ Coding Code 支持可插拔的 Markdown 技能包，扩展 Agent 在特定场景
 
 ## 什么是技能
 
-技能是一组以 Markdown 编写的指令和资源，在 Agent 调用前注入到 system prompt 中。每个技能包含：
+技能是一个包含 `SKILL.md` 的目录。发现阶段只读取少量元数据，具体内容由 Agent 在需要时通过文件工具读取。
 
-- **instruction**：SKILL.md 的 Markdown 正文，作为技能指令注入
-- **references**：附带的参考文件（代码片段、文档等）
-- **scripts**：附带的脚本文件
-- **assets**：附带的二进制资源
+发现阶段保存技能名称、描述和 `SKILL.md` 的绝对路径。
 
 ---
 
@@ -29,19 +26,16 @@ Coding Code 支持可插拔的 Markdown 技能包，扩展 Agent 在特定场景
 ```
 .codingcode/skills/
 ├── code-review/
-│   ├── SKILL.md          # 技能指令（必需）
-│   ├── review-checklist.md   # 参考文件
-│   └── run-review.sh         # 脚本文件
+│   └── SKILL.md          # 必需
 └── api-design/
-    ├── SKILL.md
-    └── openapi-template.yaml
+    └── SKILL.md
 ```
 
 ---
 
 ## SKILL.md 格式
 
-SKILL.md 是纯 Markdown 文件，正文部分作为技能指令注入 system prompt：
+SKILL.md 使用 YAML front matter 提供发现元数据。正文不会在发现阶段读取：
 
 ```markdown
 # Code Review Skill
@@ -65,52 +59,30 @@ You are now performing a code review. Follow these steps:
 
 ```typescript
 interface Skill {
-  readonly name: string;                              // 技能名称
-  readonly description: string;                       // 技能描述
-  readonly instruction: string;                       // SKILL.md 的 Markdown body
-  readonly references: ReadonlyArray<{                // 参考文件
-    path: string;
-    content: string;
-  }>;
-  readonly scripts: ReadonlyArray<{                   // 脚本文件
-    path: string;
-    content: string;
-  }>;
-  readonly assets: ReadonlyArray<{                    // 二进制资源
-    path: string;
-    mimeType: string;
-    size: number;
-  }>;
-  readonly metadata: Record<string, unknown>;         // 自定义元数据
+  readonly name: string;
+  readonly description: string;
+  readonly skillPath: string;
 }
 ```
 
+Agent 判断技能相关后，使用 `read_file` 读取 `skillPath`，再按需读取其他文件或执行脚本。
+
 ---
 
-## 技能管理 API
+## 技能列表 API
 
-通过 `AgentClient` SDK 管理技能：
+通过 `AgentClient` SDK 读取技能元数据：
 
 ```typescript
 const client = await createHttpClient('http://localhost:8080');
 
 // 列出所有技能
 const skills = await client.listSkills();
-// 返回：Array<{ name: string, description: string, enabled: boolean }>
-
-// 启用/禁用技能
-await client.toggleSkill({ name: 'code-review', enabled: true });
+// 返回：Array<{ name: string, description: string, skillPath: string }>
 ```
 
 也可通过 HTTP API：
 
 | 路由 | 方法 | 说明 |
 |------|------|------|
-| `/api/settings/skills` | GET | 列出所有技能 |
-| `/api/settings/skills/toggle` | POST | 启用/禁用技能 |
-
----
-
-## 配置
-
-技能的启用/禁用状态持久化在项目配置中。禁用的技能不会被注入 system prompt，但仍保留在技能目录中，可随时重新启用。
+| `/api/settings/skills` | GET | 列出所有技能元数据 |

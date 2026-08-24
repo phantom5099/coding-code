@@ -1,13 +1,11 @@
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { createDisabledStore } from '@codingcode/infra/disabled-store';
+import { parse as parseYaml } from 'yaml';
 
 interface SkillFrontMatter {
-  name: string;
-  description: string;
-  [key: string]: unknown;
+  name?: string;
+  description?: string;
 }
 
 export interface SkillDirectory {
@@ -45,80 +43,24 @@ export function discoverSkillDirs(projectRoot: string): SkillDirectory[] {
   return dirs;
 }
 
-/** Parse SKILL.md: returns { frontMatter, body } */
-export function readSkillMd(
-  dirPath: string
-): { frontMatter: SkillFrontMatter; body: string } | null {
+/** Parse only the SKILL.md front matter used for skill discovery. */
+export function readSkillFrontMatter(dirPath: string): SkillFrontMatter | null {
   const skillMdPath = join(dirPath, 'SKILL.md');
   if (!existsSync(skillMdPath)) return null;
 
   const raw = readFileSync(skillMdPath, 'utf8');
 
-  // Parse YAML front matter between --- delimiters
-  const match = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) {
-    // No front matter: use directory name as skill name
-    return {
-      frontMatter: { name: basename(dirPath), description: '' },
-      body: raw.trim(),
-    };
+    return { name: basename(dirPath), description: '' };
   }
 
   const frontMatter = parseYaml(match[1]!) as SkillFrontMatter;
-  const body = match[2]!.trim();
-
-  return { frontMatter, body };
-}
-
-export function readFileContent(filePath: string): string | null {
-  try {
-    return readFileSync(filePath, 'utf8');
-  } catch {
-    return null;
-  }
-}
-
-export function getFilesInDir(dirPath: string): string[] {
-  if (!existsSync(dirPath)) return [];
-  return readdirSync(dirPath)
-    .map((f) => join(dirPath, f))
-    .filter((f) => statSync(f).isFile());
-}
-
-export function getMimeType(filePath: string): string {
-  const ext = filePath.split('.').pop()?.toLowerCase();
-  const map: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    svg: 'image/svg+xml',
-    pdf: 'application/pdf',
-    tsx: 'text/typescript-jsx',
-    ts: 'text/typescript',
-    js: 'text/javascript',
-    json: 'application/json',
-    py: 'text/x-python',
-    html: 'text/html',
-    css: 'text/css',
-    md: 'text/markdown',
-    txt: 'text/plain',
+  return {
+    name: frontMatter.name,
+    description: frontMatter.description,
   };
-  return map[ext ?? ''] ?? 'application/octet-stream';
 }
-
-// ---- Skill disabled state ----
-
-const skillDisabledStore = createDisabledStore({
-  globalKeyPath: ['skills', 'disabledSkills'],
-  getGlobalConfigDir: () => join(homedir(), '.codingcode'),
-});
-export const getGlobalSkillDisabledState = skillDisabledStore.getGlobal;
-export const setGlobalSkillDisabledState = skillDisabledStore.setGlobal;
-export const getProjectSkillDisabledState = skillDisabledStore.getProject;
-export const setProjectSkillDisabledState = skillDisabledStore.setProject;
-export const resetProjectSkillDisabledState = skillDisabledStore.resetProject;
-export const resolveSkillDisabled = skillDisabledStore.resolve;
 
 // ---- 辅助函数：分别获取全局/项目级 Skill 目录 ----
 

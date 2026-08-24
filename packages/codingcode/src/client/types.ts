@@ -77,8 +77,7 @@ export interface AgentClient {
   deleteMcpServer(name: string, query: { cwd: string }): Promise<void>;
   setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
-  listSkills(): Promise<Array<{ name: string; description: string; enabled: boolean }>>;
-  toggleSkill(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
+  listSkills(): Promise<Array<{ name: string; description: string; skillPath: string }>>;
   listHooks(query: { cwd: string }): Promise<UserHookConfig[]>;
   setHookDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
   resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;

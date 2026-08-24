@@ -1,11 +1,7 @@
 import { Effect } from 'effect';
-import { discoverSkillDirs, resolveSkillDisabled, setProjectSkillDisabledState } from './source.js';
+import { discoverSkillDirs } from './source.js';
 import { loadSkill } from './loader.js';
 import type { Skill } from './types.js';
-
-function filterEnabled(projectPath: string, skills: Skill[]): Skill[] {
-  return skills.filter((s) => !resolveSkillDisabled(projectPath, s.name));
-}
 
 export class SkillService extends Effect.Service<SkillService>()('Skill', {
   effect: Effect.gen(function* () {
@@ -25,21 +21,16 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
     }
 
     return {
-      getAll: (projectPath: string) =>
-        Effect.sync(() => filterEnabled(projectPath, readAll(projectPath))),
+      getAll: (projectPath: string) => Effect.sync(() => readAll(projectPath)),
 
       findByName: (projectPath: string, name: string) =>
-        Effect.sync(() => {
-          if (resolveSkillDisabled(projectPath, name)) return undefined;
-          return readAll(projectPath).find((s) => s.name === name);
-        }),
+        Effect.sync(() => readAll(projectPath).find((s) => s.name === name)),
 
       select: (projectPath: string, query: string) =>
         Effect.sync(() => {
           const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
           if (!match) return undefined;
           const name = match[1]!;
-          if (resolveSkillDisabled(projectPath, name)) return undefined;
           return readAll(projectPath).find((s) => s.name === name);
         }),
 
@@ -49,10 +40,9 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
         matcher: (all: readonly Skill[], q: string) => Effect.Effect<string | undefined>
       ): Effect.Effect<Skill | undefined> =>
         Effect.gen(function* () {
-          const all = filterEnabled(projectPath, readAll(projectPath));
+          const all = readAll(projectPath);
           const name = yield* matcher(all, query);
           if (!name) return undefined;
-          if (resolveSkillDisabled(projectPath, name)) return undefined;
           return all.find((s) => s.name === name);
         }),
 
@@ -62,28 +52,11 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
           let skill: Skill | undefined;
           if (match) {
             const name = match[1]!;
-            if (!resolveSkillDisabled(projectPath, name)) {
-              skill = readAll(projectPath).find((s) => s.name === name);
-            }
+            skill = readAll(projectPath).find((s) => s.name === name);
           }
           const actualQuery = query.replace(/^@[a-zA-Z0-9-]+\s*/, '');
           return [skill, actualQuery] as [Skill | undefined, string];
         }),
-
-      disableSkill: (projectPath: string, name: string) =>
-        Effect.sync(() => setProjectSkillDisabledState(projectPath, name, true)),
-
-      enableSkill: (projectPath: string, name: string) =>
-        Effect.sync(() => setProjectSkillDisabledState(projectPath, name, false)),
-
-      listWithStatus: (projectPath: string) =>
-        Effect.sync(() =>
-          readAll(projectPath).map((s) => ({
-            name: s.name,
-            description: s.description,
-            enabled: !resolveSkillDisabled(projectPath, s.name),
-          }))
-        ),
 
       evictProject: (projectPath: string) =>
         Effect.sync(() => {

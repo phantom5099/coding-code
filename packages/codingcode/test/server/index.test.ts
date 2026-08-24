@@ -55,9 +55,6 @@ const MockSkillLayer = Layer.succeed(SkillService, {
   select: () => Effect.succeed(undefined),
   selectImplicit: () => Effect.succeed(undefined),
   extractSkill: (_p: string, q: string) => Effect.sync(() => [undefined, q] as [undefined, string]),
-  enableSkill: () => Effect.void,
-  disableSkill: () => Effect.void,
-  listWithStatus: () => Effect.succeed([]),
   evictProject: () => Effect.void,
 } as any);
 

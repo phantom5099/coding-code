@@ -1,23 +1,8 @@
 export interface Skill {
   readonly name: string;
   readonly description: string;
-  /** Markdown body of SKILL.md (injected into system prompt) */
-  readonly instruction: string;
-  readonly references: ReadonlyArray<{
-    readonly path: string;
-    readonly content: string;
-  }>;
-  readonly scripts: ReadonlyArray<{
-    readonly path: string;
-    readonly content: string;
-  }>;
-  readonly assets: ReadonlyArray<{
-    readonly path: string;
-    readonly mimeType: string;
-    readonly size: number;
-  }>;
-  /** Extra fields from YAML front matter (license, cursor-globs, etc.) */
-  readonly metadata: Record<string, unknown>;
+  /** Absolute path to the skill's SKILL.md file. */
+  readonly skillPath: string;
 }
 
 export interface SkillServiceApi {

@@ -226,10 +226,6 @@ export async function createHttpClient(serverUrl: string): Promise<AgentClient> 
       return clients.settings.listSkills();
     },
 
-    async toggleSkill(body: { name: string; enabled: boolean; cwd: string }) {
-      await clients.settings.toggleSkill(body);
-    },
-
     async createMcpServer(server: McpServerConfig, { cwd }: { cwd: string }) {
       await clients.settings.createMcpServer({ cwd, server });
     },
