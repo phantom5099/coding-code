@@ -171,5 +171,4 @@ Testing kebab-case name parsing.
     expect(matched!.name).toBe('test-basic');
     expect(cleanQuery).toBe('do the refactoring work');
   });
-
 });

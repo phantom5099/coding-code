@@ -21,8 +21,7 @@ export class SkillService extends Effect.Service<SkillService>()('Skill', {
     }
 
     return {
-      getAll: (projectPath: string) =>
-        Effect.sync(() => readAll(projectPath)),
+      getAll: (projectPath: string) => Effect.sync(() => readAll(projectPath)),
 
       findByName: (projectPath: string, name: string) =>
         Effect.sync(() => readAll(projectPath).find((s) => s.name === name)),

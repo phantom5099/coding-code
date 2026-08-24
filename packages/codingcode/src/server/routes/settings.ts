@@ -29,10 +29,7 @@ import {
   resetProjectHookDisabledState,
 } from '../../hooks/config.js';
 import { setHookRuntimeEnabled } from '../../hooks/executor.js';
-import {
-  discoverGlobalSkillDirs,
-  discoverProjectSkillDirs,
-} from '../../skills/source.js';
+import { discoverGlobalSkillDirs, discoverProjectSkillDirs } from '../../skills/source.js';
 import {
   getMemoryConfig,
   getAllTypesWithStatus,
