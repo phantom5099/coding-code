@@ -47,25 +47,6 @@ console.log('Screenshot (Agent mode):', shot1)
 const bodyText = await page.evaluate(() => document.body.innerText)
 console.log('Page text:', bodyText.slice(0, 200))
 
-// Click the mode switch button
-const switchResult = await page.evaluate(() => {
-  const btns = [...document.querySelectorAll('button')]
-  const btn = btns.find(b => b.textContent?.includes('IDE'))
-  if (!btn) return 'NOT_FOUND'
-  btn.click()
-  return 'CLICKED: ' + btn.textContent?.trim()
-})
-console.log('Switch button:', switchResult)
-
-await new Promise(r => setTimeout(r, 500))
-const shot2 = path.join(SHOT_DIR, '02-ide-mode.png')
-await page.screenshot({ path: shot2 })
-console.log('Screenshot (IDE mode):', shot2)
-
-// Verify mode switched
-const bodyText2 = await page.evaluate(() => document.body.innerText)
-console.log('Page text after switch:', bodyText2.slice(0, 200))
-
 // Test IPC ping
 const pingResult = await page.evaluate(() => {
   return window.electronAPI?.ping?.()
