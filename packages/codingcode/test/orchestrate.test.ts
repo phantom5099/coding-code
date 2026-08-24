@@ -113,9 +113,6 @@ const MockSkillLayer = Layer.succeed(SkillService, {
   extractSkill: vi.fn((_p: string, q: string) =>
     Effect.sync(() => [undefined, q] as [undefined, string])
   ),
-  disableSkill: vi.fn(() => Effect.void),
-  enableSkill: vi.fn(() => Effect.void),
-  listWithStatus: vi.fn(() => Effect.succeed([])),
   evictProject: vi.fn(() => Effect.void),
 } as any);
 

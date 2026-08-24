@@ -51,7 +51,6 @@ vi.mock('../src/lib/core-api', () => ({
   updateMcpServer: vi.fn(),
   deleteMcpServer: vi.fn(),
   listSkills: vi.fn(),
-  toggleSkill: vi.fn(),
   listHooks: vi.fn(),
   createHook: vi.fn(),
   updateHook: vi.fn(),

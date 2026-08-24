@@ -31,9 +31,6 @@ const TestLayer = Layer.mergeAll(
     select: () => Effect.succeed(undefined),
     selectImplicit: () => Effect.succeed(undefined),
     extractSkill: () => Effect.succeed([undefined, '']),
-    enableSkill: () => Effect.void,
-    disableSkill: () => Effect.void,
-    listWithStatus: () => Effect.succeed([]),
     evictProject: () => Effect.void,
   } as any),
   Layer.succeed(MemoryService, {

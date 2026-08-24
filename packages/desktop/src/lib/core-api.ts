@@ -200,13 +200,10 @@ export function deleteMcpServer(cwd: string | undefined, name: string): Promise<
 
 export function listSkills(
   _cwd?: string
-): Promise<Array<{ name: string; description: string; disabled: boolean }>> {
+): Promise<Array<{ name: string; description: string; skillPath: string; source?: 'global' | 'project'; hasProjectOverride?: boolean }>> {
   return clients.settings.listSkills() as any;
 }
 
-export function toggleSkill(name: string, enabled: boolean, cwd?: string): Promise<void> {
-  return clients.settings.toggleSkill({ name, enabled, cwd: cwd ?? '' });
-}
 
 // ---- Settings: Hooks ----
 

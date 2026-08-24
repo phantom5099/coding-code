@@ -68,8 +68,35 @@ Test the skill system.
     const basic = skills.find((s) => s.name === 'test-basic');
     expect(basic).toBeDefined();
     expect(basic!.description).toBe('A basic test skill for unit testing');
-    expect(basic!.instruction).toContain('Test the skill system');
-    expect(basic!.metadata.version).toBe('1.0.0');
+    expect(basic!.skillPath).toBe(join(TEST_CODINGCODE_DIR, 'skills', 'test-basic', 'SKILL.md'));
+    expect(basic).toEqual({
+      name: 'test-basic',
+      description: 'A basic test skill for unit testing',
+      skillPath: join(TEST_CODINGCODE_DIR, 'skills', 'test-basic', 'SKILL.md'),
+    });
+  });
+
+  it('does not load skill body or attachment files during discovery', () => {
+    const skillDir = join(TEST_CODINGCODE_DIR, 'skills', 'metadata-only');
+    mkdirSync(join(skillDir, 'references'), { recursive: true });
+    mkdirSync(join(skillDir, 'scripts'), { recursive: true });
+    mkdirSync(join(skillDir, 'assets'), { recursive: true });
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      `---\nname: metadata-only\ndescription: Metadata only\n---\nsecret body\n`
+    );
+    writeFileSync(join(skillDir, 'references', 'guide.md'), 'secret reference');
+    writeFileSync(join(skillDir, 'scripts', 'run.sh'), 'secret script');
+    writeFileSync(join(skillDir, 'assets', 'image.bin'), Buffer.from([0, 1, 2, 3]));
+
+    runWithSkill((s) => s.evictProject(TEST_ROOT));
+    const skill = runWithSkill((s) => s.findByName(TEST_ROOT, 'metadata-only'));
+
+    expect(skill).toEqual({
+      name: 'metadata-only',
+      description: 'Metadata only',
+      skillPath: join(skillDir, 'SKILL.md'),
+    });
   });
 
   it('should cache skills per session (added files not visible without new session)', () => {
@@ -145,29 +172,4 @@ Testing kebab-case name parsing.
     expect(cleanQuery).toBe('do the refactoring work');
   });
 
-  it('disableSkill should hide skill from findByName and select', () => {
-    runWithSkill((s) => s.disableSkill(TEST_ROOT, 'test-basic'));
-    const byName = runWithSkill((s) => s.findByName(TEST_ROOT, 'test-basic'));
-    const selected = runWithSkill((s) => s.select(TEST_ROOT, '@test-basic do something'));
-    expect(byName).toBeUndefined();
-    expect(selected).toBeUndefined();
-  });
-
-  it('enableSkill should restore skill visibility after disable', () => {
-    runWithSkill((s) => s.disableSkill(TEST_ROOT, 'test-basic'));
-    runWithSkill((s) => s.enableSkill(TEST_ROOT, 'test-basic'));
-    const found = runWithSkill((s) => s.findByName(TEST_ROOT, 'test-basic'));
-    expect(found).toBeDefined();
-    expect(found!.name).toBe('test-basic');
-  });
-
-  it('listWithStatus should reflect enabled/disabled state', () => {
-    const before = runWithSkill((s) => s.listWithStatus(TEST_ROOT));
-    runWithSkill((s) => s.disableSkill(TEST_ROOT, 'test-basic'));
-    const after = runWithSkill((s) => s.listWithStatus(TEST_ROOT));
-    const beforeEntry = before.find((s) => s.name === 'test-basic');
-    const afterEntry = after.find((s) => s.name === 'test-basic');
-    expect(beforeEntry?.enabled).toBe(true);
-    expect(afterEntry?.enabled).toBe(false);
-  });
 });

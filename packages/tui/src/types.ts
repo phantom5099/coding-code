@@ -36,7 +36,7 @@ export interface McpServerStatus {
 export interface SkillStatus {
   name: string;
   description: string;
-  enabled: boolean;
+  skillPath: string;
 }
 
 export type PanelState =

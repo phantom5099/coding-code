@@ -54,15 +54,6 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('Always use TypeScript strict mode.');
   });
 
-  it('does not append skill instructions to the system prompt', () => {
-    const prompt = buildSystemPrompt({
-      cwd: '/x',
-      platform: 'linux',
-      shell: 'bash',
-    });
-    expect(prompt).not.toContain('## Skill Instructions');
-  });
-
   it('plan profile prompt limits implementation work to submit_plan', () => {
     const prompt = buildSystemPrompt({
       cwd: '/x',
