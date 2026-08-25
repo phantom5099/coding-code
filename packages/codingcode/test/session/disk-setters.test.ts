@@ -3,6 +3,7 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../../src/session/store.js';
+import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { RulesService } from '../../src/rules/index.js';
@@ -61,7 +62,7 @@ describe('SessionService disk setter/getter consistency', () => {
         const session = yield* SessionService;
         return yield* session.create(cwd, {
           model: 'm',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
       })
@@ -71,22 +72,6 @@ describe('SessionService disk setter/getter consistency', () => {
 
   afterEach(async () => {
     await rt.dispose();
-  });
-
-  it('setModeOnDisk + getModeFromDisk are consistent', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        yield* session.setModeOnDisk(cwd, sessionId, 'plan');
-      })
-    );
-    const mode = await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        return yield* session.getModeFromDisk(cwd, sessionId);
-      })
-    );
-    expect(mode).toBe('plan');
   });
 
   it('setPermissionModeOnDisk + getPermissionModeFromDisk are consistent', async () => {
@@ -125,7 +110,7 @@ describe('SessionService disk setter/getter consistency', () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setActiveProfile(cwd, sessionId, 'custom-profile');
+        yield* session.setActiveProfile(cwd, sessionId, 'plan');
       })
     );
     const state = await rt.runPromise(
@@ -134,8 +119,16 @@ describe('SessionService disk setter/getter consistency', () => {
         return yield* session.load(cwd, sessionId);
       })
     );
-    expect(existsSync(state.indexPath)).toBe(true);
-    const idx = JSON.parse(readFileSync(state.indexPath, 'utf8'));
-    expect(idx.activeProfile).toBe('custom-profile');
+    expect(
+      existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath)
+    ).toBe(true);
+    const idx = JSON.parse(
+      readFileSync(
+        computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
+        'utf8'
+      )
+    );
+    expect(idx.activeProfile).toBe('plan');
+    expect(idx).not.toHaveProperty('mode');
   });
 });

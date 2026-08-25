@@ -19,7 +19,6 @@ function makeFixture(sessionId: string, slug: string) {
     {
       type: 'session_meta',
       sessionId,
-      projectPath: slug,
       cwd: '/tmp/test',
       createdAt: new Date().toISOString(),
     },
@@ -47,7 +46,6 @@ function makeFixture(sessionId: string, slug: string) {
 
   const idx: SessionIndex = {
     sessionId,
-    projectPath: slug,
     cwd: '/tmp/test',
     model: 'test-model',
     createdAt: new Date().toISOString(),
@@ -56,7 +54,7 @@ function makeFixture(sessionId: string, slug: string) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
-    mode: 'build',
+    activeProfile: 'build',
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');

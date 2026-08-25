@@ -8,21 +8,23 @@ import { filterForContext, buildContextMessages } from '../../src/context/servic
 import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { computePaths } from '../../src/core/path.js';
 
 const base = useTempProjectBase();
 
 function makeFixture(sessionId: string, slug: string) {
+  const cwd = `/${slug}`;
+  const paths = computePaths(cwd, sessionId);
   const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
-  const transcriptPath = join(dir, `${sessionId}.jsonl`);
-  const indexPath = join(dir, `${sessionId}.index.json`);
+  const transcriptPath = paths.transcriptPath;
+  const indexPath = paths.indexPath;
 
   const lines: any[] = [
     {
       type: 'session_meta',
       sessionId,
-      projectPath: slug,
-      cwd: '/tmp/test',
+      cwd,
       createdAt: new Date().toISOString(),
     },
     { type: 'user', turnId: 1, content: 'first' },
@@ -59,8 +61,7 @@ function makeFixture(sessionId: string, slug: string) {
 
   const idx: SessionIndex = {
     sessionId,
-    projectPath: slug,
-    cwd: '/tmp/test',
+    cwd,
     model: 'test',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -68,12 +69,12 @@ function makeFixture(sessionId: string, slug: string) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
-    mode: 'build' as const,
+    activeProfile: 'build' as const,
     permissionMode: 'default' as const,
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
-  return { dir, transcriptPath, indexPath };
+  return { cwd, dir, transcriptPath, indexPath };
 }
 
 function readEvents(jsonlPath: string): SessionEvent[] {
@@ -111,17 +112,14 @@ describe('forkSession', () => {
     try {
       const state = {
         sessionId,
-        cwd: '/tmp/test',
-        projectPath: slug,
-        transcriptPath: fx.transcriptPath,
-        indexPath: fx.indexPath,
+        cwd: fx.cwd,
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
         model: 'test',
         title: 'fixture',
         usage: undefined,
-        mode: 'build' as const,
+        activeProfile: 'build' as const,
         permissionMode: 'default' as const,
         memorySnapshot: '',
       };
@@ -157,15 +155,12 @@ describe('forkSession', () => {
     try {
       const state = {
         sessionId,
-        cwd: '/tmp/test',
-        projectPath: slug,
-        transcriptPath: fx.transcriptPath,
-        indexPath: fx.indexPath,
+        cwd: fx.cwd,
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
         model: 'test',
-        mode: 'build' as const,
+        activeProfile: 'build' as const,
         permissionMode: 'default' as const,
         title: 'fixture',
         usage: undefined,
@@ -213,15 +208,12 @@ describe('forkSession', () => {
     try {
       const state = {
         sessionId,
-        cwd: '/tmp/test',
-        projectPath: slug,
-        transcriptPath: fx.transcriptPath,
-        indexPath: fx.indexPath,
+        cwd: fx.cwd,
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
         model: 'test',
-        mode: 'build' as const,
+        activeProfile: 'build' as const,
         permissionMode: 'default' as const,
         title: 'fixture',
         usage: undefined,
@@ -279,15 +271,12 @@ describe('forkSession', () => {
     try {
       const state = {
         sessionId,
-        cwd: '/tmp/test',
-        projectPath: slug,
-        transcriptPath: fx.transcriptPath,
-        indexPath: fx.indexPath,
+        cwd: fx.cwd,
         messageCount: 7,
         currentTurnId: 3,
         sessionMeta: null,
         model: 'test',
-        mode: 'build' as const,
+        activeProfile: 'build' as const,
         permissionMode: 'default' as const,
         title: 'fixture',
         usage: undefined,
@@ -317,10 +306,12 @@ describe('forkSession', () => {
   it('fork preserves summary/compact uuid (no regeneration)', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
+    const cwd = `/${slug}`;
+    const paths = computePaths(cwd, sessionId);
     const dir = join(base.dir, slug, 'sessions');
     mkdirSync(dir, { recursive: true });
-    const transcriptPath = join(dir, `${sessionId}.jsonl`);
-    const indexPath = join(dir, `${sessionId}.index.json`);
+    const transcriptPath = paths.transcriptPath;
+    const indexPath = paths.indexPath;
 
     const fixedSummaryUuid = '11111111-1111-1111-1111-111111111111';
     const fixedCompactUuid = '22222222-2222-2222-2222-222222222222';
@@ -329,8 +320,7 @@ describe('forkSession', () => {
       {
         type: 'session_meta',
         sessionId,
-        projectPath: slug,
-        cwd: '/tmp/test',
+        cwd,
         createdAt: new Date().toISOString(),
       },
       { type: 'user', turnId: 1, content: 'q1' },
@@ -343,8 +333,7 @@ describe('forkSession', () => {
     writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
     const idx: SessionIndex = {
       sessionId,
-      projectPath: slug,
-      cwd: '/tmp/test',
+      cwd,
       model: 'test',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -352,7 +341,7 @@ describe('forkSession', () => {
       title: 'uuid-fixture',
       currentTurnId: 2,
       usage: undefined,
-      mode: 'build' as const,
+      activeProfile: 'build' as const,
       permissionMode: 'default' as const,
     };
     writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -360,15 +349,12 @@ describe('forkSession', () => {
     try {
       const state = {
         sessionId,
-        cwd: '/tmp/test',
-        projectPath: slug,
-        transcriptPath,
-        indexPath,
+        cwd,
         messageCount: lines.length - 1,
         currentTurnId: 2,
         sessionMeta: null,
         model: 'test',
-        mode: 'build' as const,
+        activeProfile: 'build' as const,
         permissionMode: 'default' as const,
         title: 'uuid-fixture',
         usage: undefined,

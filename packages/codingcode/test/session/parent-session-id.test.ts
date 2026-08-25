@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
-import { encodeProjectPath } from '../../src/core/path.js';
+import { encodeProjectPath, computePaths } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -21,13 +21,16 @@ describe('parentSessionId in index.json', () => {
         const svc = yield* SessionService;
         return yield* svc.create(
           cwd,
-          { model: 'gpt-4o', mode: 'build', permissionMode: 'default' },
+          { model: 'gpt-4o', activeProfile: 'build', permissionMode: 'default' },
           { parentSessionId: parentId }
         );
       })
     );
 
-    const idxRaw = readFileSync(state.indexPath, 'utf8');
+    const idxRaw = readFileSync(
+      computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
+      'utf8'
+    );
     const idx = JSON.parse(idxRaw);
     expect(idx.parentSessionId).toBe(parentId);
     expect(idx.sessionId).toBe(state.sessionId);

@@ -8,7 +8,7 @@ import { useAgentStore } from '../src/stores/agent.store';
 import ApprovalPanel from '../src/agent/ApprovalPanel';
 
 const sendMessageMock = vi.fn();
-const switchModeMock = vi.fn();
+const switchProfileMock = vi.fn();
 const fetchPlanMock = vi.fn();
 
 vi.mock('../src/hooks/useAgent', () => ({
@@ -20,8 +20,8 @@ vi.mock('../src/hooks/useAgent', () => ({
     sendMessage: sendMessageMock,
     abort: vi.fn(),
   }),
-  useAgentMode: () => ({
-    switchMode: switchModeMock,
+  useAgentProfile: () => ({
+    switchProfile: switchProfileMock,
     fetchPlan: fetchPlanMock,
   }),
 }));
@@ -114,7 +114,7 @@ describe('ApprovalPanel — pendingPlan handling', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(switchModeMock).toHaveBeenCalledWith('t-1', 'build', expect.any(String));
+    expect(switchProfileMock).toHaveBeenCalledWith('t-1', 'build', expect.any(String));
     expect(sendMessageMock).toHaveBeenCalledWith(
       expect.stringContaining('Plan approved'),
       expect.any(String)
@@ -131,7 +131,7 @@ describe('ApprovalPanel — pendingPlan handling', () => {
       await Promise.resolve();
     });
     expect(sendMessageMock).not.toHaveBeenCalled();
-    expect(switchModeMock).not.toHaveBeenCalled();
+    expect(switchProfileMock).not.toHaveBeenCalled();
     expect(useAgentStore.getState().pendingPlanByThreadId['t-1']).toBeUndefined();
   });
 
@@ -148,7 +148,7 @@ describe('ApprovalPanel — pendingPlan handling', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(switchModeMock).not.toHaveBeenCalled();
+    expect(switchProfileMock).not.toHaveBeenCalled();
     expect(sendMessageMock).toHaveBeenCalledWith(
       expect.stringContaining('请加上错误处理'),
       expect.any(String)
@@ -156,14 +156,14 @@ describe('ApprovalPanel — pendingPlan handling', () => {
     expect(useAgentStore.getState().pendingPlanByThreadId['t-1']).toBeUndefined();
   });
 
-  it('does not call switchMode on cancel (profile stays in plan)', async () => {
+  it('does not call switchProfile on cancel (profile stays in plan)', async () => {
     seedPendingPlan('t-1');
     const { findByTestId } = render(<ApprovalPanel threadId="t-1" />);
     await act(async () => {
       fireEvent.click(await findByTestId('plan-cancel'));
       await Promise.resolve();
     });
-    expect(switchModeMock).not.toHaveBeenCalled();
+    expect(switchProfileMock).not.toHaveBeenCalled();
   });
 
   it('falls back to the regular approval card list when only tool_calls are pending', () => {

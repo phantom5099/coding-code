@@ -24,8 +24,8 @@ import { ToolRegistry } from '../tools/registry.js';
 import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
 import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
 import { normalizePath } from '../core/path.js';
-import { isPlanProfile } from './mode.js';
-import type { SessionMode } from '../session/types.js';
+import { isPlanProfile } from './profile.js';
+import type { AgentProfileName } from '../subagent/types.js';
 import type { PermissionMode } from '../approval/types.js';
 
 const REACTIVE_COMPACT_MAX_RETRIES = 3;
@@ -119,7 +119,7 @@ export const sendMessage = (
   options: {
     signal?: AbortSignal;
     approvalOverride?: import('../approval/index.js').ApprovalService;
-    mode?: SessionMode;
+    activeProfile?: AgentProfileName;
     permissionMode?: PermissionMode;
     model?: string;
   }
@@ -143,27 +143,28 @@ export const sendMessage = (
     yield* skills.evictProject(normalizedCwd);
 
     if (!sessionId) {
-      if (!options.mode || !options.permissionMode || !options.model) {
+      if (!options.activeProfile || !options.permissionMode || !options.model) {
         return yield* Effect.fail(
-          new AgentError('CONFIG_MISSING', 'new session requires mode, permissionMode, and model')
+          new AgentError(
+            'CONFIG_MISSING',
+            'new session requires activeProfile, permissionMode, and model'
+          )
         );
       }
-      const created = yield* session.createSessionWithProfile(normalizedCwd, {
+      const created = yield* session.create(normalizedCwd, {
         model: options.model,
-        mode: options.mode,
+        activeProfile: options.activeProfile,
         permissionMode: options.permissionMode,
       });
       sessionId = created.sessionId;
     }
     const state = yield* session.load(normalizedCwd, sessionId);
-    if (state.activeProfile) {
-      yield* runtime.restoreSessionProfile(
-        normalizedCwd,
-        state.sessionId,
-        state.activeProfile,
-        state.permissionMode
-      );
-    }
+    yield* runtime.restoreSessionProfile(
+      normalizedCwd,
+      state.sessionId,
+      state.activeProfile,
+      state.permissionMode
+    );
     state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
     const sid = state.sessionId;
 
@@ -183,8 +184,7 @@ export const sendMessage = (
 
     yield* session.recordUser(state, actualInput);
 
-    const turnTitle = actualInput.trim().slice(0, 5) || '(empty)';
-    yield* checkpoint.snapshotBaseline(state.cwd, sid, turnId, turnTitle);
+    yield* checkpoint.snapshotBaseline(state.cwd, sid, turnId);
 
     const rulesText = rules.getAllRules(state.cwd);
 
@@ -269,7 +269,7 @@ export function agentLoop(
 
     for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
       const payload = yield* Effect.sync(() =>
-        context.assemblePayload(state.transcriptPath, llm.modelInfo.maxTokens)
+        context.assemblePayload(session.getTranscriptPath(state), llm.modelInfo.maxTokens)
       );
       messages = payload.messages;
 
@@ -293,7 +293,12 @@ export function agentLoop(
 
         const compressResult = yield* Effect.tryPromise({
           try: () =>
-            context.compactIfNeeded(state.transcriptPath, messages, llm.modelInfo.maxTokens, llm),
+            context.compactIfNeeded(
+              session.getTranscriptPath(state),
+              messages,
+              llm.modelInfo.maxTokens,
+              llm
+            ),
           catch: (e) => new AgentError('LLM_FAILED', String(e)),
         });
         if (compressResult.didCompress && compressResult.messages) {
@@ -339,7 +344,7 @@ export function agentLoop(
             const compressResult = yield* Effect.tryPromise({
               try: () =>
                 context.compactWithLLM(
-                  state.transcriptPath,
+                  session.getTranscriptPath(state),
                   llm.modelInfo.maxTokens,
                   llm,
                   undefined

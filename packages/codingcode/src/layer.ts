@@ -17,7 +17,7 @@ import { RulesService } from './rules/index.js';
 import { MemoryService } from './memory/index.js';
 import { ContextService } from './context/service.js';
 import { SchedulerService } from './scheduler/service.js';
-import { planModeGateHook } from './agent/mode.js';
+import { planProfileGateHook } from './agent/profile.js';
 
 export const WorkspaceLayer = WorkspaceService.Default;
 export const TodoLayer = TodoService.Default;
@@ -45,7 +45,7 @@ export const SystemHookLayer = HookLayer.pipe(
   Layer.tap((context) =>
     Effect.gen(function* () {
       const hooks = Context.get(context, HookService);
-      yield* hooks.registerDecision('tool.approval.pre', planModeGateHook, {
+      yield* hooks.registerDecision('tool.approval.pre', planProfileGateHook, {
         priority: -1000,
         source: 'system',
       });

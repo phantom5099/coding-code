@@ -15,7 +15,7 @@ import { homedir } from 'os';
 import { join, dirname } from 'path';
 import { getProjectBaseDir } from '../core/path.js';
 import { computePaths, projectSessionsDir, sessionJsonlPathFromCwd } from '../core/path.js';
-import type { SessionEvent, SessionMetaEvent, SessionIndex, SessionStoreState } from './types.js';
+import type { SessionEvent, SessionMetaEvent, SessionIndex } from './types.js';
 
 export { computePaths, projectSessionsDir, sessionJsonlPathFromCwd };
 
@@ -61,7 +61,6 @@ function buildIndexFromMeta(meta: SessionMetaEvent, history: SessionEvent[]): Se
   const firstUser = findFirstUserContent(history);
   return {
     sessionId: meta.sessionId,
-    projectPath: meta.projectPath,
     cwd: meta.cwd,
     model: 'unknown',
     createdAt: meta.createdAt,
@@ -70,16 +69,16 @@ function buildIndexFromMeta(meta: SessionMetaEvent, history: SessionEvent[]): Se
     title: firstUser ? truncateTitle(firstUser) : meta.sessionId.slice(0, 8),
     currentTurnId: 0,
     usage: undefined,
-    mode: 'build',
+    activeProfile: meta.activeProfile,
     permissionMode: 'default',
   };
 }
 
-export function listSessions(projectPath?: string): SessionIndex[] {
+export function listSessions(encodedProjectPath?: string): SessionIndex[] {
   const results: SessionIndex[] = [];
   const projectBase = getProjectBaseDir();
-  const encodedDirs = projectPath
-    ? [projectPath]
+  const encodedDirs = encodedProjectPath
+    ? [encodedProjectPath]
     : existsSync(projectBase)
       ? readdirSync(projectBase)
       : [];

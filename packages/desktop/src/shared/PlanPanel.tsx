@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { X, RefreshCw, FileText, AlertCircle } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
-import { useAgentMode, type PlanFileSnapshot } from '../hooks/useAgent';
+import { useAgentProfile, type PlanFileSnapshot } from '../hooks/useAgent';
 
 interface PlanPanelProps {
   sessionId: string;
@@ -15,7 +15,7 @@ interface PlanPanelProps {
  * is purely a viewer — it never writes back.
  */
 export default function PlanPanel({ sessionId, cwd, onClose }: PlanPanelProps) {
-  const { fetchPlan } = useAgentMode();
+  const { fetchPlan } = useAgentProfile();
   const [plan, setPlan] = useState<PlanFileSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

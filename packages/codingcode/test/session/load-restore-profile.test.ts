@@ -4,7 +4,8 @@ import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
-import { BUILD_PROFILE } from '../../src/agent/mode.js';
+import { computePaths } from '../../src/core/path.js';
+import { BUILD_PROFILE } from '../../src/agent/profile.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { RulesService } from '../../src/rules/index.js';
@@ -43,14 +44,7 @@ function makeLayer() {
   const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
   const SessionTestLayer = SessionService.Default;
   const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        HookTestLayer,
-        McpTestLayer,
-        RulesTestLayer,
-        SessionTestLayer
-      )
-    )
+    Layer.provide(Layer.mergeAll(HookTestLayer, McpTestLayer, RulesTestLayer, SessionTestLayer))
   );
   return Layer.mergeAll(ProjectRuntimeTestLayer, SessionTestLayer);
 }
@@ -70,10 +64,13 @@ describe('SessionStoreState.activeProfile persistence (disk only)', () => {
         const session = yield* SessionService;
         const state = yield* session.create(cwd, {
           model: 'test-model',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
-        return { sessionId: state.sessionId, indexPath: state.indexPath };
+        return {
+          sessionId: state.sessionId,
+          indexPath: computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
+        };
       })
     );
     sessionId = result.sessionId;
@@ -84,14 +81,14 @@ describe('SessionStoreState.activeProfile persistence (disk only)', () => {
     await rt.dispose();
   });
 
-  it('state.activeProfile is undefined for new sessions', async () => {
+  it('state.activeProfile is restored for new sessions', async () => {
     const stateBefore = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
         return yield* session.load(cwd, sessionId);
       })
     );
-    expect(stateBefore.activeProfile).toBeUndefined();
+    expect(stateBefore.activeProfile).toBe('build');
   });
 
   it('state.activeProfile is set when setSessionProfile writes to disk', async () => {

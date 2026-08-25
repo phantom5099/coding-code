@@ -40,7 +40,7 @@ export interface AgentClient {
   listModels(): Promise<{ models: SelectableModel[]; activeId: string | null }>;
   switchModel(id: string): Promise<void>;
   getSessionId(): string;
-  getCheckpoints(): Promise<Array<{ turnId: number; title: string; files: string[] }>>;
+  getCheckpoints(): Promise<Array<{ turnId: number; files: string[] }>>;
   getCheckpointDiff(turnId?: number): Promise<CheckpointDiff>;
   revertCheckpointFiles(turnId: number, files: string[]): Promise<CodeRollbackResult>;
   previewRollbackDiff(throughTurnId: number): Promise<RollbackPreviewDiff>;

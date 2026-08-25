@@ -22,7 +22,7 @@ export function isPlanProfile(p: { name: string } | null | undefined): boolean {
   return p?.name === PLAN_PROFILE_NAME;
 }
 
-export const PLAN_MODE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
+export const PLAN_PROFILE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   'read_file',
   'search_files',
   'search_code',
@@ -30,30 +30,30 @@ export const PLAN_MODE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   'submit_plan',
 ]);
 
-export function isSessionInPlanMode(sessionId: string, cwd: string): boolean {
+export function isSessionUsingPlanProfile(sessionId: string, cwd: string): boolean {
   try {
     const paths = computePaths(cwd, sessionId);
     const idx = JSON.parse(readFileSync(paths.indexPath, 'utf8')) as {
-      mode?: string;
+      activeProfile?: string;
     };
-    return idx?.mode === 'plan';
+    return idx?.activeProfile === PLAN_PROFILE_NAME;
   } catch {
     return false;
   }
 }
 
-export const planModeGateHook: DecisionHandler = (payload) => {
+export const planProfileGateHook: DecisionHandler = (payload) => {
   const sessionId = payload.sessionId as string | undefined;
   const projectPath = payload.projectPath as string | undefined;
   if (!sessionId || !projectPath) return null;
-  if (!isSessionInPlanMode(sessionId, projectPath)) return null;
+  if (!isSessionUsingPlanProfile(sessionId, projectPath)) return null;
 
   const toolName = payload.toolName as string | undefined;
   if (!toolName) return null;
-  if (PLAN_MODE_ALLOWED_TOOLS.has(toolName)) return null;
+  if (PLAN_PROFILE_ALLOWED_TOOLS.has(toolName)) return null;
 
   return {
     decision: 'deny',
-    reason: 'Write operations denied in plan mode. Use submit_plan to submit a plan.',
+    reason: 'Write operations denied in plan profile. Use submit_plan to submit a plan.',
   };
 };

@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Item } from '@shared/types';
 import { useAgentStore } from '../stores/agent.store';
-import { useAgentApproval, useAgentCore, useAgentMode } from '../hooks/useAgent';
+import { useAgentApproval, useAgentCore, useAgentProfile } from '../hooks/useAgent';
 import ToolCallCard from '../shared/ToolCallCard';
 import PlanApprovalModal from '../shared/PlanApprovalModal';
 import { useWorkspaceStore } from '../stores/workspace.store';
@@ -14,7 +14,7 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { approveTool, rejectTool } = useAgentApproval();
   const { sendMessage } = useAgentCore();
-  const { fetchPlan, switchMode } = useAgentMode();
+  const { fetchPlan, switchProfile } = useAgentProfile();
   const workspace = useWorkspaceStore();
 
   const pendingPlan = useAgentStore((s) => s.pendingPlanByThreadId[threadId] ?? null);
@@ -72,9 +72,9 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
     if (!pendingPlan) return;
     const sessionId = pendingPlan.sessionId;
     clearPendingPlan(threadId);
-    await switchMode(sessionId, 'build', workspace.rootPath ?? '');
+    await switchProfile(sessionId, 'build', workspace.rootPath ?? '');
     await sendMessage('Plan approved. Please start implementing it.', workspace.rootPath ?? '');
-  }, [pendingPlan, clearPendingPlan, threadId, switchMode, sendMessage, workspace.rootPath]);
+  }, [pendingPlan, clearPendingPlan, threadId, switchProfile, sendMessage, workspace.rootPath]);
 
   const handleSubmitOpinion = useCallback(
     async (opinion: string) => {

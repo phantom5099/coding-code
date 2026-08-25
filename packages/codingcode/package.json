@@ -44,7 +44,8 @@
     "./checkpoint/bootstrap": "./src/checkpoint/bootstrap.ts",
     "./llm/factory": "./src/llm/factory.ts",
     "./llm/client": "./src/llm/client.ts",
-    "./layer": "./src/layer.ts"
+    "./layer": "./src/layer.ts",
+    "./subagent/types": "./src/subagent/types.ts"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.35",

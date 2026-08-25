@@ -4,10 +4,11 @@ import { existsSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
+import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { RulesService } from '../../src/rules/index.js';
-import { BUILD_PROFILE, PLAN_PROFILE } from '../../src/agent/mode.js';
+import { BUILD_PROFILE, PLAN_PROFILE } from '../../src/agent/profile.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -43,14 +44,7 @@ function makeLayer() {
   const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
   const SessionTestLayer = SessionService.Default;
   const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        HookTestLayer,
-        McpTestLayer,
-        RulesTestLayer,
-        SessionTestLayer
-      )
-    )
+    Layer.provide(Layer.mergeAll(HookTestLayer, McpTestLayer, RulesTestLayer, SessionTestLayer))
   );
   return Layer.mergeAll(ProjectRuntimeTestLayer, SessionTestLayer);
 }
@@ -72,10 +66,13 @@ describe('ProjectRuntimeService.setSessionProfile (disk-only)', () => {
         yield* runtime.prepareProject(cwd);
         const state = yield* session.create(cwd, {
           model: 'test-model',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
-        return { sessionId: state.sessionId, indexPath: state.indexPath };
+        return {
+          sessionId: state.sessionId,
+          indexPath: computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
+        };
       })
     );
     sessionId = result.sessionId;
@@ -86,7 +83,7 @@ describe('ProjectRuntimeService.setSessionProfile (disk-only)', () => {
     await rt.dispose();
   });
 
-  it('writes mode + permissionMode + activeProfile when switching to plan', async () => {
+  it('writes activeProfile + permissionMode when switching to plan', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -95,12 +92,13 @@ describe('ProjectRuntimeService.setSessionProfile (disk-only)', () => {
     );
     expect(existsSync(indexPath)).toBe(true);
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.mode).toBe('plan');
+    expect(idx.activeProfile).toBe('plan');
+    expect(idx).not.toHaveProperty('mode');
     expect(idx.permissionMode).toBe('default');
     expect(idx.activeProfile).toBe('plan');
   });
 
-  it('writes mode + permissionMode + activeProfile when switching to build (with override)', async () => {
+  it('writes activeProfile + permissionMode when switching to build (with override)', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -108,9 +106,9 @@ describe('ProjectRuntimeService.setSessionProfile (disk-only)', () => {
       })
     );
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.mode).toBe('build');
+    expect(idx.activeProfile).toBe('build');
+    expect(idx).not.toHaveProperty('mode');
     expect(idx.permissionMode).toBe('bypass');
     expect(idx.activeProfile).toBe('build');
   });
-
 });

@@ -4,9 +4,10 @@ import { Hono } from 'hono';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { createMessagesRouter } from '../../src/server/routes/messages.js';
+import { registerMessagesRoutes } from '../../src/server/routes/messages.js';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
+import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { RulesService } from '../../src/rules/index.js';
@@ -108,19 +109,19 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
         const session = yield* SessionService;
         return yield* session.create(cwd, {
           model: 'm',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
       })
     );
     sessionId = state.sessionId;
-    const indexPath = state.indexPath;
+    const indexPath = computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath;
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
     idx.permissionMode = 'bypass';
     writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
     app = new Hono();
-    app.route('/api', createMessagesRouter(rt));
+    registerMessagesRoutes(app, rt);
   });
 
   afterEach(async () => {

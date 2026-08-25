@@ -44,6 +44,7 @@ const BaseMockLayer = Layer.mergeAll(
     snapshotFinal: () => Effect.void,
   } as any),
   Layer.succeed(SessionService, {
+    getTranscriptPath: () => '/tmp/test.jsonl',
     recordAssistant: () => Effect.succeed({}),
     recordUser: () => Effect.succeed({}),
     recordToolResult: () => Effect.succeed({}),
@@ -58,6 +59,7 @@ const BaseMockLayer = Layer.mergeAll(
       allowedMcpServers: undefined,
     }),
     setSessionProfile: () => {},
+    restoreSessionProfile: () => Effect.void,
     getSessionProfile: () => undefined,
     disposeSession: () => Effect.void,
     disposeProject: () => Effect.void,
@@ -89,16 +91,13 @@ function makeState(memorySnapshot: string = '') {
   return {
     sessionId: 'memory-test-sid',
     cwd: '/tmp/memory-test',
-    projectPath: 'memory-test',
-    transcriptPath: '/tmp/memory-test.jsonl',
-    indexPath: '/tmp/memory-test.index.json',
     messageCount: 0,
     currentTurnId: 1,
     sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
     model: 'test-model',
     title: 'memory-test',
     usage: undefined,
-    mode: 'build' as const,
+    activeProfile: 'build' as const,
     permissionMode: 'default' as const,
     memorySnapshot,
   };

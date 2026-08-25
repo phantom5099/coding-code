@@ -61,7 +61,7 @@ export class SchedulerService extends Effect.Service<SchedulerService>()('Schedu
           sendMessage(undefined, auto.description, auto.projectCwd, llm, {
             signal: controller.signal,
             approvalOverride: approval,
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'bypass',
             model: llm.modelInfo.model,
           })
@@ -188,25 +188,25 @@ export class SchedulerService extends Effect.Service<SchedulerService>()('Schedu
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-      const approval = await _rt.runPromise(
-        Effect.gen(function* () {
-          const svc = yield* ApprovalService;
-          return yield* svc.fork({ permissionMode: 'bypass' });
-        })
-      );
-
-      try {
-        const { stream, sessionId } = await _rt.runPromise(
-          sendMessage(undefined, auto.description, auto.projectCwd, llm, {
-            signal: controller.signal,
-            approvalOverride: approval,
-            mode: 'build',
-            permissionMode: 'bypass',
-            model: llm.modelInfo.model,
+        const approval = await _rt.runPromise(
+          Effect.gen(function* () {
+            const svc = yield* ApprovalService;
+            return yield* svc.fork({ permissionMode: 'bypass' });
           })
         );
 
-        for await (const event of stream) {
+        try {
+          const { stream, sessionId } = await _rt.runPromise(
+            sendMessage(undefined, auto.description, auto.projectCwd, llm, {
+              signal: controller.signal,
+              approvalOverride: approval,
+              activeProfile: 'build',
+              permissionMode: 'bypass',
+              model: llm.modelInfo.model,
+            })
+          );
+
+          for await (const event of stream) {
             if (event._tag === 'Error') {
               logger.error(`Manual run for ${id} agent error:`, event.error);
             }

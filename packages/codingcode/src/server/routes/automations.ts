@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { SchedulerService } from '../../scheduler/service.js';
 import { errorResponse } from '../util.js';
@@ -7,10 +7,8 @@ import type { CreateAutomationInput, UpdateAutomationInput } from '../../schedul
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-export function createAutomationsRouter(rt: ManagedRt): Hono {
-  const router = new Hono();
-
-  router.get('/', async (c) => {
+export function registerAutomationsRoutes(router: Hono, rt: ManagedRt): void {
+  router.get('/api/automations', async (c) => {
     const result = await rt.runPromise(
       Effect.gen(function* () {
         const scheduler = yield* SchedulerService;
@@ -34,7 +32,7 @@ export function createAutomationsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.post('/', async (c) => {
+  router.post('/api/automations', async (c) => {
     const body = (await c.req.json()) as CreateAutomationInput;
 
     if (!body.name || !body.description || !body.cron || !body.projectCwd) {
@@ -64,7 +62,7 @@ export function createAutomationsRouter(rt: ManagedRt): Hono {
     return c.json(result.value, 201);
   });
 
-  router.patch('/:id', async (c) => {
+  router.patch('/api/automations/:id', async (c) => {
     const id = c.req.param('id');
     const body = (await c.req.json()) as UpdateAutomationInput;
 
@@ -95,7 +93,7 @@ export function createAutomationsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.delete('/:id', async (c) => {
+  router.delete('/api/automations/:id', async (c) => {
     const id = c.req.param('id');
 
     const result = await rt.runPromise(
@@ -125,7 +123,7 @@ export function createAutomationsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.post('/:id/run', async (c) => {
+  router.post('/api/automations/:id/run', async (c) => {
     const id = c.req.param('id');
 
     const result = await rt.runPromise(
@@ -133,7 +131,7 @@ export function createAutomationsRouter(rt: ManagedRt): Hono {
         const scheduler = yield* SchedulerService;
         const sessionId = yield* Effect.tryPromise({
           try: () => scheduler.runOnce(id),
-          catch: (e) => new NotFoundError(`Automation '${id}' not found or execution failed`),
+          catch: () => new NotFoundError(`Automation '${id}' not found or execution failed`),
         });
         return { sessionId };
       }).pipe(
@@ -154,6 +152,4 @@ export function createAutomationsRouter(rt: ManagedRt): Hono {
 
     return c.json(result.value);
   });
-
-  return router;
 }

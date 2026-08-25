@@ -7,7 +7,6 @@ import { encodeProjectPath } from '../core/path.js';
 import type { PermissionMode } from '../approval/types.js';
 import type {
   SessionMetaEvent,
-  SessionMode,
   UserEvent,
   AssistantEvent,
   ToolResultEvent,
@@ -32,7 +31,11 @@ import {
   findFirstUserContent,
 } from './file-ops.js';
 import { computePaths, sessionJsonlPathFromCwd } from '../core/path.js';
-import { modeToProfile } from '../runtime/project-runtime.js';
+import type { AgentProfileName } from '../subagent/types.js';
+
+function pathsFromState(state: SessionStoreState) {
+  return computePaths(state.cwd, state.sessionId, state.parentSessionId);
+}
 
 function assertResumeWorkspace(cwd: string, sessionId: string): void {
   const expectedPath = sessionJsonlPathFromCwd(cwd, sessionId);
@@ -43,10 +46,9 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
   effect: Effect.gen(function* () {
     function updateIndex(state: SessionStoreState): void {
       if (!state.sessionMeta) return;
-      const current = readCurrentIndex(state.indexPath);
+      const paths = pathsFromState(state);
       const index: SessionIndex = {
         sessionId: state.sessionId,
-        projectPath: state.projectPath,
         cwd: state.cwd,
         model: state.model,
         createdAt: state.sessionMeta.createdAt,
@@ -55,23 +57,22 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
         title: state.title,
         currentTurnId: state.currentTurnId,
         usage: state.usage,
-        mode: state.mode,
         permissionMode: state.permissionMode,
         memorySnapshot: state.memorySnapshot,
-        activeProfile: current?.activeProfile,
+        activeProfile: state.activeProfile,
         parentSessionId: state.parentSessionId,
       };
-      writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8');
+      writeFileSync(paths.indexPath, JSON.stringify(index, null, 2), 'utf8');
     }
 
     const create = (
       cwd: string,
       options: {
         model: string;
-        mode: SessionMode;
+        activeProfile: AgentProfileName;
         permissionMode: PermissionMode;
       },
-      opts?: { parentSessionId?: string; agentName?: string; activeProfile?: string }
+      opts?: { parentSessionId?: string; agentName?: string }
     ): Effect.Effect<SessionStoreState, AgentError> =>
       Effect.try({
         try: () => {
@@ -79,38 +80,34 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           ensureDirs(paths.transcriptPath);
 
           const state: SessionStoreState = {
-            ...paths,
+            sessionId: paths.sessionId,
+            cwd: paths.cwd,
             messageCount: 0,
             sessionMeta: null,
             model: options.model,
-            mode: options.mode,
             permissionMode: options.permissionMode,
             title: paths.sessionId.slice(0, 8),
             currentTurnId: 0,
             usage: undefined,
             memorySnapshot: '',
-            activeProfile: opts?.activeProfile,
+            activeProfile: options.activeProfile,
             parentSessionId: opts?.parentSessionId,
           };
 
           const meta: SessionMetaEvent = {
             type: 'session_meta',
             sessionId: state.sessionId,
-            projectPath: state.projectPath,
             cwd: state.cwd,
             createdAt: new Date().toISOString(),
-            mode: options.mode,
+            activeProfile: options.activeProfile,
             permissionMode: options.permissionMode,
             ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
             ...(opts?.agentName && { agentName: opts.agentName }),
           };
           state.sessionMeta = meta;
-          appendLine(state.transcriptPath, meta);
+          appendLine(paths.transcriptPath, meta);
           state.messageCount++;
           updateIndex(state);
-          if (state.activeProfile) {
-            writeIndexAtomic(state.indexPath, { activeProfile: state.activeProfile });
-          }
           return state;
         },
         catch: (e) =>
@@ -127,23 +124,24 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           ensureDirs(paths.transcriptPath);
 
           const idx = readCurrentIndex(paths.indexPath);
+          if (!idx?.activeProfile) throw new Error('Session index missing activeProfile');
 
           const state: SessionStoreState = {
-            ...paths,
+            sessionId: paths.sessionId,
+            cwd: paths.cwd,
             messageCount: 0,
             sessionMeta: null,
             model: idx?.model ?? '',
-            mode: idx?.mode ?? 'build',
             permissionMode: idx?.permissionMode ?? 'default',
             title: paths.sessionId.slice(0, 8),
             currentTurnId: idx?.currentTurnId ?? 0,
             usage: idx?.usage ?? undefined,
             memorySnapshot: idx?.memorySnapshot ?? '',
-            activeProfile: idx?.activeProfile,
+            activeProfile: idx.activeProfile,
           };
 
-          if (existsSync(state.transcriptPath)) {
-            const history = readHistory(state.transcriptPath);
+          if (existsSync(paths.transcriptPath)) {
+            const history = readHistory(paths.transcriptPath);
             const meta = history.find((e) => e.type === 'session_meta') as
               | SessionMetaEvent
               | undefined;
@@ -176,7 +174,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           if (state.title === state.sessionId.slice(0, 8)) {
             state.title = truncateTitle(content);
           }
-          appendLine(state.transcriptPath, event);
+          appendLine(pathsFromState(state).transcriptPath, event);
           state.messageCount++;
           updateIndex(state);
           return event;
@@ -202,7 +200,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             toolCalls,
             usage,
           };
-          appendLine(state.transcriptPath, event);
+          appendLine(pathsFromState(state).transcriptPath, event);
           state.messageCount++;
           updateIndex(state);
           if (usage) {
@@ -231,7 +229,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             toolCallId,
             output,
           };
-          appendLine(state.transcriptPath, event);
+          appendLine(pathsFromState(state).transcriptPath, event);
           state.messageCount++;
           updateIndex(state);
           return event;
@@ -257,7 +255,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
             endTurnId,
             summaryText,
           };
-          appendLine(state.transcriptPath, event);
+          appendLine(pathsFromState(state).transcriptPath, event);
           state.messageCount++;
           state.usage = undefined;
           updateIndex(state);
@@ -280,10 +278,10 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           throughTurnId,
           reason,
         };
-        appendLine(state.transcriptPath, event);
+        appendLine(pathsFromState(state).transcriptPath, event);
         state.messageCount++;
 
-        const events = readHistory(state.transcriptPath);
+        const events = readHistory(pathsFromState(state).transcriptPath);
         const minRollbackThrough = events.reduce(
           (min, ev) => (ev.type === 'rollback' && ev.throughTurnId < min ? ev.throughTurnId : min),
           Infinity
@@ -310,7 +308,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       atTurnId: number
     ): Effect.Effect<string, AgentError> =>
       Effect.sync(() => {
-        return forkSessionImpl(state.transcriptPath, atTurnId);
+        return forkSessionImpl(pathsFromState(state).transcriptPath, atTurnId);
       });
 
     const renameSession = (
@@ -323,12 +321,15 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       });
 
     const readHistoryFromState = (state: SessionStoreState): Effect.Effect<SessionEvent[]> =>
-      Effect.sync(() => readHistory(state.transcriptPath));
+      Effect.sync(() => readHistory(pathsFromState(state).transcriptPath));
 
     const listSessionsFromCwd = (cwd?: string): Effect.Effect<SessionIndex[]> =>
       Effect.sync(() => listSessions(cwd ? encodeProjectPath(cwd) : undefined));
 
     const getSessionId = (state: SessionStoreState): string => state.sessionId;
+
+    const getTranscriptPath = (state: SessionStoreState): string =>
+      pathsFromState(state).transcriptPath;
 
     const getMessageCount = (state: SessionStoreState): number => state.messageCount;
 
@@ -337,25 +338,23 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       mode: PermissionMode
     ): Effect.Effect<void> =>
       Effect.sync(() => {
-        setPermissionMode(state.sessionId, state.indexPath, mode);
+        setPermissionMode(state.sessionId, pathsFromState(state).indexPath, mode);
       });
 
     const getPermissionModeFromState = (state: SessionStoreState): Effect.Effect<PermissionMode> =>
       Effect.sync(() => {
-        const raw = getPermissionMode(state.indexPath);
+        const raw = getPermissionMode(pathsFromState(state).indexPath);
         if (raw === 'default' || raw === 'acceptEdits' || raw === 'bypass') return raw;
         return 'default';
       });
 
     const updateActiveProfile = (
       state: SessionStoreState,
-      profileName: string
+      profileName: AgentProfileName
     ): Effect.Effect<void> =>
       Effect.sync(() => {
-        const current = readCurrentIndex(state.indexPath);
         const index: SessionIndex = {
           sessionId: state.sessionId,
-          projectPath: state.projectPath,
           cwd: state.cwd,
           model: state.model,
           createdAt: state.sessionMeta?.createdAt ?? new Date().toISOString(),
@@ -364,12 +363,12 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
           title: state.title,
           currentTurnId: state.currentTurnId,
           usage: state.usage,
-          mode: state.mode,
           permissionMode: state.permissionMode,
           memorySnapshot: state.memorySnapshot,
           activeProfile: profileName,
         };
-        writeFileSync(state.indexPath, JSON.stringify(index, null, 2), 'utf8');
+        state.activeProfile = profileName;
+        writeFileSync(pathsFromState(state).indexPath, JSON.stringify(index, null, 2), 'utf8');
       });
 
     const incrementTurn = (state: SessionStoreState): number => {
@@ -377,16 +376,6 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       updateIndex(state);
       return state.currentTurnId;
     };
-
-    const setModeOnDisk = (
-      cwd: string,
-      sessionId: string,
-      mode: SessionMode
-    ): Effect.Effect<void, AgentError> =>
-      Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId);
-        writeIndexAtomic(paths.indexPath, { mode });
-      });
 
     const setPermissionModeOnDisk = (
       cwd: string,
@@ -401,21 +390,11 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
     const setActiveProfile = (
       cwd: string,
       sessionId: string,
-      profile: string
+      profile: AgentProfileName
     ): Effect.Effect<void, AgentError> =>
       Effect.sync(() => {
         const paths = computePaths(cwd, sessionId);
         writeIndexAtomic(paths.indexPath, { activeProfile: profile });
-      });
-
-    const getModeFromDisk = (
-      cwd: string,
-      sessionId: string
-    ): Effect.Effect<SessionMode, AgentError> =>
-      Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId);
-        const idx = readCurrentIndex(paths.indexPath);
-        return (idx?.mode as SessionMode) ?? 'build';
       });
 
     const getPermissionModeFromDisk = (
@@ -432,29 +411,16 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
     const getActiveProfile = (
       cwd: string,
       sessionId: string
-    ): Effect.Effect<string | undefined, AgentError> =>
+    ): Effect.Effect<AgentProfileName, AgentError> =>
       Effect.sync(() => {
         const paths = computePaths(cwd, sessionId);
         const idx = readCurrentIndex(paths.indexPath);
-        return idx?.activeProfile;
+        if (!idx?.activeProfile) throw new Error('Session index missing activeProfile');
+        return idx.activeProfile;
       });
-
-    const createSessionWithProfile = (
-      cwd: string,
-      options: {
-        model: string;
-        mode: SessionMode;
-        permissionMode: PermissionMode;
-      },
-      opts?: { parentSessionId?: string; agentName?: string; activeProfile?: string }
-    ): Effect.Effect<SessionStoreState, AgentError> => {
-      const activeProfile = opts?.activeProfile ?? modeToProfile(options.mode).name;
-      return create(cwd, options, { ...opts, activeProfile });
-    };
 
     return {
       create,
-      createSessionWithProfile,
       load,
       recordUser,
       recordAssistant,
@@ -466,6 +432,7 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       readHistory: readHistoryFromState,
       listSessions: listSessionsFromCwd,
       getSessionId,
+      getTranscriptPath,
       getMessageCount,
       setPermissionMode: setPermissionModeFromState,
       getPermissionMode: getPermissionModeFromState,
@@ -473,10 +440,8 @@ export class SessionService extends Effect.Service<SessionService>()('Session', 
       incrementTurn,
       readHistoryFile: (path: string): SessionEvent[] => readHistory(path),
       appendLineProxy: (path: string, event: object): void => appendLine(path, event),
-      setModeOnDisk,
       setPermissionModeOnDisk,
       setActiveProfile,
-      getModeFromDisk,
       getPermissionModeFromDisk,
       getActiveProfile,
     };
@@ -525,7 +490,6 @@ function forkSessionImpl(sourceJsonlPath: string, atTurnId: number): string {
   const sourceIdxPath = sourceJsonlPath.replace('.jsonl', '.index.json');
   let title = newSessionId.slice(0, 8);
   let usage: TokenUsage | undefined = undefined;
-  let mode: SessionMode = 'build';
   let permissionMode: PermissionMode = 'default';
   let srcIdx: SessionIndex | undefined;
   if (existsSync(sourceIdxPath)) {
@@ -533,7 +497,6 @@ function forkSessionImpl(sourceJsonlPath: string, atTurnId: number): string {
       srcIdx = JSON.parse(readFileSync(sourceIdxPath, 'utf8')) as SessionIndex;
       title = srcIdx.title;
       usage = srcIdx.usage ?? undefined;
-      mode = srcIdx.mode ?? 'build';
       permissionMode = srcIdx.permissionMode ?? 'default';
     } catch {
       /* corrupt */
@@ -541,9 +504,10 @@ function forkSessionImpl(sourceJsonlPath: string, atTurnId: number): string {
   }
 
   const meta = chain[0] as SessionMetaEvent | undefined;
+  const activeProfile = srcIdx?.activeProfile ?? meta?.activeProfile;
+  if (!activeProfile) throw new Error('Fork source missing activeProfile');
   const newIdx: SessionIndex = {
     sessionId: newSessionId,
-    projectPath: meta?.projectPath ?? '',
     cwd: meta?.cwd ?? '',
     model: srcIdx?.model ?? '',
     createdAt: meta?.createdAt ?? new Date().toISOString(),
@@ -552,8 +516,8 @@ function forkSessionImpl(sourceJsonlPath: string, atTurnId: number): string {
     title,
     currentTurnId: turnId,
     usage,
-    mode,
     permissionMode,
+    activeProfile,
   };
   writeFileSync(newIndexPath, JSON.stringify(newIdx, null, 2), 'utf8');
 

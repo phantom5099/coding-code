@@ -50,15 +50,12 @@ vi.mock('../src/checkpoint/checkpoint-service.js', () => {
 const mockState = {
   sessionId: 'test-session',
   cwd: '/tmp/test',
-  projectPath: 'test',
-  transcriptPath: '/tmp/test.jsonl',
-  indexPath: '/tmp/test.index.json',
   messageCount: 0,
   currentTurnId: 0,
   sessionMeta: null,
   model: 'test',
   title: 'test-sess',
-  mode: 'build' as const,
+  activeProfile: 'build' as const,
   permissionMode: 'default' as const,
   usage: undefined,
   memorySnapshot: '',
@@ -203,6 +200,7 @@ vi.mock('../src/runtime/project-runtime.js', () => ({
 }));
 
 const MockSessionLayer = Layer.succeed(SessionService, {
+  getTranscriptPath: () => '/tmp/test.jsonl',
   create: (_cwd: string, _options: any) => Effect.succeed({ ...mockState }),
   load: (_cwd: string, _sid: string) => Effect.succeed({ ...mockState }),
   recordUser: () =>
@@ -248,6 +246,7 @@ const MockProjectRuntimeLayer = Layer.succeed(ProjectRuntimeService, {
     allowedMcpServers: undefined,
   }),
   setSessionProfile: () => {},
+  restoreSessionProfile: () => Effect.void,
   getSessionProfile: () => undefined,
   disposeSession: () => Effect.void,
   disposeProject: () => Effect.void,
@@ -324,7 +323,7 @@ describe('sendMessage stream', () => {
         const session = yield* SessionService;
         const state = yield* session.create('/tmp/test', {
           model: 'mock-model',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
         return state.sessionId;

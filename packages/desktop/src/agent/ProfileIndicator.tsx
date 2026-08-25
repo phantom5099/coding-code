@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Eye, Hammer, Loader2 } from 'lucide-react';
-import { useAgentMode } from '../hooks/useAgent';
+import { useAgentProfile } from '../hooks/useAgent';
 import { useAgentStore } from '../stores/agent.store';
-import type { SessionMode } from '@codingcode/core/session/types';
+import type { AgentProfileName } from '@codingcode/core/subagent/types';
 
-interface ModeIndicatorProps {
+interface ProfileIndicatorProps {
   sessionId: string | null;
   cwd: string;
 }
 
-const MODE_META: Record<SessionMode, { label: string; color: string; Icon: typeof Eye }> = {
+const PROFILE_META: Record<AgentProfileName, { label: string; color: string; Icon: typeof Eye }> = {
   plan: {
     label: '计划模式',
     color: 'text-[var(--accent-warning)] bg-[var(--tag-info-bg)]',
@@ -22,56 +22,49 @@ const MODE_META: Record<SessionMode, { label: string; color: string; Icon: typeo
   },
 };
 
-/**
- * Compact status-bar pill that shows the current plan/build mode.
- *
- * Two modes of operation:
- *  - `sessionId !== null` — reads the live mode from the agent store and
- *    toggles by calling `switchMode` (server round-trip).
- *  - `sessionId === null` — welcome screen / no session yet. Shows the
- *    `pendingProfile` from the agent store and toggles it locally; the
- *    value is used as the initial mode when the user starts a session.
- */
-export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
-  const { fetchMode, switchMode } = useAgentMode();
+/** Shows and switches the active agent profile. */
+export default function ProfileIndicator({ sessionId, cwd }: ProfileIndicatorProps) {
+  const { fetchProfile, switchProfile } = useAgentProfile();
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const mode = useAgentStore((s) => (sessionId ? (s.modeByThreadId[sessionId] ?? null) : null));
+  const profile = useAgentStore((s) =>
+    sessionId ? (s.profileByThreadId[sessionId] ?? null) : null
+  );
   const pendingProfile = useAgentStore((s) => s.pendingProfile);
   const setPendingProfile = useAgentStore((s) => s.setPendingProfile);
-  const setModeForThread = useAgentStore((s) => s.setModeForThread);
-  const setOptimisticModeForThread = useAgentStore((s) => s.setOptimisticModeForThread);
+  const setProfileForThread = useAgentStore((s) => s.setProfileForThread);
+  const setOptimisticProfileForThread = useAgentStore((s) => s.setOptimisticProfileForThread);
 
   useEffect(() => {
     let cancelled = false;
     if (!sessionId) return;
 
-    const existing = useAgentStore.getState().modeByThreadId[sessionId];
+    const existing = useAgentStore.getState().profileByThreadId[sessionId];
     if (existing && !existing.optimistic) return;
 
     if (!existing) {
       const permissionMode = 'default' as const;
-      setOptimisticModeForThread(sessionId, {
-        mode: pendingProfile,
+      setOptimisticProfileForThread(sessionId, {
+        activeProfile: pendingProfile,
         permissionMode,
       });
     }
 
     setLoading(true);
     const requestedAt = Date.now();
-    fetchMode(sessionId, cwd)
+    fetchProfile(sessionId, cwd)
       .then((info) => {
         if (cancelled) return;
-        setModeForThread(sessionId, {
-          mode: info.mode,
+        setProfileForThread(sessionId, {
+          activeProfile: info.activeProfile,
           permissionMode: info.permissionMode,
           requestedAt,
         });
       })
       .catch((e) => {
         if (cancelled) return;
-        console.error('Failed to fetch session mode:', e);
+        console.error('Failed to fetch session profile:', e);
       })
       .finally(() => {
         if (cancelled) return;
@@ -81,10 +74,18 @@ export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, cwd, fetchMode, pendingProfile, setModeForThread, setOptimisticModeForThread]);
+  }, [
+    sessionId,
+    cwd,
+    fetchProfile,
+    pendingProfile,
+    setProfileForThread,
+    setOptimisticProfileForThread,
+  ]);
 
-  const current: SessionMode = sessionId === null ? pendingProfile : (mode?.mode ?? 'build');
-  const target: SessionMode = current === 'plan' ? 'build' : 'plan';
+  const current: AgentProfileName =
+    sessionId === null ? pendingProfile : (profile?.activeProfile ?? 'build');
+  const target: AgentProfileName = current === 'plan' ? 'build' : 'plan';
 
   const handleToggle = async () => {
     if (busy) return;
@@ -96,19 +97,19 @@ export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
 
     setBusy(true);
     try {
-      const result = await switchMode(sessionId, target, cwd);
-      setModeForThread(sessionId, {
-        mode: result.mode,
+      const result = await switchProfile(sessionId, target, cwd);
+      setProfileForThread(sessionId, {
+        activeProfile: result.activeProfile,
         permissionMode: result.permissionMode,
       });
     } catch (e) {
-      console.error('Failed to switch mode:', e);
+      console.error('Failed to switch profile:', e);
     } finally {
       setBusy(false);
     }
   };
 
-  const meta = MODE_META[current];
+  const meta = PROFILE_META[current];
   const Icon = meta.Icon;
   const disabled = sessionId === null ? false : loading || busy;
 
@@ -117,11 +118,11 @@ export default function ModeIndicator({ sessionId, cwd }: ModeIndicatorProps) {
       type="button"
       onClick={handleToggle}
       disabled={disabled}
-      data-testid="mode-indicator"
+      data-testid="profile-indicator"
       title={
         sessionId === null
-          ? `新会话将以 ${meta.label} 启动，点击切换到 ${MODE_META[target].label}`
-          : `当前 ${meta.label}，点击切换到 ${MODE_META[target].label}`
+          ? `新会话将以 ${meta.label} 启动，点击切换到 ${PROFILE_META[target].label}`
+          : `当前 ${meta.label}，点击切换到 ${PROFILE_META[target].label}`
       }
       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium ${meta.color} hover:opacity-90 transition-opacity disabled:opacity-50`}
     >

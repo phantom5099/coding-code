@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 import { AgentError } from '../../src/core/error.js';
-import { encodeProjectPath } from '../../src/core/path.js';
+import { encodeProjectPath, computePaths } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -32,7 +32,7 @@ describe('load — restores model from disk, not overwritten', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'gpt-4o',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -65,7 +65,7 @@ describe('load — restores model from disk, not overwritten', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'claude-3-5-sonnet',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -80,7 +80,12 @@ describe('load — restores model from disk, not overwritten', () => {
         })
       );
 
-      const beforeRollback = JSON.parse(readFileSync(created.indexPath, 'utf8')) as SessionIndex;
+      const beforeRollback = JSON.parse(
+        readFileSync(
+          computePaths(created.cwd, created.sessionId, created.parentSessionId).indexPath,
+          'utf8'
+        )
+      ) as SessionIndex;
       expect(beforeRollback.model).toBe('claude-3-5-sonnet');
 
       await run(
@@ -91,7 +96,12 @@ describe('load — restores model from disk, not overwritten', () => {
         })
       );
 
-      const afterRollback = JSON.parse(readFileSync(created.indexPath, 'utf8')) as SessionIndex;
+      const afterRollback = JSON.parse(
+        readFileSync(
+          computePaths(created.cwd, created.sessionId, created.parentSessionId).indexPath,
+          'utf8'
+        )
+      ) as SessionIndex;
       expect(afterRollback.model).toBe('claude-3-5-sonnet');
     } finally {
       cleanup(dir);
@@ -134,7 +144,7 @@ describe('load — restores model from disk, not overwritten', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'gpt-4o',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -171,7 +181,7 @@ describe('create — generates sessionId internally', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -197,13 +207,18 @@ describe('create — generates sessionId internally', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'my-special-model',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
       );
 
-      const idx = JSON.parse(readFileSync(state.indexPath, 'utf8')) as SessionIndex;
+      const idx = JSON.parse(
+        readFileSync(
+          computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
+          'utf8'
+        )
+      ) as SessionIndex;
       expect(idx.model).toBe('my-special-model');
     } finally {
       cleanup(dir);
@@ -221,7 +236,7 @@ describe('create — generates sessionId internally', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -248,7 +263,7 @@ describe('load restores persisted fields', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -272,7 +287,12 @@ describe('load restores persisted fields', () => {
         })
       );
 
-      const idx = JSON.parse(readFileSync(created.indexPath, 'utf8')) as SessionIndex;
+      const idx = JSON.parse(
+        readFileSync(
+          computePaths(created.cwd, created.sessionId, created.parentSessionId).indexPath,
+          'utf8'
+        )
+      ) as SessionIndex;
       expect(idx.currentTurnId).toBe(2);
 
       const loaded = await run(
@@ -299,7 +319,7 @@ describe('load restores persisted fields', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -324,7 +344,12 @@ describe('load restores persisted fields', () => {
         })
       );
 
-      const idx = JSON.parse(readFileSync(created.indexPath, 'utf8')) as SessionIndex;
+      const idx = JSON.parse(
+        readFileSync(
+          computePaths(created.cwd, created.sessionId, created.parentSessionId).indexPath,
+          'utf8'
+        )
+      ) as SessionIndex;
       expect(idx.usage).toEqual(loaded.usage);
     } finally {
       cleanup(dir);

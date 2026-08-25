@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import type { AgentProfile } from '../subagent/types.js';
+import type { AgentProfile, AgentProfileName } from '../subagent/types.js';
 import type { ToolVisibilityPolicy } from '../tools/types.js';
 import { HookService } from '../hooks/registry.js';
 import { McpService } from '../mcp/index.js';
@@ -7,24 +7,21 @@ import { RulesService } from '../rules/index.js';
 import { SessionService } from '../session/store.js';
 import { normalizePath } from '../core/path.js';
 import type { PermissionMode } from '../approval/types.js';
-import type { SessionMode } from '../session/types.js';
 import { readCurrentIndex } from '../session/file-ops.js';
 import { computePaths } from '../core/path.js';
 import {
   BUILD_PROFILE,
   PLAN_PROFILE,
   isPlanProfile,
-  PLAN_MODE_ALLOWED_TOOLS,
-} from '../agent/mode.js';
+  PLAN_PROFILE_ALLOWED_TOOLS,
+} from '../agent/profile.js';
 
-export function modeToProfile(mode: SessionMode): AgentProfile {
-  return mode === 'plan' ? PLAN_PROFILE : BUILD_PROFILE;
+function isAgentProfileName(name: string): name is AgentProfileName {
+  return name === PLAN_PROFILE.name || name === BUILD_PROFILE.name;
 }
 
-function profileByName(name: string | undefined): AgentProfile | undefined {
-  if (name === PLAN_PROFILE.name) return PLAN_PROFILE;
-  if (name === BUILD_PROFILE.name) return BUILD_PROFILE;
-  return undefined;
+function profileByName(name: AgentProfileName): AgentProfile {
+  return name === PLAN_PROFILE.name ? PLAN_PROFILE : BUILD_PROFILE;
 }
 
 export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>()(
@@ -54,14 +51,14 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
         ): AgentProfile | undefined => {
           const idx = readCurrentIndex(computePaths(projectPath, sessionId).indexPath);
           const name = idx?.activeProfile;
-          return profileByName(name);
+          return name ? profileByName(name) : undefined;
         },
 
         resolveSubagentProfile: (_projectPath: string, name: string): AgentProfile | undefined =>
-          profileByName(name),
+          isAgentProfileName(name) ? profileByName(name) : undefined,
 
         getToolPolicy: (profile: AgentProfile | undefined): ToolVisibilityPolicy => ({
-          allowedTools: isPlanProfile(profile) ? new Set(PLAN_MODE_ALLOWED_TOOLS) : undefined,
+          allowedTools: isPlanProfile(profile) ? new Set(PLAN_PROFILE_ALLOWED_TOOLS) : undefined,
           allowedMcpServers: undefined,
         }),
 
@@ -72,9 +69,7 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
           permissionModeOverride?: PermissionMode
         ): Effect.Effect<void, import('../core/error.js').AgentError> =>
           Effect.gen(function* () {
-            const mode: SessionMode = profile.name === 'plan' ? 'plan' : 'build';
             const effectivePerm: PermissionMode = permissionModeOverride ?? 'default';
-            yield* session.setModeOnDisk(projectPath, sessionId, mode);
             yield* session.setPermissionModeOnDisk(projectPath, sessionId, effectivePerm);
             yield* session.setActiveProfile(projectPath, sessionId, profile.name);
           }),
@@ -97,16 +92,12 @@ export class ProjectRuntimeService extends Effect.Service<ProjectRuntimeService>
         restoreSessionProfile: (
           projectPath: string,
           sessionId: string,
-          profileName: string | undefined,
+          profileName: AgentProfileName,
           permissionModeOverride?: PermissionMode
         ): Effect.Effect<void, import('../core/error.js').AgentError> =>
           Effect.gen(function* () {
-            if (!profileName) return;
             const profile = profileByName(profileName);
-            if (!profile) return;
-            const mode: SessionMode = profile.name === 'plan' ? 'plan' : 'build';
             const effectivePerm: PermissionMode = permissionModeOverride ?? 'default';
-            yield* session.setModeOnDisk(projectPath, sessionId, mode);
             yield* session.setPermissionModeOnDisk(projectPath, sessionId, effectivePerm);
             yield* session.setActiveProfile(projectPath, sessionId, profile.name);
           }),

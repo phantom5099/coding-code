@@ -1,7 +1,7 @@
 import { API_BASE, api } from './api';
 import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client/http-clients';
 import type { PermissionMode } from '@codingcode/core/approval/types';
-import type { SessionMode } from '@codingcode/core/session/types';
+import type { AgentProfileName } from '@codingcode/core/subagent/types';
 
 const clients = createHttpClients(API_BASE);
 
@@ -30,7 +30,7 @@ export function listSessions(cwd?: string): Promise<any[]> {
 
 export function createSession(
   cwd: string,
-  params: { mode: SessionMode; permissionMode: PermissionMode; model: string }
+  params: { activeProfile: AgentProfileName; permissionMode: PermissionMode; model: string }
 ): Promise<{ sessionId: string }> {
   return clients.sessions.createSession({ cwd, ...params });
 }
@@ -77,25 +77,25 @@ export function getSessionPlan(
   return clients.sessions.getSessionPlan({ sessionId, cwd });
 }
 
-// ---- Plan/Build mode switching ----
+// ---- Agent profile switching ----
 
-export type SessionModeInfo = {
-  mode: SessionMode;
+export type SessionProfileInfo = {
+  activeProfile: AgentProfileName;
   permissionMode: PermissionMode;
   cwd: string;
   available: Array<{ name: string; description: string }>;
 };
 
-export function getSessionMode(sessionId: string, cwd: string): Promise<SessionModeInfo> {
-  return clients.sessions.getSessionMode({ sessionId, cwd });
+export function getSessionProfile(sessionId: string, cwd: string): Promise<SessionProfileInfo> {
+  return clients.sessions.getSessionProfile({ sessionId, cwd });
 }
 
-export function setSessionMode(
+export function setSessionProfile(
   sessionId: string,
   cwd: string,
-  mode: SessionMode
-): Promise<{ mode: SessionMode; permissionMode: PermissionMode }> {
-  return clients.sessions.setSessionMode({ sessionId, cwd, mode });
+  activeProfile: AgentProfileName
+): Promise<{ activeProfile: AgentProfileName; permissionMode: PermissionMode }> {
+  return clients.sessions.setSessionProfile({ sessionId, cwd, activeProfile });
 }
 
 // ---- Settings: Memory ----

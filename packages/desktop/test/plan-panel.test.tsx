@@ -11,14 +11,14 @@ const fetchPlanMock = vi.fn();
 // Stable references — the mock returns the same wrapper on every render so
 // the component's useEffect/useCallback don't loop on a changed identity.
 const stableFetchPlan = (...args: unknown[]) => fetchPlanMock(...args);
-const stableFetchMode = vi.fn();
-const stableSwitchMode = vi.fn();
+const stableFetchProfile = vi.fn();
+const stableSwitchProfile = vi.fn();
 
 vi.mock('../src/hooks/useAgent', () => ({
-  useAgentMode: () => ({
+  useAgentProfile: () => ({
     fetchPlan: stableFetchPlan,
-    fetchMode: stableFetchMode,
-    switchMode: stableSwitchMode,
+    fetchProfile: stableFetchProfile,
+    switchProfile: stableSwitchProfile,
   }),
 }));
 

@@ -1,5 +1,5 @@
 import type { AgentEvent } from '../agent/types.js';
-import type { SseEvent } from './types.js';
+import type { SseEvent } from './handler.js';
 
 export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
   switch (event._tag) {

@@ -15,7 +15,7 @@ export interface AgentRuntimeClient {
   }): Promise<void>;
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
 
-  getCheckpoints(): Promise<Array<{ turnId: number; title: string; files: string[] }>>;
+  getCheckpoints(): Promise<Array<{ turnId: number; files: string[] }>>;
   getCheckpointDiff(turnId?: number): Promise<import('../../checkpoint/types.js').CheckpointDiff>;
   revertCheckpointFiles(
     turnId: number,
@@ -27,9 +27,7 @@ export interface AgentRuntimeClient {
   rollbackCodeToTurn(
     throughTurnId: number
   ): Promise<import('../../checkpoint/types.js').CodeRollbackResult>;
-  rollbackContext(
-    throughTurnId: number
-  ): Promise<{
+  rollbackContext(throughTurnId: number): Promise<{
     turns: Array<{ id: string; items: object[]; status: string }>;
     rollbackState: import('../../checkpoint/types.js').RollbackState;
   }>;
@@ -43,9 +41,7 @@ export interface AgentRuntimeClient {
     files?: string[]
   ): Promise<import('../../checkpoint/types.js').CodeRollbackUndoResult>;
   getRollbackState(): Promise<import('../../checkpoint/types.js').RollbackState>;
-  forkSession(
-    atTurnId?: number
-  ): Promise<{
+  forkSession(atTurnId?: number): Promise<{
     sessionId: string;
     turns: Array<{ id: string; items: object[]; status: string }>;
   }>;

@@ -7,7 +7,7 @@ import { SessionService } from '../../src/session/store.js';
 
 import { estimatePromptTokens } from '../../src/context/service.js';
 import { estimateTokensForContent } from '../../src/core/util.js';
-import { encodeProjectPath } from '../../src/core/path.js';
+import { encodeProjectPath, computePaths } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -18,17 +18,18 @@ function makeFixture(
   slug: string,
   usage?: { prompt: number; completion: number; total: number }
 ) {
+  const cwd = `/${slug}`;
+  const paths = computePaths(cwd, sessionId);
   const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
-  const transcriptPath = join(dir, `${sessionId}.jsonl`);
-  const indexPath = join(dir, `${sessionId}.index.json`);
+  const transcriptPath = paths.transcriptPath;
+  const indexPath = paths.indexPath;
 
   const lines: any[] = [
     {
       type: 'session_meta',
       sessionId,
-      projectPath: slug,
-      cwd: '/tmp/test',
+      cwd,
       createdAt: new Date().toISOString(),
     },
     {
@@ -67,8 +68,7 @@ function makeFixture(
 
   const idx: SessionIndex = {
     sessionId,
-    projectPath: slug,
-    cwd: '/tmp/test',
+    cwd,
     model: 'test-model',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -76,12 +76,12 @@ function makeFixture(
     title: 'fixture',
     currentTurnId: 2,
     usage: usage ?? undefined,
-    mode: 'build' as const,
+    activeProfile: 'build' as const,
     permissionMode: 'default' as const,
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
-  return { dir, transcriptPath, indexPath };
+  return { cwd, dir, transcriptPath, indexPath };
 }
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
@@ -97,15 +97,12 @@ describe('promptEstimate', () => {
     try {
       const state = {
         sessionId,
-        cwd: '/tmp/test',
-        projectPath: slug,
-        transcriptPath: fx.transcriptPath,
-        indexPath: fx.indexPath,
+        cwd: fx.cwd,
         messageCount: 4,
         currentTurnId: 2,
         sessionMeta: null,
         model: 'test-model',
-        mode: 'build' as const,
+        activeProfile: 'build' as const,
         permissionMode: 'default' as const,
         title: 'fixture',
         usage,
@@ -132,15 +129,12 @@ describe('promptEstimate', () => {
     try {
       const state = {
         sessionId,
-        cwd: '/tmp/test',
-        projectPath: slug,
-        transcriptPath: fx.transcriptPath,
-        indexPath: fx.indexPath,
+        cwd: fx.cwd,
         messageCount: 4,
         currentTurnId: 2,
         sessionMeta: null,
         model: 'test-model',
-        mode: 'build' as const,
+        activeProfile: 'build' as const,
         permissionMode: 'default' as const,
         title: 'fixture',
         usage: undefined,
@@ -180,14 +174,19 @@ describe('SessionService create sets model', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'my-test-model',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
       );
       expect(state.model).toBe('my-test-model');
 
-      const idx = JSON.parse(readFileSync(state.indexPath, 'utf8'));
+      const idx = JSON.parse(
+        readFileSync(
+          computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
+          'utf8'
+        )
+      );
       expect(idx.model).toBe('my-test-model');
     } finally {
       await new Promise((r) => setTimeout(r, 50));

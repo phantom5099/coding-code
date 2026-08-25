@@ -43,7 +43,7 @@ function makeMockLLM(content: string): LLMClient {
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(
-    eff.pipe(Effect.provide(AppLayer as any), Effect.provide(TestLLMLayer)) as any
+    eff.pipe(Effect.provide(TestLLMLayer), Effect.provide(AppLayer as any)) as any
   );
 }
 
@@ -71,7 +71,7 @@ describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
         yield* runtime.prepareProject(cwd);
         const parent = yield* session.create(cwd, {
           model: 'parent-model',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
 
@@ -123,7 +123,7 @@ describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
         yield* runtime.prepareProject(cwd);
         const parent = yield* session.create(cwd, {
           model: 'parent-model',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
         const dispatchTool = yield* createDispatchAgentTool();

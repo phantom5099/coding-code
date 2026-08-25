@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { Hono } from 'hono';
-import { mkdtempSync, rmSync, readFileSync, mkdirSync } from 'fs';
-import { tmpdir } from 'os';
+import { readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
+import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { RulesService } from '../../src/rules/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
-import { createSessionsRouter } from '../../src/server/routes/sessions.js';
+import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -70,7 +70,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     mkdirSync(cwd, { recursive: true });
     rt = ManagedRuntime.make(makeLayer() as any);
     app = new Hono();
-    app.route('/api/sessions', createSessionsRouter(rt));
+    registerSessionsRoutes(app, rt);
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -83,13 +83,13 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     await rt.dispose();
   });
 
-  it('writes idx.mode=plan and idx.permissionMode=default when mode=plan', async () => {
+  it('writes idx.activeProfile=plan and idx.permissionMode=default when activeProfile=plan', async () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         cwd,
-        mode: 'plan',
+        activeProfile: 'plan',
         permissionMode: 'default',
         model: 'gpt-4',
       }),
@@ -101,22 +101,23 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        return state.indexPath;
+        return computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath;
       })
     );
 
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.mode).toBe('plan');
+    expect(idx.activeProfile).toBe('plan');
+    expect(idx).not.toHaveProperty('mode');
     expect(idx.permissionMode).toBe('default');
   });
 
-  it('writes idx.mode=build and idx.permissionMode=bypass when build+bypass', async () => {
+  it('writes idx.activeProfile=build and idx.permissionMode=bypass when activeProfile=build+bypass', async () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         cwd,
-        mode: 'build',
+        activeProfile: 'build',
         permissionMode: 'bypass',
         model: 'gpt-4',
       }),
@@ -128,22 +129,23 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        return state.indexPath;
+        return computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath;
       })
     );
 
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.mode).toBe('build');
+    expect(idx.activeProfile).toBe('build');
+    expect(idx).not.toHaveProperty('mode');
     expect(idx.permissionMode).toBe('bypass');
   });
 
-  it('allows plan mode with any permissionMode (plan no longer overrides perm)', async () => {
+  it('allows plan profile with any permissionMode (plan no longer overrides perm)', async () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         cwd,
-        mode: 'plan',
+        activeProfile: 'plan',
         permissionMode: 'bypass',
         model: 'gpt-4',
       }),
@@ -154,11 +156,12 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        return state.indexPath;
+        return computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath;
       })
     );
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.mode).toBe('plan');
+    expect(idx.activeProfile).toBe('plan');
+    expect(idx).not.toHaveProperty('mode');
     expect(idx.permissionMode).toBe('bypass');
     expect(idx.activeProfile).toBe('plan');
   });
@@ -167,7 +170,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cwd, mode: 'build', permissionMode: 'default' }),
+      body: JSON.stringify({ cwd, activeProfile: 'build', permissionMode: 'default' }),
     });
     expect(res.status).toBe(400);
   });
@@ -181,13 +184,13 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     expect(res.status).toBe(400);
   });
 
-  it('new session with plan: state.mode, activeProfile, permissionMode are all on disk', async () => {
+  it('new session persists activeProfile and permissionMode', async () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         cwd,
-        mode: 'plan',
+        activeProfile: 'plan',
         permissionMode: 'default',
         model: 'gpt-4',
       }),
@@ -199,7 +202,8 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        expect(state.mode).toBe('plan');
+        expect(state.activeProfile).toBe('plan');
+        expect(state).not.toHaveProperty('mode');
         expect(state.permissionMode).toBe('default');
         expect(state.activeProfile).toBe('plan');
       })

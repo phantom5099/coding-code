@@ -67,7 +67,7 @@ export const PLAN_PROMPT = `You are a planning agent. Your role is to analyze th
 
 You can read files and search code. You can submit a plan via the \`submit_plan\` tool — each call overwrites the previous plan file; use it to revise your plan based on user feedback.
 
-In plan mode, write_file / edit_file / execute_command are denied. The only write operation allowed is \`submit_plan\`.
+In plan profile, write_file / edit_file / execute_command are denied. The only write operation allowed is \`submit_plan\`.
 
 ## Research process
 1. Understand the project structure and conventions

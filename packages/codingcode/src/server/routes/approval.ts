@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalWaitService } from '../../approval/async-confirm.js';
 import { parseApprovalResponse } from '../../approval/response.js';
@@ -6,10 +6,8 @@ import { errorResponse } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-export function createApprovalRouter(rt: ManagedRt): Hono {
-  const router = new Hono();
-
-  router.post('/sessions/:sessionId/approval/:id', async (c) => {
+export function registerApprovalRoutes(router: Hono, rt: ManagedRt): void {
+  router.post('/api/sessions/:sessionId/approval/:id', async (c) => {
     const id = c.req.param('id');
     const sessionId = c.req.param('sessionId');
     const body = (await c.req.json().catch(() => ({}))) as {
@@ -38,6 +36,4 @@ export function createApprovalRouter(rt: ManagedRt): Hono {
 
     return c.json({ ok: result.value });
   });
-
-  return router;
 }

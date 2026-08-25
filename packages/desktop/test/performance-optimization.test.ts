@@ -173,9 +173,9 @@ describe('App.tsx - event listener cleanup', () => {
     };
 
     const handler = (() => {}) as EventListener;
-    fakeAdd('menu:switchMode', handler);
+    fakeAdd('menu:switchProfile', handler);
     expect(handlers).toHaveLength(1);
-    fakeRemove('menu:switchMode', handler);
+    fakeRemove('menu:switchProfile', handler);
     expect(handlers).toHaveLength(0);
   });
 });

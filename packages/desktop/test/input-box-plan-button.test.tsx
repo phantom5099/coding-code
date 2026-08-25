@@ -18,8 +18,8 @@ describe('Desktop: InputBox "查看计划" button', () => {
     expect(agentWorkspaceSource).toMatch(/pendingPlanByThreadId\[s\.currentThreadId\]\s*!=\s*null/);
   });
 
-  it('does not call useAgentMode in AgentWorkspace', () => {
-    expect(agentWorkspaceSource).not.toMatch(/useAgentMode\(\)/);
+  it('does not call useAgentProfile in AgentWorkspace', () => {
+    expect(agentWorkspaceSource).not.toMatch(/useAgentProfile\(\)/);
   });
 
   it('renders the view-plan button only when planExists is true', () => {

@@ -8,7 +8,7 @@ import { setSessionPermissionMode } from '../lib/core-api';
 import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
 import ApprovalPanel from './ApprovalPanel';
-import ModeIndicator from './ModeIndicator';
+import ProfileIndicator from './ProfileIndicator';
 import { APPROVAL_POLICY_TO_PERMISSION_MODE } from '../hooks/useAgent';
 import PlanPanel from '../shared/PlanPanel';
 
@@ -231,11 +231,11 @@ function InputBox({
   const pendingInput = useAgentStore((s) => s.pendingInput);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
 
-  const isPlanMode = useAgentStore((s) => {
+  const isPlanProfile = useAgentStore((s) => {
     if (!s.currentThreadId) {
       return s.pendingProfile === 'plan';
     }
-    return s.modeByThreadId[s.currentThreadId]?.mode === 'plan';
+    return s.profileByThreadId[s.currentThreadId]?.activeProfile === 'plan';
   });
   const planExists = useAgentStore((s) => {
     if (!s.currentThreadId) return false;
@@ -324,7 +324,7 @@ function InputBox({
         </div>
         {/* Row 2: toolbar */}
         <div className="flex items-center gap-2 px-3 pb-3 pt-0">
-          {!isPlanMode && (
+          {!isPlanProfile && (
             <button
               type="button"
               onClick={() => {
@@ -360,7 +360,7 @@ function InputBox({
                 <span>查看计划</span>
               </button>
             )}
-            <ModeIndicator sessionId={currentThreadId} cwd={workspace.rootPath} />
+            <ProfileIndicator sessionId={currentThreadId} cwd={workspace.rootPath} />
             {currentThreadId && <ContextIndicator threadId={currentThreadId} />}
             <ModelSelector />
           </div>

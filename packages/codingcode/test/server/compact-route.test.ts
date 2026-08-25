@@ -22,20 +22,22 @@ const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
 } as any);
 
 const MockSessionLayer = Layer.succeed(SessionService, {
+  getTranscriptPath: () => '/tmp/test.jsonl',
   create: () =>
     Effect.succeed({
       sessionId: 'test-sid',
       cwd: '/tmp/test',
-      projectPath: 'test-path',
       model: 'deepseek-chat',
+      activeProfile: 'build',
+      permissionMode: 'default',
     }),
   load: () =>
     Effect.succeed({
       sessionId: 'test-sid',
       cwd: '/tmp/test',
-      projectPath: 'test-path',
-      transcriptPath: '/tmp/test.jsonl',
       model: 'deepseek-chat',
+      activeProfile: 'build',
+      permissionMode: 'default',
     }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
@@ -61,6 +63,8 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
     Effect.succeed({
       id: 'deepseek-chat',
       model: 'deepseek-chat',
+      activeProfile: 'build',
+      permissionMode: 'default',
       provider: 'deepseek',
       driver: 'openai',
       api_key_env: 'DEEPSEEK_API_KEY',
@@ -71,6 +75,8 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
       modelInfo: {
         provider: 'deepseek',
         model: 'deepseek-chat',
+        activeProfile: 'build',
+        permissionMode: 'default',
         maxTokens: 64000,
         supportsToolCalling: true,
         supportsStreaming: true,
@@ -82,6 +88,8 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
     Effect.succeed({
       id: 'deepseek-chat',
       model: 'deepseek-chat',
+      activeProfile: 'build',
+      permissionMode: 'default',
       provider: 'deepseek',
       driver: 'openai',
       api_key_env: 'DEEPSEEK_API_KEY',
@@ -239,6 +247,8 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
           modelInfo: {
             provider: 'deepseek',
             model: 'deepseek-chat',
+            activeProfile: 'build',
+            permissionMode: 'default',
             maxTokens: 64000,
             supportsToolCalling: true,
             supportsStreaming: true,

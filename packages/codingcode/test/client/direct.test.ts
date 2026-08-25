@@ -29,7 +29,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
       },
     ]),
   switchModel: (id: string) =>
-    Effect.fail(new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /model to list.`)),
+    Effect.fail(new AgentError('CONFIG_INVALID', `Model "${id}" not found. Use /models to list.`)),
   findModel: () => Effect.succeed(null),
   getActiveEntry: () => Effect.fail(new AgentError('CONFIG_INVALID', 'No active model configured')),
   createClient: () => Effect.succeed(null),

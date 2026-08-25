@@ -8,7 +8,7 @@ import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { READONLY_TOOL_NAMES } from '../../src/approval/presets.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { planModeGateHook } from '../../src/agent/mode.js';
+import { planProfileGateHook } from '../../src/agent/profile.js';
 import { computePaths } from '../../src/core/path.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
@@ -60,12 +60,11 @@ function makeMockApprovalWait() {
   };
 }
 
-function makeIndex(cwd: string, sessionId: string, mode: 'plan' | 'build') {
+function makeIndex(cwd: string, sessionId: string, activeProfile: 'plan' | 'build') {
   const paths = computePaths(cwd, sessionId);
   mkdirSync(paths.transcriptPath.replace(/\.jsonl$/, ''), { recursive: true });
   const idx = {
     sessionId,
-    projectPath: paths.projectPath,
     cwd: paths.cwd,
     model: 'test',
     createdAt: new Date().toISOString(),
@@ -74,7 +73,7 @@ function makeIndex(cwd: string, sessionId: string, mode: 'plan' | 'build') {
     title: sessionId.slice(0, 8),
     currentTurnId: 0,
     usage: undefined,
-    mode,
+    activeProfile,
     permissionMode: 'default',
   };
   writeFileSync(paths.indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -85,14 +84,14 @@ function runPipelineWithMock(opts: {
   input: any;
   permissionMode: 'default' | 'acceptEdits' | 'bypass';
   sessionId: string;
-  planMode: boolean;
+  planProfile: boolean;
   cwd: string;
 }) {
   capturedApproval = null;
   decisionHandlers.length = 0;
-  decisionHandlers.push(planModeGateHook);
+  decisionHandlers.push(planProfileGateHook);
 
-  if (opts.planMode) makeIndex(opts.cwd, opts.sessionId, 'plan');
+  if (opts.planProfile) makeIndex(opts.cwd, opts.sessionId, 'plan');
   else makeIndex(opts.cwd, opts.sessionId, 'build');
 
   const mockWait = makeMockApprovalWait();
@@ -114,7 +113,7 @@ function runPipelineWithMock(opts: {
   );
 }
 
-describe('Plan mode gate hook integration', () => {
+describe('Plan profile gate hook integration', () => {
   let cwd: string;
   beforeEach(() => {
     cwd = mkdtempSync(join(tmpdir(), 'codingcode-gate-pipeline-'));
@@ -125,53 +124,53 @@ describe('Plan mode gate hook integration', () => {
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  it('plan mode + write_file: gate denies before reaching user confirmation', async () => {
+  it('plan profile + write_file: gate denies before reaching user confirmation', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'write_file',
       input: { path: '/tmp/x', content: 'foo' },
       permissionMode: 'default',
       sessionId: 's2',
-      planMode: true,
+      planProfile: true,
       cwd,
     });
     expect(decision.type).toBe('deny');
-    expect(decision.reason).toMatch(/plan mode/i);
+    expect(decision.reason).toMatch(/plan profile/i);
     expect(capturedApproval).toBeNull();
   });
 
-  it('plan mode + execute_command: gate denies with plan-mode reason', async () => {
+  it('plan profile + execute_command: gate denies with plan-profile reason', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'execute_command',
       input: { command: 'rm -rf /' },
       permissionMode: 'default',
       sessionId: 's3',
-      planMode: true,
+      planProfile: true,
       cwd,
     });
     expect(decision.type).toBe('deny');
-    expect(decision.reason).toMatch(/plan mode/i);
+    expect(decision.reason).toMatch(/plan profile/i);
     expect(capturedApproval).toBeNull();
   });
 
-  it('plan mode + dispatch_agent: readonly approval remains unchanged', async () => {
+  it('plan profile + dispatch_agent: readonly approval remains unchanged', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'dispatch_agent',
       input: { agent: 'build', prompt: 'do something' },
       permissionMode: 'default',
       sessionId: 's4',
-      planMode: true,
+      planProfile: true,
       cwd,
     });
     expect(decision.type).toBe('allow');
   });
 
-  it('build mode + write_file: gate does not fire, pipeline falls through normally', async () => {
+  it('build profile + write_file: gate does not fire, pipeline falls through normally', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'write_file',
       input: { path: '/tmp/x', content: 'foo' },
       permissionMode: 'default',
       sessionId: 's5',
-      planMode: false,
+      planProfile: false,
       cwd,
     });
     expect(capturedApproval).not.toBeNull();
@@ -184,7 +183,7 @@ describe('Plan mode gate hook integration', () => {
       input: { plan_content: '# plan' },
       permissionMode: 'default',
       sessionId: 's6',
-      planMode: true,
+      planProfile: true,
       cwd,
     });
     expect(decision.type).toBe('allow');

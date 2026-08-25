@@ -7,7 +7,7 @@ import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { LLMFactoryService } from '../../src/llm/factory.js';
 import { RulesService } from '../../src/rules/index.js';
-import { BUILD_PROFILE } from '../../src/agent/mode.js';
+import { BUILD_PROFILE } from '../../src/agent/profile.js';
 import { SubagentRunnerService } from '../../src/subagent/runner-service.js';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import type { ToolDefinition, ToolExecCtx } from '../../src/tools/types.js';
@@ -27,19 +27,16 @@ const mockLlm: Partial<LLMClient> = {
 function makeMockSession(parentPermissionMode: 'default' | 'bypass' | 'acceptEdits' = 'default') {
   const createImpl = (
     _cwd: string,
-    options: { model: string; mode: 'plan' | 'build'; permissionMode: any }
+    options: { model: string; activeProfile: 'plan' | 'build'; permissionMode: any }
   ) =>
     Effect.succeed({
       sessionId: 'child-1',
       cwd: '/test',
-      projectPath: '/test',
-      transcriptPath: '/tmp/child.jsonl',
-      indexPath: '/tmp/child.index.json',
       messageCount: 0,
       currentTurnId: 0,
       sessionMeta: null,
       model: options.model,
-      mode: options.mode,
+      activeProfile: options.activeProfile,
       permissionMode: options.permissionMode,
       title: 'child',
       usage: undefined,
@@ -47,19 +44,15 @@ function makeMockSession(parentPermissionMode: 'default' | 'bypass' | 'acceptEdi
     });
   return {
     create: createImpl,
-    createSessionWithProfile: createImpl,
     load: (_cwd: string, _sid: string) =>
       Effect.succeed({
         sessionId: 'parent-1',
         cwd: '/test',
-        projectPath: '/test',
-        transcriptPath: '/tmp/parent.jsonl',
-        indexPath: '/tmp/parent.index.json',
         messageCount: 0,
         currentTurnId: 0,
         sessionMeta: null,
         model: 'parent-model',
-        mode: 'build' as const,
+        activeProfile: 'build' as const,
         permissionMode: parentPermissionMode,
         title: 'parent',
         usage: undefined,
@@ -68,7 +61,6 @@ function makeMockSession(parentPermissionMode: 'default' | 'bypass' | 'acceptEdi
     incrementTurn: () => 0,
     recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 } as any),
     setActiveProfile: () => Effect.void,
-    setModeOnDisk: () => Effect.void,
     setPermissionModeOnDisk: () => Effect.void,
   };
 }

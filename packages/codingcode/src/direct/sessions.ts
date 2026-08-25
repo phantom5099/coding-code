@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../session/store.js';
-import { ProjectRuntimeService, modeToProfile } from '../runtime/project-runtime.js';
 import { deleteSession } from '../session/file-ops.js';
 import { encodeProjectPath, getProjectBaseDir } from '../core/path.js';
 import type { PermissionMode } from '../approval/types.js';
@@ -13,13 +12,14 @@ import type {
   RollbackPreviewDiff,
   RollbackState,
 } from '../checkpoint/types.js';
-import type { SessionEvent, SessionIndex, SessionMode } from '../session/types.js';
+import type { SessionEvent, SessionIndex } from '../session/types.js';
+import type { AgentProfileName } from '../subagent/types.js';
 import type { AppRuntime } from '../layer.js';
 
 export interface SessionClient {
   createSession(input: {
     cwd: string;
-    mode: SessionMode;
+    activeProfile: AgentProfileName;
     permissionMode: PermissionMode;
     model: string;
   }): Promise<{ sessionId: string }>;
@@ -28,17 +28,17 @@ export interface SessionClient {
   getSessionHistory(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
 
   deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
-  getSessionMode(input: { sessionId: string; cwd: string }): Promise<{
-    mode: SessionMode;
+  getSessionProfile(input: { sessionId: string; cwd: string }): Promise<{
+    activeProfile: AgentProfileName;
     permissionMode: PermissionMode;
     cwd: string;
     available: Array<{ name: string; description: string }>;
   }>;
-  setSessionMode(input: {
+  setSessionProfile(input: {
     sessionId: string;
     cwd: string;
-    mode: SessionMode;
-  }): Promise<{ mode: SessionMode; permissionMode: PermissionMode }>;
+    activeProfile: AgentProfileName;
+  }): Promise<{ activeProfile: AgentProfileName; permissionMode: PermissionMode }>;
   getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
   setSessionPermissionMode(input: {
     sessionId: string;
@@ -96,13 +96,13 @@ export interface SessionClient {
 
 export function createDirectSessionClient(rt: AppRuntime): SessionClient {
   return {
-    async createSession({ cwd, mode, permissionMode, model }) {
+    async createSession({ cwd, activeProfile, permissionMode, model }) {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.createSessionWithProfile(cwd, {
+          const state = yield* session.create(cwd, {
             model,
-            mode,
+            activeProfile,
             permissionMode,
           });
           return { sessionId: state.sessionId };
@@ -143,13 +143,13 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       deleteSession(sessionId, cwd);
     },
 
-    async getSessionMode({ sessionId, cwd }) {
+    async getSessionProfile({ sessionId, cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
           const state = yield* session.load(cwd, sessionId);
           return {
-            mode: state.mode,
+            activeProfile: state.activeProfile,
             permissionMode: state.permissionMode,
             cwd,
             available: [
@@ -161,15 +161,13 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       );
     },
 
-    async setSessionMode({ sessionId, cwd, mode }) {
+    async setSessionProfile({ sessionId, cwd, activeProfile }) {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          yield* session.setModeOnDisk(cwd, sessionId, mode);
-          const profile = modeToProfile(mode);
-          yield* session.setActiveProfile(cwd, sessionId, profile.name);
+          yield* session.setActiveProfile(cwd, sessionId, activeProfile);
           const state = yield* session.load(cwd, sessionId);
-          return { mode: state.mode, permissionMode: state.permissionMode };
+          return { activeProfile: state.activeProfile, permissionMode: state.permissionMode };
         })
       );
     },

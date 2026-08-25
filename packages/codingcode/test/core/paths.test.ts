@@ -4,10 +4,7 @@ import { computePaths, projectSessionsDir, sessionJsonlPathFromCwd } from '../..
 
 describe('core/path.ts contains path computation functions', () => {
   it('does not import from session/types — no core→session dependency', () => {
-    const src = readFileSync(
-      'C:/Users/10116/Desktop/agent/coding code/packages/codingcode/src/core/path.ts',
-      'utf8'
-    );
+    const src = readFileSync(new URL('../../src/core/path.ts', import.meta.url), 'utf8');
     expect(src).not.toMatch(/from\s+['"]\.\.\/session\//);
   });
 
@@ -20,10 +17,7 @@ describe('core/path.ts contains path computation functions', () => {
 
 describe('session/file-ops.ts re-exports paths from core', () => {
   it('file-ops.ts no longer defines computePaths inline', () => {
-    const src = readFileSync(
-      'C:/Users/10116/Desktop/agent/coding code/packages/codingcode/src/session/file-ops.ts',
-      'utf8'
-    );
+    const src = readFileSync(new URL('../../src/session/file-ops.ts', import.meta.url), 'utf8');
     expect(src).not.toMatch(/export function computePaths\s*\(/);
     expect(src).not.toMatch(/export function projectSessionsDir\s*\(/);
     expect(src).toMatch(/from\s+['"]\.\.\/core\/path\.js['"]/);

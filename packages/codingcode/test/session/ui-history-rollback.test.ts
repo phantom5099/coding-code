@@ -20,7 +20,6 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
     {
       type: 'session_meta',
       sessionId,
-      projectPath: slug,
       cwd: '/tmp/test',
       createdAt: new Date().toISOString(),
     },
@@ -49,7 +48,6 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
 
   const idx: SessionIndex = {
     sessionId,
-    projectPath: slug,
     cwd: '/tmp/test',
     model: 'test-model',
     createdAt: new Date().toISOString(),
@@ -58,7 +56,7 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
     title: 'fixture',
     currentTurnId: 3,
     usage: undefined,
-    mode: 'build',
+    activeProfile: 'build',
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -75,10 +73,9 @@ describe('filterForContext', () => {
         {
           type: 'session_meta',
           sessionId,
-          projectPath: slug,
           cwd: '/tmp',
           createdAt: new Date().toISOString(),
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         },
         { type: 'user', turnId: 1, content: 'hello' },
@@ -123,10 +120,9 @@ describe('readUIHistory with visibility filtering', () => {
         {
           type: 'session_meta',
           sessionId,
-          projectPath: slug,
           cwd: '/tmp',
           createdAt: new Date().toISOString(),
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         },
         { type: 'user', turnId: 1, content: 'hello' },
@@ -143,7 +139,6 @@ describe('readUIHistory with visibility filtering', () => {
         join(dir, `${sessionId}.index.json`),
         JSON.stringify({
           sessionId,
-          projectPath: slug,
           cwd: '/tmp',
           model: 't',
           createdAt: new Date().toISOString(),
@@ -152,7 +147,7 @@ describe('readUIHistory with visibility filtering', () => {
           title: 'test',
           currentTurnId: 2,
           usage: undefined,
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         })
       );

@@ -8,10 +8,9 @@ describe('sessionEventsToTurns', () => {
       {
         type: 'session_meta',
         sessionId: 's1',
-        projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
-        mode: 'build',
+        activeProfile: 'build',
         permissionMode: 'default',
       },
       {
@@ -59,10 +58,9 @@ describe('sessionEventsToTurns', () => {
       {
         type: 'session_meta',
         sessionId: 's1',
-        projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
-        mode: 'build',
+        activeProfile: 'build',
         permissionMode: 'default',
       },
       {
@@ -108,10 +106,9 @@ describe('sessionEventsToTurns', () => {
       {
         type: 'session_meta',
         sessionId: 's1',
-        projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
-        mode: 'build',
+        activeProfile: 'build',
         permissionMode: 'default',
       },
       {

@@ -26,7 +26,7 @@ export interface AgentRuntimeClient {
   }): Promise<void>;
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
 
-  getCheckpoints(cwd: string): Promise<Array<{ turnId: number; title: string; files: string[] }>>;
+  getCheckpoints(cwd: string): Promise<Array<{ turnId: number; files: string[] }>>;
   getCheckpointDiff(
     cwd: string,
     turnId?: number
@@ -81,7 +81,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
     async *sendMessage(input, { sessionId, cwd }) {
       const opts: Parameters<typeof sendMessage>[4] = {};
       if (!sessionId) {
-        opts.mode = 'build';
+        opts.activeProfile = 'build';
         opts.permissionMode = 'default';
         opts.model = llm.modelInfo.model;
       }
@@ -201,7 +201,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
           const context = yield* ContextService;
           const state = yield* session.load(cwd, sessionId);
           return yield* Effect.promise(() =>
-            context.compactWithLLM(state.transcriptPath, llm.modelInfo.maxTokens, null)
+            context.compactWithLLM(session.getTranscriptPath(state), llm.modelInfo.maxTokens, null)
           );
         })
       );
@@ -229,12 +229,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
       return rt.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          return yield* checkpoint.revertCheckpointFiles(
-            cwd,
-            currentSessionId,
-            turnId,
-            files
-          );
+          return yield* checkpoint.revertCheckpointFiles(cwd, currentSessionId, turnId, files);
         })
       );
     },
@@ -243,11 +238,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
       return rt.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          return yield* checkpoint.previewRollbackDiff(
-            cwd,
-            currentSessionId,
-            throughTurnId
-          );
+          return yield* checkpoint.previewRollbackDiff(cwd, currentSessionId, throughTurnId);
         })
       );
     },
@@ -256,11 +247,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
       return rt.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          return yield* checkpoint.rollbackCodeToTurn(
-            cwd,
-            currentSessionId,
-            throughTurnId
-          );
+          return yield* checkpoint.rollbackCodeToTurn(cwd, currentSessionId, throughTurnId);
         })
       );
     },

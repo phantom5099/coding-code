@@ -43,7 +43,7 @@ function warnMissingSections(content: string): void {
 export const submitPlanTool: ToolDefinition = {
   name: 'submit_plan',
   description:
-    'Submit (or update) the implementation plan for the current session. The only write operation allowed in plan mode. The file is written immediately and the tool returns synchronously; the user is then shown a plan approval modal in the UI. The user’s next message will contain their decision (implement / revised content / cancel).',
+    'Submit (or update) the implementation plan for the current session. The only write operation allowed in the plan profile. The file is written immediately and the tool returns synchronously; the user is then shown a plan approval modal in the UI. The user’s next message will contain their decision (implement / revised content / cancel).',
   parameters: z.object({
     title: z
       .string()

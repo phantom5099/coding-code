@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isPlanProfile, PLAN_PROFILE_NAME, BUILD_PROFILE_NAME } from '../../src/agent/mode.js';
+import { isPlanProfile, PLAN_PROFILE_NAME, BUILD_PROFILE_NAME } from '../../src/agent/profile.js';
 
 describe('isPlanProfile', () => {
   it('returns true for a profile named "plan"', () => {

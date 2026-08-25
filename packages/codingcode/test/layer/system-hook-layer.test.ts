@@ -18,14 +18,13 @@ describe('SystemHookLayer', () => {
     expect(result).toBe('function');
   });
 
-  it('registers the remaining plan-mode system hooks', async () => {
+  it('registers the remaining plan-profile system hooks', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'codingcode-syshook-'));
     try {
       const paths = computePaths(cwd, 's');
       mkdirSync(paths.transcriptPath.replace(/\.jsonl$/, ''), { recursive: true });
       const idx = {
         sessionId: 's',
-        projectPath: paths.projectPath,
         cwd: paths.cwd,
         model: 'test',
         createdAt: new Date().toISOString(),
@@ -34,7 +33,7 @@ describe('SystemHookLayer', () => {
         title: 's',
         currentTurnId: 0,
         usage: undefined,
-        mode: 'plan',
+        activeProfile: 'plan',
         permissionMode: 'default',
       };
       writeFileSync(paths.indexPath, JSON.stringify(idx, null, 2), 'utf8');
@@ -42,7 +41,7 @@ describe('SystemHookLayer', () => {
       const program = Effect.gen(function* () {
         const hooks = yield* HookService;
 
-        // (1) planModeGateHook denies write tools in plan mode
+        // (1) planProfileGateHook denies write tools in plan profile
         const denied = yield* hooks.emitDecision('tool.approval.pre', {
           toolName: 'write_file',
           args: { path: '/x' },
@@ -51,9 +50,9 @@ describe('SystemHookLayer', () => {
         });
         expect(denied).not.toBeNull();
         expect(denied?.decision).toBe('deny');
-        expect(denied?.reason).toMatch(/plan mode/i);
+        expect(denied?.reason).toMatch(/plan profile/i);
 
-        // (2) planModeGateHook lets submit_plan through
+        // (2) planProfileGateHook lets submit_plan through
         const allowed = yield* hooks.emitDecision('tool.approval.pre', {
           toolName: 'submit_plan',
           args: { plan_content: '## plan' },

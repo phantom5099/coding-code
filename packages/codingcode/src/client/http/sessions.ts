@@ -6,13 +6,14 @@ import type {
   RollbackPreviewDiff,
   RollbackState,
 } from '../../checkpoint/types.js';
-import type { SessionEvent, SessionIndex, SessionMode } from '../../session/types.js';
+import type { SessionEvent, SessionIndex } from '../../session/types.js';
+import type { AgentProfileName } from '../../subagent/types.js';
 import type { createRequestHelpers } from './request.js';
 
 export interface SessionClient {
   createSession(input: {
     cwd: string;
-    mode: SessionMode;
+    activeProfile: AgentProfileName;
     permissionMode: PermissionMode;
     model: string;
   }): Promise<{ sessionId: string }>;
@@ -20,17 +21,17 @@ export interface SessionClient {
   listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
   getSessionHistory(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
   deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
-  getSessionMode(input: { sessionId: string; cwd: string }): Promise<{
-    mode: SessionMode;
+  getSessionProfile(input: { sessionId: string; cwd: string }): Promise<{
+    activeProfile: AgentProfileName;
     permissionMode: PermissionMode;
     cwd: string;
     available: Array<{ name: string; description: string }>;
   }>;
-  setSessionMode(input: {
+  setSessionProfile(input: {
     sessionId: string;
     cwd: string;
-    mode: SessionMode;
-  }): Promise<{ mode: SessionMode; permissionMode: PermissionMode }>;
+    activeProfile: AgentProfileName;
+  }): Promise<{ activeProfile: AgentProfileName; permissionMode: PermissionMode }>;
   getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
   setSessionPermissionMode(input: {
     sessionId: string;
@@ -92,8 +93,8 @@ export function createHttpSessionClient(
   const { apiGet, apiPost, apiPut, apiDelete } = request;
 
   return {
-    async createSession({ cwd, mode, permissionMode, model }) {
-      return apiPost('/api/sessions', { cwd, mode, permissionMode, model });
+    async createSession({ cwd, activeProfile, permissionMode, model }) {
+      return apiPost('/api/sessions', { cwd, activeProfile, permissionMode, model });
     },
 
     async resumeSession({ sessionId, cwd }) {
@@ -115,12 +116,12 @@ export function createHttpSessionClient(
       await apiDelete(`/api/sessions/${sessionId}?cwd=${encodeURIComponent(cwd)}`);
     },
 
-    async getSessionMode({ sessionId, cwd }) {
-      return apiGet(`/api/sessions/${sessionId}/mode?cwd=${encodeURIComponent(cwd)}`);
+    async getSessionProfile({ sessionId, cwd }) {
+      return apiGet(`/api/sessions/${sessionId}/profile?cwd=${encodeURIComponent(cwd)}`);
     },
 
-    async setSessionMode({ sessionId, cwd, mode }) {
-      return apiPost(`/api/sessions/${sessionId}/mode`, { cwd, mode });
+    async setSessionProfile({ sessionId, cwd, activeProfile }) {
+      return apiPost(`/api/sessions/${sessionId}/profile`, { cwd, activeProfile });
     },
 
     async getSessionPermissionMode({ sessionId, cwd }) {
@@ -135,9 +136,7 @@ export function createHttpSessionClient(
     },
 
     async getSessionPlan({ sessionId, cwd }) {
-      return apiGet(
-        `/api/sessions/${sessionId}/plan?cwd=${encodeURIComponent(cwd)}`
-      );
+      return apiGet(`/api/sessions/${sessionId}/plan?cwd=${encodeURIComponent(cwd)}`);
     },
 
     async getCheckpointDiff({ sessionId, cwd, turnId }) {

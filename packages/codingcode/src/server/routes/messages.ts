@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { sendMessage } from '../../agent/agent.js';
 import { WorkspaceService } from '../../core/workspace.js';
@@ -14,11 +14,10 @@ import { createSseHandler } from '../handler.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-export function createMessagesRouter(rt: ManagedRt): Hono {
-  const router = new Hono();
+export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
   const sseHandler = createSseHandler(rt);
 
-  router.post('/sessions/:id/messages', async (c) => {
+  router.post('/api/sessions/:id/messages', async (c) => {
     let sessionId = c.req.param('id');
     const { input, cwd } = await c.req.json<{ input: string; cwd: string }>();
     const normalizedCwd = await rt.runPromise(
@@ -62,11 +61,17 @@ export function createMessagesRouter(rt: ManagedRt): Hono {
       approvalOverride,
     };
     if (isNew) {
-      sendOptions.mode = 'build';
+      sendOptions.activeProfile = 'build';
       sendOptions.permissionMode = 'default';
       sendOptions.model = llm.modelInfo.model;
     }
-    const program = sendMessage(isNew ? undefined : sessionId, input, normalizedCwd, llm, sendOptions);
+    const program = sendMessage(
+      isNew ? undefined : sessionId,
+      input,
+      normalizedCwd,
+      llm,
+      sendOptions
+    );
 
     const result = await rt.runPromise(
       program.pipe(
@@ -97,6 +102,4 @@ export function createMessagesRouter(rt: ManagedRt): Hono {
       }
     )(c);
   });
-
-  return router;
 }

@@ -49,10 +49,11 @@ describe('assemblePayload integration', () => {
       {
         type: 'session_meta',
         sessionId,
-        projectPath: projectSlug,
         cwd: '/tmp/test',
 
         createdAt: new Date().toISOString(),
+        activeProfile: 'build',
+        permissionMode: 'default',
       },
       { type: 'user', turnId: 1, content: 'q1' },
       {
@@ -83,7 +84,6 @@ describe('assemblePayload integration', () => {
 
     const idx = {
       sessionId,
-      projectPath: projectSlug,
       cwd: '/tmp/test',
       model: 'test-model',
       createdAt: new Date().toISOString(),
@@ -93,6 +93,7 @@ describe('assemblePayload integration', () => {
       currentTurnId: 1,
       usage: undefined,
       permissionMode: 'default',
+      activeProfile: 'build',
     };
     writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
   });

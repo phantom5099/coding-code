@@ -4,8 +4,8 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
+import { computePaths } from '../../src/core/path.js';
 
-import { encodeProjectPath } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -24,17 +24,17 @@ function makeFixture(
     usage: { prompt: number; completion: number; total: number } | undefined;
   }>
 ) {
-  const dir = join(base.dir, slug, 'sessions');
-  mkdirSync(dir, { recursive: true });
-  const transcriptPath = join(dir, `${sessionId}.jsonl`);
-  const indexPath = join(dir, `${sessionId}.index.json`);
+  const cwd = `/${slug}`;
+  const paths = computePaths(cwd, sessionId);
+  mkdirSync(join(base.dir, slug, 'sessions'), { recursive: true });
+  const transcriptPath = paths.transcriptPath;
+  const indexPath = paths.indexPath;
 
   const lines: any[] = [
     {
       type: 'session_meta',
       sessionId,
-      projectPath: slug,
-      cwd: '/tmp/test',
+      cwd,
       createdAt: new Date().toISOString(),
     },
   ];
@@ -54,8 +54,7 @@ function makeFixture(
 
   const idx: SessionIndex = {
     sessionId,
-    projectPath: slug,
-    cwd: '/tmp/test',
+    cwd,
     model: 'test-model',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -63,40 +62,35 @@ function makeFixture(
     title: 'fixture',
     currentTurnId: turns.length,
     usage: turns[turns.length - 1]?.usage,
-    mode: 'build',
+    activeProfile: 'build',
     permissionMode: 'default',
   };
   writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
-  return { dir, transcriptPath, indexPath };
+  return { cwd, transcriptPath, indexPath };
 }
 
 function buildState(
   sessionId: string,
-  transcriptPath: string,
-  indexPath: string,
+  cwd: string,
   initialUsage: { prompt: number; completion: number; total: number } | undefined,
   currentTurnId: number
 ) {
   return {
     sessionId,
-    cwd: '/tmp/test',
-    projectPath: encodeProjectPath('/tmp/test'),
-    transcriptPath,
-    indexPath,
+    cwd,
     messageCount: 0,
     currentTurnId,
     sessionMeta: {
       type: 'session_meta' as const,
       sessionId,
-      projectPath: encodeProjectPath('/tmp/test'),
-      cwd: '/tmp/test',
+      cwd,
       createdAt: new Date().toISOString(),
-      mode: 'build' as const,
+      activeProfile: 'build' as const,
       permissionMode: 'default' as const,
     },
     model: 'test-model',
-    mode: 'build' as const,
+    activeProfile: 'build' as const,
     permissionMode: 'default' as const,
     title: 'fixture',
     usage: initialUsage,
@@ -111,7 +105,7 @@ describe('SessionService.appendSummary - state.usage reset (used by tryCompactio
     const usage1 = { prompt: 100, completion: 50, total: 150 };
     const fx = makeFixture(sessionId, slug, [{ user: 'q1', assistant: 'a1', usage: usage1 }]);
     try {
-      const state = buildState(sessionId, fx.transcriptPath, fx.indexPath, usage1, 1);
+      const state = buildState(sessionId, fx.cwd, usage1, 1);
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
@@ -131,7 +125,7 @@ describe('SessionService.appendSummary - state.usage reset (used by tryCompactio
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, [{ user: 'q1', assistant: 'a1', usage: undefined }]);
     try {
-      const state = buildState(sessionId, fx.transcriptPath, fx.indexPath, undefined, 1);
+      const state = buildState(sessionId, fx.cwd, undefined, 1);
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;

@@ -51,15 +51,13 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
     }
 
     return {
-      snapshotBaseline: (projectPath: string, sessionId: string, turnId: number, title?: string) =>
+      snapshotBaseline: (projectPath: string, sessionId: string, turnId: number) =>
         Effect.sync(() => {
           const sg = ensure(projectPath);
           repairIncompleteTurn(sg, sessionId);
           if (sg.isTooLargeForSnapshot()) return;
           const lock = lockFor(projectPath);
-          const msg = title
-            ? `${commitMsg(sessionId, turnId, 'baseline')} ${title}`
-            : commitMsg(sessionId, turnId, 'baseline');
+          const msg = commitMsg(sessionId, turnId, 'baseline');
           lock.lock();
           try {
             sg.commit(msg);
@@ -90,7 +88,6 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
           const completedTurns = getCompletedTurnsFor(sg, sessionId);
           const result: Array<{
             turnId: number;
-            title: string;
             files: string[];
           }> = [];
 
@@ -100,23 +97,12 @@ export class CheckpointService extends Effect.Service<CheckpointService>()('Chec
             const fCommit = sg.findCommitByMessage(`${prefix}${i}-final`);
             if (!fCommit) continue;
 
-            const msgResult = sg.git(
-              'log',
-              '--all',
-              '--grep',
-              `${prefix}${i}-baseline`,
-              '--format=%s',
-              '-1'
-            );
-            const fullMsg = msgResult.stdout.trim();
-            const title = fullMsg.includes(' ') ? fullMsg.split(' ').slice(1).join(' ') : '';
-
             const allChanges = sg.diffFiles(bCommit, fCommit);
             const files = [
               ...new Set(allChanges.map((c) => normalizePath(resolve(projectPath, c.file)))),
             ];
 
-            result.push({ turnId: i, title, files });
+            result.push({ turnId: i, files });
           }
           return result;
         }),

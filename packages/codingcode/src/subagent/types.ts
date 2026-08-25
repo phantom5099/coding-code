@@ -1,5 +1,7 @@
+export type AgentProfileName = 'plan' | 'build';
+
 export interface AgentProfile {
-  name: string;
+  name: AgentProfileName;
   systemPrompt?: string;
   maxSteps?: number;
 }

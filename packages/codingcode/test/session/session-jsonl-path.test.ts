@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
 
 import { deleteSession } from '../../src/session/file-ops.js';
-import { sessionJsonlPathFromCwd } from '../../src/core/path.js';
+import { sessionJsonlPathFromCwd, computePaths } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -22,7 +22,7 @@ describe('sessionJsonlPathFromCwd', () => {
         const svc = yield* SessionService;
         return yield* svc.create(cwd, {
           model: 'test-model',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
       })
@@ -30,10 +30,15 @@ describe('sessionJsonlPathFromCwd', () => {
 
     try {
       const result = sessionJsonlPathFromCwd(cwd, state.sessionId);
-      expect(result).toBe(state.transcriptPath);
+      expect(result).toBe(
+        computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
+      );
       expect(existsSync(result)).toBe(true);
     } finally {
-      rmSync(join(base.dir, state.projectPath), { recursive: true, force: true });
+      rmSync(
+        join(base.dir, computePaths(state.cwd, state.sessionId, state.parentSessionId).projectPath),
+        { recursive: true, force: true }
+      );
     }
   });
 
@@ -44,22 +49,33 @@ describe('sessionJsonlPathFromCwd', () => {
         const svc = yield* SessionService;
         return yield* svc.create(cwd, {
           model: 'test-model',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
       })
     );
 
     try {
-      expect(existsSync(state.transcriptPath)).toBe(true);
-      expect(existsSync(state.indexPath)).toBe(true);
+      expect(
+        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath)
+      ).toBe(true);
+      expect(
+        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath)
+      ).toBe(true);
 
       deleteSession(state.sessionId, cwd);
 
-      expect(existsSync(state.transcriptPath)).toBe(false);
-      expect(existsSync(state.indexPath)).toBe(false);
+      expect(
+        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath)
+      ).toBe(false);
+      expect(
+        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath)
+      ).toBe(false);
     } finally {
-      rmSync(join(base.dir, state.projectPath), { recursive: true, force: true });
+      rmSync(
+        join(base.dir, computePaths(state.cwd, state.sessionId, state.parentSessionId).projectPath),
+        { recursive: true, force: true }
+      );
     }
   });
 });

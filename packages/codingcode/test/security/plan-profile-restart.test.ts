@@ -5,13 +5,14 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
 import { SessionService } from '../../src/session/store.js';
+import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/registry.js';
 import { McpService } from '../../src/mcp/index.js';
 import { RulesService } from '../../src/rules/index.js';
 import { ApprovalService } from '../../src/approval/index.js';
 import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { planModeGateHook, isSessionInPlanMode } from '../../src/agent/mode.js';
-import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/agent/mode.js';
+import { planProfileGateHook, isSessionUsingPlanProfile } from '../../src/agent/profile.js';
+import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/agent/profile.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -73,14 +74,7 @@ function makeLayer() {
   const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
   const SessionTestLayer = SessionService.Default;
   const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        HookTestLayer,
-        McpTestLayer,
-        RulesTestLayer,
-        SessionTestLayer
-      )
-    )
+    Layer.provide(Layer.mergeAll(HookTestLayer, McpTestLayer, RulesTestLayer, SessionTestLayer))
   );
   const ApprovalTestLayer = ApprovalService.Default.pipe(
     Layer.provide(
@@ -100,7 +94,7 @@ function makeLayer() {
   return TestLayer;
 }
 
-describe('plan mode security boundary (cross-restart, disk only)', () => {
+describe('plan profile security boundary (cross-restart, disk only)', () => {
   let cwd: string;
   let sessionId: string;
   let indexPath: string;
@@ -109,17 +103,20 @@ describe('plan mode security boundary (cross-restart, disk only)', () => {
   beforeEach(async () => {
     cwd = mkdtempSync(join(tmpdir(), 'codingcode-security-test-'));
     decisionHandlers.length = 0;
-    decisionHandlers.push(planModeGateHook);
+    decisionHandlers.push(planProfileGateHook);
     rt = ManagedRuntime.make(makeLayer() as any);
     const result = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.create(cwd, {
           model: 'test-model',
-          mode: 'build',
+          activeProfile: 'build',
           permissionMode: 'default',
         });
-        return { sessionId: state.sessionId, indexPath: state.indexPath };
+        return {
+          sessionId: state.sessionId,
+          indexPath: computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
+        };
       })
     );
     sessionId = result.sessionId;
@@ -150,7 +147,7 @@ describe('plan mode security boundary (cross-restart, disk only)', () => {
     );
   }
 
-  it('scenario 1: switch to plan, write_file is denied by the plan-mode gate hook', async () => {
+  it('scenario 1: switch to plan, write_file is denied by the plan-profile gate hook', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -158,15 +155,15 @@ describe('plan mode security boundary (cross-restart, disk only)', () => {
         yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
       })
     );
-    expect(isSessionInPlanMode(sessionId, cwd)).toBe(true);
+    expect(isSessionUsingPlanProfile(sessionId, cwd)).toBe(true);
 
     const decision = await evaluateAsSession('write_file', { path: '/tmp/x', content: 'foo' });
     expect(decision.type).toBe('deny');
-    expect(decision.reason).toMatch(/plan mode/i);
+    expect(decision.reason).toMatch(/plan profile/i);
     expect(decision.source).toBe('hook');
   });
 
-  it('scenario 2: switch to plan, execute_command is denied by the plan-mode gate hook', async () => {
+  it('scenario 2: switch to plan, execute_command is denied by the plan-profile gate hook', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -177,7 +174,7 @@ describe('plan mode security boundary (cross-restart, disk only)', () => {
 
     const decision = await evaluateAsSession('execute_command', { command: 'echo hello' });
     expect(decision.type).toBe('deny');
-    expect(decision.reason).toMatch(/plan mode/i);
+    expect(decision.reason).toMatch(/plan profile/i);
     expect(decision.source).toBe('hook');
   });
 
@@ -195,7 +192,7 @@ describe('plan mode security boundary (cross-restart, disk only)', () => {
     expect(decision.source).toBe('system-plan-self-handles');
   });
 
-  it('scenario 4: after restart (state reloaded from disk), plan mode still enforced', async () => {
+  it('scenario 4: after restart (state reloaded from disk), plan profile still enforced', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -205,27 +202,29 @@ describe('plan mode security boundary (cross-restart, disk only)', () => {
     );
 
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.mode).toBe('plan');
+    expect(idx.activeProfile).toBe('plan');
+    expect(idx).not.toHaveProperty('mode');
 
     await rt.dispose();
     decisionHandlers.length = 0;
-    decisionHandlers.push(planModeGateHook);
+    decisionHandlers.push(planProfileGateHook);
     rt = ManagedRuntime.make(makeLayer() as any);
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        expect(state.mode).toBe('plan');
-        expect(isSessionInPlanMode(sessionId, cwd)).toBe(true);
+        expect(state.activeProfile).toBe('plan');
+        expect(state).not.toHaveProperty('mode');
+        expect(isSessionUsingPlanProfile(sessionId, cwd)).toBe(true);
       })
     );
 
     const decision = await evaluateAsSession('write_file', { path: '/tmp/x', content: 'foo' });
     expect(decision.type).toBe('deny');
-    expect(decision.reason).toMatch(/plan mode/i);
+    expect(decision.reason).toMatch(/plan profile/i);
   });
 
-  it('scenario 5: plan mode → switch to build → write_file is no longer denied by plan mode', async () => {
+  it('scenario 5: plan profile → switch to build → write_file is no longer denied by plan profile', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const runtime = yield* ProjectRuntimeService;
@@ -234,12 +233,12 @@ describe('plan mode security boundary (cross-restart, disk only)', () => {
         yield* runtime.setSessionProfile(cwd, sessionId, BUILD_PROFILE);
       })
     );
-    expect(isSessionInPlanMode(sessionId, cwd)).toBe(false);
+    expect(isSessionUsingPlanProfile(sessionId, cwd)).toBe(false);
 
     const decision: any = await evaluateAsSession('write_file', { path: '/tmp/x', content: 'foo' });
     if (decision.type === 'deny') {
       expect(decision.source).not.toBe('hook');
-      expect(decision.reason).not.toMatch(/plan mode/i);
+      expect(decision.reason).not.toMatch(/plan profile/i);
     }
   });
 });

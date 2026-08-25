@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { SkillService } from '../../skills/service.js';
 import { WorkspaceService, isGlobalCwd } from '../../core/workspace.js';
@@ -50,8 +50,7 @@ import { createRunWithLayer } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
-  const settingsRouter = new Hono();
+export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promise<void> {
   const runWithLayer = createRunWithLayer(rt);
   const ws = await rt.runPromise(
     Effect.gen(function* () {
@@ -125,7 +124,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
   }
 
   // ---- Memory ----
-  settingsRouter.get('/memory/config', (c) => {
+  router.get('/api/settings/memory/config', (c) => {
     const cfg = getMemoryConfig();
     return c.json({
       enabled: cfg.enabled,
@@ -134,7 +133,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     });
   });
 
-  settingsRouter.post('/memory/enabled', async (c) => {
+  router.post('/api/settings/memory/enabled', async (c) => {
     const body = (await c.req.json()) as { enabled: boolean };
     await rt.runPromise(
       Effect.gen(function* () {
@@ -151,13 +150,13 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     return c.json({ enabled });
   });
 
-  settingsRouter.post('/memory/type-disabled', async (c) => {
+  router.post('/api/settings/memory/type-disabled', async (c) => {
     const body = (await c.req.json()) as { name: string; disabled: boolean };
     setMemoryTypeDisabled(body.name, body.disabled);
     return c.json({ ok: true });
   });
 
-  settingsRouter.post('/memory/extra-type', async (c) => {
+  router.post('/api/settings/memory/extra-type', async (c) => {
     const body = (await c.req.json()) as { name: string; description: string };
     try {
       _addMemoryExtraType({ name: body.name, description: body.description, enabled: true });
@@ -168,7 +167,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     }
   });
 
-  settingsRouter.put('/memory/extra-type/:name', async (c) => {
+  router.put('/api/settings/memory/extra-type/:name', async (c) => {
     const name = c.req.param('name');
     const body = (await c.req.json()) as { name: string; description: string };
     try {
@@ -185,7 +184,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     }
   });
 
-  settingsRouter.delete('/memory/extra-type/:name', async (c) => {
+  router.delete('/api/settings/memory/extra-type/:name', async (c) => {
     const name = c.req.param('name');
     try {
       _deleteMemoryExtraType(name);
@@ -196,19 +195,19 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     }
   });
 
-  settingsRouter.post('/memory/model', async (c) => {
+  router.post('/api/settings/memory/model', async (c) => {
     const body = (await c.req.json()) as { model: string };
     updateMemoryModel(body.model);
     return c.json({ model: body.model });
   });
 
   // ---- Agent config ----
-  settingsRouter.get('/agent/config', (c) => {
+  router.get('/api/settings/agent/config', (c) => {
     const cfg = loadConfig();
     return c.json({ maxSteps: cfg.maxSteps, maxStopContinuations: cfg.maxStopContinuations });
   });
 
-  settingsRouter.post('/agent/config', async (c) => {
+  router.post('/api/settings/agent/config', async (c) => {
     const body = (await c.req.json()) as { maxSteps?: number; maxStopContinuations?: number };
     if (body.maxSteps !== undefined) updateMaxSteps(body.maxSteps);
     if (body.maxStopContinuations !== undefined)
@@ -218,14 +217,14 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
   });
 
   // ---- Context config ----
-  settingsRouter.post('/context/compaction-model', async (c) => {
+  router.post('/api/settings/context/compaction-model', async (c) => {
     const body = (await c.req.json()) as { compactionModel: string };
     updateContextCompactionModel(body.compactionModel);
     return c.json({ compactionModel: body.compactionModel });
   });
 
   // ---- Hooks ----
-  settingsRouter.get('/hooks', (c) => {
+  router.get('/api/settings/hooks', (c) => {
     const rawCwd = c.req.query('cwd');
     if (isGlobalCwd(rawCwd)) {
       return c.json(
@@ -256,7 +255,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     );
   });
 
-  settingsRouter.post('/hooks', async (c) => {
+  router.post('/api/settings/hooks', async (c) => {
     const rawCwd = c.req.query('cwd');
     const body = (await c.req.json()) as UserHookConfig;
     try {
@@ -277,7 +276,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     }
   });
 
-  settingsRouter.put('/hooks/:name', async (c) => {
+  router.put('/api/settings/hooks/:name', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
     const body = (await c.req.json()) as UserHookConfig;
@@ -302,7 +301,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     }
   });
 
-  settingsRouter.delete('/hooks/:name', async (c) => {
+  router.delete('/api/settings/hooks/:name', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
     if (isGlobalCwd(rawCwd)) {
@@ -314,7 +313,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     return c.json({ ok: true });
   });
 
-  settingsRouter.post('/hooks/:name/disabled', async (c) => {
+  router.post('/api/settings/hooks/:name/disabled', async (c) => {
     const name = c.req.param('name');
     const body = (await c.req.json()) as { disabled: boolean };
     const rawCwd = c.req.query('cwd');
@@ -341,7 +340,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     return c.json({ ok: true });
   });
 
-  settingsRouter.post('/hooks/:name/disabled/reset', async (c) => {
+  router.post('/api/settings/hooks/:name/disabled/reset', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
     resetProjectHookDisabledState(resolveWorkspaceCwd(rawCwd), name);
@@ -349,7 +348,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
   });
 
   // ---- MCP ----
-  settingsRouter.get('/mcp', async (c) => {
+  router.get('/api/settings/mcp', async (c) => {
     const rawCwd = c.req.query('cwd');
     if (isGlobalCwd(rawCwd)) {
       return c.json(
@@ -381,7 +380,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     );
   });
 
-  settingsRouter.post('/mcp', async (c) => {
+  router.post('/api/settings/mcp', async (c) => {
     const rawCwd = c.req.query('cwd');
     const body = (await c.req.json()) as McpServerConfig;
     try {
@@ -402,7 +401,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     }
   });
 
-  settingsRouter.put('/mcp/:name', async (c) => {
+  router.put('/api/settings/mcp/:name', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
     const body = (await c.req.json()) as McpServerConfig;
@@ -427,7 +426,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     }
   });
 
-  settingsRouter.delete('/mcp/:name', async (c) => {
+  router.delete('/api/settings/mcp/:name', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
     if (isGlobalCwd(rawCwd)) {
@@ -439,7 +438,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     return c.json({ ok: true });
   });
 
-  settingsRouter.post('/mcp/:name/disabled', async (c) => {
+  router.post('/api/settings/mcp/:name/disabled', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
     const body = (await c.req.json()) as { disabled: boolean };
@@ -451,7 +450,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
     return c.json({ ok: true });
   });
 
-  settingsRouter.post('/mcp/:name/disabled/reset', async (c) => {
+  router.post('/api/settings/mcp/:name/disabled/reset', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
     resetProjectMcpDisabledState(resolveWorkspaceCwd(rawCwd), name);
@@ -459,7 +458,7 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
   });
 
   // ---- Skills ----
-  settingsRouter.get('/skills', async (c) => {
+  router.get('/api/settings/skills', async (c) => {
     const rawCwd = c.req.query('cwd');
     if (isGlobalCwd(rawCwd)) {
       const cwd = resolveWorkspaceCwd(rawCwd);
@@ -502,6 +501,4 @@ export async function createSettingsRouter(rt: ManagedRt): Promise<Hono> {
       })
     );
   });
-
-  return settingsRouter;
 }

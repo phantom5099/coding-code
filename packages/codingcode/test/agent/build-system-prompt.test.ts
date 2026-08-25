@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BUILD_PROMPT, PLAN_PROMPT, buildSystemPrompt } from '../../src/agent/prompt.js';
-import { PLAN_PROFILE } from '../../src/agent/mode.js';
+import { PLAN_PROFILE } from '../../src/agent/profile.js';
 
 describe('buildSystemPrompt', () => {
   it('uses the build prompt when profileSystemPrompt is not provided', () => {

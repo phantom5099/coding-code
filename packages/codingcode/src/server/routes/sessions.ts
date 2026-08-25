@@ -1,8 +1,9 @@
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import type { SessionStoreState, SessionMode } from '../../session/types.js';
+import type { SessionStoreState } from '../../session/types.js';
+import type { AgentProfileName } from '../../subagent/types.js';
 import { SessionService } from '../../session/store.js';
 import { getPermissionMode, deleteSession } from '../../session/file-ops.js';
 import { computePaths } from '../../core/path.js';
@@ -14,14 +15,12 @@ import { LLMFactoryService } from '../../llm/factory.js';
 import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
 import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
-import { modeToProfile } from '../../runtime/project-runtime.js';
-import { BUILD_PROFILE, PLAN_PROFILE } from '../../agent/mode.js';
+import { BUILD_PROFILE, PLAN_PROFILE } from '../../agent/profile.js';
 import { isPermissionMode, type PermissionMode } from '../../approval/types.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-export function createSessionsRouter(rt: ManagedRt): Hono {
-  const router = new Hono();
+export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   const runWithLayer = async <A, E>(eff: Effect.Effect<A, E, any>) => {
     return rt.runPromise(
       eff.pipe(
@@ -36,7 +35,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     );
   };
 
-  router.get('/', async (c) => {
+  router.get('/api/sessions', async (c) => {
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
         const ws = yield* WorkspaceService;
@@ -56,15 +55,15 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.post('/', async (c) => {
+  router.post('/api/sessions', async (c) => {
     const body = (await c.req.json()) as {
       cwd: string;
-      mode: SessionMode;
+      activeProfile: AgentProfileName;
       permissionMode: PermissionMode;
       model: string;
     };
-    if (body.mode !== 'plan' && body.mode !== 'build') {
-      return c.json({ error: `Invalid mode: ${body.mode}` }, 400);
+    if (body.activeProfile !== 'plan' && body.activeProfile !== 'build') {
+      return c.json({ error: `Invalid activeProfile: ${body.activeProfile}` }, 400);
     }
     if (!isPermissionMode(body.permissionMode)) {
       return c.json({ error: `Invalid permissionMode: ${body.permissionMode}` }, 400);
@@ -81,9 +80,9 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const state = yield* session.createSessionWithProfile(normalizedCwd, {
+        const state = yield* session.create(normalizedCwd, {
           model: body.model,
-          mode: body.mode,
+          activeProfile: body.activeProfile,
           permissionMode: body.permissionMode,
         });
         return state;
@@ -96,7 +95,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json({ sessionId: (result.value as SessionStoreState).sessionId });
   });
 
-  router.post('/:id/resume', async (c) => {
+  router.post('/api/sessions/:id/resume', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string };
     const normalizedCwd = await rt.runPromise(
@@ -119,7 +118,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.post('/:id/compact', async (c) => {
+  router.post('/api/sessions/:id/compact', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string };
     const normalizedCwd = await rt.runPromise(
@@ -145,7 +144,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const maxTokens = llm?.modelInfo.maxTokens ?? 128000;
 
         return yield* Effect.promise(() =>
-          context.compactWithLLM(state.transcriptPath, maxTokens, llm)
+          context.compactWithLLM(session.getTranscriptPath(state), maxTokens, llm)
         );
       })
     );
@@ -156,7 +155,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.delete('/:id', async (c) => {
+  router.delete('/api/sessions/:id', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ error: 'cwd required' }, 400);
@@ -164,7 +163,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json({ ok: true });
   });
 
-  router.get('/:id/history', async (c) => {
+  router.get('/api/sessions/:id/history', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ error: 'cwd required' }, 400);
@@ -176,7 +175,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
   // submit_plan writes a <slug(title)>.md file per submission, so the
   // "current" plan is whichever .md has the most recent mtime in the
   // project's plan directory.
-  router.get('/:id/plan', async (c) => {
+  router.get('/api/sessions/:id/plan', async (c) => {
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
         const ws = yield* WorkspaceService;
@@ -222,8 +221,8 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     }
   });
 
-  // ---- Plan/Build mode switching ----
-  router.get('/:id/mode', async (c) => {
+  // ---- Agent profile switching ----
+  router.get('/api/sessions/:id/profile', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
@@ -236,7 +235,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
         return {
-          mode: state.mode,
+          activeProfile: state.activeProfile,
           permissionMode: state.permissionMode,
         };
       })
@@ -252,28 +251,26 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     });
   });
 
-  router.post('/:id/mode', async (c) => {
+  router.post('/api/sessions/:id/profile', async (c) => {
     const sessionId = c.req.param('id');
-    const body = (await c.req.json()) as { cwd?: string; mode: SessionMode };
+    const body = (await c.req.json()) as { cwd?: string; activeProfile: AgentProfileName };
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
         const ws = yield* WorkspaceService;
         return ws.resolveWorkspaceCwd(body.cwd);
       })
     );
-    const mode = body.mode ?? 'build';
-    if (mode !== 'plan' && mode !== 'build') {
-      return c.json({ error: `Invalid mode: ${mode}` }, 400);
+    const activeProfile = body.activeProfile;
+    if (activeProfile !== 'plan' && activeProfile !== 'build') {
+      return c.json({ error: `Invalid activeProfile: ${activeProfile}` }, 400);
     }
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setModeOnDisk(cwd, sessionId, mode);
-        const profile = modeToProfile(mode);
-        yield* session.setActiveProfile(cwd, sessionId, profile.name);
+        yield* session.setActiveProfile(cwd, sessionId, activeProfile);
         const state = yield* session.load(cwd, sessionId);
         return {
-          mode: state.mode,
+          activeProfile: state.activeProfile,
           permissionMode: state.permissionMode,
         };
       })
@@ -285,7 +282,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.get('/:id/permission-mode', async (c) => {
+  router.get('/api/sessions/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ mode: 'default' });
@@ -295,7 +292,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json({ mode });
   });
 
-  router.put('/:id/permission-mode', async (c) => {
+  router.put('/api/sessions/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
     const { cwd, mode } = await c.req.json<{ cwd: string; mode: PermissionMode }>();
     if (!cwd) return c.json({ error: 'cwd required' }, 400);
@@ -316,7 +313,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json({ ok: true });
   });
 
-  router.get('/:id/rollback-state', async (c) => {
+  router.get('/api/sessions/:id/rollback-state', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
@@ -346,7 +343,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.get('/:id/checkpoints/latest/diff', async (c) => {
+  router.get('/api/sessions/:id/checkpoints/latest/diff', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
@@ -367,7 +364,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.get('/:id/checkpoints/:turnId/diff', async (c) => {
+  router.get('/api/sessions/:id/checkpoints/:turnId/diff', async (c) => {
     const sessionId = c.req.param('id');
     const turnId = parseInt(c.req.param('turnId'), 10);
     const cwd = await rt.runPromise(
@@ -393,7 +390,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.post('/:id/checkpoints/latest/revert-file', async (c) => {
+  router.post('/api/sessions/:id/checkpoints/latest/revert-file', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; file: string };
     const cwd = await rt.runPromise(
@@ -425,7 +422,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json({ ok: true, result: result.value });
   });
 
-  router.post('/:id/checkpoints/latest/revert-files', async (c) => {
+  router.post('/api/sessions/:id/checkpoints/latest/revert-files', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; files: string[] };
     const cwd = await rt.runPromise(
@@ -457,7 +454,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json({ ok: true, result: result.value });
   });
 
-  router.get('/:id/rollback-preview', async (c) => {
+  router.get('/api/sessions/:id/rollback-preview', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
@@ -479,7 +476,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.post('/:id/rollback-code-to-turn', async (c) => {
+  router.post('/api/sessions/:id/rollback-code-to-turn', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
     const cwd = await rt.runPromise(
@@ -501,7 +498,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json({ ok: true, result: result.value });
   });
 
-  router.post('/:id/rollback-context', async (c) => {
+  router.post('/api/sessions/:id/rollback-context', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
     const cwd = await rt.runPromise(
@@ -517,7 +514,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
         const turns = readUIHistory(sessionId, cwd);
-        const promptEstimate = estimatePromptTokens(state.transcriptPath);
+        const promptEstimate = estimatePromptTokens(session.getTranscriptPath(state));
         const usage = state.usage;
         return { ok: true, turns, rolledBackMessage, promptEstimate, usage };
       }) as any
@@ -529,7 +526,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.post('/:id/rollback-both-to-turn', async (c) => {
+  router.post('/api/sessions/:id/rollback-both-to-turn', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
     const cwd = await rt.runPromise(
@@ -547,7 +544,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
         const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
         const turns = readUIHistory(sessionId, cwd);
-        const promptEstimate = estimatePromptTokens(state.transcriptPath);
+        const promptEstimate = estimatePromptTokens(session.getTranscriptPath(state));
         const usage = state.usage;
         return {
           ok: true,
@@ -566,7 +563,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json(result.value);
   });
 
-  router.post('/:id/undo-code-rollback', async (c) => {
+  router.post('/api/sessions/:id/undo-code-rollback', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; force?: boolean; files?: string[] };
     const cwd = await rt.runPromise(
@@ -591,7 +588,7 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     return c.json({ ok: true, result: result.value });
   });
 
-  router.post('/:id/fork', async (c) => {
+  router.post('/api/sessions/:id/fork', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; atTurnId?: number };
     const cwd = await rt.runPromise(
@@ -618,6 +615,4 @@ export function createSessionsRouter(rt: ManagedRt): Hono {
     }
     return c.json(result.value);
   });
-
-  return router;
 }

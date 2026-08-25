@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { Thread, Turn, Item, TodoItem } from '@shared/types';
-import type { SessionMode } from '@codingcode/core/session/types';
+import type { AgentProfileName } from '@codingcode/core/subagent/types';
 import type { PermissionMode } from '@codingcode/core/approval/types';
 import { buildToolDiff } from '../lib/diff-compute';
 import { createDebouncedStorage, normalizeCwd } from './storage';
@@ -41,8 +41,8 @@ export interface PendingPlan {
   title: string;
 }
 
-export interface StoredMode {
-  mode: SessionMode;
+export interface StoredProfile {
+  activeProfile: AgentProfileName;
   permissionMode: PermissionMode;
   fetchedAt: number;
   optimistic: boolean;
@@ -60,24 +60,24 @@ interface AgentState {
   pendingInput: string | null;
   pendingPlanByThreadId: Record<string, PendingPlan | null>;
   usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>;
-  modeByThreadId: Record<string, StoredMode>;
+  profileByThreadId: Record<string, StoredProfile>;
   isCompressing: boolean;
   automations: Automation[];
 }
 
 interface AgentActions {
   setCurrentThread: (id: string | null) => void;
-  setCurrentThreadWithMode: (
+  setCurrentThreadWithProfile: (
     id: string,
-    info: { mode: SessionMode; permissionMode: PermissionMode; optimistic?: boolean }
+    info: { activeProfile: AgentProfileName; permissionMode: PermissionMode; optimistic?: boolean }
   ) => void;
-  setModeForThread: (
+  setProfileForThread: (
     id: string,
-    info: { mode: SessionMode; permissionMode: PermissionMode; requestedAt?: number }
+    info: { activeProfile: AgentProfileName; permissionMode: PermissionMode; requestedAt?: number }
   ) => void;
-  setOptimisticModeForThread: (
+  setOptimisticProfileForThread: (
     id: string,
-    info: { mode: SessionMode; permissionMode: PermissionMode }
+    info: { activeProfile: AgentProfileName; permissionMode: PermissionMode }
   ) => void;
   removeThread: (id: string) => void;
   upsertThread: (thread: Thread) => void;
@@ -128,7 +128,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       pendingInput: null,
       pendingPlanByThreadId: {},
       usageByThreadId: {},
-      modeByThreadId: {},
+      profileByThreadId: {},
       isCompressing: false,
       automations: [],
 
@@ -148,11 +148,11 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           }
         }),
 
-      setCurrentThreadWithMode: (id, info) =>
+      setCurrentThreadWithProfile: (id, info) =>
         set((s) => {
           s.currentThreadId = id;
-          s.modeByThreadId[id] = {
-            mode: info.mode,
+          s.profileByThreadId[id] = {
+            activeProfile: info.activeProfile,
             permissionMode: info.permissionMode,
             fetchedAt: Date.now(),
             optimistic: info.optimistic ?? false,
@@ -170,26 +170,26 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           }
         }),
 
-      setModeForThread: (id, info) =>
+      setProfileForThread: (id, info) =>
         set((s) => {
-          const current = s.modeByThreadId[id];
+          const current = s.profileByThreadId[id];
           if (current && info.requestedAt !== undefined && current.fetchedAt > info.requestedAt) {
             return;
           }
-          s.modeByThreadId[id] = {
-            mode: info.mode,
+          s.profileByThreadId[id] = {
+            activeProfile: info.activeProfile,
             permissionMode: info.permissionMode,
             fetchedAt: Date.now(),
             optimistic: false,
           };
         }),
 
-      setOptimisticModeForThread: (id, info) =>
+      setOptimisticProfileForThread: (id, info) =>
         set((s) => {
-          const current = s.modeByThreadId[id];
+          const current = s.profileByThreadId[id];
           if (current && !current.optimistic) return;
-          s.modeByThreadId[id] = {
-            mode: info.mode,
+          s.profileByThreadId[id] = {
+            activeProfile: info.activeProfile,
             permissionMode: info.permissionMode,
             fetchedAt: 0,
             optimistic: true,
@@ -202,7 +202,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           delete s.usageByThreadId[id];
           delete s.todoByThreadId[id];
           delete s.pendingPlanByThreadId[id];
-          delete s.modeByThreadId[id];
+          delete s.profileByThreadId[id];
         }),
 
       upsertThread: (thread) =>
@@ -283,9 +283,9 @@ export const useAgentStore = create<AgentState & AgentActions>()(
               delete s.todoByThreadId[id];
             }
           }
-          for (const id of Object.keys(s.modeByThreadId)) {
+          for (const id of Object.keys(s.profileByThreadId)) {
             if (!incomingIds.has(id)) {
-              delete s.modeByThreadId[id];
+              delete s.profileByThreadId[id];
             }
           }
         });
@@ -538,7 +538,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           todoByThreadId: {},
           contextUsage: null,
           usageByThreadId: {},
-          modeByThreadId: {},
+          profileByThreadId: {},
         };
       },
     }

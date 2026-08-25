@@ -15,8 +15,8 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
 }
 
-describe('updateIndex deduplication after removing appendEvent', () => {
-  it('recordUser calls readCurrentIndex exactly once', async () => {
+describe('updateIndex writes from state without rereading the index', () => {
+  it('recordUser does not reread the index', async () => {
     const slug = randomUUID();
     const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
@@ -29,7 +29,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -43,7 +43,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
         })
       );
 
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();
       rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });
@@ -51,7 +51,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
     }
   });
 
-  it('recordAssistant calls readCurrentIndex exactly once', async () => {
+  it('recordAssistant does not reread the index', async () => {
     const slug = randomUUID();
     const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
@@ -64,7 +64,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -78,7 +78,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
         })
       );
 
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();
       rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });
@@ -86,7 +86,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
     }
   });
 
-  it('rollbackToTurn calls readCurrentIndex exactly once', async () => {
+  it('rollbackToTurn does not reread the index', async () => {
     const slug = randomUUID();
     const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
@@ -99,7 +99,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            mode: 'build',
+            activeProfile: 'build',
             permissionMode: 'default',
           });
         })
@@ -113,7 +113,7 @@ describe('updateIndex deduplication after removing appendEvent', () => {
         })
       );
 
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();
       rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });

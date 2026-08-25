@@ -6,7 +6,7 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { mkdirSync, writeFileSync, utimesSync } from 'fs';
 import { join } from 'path';
 import { Hono } from 'hono';
-import { createSessionsRouter } from '../../src/server/routes/sessions.js';
+import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
 import { SessionService } from '../../src/session/store.js';
 import { LLMFactoryService } from '../../src/llm/factory.js';
@@ -30,20 +30,22 @@ const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
 } as any);
 
 const MockSessionLayer = Layer.succeed(SessionService, {
+  getTranscriptPath: () => '/tmp/test.jsonl',
   create: () =>
     Effect.succeed({
       sessionId: 'test-sid',
       cwd: '/tmp/test',
-      projectPath: 'test-path',
       model: 'deepseek-chat',
+      activeProfile: 'build',
+      permissionMode: 'default',
     }),
   load: () =>
     Effect.succeed({
       sessionId: 'test-sid',
       cwd: '/tmp/test',
-      projectPath: 'test-path',
-      transcriptPath: '/tmp/test.jsonl',
       model: 'deepseek-chat',
+      activeProfile: 'build',
+      permissionMode: 'default',
     }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
@@ -64,6 +66,8 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
     Effect.succeed({
       id: 'deepseek-chat',
       model: 'deepseek-chat',
+      activeProfile: 'build',
+      permissionMode: 'default',
       provider: 'deepseek',
       driver: 'openai',
       api_key_env: 'DEEPSEEK_API_KEY',
@@ -74,6 +78,8 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
       modelInfo: {
         provider: 'deepseek',
         model: 'deepseek-chat',
+        activeProfile: 'build',
+        permissionMode: 'default',
         maxTokens: 64000,
         supportsToolCalling: true,
         supportsStreaming: true,
@@ -85,6 +91,8 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
     Effect.succeed({
       id: 'deepseek-chat',
       model: 'deepseek-chat',
+      activeProfile: 'build',
+      permissionMode: 'default',
       provider: 'deepseek',
       driver: 'openai',
       api_key_env: 'DEEPSEEK_API_KEY',
@@ -224,9 +232,8 @@ afterEach(() => {
 describe('GET /api/sessions/:id/plan', () => {
   it('returns exists:false with empty content when no .md file is present', async () => {
     const rt = ManagedRuntime.make(TestLayer);
-    const router = createSessionsRouter(rt);
     const app = new Hono();
-    app.route('/api/sessions', router);
+    registerSessionsRoutes(app, rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -252,9 +259,8 @@ describe('GET /api/sessions/:id/plan', () => {
     utimesSync(newPath, newerDate, newerDate);
 
     const rt = ManagedRuntime.make(TestLayer);
-    const router = createSessionsRouter(rt);
     const app = new Hono();
-    app.route('/api/sessions', router);
+    registerSessionsRoutes(app, rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -273,9 +279,8 @@ describe('GET /api/sessions/:id/plan', () => {
     writeFileSync(join(plansDir, 'notes.txt'), 'should be ignored', 'utf8');
 
     const rt = ManagedRuntime.make(TestLayer);
-    const router = createSessionsRouter(rt);
     const app = new Hono();
-    app.route('/api/sessions', router);
+    registerSessionsRoutes(app, rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
     const body = (await res.json()) as { content: string; exists: boolean };
     expect(body.exists).toBe(true);

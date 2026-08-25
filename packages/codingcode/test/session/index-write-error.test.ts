@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
+import { appendFileSync, mkdirSync } from 'fs';
+import { dirname } from 'path';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/store.js';
+import { computePaths } from '../../src/core/path.js';
 import { AgentError } from '../../src/core/error.js';
 import * as fs from 'fs';
 
@@ -13,15 +16,27 @@ vi.mock('fs', async (importOriginal) => ({
 
 describe('SessionService — index write error propagation', () => {
   it('recordUser propagates SESSION_IO_ERROR when writeFileSync throws', async () => {
+    const sessionId = 'idx-err-user';
+    const cwd = '/tmp';
+    const paths = computePaths(cwd, sessionId);
+    mkdirSync(dirname(paths.transcriptPath), { recursive: true });
+    appendFileSync(paths.transcriptPath, '', 'utf8');
     const state: any = {
-      sessionId: 'idx-err-user',
-      cwd: '/tmp',
-      projectPath: 'test',
-      transcriptPath: '/tmp/idx-err-user.jsonl',
-      indexPath: '/tmp/idx-err-user.index.json',
+      sessionId,
+      cwd,
       messageCount: 0,
       currentTurnId: 1,
-      sessionMeta: { model: 'test', createdAt: new Date().toISOString() },
+      sessionMeta: {
+        type: 'session_meta',
+        sessionId,
+        cwd,
+        createdAt: new Date().toISOString(),
+        activeProfile: 'build',
+        permissionMode: 'default',
+      },
+      model: 'test',
+      activeProfile: 'build',
+      permissionMode: 'default',
       title: 'idx-err',
       usage: undefined,
       memorySnapshot: '',
@@ -43,15 +58,27 @@ describe('SessionService — index write error propagation', () => {
   });
 
   it('recordAssistant propagates SESSION_IO_ERROR when writeFileSync throws', async () => {
+    const sessionId = 'idx-err-asst';
+    const cwd = '/tmp';
+    const paths = computePaths(cwd, sessionId);
+    mkdirSync(dirname(paths.transcriptPath), { recursive: true });
+    appendFileSync(paths.transcriptPath, '', 'utf8');
     const state: any = {
-      sessionId: 'idx-err-asst',
-      cwd: '/tmp',
-      projectPath: 'test',
-      transcriptPath: '/tmp/idx-err-asst.jsonl',
-      indexPath: '/tmp/idx-err-asst.index.json',
+      sessionId,
+      cwd,
       messageCount: 0,
       currentTurnId: 1,
-      sessionMeta: { model: 'test', createdAt: new Date().toISOString() },
+      sessionMeta: {
+        type: 'session_meta',
+        sessionId,
+        cwd,
+        createdAt: new Date().toISOString(),
+        activeProfile: 'build',
+        permissionMode: 'default',
+      },
+      model: 'test',
+      activeProfile: 'build',
+      permissionMode: 'default',
       title: 'idx-err',
       usage: undefined,
       memorySnapshot: '',

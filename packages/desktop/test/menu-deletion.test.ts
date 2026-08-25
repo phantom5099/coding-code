@@ -18,11 +18,11 @@ describe('menu.ts deletion - no dead IPC events', () => {
   });
 });
 
-describe('App.tsx - no menu:switchMode listener', () => {
-  it('App.tsx source should not contain menu:switchMode or menu:openFolder', () => {
+describe('App.tsx - no menu:switchProfile listener', () => {
+  it('App.tsx source should not contain menu:switchProfile or menu:openFolder', () => {
     const appPath = path.resolve(rootDir, 'src/App.tsx');
     const source = fs.readFileSync(appPath, 'utf-8');
-    expect(source).not.toContain('menu:switchMode');
+    expect(source).not.toContain('menu:switchProfile');
     expect(source).not.toContain('menu:openFolder');
   });
 });

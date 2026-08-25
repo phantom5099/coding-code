@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '../stores/workspace.store';
 import { useRollbackStore } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import type { StreamChunk } from '@codingcode/core/client/types';
-import type { SessionMode } from '@codingcode/core/session/types';
+import type { AgentProfileName } from '@codingcode/core/subagent/types';
 import type { PermissionMode } from '@codingcode/core/approval/types';
 import { ApiError } from '../lib/api';
 import {
@@ -23,8 +23,8 @@ import {
   undoLastCodeRollback,
   getRollbackState,
   forkSession,
-  getSessionMode,
-  setSessionMode,
+  getSessionProfile,
+  setSessionProfile,
   getSessionPlan,
 } from '../lib/core-api';
 import type {
@@ -108,7 +108,7 @@ export function useAgentCore() {
   const clearRunningTurns = useAgentStore((s) => s.clearRunningTurns);
   const applyTodoUpdate = useAgentStore((s) => s.applyTodoUpdate);
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
-  const setCurrentThreadWithMode = useAgentStore((s) => s.setCurrentThreadWithMode);
+  const setCurrentThreadWithProfile = useAgentStore((s) => s.setCurrentThreadWithProfile);
   const loadThreads = useAgentStore((s) => s.loadThreads);
   const setThreadTurns = useAgentStore((s) => s.setThreadTurns);
   const setModel = useAgentStore((s) => s.setModel);
@@ -299,7 +299,7 @@ export function useAgentCore() {
 
       let threadId = currentThreadId;
       if (!threadId) {
-        const mode: SessionMode = pendingProfile;
+        const activeProfile: AgentProfileName = pendingProfile;
         const permissionMode: PermissionMode =
           pendingProfile === 'plan'
             ? 'default'
@@ -309,12 +309,12 @@ export function useAgentCore() {
           throw new Error('No model selected. Please select a model first.');
         }
         const data = await createServerSession(effectiveCwd, {
-          mode,
+          activeProfile,
           permissionMode,
           model,
         });
         threadId = data.sessionId;
-        setCurrentThreadWithMode(threadId, { mode, permissionMode, optimistic: true });
+        setCurrentThreadWithProfile(threadId, { activeProfile, permissionMode, optimistic: true });
       }
 
       if (inflightControllers.has(threadId)) return;
@@ -376,7 +376,7 @@ export function useAgentCore() {
     },
     [
       startTurn,
-      setCurrentThreadWithMode,
+      setCurrentThreadWithProfile,
       streamChunkToItem,
       applyChunk,
       completeTurn,
@@ -652,10 +652,10 @@ export function useAgent() {
   return { ...core, ...approval, ...rollback };
 }
 
-// ---- useAgentMode: plan/build mode switching + plan file access ----
+// ---- useAgentProfile: plan/build profile switching + plan file access ----
 
-export type SessionModeSnapshot = {
-  mode: SessionMode;
+export type SessionProfileSnapshot = {
+  activeProfile: AgentProfileName;
   permissionMode: PermissionMode;
   cwd: string;
   available: Array<{ name: string; description: string }>;
@@ -669,27 +669,27 @@ export type PlanFileSnapshot = {
 };
 
 /**
- * Hook for interacting with the plan/build mode of a single session, plus
+ * Hook for interacting with the plan/build profile of a single session, plus
  * reading the persisted plan file. Each call returns a fresh API to the
  * server — caching is done in the caller via useEffect / useState.
  */
-export function useAgentMode() {
+export function useAgentProfile() {
   const workspace = useWorkspaceStore();
 
-  const fetchMode = useCallback(
-    async (sessionId: string, cwd?: string): Promise<SessionModeSnapshot> => {
-      return getSessionMode(sessionId, cwd ?? workspace.rootPath ?? '');
+  const fetchProfile = useCallback(
+    async (sessionId: string, cwd?: string): Promise<SessionProfileSnapshot> => {
+      return getSessionProfile(sessionId, cwd ?? workspace.rootPath ?? '');
     },
     [workspace.rootPath]
   );
 
-  const switchMode = useCallback(
+  const switchProfile = useCallback(
     async (
       sessionId: string,
-      mode: SessionMode,
+      activeProfile: AgentProfileName,
       cwd?: string
-    ): Promise<{ mode: SessionMode; permissionMode: PermissionMode }> => {
-      return setSessionMode(sessionId, cwd ?? workspace.rootPath ?? '', mode);
+    ): Promise<{ activeProfile: AgentProfileName; permissionMode: PermissionMode }> => {
+      return setSessionProfile(sessionId, cwd ?? workspace.rootPath ?? '', activeProfile);
     },
     [workspace.rootPath]
   );
@@ -701,5 +701,5 @@ export function useAgentMode() {
     [workspace.rootPath]
   );
 
-  return { fetchMode, switchMode, fetchPlan };
+  return { fetchProfile, switchProfile, fetchPlan };
 }

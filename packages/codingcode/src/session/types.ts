@@ -1,12 +1,11 @@
-export type SessionMode = 'plan' | 'build';
+import type { AgentProfileName } from '../subagent/types.js';
 
 export interface SessionMetaEvent {
   type: 'session_meta';
   sessionId: string;
-  projectPath: string;
   cwd: string;
   createdAt: string;
-  mode: SessionMode;
+  activeProfile: AgentProfileName;
   permissionMode: import('../approval/types.js').PermissionMode;
   parentSessionId?: string;
   agentName?: string;
@@ -72,7 +71,6 @@ export interface TokenUsage {
 
 export interface SessionIndex {
   sessionId: string;
-  projectPath: string;
   cwd: string;
   model: string;
   createdAt: string;
@@ -81,28 +79,23 @@ export interface SessionIndex {
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;
-  mode: SessionMode;
+  activeProfile: AgentProfileName;
   permissionMode: import('../approval/types.js').PermissionMode;
   memorySnapshot?: string;
-  activeProfile?: string;
   parentSessionId?: string;
 }
 
 export interface SessionStoreState {
   sessionId: string;
   cwd: string;
-  projectPath: string;
-  transcriptPath: string;
-  indexPath: string;
   messageCount: number;
   sessionMeta: SessionMetaEvent | null;
   model: string;
-  mode: SessionMode;
+  activeProfile: AgentProfileName;
   permissionMode: import('../approval/types.js').PermissionMode;
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;
   memorySnapshot: string;
-  activeProfile?: string;
   parentSessionId?: string;
 }

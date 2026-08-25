@@ -2,18 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { planModeGateHook, isSessionInPlanMode } from '../../src/agent/mode.js';
+import { planProfileGateHook, isSessionUsingPlanProfile } from '../../src/agent/profile.js';
 import { computePaths } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
 
-function makeSessionIndex(cwd: string, sessionId: string, mode: 'plan' | 'build') {
+function makeSessionIndex(cwd: string, sessionId: string, activeProfile: 'plan' | 'build') {
   const paths = computePaths(cwd, sessionId);
   mkdirSync(paths.transcriptPath.replace(/\.jsonl$/, ''), { recursive: true });
   const idx = {
     sessionId,
-    projectPath: paths.projectPath,
     cwd: paths.cwd,
     model: 'test',
     createdAt: new Date().toISOString(),
@@ -22,14 +21,14 @@ function makeSessionIndex(cwd: string, sessionId: string, mode: 'plan' | 'build'
     title: sessionId.slice(0, 8),
     currentTurnId: 0,
     usage: undefined,
-    mode,
+    activeProfile,
     permissionMode: 'default',
   };
   writeFileSync(paths.indexPath, JSON.stringify(idx, null, 2), 'utf8');
   return paths;
 }
 
-describe('planModeGateHook', () => {
+describe('planProfileGateHook', () => {
   let cwd: string;
   let sessionId: string;
 
@@ -44,62 +43,62 @@ describe('planModeGateHook', () => {
   });
 
   it('returns null when no sessionId is present', () => {
-    expect(planModeGateHook({ toolName: 'write_file' } as any)).toBeNull();
+    expect(planProfileGateHook({ toolName: 'write_file' } as any)).toBeNull();
   });
 
-  it('returns null when the session is not in plan mode', () => {
+  it('returns null when the session is not in plan profile', () => {
     makeSessionIndex(cwd, sessionId, 'build');
     expect(
-      planModeGateHook({ toolName: 'write_file', sessionId, projectPath: cwd } as any)
+      planProfileGateHook({ toolName: 'write_file', sessionId, projectPath: cwd } as any)
     ).toBeNull();
   });
 
   it('returns null when the tool is not provided', () => {
     makeSessionIndex(cwd, sessionId, 'plan');
-    expect(planModeGateHook({ sessionId, projectPath: cwd } as any)).toBeNull();
+    expect(planProfileGateHook({ sessionId, projectPath: cwd } as any)).toBeNull();
   });
 
-  it('allows submit_plan in plan mode', () => {
+  it('allows submit_plan in plan profile', () => {
     makeSessionIndex(cwd, sessionId, 'plan');
     expect(
-      planModeGateHook({ toolName: 'submit_plan', sessionId, projectPath: cwd } as any)
+      planProfileGateHook({ toolName: 'submit_plan', sessionId, projectPath: cwd } as any)
     ).toBeNull();
   });
 
-  it('denies dispatch_agent in plan mode', () => {
+  it('denies dispatch_agent in plan profile', () => {
     makeSessionIndex(cwd, sessionId, 'plan');
     expect(
-      planModeGateHook({ toolName: 'dispatch_agent', sessionId, projectPath: cwd } as any)
+      planProfileGateHook({ toolName: 'dispatch_agent', sessionId, projectPath: cwd } as any)
     ).toMatchObject({ decision: 'deny' });
   });
 
-  it('denies write_file in plan mode with the plan-mode reason', () => {
+  it('denies write_file in plan profile with the plan-profile reason', () => {
     makeSessionIndex(cwd, sessionId, 'plan');
-    const result = planModeGateHook({
+    const result = planProfileGateHook({
       toolName: 'write_file',
       sessionId,
       projectPath: cwd,
     } as any);
     expect(result).toEqual({
       decision: 'deny',
-      reason: 'Write operations denied in plan mode. Use submit_plan to submit a plan.',
+      reason: 'Write operations denied in plan profile. Use submit_plan to submit a plan.',
     });
   });
 
-  it('denies execute_command in plan mode', async () => {
+  it('denies execute_command in plan profile', async () => {
     makeSessionIndex(cwd, sessionId, 'plan');
-    const result = await planModeGateHook({
+    const result = await planProfileGateHook({
       toolName: 'execute_command',
       sessionId,
       projectPath: cwd,
     } as any);
     expect(result?.decision).toBe('deny');
-    expect(result?.reason).toMatch(/plan mode/i);
+    expect(result?.reason).toMatch(/plan profile/i);
   });
 
-  it('denies edit_file in plan mode', async () => {
+  it('denies edit_file in plan profile', async () => {
     makeSessionIndex(cwd, sessionId, 'plan');
-    const result = await planModeGateHook({
+    const result = await planProfileGateHook({
       toolName: 'edit_file',
       sessionId,
       projectPath: cwd,
@@ -108,7 +107,7 @@ describe('planModeGateHook', () => {
   });
 });
 
-describe('isSessionInPlanMode', () => {
+describe('isSessionUsingPlanProfile', () => {
   let cwd: string;
 
   beforeEach(() => {
@@ -122,15 +121,15 @@ describe('isSessionInPlanMode', () => {
 
   it('returns true when index has mode=plan', () => {
     makeSessionIndex(cwd, 's-plan', 'plan');
-    expect(isSessionInPlanMode('s-plan', cwd)).toBe(true);
+    expect(isSessionUsingPlanProfile('s-plan', cwd)).toBe(true);
   });
 
   it('returns false when index has mode=build', () => {
     makeSessionIndex(cwd, 's-build', 'build');
-    expect(isSessionInPlanMode('s-build', cwd)).toBe(false);
+    expect(isSessionUsingPlanProfile('s-build', cwd)).toBe(false);
   });
 
   it('returns false when index file does not exist', () => {
-    expect(isSessionInPlanMode('s-missing', cwd)).toBe(false);
+    expect(isSessionUsingPlanProfile('s-missing', cwd)).toBe(false);
   });
 });

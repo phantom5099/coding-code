@@ -58,9 +58,7 @@ export default function App() {
     <ErrorBoundary>
       <div className="h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)] overflow-hidden">
         <TitleBar />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {content}
-        </div>
+        <div className="flex flex-1 flex-col overflow-hidden">{content}</div>
       </div>
     </ErrorBoundary>
   );

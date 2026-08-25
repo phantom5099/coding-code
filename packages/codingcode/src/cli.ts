@@ -38,8 +38,8 @@ async function main() {
 
     if (tuiOnly) {
       const tuiPath = '../../tui/src/index.js';
-      const { runTui, createTuiClientFromFacades } = yield* Effect.tryPromise(() =>
-        import(tuiPath)
+      const { runTui, createTuiClientFromFacades } = yield* Effect.tryPromise(
+        () => import(tuiPath)
       );
       const llm = yield* llmFactory.getLLMClient();
       const client = createTuiClientFromFacades(llm, rt);
@@ -53,8 +53,8 @@ async function main() {
 
     if (!serveOnly) {
       const tuiPath = '../../tui/src/index.js';
-      const { runTui, createTuiClientFromFacades } = yield* Effect.tryPromise(() =>
-        import(tuiPath)
+      const { runTui, createTuiClientFromFacades } = yield* Effect.tryPromise(
+        () => import(tuiPath)
       );
       const llm = yield* llmFactory.getLLMClient();
       const client = createTuiClientFromFacades(llm, rt);

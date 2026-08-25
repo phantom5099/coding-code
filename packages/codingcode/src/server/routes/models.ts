@@ -1,13 +1,11 @@
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { LLMFactoryService } from '../../llm/factory.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-export function createModelsRouter(rt: ManagedRt): Hono {
-  const router = new Hono();
-
-  router.get('/', async (c) => {
+export function registerModelsRoutes(router: Hono, rt: ManagedRt): void {
+  router.get('/api/models', async (c) => {
     const result = await rt.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
@@ -22,7 +20,7 @@ export function createModelsRouter(rt: ManagedRt): Hono {
     return c.json(result);
   });
 
-  router.post('/switch', async (c) => {
+  router.post('/api/models/switch', async (c) => {
     const { modelId } = (await c.req.json()) as { modelId: string };
     const result = await rt.runPromise(
       Effect.gen(function* () {
@@ -35,6 +33,4 @@ export function createModelsRouter(rt: ManagedRt): Hono {
       error: result._tag === 'Left' ? result.left.message : undefined,
     });
   });
-
-  return router;
 }

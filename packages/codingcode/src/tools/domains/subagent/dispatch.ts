@@ -7,11 +7,10 @@ import { ApprovalService } from '../../../approval/index.js';
 import { HookService } from '../../../hooks/registry.js';
 import { McpService } from '../../../mcp/index.js';
 import { LLMFactoryService } from '../../../llm/factory.js';
-import { BUILD_PROFILE } from '../../../agent/mode.js';
+import { BUILD_PROFILE } from '../../../agent/profile.js';
 import { RulesService } from '../../../rules/index.js';
 import { ProjectRuntimeService } from '../../../runtime/project-runtime.js';
 import { SubagentRunnerService } from '../../../subagent/runner-service.js';
-import type { SessionMode } from '../../../session/types.js';
 import type { PermissionMode } from '../../../approval/types.js';
 
 export function createDispatchAgentTool(): Effect.Effect<
@@ -78,7 +77,6 @@ export function createDispatchAgentTool(): Effect.Effect<
 
           // Create subagent transcript nested under parent session
           const subagentProfile = runtime.resolveSubagentProfile(projectPath, agentName);
-          const childMode: SessionMode = 'build';
 
           // Read parent session's permissionMode for inheritance (priority: profile > parent > 'default')
           let parentPermissionMode: PermissionMode | undefined;
@@ -90,17 +88,16 @@ export function createDispatchAgentTool(): Effect.Effect<
           const childPermissionMode: PermissionMode = parentPermissionMode ?? 'default';
           const childModel: string = llm.modelInfo.model;
 
-          const childState = yield* session.createSessionWithProfile(
+          const childState = yield* session.create(
             projectPath,
             {
               model: childModel,
-              mode: childMode,
+              activeProfile: (subagentProfile ?? BUILD_PROFILE).name,
               permissionMode: childPermissionMode,
             },
             {
               parentSessionId: ctx?.sessionId,
               agentName: agentName,
-              activeProfile: (subagentProfile ?? BUILD_PROFILE).name,
             }
           );
           const childUuid = childState.sessionId;

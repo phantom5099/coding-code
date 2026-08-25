@@ -20,6 +20,7 @@ const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
 } as any);
 
 const MockSessionLayer = Layer.succeed(SessionService, {
+  getTranscriptPath: () => '/tmp/test.jsonl',
   create: () => Effect.succeed({ sessionId: 'test', cwd: '/tmp/test' }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>

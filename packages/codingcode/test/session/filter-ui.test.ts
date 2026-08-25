@@ -7,10 +7,9 @@ function makeBaseEvents(extra: SessionEvent[] = []): SessionEvent[] {
     {
       type: 'session_meta',
       sessionId: 's1',
-      projectPath: 'p',
       cwd: '/tmp',
       createdAt: new Date().toISOString(),
-      mode: 'build',
+      activeProfile: 'build',
       permissionMode: 'default',
     },
     { type: 'user', turnId: 1, content: 'hello' },
@@ -125,10 +124,9 @@ describe('sessionEventsToTurns with summary', () => {
       {
         type: 'session_meta',
         sessionId: 's1',
-        projectPath: 'p',
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
-        mode: 'build',
+        activeProfile: 'build',
         permissionMode: 'default',
       },
       { type: 'user', turnId: 1, content: 'hello' },

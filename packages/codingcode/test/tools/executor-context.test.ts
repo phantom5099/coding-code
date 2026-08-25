@@ -40,13 +40,17 @@ describe('ToolExecutorService context', () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const executor = yield* ToolExecutorService;
-        return yield* executor.execute('capture_context', {}, {
-          signal,
-          sessionId: 'session-1',
-          turnId: 2,
-          projectPath: '/project',
-          toolLookup: (name) => (name === tool.name ? tool : undefined),
-        });
+        return yield* executor.execute(
+          'capture_context',
+          {},
+          {
+            signal,
+            sessionId: 'session-1',
+            turnId: 2,
+            projectPath: '/project',
+            toolLookup: (name) => (name === tool.name ? tool : undefined),
+          }
+        );
       }).pipe(Effect.provide(executorLayer) as any)
     );
 

@@ -6,23 +6,23 @@ function sourceContent(relativePath: string): string {
   return readFileSync(resolve(__dirname, '..', 'src', relativePath), 'utf-8');
 }
 
-describe('Desktop: hide permission switcher in plan mode', () => {
+describe('Desktop: hide permission switcher in plan profile', () => {
   const agentWorkspaceSource = sourceContent('agent/AgentWorkspace.tsx');
 
-  it('derives isPlanMode from the agent store', () => {
-    expect(agentWorkspaceSource).toMatch(/isPlanMode/);
+  it('derives isPlanProfile from the agent store', () => {
+    expect(agentWorkspaceSource).toMatch(/isPlanProfile/);
     expect(agentWorkspaceSource).toMatch(
-      /modeByThreadId\[s\.currentThreadId\]\?\.mode\s*===\s*['"]plan['"]/
+      /profileByThreadId\[s\.currentThreadId\]\?\.activeProfile\s*===\s*['"]plan['"]/
     );
   });
 
-  it('does not fetch session mode on session switch (no useAgentMode in AgentWorkspace)', () => {
-    expect(agentWorkspaceSource).not.toMatch(/useAgentMode\(\)/);
-    expect(agentWorkspaceSource).not.toMatch(/fetchSessionMode/);
+  it('does not fetch session profile on session switch (no useAgentProfile in AgentWorkspace)', () => {
+    expect(agentWorkspaceSource).not.toMatch(/useAgentProfile\(\)/);
+    expect(agentWorkspaceSource).not.toMatch(/fetchSessionProfile/);
   });
 
-  it('gates the permission switcher button behind !isPlanMode', () => {
-    const blockMatches = [/\{!isPlanMode\s*&&/];
+  it('gates the permission switcher button behind !isPlanProfile', () => {
+    const blockMatches = [/\{!isPlanProfile\s*&&/];
     const hasGate = blockMatches.some((re) => re.test(agentWorkspaceSource));
     expect(hasGate).toBe(true);
   });
