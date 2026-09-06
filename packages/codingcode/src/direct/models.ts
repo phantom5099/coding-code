@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
-import { LLMFactoryService } from '../llm/factory.js';
-import type { SelectableModel } from '../llm/factory.js';
+import { LLMFactoryService } from '../llm/port.js';
+import type { SelectableModel } from '../llm/port.js';
 import type { AppRuntime } from '../layer.js';
 
 export interface ModelClient {

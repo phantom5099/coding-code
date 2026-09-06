@@ -1,115 +1,166 @@
 import { Context, Layer, Effect, ManagedRuntime } from 'effect';
-import { AgentService } from './agent/agent.js';
-import { SessionService } from './session/store.js';
-import { HookService } from './hooks/registry.js';
-import { McpService } from './mcp/index.js';
-import { SkillService } from './skills/service.js';
-import { ApprovalService } from './approval/index.js';
-import { ApprovalWaitService } from './approval/async-confirm.js';
-import { ToolExecutorService } from './tools/executor.js';
-import { CheckpointService } from './checkpoint/checkpoint-service.js';
-import { ProjectRuntimeService } from './runtime/project-runtime.js';
-import { LLMFactoryService } from './llm/factory.js';
+import { HookLayer } from './hooks/hooks.js';
+import { RulesLayer } from './rules/rules.js';
+import { SkillLayer } from './skills/skills.js';
+import { LlmLayer } from './llm/llm.js';
+import { McpLayer } from './mcp/mcp.js';
+import { CheckpointLayer } from './checkpoint/checkpoint.js';
+import { ApprovalLayer } from './approval/approval.js';
+import { ApprovalWaitLayer } from './approval/wait.js';
+import { TodoLayer } from './todo/todo.js';
+import { SessionLayer } from './session/session.js';
+import { ToolExecutorLayer } from './tools/tools.js';
+import { ContextLayer } from './context/context.js';
+import { MemoryLayer } from './memory/memory.js';
+import { AgentLayer } from './agent/agent.js';
+import { SubagentRunnerLayer } from './subagent/subagent.js';
+import { SchedulerLayer } from './scheduler/scheduler.js';
 import { WorkspaceService } from './core/workspace.js';
-import { TodoService } from './agent/todo.js';
-import { SubagentRunnerService } from './subagent/runner-service.js';
-import { RulesService } from './rules/index.js';
-import { MemoryService } from './memory/index.js';
-import { ContextService } from './context/service.js';
-import { SchedulerService } from './scheduler/service.js';
 import { planProfileGateHook } from './agent/profile.js';
 
-export const WorkspaceLayer = WorkspaceService.Default;
-export const TodoLayer = TodoService.Default;
-export const RulesLayer = RulesService.Default;
-export const SessionLayer = SessionService.Default;
-export const LLMFactoryLayer = LLMFactoryService.Default.pipe(Layer.provide(WorkspaceLayer));
-export const MemoryLayer = MemoryService.Default.pipe(Layer.provide(LLMFactoryLayer));
-export const ContextLayer = ContextService.Default.pipe(
-  Layer.provide(Layer.mergeAll(SessionLayer, LLMFactoryLayer))
-);
-export const HookLayer = HookService.Default;
-export const SkillLayer = SkillService.Default;
-export const CheckpointLayer = CheckpointService.Default;
-export const ApprovalWaitLayer = ApprovalWaitService.Default;
-export const McpLayer = McpService.Default;
-export const SchedulerLayer = SchedulerService.Default;
-export const ProjectRuntimeLayer = ProjectRuntimeService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, McpLayer, RulesLayer, SessionLayer))
-);
-export const ApprovalLayer = ApprovalService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
+import { HookService } from './hooks/port.js';
+import { RulesService } from './rules/port.js';
+import { SkillService } from './skills/port.js';
+import { LLMFactoryService } from './llm/port.js';
+import { McpService } from './mcp/port.js';
+import { CheckpointService } from './checkpoint/port.js';
+import { ApprovalService } from './approval/port.js';
+import { ApprovalWaitService } from './approval/wait-port.js';
+import { TodoService } from './todo/port.js';
+import { SessionService } from './session/port.js';
+import { ToolExecutorService } from './tools/port.js';
+import { ContextService } from './context/port.js';
+import { MemoryService } from './memory/port.js';
+
+import {
+  SessionPort, ToolExecutorPort, CheckpointPort, HookPort,
+  ApprovalPort, SkillPort, McpPort, ContextPort, MemoryPort,
+  LlmPort, RulesPort, TodoPort,
+} from './agent/deps.js';
+
+// adapter layers: map full services to agent's narrow ports
+const AgentSessionAdapter = Layer.effect(SessionPort, Effect.gen(function* () {
+  const s = yield* SessionService;
+  return {
+    load: s.load.bind(s), create: s.create.bind(s),
+    recordUser: s.recordUser.bind(s), recordAssistant: s.recordAssistant.bind(s),
+    recordToolResult: s.recordToolResult.bind(s), incrementTurn: s.incrementTurn.bind(s),
+    getTranscriptPath: s.getTranscriptPath.bind(s),
+    getActiveProfile: s.getActiveProfile.bind(s),
+    setPermissionMode: s.setPermissionMode.bind(s),
+    setActiveProfile: s.setActiveProfile.bind(s),
+  };
+}));
+
+const AgentToolExecutorAdapter = Layer.effect(ToolExecutorPort, Effect.gen(function* () {
+  const e = yield* ToolExecutorService;
+  return { executeBatch: e.executeBatch.bind(e) };
+}));
+
+const AgentCheckpointAdapter = Layer.effect(CheckpointPort, Effect.gen(function* () {
+  const c = yield* CheckpointService;
+  return { snapshotBaseline: c.snapshotBaseline.bind(c), snapshotFinal: c.snapshotFinal.bind(c) };
+}));
+
+const AgentHookAdapter = Layer.effect(HookPort, Effect.gen(function* () {
+  const h = yield* HookService;
+  return { emit: h.emit.bind(h), emitDecision: h.emitDecision.bind(h), disposeSession: h.disposeSession.bind(h) };
+}));
+
+const AgentApprovalAdapter = Layer.effect(ApprovalPort, Effect.gen(function* () {
+  const a = yield* ApprovalService;
+  return { evaluate: a.evaluate.bind(a), fork: a.fork.bind(a) };
+}));
+
+const AgentSkillAdapter = Layer.effect(SkillPort, Effect.gen(function* () {
+  const s = yield* SkillService;
+  return { extractSkill: s.extractSkill.bind(s), evictProject: s.evictProject.bind(s) };
+}));
+
+const AgentMcpAdapter = Layer.effect(McpPort, Effect.gen(function* () {
+  const m = yield* McpService;
+  return { listProjectMcpTools: m.listProjectMcpTools.bind(m), syncConnections: m.syncConnections.bind(m) };
+}));
+
+const AgentContextAdapter = Layer.effect(ContextPort, Effect.gen(function* () {
+  const c = yield* ContextService;
+  return {
+    assemblePayload: c.assemblePayload.bind(c),
+  };
+}));
+
+const AgentMemoryAdapter = Layer.effect(MemoryPort, Effect.gen(function* () {
+  const m = yield* MemoryService;
+  return { loadMemoryForPrompt: m.loadMemoryForPrompt.bind(m), flushSessionToMemory: m.flushSessionToMemory.bind(m) };
+}));
+
+const AgentLlmAdapter = Layer.effect(LlmPort, Effect.gen(function* () {
+  const f = yield* LLMFactoryService;
+  return { getLLMClient: f.getLLMClient.bind(f) };
+}));
+
+const AgentRulesAdapter = Layer.effect(RulesPort, Effect.gen(function* () {
+  const r = yield* RulesService;
+  return { getAllRules: r.getAllRules.bind(r), evictProjectRules: r.evictProjectRules.bind(r) };
+}));
+
+const AgentTodoAdapter = Layer.effect(TodoPort, Effect.gen(function* () {
+  const t = yield* TodoService;
+  return { read: t.read.bind(t) };
+}));
+
+const AgentDepsAdapter = Layer.mergeAll(
+  AgentSessionAdapter, AgentToolExecutorAdapter, AgentCheckpointAdapter,
+  AgentHookAdapter, AgentApprovalAdapter, AgentSkillAdapter, AgentMcpAdapter,
+  AgentContextAdapter, AgentMemoryAdapter, AgentLlmAdapter, AgentRulesAdapter,
+  AgentTodoAdapter,
 );
 
-export const SystemHookLayer = HookLayer.pipe(
+// base layers
+const InfraLayer = Layer.mergeAll(
+  WorkspaceService.Default, HookLayer, RulesLayer, SkillLayer, McpLayer, ApprovalWaitLayer, TodoLayer,
+);
+
+const LlmWithDeps = LlmLayer.pipe(Layer.provide(WorkspaceService.Default));
+const ApprovalWithDeps = ApprovalLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer)));
+const ToolExecutorWithDeps = ToolExecutorLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalLayer)));
+const ContextWithDeps = ContextLayer.pipe(Layer.provide(Layer.mergeAll(SessionLayer, LlmWithDeps)));
+const MemoryWithDeps = MemoryLayer.pipe(Layer.provide(LlmWithDeps));
+
+// system hook registration
+const SystemHookLayer = HookLayer.pipe(
   Layer.tap((context) =>
     Effect.gen(function* () {
       const hooks = Context.get(context, HookService);
       yield* hooks.registerDecision('tool.approval.pre', planProfileGateHook, {
-        priority: -1000,
-        source: 'system',
+        priority: -1000, source: 'system',
       });
     })
   )
 );
 
-/** ToolExecutor depends on HookLayer + ApprovalLayer. */
-const ExecutorDeps = Layer.mergeAll(HookLayer, ApprovalLayer);
-const ExecutorLayer = ToolExecutorService.Default.pipe(Layer.provide(ExecutorDeps));
-
-/** Agent depends on ToolExecutor + HookLayer + ApprovalLayer + ApprovalWaitLayer + Session + Checkpoint + ProjectRuntime + Skill + LLMFactory + Todo + Rules + Context + Memory. */
-const AgentDeps = Layer.mergeAll(
-  ExecutorLayer,
-  ApprovalLayer,
-  ApprovalWaitLayer,
-  SessionLayer,
-  CheckpointLayer,
-  McpLayer,
-  SkillLayer,
-  LLMFactoryLayer,
-  HookLayer,
-  ProjectRuntimeLayer,
-  TodoLayer,
-  RulesLayer,
-  ContextLayer,
-  MemoryLayer
+// agent with deps
+const AgentWithDeps = AgentLayer.pipe(
+  Layer.provide(Layer.mergeAll(AgentDepsAdapter, InfraLayer, SessionLayer, ToolExecutorWithDeps, ApprovalWithDeps, ContextWithDeps, MemoryWithDeps, CheckpointLayer))
 );
-const AgentWithDeps = AgentService.Default.pipe(Layer.provide(AgentDeps));
 
-/** SubagentRunnerService delegates to AgentService.runStream. */
-const SubagentRunnerLayer = Layer.effect(
-  SubagentRunnerService,
-  Effect.gen(function* () {
-    const agent = yield* AgentService;
-    return SubagentRunnerService.make({ runStream: agent.runStream });
-  })
-).pipe(Layer.provide(AgentWithDeps));
+// subagent runner (depends on agent)
+const SubagentWithDeps = SubagentRunnerLayer.pipe(Layer.provide(AgentWithDeps));
 
-/** Final application layer — all services merged. */
 export const AppLayer = Layer.mergeAll(
-  AgentWithDeps,
-  SubagentRunnerLayer,
-  ExecutorLayer,
+  InfraLayer,
+  LlmWithDeps,
+  ApprovalWithDeps,
   SessionLayer,
-  HookLayer,
-  McpLayer,
-  SkillLayer,
-  ApprovalLayer,
-  ApprovalWaitLayer,
+  ToolExecutorWithDeps,
+  ContextWithDeps,
+  MemoryWithDeps,
   CheckpointLayer,
-  ProjectRuntimeLayer,
-  LLMFactoryLayer,
-  WorkspaceLayer,
-  TodoLayer,
-  RulesLayer,
-  MemoryLayer,
-  ContextLayer,
+  AgentWithDeps,
+  SubagentWithDeps,
   SchedulerLayer,
-  SystemHookLayer
+  SystemHookLayer,
 );
 
-/** Create the application ManagedRuntime from AppLayer. */
 export const createAppRuntime = () => ManagedRuntime.make(AppLayer as any);
-
-/** Concrete runtime type for the application. */
 export type AppRuntime = ManagedRuntime.ManagedRuntime<any, any>;

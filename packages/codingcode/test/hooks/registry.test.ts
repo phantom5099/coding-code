@@ -3,8 +3,9 @@ import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
-import { HookService } from '../../src/hooks/registry.js';
-const AppLayer = HookService.Default;
+import { HookService } from '../../src/hooks/port.js';
+import { HookLayer } from '../../src/hooks/hooks.js';
+const AppLayer = HookLayer;
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));

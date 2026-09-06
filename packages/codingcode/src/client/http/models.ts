@@ -1,4 +1,4 @@
-import type { SelectableModel } from '../../llm/factory.js';
+import type { SelectableModel } from '../../llm/port.js';
 import type { createRequestHelpers } from './request.js';
 
 export interface ModelClient {

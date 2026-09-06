@@ -7,14 +7,9 @@ export interface SettingsClient {
   getMemoryEnabled(): Promise<boolean>;
   getMemoryConfig(): Promise<{
     enabled: boolean;
-    types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
     model: string;
   }>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
-  setMemoryTypeDisabled(name: string, disabled: boolean): Promise<void>;
-  addMemoryExtraType(type: { name: string; description: string }): Promise<void>;
-  updateMemoryExtraType(name: string, type: { name: string; description: string }): Promise<void>;
-  deleteMemoryExtraType(name: string): Promise<void>;
   setMemoryModel(model: string): Promise<{ model: string }>;
   getAgentConfig(): Promise<{ maxSteps: number; maxStopContinuations: number }>;
   setCompactionModel(compactionModel: string): Promise<{ compactionModel: string }>;
@@ -72,22 +67,6 @@ export function createHttpSettingsClient(
 
     async setMemoryEnabled(enabled) {
       await apiPost('/api/settings/memory/enabled', { enabled });
-    },
-
-    async setMemoryTypeDisabled(name, disabled) {
-      await apiPost('/api/settings/memory/type-disabled', { name, disabled });
-    },
-
-    async addMemoryExtraType(type) {
-      await apiPost('/api/settings/memory/extra-type', type);
-    },
-
-    async updateMemoryExtraType(name, type) {
-      await apiPut(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`, type);
-    },
-
-    async deleteMemoryExtraType(name) {
-      await apiDelete(`/api/settings/memory/extra-type/${encodeURIComponent(name)}`);
     },
 
     async getMcpStatus({ cwd }) {

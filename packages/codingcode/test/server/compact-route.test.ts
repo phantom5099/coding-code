@@ -2,17 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
-import { SessionService } from '../../src/session/store.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
-import { ApprovalService } from '../../src/approval/index.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { SkillService } from '../../src/skills/service.js';
-import { McpService } from '../../src/mcp/index.js';
-import { MemoryService } from '../../src/memory/index.js';
-import { SchedulerService } from '../../src/scheduler/service.js';
-import { ContextService } from '../../src/context/service.js';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { SessionService } from '../../src/session/index.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
+import { ApprovalService } from '../../src/approval/port.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { HookService } from '../../src/hooks/port.js';
+import { SkillService } from '../../src/skills/port.js';
+import { McpService } from '../../src/mcp/port.js';
+import { MemoryService } from '../../src/memory/port.js';
+import { SchedulerService } from '../../src/scheduler/port.js';
+import { ContextService } from '../../src/context/port.js';
+import { CheckpointService } from '../../src/checkpoint/port.js';
+import { HookLayer } from '../../src/hooks/hooks.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
+import { ApprovalLayer } from '../../src/approval/approval.js';
 
 const mockCompactWithLLM = vi.fn();
 
@@ -98,8 +101,8 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
   switchModel: () => Effect.fail(new Error('no models')),
 } as any);
 
-const MockApprovalLayer = ApprovalService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookService.Default, ApprovalWaitService.Default))
+const MockApprovalLayer = ApprovalLayer.pipe(
+  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
 );
 
 const MockSkillLayer = Layer.succeed(SkillService, {
@@ -188,8 +191,8 @@ const TestLayer = Layer.mergeAll(
   MockSessionLayer,
   MockLLMFactoryLayer,
   MockApprovalLayer,
-  HookService.Default,
-  ApprovalWaitService.Default,
+  HookLayer,
+  ApprovalWaitLayer,
   MockSkillLayer,
   MockMcpLayer,
   MockMemoryLayer,
@@ -198,7 +201,7 @@ const TestLayer = Layer.mergeAll(
   MockCheckpointLayer
 );
 
-const rt = ManagedRuntime.make(TestLayer);
+const rt = ManagedRuntime.make(TestLayer as any);
 
 describe('POST /api/sessions/:id/compact (manual compact)', () => {
   beforeEach(() => {
@@ -265,8 +268,8 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
       MockSessionLayer,
       FailingFactoryLayer,
       MockApprovalLayer,
-      HookService.Default,
-      ApprovalWaitService.Default,
+      HookLayer,
+      ApprovalWaitLayer,
       MockSkillLayer,
       MockMcpLayer,
       MockMemoryLayer,
@@ -274,7 +277,7 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
       MockContextLayer,
       MockCheckpointLayer
     );
-    const failRt = ManagedRuntime.make(FailLayer);
+    const failRt = ManagedRuntime.make(FailLayer as any);
     const app = await createServer(failRt);
     const res = await app.request('/api/sessions/test-sid/compact', {
       method: 'POST',

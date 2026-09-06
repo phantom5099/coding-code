@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
 
 import { deleteSession } from '../../src/session/file-ops.js';
 import { sessionJsonlPathFromCwd, computePaths } from '../../src/core/path.js';
@@ -11,7 +11,7 @@ import { useTempProjectBase } from '../helpers/project-base.js';
 const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionLayer) as any));
 }
 
 describe('sessionJsonlPathFromCwd', () => {

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { z } from 'zod';
-import { ApprovalService } from '../../src/approval/index.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { ToolExecutorService } from '../../src/tools/executor.js';
+import { ApprovalService } from '../../src/approval/port.js';
+import { HookService } from '../../src/hooks/port.js';
+import { ToolExecutorService } from '../../src/tools/port.js';
 import type { ToolDefinition, ToolExecCtx } from '../../src/tools/types.js';
+import { ToolExecutorLayer } from '../../src/tools/tools.js';
 
 const hooks = {
   emit: () => Effect.void,
@@ -14,7 +15,7 @@ const approval = {
   evaluate: () => Effect.succeed({ type: 'allow' as const }),
 };
 
-const executorLayer = ToolExecutorService.Default.pipe(
+const executorLayer = ToolExecutorLayer.pipe(
   Layer.provide(
     Layer.mergeAll(
       Layer.succeed(HookService, hooks as any),

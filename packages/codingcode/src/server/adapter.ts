@@ -29,6 +29,12 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
       return { type: 'done' };
     case 'TodoUpdate':
       return { type: 'todo_update', items: event.items as unknown as Record<string, unknown>[] };
+    case 'ContextCompressed':
+      return {
+        type: 'context_compressed',
+        released: event.released,
+        promptEstimate: event.promptEstimate,
+      };
     case 'Usage':
       return {
         type: 'usage',
@@ -38,7 +44,6 @@ export function agentEventToSseEvent(event: AgentEvent): SseEvent | null {
       };
     case 'LlmChunk':
     case 'Assistant':
-    case 'ReactiveCompact':
       return null;
     default:
       return null;

@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import type { ConfirmResult } from '../../src/approval/confirmation.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 
-const TestLayer = ApprovalWaitService.Default;
+const TestLayer = ApprovalWaitLayer;
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(TestLayer) as any));

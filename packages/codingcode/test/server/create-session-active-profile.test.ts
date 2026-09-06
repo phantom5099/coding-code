@@ -3,61 +3,16 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { Hono } from 'hono';
 import { readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
 import { computePaths } from '../../src/core/path.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { McpService } from '../../src/mcp/index.js';
-import { RulesService } from '../../src/rules/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
 
-const mockHookService = {
-  register: () => Effect.succeed(() => {}),
-  registerDecision: () => Effect.succeed(() => {}),
-  emit: () => Effect.succeed(undefined),
-  emitDecision: () => Effect.succeed(null),
-  reloadUserHooks: () => Effect.succeed(undefined),
-  attachSessionHooks: () => Effect.succeed(undefined),
-  disableHook: () => Effect.succeed(undefined),
-  enableHook: () => Effect.succeed(undefined),
-  disposeSession: () => Effect.succeed(undefined),
-  disposeProject: () => Effect.succeed(undefined),
-} as any;
-
-const mockMcpService = {
-  syncConnections: () => Effect.succeed(undefined),
-  connectServers: () => Effect.succeed(undefined),
-  listProjectMcpTools: () => [],
-  disposeSession: () => Effect.succeed(undefined),
-} as any;
-
-const mockRulesService = {
-  getAllRules: () => '',
-  evictProjectRules: () => undefined,
-} as any;
-
 function makeLayer() {
-  const HookTestLayer = Layer.succeed(HookService, mockHookService);
-  const McpTestLayer = Layer.succeed(McpService, mockMcpService);
-  const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
-  const SessionTestLayer = SessionService.Default;
-  const WorkspaceTestLayer = WorkspaceService.Default;
-  const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        HookTestLayer,
-        McpTestLayer,
-        RulesTestLayer,
-        SessionTestLayer,
-        WorkspaceTestLayer
-      )
-    )
-  );
-  return Layer.mergeAll(ProjectRuntimeTestLayer, SessionTestLayer, WorkspaceTestLayer);
+  return Layer.mergeAll(SessionLayer, WorkspaceService.Default);
 }
 
 describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
@@ -71,12 +26,6 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     rt = ManagedRuntime.make(makeLayer() as any);
     app = new Hono();
     registerSessionsRoutes(app, rt);
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
-        yield* runtime.prepareProject(cwd);
-      })
-    );
   });
 
   afterEach(async () => {

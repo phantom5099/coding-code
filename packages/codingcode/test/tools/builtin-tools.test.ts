@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
-import { TodoService } from '../../src/agent/todo.js';
+import { TodoService } from '../../src/todo/port.js';
 import { registerBuiltinTools } from '../../src/tools/builtin-tools.js';
 import { ToolRegistry } from '../../src/tools/registry.js';
+import { TodoLayer } from '../../src/todo/todo.js';
 
 describe('registerBuiltinTools', () => {
   it('registers stateless tools and the TodoService-backed todo tool', async () => {
     const registry = new ToolRegistry();
     await Effect.runPromise(
-      registerBuiltinTools(registry).pipe(Effect.provide(TodoService.Default))
+      registerBuiltinTools(registry).pipe(Effect.provide(TodoLayer))
     );
 
     expect(registry.describe().map((tool) => tool.name)).toEqual([

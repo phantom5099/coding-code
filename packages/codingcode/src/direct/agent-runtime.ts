@@ -1,13 +1,11 @@
 import { Effect } from 'effect';
-import { sendMessage } from '../agent/agent.js';
-import { ApprovalWaitService } from '../approval/async-confirm.js';
+import { AgentService } from '../agent/port.js';
+import { ApprovalWaitService } from '../approval/wait-port.js';
 import { parseApprovalResponse } from '../approval/response.js';
-import { ContextService } from '../context/service.js';
-import { HookService } from '../hooks/registry.js';
-import { SessionService } from '../session/store.js';
-import { CheckpointService } from '../checkpoint/checkpoint-service.js';
-import { readUIHistory } from '../session/ui-history.js';
-import { findUserMessageForTurn } from '../session/ui-history.js';
+import { ContextService } from '../context/port.js';
+import { HookService } from '../hooks/port.js';
+import { SessionService } from '../session/port.js';
+import { CheckpointService } from '../checkpoint/port.js';
 import type { StreamChunk } from '../client/types.js';
 import { agentEventToStreamChunk } from '../agent/stream-adapter.js';
 import type { AppRuntime } from '../layer.js';
@@ -35,21 +33,21 @@ export interface AgentRuntimeClient {
     cwd: string,
     turnId: number,
     files: string[]
-  ): Promise<import('../checkpoint/types.js').CodeRollbackResult>;
+  ): Promise<any>;
   previewRollbackDiff(
     cwd: string,
     throughTurnId: number
-  ): Promise<import('../checkpoint/types.js').RollbackPreviewDiff>;
+  ): Promise<any>;
   rollbackCodeToTurn(
     cwd: string,
     throughTurnId: number
-  ): Promise<import('../checkpoint/types.js').CodeRollbackResult>;
+  ): Promise<any>;
   rollbackContext(
     cwd: string,
     throughTurnId: number
   ): Promise<{
     turns: Array<{ id: string; items: object[]; status: string }>;
-    rollbackState: import('../checkpoint/types.js').RollbackState;
+    rollbackState: any;
   }>;
   rollbackBothToTurn(
     cwd: string,
@@ -57,14 +55,14 @@ export interface AgentRuntimeClient {
   ): Promise<{
     turns: Array<{ id: string; items: object[]; status: string }>;
     codeResult: import('../checkpoint/types.js').CodeRollbackResult;
-    rollbackState: import('../checkpoint/types.js').RollbackState;
+    rollbackState: any;
   }>;
   undoLastCodeRollback(
     cwd: string,
     force?: boolean,
     files?: string[]
-  ): Promise<import('../checkpoint/types.js').CodeRollbackUndoResult>;
-  getRollbackState(cwd: string): Promise<import('../checkpoint/types.js').RollbackState>;
+  ): Promise<any>;
+  getRollbackState(cwd: string): Promise<any>;
   forkSession(
     cwd: string,
     atTurnId?: number
@@ -79,16 +77,17 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
 
   return {
     async *sendMessage(input, { sessionId, cwd }) {
-      const opts: Parameters<typeof sendMessage>[4] = {};
+      const runOpts: any = { cwd };
       if (!sessionId) {
-        opts.activeProfile = 'build';
-        opts.permissionMode = 'default';
-        opts.model = llm.modelInfo.model;
+        runOpts.activeProfile = 'build';
+        runOpts.permissionMode = 'default';
       }
-      const program = sendMessage(sessionId || undefined, input, cwd, llm, opts);
-      const { stream: agentGen, sessionId: resolvedSessionId } = (await rt.runPromise(
-        program
-      )) as any;
+      const { stream: agentGen, sessionId: resolvedSessionId } = await rt.runPromise(
+        Effect.gen(function* () {
+          const agent = yield* AgentService;
+          return yield* agent.runTurn(input, { sessionId: sessionId || undefined, ...runOpts });
+        })
+      );
       currentSessionId = resolvedSessionId;
 
       yield { type: 'session_id', sessionId: resolvedSessionId };
@@ -258,8 +257,8 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
           const session = yield* SessionService;
           const state = yield* session.load(cwd, currentSessionId);
           yield* session.rollbackToTurn(state, throughTurnId, 'user rollback');
-          const turns = readUIHistory(currentSessionId, cwd);
-          const rollbackState: import('../checkpoint/types.js').RollbackState = {
+          const turns = yield* session.readUITurns(currentSessionId, cwd);
+          const rollbackState: any = {
             context: { active: true, currentThroughTurnId: throughTurnId },
             code: {
               canUndoLast: false,
@@ -273,7 +272,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
       );
     },
 
-    async rollbackBothToTurn(cwd: string, throughTurnId: number) {
+    async rollbackBothToTurn(cwd: string, throughTurnId: number): Promise<any> {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
@@ -285,8 +284,8 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
             throughTurnId
           );
           yield* session.rollbackToTurn(state, throughTurnId, 'user rollback');
-          const turns = readUIHistory(currentSessionId, cwd);
-          const rollbackState: import('../checkpoint/types.js').RollbackState = {
+          const turns = yield* session.readUITurns(currentSessionId, cwd);
+          const rollbackState: any = {
             context: { active: true, currentThroughTurnId: throughTurnId },
             code: {
               canUndoLast: false,
@@ -336,7 +335,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
           const session = yield* SessionService;
           const state = yield* session.load(cwd, currentSessionId);
           const newSessionId = yield* session.forkSession(state, atTurnId ?? 0);
-          const turns = readUIHistory(newSessionId, cwd);
+          const turns = yield* session.readUITurns(newSessionId, cwd);
           return { sessionId: newSessionId, turns };
         })
       );

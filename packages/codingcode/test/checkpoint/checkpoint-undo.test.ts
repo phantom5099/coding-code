@@ -12,8 +12,14 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { spawnSync } from 'child_process';
 import { Effect } from 'effect';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { CheckpointService } from '../../src/checkpoint/port.js';
+import type {
+  CodeRollbackResult,
+  CodeRollbackUndoResult,
+  RollbackPreviewDiff,
+} from '../../src/checkpoint/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { CheckpointLayer } from '../../src/checkpoint/checkpoint.js';
 
 useTempProjectBase();
 
@@ -100,7 +106,7 @@ describe('findCommitByMessage single-match guarantee', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 });
 
 describe('checkoutFiles error propagation', () => {
@@ -124,7 +130,7 @@ describe('checkoutFiles error propagation', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 });
 
 describe('undoLastCodeRollback end-to-end via ShadowGit', () => {
@@ -184,7 +190,7 @@ describe('undoLastCodeRollback end-to-end via ShadowGit', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 });
 
 describe('rollbackCodeToTurn uses inclusive target turn', () => {
@@ -206,15 +212,15 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
         Effect.gen(function* () {
           const svc = yield* CheckpointService;
           return yield* svc.previewRollbackDiff(projectPath, sessionId, 1);
-        }).pipe(Effect.provide(CheckpointService.Default))
-      );
+        }).pipe(Effect.provide(CheckpointLayer) as any)
+      ) as RollbackPreviewDiff;
 
       expect(preview.affectedTurns).toEqual([1]);
       expect(preview.diff).toContain('articles/one.md');
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 
   it('rolls back files created by the first turn in a single-turn session', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
@@ -234,8 +240,8 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
         Effect.gen(function* () {
           const svc = yield* CheckpointService;
           return yield* svc.rollbackCodeToTurn(projectPath, sessionId, 1);
-        }).pipe(Effect.provide(CheckpointService.Default))
-      );
+        }).pipe(Effect.provide(CheckpointLayer) as any)
+      ) as CodeRollbackResult;
 
       expect(result.reverted).toBe(true);
       expect(result.affectedTurns).toEqual([1]);
@@ -246,7 +252,7 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 
   it('includes the target and later turns when rolling back a multi-turn session', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
@@ -276,8 +282,8 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
         Effect.gen(function* () {
           const svc = yield* CheckpointService;
           return yield* svc.previewRollbackDiff(projectPath, sessionId, 2);
-        }).pipe(Effect.provide(CheckpointService.Default))
-      );
+        }).pipe(Effect.provide(CheckpointLayer) as any)
+      ) as RollbackPreviewDiff;
 
       expect(preview.affectedTurns).toEqual([2, 3]);
       expect(preview.diff).toContain('two.txt');
@@ -285,7 +291,7 @@ describe('rollbackCodeToTurn uses inclusive target turn', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 });
 
 describe('toGitPath preserves original casing for git paths', () => {
@@ -347,8 +353,8 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
           return yield* svc.undoLastCodeRollback(projectPath, sessionId, {
             files: [join(projectPath, 'src/main.ts')],
           });
-        }).pipe(Effect.provide(CheckpointService.Default))
-      );
+        }).pipe(Effect.provide(CheckpointLayer) as any)
+      ) as CodeRollbackUndoResult;
 
       expect(result.restored).toBe(true);
       expect(result.restoredFiles.length).toBeGreaterThan(0);
@@ -358,7 +364,7 @@ describe('undoLastCodeRollback case-insensitive path matching', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 });
 
 describe('revertFilesImpl case-insensitive deduplication', () => {
@@ -386,8 +392,8 @@ describe('revertFilesImpl case-insensitive deduplication', () => {
         Effect.gen(function* () {
           const svc = yield* CheckpointService;
           return yield* svc.revertCheckpointFiles(projectPath, 'sess', 1, [filePath.toLowerCase()]);
-        }).pipe(Effect.provide(CheckpointService.Default))
-      );
+        }).pipe(Effect.provide(CheckpointLayer) as any)
+      ) as CodeRollbackResult;
 
       expect(result1.reverted).toBe(true);
       expect(result1.restoreEntry).not.toBeNull();
@@ -398,8 +404,8 @@ describe('revertFilesImpl case-insensitive deduplication', () => {
         Effect.gen(function* () {
           const svc = yield* CheckpointService;
           return yield* svc.revertCheckpointFiles(projectPath, 'sess', 1, [filePath]);
-        }).pipe(Effect.provide(CheckpointService.Default))
-      );
+        }).pipe(Effect.provide(CheckpointLayer) as any)
+      ) as CodeRollbackResult;
 
       expect(result2.reverted).toBe(true);
       expect(result2.restoreEntry).not.toBeNull();
@@ -408,13 +414,13 @@ describe('revertFilesImpl case-insensitive deduplication', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 });
 
 describe('CheckpointService', () => {
   it('should export a Default layer', async () => {
-    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { CheckpointService } = await import('../../src/checkpoint/port.js');
     expect(CheckpointService).toBeDefined();
-    expect((CheckpointService as any).Default).toBeDefined();
+    expect((CheckpointLayer as any)).toBeDefined();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterForContext, buildContextMessages } from '../../src/context/service.js';
+import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import type { SessionEvent } from '../../src/session/types.js';
 
 function toMessages(events: SessionEvent[]) {

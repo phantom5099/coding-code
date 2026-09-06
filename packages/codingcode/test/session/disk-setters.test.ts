@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
 import { computePaths } from '../../src/core/path.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { McpService } from '../../src/mcp/index.js';
-import { RulesService } from '../../src/rules/index.js';
+import { HookService } from '../../src/hooks/port.js';
+import { McpService } from '../../src/mcp/port.js';
+import { RulesService } from '../../src/rules/port.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -37,7 +37,7 @@ const mockRulesService = {
 } as any;
 
 function makeLayer() {
-  return SessionService.Default.pipe(
+  return SessionLayer.pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(HookService, mockHookService as any),
@@ -74,17 +74,17 @@ describe('SessionService disk setter/getter consistency', () => {
     await rt.dispose();
   });
 
-  it('setPermissionModeOnDisk + getPermissionModeFromDisk are consistent', async () => {
+  it('setPermissionMode + getPermissionMode are consistent', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setPermissionModeOnDisk(cwd, sessionId, 'bypass');
+        yield* session.setPermissionMode(cwd, sessionId, 'bypass');
       })
     );
     const mode = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        return yield* session.getPermissionModeFromDisk(cwd, sessionId);
+        return yield* session.getPermissionMode(cwd, sessionId);
       })
     );
     expect(mode).toBe('bypass');

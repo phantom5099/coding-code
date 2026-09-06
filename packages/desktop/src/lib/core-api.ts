@@ -1,7 +1,7 @@
 import { API_BASE, api } from './api';
-import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client/http-clients';
+import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client';
 import type { PermissionMode } from '@codingcode/core/approval/types';
-import type { AgentProfileName } from '@codingcode/core/subagent/types';
+import type { AgentProfileName } from '@codingcode/core/agent/profile';
 
 const clients = createHttpClients(API_BASE);
 
@@ -102,7 +102,6 @@ export function setSessionProfile(
 
 export function getMemoryConfig(): Promise<{
   enabled: boolean;
-  types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
   model: string;
 }> {
   return clients.settings.getMemoryConfig();
@@ -110,25 +109,6 @@ export function getMemoryConfig(): Promise<{
 
 export function setMemoryEnabled(enabled: boolean): Promise<void> {
   return clients.settings.setMemoryEnabled(enabled);
-}
-
-export function setMemoryTypeDisabled(name: string, disabled: boolean): Promise<void> {
-  return clients.settings.setMemoryTypeDisabled(name, disabled);
-}
-
-export function createMemoryExtraType(type: { name: string; description: string }): Promise<void> {
-  return clients.settings.addMemoryExtraType(type);
-}
-
-export function updateMemoryExtraType(
-  name: string,
-  type: { name: string; description: string }
-): Promise<void> {
-  return clients.settings.updateMemoryExtraType(name, type);
-}
-
-export function deleteMemoryExtraType(name: string): Promise<void> {
-  return clients.settings.deleteMemoryExtraType(name);
 }
 
 export function setMemoryModel(model: string): Promise<{ model: string }> {

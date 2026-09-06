@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { ApprovalWaitService } from '../approval/async-confirm.js';
-import { HookService } from '../hooks/registry.js';
+import { ApprovalWaitService } from '../approval/wait-port.js';
+import { HookService } from '../hooks/port.js';
 import { AgentError } from '../core/error.js';
 
 export type SseEvent = { type: string; [key: string]: unknown };

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { PermissionRule } from './types.js';
-import { ApprovalWaitService } from './async-confirm.js';
+import { ApprovalWaitService } from './wait-port.js';
 
 export type ConfirmResult =
   | { type: 'allow' }

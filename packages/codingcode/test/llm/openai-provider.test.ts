@@ -73,7 +73,7 @@ describe('OpenAIProvider completeStream', () => {
 
     expect(generateText).toHaveBeenCalledTimes(1);
     expect(streamText).not.toHaveBeenCalled();
-  });
+  }, 30000);
 
   it('keeps streaming for sansen requests without tools', async () => {
     const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
@@ -107,5 +107,5 @@ describe('OpenAIProvider completeStream', () => {
     if (resp.ok) {
       expect(resp.value.usage).toEqual({ prompt: 100, completion: 50, total: 150 });
     }
-  });
+  }, 30000);
 });

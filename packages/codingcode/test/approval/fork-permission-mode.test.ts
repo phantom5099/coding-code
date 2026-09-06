@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Effect, Layer } from 'effect';
-import { ApprovalService } from '../../src/approval/index.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { Effect, Layer, Context } from 'effect';
+import { ApprovalService } from '../../src/approval/port.js';
+import { HookService } from '../../src/hooks/port.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { ApprovalLayer } from '../../src/approval/approval.js';
+
+type Approval = Context.Tag.Service<typeof ApprovalService>;
 
 const mockHookService = {
   register: () => Effect.succeed(() => {}),
@@ -28,13 +31,13 @@ const mockApprovalWaitService = {
   hasEmitter: () => Effect.succeed(false),
 };
 
-const TestLayer = ApprovalService.Default.pipe(
+const TestLayer = ApprovalLayer.pipe(
   Layer.provide(Layer.succeed(HookService, mockHookService as any)),
   Layer.provide(Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any))
 );
 
-let _service: ApprovalService | null = null;
-async function getService(): Promise<ApprovalService> {
+let _service: Approval | null = null;
+async function getService(): Promise<Approval> {
   if (!_service) {
     _service = await Effect.runPromise(
       Effect.gen(function* () {
@@ -45,7 +48,7 @@ async function getService(): Promise<ApprovalService> {
   return _service!;
 }
 
-function run<T>(eff: (svc: ApprovalService) => Promise<T>): Promise<T> {
+function run<T>(eff: (svc: Approval) => Promise<T>): Promise<T> {
   return getService().then(eff);
 }
 

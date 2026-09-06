@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { TodoService } from '../../src/agent/todo.js';
+import { TodoService } from '../../src/todo/port.js';
 import { createTodoWriteTool } from '../../src/tools/domains/self/todo-write.js';
+import { TodoLayer } from '../../src/todo/todo.js';
 
 async function makeTodoTool() {
-  return Effect.runPromise(createTodoWriteTool().pipe(Effect.provide(TodoService.Default)));
+  return Effect.runPromise(createTodoWriteTool().pipe(Effect.provide(TodoLayer)));
 }
 
 describe('todo_write tool', () => {

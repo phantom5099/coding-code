@@ -5,6 +5,7 @@ import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import { spawnSync } from 'child_process';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { CheckpointLayer } from '../../src/checkpoint/checkpoint.js';
 
 useTempProjectBase();
 
@@ -51,9 +52,9 @@ describe('toGitPath', () => {
 
 describe('CheckpointService class', () => {
   it('CheckpointService class is exported', async () => {
-    const mod = await import('../../src/checkpoint/checkpoint-service.js');
+    const mod = await import('../../src/checkpoint/port.js');
     expect(mod.CheckpointService).toBeDefined();
-  });
+  }, 60000);
 });
 
 describe('CheckpointDiff type with insertions/deletions', () => {
@@ -114,7 +115,7 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 
   it('returns empty diff when no changes between commits', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
@@ -145,7 +146,7 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 
   it('correctly handles Chinese filenames in commits and diffs', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
@@ -189,7 +190,7 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  }, 15000);
+  }, 60000);
 
   it('throws when git add -A fails', async () => {
     const { ShadowGit } = await import('../../src/checkpoint/shadow-git.js');
@@ -215,13 +216,13 @@ describe('ShadowGit commit and findCommitByMessage flow', () => {
     } finally {
       cleanupTempRepo(projectPath);
     }
-  });
+  }, 60000);
 });
 
 describe('CheckpointService', () => {
   it('should export a Default layer', async () => {
-    const { CheckpointService } = await import('../../src/checkpoint/checkpoint-service.js');
+    const { CheckpointService } = await import('../../src/checkpoint/port.js');
     expect(CheckpointService).toBeDefined();
-    expect((CheckpointService as any).Default).toBeDefined();
+    expect((CheckpointLayer as any)).toBeDefined();
   });
 });

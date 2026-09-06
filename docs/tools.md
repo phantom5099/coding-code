@@ -97,16 +97,15 @@ interface ToolVisibilityPolicy {
 
 ### 审批流水线（始终生效）
 
-六层决策链，按顺序执行，任一层返回 deny/allow 即终止：
+五层决策链，按顺序执行，任一层返回 deny/allow 即终止：
 
 | 层级 | 名称 | 逻辑 |
 |------|------|------|
 | 1 | **RuleEngine** | 规则引擎匹配，支持 glob 模式匹配工具名和参数，按优先级排序 |
-| 2 | **ReadonlyWhitelist** | 只读工具自动放行（read_file, search_code, search_files, fetch_url, web_search, dispatch_agent, todo_write） |
-| 3 | **PermissionMode** | 权限模式判断：`bypass`（全部放行）、`acceptEdits`（非破坏性工具放行）、`default`（继续下一层）。`plan` Profile 由独立的 `agent/profile.ts` 中的 `planProfileGateHook` 在 Layer 4 强制，不在此层处理 |
-| 4 | **HookPreToolUse** | 钩子决策，可返回 allow/deny/ask/continue，支持 `modifiedInput` 修改参数 |
-| 5 | **UserConfirmation** | 异步用户确认，支持 allow/deny/always/never 四种响应，always/never 会持久化为规则 |
-| 6 | **AuditLog** | 每一层决策后记录审计日志，通过 `tool.approval.post` 钩子发出 |
+| 2 | **PermissionMode** | 权限模式驱动的自动放行：`bypass`（全部放行）、`acceptEdits`（非破坏性工具放行，涵盖只读与编辑工具）、`default`（不自动放行，继续下一层）。只读工具不再有无条件的独立白名单层；`plan` Profile 由 `agent/profile.ts` 中的 `planProfileGateHook` 在下一层强制，不在此层处理 |
+| 3 | **HookPreToolUse** | 钩子决策，可返回 allow/deny/ask/continue，支持 `modifiedInput` 修改参数 |
+| 4 | **UserConfirmation** | 异步用户确认，支持 allow/deny/always/never 四种响应，always/never 会持久化为规则 |
+| 5 | **AuditLog** | 每一层决策后记录审计日志，通过 `tool.approval.post` 钩子发出 |
 
 ### 预设安全规则
 
@@ -130,11 +129,13 @@ interface ToolVisibilityPolicy {
 type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
 ```
 
-- `default`：逐层审批，危险操作需用户确认
-- `acceptEdits`：非破坏性工具自动放行，减少确认弹窗
+- `default`：不自动放行任何工具（含只读工具），全部逐层审批
+- `acceptEdits`：非破坏性工具自动放行（涵盖只读工具与编辑类工具），破坏性工具仍需确认
 - `bypass`：全部放行，跳过所有审批（慎用）
 
-> `plan` 不再是 `PermissionMode` 的成员。plan Profile 通过 `AgentProfile.name === 'plan'` 结构化识别，由 `agent/profile.ts` 的 `planProfileGateHook` 和 `PLAN_PROFILE_ALLOWED_TOOLS` 共同限制工具。
+> 原独立的 `ReadonlyWhitelist` 层（在 `default` 下也无条件放行只读工具）已废弃，其语义并入 `PermissionMode` 的自动放行判定：`acceptEdits` 视只读工具为非破坏性工具自动放行，`default` 不再自动放行。
+
+> `plan` 不再是 `PermissionMode` 的成员。plan Profile 通过 `AgentProfile.name === 'plan'` 结构化识别，由 `agent/profile.ts` 的 `planProfileGateHook` 和 `PLAN_PROFILE_ALLOWED_TOOLS` 共同限制工具。因只读白名单层已删除，`dispatch_agent` 等在 plan 下不再被流水线上层提前放行，统一由 plan gate 拦截。
 
 ### OS 级沙箱（预留）
 

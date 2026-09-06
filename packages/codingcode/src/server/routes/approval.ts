@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { ApprovalWaitService } from '../../approval/async-confirm.js';
+import { ApprovalWaitService } from '../../approval/wait-port.js';
 import { parseApprovalResponse } from '../../approval/response.js';
 import { errorResponse } from '../util.js';
 

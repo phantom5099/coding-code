@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { ContextService } from '../../src/context/service.js';
-import { SessionService } from '../../src/session/store.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
+import { ContextService } from '../../src/context/port.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
 import type { SessionEvent, ToolResultEvent } from '../../src/session/types.js';
+import { ContextLayer } from '../../src/context/context.js';
 
 const baseConfig = {
   compactionModel: '',
@@ -38,7 +39,7 @@ function makeToolResult(
 }
 
 const TestLayer = Layer.merge(
-  SessionService.Default,
+  SessionLayer,
   Layer.succeed(LLMFactoryService, {
     listModels: () => Effect.succeed([]),
     findModel: () => Effect.succeed(null),
@@ -55,7 +56,7 @@ describe('assemblePayload', () => {
       Effect.gen(function* () {
         const ctx = yield* ContextService;
         return ctx;
-      }).pipe(Effect.provide(ContextService.Default), Effect.provide(TestLayer))
+      }).pipe(Effect.provide(ContextLayer), Effect.provide(TestLayer))
     );
     expect(typeof svc.assemblePayload).toBe('function');
   });

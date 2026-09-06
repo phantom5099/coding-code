@@ -1,13 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Effect, Layer, Queue } from 'effect';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import { TodoService } from '../../src/agent/todo.js';
-import { ContextService } from '../../src/context/service.js';
-import { MemoryService } from '../../src/memory/index.js';
+import { Effect } from 'effect';
+import { makeState, runAgentTurn } from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
+    maxSteps: 5,
+    maxStopContinuations: 2,
     context: {
       compactionModel: '',
     },
@@ -16,111 +14,39 @@ vi.mock('@codingcode/infra/config', () => ({
       model: '',
       maxBytes: 16384,
       promptMaxBytes: 8192,
-      extraTypes: [],
-      disabledTypes: [],
     },
     server: { port: 8080 },
   }),
 }));
 
-import { agentLoop } from '../../src/agent/agent.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { Result } from '../../src/core/result.js';
-import { SessionService } from '../../src/session/store.js';
+const mockState = makeState({ sessionId: 'type-test', cwd: '/tmp', title: 'type-test' });
 
-const AllMockLayer = Layer.mergeAll(
-  Layer.succeed(CheckpointService, {
-    snapshotBaseline: () => Effect.void,
-    snapshotFinal: () => Effect.void,
-  } as any),
-  Layer.succeed(SessionService, {
-    getTranscriptPath: () => '/tmp/test.jsonl',
-    recordAssistant: () => Effect.succeed({}),
-    recordUser: () => Effect.succeed({}),
-    recordToolResult: () => Effect.succeed({}),
-  } as any),
-  Layer.succeed(ProjectRuntimeService, {
-    prepareProject: () => Effect.void,
-    resolveMainAgentProfile: () => undefined,
-    resolveSubagentProfile: () => undefined,
-    listAgentProfiles: () => [],
-    getToolPolicy: () => ({
-      allowedTools: undefined,
-      allowedMcpServers: undefined,
-    }),
-    setSessionProfile: () => {},
-    restoreSessionProfile: () => Effect.void,
-    getSessionProfile: () => undefined,
-    disposeSession: () => Effect.void,
-    disposeProject: () => Effect.void,
-  } as any),
-  Layer.succeed(TodoService, {
-    read: () => [],
-    write: () => {},
-    reset: () => {},
-  } as any),
-  Layer.succeed(ContextService, {
-    assemblePayload: () => ({
-      messages: [{ role: 'user' as const, content: 'hi' }],
-      compactedEvents: [],
-      promptEstimate: 10,
-      currentTurnId: 1,
-      compactedTurnIds: new Set<number>(),
-    }),
-    compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-    compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-  } as any),
-  Layer.succeed(MemoryService, {
-    getMemoryEnabled: () => false,
-    setMemoryEnabled: () => {},
-    loadMemoryForPrompt: () => '',
-    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
-  } as any)
-);
-
-describe('agentLoop hooks type', () => {
-  it('should accept a properly typed HookService mock', async () => {
-    const mockHooks = {
-      emit: (_point: any, _payload: any) => Effect.succeed(undefined),
-      emitDecision: (_point: any, _payload: any) => Effect.succeed(null),
-      register: (_point: any, _handler: any, _opts?: any) => Effect.succeed(() => {}),
-      registerDecision: (_point: any, _handler: any, _opts?: any) => Effect.succeed(() => {}),
-      reloadUserHooks: (_cwd: string) => Effect.succeed(undefined),
-    } as unknown as HookService;
-
-    const mockLlm = {
-      completeStream: () => ({
+describe('agent runTurn smoke (hooks deps wiring)', () => {
+  it('should build & run via AgentService.runTurn with mocked deps', async () => {
+    const llm = {
+      completeStream: vi.fn(() => ({
         stream: (async function* () {})(),
-        response: Promise.resolve(Result.ok({ content: '' })),
+        response: Promise.resolve({ ok: true, value: { content: 'Hello' } }),
+      })),
+      modelInfo: { maxTokens: 1000 },
+    } as any;
+
+    const turnEndCalls: any[] = [];
+    const hooks = {
+      emit: vi.fn((point: string, payload: any) => {
+        if (point === 'agent.turn.end') turnEndCalls.push(payload);
+        return Effect.succeed(undefined);
       }),
-    };
+      emitDecision: () => Effect.succeed(null),
+    } as any;
 
-    const mockState = {
-      sessionId: 'type-test',
-      cwd: '/tmp',
-      messageCount: 0,
-      currentTurnId: 1,
-      sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
-      model: 'test-model',
-      title: 'type-test',
-      activeProfile: 'build' as const,
-      permissionMode: 'default' as const,
-      usage: undefined,
-      memorySnapshot: '',
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    const result = await Effect.runPromise(
-      agentLoop(
-        null as any,
-        mockHooks,
-        1,
-        2,
-        { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
-        q
-      ).pipe(Effect.provide(AllMockLayer)) as any
+    const { events } = await runAgentTurn(
+      { llm, state: mockState, hooks },
+      { sessionId: 'type-test', cwd: '/tmp' }
     );
 
-    expect(result).toBeDefined();
+    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
+    expect(turnEndCalls).toHaveLength(1);
+    expect(turnEndCalls[0].status).toBe('done');
   });
 });

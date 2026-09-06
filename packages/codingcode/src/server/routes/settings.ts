@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { SkillService } from '../../skills/service.js';
+import { SkillService } from '../../skills/port.js';
 import { WorkspaceService, isGlobalCwd } from '../../core/workspace.js';
 import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
 import type { McpServerConfig } from '../../mcp/types.js';
@@ -30,14 +30,7 @@ import {
 } from '../../hooks/config.js';
 import { setHookRuntimeEnabled } from '../../hooks/executor.js';
 import { discoverGlobalSkillDirs, discoverProjectSkillDirs } from '../../skills/source.js';
-import {
-  getMemoryConfig,
-  getAllTypesWithStatus,
-  setMemoryTypeDisabled,
-  addMemoryExtraType as _addMemoryExtraType,
-  updateMemoryExtraType as _updateMemoryExtraType,
-  deleteMemoryExtraType as _deleteMemoryExtraType,
-} from '../../memory/config.js';
+import { getMemoryConfig } from '../../memory/config.js';
 import {
   loadConfig,
   updateMaxSteps,
@@ -45,7 +38,7 @@ import {
   updateContextCompactionModel,
   updateMemoryModel,
 } from '@codingcode/infra/config';
-import { MemoryService } from '../../memory/index.js';
+import { MemoryService } from '../../memory/port.js';
 import { createRunWithLayer } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -128,7 +121,6 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
     const cfg = getMemoryConfig();
     return c.json({
       enabled: cfg.enabled,
-      types: getAllTypesWithStatus(cfg),
       model: cfg.model,
     });
   });
@@ -148,51 +140,6 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
       })
     );
     return c.json({ enabled });
-  });
-
-  router.post('/api/settings/memory/type-disabled', async (c) => {
-    const body = (await c.req.json()) as { name: string; disabled: boolean };
-    setMemoryTypeDisabled(body.name, body.disabled);
-    return c.json({ ok: true });
-  });
-
-  router.post('/api/settings/memory/extra-type', async (c) => {
-    const body = (await c.req.json()) as { name: string; description: string };
-    try {
-      _addMemoryExtraType({ name: body.name, description: body.description, enabled: true });
-      return c.json({ ok: true });
-    } catch (e: any) {
-      if (e.message?.includes('already exists')) return c.json({ error: e.message }, 409);
-      throw e;
-    }
-  });
-
-  router.put('/api/settings/memory/extra-type/:name', async (c) => {
-    const name = c.req.param('name');
-    const body = (await c.req.json()) as { name: string; description: string };
-    try {
-      _updateMemoryExtraType(name, {
-        name: body.name,
-        description: body.description,
-        enabled: true,
-      });
-      return c.json({ ok: true });
-    } catch (e: any) {
-      if (e.message?.includes('not found')) return c.json({ error: e.message }, 404);
-      if (e.message?.includes('already exists')) return c.json({ error: e.message }, 409);
-      throw e;
-    }
-  });
-
-  router.delete('/api/settings/memory/extra-type/:name', async (c) => {
-    const name = c.req.param('name');
-    try {
-      _deleteMemoryExtraType(name);
-      return c.json({ ok: true });
-    } catch (e: any) {
-      if (e.message?.includes('not found')) return c.json({ error: e.message }, 404);
-      throw e;
-    }
   });
 
   router.post('/api/settings/memory/model', async (c) => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
 import { AgentError } from '../../src/core/error.js';
 import * as fs from 'fs';
 
@@ -39,7 +39,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       Effect.gen(function* () {
         const svc = yield* SessionService;
         return yield* svc.recordUser(state, 'hello');
-      }).pipe(Effect.provide(SessionService.Default))
+      }).pipe(Effect.provide(SessionLayer))
     );
 
     expect(exit._tag).toBe('Failure');
@@ -77,7 +77,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       Effect.gen(function* () {
         const svc = yield* SessionService;
         return yield* svc.recordAssistant(state, 'hi', []);
-      }).pipe(Effect.provide(SessionService.Default))
+      }).pipe(Effect.provide(SessionLayer))
     );
 
     expect(exit._tag).toBe('Failure');
@@ -113,7 +113,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
     const program = Effect.gen(function* () {
       const session = yield* SessionService;
       return yield* session.recordUser(state, 'hello');
-    }).pipe(Effect.provide(SessionService.Default));
+    }).pipe(Effect.provide(SessionLayer));
 
     const exit = await Effect.runPromiseExit(program);
 

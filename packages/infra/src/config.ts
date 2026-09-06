@@ -10,20 +10,12 @@ export interface ContextConfig {
   compactionModel: string;
 }
 
-export interface MemoryTypeConfig {
-  name: string;
-  description: string;
-  enabled: boolean;
-}
-
 export interface MemoryConfig {
   enabled: boolean;
   /** Model for memory operations. Empty string falls back to main session LLM.
    *  Use full id format "model@API_KEY_ENV" to avoid ambiguity (e.g. "deepseek-chat@DEEPSEEK_API_KEY").
    *  Can also use bare model id (e.g. "deepseek-chat") or display name, first match wins. */
   model: string;
-  extraTypes: MemoryTypeConfig[];
-  disabledTypes: string[];
   promptMaxBytes: number;
 }
 
@@ -47,17 +39,9 @@ const DEFAULT_CONTEXT: ContextConfig = {
   compactionModel: '',
 };
 
-export const DEFAULT_MEMORY_TYPES: MemoryTypeConfig[] = [
-  { name: 'user', description: '用户角色、技能栈、工作偏好及对 Agent 的纠正', enabled: true },
-  { name: 'project', description: '架构决策、技术选型、部署信息', enabled: true },
-  { name: 'reference', description: '外部资源、文档、Dashboard 链接', enabled: true },
-];
-
 export const DEFAULT_MEMORY: MemoryConfig = {
   enabled: false,
   model: '',
-  extraTypes: [],
-  disabledTypes: [],
   promptMaxBytes: 8192,
 };
 
@@ -112,22 +96,6 @@ export function updateMemoryEnabled(enabled: boolean, configPath?: string): void
   const existing = readExistingConfig(p);
   const memory = (existing.memory as Record<string, unknown>) ?? {};
   existing.memory = { ...memory, enabled };
-  writeConfig(p, existing);
-}
-
-export function updateMemoryDisabledTypes(disabledTypes: string[], configPath?: string): void {
-  const p = configPath ?? getUserConfigPath();
-  const existing = readExistingConfig(p);
-  const memory = (existing.memory as Record<string, unknown>) ?? {};
-  existing.memory = { ...memory, disabledTypes };
-  writeConfig(p, existing);
-}
-
-export function updateMemoryExtraTypes(extraTypes: MemoryTypeConfig[], configPath?: string): void {
-  const p = configPath ?? getUserConfigPath();
-  const existing = readExistingConfig(p);
-  const memory = (existing.memory as Record<string, unknown>) ?? {};
-  existing.memory = { ...memory, extraTypes };
   writeConfig(p, existing);
 }
 

@@ -1,13 +1,11 @@
 import { expect, it, describe, vi } from 'vitest';
-import { Effect, Layer, Queue, Chunk } from 'effect';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import { TodoService } from '../../src/agent/todo.js';
-import { ContextService } from '../../src/context/service.js';
-import { MemoryService } from '../../src/memory/index.js';
+import { Effect } from 'effect';
+import { makeState, runAgentTurn } from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
+    maxSteps: 5,
+    maxStopContinuations: 2,
     context: {
       compactionModel: '',
     },
@@ -16,283 +14,55 @@ vi.mock('@codingcode/infra/config', () => ({
       model: '',
       maxBytes: 16384,
       promptMaxBytes: 8192,
-      extraTypes: [],
-      disabledTypes: [],
     },
     server: { port: 8080 },
   }),
 }));
 
-import { agentLoop } from '../../src/agent/agent';
-import { Result } from '../../src/core/result';
-import type { RunStreamOptions } from '../../src/agent/types';
-import { SessionService } from '../../src/session/store.js';
+const mockState = makeState({ sessionId: 'test-sid', cwd: '/tmp', title: 'test' });
 
-const AllMockLayer = Layer.mergeAll(
-  Layer.succeed(CheckpointService, {
-    snapshotBaseline: () => Effect.void,
-    snapshotFinal: () => Effect.void,
-  } as any),
-  Layer.succeed(SessionService, {
-    getTranscriptPath: () => '/tmp/test.jsonl',
-    recordAssistant: () => Effect.succeed({}),
-    recordUser: () => Effect.succeed({}),
-    recordToolResult: () => Effect.succeed({}),
-  } as any),
-  Layer.succeed(ProjectRuntimeService, {
-    prepareProject: () => Effect.void,
-    resolveMainAgentProfile: () => undefined,
-    resolveSubagentProfile: () => undefined,
-    listAgentProfiles: () => [],
-    getToolPolicy: () => ({
-      allowedTools: undefined,
-      allowedMcpServers: undefined,
-    }),
-    setSessionProfile: () => {},
-    restoreSessionProfile: () => Effect.void,
-    getSessionProfile: () => undefined,
-    disposeSession: () => Effect.void,
-    disposeProject: () => Effect.void,
-  } as any),
-  Layer.succeed(TodoService, {
-    read: () => [],
-    write: () => {},
-    reset: () => {},
-  } as any),
-  Layer.succeed(ContextService, {
-    assemblePayload: () => ({
-      messages: [{ role: 'user' as const, content: 'hi' }],
-      compactedEvents: [],
-      promptEstimate: 10,
-      currentTurnId: 1,
-      compactedTurnIds: new Set<number>(),
-    }),
-    compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-    compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-  } as any),
-  Layer.succeed(MemoryService, {
-    getMemoryEnabled: () => false,
-    setMemoryEnabled: () => {},
-    loadMemoryForPrompt: () => '',
-    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
-  } as any)
-);
+function makeCapturingLlm(opts: { content?: string } = {}) {
+  const llm = {
+    completeStream: vi.fn(() => ({
+      stream: (async function* () {})(),
+      response: Promise.resolve({
+        ok: true,
+        value: { content: opts.content ?? 'Done', toolCalls: [] },
+      }),
+    })),
+    modelInfo: { maxTokens: 1000 },
+  } as any;
+  return llm;
+}
 
-describe('agentLoop loop options', () => {
-  const mockState = {
-    sessionId: 'test-session',
-    cwd: process.cwd(),
-    currentTurnId: 0,
-    sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
-    model: 'test-model',
-    title: 'test',
-    usage: undefined,
-    activeProfile: 'build' as const,
-    permissionMode: 'default' as const,
-    messageCount: 0,
-    memorySnapshot: '',
-  };
+function mockHooks() {
+  return {
+    emit: vi.fn(() => Effect.succeed(undefined)),
+    emitDecision: vi.fn(() => Effect.succeed(null)),
+  } as any;
+}
 
-  function mockHooks() {
-    return {
-      emit: vi.fn(() => Effect.succeed(undefined)),
-      emitDecision: vi.fn(() => Effect.succeed(null)),
-    } as any;
-  }
-
-  it('should accept systemOverride to replace base prompt', async () => {
-    const mockLlm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve(
-          Result.ok({
-            content: 'Done',
-            toolCalls: [],
-          })
-        ),
-      })),
-    };
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-      systemOverride: 'Custom system prompt',
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop({} as any, mockHooks(), 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+describe('agent runTurn loop options', () => {
+  it('Step events report max from global config maxSteps', async () => {
+    const llm = makeCapturingLlm();
+    const { events } = await runAgentTurn(
+      { llm, state: mockState },
+      { sessionId: 'test-sid', cwd: '/tmp' }
     );
-
-    expect(mockLlm.completeStream).toHaveBeenCalled();
-    const lastCall = (mockLlm.completeStream as any).mock?.calls?.[0]?.[0];
-    expect(lastCall?.system).toBe('Custom system prompt');
-  });
-
-  it('should respect abortSignal to terminate early', async () => {
-    const controller = new AbortController();
-
-    const mockLlm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: new Promise((r) =>
-          setTimeout(() => r(Result.ok({ content: 'Response', toolCalls: [] })), 100)
-        ),
-      })),
-    };
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-      abortSignal: controller.signal,
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    controller.abort();
-    await Effect.runPromise(
-      agentLoop({} as any, mockHooks(), 10, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
-    );
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
-
-    // abortSignal is forwarded to llm.completeStream; agentLoop itself does not
-    // short-circuit on abort — that is handled at AgentService.runStream level
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
-  });
-
-  it('should support coreAllowlist to filter available tools', async () => {
-    const mockLlm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve(
-          Result.ok({
-            content: 'Done',
-            toolCalls: [],
-          })
-        ),
-      })),
-    };
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-      coreAllowlist: new Set(['allowed_tool']),
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop({} as any, mockHooks(), 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
-    );
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
-
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
-  });
-
-  it('should accept maxStepsOverride', async () => {
-    const mockLlm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve(
-          Result.ok({
-            content: 'Done',
-            toolCalls: [],
-          })
-        ),
-      })),
-    };
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-      maxStepsOverride: 5,
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop({} as any, mockHooks(), 100, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
-    );
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
     const stepEvents = events.filter((e: any) => e._tag === 'Step');
-    expect(stepEvents.some((e: any) => e.max === 5)).toBe(true);
+    expect(stepEvents.length).toBeGreaterThan(0);
+    for (const s of stepEvents) {
+      expect((s as any).max).toBe(5);
+    }
   });
 
-  it('should support approvalOverride', async () => {
-    const mockLlm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve(
-          Result.ok({
-            content: 'Done',
-            toolCalls: [],
-          })
-        ),
-      })),
-    };
-
-    const mockApproval = {
-      evaluate: () => Effect.succeed({ decision: 'allow' }),
-    };
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-      approvalOverride: mockApproval as any,
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop({} as any, mockHooks(), 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
-    );
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
-
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
-  });
-
-  it('should use maxStopContinuations from deps when opts does not override', async () => {
-    const mockLlm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve(Result.ok({ content: 'Done', toolCalls: [] })),
-      })),
-    };
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop({} as any, mockHooks(), 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
-    );
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
-
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
-  });
-
-  it('should emit turn hooks', async () => {
-    const mockLlm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve(
-          Result.ok({
-            content: 'Done',
-            toolCalls: [],
-          })
-        ),
-      })),
-    };
-
+  it('should emit turn hooks agent.turn.start / agent.turn.end after stopping', async () => {
+    const llm = makeCapturingLlm();
     const hooks = mockHooks();
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop({} as any, hooks, 1, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+    await runAgentTurn(
+      { llm, state: mockState, hooks },
+      { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
     expect(hooks.emit).toHaveBeenCalledWith(
@@ -301,7 +71,20 @@ describe('agentLoop loop options', () => {
     );
     expect(hooks.emit).toHaveBeenCalledWith(
       'agent.turn.end',
-      expect.objectContaining({ status: 'done' })
+      expect.objectContaining({ sessionId: mockState.sessionId, status: 'done' })
     );
+  });
+
+  it('should not produce Done when a pre-aborted signal is passed', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const llm = makeCapturingLlm({ content: 'Response' });
+    const { events } = await runAgentTurn(
+      { llm, state: mockState },
+      { sessionId: 'test-sid', cwd: '/tmp', signal: controller.signal }
+    );
+
+    expect(events.some((e: any) => e._tag === 'Done')).toBe(false);
   });
 });

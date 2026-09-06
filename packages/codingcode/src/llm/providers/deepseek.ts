@@ -5,7 +5,7 @@ import { AgentError } from '../../core/error.js';
 import { mapLlmError } from '../errors.js';
 import type { LLMClient } from '../client.js';
 import type { LLMRequest, LLMResponse } from '../types.js';
-import type { SelectableModel } from '../factory.js';
+import type { SelectableModel } from '../port.js';
 import { convertMessages, convertTools, parseResponseMessages } from './shared.js';
 
 export class DeepSeekProvider implements LLMClient {

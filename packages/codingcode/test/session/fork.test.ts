@@ -3,8 +3,8 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/store.js';
-import { filterForContext, buildContextMessages } from '../../src/context/service.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
@@ -101,7 +101,7 @@ function collectToolCallIds(events: SessionEvent[]): Set<string> {
 }
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionLayer) as any));
 }
 
 describe('forkSession', () => {

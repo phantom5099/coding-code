@@ -60,16 +60,8 @@ describe('agentEventToSseEvent', () => {
     ).toEqual({ type: 'usage', prompt: 1000, completion: 500, total: 1500 });
   });
 
-  it('returns null for Assistant and ReactiveCompact', () => {
+  it('returns null for Assistant', () => {
     expect(agentEventToSseEvent({ _tag: 'Assistant', content: 'ok' })).toBeNull();
-    expect(
-      agentEventToSseEvent({
-        _tag: 'ReactiveCompact',
-        attempt: 1,
-        released: 100,
-        promptEstimate: 0,
-      })
-    ).toBeNull();
   });
 });
 

@@ -1,28 +1,29 @@
 import { describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'fs';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
     maxSteps: 50,
     maxStopContinuations: 2,
-    memory: { enabled: true, disabledTypes: [], extraTypes: [], model: 'test-model' },
+    memory: { enabled: true, model: 'test-model' },
     context: { compactionModel: 'gpt-4o-mini' },
   }),
   updateMemoryModel: vi.fn(),
   updateContextCompactionModel: vi.fn(),
-  DEFAULT_MEMORY_TYPES: [],
 }));
 
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createHttpSettingsClient } from '../../src/client/http/settings.js';
 import { createDirectSettingsClient } from '../../src/direct/settings.js';
-import { ApprovalService } from '../../src/approval/index.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { MemoryService } from '../../src/memory/index.js';
-import { McpService } from '../../src/mcp/index.js';
-import { SkillService } from '../../src/skills/service.js';
+import { ApprovalService } from '../../src/approval/port.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { HookService } from '../../src/hooks/port.js';
+import { MemoryService } from '../../src/memory/port.js';
+import { McpService } from '../../src/mcp/port.js';
+import { SkillService } from '../../src/skills/port.js';
 import * as infraConfig from '@codingcode/infra/config';
+import { HookLayer } from '../../src/hooks/hooks.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
+import { ApprovalLayer } from '../../src/approval/approval.js';
 
 const TestLayer = Layer.mergeAll(
   Layer.succeed(SkillService, {
@@ -50,9 +51,9 @@ const TestLayer = Layer.mergeAll(
     disable: () => Effect.void,
     enable: () => Effect.void,
   } as any),
-  ApprovalService.Default,
-  HookService.Default,
-  ApprovalWaitService.Default
+  ApprovalLayer,
+  HookLayer,
+  ApprovalWaitLayer
 );
 
 const rt = ManagedRuntime.make(
@@ -140,7 +141,7 @@ describe('setCompactionModel: http + direct both implement', () => {
 describe('getMemoryConfig returns model field', () => {
   it('http typed return includes model', async () => {
     const c = createHttpSettingsClient({
-      apiGet: async <T>() => ({ enabled: true, types: [], model: 'm' }) as T,
+      apiGet: async <T>() => ({ enabled: true, model: 'm' }) as T,
       apiPost: async () => null as any,
       apiPut: async () => null as any,
       apiDelete: async () => undefined,
@@ -149,5 +150,3 @@ describe('getMemoryConfig returns model field', () => {
     expect(res.model).toBe('m');
   });
 });
-
-void readFileSync;

@@ -1,10 +1,6 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
-import {
-  DEFAULT_DENY_RULES,
-  READONLY_TOOL_NAMES,
-  DANGEROUS_TOOL_NAMES,
-} from '../../src/approval/presets.js';
+import { DEFAULT_DENY_RULES, DANGEROUS_TOOL_NAMES } from '../../src/approval/presets.js';
 
 describe('Presets', () => {
   it('should have system-source rules', () => {
@@ -40,16 +36,6 @@ describe('Presets', () => {
     const engine = createRuleEngine(DEFAULT_DENY_RULES);
     const result = engine.evaluate('read_file', { path: '/project/.env.production' });
     expect(result).toBeNull();
-  });
-
-  it('should define read-only tools', () => {
-    expect(READONLY_TOOL_NAMES).toContain('read_file');
-    expect(READONLY_TOOL_NAMES).toContain('search_code');
-    expect(READONLY_TOOL_NAMES).toContain('search_files');
-    expect(READONLY_TOOL_NAMES).toContain('fetch_url');
-    expect(READONLY_TOOL_NAMES).toContain('web_search');
-    expect(READONLY_TOOL_NAMES).toContain('dispatch_agent');
-    expect(READONLY_TOOL_NAMES).toContain('todo_write');
   });
 
   it('should define destructive tools', () => {

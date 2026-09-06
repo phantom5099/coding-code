@@ -3,15 +3,14 @@ import { Effect, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import type { SessionStoreState } from '../../session/types.js';
-import type { AgentProfileName } from '../../subagent/types.js';
-import { SessionService } from '../../session/store.js';
-import { getPermissionMode, deleteSession } from '../../session/file-ops.js';
+import type { AgentProfileName } from '../../agent/profile.js';
+import { SessionService } from '../../session/port.js';
 import { computePaths } from '../../core/path.js';
-import { readUIHistory, findUserMessageForTurn } from '../../session/ui-history.js';
-import { ContextService, estimatePromptTokens } from '../../context/service.js';
-import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
+import { ContextService } from '../../context/port.js';
+import { estimatePromptTokensFrom } from '../../context/context.js';
+import { CheckpointService } from '../../checkpoint/port.js';
 import { WorkspaceService } from '../../core/workspace.js';
-import { LLMFactoryService } from '../../llm/factory.js';
+import { LLMFactoryService } from '../../llm/port.js';
 import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
 import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
@@ -159,7 +158,12 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ error: 'cwd required' }, 400);
-    deleteSession(sessionId, cwd);
+    await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        yield* session.deleteSession(sessionId, cwd);
+      }) as any
+    );
     return c.json({ ok: true });
   });
 
@@ -167,8 +171,17 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ error: 'cwd required' }, 400);
-    const turns = readUIHistory(sessionId, cwd);
-    return c.json(turns);
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        return yield* session.readUITurns(sessionId, cwd);
+      }) as any
+    );
+    if (!result.ok) {
+      const { status, body: errBody } = errorResponse(result.error);
+      return c.json(errBody, status as any);
+    }
+    return c.json(result.value);
   });
 
   // ---- Plan file: read the current plan document for a session ----
@@ -286,10 +299,18 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ mode: 'default' });
-    const idxPath = computePaths(cwd, sessionId).indexPath;
-    if (!existsSync(idxPath)) return c.json({ mode: 'default' });
-    const mode = getPermissionMode(idxPath);
-    return c.json({ mode });
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        const mode = yield* session.getPermissionMode(cwd, sessionId);
+        return { mode };
+      }) as any
+    );
+    if (!result.ok) {
+      const { status, body: errBody } = errorResponse(result.error);
+      return c.json(errBody, status as any);
+    }
+    return c.json(result.value);
   });
 
   router.put('/api/sessions/:id/permission-mode', async (c) => {
@@ -302,7 +323,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const setResult = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setPermissionModeOnDisk(cwd, sessionId, mode);
+        yield* session.setPermissionMode(cwd, sessionId, mode);
         return { ok: true };
       }) as any
     );
@@ -511,10 +532,16 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
+        const rolledBackMessage = yield* session.findUserMessageForTurn(
+          sessionId,
+          body.throughTurnId,
+          cwd
+        );
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
-        const turns = readUIHistory(sessionId, cwd);
-        const promptEstimate = estimatePromptTokens(session.getTranscriptPath(state));
+        const turns = yield* session.readUITurns(sessionId, cwd);
+        const promptEstimate = estimatePromptTokensFrom(
+          session.readEvents(session.getTranscriptPath(state))
+        );
         const usage = state.usage;
         return { ok: true, turns, rolledBackMessage, promptEstimate, usage };
       }) as any
@@ -541,10 +568,16 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const checkpoint = yield* CheckpointService;
         const codeResult = yield* checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
         const state = yield* session.load(cwd, sessionId);
-        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
+        const rolledBackMessage = yield* session.findUserMessageForTurn(
+          sessionId,
+          body.throughTurnId,
+          cwd
+        );
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
-        const turns = readUIHistory(sessionId, cwd);
-        const promptEstimate = estimatePromptTokens(session.getTranscriptPath(state));
+        const turns = yield* session.readUITurns(sessionId, cwd);
+        const promptEstimate = estimatePromptTokensFrom(
+          session.readEvents(session.getTranscriptPath(state))
+        );
         const usage = state.usage;
         return {
           ok: true,
@@ -603,9 +636,9 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
         const newSessionId = yield* session.forkSession(state, atTurnId);
-        const turns = readUIHistory(newSessionId, cwd);
+        const turns = yield* session.readUITurns(newSessionId, cwd);
         const newJsonlPath = computePaths(cwd, newSessionId).transcriptPath;
-        const promptEstimate = estimatePromptTokens(newJsonlPath);
+        const promptEstimate = estimatePromptTokensFrom(session.readEvents(newJsonlPath));
         return { sessionId: newSessionId, turns, promptEstimate };
       }) as any
     );

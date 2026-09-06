@@ -57,9 +57,9 @@ function streamChunkToItem(
       return { id: 'rand', type: 'error', message: event.message };
     case 'todo_update':
       return null;
-    case 'usage':
+    case 'context_compressed':
       return null;
-    case 'reactive_compact':
+    case 'usage':
       return null;
     case 'done':
     case 'session_id':
@@ -188,9 +188,9 @@ describe('streamChunkToItem after StreamChunk refactor', () => {
     expect(item).toBeNull();
   });
 
-  it('maps reactive_compact to null', () => {
+  it('maps context_compressed to null (store side-effects handled by hook)', () => {
     const item = streamChunkToItem(
-      { type: 'reactive_compact', released: 500, promptEstimate: 800 },
+      { type: 'context_compressed', released: 500, promptEstimate: 1200 },
       't1',
       'a1',
       'turn1'

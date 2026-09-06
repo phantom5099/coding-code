@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { filterForContext, buildContextMessages } from '../../src/context/service.js';
+import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import { filterForUI } from '../../src/session/ui-history.js';
 import type { SessionEvent, SessionIndex } from '../../src/session/types.js';

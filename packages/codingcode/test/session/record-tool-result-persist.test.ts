@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
 
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionLayer) as any));
 }
 
 describe('recordToolResult', () => {

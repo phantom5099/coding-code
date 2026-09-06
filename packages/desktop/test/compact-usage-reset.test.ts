@@ -5,10 +5,12 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { useAgentStore } from '../src/stores/agent.store';
 import { useWorkspaceStore } from '../src/stores/workspace.store';
 
-// Reconstruct the side-effect block from useAgentCore.streamChunkToItem for the
-// 'reactive_compact' case. This mirrors the actual implementation so we can
-// exercise it without rendering the full hook.
-function handleReactiveCompact(threadId: string, event: { promptEstimate: number }): void {
+// Reconstruct the context_compressed stream handler from useAgentCore's
+// streamChunkToItem. Mirrors the case body so we can drive it standalone.
+function handleContextCompressed(
+  threadId: string,
+  event: { promptEstimate: number }
+): void {
   const contextUsage = useAgentStore.getState().contextUsage;
   if (contextUsage) {
     useAgentStore.getState().setContextUsage({
@@ -19,8 +21,44 @@ function handleReactiveCompact(threadId: string, event: { promptEstimate: number
   useAgentStore.getState().clearThreadUsage(threadId);
 }
 
-// Reconstruct the manual /compact handler from AgentWorkspace.ContextIndicator.
-// Mirrors the onClick body so we can drive it without rendering the component.
+describe('context_compressed stream handler', () => {
+  it('clears usageByThreadId for the affected thread only', () => {
+    useAgentStore
+      .getState()
+      .setThreadUsage('thread-1', { prompt: 3000, completion: 500, total: 3500 });
+    useAgentStore
+      .getState()
+      .setThreadUsage('thread-2', { prompt: 800, completion: 400, total: 1200 });
+
+    handleContextCompressed('thread-1', { promptEstimate: 1200 });
+
+    expect(useAgentStore.getState().usageByThreadId['thread-1']).toBeUndefined();
+    expect(useAgentStore.getState().usageByThreadId['thread-2']).toEqual({
+      prompt: 800,
+      completion: 400,
+      total: 1200,
+    });
+  });
+
+  it('updates contextUsage.used to the post-compression promptEstimate', () => {
+    handleContextCompressed('thread-1', { promptEstimate: 1200 });
+    expect(useAgentStore.getState().contextUsage).toEqual({
+      used: 1200,
+      contextWindow: 128000,
+    });
+  });
+
+  it('does not throw when contextUsage is null (e.g., model not loaded)', () => {
+    useAgentStore.getState().setContextUsage(null);
+    useAgentStore
+      .getState()
+      .setThreadUsage('thread-1', { prompt: 3000, completion: 500, total: 3500 });
+
+    expect(() => handleContextCompressed('thread-1', { promptEstimate: 1200 })).not.toThrow();
+    expect(useAgentStore.getState().usageByThreadId['thread-1']).toBeUndefined();
+  });
+});
+
 async function runManualCompact(
   threadId: string,
   response: { didCompress: boolean; promptEstimate: number; released: number }
@@ -66,47 +104,6 @@ beforeEach(() => {
     projects: [],
     currentProjectId: '',
     git: { branch: 'main', isDirty: false, staged: [], unstaged: [] },
-  });
-});
-
-describe('reactive_compact streaming handler', () => {
-  it('clears usageByThreadId for the affected thread only', () => {
-    useAgentStore
-      .getState()
-      .setThreadUsage('thread-1', { prompt: 3000, completion: 500, total: 3500 });
-    useAgentStore
-      .getState()
-      .setThreadUsage('thread-2', { prompt: 800, completion: 400, total: 1200 });
-
-    handleReactiveCompact('thread-1', { promptEstimate: 1200 });
-
-    expect(useAgentStore.getState().usageByThreadId['thread-1']).toBeUndefined();
-    expect(useAgentStore.getState().usageByThreadId['thread-2']).toEqual({
-      prompt: 800,
-      completion: 400,
-      total: 1200,
-    });
-  });
-
-  it('updates contextUsage.used to the new promptEstimate', () => {
-    useAgentStore.getState().setContextUsage({ used: 95000, contextWindow: 128000 });
-
-    handleReactiveCompact('thread-1', { promptEstimate: 1200 });
-
-    expect(useAgentStore.getState().contextUsage).toEqual({
-      used: 1200,
-      contextWindow: 128000,
-    });
-  });
-
-  it('does not throw when contextUsage is null (e.g., model not loaded)', () => {
-    useAgentStore.getState().setContextUsage(null);
-    useAgentStore
-      .getState()
-      .setThreadUsage('thread-1', { prompt: 3000, completion: 500, total: 3500 });
-
-    expect(() => handleReactiveCompact('thread-1', { promptEstimate: 1200 })).not.toThrow();
-    expect(useAgentStore.getState().usageByThreadId['thread-1']).toBeUndefined();
   });
 });
 

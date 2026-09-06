@@ -3,18 +3,15 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { mkdtempSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
 import { computePaths } from '../../src/core/path.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { McpService } from '../../src/mcp/index.js';
-import { RulesService } from '../../src/rules/index.js';
-import { ApprovalService } from '../../src/approval/index.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { HookService } from '../../src/hooks/port.js';
+import { ApprovalService } from '../../src/approval/port.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { planProfileGateHook, isSessionUsingPlanProfile } from '../../src/agent/profile.js';
-import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/agent/profile.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { ApprovalLayer } from '../../src/approval/approval.js';
 
 useTempProjectBase();
 
@@ -45,18 +42,6 @@ const mockHookService = {
   disposeProject: () => Effect.succeed(undefined),
 };
 
-const mockMcpService = {
-  syncConnections: () => Effect.succeed(undefined),
-  connectServers: () => Effect.succeed(undefined),
-  listProjectMcpTools: () => [],
-  disposeSession: () => Effect.succeed(undefined),
-} as any;
-
-const mockRulesService = {
-  getAllRules: () => '',
-  evictProjectRules: () => undefined,
-} as any;
-
 const mockApprovalWaitService = {
   waitForConfirm: () => Effect.dieMessage('not implemented'),
   resolveConfirm: () => Effect.succeed(false),
@@ -70,13 +55,8 @@ const mockApprovalWaitService = {
 
 function makeLayer() {
   const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
-  const McpTestLayer = Layer.succeed(McpService, mockMcpService);
-  const RulesTestLayer = Layer.succeed(RulesService, mockRulesService);
-  const SessionTestLayer = SessionService.Default;
-  const ProjectRuntimeTestLayer = ProjectRuntimeService.Default.pipe(
-    Layer.provide(Layer.mergeAll(HookTestLayer, McpTestLayer, RulesTestLayer, SessionTestLayer))
-  );
-  const ApprovalTestLayer = ApprovalService.Default.pipe(
+  const SessionTestLayer = SessionLayer;
+  const ApprovalTestLayer = ApprovalLayer.pipe(
     Layer.provide(
       Layer.mergeAll(
         HookTestLayer,
@@ -84,14 +64,19 @@ function makeLayer() {
       )
     )
   );
-  const TestLayer = Layer.mergeAll(
-    ProjectRuntimeTestLayer,
+  return Layer.mergeAll(
     SessionTestLayer,
     HookTestLayer,
     ApprovalTestLayer,
     Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any)
   );
-  return TestLayer;
+}
+
+function setProfileEffect(cwd: string, sessionId: string, profile: 'plan' | 'build') {
+  return Effect.gen(function* () {
+    const session = yield* SessionService;
+    yield* session.setActiveProfile(cwd, sessionId, profile);
+  });
 }
 
 describe('plan profile security boundary (cross-restart, disk only)', () => {
@@ -148,13 +133,7 @@ describe('plan profile security boundary (cross-restart, disk only)', () => {
   }
 
   it('scenario 1: switch to plan, write_file is denied by the plan-profile gate hook', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
-        yield* runtime.prepareProject(cwd);
-        yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
-      })
-    );
+    await rt.runPromise(setProfileEffect(cwd, sessionId, 'plan'));
     expect(isSessionUsingPlanProfile(sessionId, cwd)).toBe(true);
 
     const decision = await evaluateAsSession('write_file', { path: '/tmp/x', content: 'foo' });
@@ -164,13 +143,7 @@ describe('plan profile security boundary (cross-restart, disk only)', () => {
   });
 
   it('scenario 2: switch to plan, execute_command is denied by the plan-profile gate hook', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
-        yield* runtime.prepareProject(cwd);
-        yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
-      })
-    );
+    await rt.runPromise(setProfileEffect(cwd, sessionId, 'plan'));
 
     const decision = await evaluateAsSession('execute_command', { command: 'echo hello' });
     expect(decision.type).toBe('deny');
@@ -179,13 +152,7 @@ describe('plan profile security boundary (cross-restart, disk only)', () => {
   });
 
   it('scenario 3: switch to plan, submit_plan is short-circuited by the pipeline', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
-        yield* runtime.prepareProject(cwd);
-        yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
-      })
-    );
+    await rt.runPromise(setProfileEffect(cwd, sessionId, 'plan'));
 
     const decision: any = await evaluateAsSession('submit_plan', { plan_content: 'do things' });
     expect(decision.type).toBe('allow');
@@ -193,13 +160,7 @@ describe('plan profile security boundary (cross-restart, disk only)', () => {
   });
 
   it('scenario 4: after restart (state reloaded from disk), plan profile still enforced', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
-        yield* runtime.prepareProject(cwd);
-        yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
-      })
-    );
+    await rt.runPromise(setProfileEffect(cwd, sessionId, 'plan'));
 
     const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
     expect(idx.activeProfile).toBe('plan');
@@ -226,12 +187,9 @@ describe('plan profile security boundary (cross-restart, disk only)', () => {
 
   it('scenario 5: plan profile → switch to build → write_file is no longer denied by plan profile', async () => {
     await rt.runPromise(
-      Effect.gen(function* () {
-        const runtime = yield* ProjectRuntimeService;
-        yield* runtime.prepareProject(cwd);
-        yield* runtime.setSessionProfile(cwd, sessionId, PLAN_PROFILE);
-        yield* runtime.setSessionProfile(cwd, sessionId, BUILD_PROFILE);
-      })
+      setProfileEffect(cwd, sessionId, 'plan').pipe(
+        Effect.andThen(setProfileEffect(cwd, sessionId, 'build'))
+      )
     );
     expect(isSessionUsingPlanProfile(sessionId, cwd)).toBe(false);
 

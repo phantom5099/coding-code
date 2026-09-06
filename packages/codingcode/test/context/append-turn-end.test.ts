@@ -15,8 +15,6 @@ vi.mock('@codingcode/infra/config', () => ({
       model: '',
       maxBytes: 16384,
       promptMaxBytes: 8192,
-      extraTypes: [],
-      disabledTypes: [],
     },
     server: { port: 8080 },
   }),

@@ -5,9 +5,8 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { runPipeline } from '../../src/approval/pipeline.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
-import { READONLY_TOOL_NAMES } from '../../src/approval/presets.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { HookService } from '../../src/hooks/port.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { planProfileGateHook } from '../../src/agent/profile.js';
 import { computePaths } from '../../src/core/path.js';
 import type { DecisionHandler } from '../../src/hooks/types.js';
@@ -103,7 +102,6 @@ function runPipelineWithMock(opts: {
       { tool: opts.tool, input: opts.input },
       {
         ruleEngine: createRuleEngine([]),
-        readonlyTools: new Set(READONLY_TOOL_NAMES),
         destructiveTools: new Set(),
         permissionMode: opts.permissionMode,
         sessionId: opts.sessionId,
@@ -152,7 +150,7 @@ describe('Plan profile gate hook integration', () => {
     expect(capturedApproval).toBeNull();
   });
 
-  it('plan profile + dispatch_agent: readonly approval remains unchanged', async () => {
+  it('plan profile + dispatch_agent: denied by plan gate (no longer auto-allowed)', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'dispatch_agent',
       input: { agent: 'build', prompt: 'do something' },
@@ -161,7 +159,9 @@ describe('Plan profile gate hook integration', () => {
       planProfile: true,
       cwd,
     });
-    expect(decision.type).toBe('allow');
+    expect(decision.type).toBe('deny');
+    expect(decision.reason).toMatch(/plan profile/i);
+    expect(capturedApproval).toBeNull();
   });
 
   it('build profile + write_file: gate does not fire, pipeline falls through normally', async () => {

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { Thread, Turn, Item, TodoItem } from '@shared/types';
-import type { AgentProfileName } from '@codingcode/core/subagent/types';
+import type { AgentProfileName } from '@codingcode/core/agent/profile';
 import type { PermissionMode } from '@codingcode/core/approval/types';
 import { buildToolDiff } from '../lib/diff-compute';
 import { createDebouncedStorage, normalizeCwd } from './storage';

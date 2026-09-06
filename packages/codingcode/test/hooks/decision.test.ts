@@ -1,8 +1,9 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { HookService } from '../../src/hooks/registry.js';
+import { HookService } from '../../src/hooks/port.js';
+import { HookLayer } from '../../src/hooks/hooks.js';
 
-const TestLayer = HookService.Default;
+const TestLayer = HookLayer;
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(TestLayer) as any));

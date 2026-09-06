@@ -3,16 +3,18 @@ import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
-import { ContextService } from '../../src/context/service.js';
-import { SessionService } from '../../src/session/store.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
+import { ContextService } from '../../src/context/port.js';
+import type { ContextShape } from '../../src/context/port.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
 import type { SessionEvent } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { ContextLayer } from '../../src/context/context.js';
 
 const base = useTempProjectBase();
 
 const TestLayer = Layer.merge(
-  SessionService.Default,
+  SessionLayer,
   Layer.succeed(LLMFactoryService, {
     listModels: () => Effect.succeed([]),
     findModel: () => Effect.succeed(null),
@@ -23,11 +25,11 @@ const TestLayer = Layer.merge(
   } as any)
 );
 
-async function getCtxService(): Promise<ContextService> {
+async function getCtxService(): Promise<ContextShape> {
   return Effect.runPromise(
     Effect.gen(function* () {
       return yield* ContextService;
-    }).pipe(Effect.provide(ContextService.Default), Effect.provide(TestLayer))
+    }).pipe(Effect.provide(ContextLayer), Effect.provide(TestLayer))
   );
 }
 
@@ -103,19 +105,18 @@ describe('assemblePayload integration', () => {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
-  it('returns messages and compactedEvents', async () => {
+  it('returns messages assembled from the transcript', async () => {
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(jsonlPath, 128000);
+    const result = await ctx.assemblePayload(jsonlPath, 128000, null);
 
     expect(result.messages.length).toBeGreaterThan(0);
-    expect(Array.isArray(result.compactedEvents)).toBe(true);
-    expect(result.currentTurnId).toBe(1);
-    expect(result.promptEstimate).toBeGreaterThan(0);
   });
 
-  it('returns currentTurnId from session index', async () => {
+  it('returns an empty message list when the transcript is empty', async () => {
+    const emptyJsonl = join(sessionDir, `${sessionId}-empty.jsonl`);
+    writeFileSync(emptyJsonl, '', 'utf8');
     const ctx = await getCtxService();
-    const result = ctx.assemblePayload(jsonlPath, 128000);
-    expect(result.currentTurnId).toBe(1);
+    const result = await ctx.assemblePayload(emptyJsonl, 128000, null);
+    expect(result.messages).toEqual([]);
   });
 });

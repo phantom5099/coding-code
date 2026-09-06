@@ -3,9 +3,10 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService, SessionLayer } from '../../src/session/index.js';
 
-import { estimatePromptTokens } from '../../src/context/service.js';
+import { estimatePromptTokensFrom } from '../../src/context/context.js';
+import { readHistory } from '../../src/session/file-ops.js';
 import { estimateTokensForContent } from '../../src/core/util.js';
 import { encodeProjectPath, computePaths } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
@@ -85,7 +86,7 @@ function makeFixture(
 }
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionLayer) as any));
 }
 
 describe('promptEstimate', () => {
@@ -149,7 +150,9 @@ describe('promptEstimate', () => {
       const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
       const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
       expect(idx.sessionId).toBe(newSessionId);
-      expect(estimatePromptTokens(join(fx.dir, `${newSessionId}.jsonl`))).toBeGreaterThan(0);
+      expect(
+        estimatePromptTokensFrom(readHistory(join(fx.dir, `${newSessionId}.jsonl`)))
+      ).toBeGreaterThan(0);
     } finally {
       rmSync(join(base.dir, slug), { recursive: true, force: true });
     }

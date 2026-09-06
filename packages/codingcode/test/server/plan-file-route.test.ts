@@ -8,21 +8,23 @@ import { join } from 'path';
 import { Hono } from 'hono';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
-import { SessionService } from '../../src/session/store.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
-import { ApprovalService } from '../../src/approval/index.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { SkillService } from '../../src/skills/service.js';
-import { McpService } from '../../src/mcp/index.js';
-import { MemoryService } from '../../src/memory/index.js';
-import { SchedulerService } from '../../src/scheduler/service.js';
-import { ContextService } from '../../src/context/service.js';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
+import { SessionService } from '../../src/session/index.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
+import { ApprovalService } from '../../src/approval/port.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { HookService } from '../../src/hooks/port.js';
+import { SkillService } from '../../src/skills/port.js';
+import { McpService } from '../../src/mcp/port.js';
+import { MemoryService } from '../../src/memory/port.js';
+import { SchedulerService } from '../../src/scheduler/port.js';
+import { ContextService } from '../../src/context/port.js';
+import { CheckpointService } from '../../src/checkpoint/port.js';
 import { setProjectBaseDir } from '../../src/core/path.js';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
+import { HookLayer } from '../../src/hooks/hooks.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
+import { ApprovalLayer } from '../../src/approval/approval.js';
 
 const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
   getWorkspaceCwd: () => '/tmp/test',
@@ -101,8 +103,8 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
   switchModel: () => Effect.fail(new Error('no models')),
 } as any);
 
-const MockApprovalLayer = ApprovalService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookService.Default, ApprovalWaitService.Default))
+const MockApprovalLayer = ApprovalLayer.pipe(
+  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
 );
 
 const MockSkillLayer = Layer.succeed(SkillService, {
@@ -186,30 +188,19 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
   getLatestRestoreEntry: () => Effect.succeed(null),
 } as any);
 
-const MockProjectRuntimeLayer = Layer.succeed(ProjectRuntimeService, {
-  getSessionProfile: () => 'plan',
-  setSessionProfile: () => Effect.void,
-  resolveSubagentProfile: () => undefined,
-  registerActiveSession: () => Effect.void,
-  unregisterActiveSession: () => Effect.void,
-  getActiveSessions: () => [],
-  clearActiveSessions: () => Effect.void,
-} as any);
-
 const TestLayer = Layer.mergeAll(
   MockWorkspaceLayer,
   MockSessionLayer,
   MockLLMFactoryLayer,
   MockApprovalLayer,
-  HookService.Default,
-  ApprovalWaitService.Default,
+  HookLayer,
+  ApprovalWaitLayer,
   MockSkillLayer,
   MockMcpLayer,
   MockMemoryLayer,
   MockSchedulerLayer,
   MockContextLayer,
-  MockCheckpointLayer,
-  MockProjectRuntimeLayer
+  MockCheckpointLayer
 );
 
 let tempBase = '';
@@ -231,7 +222,7 @@ afterEach(() => {
 
 describe('GET /api/sessions/:id/plan', () => {
   it('returns exists:false with empty content when no .md file is present', async () => {
-    const rt = ManagedRuntime.make(TestLayer);
+    const rt = ManagedRuntime.make(TestLayer as any);
     const app = new Hono();
     registerSessionsRoutes(app, rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
@@ -258,7 +249,7 @@ describe('GET /api/sessions/:id/plan', () => {
     utimesSync(oldPath, olderDate, olderDate);
     utimesSync(newPath, newerDate, newerDate);
 
-    const rt = ManagedRuntime.make(TestLayer);
+    const rt = ManagedRuntime.make(TestLayer as any);
     const app = new Hono();
     registerSessionsRoutes(app, rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
@@ -278,7 +269,7 @@ describe('GET /api/sessions/:id/plan', () => {
     writeFileSync(mdPath, '# ONLY-MD', 'utf8');
     writeFileSync(join(plansDir, 'notes.txt'), 'should be ignored', 'utf8');
 
-    const rt = ManagedRuntime.make(TestLayer);
+    const rt = ManagedRuntime.make(TestLayer as any);
     const app = new Hono();
     registerSessionsRoutes(app, rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');

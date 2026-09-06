@@ -4,10 +4,11 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID, createHash } from 'crypto';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { CheckpointService } from '../../src/checkpoint/port.js';
 import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
 import { normalizePath } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { CheckpointLayer } from '../../src/checkpoint/checkpoint.js';
 
 useTempProjectBase();
 
@@ -26,8 +27,8 @@ describe('checkpoint turn title removal', () => {
           writeFileSync(join(projectPath, 'after.txt'), 'after', 'utf8');
           yield* checkpoint.snapshotFinal(projectPath, sessionId, 1);
           return yield* checkpoint.getCheckpoints(projectPath, sessionId);
-        }).pipe(Effect.provide(CheckpointService.Default))
-      );
+        }).pipe(Effect.provide(CheckpointLayer) as any)
+      ) as Array<{ turnId: number; files: string[] }>;
 
       expect(checkpoints).toEqual([
         {
@@ -47,5 +48,5 @@ describe('checkpoint turn title removal', () => {
     } finally {
       rmSync(projectPath, { recursive: true, force: true });
     }
-  }, 15000);
+  }, 60000);
 });

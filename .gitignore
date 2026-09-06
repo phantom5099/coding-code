@@ -33,6 +33,10 @@ client-tests.txt
 desktop-test.txt
 h-test.txt
 test-fallback.txt
+test2.txt
+tsc-out.txt
+arch-out.txt
+vitest-result.json
 
 # Compiled JS artifacts leaked into src directories
 packages/infra/src/*.js
@@ -51,3 +55,4 @@ packages/desktop/pnpm-workspace.yaml
 Thumbs.db
 .idea/
 .vscode/
+.workbuddy/memory/

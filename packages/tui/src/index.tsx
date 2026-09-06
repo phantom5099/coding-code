@@ -7,7 +7,7 @@ import { createDirectSessionClient } from '@codingcode/core/direct/sessions';
 import { createDirectSettingsClient } from '@codingcode/core/direct/settings';
 import { createDirectModelClient } from '@codingcode/core/direct/models';
 import type { LLMClient } from '@codingcode/core/llm/client';
-import type { AppRuntime } from '@codingcode/core/layer';
+import type { AppRuntime } from '@codingcode/core';
 
 export type { StreamChunk };
 

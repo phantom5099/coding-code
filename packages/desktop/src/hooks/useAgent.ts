@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '../stores/workspace.store';
 import { useRollbackStore } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import type { StreamChunk } from '@codingcode/core/client/types';
-import type { AgentProfileName } from '@codingcode/core/subagent/types';
+import type { AgentProfileName } from '@codingcode/core/agent/profile';
 import type { PermissionMode } from '@codingcode/core/approval/types';
 import { ApiError } from '../lib/api';
 import {
@@ -115,7 +115,6 @@ export function useAgentCore() {
   const setModels = useAgentStore((s) => s.setModels);
   const setContextUsage = useAgentStore((s) => s.setContextUsage);
   const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
-  const clearThreadUsage = useAgentStore((s) => s.clearThreadUsage);
   const workspace = useWorkspaceStore();
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
   const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
@@ -258,6 +257,17 @@ export function useAgentCore() {
         case 'todo_update':
           applyTodoUpdate(threadId, event.items as any);
           return null;
+        case 'context_compressed': {
+          const contextUsage = useAgentStore.getState().contextUsage;
+          if (contextUsage) {
+            setContextUsage({
+              used: event.promptEstimate,
+              contextWindow: contextUsage.contextWindow,
+            });
+          }
+          useAgentStore.getState().clearThreadUsage(threadId);
+          return null;
+        }
         case 'usage': {
           setThreadUsage(threadId, {
             prompt: event.prompt,
@@ -271,18 +281,6 @@ export function useAgentCore() {
           }
           return null;
         }
-        case 'reactive_compact':
-          {
-            const contextUsage = useAgentStore.getState().contextUsage;
-            if (contextUsage) {
-              setContextUsage({
-                used: event.promptEstimate,
-                contextWindow: contextUsage.contextWindow,
-              });
-            }
-            clearThreadUsage(threadId);
-          }
-          return null;
         case 'done':
         case 'session_id':
           return null;
@@ -290,7 +288,7 @@ export function useAgentCore() {
           return null;
       }
     },
-    [applyTodoUpdate, updateTurnId, setThreadUsage, setContextUsage, clearThreadUsage]
+    [applyTodoUpdate, updateTurnId, setThreadUsage, setContextUsage]
   );
 
   const sendMessage = useCallback(

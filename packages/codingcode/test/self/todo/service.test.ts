@@ -1,7 +1,8 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { TodoService, countByStatus } from '../../../src/agent/todo.js';
-import type { Todo } from '../../../src/agent/types.js';
+import { TodoService, countByStatus } from '../../../src/todo/port.js';
+import type { Todo } from '../../../src/todo/port.js';
+import { TodoLayer } from '../../../src/todo/todo.js';
 
 describe('TodoService', () => {
   it('write then read returns full list', async () => {
@@ -16,7 +17,7 @@ describe('TodoService', () => {
         const svc = yield* TodoService;
         svc.write('agent-a', plan);
         return svc.read('agent-a');
-      }).pipe(Effect.provide(TodoService.Default))
+      }).pipe(Effect.provide(TodoLayer))
     );
 
     expect(got).toEqual(plan);
@@ -32,7 +33,7 @@ describe('TodoService', () => {
           readA: svc.read('agent-a'),
           readB: svc.read('agent-b'),
         };
-      }).pipe(Effect.provide(TodoService.Default))
+      }).pipe(Effect.provide(TodoLayer))
     );
 
     expect(readA).toHaveLength(1);
@@ -48,7 +49,7 @@ describe('TodoService', () => {
         svc.write('agent-r', [{ step: 'first', status: 'pending' }]);
         svc.write('agent-r', [{ step: 'second', status: 'completed' }]);
         return svc.read('agent-r');
-      }).pipe(Effect.provide(TodoService.Default))
+      }).pipe(Effect.provide(TodoLayer))
     );
 
     expect(got).toHaveLength(1);
@@ -60,7 +61,7 @@ describe('TodoService', () => {
       Effect.gen(function* () {
         const svc = yield* TodoService;
         return svc.read('unknown');
-      }).pipe(Effect.provide(TodoService.Default))
+      }).pipe(Effect.provide(TodoLayer))
     );
 
     expect(result).toEqual([]);
@@ -86,7 +87,7 @@ describe('TodoService', () => {
         svc.reset();
 
         return svc.read('agent-x');
-      }).pipe(Effect.provide(TodoService.Default))
+      }).pipe(Effect.provide(TodoLayer))
     );
 
     expect(result).toEqual([]);

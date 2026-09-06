@@ -1,19 +1,24 @@
 import { expect, it, describe } from 'vitest';
-import { Effect, Layer } from 'effect';
-import { ApprovalService } from '../../src/approval/index.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { Context, Effect, Layer } from 'effect';
+import { ApprovalService } from '../../src/approval/port.js';
+import { HookService } from '../../src/hooks/port.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { HookLayer } from '../../src/hooks/hooks.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
+import { ApprovalLayer as ApprovalLayerImpl } from '../../src/approval/approval.js';
 
-const ApprovalLayer = ApprovalService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookService.Default, ApprovalWaitService.Default))
+type ApprovalSvc = Context.Tag.Service<typeof ApprovalService>;
+
+const ApprovalLayer = ApprovalLayerImpl.pipe(
+  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
 );
 
 describe('ApprovalService.fork', () => {
-  async function makeApproval(): Promise<ApprovalService> {
+  async function makeApproval(): Promise<ApprovalSvc> {
     return await Effect.runPromise(
       Effect.gen(function* () {
         return yield* ApprovalService;
-      }).pipe(Effect.provide(ApprovalLayer))
+      }).pipe(Effect.provide(ApprovalLayer) as any)
     );
   }
 
@@ -21,7 +26,7 @@ describe('ApprovalService.fork', () => {
     const parent = await makeApproval();
     const forkEffect = (parent as any).fork();
 
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalService;
+    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
     expect(child).toBeDefined();
     expect(child.evaluate).toBeDefined();
     expect(child.fork).toBeDefined();
@@ -31,7 +36,7 @@ describe('ApprovalService.fork', () => {
     const parent = await makeApproval();
     const forkEffect = (parent as any).fork();
 
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalService;
+    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
 
     const parentMode = parent.getPermissionMode();
     const childMode = child.getPermissionMode();
@@ -57,7 +62,7 @@ describe('ApprovalService.fork', () => {
     );
 
     const forkEffect = (parent as any).fork();
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalService;
+    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
 
     expect(child).toBeDefined();
   });
@@ -66,7 +71,7 @@ describe('ApprovalService.fork', () => {
     const parent = await makeApproval();
     const forkEffect = (parent as any).fork({ readonly: true });
 
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalService;
+    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
 
     expect(child).toBeDefined();
     expect(child.evaluate).toBeDefined();
@@ -84,7 +89,7 @@ describe('ApprovalService.fork', () => {
       ],
     });
 
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalService;
+    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
 
     expect(child).toBeDefined();
   });
@@ -93,10 +98,10 @@ describe('ApprovalService.fork', () => {
     const parent = await makeApproval();
 
     const forkEffect1 = (parent as any).fork();
-    const child1 = (await Effect.runPromise(forkEffect1)) as ApprovalService;
+    const child1 = (await Effect.runPromise(forkEffect1)) as ApprovalSvc;
 
     const forkEffect2 = (child1 as any).fork();
-    const child2 = (await Effect.runPromise(forkEffect2)) as ApprovalService;
+    const child2 = (await Effect.runPromise(forkEffect2)) as ApprovalSvc;
 
     expect(child1).toBeDefined();
     expect(child2).toBeDefined();
@@ -128,7 +133,7 @@ describe('ApprovalService.fork', () => {
     );
 
     const forkEffect = (parent as any).fork();
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalService;
+    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
 
     expect(child).toBeDefined();
   });
@@ -136,7 +141,7 @@ describe('ApprovalService.fork', () => {
   it('should isolate rule changes', async () => {
     const parent = await makeApproval();
     const forkEffect = (parent as any).fork();
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalService;
+    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
 
     await Effect.runPromise(
       child.addRule({
@@ -164,7 +169,7 @@ describe('ApprovalService.fork', () => {
       ],
     });
 
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalService;
+    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
 
     expect(child).toBeDefined();
   });

@@ -1,15 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
-import { Effect, Layer } from 'effect';
-import { SkillService } from '../../src/skills/service.js';
+import { Context, Effect, Layer } from 'effect';
+import { SkillService } from '../../src/skills/port.js';
+import { SkillLayer } from '../../src/skills/skills.js';
 
 const TEST_ROOT = process.cwd();
 const TEST_CODINGCODE_DIR = join(TEST_ROOT, '.codingcode');
 
-const SkillTestLayer = SkillService.Default;
+type SkillSvc = Context.Tag.Service<typeof SkillService>;
 
-const runWithSkill = <A>(f: (skill: SkillService) => Effect.Effect<A>): A =>
+const SkillTestLayer = SkillLayer;
+
+const runWithSkill = <A>(f: (skill: SkillSvc) => Effect.Effect<A>): A =>
   Effect.runSync(
     Effect.gen(function* () {
       const skill = yield* SkillService;
@@ -19,7 +22,7 @@ const runWithSkill = <A>(f: (skill: SkillService) => Effect.Effect<A>): A =>
 
 /** Run multiple operations against the same SkillService instance (shared cache). */
 const runWithSharedSkill = <A>(
-  ...ops: Array<(skill: SkillService) => Effect.Effect<unknown>>
+  ...ops: Array<(skill: SkillSvc) => Effect.Effect<unknown>>
 ): A[] =>
   Effect.runSync(
     Effect.gen(function* () {
@@ -34,8 +37,12 @@ const runWithSharedSkill = <A>(
 
 describe('SkillService', () => {
   beforeEach(() => {
-    if (existsSync(TEST_CODINGCODE_DIR))
-      rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    try {
+      if (existsSync(TEST_CODINGCODE_DIR))
+        rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    } catch {
+      /* best-effort cleanup */
+    }
     runWithSkill((s) => s.evictProject(TEST_ROOT));
     const dir = join(TEST_CODINGCODE_DIR, 'skills', 'test-basic');
     mkdirSync(dir, { recursive: true });
@@ -57,9 +64,21 @@ Test the skill system.
   });
 
   afterEach(() => {
-    if (existsSync(TEST_CODINGCODE_DIR))
-      rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    try {
+      if (existsSync(TEST_CODINGCODE_DIR))
+        rmSync(TEST_CODINGCODE_DIR, { recursive: true, force: true });
+    } catch {
+      /* best-effort cleanup */
+    }
     runWithSkill((s) => s.evictProject(TEST_ROOT));
+  });
+
+  afterAll(() => {
+    try {
+      if (existsSync(TEST_ROOT)) rmSync(TEST_ROOT, { recursive: true, force: true });
+    } catch {
+      /* temp dir cleanup is best-effort */
+    }
   });
 
   it('should load skills from .codingcode/skills/ on demand', () => {

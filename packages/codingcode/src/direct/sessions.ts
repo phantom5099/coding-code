@@ -1,8 +1,7 @@
 import { Effect } from 'effect';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join } from 'path';
-import { SessionService } from '../session/store.js';
-import { deleteSession } from '../session/file-ops.js';
+import { SessionService } from '../session/port.js';
 import { encodeProjectPath, getProjectBaseDir } from '../core/path.js';
 import type { PermissionMode } from '../approval/types.js';
 import type {
@@ -13,7 +12,7 @@ import type {
   RollbackState,
 } from '../checkpoint/types.js';
 import type { SessionEvent, SessionIndex } from '../session/types.js';
-import type { AgentProfileName } from '../subagent/types.js';
+import type { AgentProfileName } from '../agent/profile.js';
 import type { AppRuntime } from '../layer.js';
 
 export interface SessionClient {
@@ -140,7 +139,12 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     },
 
     async deleteSession({ sessionId, cwd }) {
-      deleteSession(sessionId, cwd);
+      await rt.runPromise(
+        Effect.gen(function* () {
+          const session = yield* SessionService;
+          yield* session.deleteSession(sessionId, cwd);
+        })
+      );
     },
 
     async getSessionProfile({ sessionId, cwd }) {
@@ -176,8 +180,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       const mode = await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.load(cwd, sessionId);
-          return yield* session.getPermissionMode(state);
+          return yield* session.getPermissionMode(cwd, sessionId);
         })
       );
       return mode as PermissionMode;
@@ -187,8 +190,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.load(cwd, sessionId);
-          yield* session.setPermissionMode(state, mode);
+          yield* session.setPermissionMode(cwd, sessionId, mode);
         })
       );
     },

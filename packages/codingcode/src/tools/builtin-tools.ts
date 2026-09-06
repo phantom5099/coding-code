@@ -10,7 +10,7 @@ import { globTool } from './domains/fs/glob.js';
 import { webFetchTool } from './domains/web/fetch.js';
 import { webSearchTool } from './domains/web/search.js';
 import { createTodoWriteTool } from './domains/self/todo-write.js';
-import { TodoService } from '../agent/todo.js';
+import { TodoService } from '../todo/port.js';
 
 const STATELESS_BUILTIN_TOOLS: ToolDefinition[] = [
   readFileTool,

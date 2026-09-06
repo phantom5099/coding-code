@@ -16,8 +16,3 @@ export interface ToolDefinition {
   parameters: z.ZodTypeAny;
   execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, never>;
 }
-
-export interface ToolVisibilityPolicy {
-  allowedTools?: Set<string>;
-  allowedMcpServers?: Set<string>;
-}

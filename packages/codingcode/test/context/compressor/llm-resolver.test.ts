@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Effect } from 'effect';
-import { LLMFactoryService } from '../../../src/llm/factory.js';
+import { LLMFactoryService } from '../../../src/llm/port.js';
 import { AgentError } from '../../../src/core/error.js';
 import type { LLMClient } from '../../../src/llm/client.js';
-import type { SelectableModel } from '../../../src/llm/factory.js';
+import type { SelectableModel } from '../../../src/llm/port.js';
 
 const { mockFindModel, mockCreateClient } = vi.hoisted(() => ({
   mockFindModel: vi.fn(() => Effect.succeed(null)),

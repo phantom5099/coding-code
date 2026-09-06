@@ -4,12 +4,9 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import {
   readMemoryFile,
-  extractAutoBlock,
-  replaceAutoBlock,
+  resolveMemoryPath,
   enforceMaxBytes,
-  mergeAutoBlocks,
   writeMemoryFileAtomic,
-  stripMarkersForPrompt,
 } from '../../src/memory/storage.js';
 
 const tmpDir = path.join(os.tmpdir(), 'memory-test');
@@ -29,7 +26,13 @@ afterEach(() => {
   cleanup();
 });
 
-describe('File Operations', () => {
+describe('resolveMemoryPath', () => {
+  it('points to .codingcode/memory.md under cwd', () => {
+    expect(resolveMemoryPath('/proj')).toBe(path.join('/proj', '.codingcode', 'memory.md'));
+  });
+});
+
+describe('readMemoryFile', () => {
   it('reads non-existent file as empty string', () => {
     const result = readMemoryFile(path.join(tmpDir, 'nonexistent.md'));
     expect(result).toBe('');
@@ -41,103 +44,6 @@ describe('File Operations', () => {
     fs.writeFileSync(file, content);
     const result = readMemoryFile(file);
     expect(result).toBe(content);
-  });
-
-  it('extracts auto block', () => {
-    const content = `Some text
-<!-- auto:begin -->
-### user
-- Item 1
-<!-- auto:end -->
-More text`;
-    const result = extractAutoBlock(content);
-    expect(result).toContain('### user');
-    expect(result).toContain('- Item 1');
-    expect(result).not.toContain('<!-- auto:begin -->');
-  });
-
-  it('extracts empty auto block when markers absent', () => {
-    const content = 'No markers here';
-    const result = extractAutoBlock(content);
-    expect(result).toBe('');
-  });
-
-  it('replaces auto block in existing content', () => {
-    const content = `Before
-<!-- auto:begin -->
-Old content
-<!-- auto:end -->
-After`;
-    const newAuto = '### new\n- content';
-    const result = replaceAutoBlock(content, newAuto);
-    expect(result).toContain('Before');
-    expect(result).toContain('After');
-    expect(result).toContain(newAuto);
-    expect(result).not.toContain('Old content');
-  });
-
-  it('creates auto block when markers absent', () => {
-    const content = 'Just text';
-    const newAuto = '### user\n- item';
-    const result = replaceAutoBlock(content, newAuto);
-    expect(result).toContain('<!-- auto:begin -->');
-    expect(result).toContain('<!-- auto:end -->');
-    expect(result).toContain(newAuto);
-  });
-
-  it('strips markers for prompt injection', () => {
-    const content = `<!-- auto:begin -->
-### user
-- Item 1
-<!-- auto:end -->`;
-    const result = stripMarkersForPrompt(content);
-    expect(result).not.toContain('<!-- auto:begin -->');
-    expect(result).not.toContain('<!-- auto:end -->');
-    expect(result).toContain('### user');
-  });
-});
-
-describe('enforceMaxBytes', () => {
-  it('returns content unchanged if under limit', () => {
-    const content = '### user\n- Item 1';
-    const result = enforceMaxBytes(content, 1000);
-    expect(result).toBe(content);
-  });
-
-  it('truncates content by dropping H3 sections from oldest', () => {
-    const content = `### user
-- Very long content here ${' x'.repeat(100)}
-
-### project
-- Another section ${' y'.repeat(100)}
-
-### reference
-- Third section`;
-    const result = enforceMaxBytes(content, 200);
-    // Should drop oldest sections first
-    expect(result.length).toBeLessThanOrEqual(200);
-  });
-});
-
-describe('mergeAutoBlocks', () => {
-  it('merges H3 sections with incoming overriding base', () => {
-    const base = `### user
-- Old role
-
-### project
-- Existing decision`;
-    const incoming = `### user
-- New role
-
-### reference
-- New resource`;
-    const result = mergeAutoBlocks(base, incoming);
-    expect(result).toContain('### user');
-    expect(result).toContain('- New role');
-    expect(result).toContain('### project');
-    expect(result).toContain('- Existing decision');
-    expect(result).toContain('### reference');
-    expect(result).toContain('- New resource');
   });
 });
 
@@ -156,5 +62,41 @@ describe('writeMemoryFileAtomic', () => {
     writeMemoryFileAtomic(file, content);
     expect(fs.existsSync(file)).toBe(true);
     expect(fs.readFileSync(file, 'utf-8')).toBe(content);
+  });
+});
+
+describe('enforceMaxBytes', () => {
+  it('returns content unchanged if under limit', () => {
+    const content = '### 主题\n- Item 1';
+    const result = enforceMaxBytes(content, 1000);
+    expect(result).toBe(content);
+  });
+
+  it('drops H3 sections from the end until under limit', () => {
+    const content = `### first
+- ${'a'.repeat(100)}
+
+### second
+- ${'b'.repeat(100)}
+
+### third
+- ${'c'.repeat(100)}`;
+    const result = enforceMaxBytes(content, 200);
+    expect(Buffer.byteLength(result, 'utf-8')).toBeLessThanOrEqual(200);
+    expect(result).toContain('### first');
+  });
+
+  it('falls back to line truncation when a single H3 section exceeds limit', () => {
+    const content = `### huge
+- ${'x'.repeat(500)}`;
+    const result = enforceMaxBytes(content, 100);
+    expect(Buffer.byteLength(result, 'utf-8')).toBeLessThanOrEqual(100);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('falls back to line truncation when content has no H3 sections', () => {
+    const content = `${'l'.repeat(50)}\n${'m'.repeat(200)}`;
+    const result = enforceMaxBytes(content, 100);
+    expect(Buffer.byteLength(result, 'utf-8')).toBeLessThanOrEqual(100);
   });
 });

@@ -2,12 +2,11 @@ import { Effect } from 'effect';
 import type { ApprovalDecision, PermissionMode, PermissionRule, ToolCallRequest } from './types.js';
 import type { RuleEngine } from './rule-engine.js';
 import { userConfirmAsync } from './confirmation.js';
-import { ApprovalWaitService } from './async-confirm.js';
-import { HookService } from '../hooks/registry.js';
+import { ApprovalWaitService } from './wait-port.js';
+import { HookService } from '../hooks/port.js';
 
 export interface PipelineOptions {
   ruleEngine: RuleEngine;
-  readonlyTools: Set<string>;
   destructiveTools: Set<string>;
   permissionMode: PermissionMode;
   /** Called when user selects Always — allows caller to persist the rule. */
@@ -25,7 +24,6 @@ export interface PipelineOptions {
 
 const LAYER_NAMES = [
   'RuleEngine',
-  'ReadonlyWhitelist',
   'PermissionMode',
   'HookPreToolUse',
   'UserConfirmation',
@@ -35,10 +33,10 @@ const LAYER_NAMES = [
 export function runPipeline(
   request: ToolCallRequest,
   opts: PipelineOptions
-): Effect.Effect<ApprovalDecision, never, HookService | ApprovalWaitService> {
+): any {
   return Effect.gen(function* () {
-    const hooks = yield* HookService;
-    const approvalWait = yield* ApprovalWaitService;
+    const hooks: any = yield* HookService;
+    const approvalWait: any = yield* ApprovalWaitService;
     const asyncConfirm = yield* approvalWait.hasEmitter(opts.sessionId);
     const layers: string[] = [];
 
@@ -52,35 +50,23 @@ export function runPipeline(
       }
     }
 
-    // Layer 2: Read-only Whitelist
-    {
-      if (opts.readonlyTools.has(request.tool)) {
-        const result: ApprovalDecision = {
-          type: 'allow',
-          source: 'readonly-whitelist',
-        };
-        layers.push(LAYER_NAMES[1]);
-        const final = yield* recordAuditAndReturn(hooks, request, result, layers);
-        return final;
-      }
-    }
-
-    // Layer 3: Permission Mode
+    // Layer 2: Permission Mode — the single auto-allow gate. Read-only tools
+    // are NOT unconditionally whitelisted; acceptEdits covers them as
+    // non-destructive. In default mode nothing is auto-allowed here.
     {
       const modeResult = applyPermissionMode(
         request.tool,
         opts.permissionMode,
-        opts.readonlyTools,
         opts.destructiveTools
       );
       if (modeResult) {
-        layers.push(LAYER_NAMES[2]);
+        layers.push(LAYER_NAMES[1]);
         const final = yield* recordAuditAndReturn(hooks, request, modeResult, layers);
         return final;
       }
     }
 
-    // Layer 4: Hook PreToolUse
+    // Layer 3: Hook PreToolUse
     {
       const hookResult = yield* Effect.gen(function* () {
         const result = yield* hooks.emitDecision('tool.approval.pre', {
@@ -95,7 +81,7 @@ export function runPipeline(
         return result;
       });
       if (hookResult) {
-        layers.push(LAYER_NAMES[3]);
+        layers.push(LAYER_NAMES[2]);
         if (hookResult.decision === 'deny') {
           const result: ApprovalDecision = {
             type: 'deny',
@@ -119,9 +105,9 @@ export function runPipeline(
       }
     }
 
-    // Layer 5: User Confirmation
+    // Layer 4: User Confirmation
     {
-      layers.push(LAYER_NAMES[4]);
+      layers.push(LAYER_NAMES[3]);
 
       if (request.tool === 'submit_plan') {
         const result: ApprovalDecision = {
@@ -176,7 +162,6 @@ export function runPipeline(
 function applyPermissionMode(
   tool: string,
   mode: PermissionMode,
-  readonlyTools: Set<string>,
   destructiveTools: Set<string>
 ): ApprovalDecision | null {
   switch (mode) {
@@ -185,7 +170,8 @@ function applyPermissionMode(
       return { type: 'allow', source: 'permission-mode' };
 
     case 'acceptEdits':
-      // Accept edits: read-only + edit tools auto-allow, destructive tools need confirmation
+      // Accept edits: non-destructive tools (read-only + edit) auto-allow,
+      // destructive tools need confirmation
       if (!destructiveTools.has(tool)) {
         return { type: 'allow', source: 'permission-mode' };
       }
@@ -198,13 +184,13 @@ function applyPermissionMode(
 }
 
 function recordAuditAndReturn(
-  hooks: HookService,
+  hooks: any,
   request: ToolCallRequest,
   decision: ApprovalDecision,
   passedLayers: string[]
-): Effect.Effect<ApprovalDecision, never, HookService> {
+): any {
   return Effect.gen(function* () {
-    passedLayers.push(LAYER_NAMES[5]);
+    passedLayers.push(LAYER_NAMES[4]);
     yield* hooks.emit('tool.approval.post', {
       tool: request.tool,
       input: request.input,

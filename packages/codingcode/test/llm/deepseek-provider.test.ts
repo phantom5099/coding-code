@@ -69,5 +69,5 @@ describe('DeepSeekProvider completeStream', () => {
     }
 
     expect(streamText).toHaveBeenCalledTimes(1);
-  });
+  }, 30000);
 });

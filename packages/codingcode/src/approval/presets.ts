@@ -84,14 +84,4 @@ export const DEFAULT_DENY_RULES: PermissionRule[] = [
   },
 ];
 
-export const READONLY_TOOL_NAMES: string[] = [
-  'read_file',
-  'search_code',
-  'search_files',
-  'fetch_url',
-  'web_search',
-  'dispatch_agent',
-  'todo_write',
-];
-
 export const DANGEROUS_TOOL_NAMES: string[] = ['execute_command'];

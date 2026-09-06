@@ -4,10 +4,11 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createDirectModelClient } from '../../src/direct/models.js';
 import { agentEventToStreamChunk } from '../../src/agent/stream-adapter.js';
 import type { LLMClient } from '../../src/llm/client.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { AgentError } from '../../src/core/error.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 
 const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
   getWorkspaceCwd: () => '/tmp/test',
@@ -36,7 +37,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
 } as any);
 
 const TestLayer = Layer.mergeAll(
-  ApprovalWaitService.Default,
+  ApprovalWaitLayer,
   MockWorkspaceLayer,
   MockLLMFactoryLayer
 );

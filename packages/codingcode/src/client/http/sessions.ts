@@ -7,7 +7,7 @@ import type {
   RollbackState,
 } from '../../checkpoint/types.js';
 import type { SessionEvent, SessionIndex } from '../../session/types.js';
-import type { AgentProfileName } from '../../subagent/types.js';
+import type { AgentProfileName } from '../../agent/profile.js';
 import type { createRequestHelpers } from './request.js';
 
 export interface SessionClient {
