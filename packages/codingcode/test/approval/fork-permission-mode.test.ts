@@ -52,42 +52,61 @@ function run<T>(eff: (svc: Approval) => Promise<T>): Promise<T> {
   return getService().then(eff);
 }
 
-describe('approval.fork({ permissionMode }) closure', () => {
+function evaluateWithMode(mode: string, tool: string, input: Record<string, unknown>) {
+  return run(async (svc) => {
+    const child = await Effect.runPromise(svc.fork({ permissionMode: mode as any }));
+    return Effect.runPromise(
+      child.evaluate({ tool, input, sessionId: 'test' })
+    );
+  });
+}
+
+describe('approval.fork({ permissionMode }) applies the mode gate', () => {
   beforeEach(async () => {
     _service = null;
   });
 
-  it('fork with permissionMode: bypass creates a child whose getPermissionMode returns bypass', async () => {
-    const mode = await run(async (svc) => {
-      const child = await Effect.runPromise(svc.fork({ permissionMode: 'bypass' }));
-      return child.getPermissionMode();
-    });
-    expect(mode).toBe('bypass');
+  it('bypass auto-allows a non-destructive tool', async () => {
+    const decision = await evaluateWithMode('bypass', 'read_file', { path: '/tmp/x' });
+    expect(decision.type).toBe('allow');
+    expect(decision.source).toBe('permission-mode');
   });
 
-  it('fork with permissionMode: acceptEdits creates a child with acceptEdits', async () => {
-    const mode = await run(async (svc) => {
-      const child = await Effect.runPromise(svc.fork({ permissionMode: 'acceptEdits' }));
-      return child.getPermissionMode();
-    });
-    expect(mode).toBe('acceptEdits');
+  it('acceptEdits auto-allows a non-destructive tool', async () => {
+    const decision = await evaluateWithMode('acceptEdits', 'read_file', { path: '/tmp/x' });
+    expect(decision.type).toBe('allow');
+    expect(decision.source).toBe('permission-mode');
   });
 
-  it('fork without permissionMode defaults to "default"', async () => {
-    const mode = await run(async (svc) => {
+  it('acceptEdits still gates a destructive tool', async () => {
+    const decision = await evaluateWithMode('acceptEdits', 'execute_command', { command: 'echo hi' });
+    expect(decision.type).toBe('deny');
+  });
+
+  it('fork without permissionMode defaults to "default" (requires confirmation)', async () => {
+    const decision = await run(async (svc) => {
       const child = await Effect.runPromise(svc.fork({}));
-      return child.getPermissionMode();
+      return Effect.runPromise(
+        child.evaluate({ tool: 'read_file', input: { path: '/tmp/x' }, sessionId: 'test' })
+      );
     });
-    expect(mode).toBe('default');
+    expect(decision.type).toBe('deny');
+    expect(decision.source).toBe('system');
   });
 
-  it('two forks with different permissionMode are isolated', async () => {
+  it('two forks with different modes are isolated', async () => {
     const result = await run(async (svc) => {
       const a = await Effect.runPromise(svc.fork({ permissionMode: 'bypass' }));
       const b = await Effect.runPromise(svc.fork({ permissionMode: 'default' }));
-      return { a: a.getPermissionMode(), b: b.getPermissionMode() };
+      const da = await Effect.runPromise(
+        a.evaluate({ tool: 'read_file', input: { path: '/tmp/x' }, sessionId: 'test' })
+      );
+      const db = await Effect.runPromise(
+        b.evaluate({ tool: 'read_file', input: { path: '/tmp/x' }, sessionId: 'test' })
+      );
+      return { a: da.type, b: db.type };
     });
-    expect(result.a).toBe('bypass');
-    expect(result.b).toBe('default');
+    expect(result.a).toBe('allow');
+    expect(result.b).toBe('deny');
   });
 });

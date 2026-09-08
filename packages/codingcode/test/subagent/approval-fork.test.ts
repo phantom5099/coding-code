@@ -3,14 +3,37 @@ import { Context, Effect, Layer } from 'effect';
 import { ApprovalService } from '../../src/approval/port.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import { HookLayer } from '../../src/hooks/hooks.js';
-import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 import { ApprovalLayer as ApprovalLayerImpl } from '../../src/approval/approval.js';
 
 type ApprovalSvc = Context.Tag.Service<typeof ApprovalService>;
 
+const mockHookService = {
+  register: () => Effect.succeed(() => {}),
+  registerDecision: () => Effect.succeed(() => {}),
+  emit: () => Effect.succeed(undefined),
+  emitDecision: () => Effect.succeed(null),
+  reloadUserHooks: () => Effect.succeed(undefined),
+  attachSessionHooks: () => Effect.succeed(undefined),
+  disableHook: () => Effect.succeed(undefined),
+  enableHook: () => Effect.succeed(undefined),
+  disposeSession: () => Effect.succeed(undefined),
+  disposeProject: () => Effect.succeed(undefined),
+};
+
+const mockApprovalWaitService = {
+  waitForConfirm: () => Effect.dieMessage('not implemented'),
+  resolveConfirm: () => Effect.succeed(false),
+  getPending: () => Effect.succeed([]),
+  emitApprovalRequest: () => Effect.succeed(undefined),
+  registerEmitter: () => Effect.succeed(undefined),
+  delegateEmitter: () => Effect.succeed(undefined),
+  unregisterEmitter: () => Effect.succeed(undefined),
+  hasEmitter: () => Effect.succeed(false),
+};
+
 const ApprovalLayer = ApprovalLayerImpl.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
+  Layer.provide(Layer.succeed(HookService, mockHookService as any)),
+  Layer.provide(Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any))
 );
 
 describe('ApprovalService.fork', () => {
@@ -22,155 +45,66 @@ describe('ApprovalService.fork', () => {
     );
   }
 
-  it('should create a forked approval service', async () => {
+  async function evaluateChild(
+    opts: Parameters<ApprovalSvc['fork']>[0],
+    tool: string,
+    input: Record<string, unknown>
+  ) {
     const parent = await makeApproval();
-    const forkEffect = (parent as any).fork();
+    const child = await Effect.runPromise(parent.fork(opts));
+    return Effect.runPromise(child.evaluate({ tool, input, sessionId: 'test' }));
+  }
 
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
+  it('creates a forked approval service with evaluate and fork', async () => {
+    const parent = await makeApproval();
+    const child = await Effect.runPromise(parent.fork());
     expect(child).toBeDefined();
     expect(child.evaluate).toBeDefined();
     expect(child.fork).toBeDefined();
   });
 
-  it('should have independent permission mode', async () => {
-    const parent = await makeApproval();
-    const forkEffect = (parent as any).fork();
-
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
-
-    const parentMode = parent.getPermissionMode();
-    const childMode = child.getPermissionMode();
-
-    expect(parentMode).toBe('default');
-    expect(childMode).toBe('default');
-
-    await Effect.runPromise(child.setPermissionMode('acceptEdits'));
-
-    expect(parent.getPermissionMode()).toBe('default');
-    expect(child.getPermissionMode()).toBe('acceptEdits');
+  it('readonly fork denies destructive tools', async () => {
+    const decision = await evaluateChild({ readonly: true }, 'execute_command', { command: 'echo hi' });
+    expect(decision.type).toBe('deny');
+    expect(decision.source).toBe('rule:readonly-execute_command');
   });
 
-  it('should inherit parent rules', async () => {
-    const parent = await makeApproval();
+  it('extraDenyRules denies the matching tool', async () => {
+    const decision = await evaluateChild(
+      { extraDenyRules: [{ id: 'x', action: 'deny', toolPattern: 'custom_tool' }] },
+      'custom_tool',
+      {}
+    );
+    expect(decision.type).toBe('deny');
+    expect(decision.source).toBe('rule:x');
+  });
 
-    await Effect.runPromise(
-      parent.addRule({
-        id: 'parent-rule',
-        action: 'deny',
-        toolPattern: 'dangerous_tool',
+  it('nested fork inherits parent permission mode', async () => {
+    const parent = await makeApproval();
+    const child1 = await Effect.runPromise(parent.fork({ permissionMode: 'bypass' }));
+    const child2 = await Effect.runPromise(child1.fork());
+    const decision = await Effect.runPromise(
+      child2.evaluate({ tool: 'read_file', input: { path: '/tmp/x' }, sessionId: 'test' })
+    );
+    expect(decision.type).toBe('allow');
+    expect(decision.source).toBe('permission-mode');
+  });
+
+  it('combines readonly and extraDenyRules', async () => {
+    const parent = await makeApproval();
+    const child = await Effect.runPromise(
+      parent.fork({
+        readonly: true,
+        extraDenyRules: [{ id: 'extra', action: 'deny', toolPattern: 'special_tool' }],
       })
     );
-
-    const forkEffect = (parent as any).fork();
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
-
-    expect(child).toBeDefined();
-  });
-
-  it('should support readonly mode to deny destructive operations', async () => {
-    const parent = await makeApproval();
-    const forkEffect = (parent as any).fork({ readonly: true });
-
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
-
-    expect(child).toBeDefined();
-    expect(child.evaluate).toBeDefined();
-  });
-
-  it('should support extra deny rules on fork', async () => {
-    const parent = await makeApproval();
-    const forkEffect = (parent as any).fork({
-      extraDenyRules: [
-        {
-          id: 'fork-deny',
-          action: 'deny',
-          toolPattern: 'custom_tool',
-        },
-      ],
-    });
-
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
-
-    expect(child).toBeDefined();
-  });
-
-  it('should support nested fork', async () => {
-    const parent = await makeApproval();
-
-    const forkEffect1 = (parent as any).fork();
-    const child1 = (await Effect.runPromise(forkEffect1)) as ApprovalSvc;
-
-    const forkEffect2 = (child1 as any).fork();
-    const child2 = (await Effect.runPromise(forkEffect2)) as ApprovalSvc;
-
-    expect(child1).toBeDefined();
-    expect(child2).toBeDefined();
-
-    await Effect.runPromise(child1.setPermissionMode('acceptEdits'));
-    await Effect.runPromise(child2.setPermissionMode('bypass'));
-
-    expect(child1.getPermissionMode()).toBe('acceptEdits');
-    expect(child2.getPermissionMode()).toBe('bypass');
-  });
-
-  it('should preserve parent rules in fork', async () => {
-    const parent = await makeApproval();
-
-    await Effect.runPromise(
-      parent.addRule({
-        id: 'rule1',
-        action: 'allow',
-        toolPattern: 'safe_tool',
-      })
+    const destructive = await Effect.runPromise(
+      child.evaluate({ tool: 'execute_command', input: { command: 'echo hi' }, sessionId: 'test' })
     );
-
-    await Effect.runPromise(
-      parent.addRule({
-        id: 'rule2',
-        action: 'ask',
-        toolPattern: 'maybe_tool',
-      })
+    const extra = await Effect.runPromise(
+      child.evaluate({ tool: 'special_tool', input: {}, sessionId: 'test' })
     );
-
-    const forkEffect = (parent as any).fork();
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
-
-    expect(child).toBeDefined();
-  });
-
-  it('should isolate rule changes', async () => {
-    const parent = await makeApproval();
-    const forkEffect = (parent as any).fork();
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
-
-    await Effect.runPromise(
-      child.addRule({
-        id: 'child-rule',
-        action: 'deny',
-        toolPattern: 'child_only_tool',
-      })
-    );
-
-    expect(parent).toBeDefined();
-    expect(child).toBeDefined();
-  });
-
-  it('should combine readonly and extra deny rules', async () => {
-    const parent = await makeApproval();
-
-    const forkEffect = (parent as any).fork({
-      readonly: true,
-      extraDenyRules: [
-        {
-          id: 'extra',
-          action: 'deny',
-          toolPattern: 'special_tool',
-        },
-      ],
-    });
-
-    const child = (await Effect.runPromise(forkEffect)) as ApprovalSvc;
-
-    expect(child).toBeDefined();
+    expect(destructive.type).toBe('deny');
+    expect(extra.type).toBe('deny');
   });
 });

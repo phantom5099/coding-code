@@ -18,7 +18,6 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
       permMode: PermissionMode,
       destTools: Set<string>
     ): any {
-      let currentPermMode = permMode;
       return {
         evaluate: (request: {
           tool: string;
@@ -38,7 +37,7 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
             {
               ruleEngine: engine,
               destructiveTools: destTools,
-              permissionMode: currentPermMode,
+              permissionMode: permMode,
               onAlways: (rule) => engine.addRule(rule),
               onNever: (rule) => engine.addRule(rule),
               sessionId: request.sessionId,
@@ -49,14 +48,6 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
             Effect.provideService(HookService, hooks),
             Effect.provideService(ApprovalWaitService, approvalWait)
           ),
-        addRule: (rule: PermissionRule): Effect.Effect<void> =>
-          Effect.sync(() => engine.addRule(rule)),
-        removeRule: (id: string): Effect.Effect<void> => Effect.sync(() => engine.removeRule(id)),
-        setPermissionMode: (mode: PermissionMode): Effect.Effect<void> =>
-          Effect.sync(() => {
-            currentPermMode = mode;
-          }),
-        getPermissionMode: (): PermissionMode => currentPermMode,
         fork: (opts?: {
           extraDenyRules?: PermissionRule[];
           readonly?: boolean;
@@ -81,7 +72,7 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
             }
             return makeForkedService(
               nextEngine,
-              opts?.permissionMode ?? currentPermMode,
+              opts?.permissionMode ?? permMode,
               new Set(destTools)
             );
           }),
@@ -118,18 +109,6 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
           Effect.provideService(HookService, hooks),
           Effect.provideService(ApprovalWaitService, approvalWait)
         ),
-
-      addRule: (rule: PermissionRule): Effect.Effect<void> =>
-        Effect.sync(() => ruleEngine.addRule(rule)),
-
-      removeRule: (id: string): Effect.Effect<void> => Effect.sync(() => ruleEngine.removeRule(id)),
-
-      setPermissionMode: (_mode: PermissionMode): Effect.Effect<void> =>
-        Effect.sync(() => {
-          /* no-op at root; only fork children maintain their own currentPermMode */
-        }),
-
-      getPermissionMode: (): PermissionMode => 'default',
 
       fork: (opts?: {
         extraDenyRules?: PermissionRule[];
