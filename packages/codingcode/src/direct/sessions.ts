@@ -7,9 +7,7 @@ import type { PermissionMode } from '../approval/types.js';
 import type {
   CheckpointDiff,
   CodeRollbackResult,
-  CodeRollbackUndoResult,
   RollbackPreviewDiff,
-  RollbackState,
 } from '../checkpoint/types.js';
 import type { SessionEvent, SessionIndex } from '../session/types.js';
 import type { AgentProfileName } from '../agent/profile.js';
@@ -73,19 +71,11 @@ export interface SessionClient {
     sessionId: string;
     cwd: string;
     throughTurnId: number;
-  }): Promise<{ turns: SessionEvent[]; rollbackState: RollbackState }>;
+  }): Promise<{ turns: SessionEvent[] }>;
   rollbackBothToTurn(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<{
     turns: SessionEvent[];
     codeResult: CodeRollbackResult;
-    rollbackState: RollbackState;
   }>;
-  undoLastCodeRollback(input: {
-    sessionId: string;
-    cwd: string;
-    force?: boolean;
-    files?: string[];
-  }): Promise<CodeRollbackUndoResult>;
-  getRollbackState(input: { sessionId: string; cwd: string }): Promise<RollbackState>;
   forkSession(input: {
     sessionId: string;
     cwd: string;
@@ -225,7 +215,6 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
         throughTurnId: 0,
         affectedTurns: [],
         selectedFiles: [],
-        restoreEntry: null,
       };
     },
     async previewRollbackDiff() {
@@ -237,21 +226,11 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
         throughTurnId: 0,
         affectedTurns: [],
         selectedFiles: [],
-        restoreEntry: null,
       };
     },
     async rollbackContext() {
       return {
         turns: [] as SessionEvent[],
-        rollbackState: {
-          context: { active: false, currentThroughTurnId: null },
-          code: {
-            canUndoLast: false,
-            lastEntry: null,
-            revertedFiles: [] as string[],
-            lastEntryId: null,
-          },
-        } as RollbackState,
       };
     },
     async rollbackBothToTurn() {
@@ -262,32 +241,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
           throughTurnId: 0,
           affectedTurns: [],
           selectedFiles: [],
-          restoreEntry: null,
         },
-        rollbackState: {
-          context: { active: false, currentThroughTurnId: null },
-          code: {
-            canUndoLast: false,
-            lastEntry: null,
-            revertedFiles: [] as string[],
-            lastEntryId: null,
-          },
-        } as RollbackState,
-      };
-    },
-    async undoLastCodeRollback() {
-      return {
-        restored: false,
-        conflict: false,
-        conflictFiles: [],
-        restoredFiles: [],
-        remainingRolledBack: [],
-      };
-    },
-    async getRollbackState() {
-      return {
-        context: { active: false, currentThroughTurnId: null },
-        code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null },
       };
     },
     async forkSession({ sessionId, cwd, atTurnId }) {

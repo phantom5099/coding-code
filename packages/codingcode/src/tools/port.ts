@@ -20,6 +20,7 @@ export interface ToolExecutorShape {
     approval?: import('../approval/port.js').ApprovalService;
     callId?: string;
     toolLookup?: ToolLookup;
+    permissionMode?: import('../approval/types.js').PermissionMode;
   }): Effect.Effect<{ output: string; diff?: string; filePath?: string; insertions?: number; deletions?: number }, AgentError, any>;
   executeBatch(toolCalls: ToolCall[], sessionId?: string, opts?: {
     turnId?: number;
@@ -27,6 +28,7 @@ export interface ToolExecutorShape {
     signal?: AbortSignal;
     approval?: import('../approval/port.js').ApprovalService;
     toolLookup?: ToolLookup;
+    permissionMode?: import('../approval/types.js').PermissionMode;
   }): Effect.Effect<ToolResultUnion[], never, any>;
 }
 

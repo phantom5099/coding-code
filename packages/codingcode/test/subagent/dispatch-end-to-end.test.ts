@@ -107,11 +107,9 @@ const AgentDeps = Layer.mergeAll(
   } as any),
   Layer.succeed(ApprovalPort, {
     evaluate: () => Effect.succeed({ type: 'allow' }),
-    fork: () => Effect.succeed({}),
   } as any),
   Layer.succeed(SkillPort, {
     extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
-    evictProject: () => Effect.void,
   } as any),
   Layer.succeed(McpPort, {
     syncConnections: () => Effect.void,

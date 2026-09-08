@@ -16,6 +16,7 @@ import { createLogger } from '@codingcode/infra/logger';
 import { normalizePath, computePaths } from '../core/path.js';
 import { resolveProfile, getToolNames } from './profile.js';
 import type { AgentProfile } from './profile.js';
+import type { PermissionMode } from '../approval/types.js';
 
 const logger = createLogger();
 
@@ -105,7 +106,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         state, llm, profile, catalog,
         toolEnv,
         abortSignal: opts.signal, rulesText,
-        sid, projectPath: state.cwd,
+        sid, projectPath: state.cwd, permissionMode: effectivePerm,
       });
 
       return { stream, sessionId: sid };
@@ -117,7 +118,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     catalog: ToolCatalog;
     toolEnv: ToolEnv;
     rulesText: string;
-    sid: string; projectPath: string;
+    sid: string; projectPath: string; permissionMode: PermissionMode;
   }): AsyncGenerator<AgentEvent> {
     const q = Effect.runSync(Queue.unbounded<AgentEvent>());
 
@@ -163,9 +164,9 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     abortSignal: AbortSignal | undefined;
     catalog: ToolCatalog;
     rulesText: string;
-    sid: string; projectPath: string;
+    sid: string; projectPath: string; permissionMode: PermissionMode;
   }, q: Queue.Queue<AgentEvent>): any {
-    const { state, llm, profile, abortSignal, catalog, rulesText, sid, projectPath } = opts;
+    const { state, llm, profile, abortSignal, catalog, rulesText, sid, projectPath, permissionMode } = opts;
     const { tools, lookup: toolLookup } = catalog;
 
     return Effect.gen(function* () {
@@ -268,7 +269,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
         yield* session.recordAssistant(state, resp.content, toolCalls!, resp.usage);
         const allResults = yield* executor.executeBatch(toolCalls, state.sessionId, {
-          turnId: state.currentTurnId, projectPath, signal: abortSignal, toolLookup,
+          turnId: state.currentTurnId, projectPath, signal: abortSignal, toolLookup, permissionMode,
         });
 
         let todoPrinted = false;

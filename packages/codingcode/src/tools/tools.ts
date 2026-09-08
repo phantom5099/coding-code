@@ -28,6 +28,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         approval?: import('../approval/port.js').ApprovalService;
         callId?: string;
         toolLookup?: ToolLookup;
+        permissionMode?: import('../approval/types.js').PermissionMode;
       }
     ): any {
       return Effect.gen(function* () {
@@ -41,6 +42,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
           callId: opts?.callId,
           sessionId: opts?.sessionId ?? 'default',
           projectPath: opts?.projectPath,
+          permissionMode: opts?.permissionMode,
         });
 
         if (decision.type === 'deny') {
@@ -129,6 +131,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         signal?: AbortSignal;
         approval?: import('../approval/port.js').ApprovalService;
         toolLookup?: ToolLookup;
+        permissionMode?: import('../approval/types.js').PermissionMode;
       }
     ): Effect.Effect<ToolResultUnion, never, any> {
       return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
@@ -179,6 +182,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         signal?: AbortSignal;
         approval?: import('../approval/port.js').ApprovalService;
         toolLookup?: ToolLookup;
+        permissionMode?: import('../approval/types.js').PermissionMode;
       }
     ): Effect.Effect<ToolResultUnion[], never, any> {
       return Effect.gen(function* () {

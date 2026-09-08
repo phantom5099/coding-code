@@ -108,11 +108,7 @@ const MockApprovalLayer = ApprovalLayer.pipe(
 const MockSkillLayer = Layer.succeed(SkillService, {
   _tag: 'Skill' as const,
   getAll: () => Effect.succeed([]),
-  findByName: () => Effect.succeed(undefined),
-  select: () => Effect.succeed(undefined),
-  selectImplicit: () => Effect.succeed(undefined),
   extractSkill: (_p: string, q: string) => Effect.sync(() => [undefined, q] as [undefined, string]),
-  evictProject: () => Effect.void,
 } as any);
 
 const MockMcpLayer = Layer.succeed(McpService, {
@@ -155,8 +151,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
   _tag: 'Checkpoint' as const,
   snapshotBaseline: () => Effect.void,
   snapshotFinal: () => Effect.void,
-  getCompletedTurns: () => Effect.succeed([]),
-  getCheckpoints: () => Effect.succeed([]),
   getCheckpointDiff: () => Effect.succeed({ turnId: 0, files: [] }),
   revertCheckpointFiles: () =>
     Effect.succeed({
@@ -164,7 +158,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
       throughTurnId: 0,
       affectedTurns: [],
       selectedFiles: [],
-      restoreEntry: null,
     }),
   previewRollbackDiff: () => Effect.succeed({ throughTurnId: 0, affectedTurns: [], diff: '' }),
   rollbackCodeToTurn: () =>
@@ -173,17 +166,7 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
       throughTurnId: 0,
       affectedTurns: [],
       selectedFiles: [],
-      restoreEntry: null,
     }),
-  undoLastCodeRollback: () =>
-    Effect.succeed({
-      restored: false,
-      conflict: false,
-      conflictFiles: [],
-      restoredFiles: [],
-      remainingRolledBack: [],
-    }),
-  getLatestRestoreEntry: () => Effect.succeed(null),
 } as any);
 
 const TestLayer = Layer.mergeAll(

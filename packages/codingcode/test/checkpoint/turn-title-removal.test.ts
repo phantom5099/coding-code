@@ -26,17 +26,15 @@ describe('checkpoint turn title removal', () => {
           yield* checkpoint.snapshotBaseline(projectPath, sessionId, 1);
           writeFileSync(join(projectPath, 'after.txt'), 'after', 'utf8');
           yield* checkpoint.snapshotFinal(projectPath, sessionId, 1);
-          return yield* checkpoint.getCheckpoints(projectPath, sessionId);
+          return yield* checkpoint.getCheckpointDiff(projectPath, sessionId);
         }).pipe(Effect.provide(CheckpointLayer) as any)
-      ) as Array<{ turnId: number; files: string[] }>;
+      ) as { turnId: number; files: Array<{ path: string }> };
 
-      expect(checkpoints).toEqual([
-        {
-          turnId: 1,
-          files: [normalizePath(join(projectPath, 'after.txt'))],
-        },
+      expect(checkpoints.turnId).toBe(1);
+      expect(checkpoints.files.map((f) => f.path)).toEqual([
+        normalizePath(join(projectPath, 'after.txt')),
       ]);
-      expect(checkpoints[0]).not.toHaveProperty('title');
+      expect(checkpoints).not.toHaveProperty('title');
 
       const shortSid = createHash('sha256').update(sessionId).digest('hex').slice(0, 8);
       const shadowGit = new ShadowGit(projectPath);

@@ -1,10 +1,6 @@
-import { createHash } from 'crypto';
-import { normalizePath } from '../core/path.js';
 import type { ShadowGit } from './shadow-git.js';
 import type { ProjectLock } from './project-lock.js';
-import type { CodeRollbackResult, CodeRestoreEntry, RestorePlan } from './types.js';
-import { commitMsg } from './utils.js';
-import { readRestoreEntry, writeRestoreEntry } from './undo-store.js';
+import type { CodeRollbackResult, RestorePlan } from './types.js';
 
 export function emptyRollbackResult(turnId: number): CodeRollbackResult {
   return {
@@ -12,15 +8,12 @@ export function emptyRollbackResult(turnId: number): CodeRollbackResult {
     throughTurnId: turnId,
     affectedTurns: [],
     selectedFiles: [],
-    restoreEntry: null,
   };
 }
 
 export function executeRollback(
-  sessionId: string,
   plan: RestorePlan,
   selectedFiles: string[],
-  action: CodeRestoreEntry['action'],
   sg: ShadowGit,
   lock: ProjectLock
 ): CodeRollbackResult {
@@ -30,60 +23,18 @@ export function executeRollback(
       throughTurnId: plan.throughTurnId,
       affectedTurns: plan.affectedTurns,
       selectedFiles: [],
-      restoreEntry: null,
     };
   }
 
   lock.lock();
   try {
-    let safetyCommit: string;
-    const existingEntry = readRestoreEntry(sg.gitDir, sessionId);
-
-    if (
-      existingEntry &&
-      existingEntry.throughTurnId === plan.throughTurnId &&
-      existingEntry.safetyCommit
-    ) {
-      safetyCommit = existingEntry.safetyCommit;
-    } else {
-      safetyCommit = sg.commit(commitMsg(sessionId, plan.throughTurnId, 'revert-safety'));
-    }
-
-    const combinedFiles =
-      existingEntry && existingEntry.throughTurnId === plan.throughTurnId
-        ? [
-            ...new Map(
-              [...existingEntry.selectedFiles, ...selectedFiles].map((f) => [
-                normalizePath(f).toLowerCase(),
-                f,
-              ])
-            ).values(),
-          ]
-        : selectedFiles;
-
-    const entry: CodeRestoreEntry = {
-      id: createHash('sha256')
-        .update(`${sessionId}-${plan.throughTurnId}-${Date.now()}`)
-        .digest('hex')
-        .slice(0, 12),
-      sessionId,
-      action,
-      throughTurnId: plan.throughTurnId,
-      affectedTurns: plan.affectedTurns,
-      selectedFiles: combinedFiles,
-      safetyCommit,
-      timestamp: new Date().toISOString(),
-    };
-    writeRestoreEntry(sg.gitDir, sessionId, entry);
-
     sg.checkoutFiles(plan.baseline, selectedFiles);
 
     return {
       reverted: true,
       throughTurnId: plan.throughTurnId,
       affectedTurns: plan.affectedTurns,
-      selectedFiles: combinedFiles,
-      restoreEntry: entry,
+      selectedFiles,
     };
   } finally {
     lock.unlock();

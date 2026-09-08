@@ -2,9 +2,7 @@ import type { PermissionMode } from '../../approval/types.js';
 import type {
   CheckpointDiff,
   CodeRollbackResult,
-  CodeRollbackUndoResult,
   RollbackPreviewDiff,
-  RollbackState,
 } from '../../checkpoint/types.js';
 import type { SessionEvent, SessionIndex } from '../../session/types.js';
 import type { AgentProfileName } from '../../agent/profile.js';
@@ -67,19 +65,11 @@ export interface SessionClient {
     sessionId: string;
     cwd: string;
     throughTurnId: number;
-  }): Promise<{ turns: SessionEvent[]; rollbackState: RollbackState }>;
+  }): Promise<{ turns: SessionEvent[] }>;
   rollbackBothToTurn(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<{
     turns: SessionEvent[];
     codeResult: CodeRollbackResult;
-    rollbackState: RollbackState;
   }>;
-  undoLastCodeRollback(input: {
-    sessionId: string;
-    cwd: string;
-    force?: boolean;
-    files?: string[];
-  }): Promise<CodeRollbackUndoResult>;
-  getRollbackState(input: { sessionId: string; cwd: string }): Promise<RollbackState>;
   forkSession(input: {
     sessionId: string;
     cwd: string;
@@ -166,14 +156,6 @@ export function createHttpSessionClient(
 
     async rollbackBothToTurn({ sessionId, cwd, throughTurnId }) {
       return apiPost(`/api/sessions/${sessionId}/rollback-both-to-turn`, { cwd, throughTurnId });
-    },
-
-    async undoLastCodeRollback({ sessionId, cwd, force, files }) {
-      return apiPost(`/api/sessions/${sessionId}/undo-code-rollback`, { cwd, force, files });
-    },
-
-    async getRollbackState({ sessionId, cwd }) {
-      return apiGet(`/api/sessions/${sessionId}/rollback-state?cwd=${encodeURIComponent(cwd)}`);
     },
 
     async forkSession({ sessionId, cwd, atTurnId }) {

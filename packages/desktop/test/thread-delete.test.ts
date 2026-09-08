@@ -23,8 +23,6 @@ vi.mock('../src/lib/core-api', () => ({
   rollbackCodeToTurn: vi.fn(),
   rollbackContext: vi.fn(),
   rollbackBothToTurn: vi.fn(),
-  undoLastCodeRollback: vi.fn(),
-  getRollbackState: vi.fn(),
   forkSession: vi.fn(),
   listModels: vi.fn(),
   switchModel: vi.fn(),

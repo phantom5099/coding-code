@@ -122,12 +122,12 @@ describe('plan profile security boundary (cross-restart, disk only)', () => {
           const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
           return idx.permissionMode;
         });
-        const forked = yield* approval.fork({ permissionMode: mode });
-        return yield* forked.evaluate({
+        return yield* approval.evaluate({
           tool,
           input,
           sessionId,
           projectPath: cwd,
+          permissionMode: mode,
         });
       })
     );

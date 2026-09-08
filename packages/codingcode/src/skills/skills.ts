@@ -23,29 +23,6 @@ export const SkillLayer = Layer.effect(SkillService, Effect.gen(function* () {
     return {
       getAll: (projectPath: string) => Effect.sync(() => readAll(projectPath)),
 
-      findByName: (projectPath: string, name: string) =>
-        Effect.sync(() => readAll(projectPath).find((s) => s.name === name)),
-
-      select: (projectPath: string, query: string) =>
-        Effect.sync(() => {
-          const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
-          if (!match) return undefined;
-          const name = match[1]!;
-          return readAll(projectPath).find((s) => s.name === name);
-        }),
-
-      selectImplicit: (
-        projectPath: string,
-        query: string,
-        matcher: (all: readonly Skill[], q: string) => Effect.Effect<string | undefined>
-      ): Effect.Effect<Skill | undefined> =>
-        Effect.gen(function* () {
-          const all = readAll(projectPath);
-          const name = yield* matcher(all, query);
-          if (!name) return undefined;
-          return all.find((s) => s.name === name);
-        }),
-
       extractSkill: (projectPath: string, query: string) =>
         Effect.sync(() => {
           const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
@@ -56,11 +33,6 @@ export const SkillLayer = Layer.effect(SkillService, Effect.gen(function* () {
           }
           const actualQuery = query.replace(/^@[a-zA-Z0-9-]+\s*/, '');
           return [skill, actualQuery] as [Skill | undefined, string];
-        }),
-
-      evictProject: (projectPath: string) =>
-        Effect.sync(() => {
-          cachedByProject.delete(projectPath);
         }),
     };
 }));

@@ -162,7 +162,6 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
   };
   const skills = {
     extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
-    evictProject: () => Effect.void,
   };
   const context = {
     assemblePayload: async () =>
@@ -194,7 +193,6 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     } as any),
     Layer.succeed(ApprovalPort, {
       evaluate: () => Effect.succeed({ decision: 'allow' }),
-      fork: () => Effect.succeed({}),
     } as any),
     Layer.succeed(SkillPort, skills as any),
     Layer.succeed(McpPort, mcpPort as any),

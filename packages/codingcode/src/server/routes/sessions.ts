@@ -334,36 +334,6 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     return c.json({ ok: true });
   });
 
-  router.get('/api/sessions/:id/rollback-state', async (c) => {
-    const sessionId = c.req.param('id');
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
-      })
-    );
-    const result = await runWithLayer(
-      Effect.gen(function* () {
-        const checkpoint = yield* CheckpointService;
-        const entry = yield* checkpoint.getLatestRestoreEntry(cwd, sessionId);
-        return {
-          context: { active: false, currentThroughTurnId: null },
-          code: {
-            canUndoLast: entry !== null,
-            lastEntry: entry,
-            revertedFiles: entry?.selectedFiles ?? [],
-            lastEntryId: entry?.id ?? null,
-          },
-        };
-      })
-    );
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
-    return c.json(result.value);
-  });
-
   router.get('/api/sessions/:id/checkpoints/latest/diff', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = await rt.runPromise(
@@ -423,17 +393,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
-        const completedTurns = yield* checkpoint.getCompletedTurns(cwd, sessionId);
-        if (completedTurns.length === 0)
-          return {
-            reverted: false,
-            throughTurnId: 0,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
-        const latestTurnId = completedTurns[completedTurns.length - 1]!;
-        return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, [body.file]);
+        return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, undefined, [body.file]);
       })
     );
     if (!result.ok) {
@@ -455,17 +415,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
-        const completedTurns = yield* checkpoint.getCompletedTurns(cwd, sessionId);
-        if (completedTurns.length === 0)
-          return {
-            reverted: false,
-            throughTurnId: 0,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
-        const latestTurnId = completedTurns[completedTurns.length - 1]!;
-        return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, body.files);
+        return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, undefined, body.files);
       })
     );
     if (!result.ok) {
@@ -579,31 +529,6 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       return c.json(errBody, status as any);
     }
     return c.json(result.value);
-  });
-
-  router.post('/api/sessions/:id/undo-code-rollback', async (c) => {
-    const sessionId = c.req.param('id');
-    const body = (await c.req.json()) as { cwd: string; force?: boolean; files?: string[] };
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
-    const result = await runWithLayer(
-      Effect.gen(function* () {
-        const checkpoint = yield* CheckpointService;
-        return yield* checkpoint.undoLastCodeRollback(cwd, sessionId, {
-          force: body.force,
-          files: body.files,
-        });
-      })
-    );
-    if (!result.ok) {
-      const { status, body: errBody } = errorResponse(result.error);
-      return c.json(errBody, status as any);
-    }
-    return c.json({ ok: true, result: result.value });
   });
 
   router.post('/api/sessions/:id/fork', async (c) => {

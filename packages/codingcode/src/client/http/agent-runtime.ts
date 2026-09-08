@@ -15,7 +15,6 @@ export interface AgentRuntimeClient {
   }): Promise<void>;
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
 
-  getCheckpoints(): Promise<Array<{ turnId: number; files: string[] }>>;
   getCheckpointDiff(turnId?: number): Promise<import('../../checkpoint/types.js').CheckpointDiff>;
   revertCheckpointFiles(
     turnId: number,
@@ -29,18 +28,11 @@ export interface AgentRuntimeClient {
   ): Promise<import('../../checkpoint/types.js').CodeRollbackResult>;
   rollbackContext(throughTurnId: number): Promise<{
     turns: Array<{ id: string; items: object[]; status: string }>;
-    rollbackState: import('../../checkpoint/types.js').RollbackState;
   }>;
   rollbackBothToTurn(throughTurnId: number): Promise<{
     turns: Array<{ id: string; items: object[]; status: string }>;
     codeResult: import('../../checkpoint/types.js').CodeRollbackResult;
-    rollbackState: import('../../checkpoint/types.js').RollbackState;
   }>;
-  undoLastCodeRollback(
-    force?: boolean,
-    files?: string[]
-  ): Promise<import('../../checkpoint/types.js').CodeRollbackUndoResult>;
-  getRollbackState(): Promise<import('../../checkpoint/types.js').RollbackState>;
   forkSession(atTurnId?: number): Promise<{
     sessionId: string;
     turns: Array<{ id: string; items: object[]; status: string }>;
@@ -156,10 +148,6 @@ export function createHttpAgentClient(
       await apiPost(`/api/sessions/${sessionId}/compact`, { cwd });
     },
 
-    async getCheckpoints() {
-      return apiGet('/api/checkpoints');
-    },
-
     async getCheckpointDiff(turnId?: number) {
       const segment = turnId != null ? String(turnId) : 'latest';
       return apiGet(`/api/sessions/_/checkpoints/${segment}/diff?cwd=_`);
@@ -186,14 +174,6 @@ export function createHttpAgentClient(
 
     async rollbackBothToTurn(throughTurnId: number) {
       return apiPost(`/api/sessions/_/rollback-both-to-turn?cwd=_`, { throughTurnId });
-    },
-
-    async undoLastCodeRollback(force?: boolean, files?: string[]) {
-      return apiPost(`/api/sessions/_/undo-code-rollback?cwd=_`, { force, files });
-    },
-
-    async getRollbackState() {
-      return apiGet('/api/sessions/_/rollback-state?cwd=_');
     },
 
     async forkSession(atTurnId?: number) {

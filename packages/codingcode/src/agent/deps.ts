@@ -25,7 +25,7 @@ export class SessionPort extends Context.Tag('AgentSessionPort')<SessionPort, {
 export class ToolExecutorPort extends Context.Tag('AgentToolExecutorPort')<ToolExecutorPort, {
   executeBatch(toolCalls: ToolCall[], sid: string, opts: {
     turnId?: number; projectPath?: string; signal?: AbortSignal;
-    approval?: any; toolLookup?: ToolLookup;
+    approval?: any; toolLookup?: ToolLookup; permissionMode?: PermissionMode;
   }): Effect.Effect<ToolResultUnion[], never, any>;
 }>() {}
 
@@ -41,13 +41,11 @@ export class HookPort extends Context.Tag('AgentHookPort')<HookPort, {
 }>() {}
 
 export class ApprovalPort extends Context.Tag('AgentApprovalPort')<ApprovalPort, {
-  evaluate(req: { tool: string; input: Record<string, unknown>; callId?: string; sessionId: string; projectPath?: string }): Effect.Effect<ApprovalDecision>;
-  fork(opts?: { permissionMode?: PermissionMode }): Effect.Effect<any>;
+  evaluate(req: { tool: string; input: Record<string, unknown>; callId?: string; sessionId: string; projectPath?: string; permissionMode?: PermissionMode }): Effect.Effect<ApprovalDecision>;
 }>() {}
 
 export class SkillPort extends Context.Tag('AgentSkillPort')<SkillPort, {
   extractSkill(cwd: string, query: string): Effect.Effect<[any, string]>;
-  evictProject(cwd: string): Effect.Effect<void>;
 }>() {}
 
 export class McpPort extends Context.Tag('AgentMcpPort')<McpPort, {

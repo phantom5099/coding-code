@@ -14,15 +14,6 @@ export interface CodeRollbackResult {
   throughTurnId: number;
   affectedTurns: number[];
   selectedFiles: string[];
-  restoreEntry: CodeRestoreEntry | null;
-}
-
-export interface CodeRollbackUndoResult {
-  restored: boolean;
-  conflict: boolean;
-  conflictFiles: string[];
-  restoredFiles: string[];
-  remainingRolledBack: string[];
 }
 
 export interface RollbackPreviewDiff {
@@ -31,29 +22,8 @@ export interface RollbackPreviewDiff {
   diff: string;
 }
 
-export interface CodeRestoreEntry {
-  id: string;
-  sessionId: string;
-  action: 'checkpoint-files' | 'rollback-to-turn';
-  throughTurnId: number;
-  affectedTurns: number[];
-  selectedFiles: string[];
-  safetyCommit: string;
-  timestamp: string;
-}
-
 export interface RestorePlan {
   throughTurnId: number;
   affectedTurns: number[];
   baseline: string;
-}
-
-export interface RollbackState {
-  context: { active: boolean; currentThroughTurnId: number | null };
-  code: {
-    canUndoLast: boolean;
-    lastEntry: CodeRestoreEntry | null;
-    revertedFiles: string[];
-    lastEntryId: string | null;
-  };
 }

@@ -28,11 +28,7 @@ import { ApprovalLayer } from '../../src/approval/approval.js';
 const TestLayer = Layer.mergeAll(
   Layer.succeed(SkillService, {
     getAll: () => Effect.succeed([]),
-    findByName: () => Effect.succeed(undefined),
-    select: () => Effect.succeed(undefined),
-    selectImplicit: () => Effect.succeed(undefined),
     extractSkill: () => Effect.succeed([undefined, '']),
-    evictProject: () => Effect.void,
   } as any),
   Layer.succeed(MemoryService, {
     getMemoryEnabled: () => true,

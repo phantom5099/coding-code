@@ -20,8 +20,6 @@ import {
   rollbackCodeToTurn,
   rollbackContext,
   rollbackBothToTurn,
-  undoLastCodeRollback,
-  getRollbackState,
   forkSession,
   getSessionProfile,
   setSessionProfile,
@@ -30,8 +28,6 @@ import {
 import type {
   CheckpointDiff,
   CodeRollbackResult,
-  CodeRollbackUndoResult,
-  SessionRollbackState,
 } from '../lib/core-api';
 import type { Item, Turn, Project } from '@shared/types';
 
@@ -445,12 +441,9 @@ export function useAgentRollback() {
   const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
   // Rollback store
   const revertedFilesByTurnId = useRollbackStore((s) => s.revertedFilesByTurnId);
-  const setRollbackState = useRollbackStore((s) => s.setRollbackState);
   const setCheckpointDiff = useRollbackStore((s) => s.setCheckpointDiff);
   const markFileReverted = useRollbackStore((s) => s.markFileReverted);
-  const markFileRestored = useRollbackStore((s) => s.markFileRestored);
   const setTurnCheckpointMapping = useRollbackStore((s) => s.setTurnCheckpointMapping);
-  const initRevertedFilesFromState = useRollbackStore((s) => s.initRevertedFilesFromState);
 
   const resolveUITurnId = useCallback((threadId: string, checkpointId: number): string => {
     const mapping = useRollbackStore.getState().turnCheckpointMapping;
@@ -592,20 +585,6 @@ export function useAgentRollback() {
     [workspace.rootPath, setThreadTurns, setThreadUsage, setPendingInput, setContextUsage]
   );
 
-  const undoCodeRollback = useCallback(
-    async (threadId: string, uiTurnId: string, force?: boolean, files?: string[]) => {
-      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await undoLastCodeRollback(threadId, cwd, force, files);
-      if (result.restored) {
-        for (const f of result.restoredFiles) {
-          markFileRestored(threadId, uiTurnId, f);
-        }
-      }
-      return result;
-    },
-    [workspace.rootPath, markFileRestored]
-  );
-
   const forkThread = useCallback(
     async (threadId: string, atTurnId?: number) => {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
@@ -613,20 +592,6 @@ export function useAgentRollback() {
       return res.sessionId;
     },
     [workspace.rootPath]
-  );
-
-  const initRollbackState = useCallback(
-    async (threadId: string) => {
-      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
-      try {
-        const state = await getRollbackState(threadId, cwd);
-        setRollbackState(threadId, state);
-        initRevertedFilesFromState(threadId);
-      } catch {
-        /* ignore */
-      }
-    },
-    [workspace.rootPath, setRollbackState, initRevertedFilesFromState]
   );
 
   const deleteThread = useCallback(async (threadId: string) => {
@@ -652,9 +617,7 @@ export function useAgentRollback() {
     rollbackCode,
     rollbackCtx,
     rollbackBoth,
-    undoCodeRollback,
     forkThread,
-    initRollbackState,
     deleteThread,
     revertedFilesByTurnId,
   };

@@ -24,7 +24,6 @@ export interface AgentRuntimeClient {
   }): Promise<void>;
   compact(input: { sessionId: string; cwd: string }): Promise<void>;
 
-  getCheckpoints(cwd: string): Promise<Array<{ turnId: number; files: string[] }>>;
   getCheckpointDiff(
     cwd: string,
     turnId?: number
@@ -47,7 +46,6 @@ export interface AgentRuntimeClient {
     throughTurnId: number
   ): Promise<{
     turns: Array<{ id: string; items: object[]; status: string }>;
-    rollbackState: any;
   }>;
   rollbackBothToTurn(
     cwd: string,
@@ -55,14 +53,7 @@ export interface AgentRuntimeClient {
   ): Promise<{
     turns: Array<{ id: string; items: object[]; status: string }>;
     codeResult: import('../checkpoint/types.js').CodeRollbackResult;
-    rollbackState: any;
   }>;
-  undoLastCodeRollback(
-    cwd: string,
-    force?: boolean,
-    files?: string[]
-  ): Promise<any>;
-  getRollbackState(cwd: string): Promise<any>;
   forkSession(
     cwd: string,
     atTurnId?: number
@@ -169,15 +160,6 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
       );
     },
 
-    async getCheckpoints(cwd: string) {
-      return rt.runPromise(
-        Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return yield* checkpoint.getCheckpoints(cwd, currentSessionId);
-        })
-      );
-    },
-
     async getCheckpointDiff(cwd: string, turnId?: number) {
       return rt.runPromise(
         Effect.gen(function* () {
@@ -221,16 +203,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
           const state = yield* session.load(cwd, currentSessionId);
           yield* session.rollbackToTurn(state, throughTurnId, 'user rollback');
           const turns = yield* session.readUITurns(currentSessionId, cwd);
-          const rollbackState: any = {
-            context: { active: true, currentThroughTurnId: throughTurnId },
-            code: {
-              canUndoLast: false,
-              lastEntry: null,
-              revertedFiles: [],
-              lastEntryId: null,
-            },
-          };
-          return { turns, rollbackState };
+          return { turns };
         })
       );
     },
@@ -248,46 +221,7 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
           );
           yield* session.rollbackToTurn(state, throughTurnId, 'user rollback');
           const turns = yield* session.readUITurns(currentSessionId, cwd);
-          const rollbackState: any = {
-            context: { active: true, currentThroughTurnId: throughTurnId },
-            code: {
-              canUndoLast: false,
-              lastEntry: null,
-              revertedFiles: [],
-              lastEntryId: null,
-            },
-          };
-          return { turns, codeResult, rollbackState };
-        })
-      );
-    },
-
-    async undoLastCodeRollback(cwd: string, force?: boolean, files?: string[]) {
-      return rt.runPromise(
-        Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          return yield* checkpoint.undoLastCodeRollback(cwd, currentSessionId, {
-            force,
-            files,
-          });
-        })
-      );
-    },
-
-    async getRollbackState(cwd: string) {
-      return rt.runPromise(
-        Effect.gen(function* () {
-          const checkpoint = yield* CheckpointService;
-          const entry = yield* checkpoint.getLatestRestoreEntry(cwd, currentSessionId);
-          return {
-            context: { active: false, currentThroughTurnId: null },
-            code: {
-              canUndoLast: entry !== null,
-              lastEntry: entry,
-              revertedFiles: entry?.selectedFiles ?? [],
-              lastEntryId: entry?.id ?? null,
-            },
-          };
+          return { turns, codeResult };
         })
       );
     },

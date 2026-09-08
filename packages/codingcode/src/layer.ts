@@ -70,12 +70,12 @@ const AgentHookAdapter = Layer.effect(HookPort, Effect.gen(function* () {
 
 const AgentApprovalAdapter = Layer.effect(ApprovalPort, Effect.gen(function* () {
   const a = yield* ApprovalService;
-  return { evaluate: a.evaluate.bind(a), fork: a.fork.bind(a) };
+  return { evaluate: a.evaluate.bind(a) };
 }));
 
 const AgentSkillAdapter = Layer.effect(SkillPort, Effect.gen(function* () {
   const s = yield* SkillService;
-  return { extractSkill: s.extractSkill.bind(s), evictProject: s.evictProject.bind(s) };
+  return { extractSkill: s.extractSkill.bind(s) };
 }));
 
 const AgentMcpAdapter = Layer.effect(McpPort, Effect.gen(function* () {

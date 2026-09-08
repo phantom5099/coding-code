@@ -242,42 +242,12 @@ export interface CodeRollbackResult {
   throughTurnId: number;
   affectedTurns: number[];
   selectedFiles: string[];
-  restoreEntry: CodeRestoreEntry | null;
-}
-
-export interface CodeRollbackUndoResult {
-  restored: boolean;
-  conflict: boolean;
-  conflictFiles: string[];
-  restoredFiles: string[];
-  remainingRolledBack: string[];
 }
 
 export interface RollbackPreviewDiff {
   throughTurnId: number;
   affectedTurns: number[];
   diff: string;
-}
-
-export interface CodeRestoreEntry {
-  id: string;
-  sessionId: string;
-  action: string;
-  throughTurnId: number;
-  affectedTurns: number[];
-  selectedFiles: string[];
-  safetyCommit: string;
-  timestamp: string;
-}
-
-export interface SessionRollbackState {
-  context: { active: boolean; currentThroughTurnId: number | null };
-  code: {
-    canUndoLast: boolean;
-    lastEntry: CodeRestoreEntry | null;
-    revertedFiles: string[];
-    lastEntryId: string | null;
-  };
 }
 
 export function getCheckpointDiff(
@@ -337,19 +307,6 @@ export function rollbackBothToTurn(
   usage?: { prompt: number; completion: number; total: number };
 }> {
   return clients.sessions.rollbackBothToTurn({ sessionId, cwd, throughTurnId }) as any;
-}
-
-export function undoLastCodeRollback(
-  sessionId: string,
-  cwd: string,
-  force?: boolean,
-  files?: string[]
-): Promise<{ ok: boolean; result: CodeRollbackUndoResult }> {
-  return clients.sessions.undoLastCodeRollback({ sessionId, cwd, force, files }) as any;
-}
-
-export function getRollbackState(sessionId: string, cwd: string): Promise<SessionRollbackState> {
-  return clients.sessions.getRollbackState({ sessionId, cwd }) as any;
 }
 
 export function forkSession(
