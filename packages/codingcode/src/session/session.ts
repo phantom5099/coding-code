@@ -4,7 +4,6 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { AgentError } from '../core/error.js';
 import { encodeProjectPath } from '../core/path.js';
-import type { PermissionMode } from '../approval/types.js';
 import type {
   SessionMetaEvent,
   UserEvent,
@@ -16,9 +15,12 @@ import type {
   TokenUsage,
   SessionEvent,
   SessionStoreState,
-  ActiveProfileName,
+  ProfileName,
+  PermissionMode,
+  CompactEvent,
 } from './types.js';
 import { SessionService } from './port.js';
+import type { UITurn } from './port.js';
 import {
   ensureDirs,
   readHistory,
@@ -34,7 +36,6 @@ import {
   readActiveProfileSync,
   deleteSession as deleteSessionImpl,
 } from './file-ops.js';
-import { readUIHistory, findUserMessageForTurn } from './ui-history.js';
 import { computePaths, sessionJsonlPathFromCwd } from '../core/path.js';
 
 function pathsFromState(state: SessionStoreState) {
@@ -44,6 +45,129 @@ function pathsFromState(state: SessionStoreState) {
 function assertResumeWorkspace(cwd: string, sessionId: string): void {
   const expectedPath = sessionJsonlPathFromCwd(cwd, sessionId);
   if (!existsSync(expectedPath)) throw AgentError.sessionNotFound(sessionId);
+}
+
+// --- UI history (moved from ui-history.ts) ---
+
+export function filterForUI(events: SessionEvent[]): SessionEvent[] {
+  const rollbackHiddenTurnIds = new Set<number>();
+  const rollbackHiddenOpUuids = new Set<string>();
+
+  for (const ev of events) {
+    if (ev.type !== 'rollback') continue;
+    for (const prior of events) {
+      if (prior === ev) break;
+      if ('turnId' in prior && prior.turnId >= ev.throughTurnId) {
+        rollbackHiddenTurnIds.add(prior.turnId);
+      }
+      if (prior.type === 'summary' || prior.type === 'compact') {
+        if ((prior as SummaryEvent | CompactEvent).endTurnId >= ev.throughTurnId) {
+          rollbackHiddenOpUuids.add((prior as SummaryEvent | CompactEvent).uuid);
+        }
+      }
+    }
+  }
+
+  return events.filter((ev) => {
+    if (ev.type === 'rollback') return false;
+    if (ev.type === 'summary' && rollbackHiddenOpUuids.has((ev as SummaryEvent).uuid)) return false;
+    if (ev.type === 'compact' && rollbackHiddenOpUuids.has((ev as CompactEvent).uuid)) return false;
+    if ('turnId' in ev && rollbackHiddenTurnIds.has(ev.turnId)) return false;
+    return true;
+  }) as SessionEvent[];
+}
+
+function createTurnScopedIdGenerator() {
+  const counters = new Map<string, number>();
+  return (prefix: string, turnId: number): string => {
+    const key = `${prefix}:${turnId}`;
+    const next = (counters.get(key) ?? 0) + 1;
+    counters.set(key, next);
+    return `${prefix}-${turnId}-${next}`;
+  };
+}
+
+export function sessionEventsToTurns(events: SessionEvent[]): UITurn[] {
+  const turnsMap = new Map<number, UITurn>();
+  const nextId = createTurnScopedIdGenerator();
+
+  for (const event of events) {
+    if (event.type === 'session_meta') continue;
+    if (event.type === 'compact' || event.type === 'rollback') continue;
+
+    if (event.type === 'summary') {
+      let turn = turnsMap.get(event.endTurnId);
+      if (!turn) {
+        turn = { id: String(event.endTurnId), items: [], status: 'completed' };
+        turnsMap.set(event.endTurnId, turn);
+      }
+      turn.items.push({
+        id: `summary-${event.uuid}`,
+        type: 'summary',
+        content: event.summaryText,
+        startTurnId: event.startTurnId,
+        endTurnId: event.endTurnId,
+      });
+      continue;
+    }
+
+    let turn = turnsMap.get(event.turnId);
+    if (!turn) {
+      turn = { id: String(event.turnId), items: [], status: 'completed' };
+      turnsMap.set(event.turnId, turn);
+    }
+    switch (event.type) {
+      case 'user':
+        if (event.source === 'system') break;
+        turn.items.push({
+          id: nextId('user', event.turnId),
+          type: 'message',
+          role: 'user',
+          content: event.content,
+        });
+        break;
+      case 'assistant':
+        if (event.content) {
+          turn.items.push({
+            id: nextId('assistant', event.turnId),
+            type: 'message',
+            role: 'assistant',
+            content: event.content,
+          });
+        }
+        for (const tc of event.toolCalls ?? []) {
+          const args = tc.arguments ?? {};
+          turn.items.push({
+            id: tc.id,
+            type: 'tool_call',
+            name: tc.name,
+            args,
+            status: 'approved',
+          });
+        }
+        break;
+      case 'tool_result': {
+        const item: Record<string, unknown> = {
+          id: `result-${event.toolCallId}`,
+          type: 'tool_result',
+          callId: event.toolCallId,
+          name: event.toolName,
+          output: event.output,
+        };
+        turn.items.push(item);
+        break;
+      }
+    }
+  }
+  return [...turnsMap.values()].sort((a, b) => Number(a.id) - Number(b.id));
+}
+
+function readUIHistory(sessionId: string, cwd: string): UITurn[] {
+  const jsonlPath = sessionJsonlPathFromCwd(cwd, sessionId);
+  if (!existsSync(jsonlPath)) return [];
+  const events = readHistory(jsonlPath);
+  const visibleEvents = filterForUI(events);
+  return sessionEventsToTurns(visibleEvents);
 }
 
 export const SessionLayer = Layer.effect(
@@ -74,7 +198,7 @@ export const SessionLayer = Layer.effect(
       cwd: string,
       options: {
         model: string;
-        activeProfile: ActiveProfileName;
+        activeProfile: ProfileName;
         permissionMode: PermissionMode;
       },
       opts?: { parentSessionId?: string; agentName?: string }
@@ -171,14 +295,39 @@ export const SessionLayer = Layer.effect(
     ): Effect.Effect<UserEvent, AgentError> =>
       Effect.try({
         try: () => {
+          state.currentTurnId += 1;
           const event: UserEvent = {
             type: 'user',
             turnId: state.currentTurnId,
             content,
+            source: 'user',
           };
           if (state.title === state.sessionId.slice(0, 8)) {
             state.title = truncateTitle(content);
           }
+          appendLine(pathsFromState(state).transcriptPath, event);
+          state.messageCount++;
+          updateIndex(state);
+          return event;
+        },
+        catch: (e) =>
+          e instanceof AgentError
+            ? e
+            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
+
+    const recordSystem = (
+      state: SessionStoreState,
+      content: string
+    ): Effect.Effect<UserEvent, AgentError> =>
+      Effect.try({
+        try: () => {
+          const event: UserEvent = {
+            type: 'user',
+            turnId: state.currentTurnId,
+            content,
+            source: 'system',
+          };
           appendLine(pathsFromState(state).transcriptPath, event);
           state.messageCount++;
           updateIndex(state);
@@ -331,13 +480,6 @@ export const SessionLayer = Layer.effect(
     const listSessionsFromCwd = (cwd?: string): Effect.Effect<SessionIndex[]> =>
       Effect.sync(() => listSessions(cwd ? encodeProjectPath(cwd) : undefined));
 
-    const getSessionId = (state: SessionStoreState): string => state.sessionId;
-
-    const getTranscriptPath = (state: SessionStoreState): string =>
-      pathsFromState(state).transcriptPath;
-
-    const getMessageCount = (state: SessionStoreState): number => state.messageCount;
-
     const setPermissionModeByAddress = (
       cwd: string,
       sessionId: string,
@@ -362,7 +504,7 @@ export const SessionLayer = Layer.effect(
     const setActiveProfile = (
       cwd: string,
       sessionId: string,
-      profile: ActiveProfileName
+      profile: ProfileName
     ): Effect.Effect<void, AgentError> =>
       Effect.sync(() => {
         const paths = computePaths(cwd, sessionId);
@@ -372,14 +514,8 @@ export const SessionLayer = Layer.effect(
     const getActiveProfile = (
       cwd: string,
       sessionId: string
-    ): Effect.Effect<ActiveProfileName | undefined, AgentError> =>
+    ): Effect.Effect<ProfileName | undefined, AgentError> =>
       Effect.sync(() => readActiveProfileSync(cwd, sessionId) ?? undefined);
-
-    const incrementTurn = (state: SessionStoreState): number => {
-      state.currentTurnId += 1;
-      updateIndex(state);
-      return state.currentTurnId;
-    };
 
     return {
       create,
@@ -394,11 +530,11 @@ export const SessionLayer = Layer.effect(
 
       readHistory: readHistoryFromState,
       recordUser,
+      recordSystem,
       recordAssistant,
       recordToolResult,
       appendSummary,
       rollbackToTurn,
-      incrementTurn,
 
       readEvents: (transcriptPath: string): SessionEvent[] => readHistory(transcriptPath),
       appendEvent: (transcriptPath: string, event: SessionEvent): void =>
@@ -406,24 +542,20 @@ export const SessionLayer = Layer.effect(
 
       readUITurns: (sessionId: string, cwd: string) =>
         Effect.sync(() => readUIHistory(sessionId, cwd)),
-      findUserMessageForTurn: (sessionId: string, turnId: number, cwd: string) =>
-        Effect.sync(() => findUserMessageForTurn(sessionId, turnId, cwd)),
 
       setPermissionMode: setPermissionModeByAddress,
       getPermissionMode: getPermissionModeByAddress,
       setActiveProfile,
       getActiveProfile,
-
-      getSessionId,
-      getTranscriptPath,
-      getMessageCount,
     };
   })
 );
 
 function forkSessionImpl(sourceJsonlPath: string, atTurnId: number): string {
   const events = readHistory(sourceJsonlPath);
-  const atIdx = events.findIndex((e) => e.type === 'user' && (e as any).turnId === atTurnId);
+  const atIdx = events.findIndex(
+    (e) => e.type === 'user' && (e as any).source !== 'system' && (e as any).turnId === atTurnId
+  );
 
   const chain = atIdx >= 0 ? events.slice(0, atIdx + 1) : events;
   const newSessionId = randomUUID();
@@ -432,23 +564,10 @@ function forkSessionImpl(sourceJsonlPath: string, atTurnId: number): string {
   const newJsonlPath = join(sessionsDir, `${newSessionId}.jsonl`);
   const newIndexPath = join(sessionsDir, `${newSessionId}.index.json`);
 
-  const toolCallIdMap = new Map<string, string>();
   let turnId = 0;
 
   for (const ev of chain) {
     const cloned: any = { ...ev };
-
-    if (cloned.type === 'assistant' && Array.isArray(cloned.toolCalls)) {
-      for (const tc of cloned.toolCalls) {
-        const newId = randomUUID();
-        toolCallIdMap.set(tc.id, newId);
-        tc.id = newId;
-      }
-    }
-
-    if (cloned.type === 'tool_result' && cloned.toolCallId) {
-      cloned.toolCallId = toolCallIdMap.get(cloned.toolCallId) ?? cloned.toolCallId;
-    }
 
     if (cloned.type === 'session_meta') {
       cloned.sessionId = newSessionId;

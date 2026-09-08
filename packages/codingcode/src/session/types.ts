@@ -1,17 +1,14 @@
-/**
- * 会话自身持久化的 profile 名称。session 只需存储这一字段，不依赖上层
- * profile 模块；与 AgentProfileName 保持同构（同为 'plan' | 'build'），
- * 边界赋值处可互相兼容。
- */
-export type ActiveProfileName = 'plan' | 'build';
+export type ProfileName = 'plan' | 'build';
+
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
 
 export interface SessionMetaEvent {
   type: 'session_meta';
   sessionId: string;
   cwd: string;
   createdAt: string;
-  activeProfile: ActiveProfileName;
-  permissionMode: import('../approval/types.js').PermissionMode;
+  activeProfile: ProfileName;
+  permissionMode: PermissionMode;
   parentSessionId?: string;
   agentName?: string;
 }
@@ -20,6 +17,7 @@ export interface UserEvent {
   type: 'user';
   turnId: number;
   content: string;
+  source?: 'user' | 'system';
 }
 
 export interface AssistantEvent {
@@ -84,8 +82,8 @@ export interface SessionIndex {
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;
-  activeProfile: ActiveProfileName;
-  permissionMode: import('../approval/types.js').PermissionMode;
+  activeProfile: ProfileName;
+  permissionMode: PermissionMode;
   memorySnapshot?: string;
   parentSessionId?: string;
 }
@@ -96,8 +94,8 @@ export interface SessionStoreState {
   messageCount: number;
   sessionMeta: SessionMetaEvent | null;
   model: string;
-  activeProfile: ActiveProfileName;
-  permissionMode: import('../approval/types.js').PermissionMode;
+  activeProfile: ProfileName;
+  permissionMode: PermissionMode;
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;

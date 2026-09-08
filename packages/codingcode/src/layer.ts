@@ -13,6 +13,8 @@ import { ToolExecutorLayer } from './tools/tools.js';
 import { ContextLayer } from './context/context.js';
 import { MemoryLayer } from './memory/memory.js';
 import { AgentLayer } from './agent/agent.js';
+import { ToolEnvLayer } from './agent/tool-env.js';
+import { ToolCatalogLayer } from './agent/tool-catalog.js';
 import { SubagentRunnerLayer } from './subagent/subagent.js';
 import { SchedulerLayer } from './scheduler/scheduler.js';
 import { WorkspaceService } from './core/workspace.js';
@@ -43,9 +45,8 @@ const AgentSessionAdapter = Layer.effect(SessionPort, Effect.gen(function* () {
   const s = yield* SessionService;
   return {
     load: s.load.bind(s), create: s.create.bind(s),
-    recordUser: s.recordUser.bind(s), recordAssistant: s.recordAssistant.bind(s),
-    recordToolResult: s.recordToolResult.bind(s), incrementTurn: s.incrementTurn.bind(s),
-    getTranscriptPath: s.getTranscriptPath.bind(s),
+    recordUser: s.recordUser.bind(s), recordSystem: s.recordSystem.bind(s), recordAssistant: s.recordAssistant.bind(s),
+    recordToolResult: s.recordToolResult.bind(s),
     getActiveProfile: s.getActiveProfile.bind(s),
     setPermissionMode: s.setPermissionMode.bind(s),
     setActiveProfile: s.setActiveProfile.bind(s),
@@ -141,7 +142,7 @@ const SystemHookLayer = HookLayer.pipe(
 
 // agent with deps
 const AgentWithDeps = AgentLayer.pipe(
-  Layer.provide(Layer.mergeAll(AgentDepsAdapter, InfraLayer, SessionLayer, ToolExecutorWithDeps, ApprovalWithDeps, ContextWithDeps, MemoryWithDeps, CheckpointLayer))
+  Layer.provide(Layer.mergeAll(AgentDepsAdapter, ToolEnvLayer, ToolCatalogLayer, InfraLayer, SessionLayer, ToolExecutorWithDeps, ApprovalWithDeps, ContextWithDeps, MemoryWithDeps, CheckpointLayer))
 );
 
 // subagent runner (depends on agent)

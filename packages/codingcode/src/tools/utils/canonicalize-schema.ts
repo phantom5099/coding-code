@@ -1,18 +1,3 @@
-/**
- * Recursively sort object keys to produce deterministic JSON serialization.
- *
- * Used to canonicalize tool JSON Schema so that consecutive calls with
- * structurally identical schemas produce byte-identical strings — necessary
- * for LLM provider prompt cache prefix stability.
- *
- * Special handling for JSON Schema: when an object has `properties` and
- * `required`, the `required` array is reordered to follow the same key order
- * as `properties` (which is sorted alphabetically). Without this, two
- * structurally identical zod schemas declared in different field order
- * would still produce different serialized output, since zod's `required`
- * mirrors the declaration order rather than the canonicalized `properties`
- * order.
- */
 export function canonicalizeSchema(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(canonicalizeSchema);

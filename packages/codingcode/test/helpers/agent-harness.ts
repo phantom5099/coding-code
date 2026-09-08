@@ -2,6 +2,8 @@
 // 替代已删除的 agentLoop 自由函数。所有 agent 内部服务均以窄端口 mock 注入。
 import { Effect, Layer } from 'effect';
 import { AgentLayer } from '../../src/agent/agent.js';
+import { ToolEnvLayer } from '../../src/agent/tool-env.js';
+import { ToolCatalogLayer } from '../../src/agent/tool-catalog.js';
 import { AgentService } from '../../src/agent/port.js';
 import {
   ApprovalPort,
@@ -54,6 +56,7 @@ export interface HarnessMocks {
     load: (cwd: string, sid: string) => any;
     create: (cwd: string, opts: any, extra?: any) => any;
     recordUser: (state: any, content: string) => any;
+    recordSystem: (state: any, content: string) => any;
     recordAssistant: (state: any, content: string, toolCalls: any[], usage?: any) => any;
     recordToolResult: (state: any, name: string, id: string, output: string) => any;
     getActiveProfile: (cwd: string, sid: string) => any;
@@ -144,10 +147,9 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
         activeProfile: opts.activeProfile ?? 'build',
       }),
     recordUser: () => Effect.succeed({}),
+    recordSystem: () => Effect.succeed({}),
     recordAssistant: () => Effect.succeed({}),
     recordToolResult: () => Effect.succeed({}),
-    incrementTurn: (s: SessionStoreState) => (s.currentTurnId ?? 0) + 1,
-    getTranscriptPath: () => '/tmp/test.jsonl',
     getActiveProfile: () => Effect.succeed('build'),
     setPermissionMode: () => Effect.void,
     setActiveProfile: () => Effect.void,
@@ -204,7 +206,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       evictProjectRules: () => {},
     } as any),
     Layer.succeed(TodoPort, { read: (sid: string) => store.get(sid) ?? [] } as any),
-    // registerBuiltinTools 在循环内部 yield* TodoService（完整 tag），窄端口 TodoPort 不可替代
+    // todo_write 工具 execute 执行时 yield* TodoService（完整 tag），窄端口 TodoPort 不可替代
     Layer.succeed(TodoService, {
       read: (sid: string) => store.get(sid) ?? [],
       write: (sid: string, items: any[]) => {
@@ -212,7 +214,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       },
       reset: () => store.clear(),
     } as any),
-    // createDispatchAgentTool 在 runTurn 内 yield* 这三个完整服务
+    // dispatch_agent 工具 execute 执行时 yield* 这三个完整服务
     Layer.succeed(HookService, {
       register: () => Effect.succeed(() => {}),
       registerDecision: () => Effect.succeed(() => {}),
@@ -225,7 +227,11 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       syncConnections: () => Effect.void,
       listProjectMcpTools: () => [],
     } as any),
-    Layer.succeed(SubagentRunnerService, {} as any)
+    Layer.succeed(SubagentRunnerService, {} as any),
+    // ToolEnvPort：把上面的具体服务适配成 agent 所需的工具执行期注入能力（同 layer.ts）
+    ToolEnvLayer,
+    // ToolCatalogPort：静态内置工具 + profile 工具 + MCP 工具的装配（同 layer.ts）
+    ToolCatalogLayer,
   );
   return services;
 }

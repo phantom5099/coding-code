@@ -94,13 +94,6 @@ export function createHttpAgentClient(
               args: data.args as Record<string, unknown>,
             };
             break;
-          case 'plan_ready':
-            yield {
-              type: 'plan_ready',
-              sessionId: data.sessionId as string,
-              title: data.title as string,
-            };
-            break;
           case 'tool_start':
             yield {
               type: 'tool_start',

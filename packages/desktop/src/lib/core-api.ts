@@ -319,7 +319,6 @@ export function rollbackContext(
 ): Promise<{
   ok: boolean;
   turns: any[];
-  rolledBackMessage?: string;
   promptEstimate?: number;
   usage?: { prompt: number; completion: number; total: number };
 }> {
@@ -334,7 +333,6 @@ export function rollbackBothToTurn(
   ok: boolean;
   turns: any[];
   codeResult: CodeRollbackResult;
-  rolledBackMessage?: string;
   promptEstimate?: number;
   usage?: { prompt: number; completion: number; total: number };
 }> {

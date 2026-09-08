@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
-import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();

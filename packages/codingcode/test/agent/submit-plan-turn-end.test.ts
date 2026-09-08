@@ -65,57 +65,35 @@ function makeOkExecutor() {
   } as any;
 }
 
-function makePlanReadyHooks() {
-  const planReadyEmits: any[] = [];
+function makeCapturingHooks() {
+  const emittedPoints: string[] = [];
   const hooks = {
-    emit: vi.fn((point: string, payload: any) => {
-      if (point === 'plan.ready') planReadyEmits.push(payload);
+    emit: vi.fn((point: string, _payload: any) => {
+      emittedPoints.push(point);
       return Effect.succeed(undefined);
     }),
     emitDecision: vi.fn(() => Effect.succeed(null)),
   } as any;
-  return { hooks, planReadyEmits };
+  return { hooks, emittedPoints };
 }
 
-describe('agent runTurn plan.ready emission on turn-end', () => {
-  it('emits plan.ready when turn ends naturally after submit_plan tool call', async () => {
-    const { hooks, planReadyEmits } = makePlanReadyHooks();
+describe('agent treats submit_plan as an ordinary tool', () => {
+  it('runs submit_plan and ends the turn without any plan-specific hook events', async () => {
+    const { hooks, emittedPoints } = makeCapturingHooks();
     const { events } = await runAgentTurn(
       { llm: makeSubmitPlanLlm(), state: mockState, hooks, executor: makeOkExecutor() },
       { sessionId: 'test-session', cwd: '/tmp' }
     );
 
     expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
-    expect(planReadyEmits).toHaveLength(1);
-    expect(planReadyEmits[0]).toEqual({
-      sessionId: mockState.sessionId,
-      projectPath: mockState.cwd,
-      title: 'My Plan',
-    });
+    // plan.ready hook point has been removed — the agent no longer announces submit_plan.
+    expect(emittedPoints.includes('plan.ready')).toBe(false);
+    expect(emittedPoints.filter((p) => p.startsWith('plan.'))).toHaveLength(0);
   });
 
-  it('does NOT emit plan.ready when no submit_plan was called this turn', async () => {
-    const { hooks, planReadyEmits } = makePlanReadyHooks();
-    const llm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: okResponse('Just a regular response'),
-      })),
-      modelInfo: { maxTokens: 1000 },
-    } as any;
-
-    const { events } = await runAgentTurn(
-      { llm, state: mockState, hooks },
-      { sessionId: 'test-session', cwd: '/tmp' }
-    );
-
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
-    expect(planReadyEmits).toHaveLength(0);
-  });
-
-  it('does NOT switch profile after plan.ready (profile change is UI responsibility)', async () => {
+  it('does NOT switch profile after submit_plan (profile change is UI responsibility)', async () => {
     const setActiveProfile = vi.fn(() => Effect.void);
-    const { hooks } = makePlanReadyHooks();
+    const { hooks } = makeCapturingHooks();
 
     const { events } = await runAgentTurn(
       {

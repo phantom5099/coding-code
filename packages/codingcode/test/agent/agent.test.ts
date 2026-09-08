@@ -154,23 +154,4 @@ describe('agent runTurn loop', () => {
     expect(turnEndCalls).toHaveLength(1);
     expect(turnEndCalls[0].status).toBe('maxSteps');
   });
-
-  it('should not emit plan.ready when no submit_plan was called', async () => {
-    const { llm } = makeCapturingLlm({ content: 'Just a regular response' });
-    const planReadyEmits: any[] = [];
-    const hooks = {
-      emit: vi.fn((point: string, payload: any) => {
-        if (point === 'plan.ready') planReadyEmits.push(payload);
-        return Effect.succeed(undefined);
-      }),
-      emitDecision: () => Effect.succeed(null),
-    } as any;
-    const { events } = await runAgentTurn(
-      { llm, state: mockState, hooks },
-      { sessionId: 'test-sid', cwd: '/tmp' }
-    );
-
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
-    expect(planReadyEmits).toHaveLength(0);
-  });
 });

@@ -10,9 +10,9 @@ export interface ToolExecCtx {
   projectPath?: string;
 }
 
-export interface ToolDefinition {
+export interface ToolDefinition<R = never> {
   name: string;
   description: string;
   parameters: z.ZodTypeAny;
-  execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, never>;
+  execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, R>;
 }

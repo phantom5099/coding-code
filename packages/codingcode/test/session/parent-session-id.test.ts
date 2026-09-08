@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Effect } from 'effect';
-import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { encodeProjectPath, computePaths } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 

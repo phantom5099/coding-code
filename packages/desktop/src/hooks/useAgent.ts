@@ -105,6 +105,7 @@ export function useAgentCore() {
   const completeTurn = useAgentStore((s) => s.completeTurn);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
   const setPendingPlan = useAgentStore((s) => s.setPendingPlan);
+  const clearPendingPlan = useAgentStore((s) => s.clearPendingPlan);
   const clearRunningTurns = useAgentStore((s) => s.clearRunningTurns);
   const applyTodoUpdate = useAgentStore((s) => s.applyTodoUpdate);
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
@@ -230,11 +231,6 @@ export function useAgentCore() {
             args: event.args,
             status: 'pending',
           };
-        case 'plan_ready':
-          // The server's plan.ready SSE event drives the plan-approval
-          // modal directly. We don't write a tool_call item — the modal
-          // renders from this payload via useAgentStore's pendingPlan.
-          return null;
         case 'tool_result':
           return {
             id: randomId(),
@@ -316,6 +312,7 @@ export function useAgentCore() {
       }
 
       if (inflightControllers.has(threadId)) return;
+      clearPendingPlan(threadId);
 
       let turnId = randomId();
       let assistantMessageId = randomId();
@@ -335,6 +332,7 @@ export function useAgentCore() {
         });
 
         let hasError = false;
+        let submittedPlanTitle: string | null = null;
         for await (const event of stream) {
           if (event.type === 'session_id') continue;
 
@@ -342,11 +340,14 @@ export function useAgentCore() {
             hasError = true;
           }
 
-          if (event.type === 'plan_ready') {
-            setPendingPlan(threadId, {
-              sessionId: event.sessionId,
-              title: event.title,
-            });
+          // Front-end detection: submit_plan is an ordinary tool from the
+          // agent's perspective; only a successful call shows the decision UI.
+          if (event.type === 'tool_start' && event.name === 'submit_plan') {
+            submittedPlanTitle = String((event.args as Record<string, unknown>)?.title ?? '');
+          } else if (event.type === 'tool_result' && event.name === 'submit_plan') {
+            if (!event.ok) submittedPlanTitle = null;
+          } else if (event.type === 'tool_denied' && event.name === 'submit_plan') {
+            submittedPlanTitle = null;
           }
 
           const item = streamChunkToItem(event, threadId, assistantMessageId, turnId);
@@ -364,6 +365,9 @@ export function useAgentCore() {
         }
 
         completeTurn(threadId, turnId, hasError ? 'error' : 'completed');
+        if (!hasError && submittedPlanTitle !== null) {
+          setPendingPlan(threadId, { sessionId: threadId, title: submittedPlanTitle });
+        }
       } catch (err: any) {
         const msg = err instanceof ApiError ? (err.body?.message ?? err.message) : String(err);
         applyChunk(threadId, turnId, { id: randomId(), type: 'error', message: msg });
@@ -379,6 +383,7 @@ export function useAgentCore() {
       applyChunk,
       completeTurn,
       setPendingPlan,
+      clearPendingPlan,
       workspace.rootPath,
       approvalPolicy,
       pendingProfile,
@@ -524,12 +529,19 @@ export function useAgentRollback() {
   const rollbackCtx = useCallback(
     async (threadId: string, throughTurnId: number) => {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
+      const targetTurn = useAgentStore.getState().threads[threadId]?.turns.find(
+        (t) => t.id === String(throughTurnId)
+      );
+      const userMsg = targetTurn?.items.find(
+        (i) => i.type === 'message' && (i as any).role === 'user'
+      );
+      const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
       const res = await rollbackContext(threadId, cwd, throughTurnId);
       clearRunningTurns(threadId);
       setThreadTurns(threadId, res.turns as Turn[]);
       setThreadUsage(threadId, res.usage ?? { prompt: 0, completion: 0, total: 0 });
-      if (res.rolledBackMessage) {
-        setPendingInput(res.rolledBackMessage);
+      if (userContent) {
+        setPendingInput(userContent);
       }
       if (res.promptEstimate != null) {
         const agentState = useAgentStore.getState();
@@ -554,11 +566,18 @@ export function useAgentRollback() {
   const rollbackBoth = useCallback(
     async (threadId: string, throughTurnId: number) => {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
+      const targetTurn = useAgentStore.getState().threads[threadId]?.turns.find(
+        (t) => t.id === String(throughTurnId)
+      );
+      const userMsg = targetTurn?.items.find(
+        (i) => i.type === 'message' && (i as any).role === 'user'
+      );
+      const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
       const res = await rollbackBothToTurn(threadId, cwd, throughTurnId);
       setThreadTurns(threadId, res.turns as Turn[]);
       setThreadUsage(threadId, res.usage ?? { prompt: 0, completion: 0, total: 0 });
-      if (res.rolledBackMessage) {
-        setPendingInput(res.rolledBackMessage);
+      if (userContent) {
+        setPendingInput(userContent);
       }
       if (res.promptEstimate != null) {
         const agentState = useAgentStore.getState();

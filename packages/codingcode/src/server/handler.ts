@@ -1,7 +1,6 @@
 import type { Context } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalWaitService } from '../approval/wait-port.js';
-import { HookService } from '../hooks/port.js';
 import { AgentError } from '../core/error.js';
 
 export type SseEvent = { type: string; [key: string]: unknown };
@@ -26,11 +25,6 @@ export function createSseHandler(rt: ManagedRt) {
               return yield* ApprovalWaitService;
             })
           );
-          const hookService = await rt.runPromise(
-            Effect.gen(function* () {
-              return yield* HookService;
-            })
-          );
           Effect.runSync(
             waitService.registerEmitter(
               sessionId,
@@ -38,21 +32,6 @@ export function createSseHandler(rt: ManagedRt) {
                 enqueue({ type: 'approval_request', id, tool, args });
               }
             )
-          );
-
-          const unregisterPlanReady = Effect.runSync(
-            hookService.register('plan.ready', (payload) => {
-              const p = payload as {
-                sessionId?: string;
-                title?: string;
-              };
-              if (p.sessionId !== sessionId) return;
-              enqueue({
-                type: 'plan_ready',
-                sessionId: p.sessionId,
-                title: p.title ?? '',
-              });
-            })
           );
 
           try {
@@ -74,7 +53,6 @@ export function createSseHandler(rt: ManagedRt) {
               ...(e instanceof AgentError ? { code: e.code } : {}),
             });
           } finally {
-            unregisterPlanReady();
             Effect.runSync(waitService.unregisterEmitter(sessionId));
             opts?.onDone?.();
           }

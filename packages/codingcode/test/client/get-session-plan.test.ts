@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ManagedRuntime } from 'effect';
 import { createHttpSessionClient } from '../../src/client/http/sessions.js';
 import { createDirectSessionClient } from '../../src/direct/sessions.js';
-import { SessionLayer } from '../../src/session/index.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

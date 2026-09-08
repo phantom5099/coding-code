@@ -1,35 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
-import * as facade from '../../src/session/index.js';
-import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 
-describe('session facade surface', () => {
-  it('exposes only intent-level capabilities', () => {
-    const exported = Object.keys(facade).sort();
-    expect(exported).toEqual([
-      'SessionLayer',
-      'SessionService',
-      'readActiveProfileSync',
-      'readTranscript',
-    ]);
-  });
-
-  it('does not leak file-level operations through the facade', () => {
-    const f = facade as unknown as Record<string, unknown>;
-    for (const leaked of [
-      'readCurrentIndex',
-      'appendLine',
-      'readHistory',
-      'deleteSession',
-      'setPermissionMode',
-      'getPermissionMode',
-      'writeIndexAtomic',
-      'ensureDirs',
-    ]) {
-      expect(f[leaked], `facade must not export ${leaked}`).toBeUndefined();
-    }
-  });
-
+describe('session service surface', () => {
   it('service shape exposes exactly the contract method set', async () => {
     const service = await Effect.runPromise(
       Effect.gen(function* () {
@@ -42,20 +16,16 @@ describe('session facade surface', () => {
       'appendSummary',
       'create',
       'deleteSession',
-      'findUserMessageForTurn',
       'forkSession',
       'getActiveProfile',
-      'getMessageCount',
       'getPermissionMode',
-      'getSessionId',
-      'getTranscriptPath',
-      'incrementTurn',
       'listSessions',
       'load',
       'readEvents',
       'readHistory',
       'readUITurns',
       'recordAssistant',
+      'recordSystem',
       'recordToolResult',
       'recordUser',
       'renameSession',
@@ -63,5 +33,33 @@ describe('session facade surface', () => {
       'setActiveProfile',
       'setPermissionMode',
     ]);
+  });
+
+  it('does not leak file-level operations through the service', async () => {
+    const service = await Effect.runPromise(
+      Effect.gen(function* () {
+        return yield* SessionService;
+      }).pipe(Effect.provide(SessionLayer))
+    );
+    for (const leaked of [
+      'readCurrentIndex',
+      'appendLine',
+      'writeIndexAtomic',
+      'ensureDirs',
+      'truncateTitle',
+      'countNonMetaEvents',
+      'findFirstUserContent',
+      'readActiveProfileSync',
+      'readTranscript',
+      'readUIHistory',
+      'filterForUI',
+      'sessionEventsToTurns',
+      'forkSessionImpl',
+    ]) {
+      expect(
+        (service as unknown as Record<string, unknown>)[leaked],
+        `service must not expose ${leaked}`
+      ).toBeUndefined();
+    }
   });
 });

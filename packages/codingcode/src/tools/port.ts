@@ -9,7 +9,7 @@ export type ToolResultUnion =
   | { type: 'denied'; id: string; name: string; reason: string }
   | { type: 'error'; id: string; name: string; output: string };
 
-export type ToolLookup = (name: string) => ToolDefinition | undefined;
+export type ToolLookup = (name: string) => ToolDefinition<any> | undefined;
 
 export interface ToolExecutorShape {
   execute(name: string, args: unknown, opts?: {

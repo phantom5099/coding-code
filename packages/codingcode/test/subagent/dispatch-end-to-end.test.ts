@@ -4,6 +4,8 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { AgentLayer } from '../../src/agent/agent.js';
+import { ToolEnvLayer } from '../../src/agent/tool-env.js';
+import { ToolCatalogLayer } from '../../src/agent/tool-catalog.js';
 import { AgentService } from '../../src/agent/port.js';
 import {
   SessionPort,
@@ -20,13 +22,13 @@ import {
   TodoPort,
 } from '../../src/agent/deps.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { SessionService } from '../../src/session/index.js';
+import { SessionService } from '../../src/session/port.js';
 import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import { encodeProjectPath, normalizePath, setProjectBaseDir } from '../../src/core/path.js';
+import { encodeProjectPath, normalizePath, setProjectBaseDir, computePaths } from '../../src/core/path.js';
 import type { Message } from '../../src/core/types.js';
 import type { LLMClient } from '../../src/llm/client.js';
 import { Result } from '../../src/core/result.js';
@@ -81,10 +83,9 @@ const SessionPortLayer = Layer.effect(SessionPort, Effect.gen(function* () {
     load: svc.load.bind(svc),
     create: svc.create.bind(svc),
     recordUser: svc.recordUser.bind(svc),
+    recordSystem: svc.recordSystem.bind(svc),
     recordAssistant: svc.recordAssistant.bind(svc),
     recordToolResult: svc.recordToolResult.bind(svc),
-    incrementTurn: svc.incrementTurn.bind(svc),
-    getTranscriptPath: svc.getTranscriptPath.bind(svc),
     getActiveProfile: svc.getActiveProfile.bind(svc),
     setPermissionMode: svc.setPermissionMode.bind(svc),
     setActiveProfile: svc.setActiveProfile.bind(svc),
@@ -133,14 +134,17 @@ const AgentDeps = Layer.mergeAll(
     evictProjectRules: () => {},
   } as any),
   Layer.succeed(TodoPort, { read: () => [] } as any),
-  Layer.succeed(TodoService, { read: () => [], write: () => {}, reset: () => {} } as any)
+  // ToolEnvPort 在 getToolEnv 运行时从外层 Runtime 解析具体服务（见 Runtime 定义）
+  ToolEnvLayer,
+  // ToolCatalogPort：静态内置 + profile 工具的装配（同 layer.ts）
+  ToolCatalogLayer
 );
 
 // Real AgentService built on the real SessionPort + stubbed narrow ports.
 const AgentWired = AgentLayer.pipe(Layer.provide(AgentDeps as any));
 
 // Runtime exposed to the tests: real AgentService + SessionService, plus the
-// full services createDispatchAgentTool pulls from the environment.
+// full services the dispatch_agent tool's execute pulls from the environment.
 const Runtime = Layer.mergeAll(
   AgentWired,
   SessionLayer,
@@ -156,7 +160,9 @@ const Runtime = Layer.mergeAll(
     syncConnections: () => Effect.void,
     listProjectMcpTools: () => [],
   } as any),
-  Layer.succeed(SubagentRunnerService, {} as any)
+  Layer.succeed(SubagentRunnerService, {} as any),
+  // ToolEnvLayer.getToolEnv 运行时从外层解析 TodoService（工具执行期依赖）
+  Layer.succeed(TodoService, { read: () => [], write: () => {}, reset: () => {} } as any)
 );
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
@@ -211,7 +217,7 @@ describe('subagent run end-to-end (session transcript is read by the agent loop)
         });
         const content = yield* drainStream(stream);
         const state = yield* session.load(normalizePath(cwd), sessionId);
-        return { content, sessionId, transcriptPath: session.getTranscriptPath(state) };
+        return { content, sessionId, transcriptPath: computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath };
       })
     );
 

@@ -9,7 +9,6 @@ import ApprovalPanel from '../src/agent/ApprovalPanel';
 
 const sendMessageMock = vi.fn();
 const switchProfileMock = vi.fn();
-const fetchPlanMock = vi.fn();
 
 vi.mock('../src/hooks/useAgent', () => ({
   useAgentApproval: () => ({
@@ -22,11 +21,8 @@ vi.mock('../src/hooks/useAgent', () => ({
   }),
   useAgentProfile: () => ({
     switchProfile: switchProfileMock,
-    fetchPlan: fetchPlanMock,
   }),
 }));
-
-const PLAN = '# 计划\n\n正文';
 
 function seedPendingPlan(threadId: string, title = '测试计划') {
   act(() => {
@@ -34,12 +30,6 @@ function seedPendingPlan(threadId: string, title = '测试计划') {
       sessionId: threadId,
       title,
     });
-  });
-  // Default: fetchPlan returns the test plan content
-  fetchPlanMock.mockResolvedValue({
-    content: PLAN,
-    path: '/tmp/.codingcode/plans/abc.md',
-    directory: '/tmp/.codingcode/plans',
   });
 }
 
@@ -98,10 +88,10 @@ describe('ApprovalPanel — pendingPlan handling', () => {
     cleanup();
   });
 
-  it('renders the PlanApprovalModal when pendingPlan is set', async () => {
+  it('renders the PlanDecisionModal when pendingPlan is set', async () => {
     seedPendingPlan('t-1');
     const { findByTestId } = render(<ApprovalPanel threadId="t-1" />);
-    const modal = await findByTestId('plan-approval-modal');
+    const modal = await findByTestId('plan-decision-modal');
     expect(modal).toBeInTheDocument();
   });
 
@@ -169,7 +159,7 @@ describe('ApprovalPanel — pendingPlan handling', () => {
   it('falls back to the regular approval card list when only tool_calls are pending', () => {
     seedRegularApproval('t-2');
     const { queryByTestId, getByText } = render(<ApprovalPanel threadId="t-2" />);
-    expect(queryByTestId('plan-approval-modal')).not.toBeInTheDocument();
+    expect(queryByTestId('plan-decision-modal')).not.toBeInTheDocument();
     expect(getByText('bash')).toBeInTheDocument();
   });
 

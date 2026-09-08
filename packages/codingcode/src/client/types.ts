@@ -9,7 +9,6 @@ export type StreamChunk =
       tool: string;
       args: Record<string, unknown>;
     }
-  | { type: 'plan_ready'; sessionId: string; title: string }
   | { type: 'tool_start'; id: string; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; id: string; name: string; output: string; ok: boolean }
   | { type: 'tool_denied'; id: string; name: string; reason: string }

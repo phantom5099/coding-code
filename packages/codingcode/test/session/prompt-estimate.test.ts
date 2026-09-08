@@ -3,7 +3,8 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 
 import { estimatePromptTokensFrom } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';

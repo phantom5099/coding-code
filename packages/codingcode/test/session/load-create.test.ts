@@ -3,7 +3,8 @@ import { mkdirSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { AgentError } from '../../src/core/error.js';
 import { encodeProjectPath, computePaths } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
@@ -274,7 +275,6 @@ describe('load restores persisted fields', () => {
         Effect.gen(function* () {
           const svc = yield* SessionService;
           const state = yield* svc.load(dir, sid);
-          svc.incrementTurn(state);
           yield* svc.recordUser(state, 'first');
         })
       );
@@ -282,7 +282,6 @@ describe('load restores persisted fields', () => {
         Effect.gen(function* () {
           const svc = yield* SessionService;
           const state = yield* svc.load(dir, sid);
-          svc.incrementTurn(state);
           yield* svc.recordUser(state, 'second');
         })
       );

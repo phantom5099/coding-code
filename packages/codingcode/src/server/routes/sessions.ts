@@ -143,7 +143,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const maxTokens = llm?.modelInfo.maxTokens ?? 128000;
 
         return yield* Effect.promise(() =>
-          context.compactWithLLM(session.getTranscriptPath(state), maxTokens, llm)
+          context.compactWithLLM(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath, maxTokens, llm)
         );
       })
     );
@@ -532,18 +532,11 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        const rolledBackMessage = yield* session.findUserMessageForTurn(
-          sessionId,
-          body.throughTurnId,
-          cwd
-        );
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
         const turns = yield* session.readUITurns(sessionId, cwd);
-        const promptEstimate = estimatePromptTokensFrom(
-          session.readEvents(session.getTranscriptPath(state))
-        );
+        const promptEstimate = estimatePromptTokensFrom(yield* session.readHistory(state));
         const usage = state.usage;
-        return { ok: true, turns, rolledBackMessage, promptEstimate, usage };
+        return { ok: true, turns, promptEstimate, usage };
       }) as any
     );
     if (!result.ok) {
@@ -568,22 +561,14 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const checkpoint = yield* CheckpointService;
         const codeResult = yield* checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
         const state = yield* session.load(cwd, sessionId);
-        const rolledBackMessage = yield* session.findUserMessageForTurn(
-          sessionId,
-          body.throughTurnId,
-          cwd
-        );
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
         const turns = yield* session.readUITurns(sessionId, cwd);
-        const promptEstimate = estimatePromptTokensFrom(
-          session.readEvents(session.getTranscriptPath(state))
-        );
+        const promptEstimate = estimatePromptTokensFrom(yield* session.readHistory(state));
         const usage = state.usage;
         return {
           ok: true,
           turns,
           codeResult,
-          rolledBackMessage,
           promptEstimate,
           usage,
         };

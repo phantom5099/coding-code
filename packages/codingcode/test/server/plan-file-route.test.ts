@@ -8,7 +8,7 @@ import { join } from 'path';
 import { Hono } from 'hono';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
-import { SessionService } from '../../src/session/index.js';
+import { SessionService } from '../../src/session/port.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
@@ -32,7 +32,6 @@ const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
 } as any);
 
 const MockSessionLayer = Layer.succeed(SessionService, {
-  getTranscriptPath: () => '/tmp/test.jsonl',
   create: () =>
     Effect.succeed({
       sessionId: 'test-sid',
@@ -60,7 +59,6 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       output: '',
       turnId: 0,
     }),
-  incrementTurn: () => 0,
 } as any);
 
 const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {

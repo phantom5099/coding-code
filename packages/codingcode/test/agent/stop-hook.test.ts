@@ -116,7 +116,7 @@ describe('agent runTurn stop hook', () => {
 
   it('should record the injection message from the stop decision', async () => {
     const { llm } = makeContentOnlyLlm();
-    const recordUser = vi.fn(() => Effect.succeed({}));
+    const recordSystem = vi.fn(() => Effect.succeed({}));
     const emitDecision = makeStopDecision({
       decision: 'continue',
       injection: 'Custom injection message',
@@ -124,26 +124,26 @@ describe('agent runTurn stop hook', () => {
     const hooks = { emit: vi.fn(() => Effect.succeed(undefined)), emitDecision } as any;
 
     await runAgentTurn(
-      { llm, state: mockState, hooks, sessionPort: { recordUser } },
+      { llm, state: mockState, hooks, sessionPort: { recordSystem } },
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    const contents = recordUser.mock.calls.map((c: any) => c[1] as string);
+    const contents = recordSystem.mock.calls.map((c: any) => c[1] as string);
     expect(contents.some((c) => c === 'Custom injection message')).toBe(true);
   });
 
   it('should use default injection if stop decision does not provide one', async () => {
     const { llm } = makeContentOnlyLlm();
-    const recordUser = vi.fn(() => Effect.succeed({}));
+    const recordSystem = vi.fn(() => Effect.succeed({}));
     const emitDecision = makeStopDecision({ decision: 'continue' });
     const hooks = { emit: vi.fn(() => Effect.succeed(undefined)), emitDecision } as any;
 
     await runAgentTurn(
-      { llm, state: mockState, hooks, sessionPort: { recordUser } },
+      { llm, state: mockState, hooks, sessionPort: { recordSystem } },
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    const contents = recordUser.mock.calls.map((c: any) => c[1] as string);
+    const contents = recordSystem.mock.calls.map((c: any) => c[1] as string);
     expect(contents.some((c) => c === '(continue)')).toBe(true);
   });
 });

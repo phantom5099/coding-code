@@ -1,6 +1,6 @@
 import { Layer, Effect } from 'effect';
 import type { LLMClient } from '../llm/client.js';
-import { readTranscript } from '../session/index.js';
+import { readTranscript } from '../session/file-ops.js';
 import type { SessionEvent } from '../session/types.js';
 import {
   readMemoryFile,

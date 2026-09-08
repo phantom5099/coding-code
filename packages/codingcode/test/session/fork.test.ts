@@ -3,7 +3,8 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionIndex, SessionEvent } from '../../src/session/types.js';
@@ -148,7 +149,7 @@ describe('forkSession', () => {
     }
   });
 
-  it('forked session has regenerated toolCallIds', async () => {
+  it('fork preserves toolCallIds and keeps tool_result mapping', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
@@ -182,11 +183,9 @@ describe('forkSession', () => {
       const originalToolCallIds = collectToolCallIds(originalEvents);
       const newToolCallIds = collectToolCallIds(newEvents);
 
-      // No toolCallId overlap
-      for (const id of newToolCallIds) {
-        expect(originalToolCallIds.has(id)).toBe(false);
-      }
-      // Tool result still maps to the regenerated assistant toolCall id
+      // toolCallIds are preserved unchanged (no regeneration)
+      expect([...newToolCallIds].sort()).toEqual([...originalToolCallIds].sort());
+      // Tool result still maps to the preserved assistant toolCall id
       const forkedAssistant = newEvents.find((e) => e.type === 'assistant' && e.turnId === 2) as
         | { toolCalls: Array<{ id: string }> }
         | undefined;

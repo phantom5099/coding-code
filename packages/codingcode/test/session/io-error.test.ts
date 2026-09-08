@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { SessionService, SessionLayer } from '../../src/session/index.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { AgentError } from '../../src/core/error.js';
 import * as fs from 'fs';
 

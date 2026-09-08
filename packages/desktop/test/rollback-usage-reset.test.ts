@@ -112,7 +112,6 @@ describe('useAgentRollback().rollbackCtx - per-thread usage from server', () => 
 
     rollbackContextMock.mockResolvedValue({
       turns: [],
-      rolledBackMessage: null,
       promptEstimate: 1200,
       usage: { prompt: 800, completion: 400, total: 1200 },
     });
@@ -144,7 +143,6 @@ describe('useAgentRollback().rollbackCtx - per-thread usage from server', () => 
 
     rollbackContextMock.mockResolvedValue({
       turns: [],
-      rolledBackMessage: 'first prompt',
       promptEstimate: 0,
     });
 
@@ -167,7 +165,6 @@ describe('useAgentRollback().rollbackCtx - per-thread usage from server', () => 
   it('uses promptEstimate for contextUsage.used when usage is also provided', async () => {
     rollbackContextMock.mockResolvedValue({
       turns: [],
-      rolledBackMessage: null,
       promptEstimate: 1234,
       usage: { prompt: 800, completion: 400, total: 1200 },
     });
@@ -185,10 +182,19 @@ describe('useAgentRollback().rollbackCtx - per-thread usage from server', () => 
     });
   });
 
-  it('refills the rolled-back message into pendingInput', async () => {
+  it('refills the user message from existing turns into pendingInput', async () => {
+    act(() => {
+      useAgentStore.getState().setThreadTurns('thread-1', [
+        {
+          id: '1',
+          items: [{ id: 'u1', type: 'message', role: 'user', content: 'first prompt' }],
+          status: 'completed',
+        } as any,
+      ]);
+    });
+
     rollbackContextMock.mockResolvedValue({
       turns: [],
-      rolledBackMessage: 'first prompt',
       promptEstimate: 0,
       usage: undefined,
     });
@@ -214,7 +220,6 @@ describe('useAgentRollback().rollbackBoth - per-thread usage from server', () =>
 
     rollbackBothToTurnMock.mockResolvedValue({
       turns: [],
-      rolledBackMessage: null,
       codeResult: {
         reverted: false,
         throughTurnId: 0,
@@ -245,7 +250,6 @@ describe('useAgentRollback().rollbackBoth - per-thread usage from server', () =>
   it('falls back to zeros when the server returns no usage', async () => {
     rollbackBothToTurnMock.mockResolvedValue({
       turns: [],
-      rolledBackMessage: null,
       codeResult: {
         reverted: false,
         throughTurnId: 0,

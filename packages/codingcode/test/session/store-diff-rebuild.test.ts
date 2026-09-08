@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SessionEvent } from '../../src/session/types.js';
-import { sessionEventsToTurns } from '../../src/session/ui-history.js';
+import { sessionEventsToTurns } from '../../src/session/session.js';
 
 describe('sessionEventsToTurns', () => {
   it('parses edit_file tool_result without diff (diff is computed on frontend)', () => {

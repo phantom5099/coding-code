@@ -44,7 +44,7 @@ vi.mock('../../src/memory/config.js', () => ({
   })),
 }));
 
-vi.mock('../../src/session/index.js', async (importOriginal) => {
+vi.mock('../../src/session/file-ops.js', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
@@ -84,7 +84,7 @@ beforeEach(async () => {
     model: '',
     promptMaxBytes: 8192,
   });
-  const { readTranscript } = await import('../../src/session/index.js');
+  const { readTranscript } = await import('../../src/session/file-ops.js');
   vi.mocked(readTranscript).mockImplementation(() => []);
   service = await Effect.runPromise(
     Effect.gen(function* () {
@@ -158,7 +158,7 @@ describe('flushSessionToMemory', () => {
 
   it('gracefully handles missing LLM', async () => {
     await enableConfig();
-    const { readTranscript } = await import('../../src/session/index.js');
+    const { readTranscript } = await import('../../src/session/file-ops.js');
     vi.mocked(readTranscript).mockImplementation(() => [
       { type: 'user', content: 'hello' },
     ] as any);
@@ -169,7 +169,7 @@ describe('flushSessionToMemory', () => {
   it('replaces the whole memory file with extracted content', async () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
-    const { readTranscript } = await import('../../src/session/index.js');
+    const { readTranscript } = await import('../../src/session/file-ops.js');
     vi.mocked(readTranscript).mockImplementation(() => [
       { type: 'user', content: '记住新架构决策' },
       { type: 'assistant', content: '好的' },
@@ -186,7 +186,7 @@ describe('flushSessionToMemory', () => {
   it('keeps file unchanged when model returns empty memory', async () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
-    const { readTranscript } = await import('../../src/session/index.js');
+    const { readTranscript } = await import('../../src/session/file-ops.js');
     vi.mocked(readTranscript).mockImplementation(() => [
       { type: 'user', content: 'hello' },
     ] as any);
@@ -200,7 +200,7 @@ describe('flushSessionToMemory', () => {
   it('skips rewrite when extracted content equals current file', async () => {
     await enableConfig();
     writeMemory('### 主题\n- 不变的内容');
-    const { readTranscript } = await import('../../src/session/index.js');
+    const { readTranscript } = await import('../../src/session/file-ops.js');
     vi.mocked(readTranscript).mockImplementation(() => [
       { type: 'user', content: '无新信息' },
     ] as any);
@@ -217,7 +217,7 @@ describe('flushSessionToMemory', () => {
   it('does not overwrite a memory file manually edited during extraction', async () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
-    const { readTranscript } = await import('../../src/session/index.js');
+    const { readTranscript } = await import('../../src/session/file-ops.js');
     vi.mocked(readTranscript).mockImplementation(() => [
       { type: 'user', content: 'hello' },
     ] as any);

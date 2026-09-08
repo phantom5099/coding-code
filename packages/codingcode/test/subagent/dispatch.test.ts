@@ -1,10 +1,10 @@
 import { expect, it, describe, beforeEach, vi } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch.js';
+import { dispatchAgentTool } from '../../src/tools/domains/subagent/dispatch.js';
 import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
-import type { ToolDefinition, ToolExecCtx } from '../../src/tools/types.js';
+import type { ToolExecCtx } from '../../src/tools/types.js';
 import type { AgentEvent } from '../../src/agent/types.js';
 
 const mockHooks = {
@@ -43,10 +43,10 @@ function makeLayers() {
   );
 }
 
-async function makeTool(): Promise<ToolDefinition> {
-  return (await Effect.runPromise(
-    createDispatchAgentTool().pipe(Effect.provide(makeLayers()) as any)
-  )) as ToolDefinition;
+function runTool(args: unknown, ctx: ToolExecCtx): Promise<string> {
+  return Effect.runPromise(
+    dispatchAgentTool.execute(args, ctx).pipe(Effect.provide(makeLayers()))
+  );
 }
 
 describe('dispatch_agent (runner-based subagent spawn)', () => {
@@ -55,23 +55,17 @@ describe('dispatch_agent (runner-based subagent spawn)', () => {
   });
 
   it('case 1: dispatches build subagent and returns the runner output', async () => {
-    const tool = await makeTool();
-    const out = await Effect.runPromise(
-      tool.execute(
-        { agent: 'build', prompt: 'go' },
-        { projectPath: '/test', sessionId: 'parent-1' } as ToolExecCtx
-      ) as any
+    const out = await runTool(
+      { agent: 'build', prompt: 'go' },
+      { projectPath: '/test', sessionId: 'parent-1' }
     );
     expect(out).toBe('done');
   });
 
   it('case 2: forwards prompt, cwd and parent session id to the runner', async () => {
-    const tool = await makeTool();
-    await Effect.runPromise(
-      tool.execute(
-        { agent: 'build', prompt: 'analyze this code' },
-        { projectPath: '/test', sessionId: 'parent-1' } as ToolExecCtx
-      ) as any
+    await runTool(
+      { agent: 'build', prompt: 'analyze this code' },
+      { projectPath: '/test', sessionId: 'parent-1' }
     );
 
     expect(mockRunner.runSubagent).toHaveBeenCalledTimes(1);
@@ -87,13 +81,14 @@ describe('dispatch_agent (runner-based subagent spawn)', () => {
   });
 
   it('case 3: rejects unknown profile (custom subagents removed)', async () => {
-    const tool = await makeTool();
     const outcome = await Effect.runPromise(
       Effect.either(
-        tool.execute(
-          { agent: 'custom', prompt: 'go' },
-          { projectPath: '/test', sessionId: 'parent-1' } as ToolExecCtx
-        ) as any
+        dispatchAgentTool
+          .execute(
+            { agent: 'custom', prompt: 'go' },
+            { projectPath: '/test', sessionId: 'parent-1' }
+          )
+          .pipe(Effect.provide(makeLayers()))
       )
     );
     expect(outcome._tag).toBe('Left');
@@ -108,13 +103,14 @@ describe('dispatch_agent (runner-based subagent spawn)', () => {
     mockHooks.emitDecision.mockReturnValueOnce(
       Effect.succeed({ decision: 'deny' as const, reason: 'policy forbids it' }) as any
     );
-    const tool = await makeTool();
     const outcome = await Effect.runPromise(
       Effect.either(
-        tool.execute(
-          { agent: 'build', prompt: 'go' },
-          { projectPath: '/test', sessionId: 'parent-1' } as ToolExecCtx
-        ) as any
+        dispatchAgentTool
+          .execute(
+            { agent: 'build', prompt: 'go' },
+            { projectPath: '/test', sessionId: 'parent-1' }
+          )
+          .pipe(Effect.provide(makeLayers()))
       )
     );
     expect(outcome._tag).toBe('Left');
@@ -125,12 +121,9 @@ describe('dispatch_agent (runner-based subagent spawn)', () => {
   });
 
   it('case 5: emits spawn.after and disposes the child session on completion', async () => {
-    const tool = await makeTool();
-    await Effect.runPromise(
-      tool.execute(
-        { agent: 'build', prompt: 'go' },
-        { projectPath: '/test', sessionId: 'parent-1' } as ToolExecCtx
-      ) as any
+    await runTool(
+      { agent: 'build', prompt: 'go' },
+      { projectPath: '/test', sessionId: 'parent-1' }
     );
 
     expect(mockHooks.emit).toHaveBeenCalledWith(

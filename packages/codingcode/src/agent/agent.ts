@@ -1,5 +1,4 @@
 import { Effect, Queue, Stream, Fiber, Layer } from 'effect';
-import type { Message } from '../core/types.js';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
 import { AgentService } from './port.js';
@@ -7,20 +6,16 @@ import type { RunTurnOptions } from './port.js';
 import {
   SessionPort, ToolExecutorPort, CheckpointPort, HookPort,
   ApprovalPort, SkillPort, McpPort, ContextPort, MemoryPort,
-  LlmPort, RulesPort, TodoPort,
+  LlmPort, RulesPort, TodoPort, ToolEnvPort, ToolCatalogPort,
 } from './deps.js';
+import type { ToolEnv, ToolCatalog } from './deps.js';
 import { buildSystemPrompt } from './prompt.js';
 import type { AgentEvent } from './types.js';
 import { loadConfig } from '@codingcode/infra/config';
 import { createLogger } from '@codingcode/infra/logger';
-import { registerBuiltinTools } from '../tools/builtin-tools.js';
-import { ToolRegistry } from '../tools/registry.js';
-import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
-import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
-import { normalizePath } from '../core/path.js';
-import { isPlanProfile, resolveProfile, getAllowedTools } from './profile.js';
+import { normalizePath, computePaths } from '../core/path.js';
+import { resolveProfile, getToolNames } from './profile.js';
 import type { AgentProfile } from './profile.js';
-import { TodoService } from '../todo/port.js';
 
 const logger = createLogger();
 
@@ -37,7 +32,8 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   const llmFactory = yield* LlmPort;
   const rules = yield* RulesPort;
   const todo = yield* TodoPort;
-  const todoService = yield* TodoService;
+  const toolEnvPort = yield* ToolEnvPort;
+  const toolCatalog = yield* ToolCatalogPort;
   const cfg = loadConfig();
   const maxSteps = cfg.maxSteps ?? 250;
   const maxStopContinuations = cfg.maxStopContinuations ?? 3;
@@ -46,7 +42,6 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     Effect.gen(function* () {
       const normalizedCwd = normalizePath(opts.cwd);
 
-      // prepareProject: evict rules + reload hooks + sync mcp
       rules.evictProjectRules(normalizedCwd);
       yield* hooks.emit('agent.turn.start', { sessionId: '' }).pipe(Effect.catchAll(() => Effect.void));
       yield* mcp.syncConnections(normalizedCwd).pipe(Effect.catchAll(() => Effect.void));
@@ -83,29 +78,33 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       // resolveMainAgentProfile
       const profileName = yield* session.getActiveProfile(normalizedCwd, sid);
       const profile: AgentProfile | undefined = profileName ? resolveProfile(profileName) : undefined;
-      const allowedTools = getAllowedTools(profile);
-
-      // create dispatch tool
-      const dispatchTool = yield* createDispatchAgentTool();
 
       // get MCP tools
       const mcpTools = mcp.listProjectMcpTools(normalizedCwd);
 
-      // increment turn + extract skill + record user
-      const turnId = session.incrementTurn(state);
+      // 只把"自己需要的工具名字名单 + MCP 工具"交给工具模块注册，拿到成品描述 + 查找，
+      // 装配与名单取舍由组合根（ToolCatalogLayer）按名查表完成，agent 拿到后直接消费、不再查询。
+      const catalog = toolCatalog.register(getToolNames(profile), mcpTools);
+
+      // tool execution-time dependencies: resolved via the ToolEnvPort abstraction,
+      // so the agent never imports concrete services (mcp/hook/todo/subagent).
+      const toolEnv = yield* toolEnvPort.getToolEnv();
+
+      // record user (increments turn) + extract skill
       const [, actualInput] = yield* skills.extractSkill(state.cwd, input);
-      yield* session.recordUser(state, actualInput);
+      const userEvent = yield* session.recordUser(state, actualInput);
 
       // checkpoint baseline
-      yield* checkpoint.snapshotBaseline(state.cwd, sid, turnId);
+      yield* checkpoint.snapshotBaseline(state.cwd, sid, userEvent.turnId);
 
       // get rules text
       const rulesText = rules.getAllRules(state.cwd);
 
       // run agent loop
       const stream = runAgentLoop({
-        state, llm, profile, allowedTools, mcpTools,
-        abortSignal: opts.signal, rulesText, dispatchTool,
+        state, llm, profile, catalog,
+        toolEnv,
+        abortSignal: opts.signal, rulesText,
         sid, projectPath: state.cwd,
       });
 
@@ -114,9 +113,10 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
   function runAgentLoop(opts: {
     state: any; llm: any; profile: AgentProfile | undefined;
-    allowedTools: ReadonlySet<string> | undefined;
-    mcpTools: any[]; abortSignal: AbortSignal | undefined;
-    rulesText: string; dispatchTool: any;
+    abortSignal: AbortSignal | undefined;
+    catalog: ToolCatalog;
+    toolEnv: ToolEnv;
+    rulesText: string;
     sid: string; projectPath: string;
   }): AsyncGenerator<AgentEvent> {
     const q = Effect.runSync(Queue.unbounded<AgentEvent>());
@@ -140,13 +140,11 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         Effect.provideService(LlmPort, llmFactory),
         Effect.provideService(RulesPort, rules),
         Effect.provideService(TodoPort, todo),
-        // registerBuiltinTools 需要完整 TodoService 构建 todo_write 工具定义
-        Effect.provideService(TodoService, todoService),
       )
     );
 
     return (async function* () {
-      const fiber = Effect.runFork(program);
+      const fiber = Effect.runFork(opts.toolEnv.provide(program));
       if (opts.abortSignal) {
         opts.abortSignal.addEventListener('abort', () => {
           Effect.runFork(Fiber.interrupt(fiber));
@@ -162,12 +160,13 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
   function agentLoopInternal(opts: {
     state: any; llm: any; profile: AgentProfile | undefined;
-    allowedTools: ReadonlySet<string> | undefined;
-    mcpTools: any[]; abortSignal: AbortSignal | undefined;
-    rulesText: string; dispatchTool: any;
+    abortSignal: AbortSignal | undefined;
+    catalog: ToolCatalog;
+    rulesText: string;
     sid: string; projectPath: string;
   }, q: Queue.Queue<AgentEvent>): any {
-    const { state, llm, profile, allowedTools, mcpTools, abortSignal, rulesText, dispatchTool, sid, projectPath } = opts;
+    const { state, llm, profile, abortSignal, catalog, rulesText, sid, projectPath } = opts;
+    const { tools, lookup: toolLookup } = catalog;
 
     return Effect.gen(function* () {
       const basePrompt = buildSystemPrompt({
@@ -182,32 +181,21 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       const memorySection = memoryBlock ? `## Session Memory\n\n${memoryBlock}` : '';
       const system = [basePrompt, memorySection].filter(Boolean).join('\n\n');
 
-      const effectiveMaxSteps = opts.profile?.maxSteps ?? maxSteps;
       let stopContinuations = 0;
       const effectiveMaxStopContinuations = maxStopContinuations;
 
-      const registry = new ToolRegistry();
-      yield* registerBuiltinTools(registry);
-      registry.register(...(mcpTools ?? []));
-      if (dispatchTool) registry.register(dispatchTool);
-      if (isPlanProfile(profile)) registry.register(submitPlanTool);
-
-      let submittedPlanTitle: string | null = null;
       let lastResult: Result<string, AgentError> | null = null;
 
       yield* hooks.emit('agent.turn.start', { sessionId: sid });
       yield* q.offer({ _tag: 'TurnId', turnId: state.currentTurnId });
 
-      for (let step = 0; step < effectiveMaxSteps; step++) {
-        yield* q.offer({ _tag: 'Step', step: step + 1, max: effectiveMaxSteps });
-
-        const tools = registry.describe(allowedTools);
-        const toolLookup = (name: string) => registry.get(name, allowedTools);
+      for (let step = 0; step < maxSteps; step++) {
+        yield* q.offer({ _tag: 'Step', step: step + 1, max: maxSteps });
 
         yield* hooks.emitDecision('agent.step.before', { sessionId: sid, step: step + 1 });
 
         const payload = yield* Effect.tryPromise({
-          try: () => context.assemblePayload(session.getTranscriptPath(state), llm.modelInfo.maxTokens, llm),
+          try: () => context.assemblePayload(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath, llm.modelInfo.maxTokens, llm),
           catch: (e) => new AgentError('LLM_FAILED', String(e)),
         });
         if (payload.compressed) {
@@ -264,13 +252,8 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
             }
             stopContinuations++;
             const injection = stopDecision.injection ?? '(continue)';
-            yield* session.recordUser(state, injection);
+            yield* session.recordSystem(state, injection);
             continue;
-          }
-
-          if (submittedPlanTitle !== null) {
-            yield* hooks.emit('plan.ready', { sessionId: sid, projectPath, title: submittedPlanTitle });
-            submittedPlanTitle = null;
           }
 
           yield* q.offer({ _tag: 'Done', content: resp.content });
@@ -302,12 +285,6 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
             todoPrinted = true;
           }
         }
-
-        const submitPlanCall = toolCalls?.find((tc: any) => tc.name === 'submit_plan');
-        const submitPlanResult = allResults.find((r) => r.name === 'submit_plan' && r.type === 'ok');
-        if (submitPlanCall && submitPlanResult && submittedPlanTitle === null) {
-          submittedPlanTitle = String(submitPlanCall.arguments?.title ?? '');
-        }
       }
 
       yield* checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
@@ -315,9 +292,9 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
       if (lastResult) return lastResult;
 
-      yield* q.offer({ _tag: 'Error', error: AgentError.maxStepsReached(effectiveMaxSteps) });
+      yield* q.offer({ _tag: 'Error', error: AgentError.maxStepsReached(maxSteps) });
       yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'maxSteps' });
-      return Result.err(AgentError.maxStepsReached(effectiveMaxSteps));
+      return Result.err(AgentError.maxStepsReached(maxSteps));
     }).pipe(
       Effect.interruptible,
       Effect.onInterrupt(() =>
