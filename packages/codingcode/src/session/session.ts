@@ -27,13 +27,11 @@ import {
   appendLine,
   listSessions,
   setPermissionMode,
-  getPermissionMode,
   readCurrentIndex,
   writeIndexAtomic,
   countNonMetaEvents,
   truncateTitle,
   findFirstUserContent,
-  readActiveProfileSync,
   deleteSession as deleteSessionImpl,
 } from './file-ops.js';
 import { computePaths, sessionJsonlPathFromCwd } from '../core/path.js';
@@ -490,17 +488,6 @@ export const SessionLayer = Layer.effect(
         setPermissionMode(sessionId, paths.indexPath, mode);
       });
 
-    const getPermissionModeByAddress = (
-      cwd: string,
-      sessionId: string
-    ): Effect.Effect<PermissionMode, AgentError> =>
-      Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId);
-        const raw = getPermissionMode(paths.indexPath);
-        if (raw === 'default' || raw === 'acceptEdits' || raw === 'bypass') return raw;
-        return 'default';
-      });
-
     const setActiveProfile = (
       cwd: string,
       sessionId: string,
@@ -510,12 +497,6 @@ export const SessionLayer = Layer.effect(
         const paths = computePaths(cwd, sessionId);
         writeIndexAtomic(paths.indexPath, { activeProfile: profile });
       });
-
-    const getActiveProfile = (
-      cwd: string,
-      sessionId: string
-    ): Effect.Effect<ProfileName | undefined, AgentError> =>
-      Effect.sync(() => readActiveProfileSync(cwd, sessionId) ?? undefined);
 
     return {
       create,
@@ -544,9 +525,7 @@ export const SessionLayer = Layer.effect(
         Effect.sync(() => readUIHistory(sessionId, cwd)),
 
       setPermissionMode: setPermissionModeByAddress,
-      getPermissionMode: getPermissionModeByAddress,
       setActiveProfile,
-      getActiveProfile,
     };
   })
 );

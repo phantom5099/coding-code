@@ -17,7 +17,6 @@ export class SessionPort extends Context.Tag('AgentSessionPort')<SessionPort, {
   recordSystem(state: SessionStoreState, content: string): Effect.Effect<UserEvent, AgentError>;
   recordAssistant(state: SessionStoreState, content: string, toolCalls: any[], usage?: TokenUsage): Effect.Effect<any, AgentError>;
   recordToolResult(state: SessionStoreState, name: string, id: string, output: string): Effect.Effect<any, AgentError>;
-  getActiveProfile(cwd: string, sid: string): Effect.Effect<AgentProfileName | undefined, AgentError>;
   setPermissionMode(cwd: string, sid: string, mode: PermissionMode): Effect.Effect<void, AgentError>;
   setActiveProfile(cwd: string, sid: string, profile: AgentProfileName): Effect.Effect<void, AgentError>;
 }>() {}

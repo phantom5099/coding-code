@@ -59,7 +59,6 @@ export interface HarnessMocks {
     recordSystem: (state: any, content: string) => any;
     recordAssistant: (state: any, content: string, toolCalls: any[], usage?: any) => any;
     recordToolResult: (state: any, name: string, id: string, output: string) => any;
-    getActiveProfile: (cwd: string, sid: string) => any;
     setPermissionMode: (cwd: string, sid: string, mode: any) => any;
     setActiveProfile: (cwd: string, sid: string, profile: any) => any;
   }>;
@@ -150,7 +149,6 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     recordSystem: () => Effect.succeed({}),
     recordAssistant: () => Effect.succeed({}),
     recordToolResult: () => Effect.succeed({}),
-    getActiveProfile: () => Effect.succeed('build'),
     setPermissionMode: () => Effect.void,
     setActiveProfile: () => Effect.void,
     ...(mocks.sessionPort ?? {}),

@@ -65,30 +65,26 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       }
 
       const state = yield* session.load(normalizedCwd, sessionId);
-      const sid = state.sessionId;
 
-      // restoreSessionProfile
-      const effectivePerm = opts.permissionMode ?? 'default';
-      yield* session.setPermissionMode(normalizedCwd, sid, effectivePerm);
+      // restore session profile/permission from the frontend request, falling back to persisted values
+      const effectivePerm = opts.permissionMode ?? state.permissionMode;
+      const profileName = opts.activeProfile ?? state.activeProfile;
+      if (opts.permissionMode) {
+        yield* session.setPermissionMode(normalizedCwd, sessionId, opts.permissionMode);
+      }
       if (opts.activeProfile) {
-        yield* session.setActiveProfile(normalizedCwd, sid, opts.activeProfile);
+        yield* session.setActiveProfile(normalizedCwd, sessionId, opts.activeProfile);
       }
 
       state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
 
-      // resolveMainAgentProfile
-      const profileName = yield* session.getActiveProfile(normalizedCwd, sid);
       const profile: AgentProfile | undefined = profileName ? resolveProfile(profileName) : undefined;
 
       // get MCP tools
       const mcpTools = mcp.listProjectMcpTools(normalizedCwd);
 
-      // 只把"自己需要的工具名字名单 + MCP 工具"交给工具模块注册，拿到成品描述 + 查找，
-      // 装配与名单取舍由组合根（ToolCatalogLayer）按名查表完成，agent 拿到后直接消费、不再查询。
       const catalog = toolCatalog.register(getToolNames(profile), mcpTools);
 
-      // tool execution-time dependencies: resolved via the ToolEnvPort abstraction,
-      // so the agent never imports concrete services (mcp/hook/todo/subagent).
       const toolEnv = yield* toolEnvPort.getToolEnv();
 
       // record user (increments turn) + extract skill
@@ -96,7 +92,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       const userEvent = yield* session.recordUser(state, actualInput);
 
       // checkpoint baseline
-      yield* checkpoint.snapshotBaseline(state.cwd, sid, userEvent.turnId);
+      yield* checkpoint.snapshotBaseline(state.cwd, sessionId, userEvent.turnId);
 
       // get rules text
       const rulesText = rules.getAllRules(state.cwd);
@@ -106,10 +102,10 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         state, llm, profile, catalog,
         toolEnv,
         abortSignal: opts.signal, rulesText,
-        sid, projectPath: state.cwd, permissionMode: effectivePerm,
+        sid: sessionId, projectPath: state.cwd, permissionMode: effectivePerm,
       });
 
-      return { stream, sessionId: sid };
+      return { stream, sessionId };
     });
 
   function runAgentLoop(opts: {

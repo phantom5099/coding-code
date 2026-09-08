@@ -1,6 +1,5 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { AgentError } from '../core/error.js';
 import type { ToolCall } from '../core/types.js';
 import type { ToolDefinition } from './types.js';
 
@@ -12,16 +11,6 @@ export type ToolResultUnion =
 export type ToolLookup = (name: string) => ToolDefinition<any> | undefined;
 
 export interface ToolExecutorShape {
-  execute(name: string, args: unknown, opts?: {
-    signal?: AbortSignal;
-    sessionId?: string;
-    turnId?: number;
-    projectPath?: string;
-    approval?: import('../approval/port.js').ApprovalService;
-    callId?: string;
-    toolLookup?: ToolLookup;
-    permissionMode?: import('../approval/types.js').PermissionMode;
-  }): Effect.Effect<{ output: string; diff?: string; filePath?: string; insertions?: number; deletions?: number }, AgentError, any>;
   executeBatch(toolCalls: ToolCall[], sessionId?: string, opts?: {
     turnId?: number;
     projectPath?: string;

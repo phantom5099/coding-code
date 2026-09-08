@@ -75,36 +75,36 @@ describe('SessionService disk setter/getter consistency', () => {
     await rt.dispose();
   });
 
-  it('setPermissionMode + getPermissionMode are consistent', async () => {
+  it('setPermissionMode persists to loaded state', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
         yield* session.setPermissionMode(cwd, sessionId, 'bypass');
       })
     );
-    const mode = await rt.runPromise(
+    const state = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        return yield* session.getPermissionMode(cwd, sessionId);
+        return yield* session.load(cwd, sessionId);
       })
     );
-    expect(mode).toBe('bypass');
+    expect(state.permissionMode).toBe('bypass');
   });
 
-  it('setActiveProfile + getActiveProfile are consistent', async () => {
+  it('setActiveProfile persists to loaded state', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
         yield* session.setActiveProfile(cwd, sessionId, 'plan');
       })
     );
-    const profile = await rt.runPromise(
+    const state = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        return yield* session.getActiveProfile(cwd, sessionId);
+        return yield* session.load(cwd, sessionId);
       })
     );
-    expect(profile).toBe('plan');
+    expect(state.activeProfile).toBe('plan');
   });
 
   it('setActiveProfile is durable across reload (file exists on disk)', async () => {

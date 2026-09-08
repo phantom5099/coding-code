@@ -171,16 +171,6 @@ export function setPermissionMode(
   writeFileSync(indexPath, JSON.stringify(index, null, 2), 'utf8');
 }
 
-export function getPermissionMode(indexPath: string): string {
-  if (!existsSync(indexPath)) return 'default';
-  try {
-    const index = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
-    return index.permissionMode ?? 'default';
-  } catch {
-    return 'default';
-  }
-}
-
 export function deleteSession(sessionId: string, cwd: string): void {
   const dir = dirname(sessionJsonlPathFromCwd(cwd, sessionId));
   if (!dir) return;

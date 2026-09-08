@@ -170,7 +170,8 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
       const mode = await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          return yield* session.getPermissionMode(cwd, sessionId);
+          const state = yield* session.load(cwd, sessionId);
+          return state.permissionMode;
         })
       );
       return mode as PermissionMode;

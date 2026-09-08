@@ -24,25 +24,15 @@ export const ApprovalWaitLayer = Layer.effect(ApprovalWaitService, Effect.gen(fu
 
       resolveConfirm: (
         id: string,
-        _sessionId: string,
+        sessionId: string,
         result: ConfirmResult
       ): Effect.Effect<boolean> =>
         Effect.sync(() => {
           const entry = pendingConfirmations.get(id);
-          if (!entry) return false;
+          if (!entry || entry.sessionId !== sessionId) return false;
           pendingConfirmations.delete(id);
           Deferred.unsafeDone(entry.deferred, Effect.succeed(result));
           return true;
-        }),
-
-      getPending: (sessionId?: string): Effect.Effect<string[]> =>
-        Effect.sync(() => {
-          if (sessionId) {
-            return Array.from(pendingConfirmations.entries())
-              .filter(([_, e]) => e.sessionId === sessionId)
-              .map(([id]) => id);
-          }
-          return Array.from(pendingConfirmations.keys());
         }),
 
       emitApprovalRequest: (

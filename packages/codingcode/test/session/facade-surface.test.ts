@@ -17,8 +17,6 @@ describe('session service surface', () => {
       'create',
       'deleteSession',
       'forkSession',
-      'getActiveProfile',
-      'getPermissionMode',
       'listSessions',
       'load',
       'readEvents',

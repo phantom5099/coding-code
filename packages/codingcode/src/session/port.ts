@@ -39,9 +39,7 @@ export interface SessionShape {
   appendEvent(transcriptPath: string, event: SessionEvent): void;
   readUITurns(sessionId: string, cwd: string): Effect.Effect<UITurn[]>;
   setPermissionMode(cwd: string, sessionId: string, mode: PermissionMode): Effect.Effect<void, AgentError>;
-  getPermissionMode(cwd: string, sessionId: string): Effect.Effect<PermissionMode, AgentError>;
   setActiveProfile(cwd: string, sessionId: string, profile: ProfileName): Effect.Effect<void, AgentError>;
-  getActiveProfile(cwd: string, sessionId: string): Effect.Effect<ProfileName | undefined, AgentError>;
 }
 
 export class SessionService extends Context.Tag('Session')<SessionService, SessionShape>() {}

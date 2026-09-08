@@ -86,7 +86,6 @@ const SessionPortLayer = Layer.effect(SessionPort, Effect.gen(function* () {
     recordSystem: svc.recordSystem.bind(svc),
     recordAssistant: svc.recordAssistant.bind(svc),
     recordToolResult: svc.recordToolResult.bind(svc),
-    getActiveProfile: svc.getActiveProfile.bind(svc),
     setPermissionMode: svc.setPermissionMode.bind(svc),
     setActiveProfile: svc.setActiveProfile.bind(svc),
   };

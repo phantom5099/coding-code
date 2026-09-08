@@ -393,7 +393,8 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
       return rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          return yield* session.getPermissionMode(input.cwd, input.sessionId);
+          const state = yield* session.load(input.cwd, input.sessionId);
+          return state.permissionMode;
         })
       );
     },

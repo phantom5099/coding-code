@@ -47,7 +47,6 @@ function makeMockApprovalWait() {
   return {
     waitForConfirm: () => Effect.succeed({ type: 'deny' }) as any,
     resolveConfirm: () => Effect.succeed(false),
-    getPending: () => Effect.succeed([]),
     emitApprovalRequest: (sessionId: string, id: string, tool: string, args: any) =>
       Effect.sync(() => {
         capturedApproval = { sessionId, id, tool, args };

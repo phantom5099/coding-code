@@ -302,8 +302,8 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const mode = yield* session.getPermissionMode(cwd, sessionId);
-        return { mode };
+        const state = yield* session.load(cwd, sessionId);
+        return { mode: state.permissionMode };
       }) as any
     );
     if (!result.ok) {

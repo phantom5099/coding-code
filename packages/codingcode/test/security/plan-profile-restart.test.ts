@@ -46,7 +46,6 @@ const mockHookService = {
 const mockApprovalWaitService = {
   waitForConfirm: () => Effect.dieMessage('not implemented'),
   resolveConfirm: () => Effect.succeed(false),
-  getPending: () => Effect.succeed([]),
   emitApprovalRequest: () => Effect.succeed(undefined),
   registerEmitter: () => Effect.succeed(undefined),
   delegateEmitter: () => Effect.succeed(undefined),

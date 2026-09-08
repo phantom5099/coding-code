@@ -47,7 +47,6 @@ const AgentSessionAdapter = Layer.effect(SessionPort, Effect.gen(function* () {
     load: s.load.bind(s), create: s.create.bind(s),
     recordUser: s.recordUser.bind(s), recordSystem: s.recordSystem.bind(s), recordAssistant: s.recordAssistant.bind(s),
     recordToolResult: s.recordToolResult.bind(s),
-    getActiveProfile: s.getActiveProfile.bind(s),
     setPermissionMode: s.setPermissionMode.bind(s),
     setActiveProfile: s.setActiveProfile.bind(s),
   };

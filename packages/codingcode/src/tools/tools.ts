@@ -237,5 +237,5 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
       });
     }
 
-    return { execute, executeBatch };
+    return { executeBatch };
 } as any));
