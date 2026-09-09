@@ -1,7 +1,6 @@
 import { Layer, Effect } from 'effect';
 import { AgentError } from '../core/error.js';
 import { HookService } from '../hooks/port.js';
-import { ApprovalService } from '../approval/port.js';
 import type { ToolDefinition } from './types.js';
 import type { ToolCall } from '../core/types.js';
 import { ToolExecutorService } from './port.js';
@@ -15,7 +14,6 @@ export type ToolLookup = (name: string) => ToolDefinition | undefined;
 
 export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(function* () {
     const hooks = yield* HookService;
-    const approval = yield* ApprovalService;
 
     function execute(
       name: string,
@@ -25,39 +23,17 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         sessionId?: string;
         turnId?: number;
         projectPath?: string;
-        approval?: import('../approval/port.js').ApprovalService;
         callId?: string;
         toolLookup?: ToolLookup;
-        permissionMode?: import('../approval/types.js').PermissionMode;
       }
     ): any {
       return Effect.gen(function* () {
         const tool = opts?.toolLookup?.(name);
         if (!tool) return yield* Effect.fail(AgentError.toolNotFound(name));
-        // 1. Approval pipeline (Layers 1-6)
-        const decisionApproval: any = opts?.approval ?? approval;
-        const decision = yield* decisionApproval.evaluate({
-          tool: name,
-          input: args as Record<string, unknown>,
-          callId: opts?.callId,
-          sessionId: opts?.sessionId ?? 'default',
-          projectPath: opts?.projectPath,
-          permissionMode: opts?.permissionMode,
-        });
-
-        if (decision.type === 'deny') {
-          yield* hooks.emit('tool.execute.denied', {
-            toolName: name,
-            args: args as Record<string, unknown>,
-            reason: decision.reason,
-            source: decision.source,
-          });
-          return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', decision.reason));
-        }
 
         const finalArgs = args as Record<string, unknown>;
 
-        // 2. Notification hook — use callId for consistent pairing
+        // Notification hook — use callId for consistent pairing
         const callId = opts?.callId;
         yield* hooks.emit('tool.execute.before', {
           toolName: name,
@@ -75,7 +51,6 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         const ctx = {
           signal: opts?.signal,
           sessionId: opts?.sessionId,
-          turnId: opts?.turnId,
           projectPath: opts?.projectPath,
         };
 
@@ -129,9 +104,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         turnId?: number;
         projectPath?: string;
         signal?: AbortSignal;
-        approval?: import('../approval/port.js').ApprovalService;
         toolLookup?: ToolLookup;
-        permissionMode?: import('../approval/types.js').PermissionMode;
       }
     ): Effect.Effect<ToolResultUnion, never, any> {
       return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
@@ -180,9 +153,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         turnId?: number;
         projectPath?: string;
         signal?: AbortSignal;
-        approval?: import('../approval/port.js').ApprovalService;
         toolLookup?: ToolLookup;
-        permissionMode?: import('../approval/types.js').PermissionMode;
       }
     ): Effect.Effect<ToolResultUnion[], never, any> {
       return Effect.gen(function* () {

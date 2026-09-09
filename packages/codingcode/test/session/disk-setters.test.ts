@@ -107,6 +107,41 @@ describe('SessionService disk setter/getter consistency', () => {
     expect(state.activeProfile).toBe('plan');
   });
 
+  it('setActiveProfile to plan leaves permissionMode untouched', async () => {
+    await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        yield* session.setActiveProfile(cwd, sessionId, 'plan');
+      })
+    );
+    const state = await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        return yield* session.load(cwd, sessionId);
+      })
+    );
+    expect(state.activeProfile).toBe('plan');
+    expect(state.permissionMode).toBe('default');
+  });
+
+  it('setActiveProfile to build leaves permissionMode untouched', async () => {
+    await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        yield* session.setActiveProfile(cwd, sessionId, 'plan');
+        yield* session.setActiveProfile(cwd, sessionId, 'build');
+      })
+    );
+    const state = await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        return yield* session.load(cwd, sessionId);
+      })
+    );
+    expect(state.activeProfile).toBe('build');
+    expect(state.permissionMode).toBe('default');
+  });
+
   it('setActiveProfile is durable across reload (file exists on disk)', async () => {
     await rt.runPromise(
       Effect.gen(function* () {

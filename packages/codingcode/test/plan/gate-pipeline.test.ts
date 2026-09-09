@@ -1,38 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
+import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { runPipeline } from '../../src/approval/pipeline.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import { planProfileGateHook } from '../../src/agent/profile.js';
-import { computePaths } from '../../src/core/path.js';
-import type { DecisionHandler } from '../../src/hooks/types.js';
+import type { ApprovalProfile } from '../../src/approval/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
-const base = useTempProjectBase();
-
-const decisionHandlers: DecisionHandler[] = [];
+useTempProjectBase();
 
 const mockHookService = {
   register: () => Effect.succeed(() => {}),
-  registerDecision: (_point: string, handler: DecisionHandler, _opts?: any) =>
-    Effect.sync(() => {
-      decisionHandlers.push(handler);
-    }),
+  registerDecision: () => Effect.succeed(() => {}),
   emit: () => Effect.succeed(undefined),
-  emitDecision: (point: string, payload: any) =>
-    Effect.sync(() => {
-      if (point === 'tool.approval.pre') {
-        for (const h of decisionHandlers) {
-          const result = h(payload);
-          if (result) return result;
-        }
-      }
-      return null;
-    }),
+  emitDecision: () => Effect.succeed(null),
   reloadUserHooks: () => Effect.succeed(undefined),
   attachSessionHooks: () => Effect.succeed(undefined),
   disableHook: () => Effect.succeed(undefined),
@@ -58,39 +42,14 @@ function makeMockApprovalWait() {
   };
 }
 
-function makeIndex(cwd: string, sessionId: string, activeProfile: 'plan' | 'build') {
-  const paths = computePaths(cwd, sessionId);
-  mkdirSync(paths.transcriptPath.replace(/\.jsonl$/, ''), { recursive: true });
-  const idx = {
-    sessionId,
-    cwd: paths.cwd,
-    model: 'test',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messageCount: 0,
-    title: sessionId.slice(0, 8),
-    currentTurnId: 0,
-    usage: undefined,
-    activeProfile,
-    permissionMode: 'default',
-  };
-  writeFileSync(paths.indexPath, JSON.stringify(idx, null, 2), 'utf8');
-}
-
 function runPipelineWithMock(opts: {
   tool: string;
   input: any;
   permissionMode: 'default' | 'acceptEdits' | 'bypass';
   sessionId: string;
-  planProfile: boolean;
-  cwd: string;
+  profile: ApprovalProfile;
 }) {
   capturedApproval = null;
-  decisionHandlers.length = 0;
-  decisionHandlers.push(planProfileGateHook);
-
-  if (opts.planProfile) makeIndex(opts.cwd, opts.sessionId, 'plan');
-  else makeIndex(opts.cwd, opts.sessionId, 'build');
 
   const mockWait = makeMockApprovalWait();
   const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
@@ -103,90 +62,87 @@ function runPipelineWithMock(opts: {
         ruleEngine: createRuleEngine([]),
         destructiveTools: new Set(),
         permissionMode: opts.permissionMode,
+        profile: opts.profile,
         sessionId: opts.sessionId,
-        projectPath: opts.cwd,
       }
     ).pipe(Effect.provide(TestLayer) as any)
   );
 }
 
-describe('Plan profile gate hook integration', () => {
+describe('plan profile permission mode (Layer 2)', () => {
   let cwd: string;
   beforeEach(() => {
     cwd = mkdtempSync(join(tmpdir(), 'codingcode-gate-pipeline-'));
     capturedApproval = null;
-    decisionHandlers.length = 0;
   });
   afterEach(() => {
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  it('plan profile + write_file: gate denies before reaching user confirmation', async () => {
+  it('plan profile + write_file: denied before reaching user confirmation', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'write_file',
       input: { path: '/tmp/x', content: 'foo' },
       permissionMode: 'default',
       sessionId: 's2',
-      planProfile: true,
-      cwd,
+      profile: 'plan',
     });
     expect(decision.type).toBe('deny');
+    expect(decision.source).toBe('permission-mode');
     expect(decision.reason).toMatch(/plan profile/i);
     expect(capturedApproval).toBeNull();
   });
 
-  it('plan profile + execute_command: gate denies with plan-profile reason', async () => {
+  it('plan profile + execute_command: denied with plan-profile reason', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'execute_command',
       input: { command: 'rm -rf /' },
       permissionMode: 'default',
       sessionId: 's3',
-      planProfile: true,
-      cwd,
+      profile: 'plan',
     });
     expect(decision.type).toBe('deny');
+    expect(decision.source).toBe('permission-mode');
     expect(decision.reason).toMatch(/plan profile/i);
     expect(capturedApproval).toBeNull();
   });
 
-  it('plan profile + dispatch_agent: denied by plan gate (no longer auto-allowed)', async () => {
+  it('plan profile + dispatch_agent: denied by plan mode', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'dispatch_agent',
       input: { agent: 'build', prompt: 'do something' },
       permissionMode: 'default',
       sessionId: 's4',
-      planProfile: true,
-      cwd,
+      profile: 'plan',
     });
     expect(decision.type).toBe('deny');
+    expect(decision.source).toBe('permission-mode');
     expect(decision.reason).toMatch(/plan profile/i);
     expect(capturedApproval).toBeNull();
   });
 
-  it('build profile + write_file: gate does not fire, pipeline falls through normally', async () => {
+  it('build profile + write_file: falls through to user confirmation', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'write_file',
       input: { path: '/tmp/x', content: 'foo' },
       permissionMode: 'default',
       sessionId: 's5',
-      planProfile: false,
-      cwd,
+      profile: 'build',
     });
     expect(capturedApproval).not.toBeNull();
     expect(decision.source).toBe('user-confirm');
   });
 
-  it('submit_plan: pipeline short-circuits at Layer 5', async () => {
+  it('plan profile + submit_plan: allowed by plan allow-list', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'submit_plan',
       input: { plan_content: '# plan' },
       permissionMode: 'default',
       sessionId: 's6',
-      planProfile: true,
-      cwd,
+      profile: 'plan',
     });
     expect(decision.type).toBe('allow');
-    expect(decision.source).toBe('system-plan-self-handles');
+    expect(decision.source).toBe('permission-mode');
     expect(capturedApproval).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { Context, Layer, Effect, ManagedRuntime } from 'effect';
+import { Layer, Effect, ManagedRuntime } from 'effect';
 import { HookLayer } from './hooks/hooks.js';
 import { RulesLayer } from './rules/rules.js';
 import { SkillLayer } from './skills/skills.js';
@@ -18,7 +18,6 @@ import { ToolCatalogLayer } from './agent/tool-catalog.js';
 import { SubagentRunnerLayer } from './subagent/subagent.js';
 import { SchedulerLayer } from './scheduler/scheduler.js';
 import { WorkspaceService } from './core/workspace.js';
-import { planProfileGateHook } from './agent/profile.js';
 
 import { HookService } from './hooks/port.js';
 import { RulesService } from './rules/port.js';
@@ -123,25 +122,21 @@ const InfraLayer = Layer.mergeAll(
 
 const LlmWithDeps = LlmLayer.pipe(Layer.provide(WorkspaceService.Default));
 const ApprovalWithDeps = ApprovalLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer)));
-const ToolExecutorWithDeps = ToolExecutorLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalLayer)));
+const ToolExecutorWithDeps = ToolExecutorLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalWithDeps)));
 const ContextWithDeps = ContextLayer.pipe(Layer.provide(Layer.mergeAll(SessionLayer, LlmWithDeps)));
 const MemoryWithDeps = MemoryLayer.pipe(Layer.provide(LlmWithDeps));
 
-// system hook registration
-const SystemHookLayer = HookLayer.pipe(
-  Layer.tap((context) =>
-    Effect.gen(function* () {
-      const hooks = Context.get(context, HookService);
-      yield* hooks.registerDecision('tool.approval.pre', planProfileGateHook, {
-        priority: -1000, source: 'system',
-      });
-    })
-  )
+// agent deps adapters wrap concrete services, so provide them first
+const AgentDepsWithDeps = AgentDepsAdapter.pipe(
+  Layer.provide(Layer.mergeAll(
+    InfraLayer, SessionLayer, ToolExecutorWithDeps, ApprovalWithDeps,
+    ContextWithDeps, MemoryWithDeps, CheckpointLayer, LlmWithDeps,
+  ))
 );
 
 // agent with deps
 const AgentWithDeps = AgentLayer.pipe(
-  Layer.provide(Layer.mergeAll(AgentDepsAdapter, ToolEnvLayer, ToolCatalogLayer, InfraLayer, SessionLayer, ToolExecutorWithDeps, ApprovalWithDeps, ContextWithDeps, MemoryWithDeps, CheckpointLayer))
+  Layer.provide(Layer.mergeAll(AgentDepsWithDeps, ToolEnvLayer, ToolCatalogLayer))
 );
 
 // subagent runner (depends on agent)
@@ -159,7 +154,6 @@ export const AppLayer = Layer.mergeAll(
   AgentWithDeps,
   SubagentWithDeps,
   SchedulerLayer,
-  SystemHookLayer,
 );
 
 export const createAppRuntime = () => ManagedRuntime.make(AppLayer as any);

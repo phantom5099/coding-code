@@ -67,8 +67,8 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       const state = yield* session.load(normalizedCwd, sessionId);
 
       // restore session profile/permission from the frontend request, falling back to persisted values
-      const effectivePerm = opts.permissionMode ?? state.permissionMode;
       const profileName = opts.activeProfile ?? state.activeProfile;
+      const effectivePerm = opts.permissionMode ?? state.permissionMode;
       if (opts.permissionMode) {
         yield* session.setPermissionMode(normalizedCwd, sessionId, opts.permissionMode);
       }
@@ -264,9 +264,33 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         }
 
         yield* session.recordAssistant(state, resp.content, toolCalls!, resp.usage);
-        const allResults = yield* executor.executeBatch(toolCalls, state.sessionId, {
-          turnId: state.currentTurnId, projectPath, signal: abortSignal, toolLookup, permissionMode,
-        });
+
+        const approvedCalls: any[] = [];
+        const deniedResults: any[] = [];
+        for (const tc of toolCalls as any[]) {
+          const decision = yield* approval.evaluate({
+            tool: tc.name,
+            input: tc.arguments ?? {},
+            callId: tc.id,
+            sessionId: state.sessionId,
+            projectPath,
+            permissionMode,
+            profile: profile?.name,
+          });
+          if (decision.type === 'deny') {
+            deniedResults.push({ type: 'denied', id: tc.id, name: tc.name, reason: decision.reason });
+          } else {
+            approvedCalls.push(tc);
+          }
+        }
+
+        const approvedResults = approvedCalls.length > 0
+          ? yield* executor.executeBatch(approvedCalls, state.sessionId, {
+              turnId: state.currentTurnId, projectPath, signal: abortSignal, toolLookup,
+            })
+          : [];
+
+        const allResults = [...approvedResults, ...deniedResults];
 
         let todoPrinted = false;
         for (const r of allResults) {

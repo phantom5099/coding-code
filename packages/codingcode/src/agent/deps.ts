@@ -2,12 +2,12 @@ import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { AgentError } from '../core/error.js';
 import type { ToolCall, Message, ToolDescription } from '../core/types.js';
-import type { SessionStoreState, SessionEvent, TokenUsage, UserEvent } from '../session/types.js';
+import type { SessionStoreState, TokenUsage, UserEvent } from '../session/types.js';
 import type { ToolResultUnion, ToolLookup } from '../tools/port.js';
 import type { ToolDefinition } from '../tools/types.js';
 import type { LLMClient } from '../llm/client.js';
 import type { AgentProfileName } from './profile.js';
-import type { PermissionMode } from '../approval/types.js';
+import type { PermissionMode, ApprovalProfile } from '../approval/types.js';
 import type { ApprovalDecision } from '../approval/types.js';
 
 export class SessionPort extends Context.Tag('AgentSessionPort')<SessionPort, {
@@ -24,7 +24,7 @@ export class SessionPort extends Context.Tag('AgentSessionPort')<SessionPort, {
 export class ToolExecutorPort extends Context.Tag('AgentToolExecutorPort')<ToolExecutorPort, {
   executeBatch(toolCalls: ToolCall[], sid: string, opts: {
     turnId?: number; projectPath?: string; signal?: AbortSignal;
-    approval?: any; toolLookup?: ToolLookup; permissionMode?: PermissionMode;
+    toolLookup?: ToolLookup;
   }): Effect.Effect<ToolResultUnion[], never, any>;
 }>() {}
 
@@ -40,7 +40,7 @@ export class HookPort extends Context.Tag('AgentHookPort')<HookPort, {
 }>() {}
 
 export class ApprovalPort extends Context.Tag('AgentApprovalPort')<ApprovalPort, {
-  evaluate(req: { tool: string; input: Record<string, unknown>; callId?: string; sessionId: string; projectPath?: string; permissionMode?: PermissionMode }): Effect.Effect<ApprovalDecision>;
+  evaluate(req: { tool: string; input: Record<string, unknown>; callId?: string; sessionId: string; projectPath?: string; permissionMode?: PermissionMode; profile?: ApprovalProfile }): Effect.Effect<ApprovalDecision>;
 }>() {}
 
 export class SkillPort extends Context.Tag('AgentSkillPort')<SkillPort, {
@@ -83,18 +83,6 @@ export class TodoPort extends Context.Tag('AgentTodoPort')<TodoPort, {
   read(sid: string): Array<{ step: string; status: string }>;
 }>() {}
 
-/**
- * 工具执行期依赖的注入能力。
- *
- * agent loop 在独立 runtime（Effect.runFork）中执行工具，而工具（todo_write、
- * dispatch_agent 等）的 `execute()` 内部会 `yield*` 具体服务（TodoService、
- * HookService、McpService、SubagentRunnerService）。这些服务是"工具执行期依赖"，
- * 与 agent 自身无关，agent 不应直接 import 它们的具体 Tag。
- *
- * 因此这里只暴露一个抽象能力：`provide` 把一个 effect 包装成"工具执行期服务已就绪"的
- * effect。具体依赖哪些服务、如何注入，由组合根（layer.ts 的 ToolEnvLayer）负责，
- * agent 对此一无所知 —— 这才是真正的依赖倒置。
- */
 export interface ToolEnv {
   provide<R, E, A>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, never>;
 }
@@ -103,14 +91,6 @@ export class ToolEnvPort extends Context.Tag('AgentToolEnvPort')<ToolEnvPort, {
   getToolEnv(): Effect.Effect<ToolEnv, AgentError, any>;
 }>() {}
 
-/**
- * 工具目录抽象：agent 只把"自己需要的工具名字名单"（toolNames）交给工具模块注册，
- * 拿到"注册好的成品"（tools 描述列表 + lookup 查找），loop 里直接消费、不再查询。
- *
- * agent 不接触任何具体工具定义与注册逻辑 —— 名字名单由 agent 侧按 profile 静态给出
- * （build/plan 各有各的名单），工具模块内部维护"名字 -> 定义"全量表并按名装配。
- * MCP 工具是运行时动态对象（非静态名单可覆盖），故一并传入。
- */
 export interface ToolCatalog {
   tools: ToolDescription[];
   lookup: ToolLookup;

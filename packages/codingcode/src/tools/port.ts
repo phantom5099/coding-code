@@ -15,9 +15,7 @@ export interface ToolExecutorShape {
     turnId?: number;
     projectPath?: string;
     signal?: AbortSignal;
-    approval?: import('../approval/port.js').ApprovalService;
     toolLookup?: ToolLookup;
-    permissionMode?: import('../approval/types.js').PermissionMode;
   }): Effect.Effect<ToolResultUnion[], never, any>;
 }
 

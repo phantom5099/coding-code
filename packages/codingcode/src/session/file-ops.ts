@@ -14,8 +14,8 @@ import {
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import { getProjectBaseDir } from '../core/path.js';
-import { computePaths, projectSessionsDir, sessionJsonlPathFromCwd } from '../core/path.js';
-import type { ProfileName, PermissionMode } from './types.js';
+import { projectSessionsDir, sessionJsonlPathFromCwd } from '../core/path.js';
+import type { PermissionMode } from './types.js';
 import type { SessionEvent, SessionMetaEvent, SessionIndex } from './types.js';
 
 export function ensureDirs(transcriptPath: string): void {
@@ -128,11 +128,6 @@ export function readCurrentIndex(indexPath: string): Partial<SessionIndex> | nul
   } catch {
     return null;
   }
-}
-
-export function readActiveProfileSync(cwd: string, sessionId: string): ProfileName | null {
-  const idx = readCurrentIndex(computePaths(cwd, sessionId).indexPath);
-  return idx?.activeProfile ?? null;
 }
 
 export function readTranscript(cwd: string, sessionId: string): SessionEvent[] {

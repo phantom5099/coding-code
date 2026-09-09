@@ -6,6 +6,18 @@ export const PERMISSION_MODES: readonly PermissionMode[] = [
   'bypass',
 ] as const;
 
+// plan 权限模式只允许这组工具（只读 + submit_plan），其余一律 deny。
+// 作为审批层的权威白名单，agent 侧的工具可见性名单也从这里派生。
+export const PLAN_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
+  'read_file',
+  'search_files',
+  'search_code',
+  'fetch_url',
+  'submit_plan',
+]);
+
+export type ApprovalProfile = 'plan' | 'build';
+
 export function isPermissionMode(value: unknown): value is PermissionMode {
   return typeof value === 'string' && (PERMISSION_MODES as readonly string[]).includes(value);
 }

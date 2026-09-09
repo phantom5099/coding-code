@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
-import type { ApprovalDecision, PermissionMode, PermissionRule, ToolCallRequest } from './types.js';
+import type { ApprovalDecision, ApprovalProfile, PermissionMode, PermissionRule, ToolCallRequest } from './types.js';
+import { PLAN_ALLOWED_TOOLS } from './types.js';
 import type { RuleEngine } from './rule-engine.js';
 import { userConfirmAsync } from './confirmation.js';
 import { ApprovalWaitService } from './wait-port.js';
@@ -9,6 +10,8 @@ export interface PipelineOptions {
   ruleEngine: RuleEngine;
   destructiveTools: Set<string>;
   permissionMode: PermissionMode;
+  /** Active agent profile — plan profile enforces its own allow-list in Layer 2. */
+  profile?: ApprovalProfile;
   /** Called when user selects Always — allows caller to persist the rule. */
   onAlways?: (rule: PermissionRule) => void;
   /** Called when user selects Never — allows caller to persist the rule. */
@@ -51,12 +54,11 @@ export function runPipeline(
     }
 
     // Layer 2: Permission Mode — the single auto-allow gate. Read-only tools
-    // are NOT unconditionally whitelisted; acceptEdits covers them as
-    // non-destructive. In default mode nothing is auto-allowed here.
     {
       const modeResult = applyPermissionMode(
         request.tool,
         opts.permissionMode,
+        opts.profile,
         opts.destructiveTools
       );
       if (modeResult) {
@@ -109,15 +111,6 @@ export function runPipeline(
     {
       layers.push(LAYER_NAMES[3]);
 
-      if (request.tool === 'submit_plan') {
-        const result: ApprovalDecision = {
-          type: 'allow',
-          source: 'system-plan-self-handles',
-        };
-        const final = yield* recordAuditAndReturn(hooks, request, result, layers);
-        return final;
-      }
-
       if (!asyncConfirm) {
         const result: ApprovalDecision = {
           type: 'deny',
@@ -162,8 +155,20 @@ export function runPipeline(
 function applyPermissionMode(
   tool: string,
   mode: PermissionMode,
+  profile: ApprovalProfile | undefined,
   destructiveTools: Set<string>
 ): ApprovalDecision | null {
+  if (profile === 'plan') {
+    if (PLAN_ALLOWED_TOOLS.has(tool)) {
+      return { type: 'allow', source: 'permission-mode' };
+    }
+    return {
+      type: 'deny',
+      reason: 'Write operations denied in plan profile. Use submit_plan to submit a plan.',
+      source: 'permission-mode',
+    };
+  }
+
   switch (mode) {
     case 'bypass':
       // Bypass mode: everything allowed (sandbox still restricts at OS level)

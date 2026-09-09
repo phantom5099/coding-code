@@ -47,7 +47,6 @@ describe('session service surface', () => {
       'truncateTitle',
       'countNonMetaEvents',
       'findFirstUserContent',
-      'readActiveProfileSync',
       'readTranscript',
       'readUIHistory',
       'filterForUI',

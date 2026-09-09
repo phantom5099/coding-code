@@ -6,7 +6,6 @@ export type { ToolDescription } from '../core/types.js';
 export interface ToolExecCtx {
   signal?: AbortSignal;
   sessionId?: string;
-  turnId?: number;
   projectPath?: string;
 }
 

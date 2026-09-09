@@ -190,7 +190,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       disposeSession: () => Effect.void,
     } as any),
     Layer.succeed(ApprovalPort, {
-      evaluate: () => Effect.succeed({ decision: 'allow' }),
+      evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
     } as any),
     Layer.succeed(SkillPort, skills as any),
     Layer.succeed(McpPort, mcpPort as any),

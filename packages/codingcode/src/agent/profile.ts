@@ -5,8 +5,7 @@ export interface AgentProfile {
   systemPrompt?: string;
 }
 
-import { readActiveProfileSync } from '../session/file-ops.js';
-import type { DecisionHandler } from '../hooks/types.js';
+import { PLAN_ALLOWED_TOOLS } from '../approval/types.js';
 
 export const PLAN_PROFILE_NAME = 'plan' as const;
 export const BUILD_PROFILE_NAME = 'build' as const;
@@ -117,14 +116,8 @@ export const BUILD_PROFILE: AgentProfile = {
 };
 
 // 各 profile 的工具名字名单：agent 只把这份名单交给工具模块注册，工具模块按名查表装配。
-// build 含写工具、不含 submit_plan；plan 相反（只读 + submit_plan）。
-export const PLAN_TOOL_NAMES: readonly string[] = [
-  'read_file',
-  'search_files',
-  'search_code',
-  'fetch_url',
-  'submit_plan',
-];
+// build 含写工具、不含 submit_plan；plan 相反（只读 + submit_plan），名单即审批层白名单。
+export const PLAN_TOOL_NAMES: readonly string[] = [...PLAN_ALLOWED_TOOLS];
 
 export const BUILD_TOOL_NAMES: readonly string[] = [
   'read_file',
@@ -140,8 +133,6 @@ export const BUILD_TOOL_NAMES: readonly string[] = [
 ];
 
 // 运行时审批兜底（plan 模式 deny 非名单工具），从名单派生
-export const PLAN_PROFILE_ALLOWED_TOOLS: ReadonlySet<string> = new Set(PLAN_TOOL_NAMES);
-
 export function isPlanProfile(p: { name: string } | null | undefined): boolean {
   return p?.name === PLAN_PROFILE_NAME;
 }
@@ -161,23 +152,3 @@ export function resolveSubagentProfile(name: string): AgentProfile | undefined {
 export function getToolNames(profile: AgentProfile | undefined): readonly string[] {
   return isPlanProfile(profile) ? PLAN_TOOL_NAMES : BUILD_TOOL_NAMES;
 }
-
-export function isSessionUsingPlanProfile(sessionId: string, cwd: string): boolean {
-  return readActiveProfileSync(cwd, sessionId) === PLAN_PROFILE_NAME;
-}
-
-export const planProfileGateHook: DecisionHandler = (payload) => {
-  const sessionId = payload.sessionId as string | undefined;
-  const projectPath = payload.projectPath as string | undefined;
-  if (!sessionId || !projectPath) return null;
-  if (!isSessionUsingPlanProfile(sessionId, projectPath)) return null;
-
-  const toolName = payload.toolName as string | undefined;
-  if (!toolName) return null;
-  if (PLAN_PROFILE_ALLOWED_TOOLS.has(toolName)) return null;
-
-  return {
-    decision: 'deny',
-    reason: 'Write operations denied in plan profile. Use submit_plan to submit a plan.',
-  };
-};
