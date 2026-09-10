@@ -36,37 +36,7 @@ import {
 } from '@codingcode/infra/config';
 import type { AppRuntime } from '../layer.js';
 import { SessionService } from '../session/port.js';
-
-export interface SettingsClient {
-  getMemoryEnabled(): Promise<boolean>;
-  getMemoryConfig(): Promise<{
-    enabled: boolean;
-    model: string;
-  }>;
-  setMemoryEnabled(enabled: boolean): Promise<void>;
-  setMemoryModel(model: string): Promise<{ model: string }>;
-  getAgentConfig(): Promise<{ maxSteps: number; maxStopContinuations: number }>;
-  setCompactionModel(compactionModel: string): Promise<{ compactionModel: string }>;
-  getMcpStatus(input: { cwd: string }): Promise<McpStatus[]>;
-  setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
-  resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
-  createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
-  updateMcpServer(input: { cwd: string; name: string; server: McpServerConfig }): Promise<void>;
-  deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
-  listSkills(): Promise<Array<{ name: string; description: string; skillPath: string }>>;
-  listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
-  createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
-  updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
-  deleteHook(input: { cwd: string; name: string }): Promise<void>;
-  setHookDisabled(input: { cwd: string; name: string; disabled: boolean }): Promise<void>;
-  resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;
-  getGlobalPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
-  setGlobalPermissionMode(input: {
-    sessionId: string;
-    cwd: string;
-    mode: PermissionMode;
-  }): Promise<void>;
-}
+import type { SettingsClient } from '../client/contracts.js';
 
 // ---- Helpers with validation ----
 

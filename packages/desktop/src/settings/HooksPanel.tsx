@@ -9,6 +9,7 @@ import {
   setHookDisabled,
   resetHookDisabled,
 } from '../lib/core-api';
+import type { UserHookConfig, HookPoint } from '@codingcode/core/hooks/types';
 
 interface HookEntry {
   name: string;
@@ -162,9 +163,9 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
   };
 
   const saveForm = async () => {
-    const hook: Record<string, unknown> = {
+    const hook: UserHookConfig = {
       name: form.name,
-      point: form.point,
+      point: form.point as HookPoint,
       type: ALL_POINTS.find((p) => p.name === form.point)?.type ?? 'observer',
       command: form.command,
       enabled: form.enabled,

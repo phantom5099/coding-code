@@ -1,7 +1,15 @@
 import { API_BASE, api } from './api';
 import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client';
 import type { PermissionMode } from '@codingcode/core/approval/types';
-import type { AgentProfileName } from '@codingcode/core/agent/profile';
+import type { ProfileName, TokenUsage } from '@codingcode/core/core/types';
+import type {
+  CheckpointDiff,
+  CodeRollbackResult,
+  RollbackPreviewDiff,
+} from '@codingcode/core/checkpoint/types';
+import type { UITurn } from '@codingcode/core/session/port';
+import type { McpServerConfig } from '@codingcode/core/mcp/types';
+import type { UserHookConfig } from '@codingcode/core/hooks/types';
 
 const clients = createHttpClients(API_BASE);
 
@@ -30,7 +38,7 @@ export function listSessions(cwd?: string): Promise<any[]> {
 
 export function createSession(
   cwd: string,
-  params: { activeProfile: AgentProfileName; permissionMode: PermissionMode; model: string }
+  params: { activeProfile: ProfileName; permissionMode: PermissionMode; model: string }
 ): Promise<{ sessionId: string }> {
   return clients.sessions.createSession({ cwd, ...params });
 }
@@ -39,16 +47,11 @@ export function deleteSession(sessionId: string, cwd: string): Promise<void> {
   return clients.sessions.deleteSession({ sessionId, cwd });
 }
 
-export function getSessionHistory(
-  sessionId: string,
-  cwd: string
-): Promise<Array<{ id: string; items: any[]; status: string }>> {
-  return clients.sessions.getSessionHistory({ sessionId, cwd }) as unknown as Promise<
-    Array<{ id: string; items: any[]; status: string }>
-  >;
+export function getSessionHistory(sessionId: string, cwd: string): Promise<UITurn[]> {
+  return clients.sessions.getSessionHistory({ sessionId, cwd });
 }
 
-export function resumeSession(sessionId: string, cwd: string): Promise<any> {
+export function resumeSession(sessionId: string, cwd: string): Promise<UITurn[]> {
   return clients.sessions.resumeSession({ sessionId, cwd });
 }
 
@@ -80,7 +83,7 @@ export function getSessionPlan(
 // ---- Agent profile switching ----
 
 export type SessionProfileInfo = {
-  activeProfile: AgentProfileName;
+  activeProfile: ProfileName;
   permissionMode: PermissionMode;
   cwd: string;
   available: Array<{ name: string; description: string }>;
@@ -93,8 +96,8 @@ export function getSessionProfile(sessionId: string, cwd: string): Promise<Sessi
 export function setSessionProfile(
   sessionId: string,
   cwd: string,
-  activeProfile: AgentProfileName
-): Promise<{ activeProfile: AgentProfileName; permissionMode: PermissionMode }> {
+  activeProfile: ProfileName
+): Promise<{ activeProfile: ProfileName; permissionMode: PermissionMode }> {
   return clients.sessions.setSessionProfile({ sessionId, cwd, activeProfile });
 }
 
@@ -157,19 +160,16 @@ export function resetMcpDisabled(name: string, cwd: string): Promise<void> {
   return clients.settings.resetMcpDisabled({ name, cwd });
 }
 
-export function createMcpServer(
-  cwd: string | undefined,
-  server: Record<string, unknown>
-): Promise<void> {
-  return clients.settings.createMcpServer({ cwd: cwd ?? '', server: server as any });
+export function createMcpServer(cwd: string | undefined, server: McpServerConfig): Promise<void> {
+  return clients.settings.createMcpServer({ cwd: cwd ?? '', server });
 }
 
 export function updateMcpServer(
   cwd: string | undefined,
   name: string,
-  server: Record<string, unknown>
+  server: McpServerConfig
 ): Promise<void> {
-  return clients.settings.updateMcpServer({ cwd: cwd ?? '', name, server: server as any });
+  return clients.settings.updateMcpServer({ cwd: cwd ?? '', name, server });
 }
 
 export function deleteMcpServer(cwd: string | undefined, name: string): Promise<void> {
@@ -187,25 +187,25 @@ export function listSkills(_cwd?: string): Promise<
     hasProjectOverride?: boolean;
   }>
 > {
-  return clients.settings.listSkills() as any;
+  return clients.settings.listSkills();
 }
 
 // ---- Settings: Hooks ----
 
-export function listHooks(cwd?: string): Promise<any[]> {
+export function listHooks(cwd?: string): Promise<UserHookConfig[]> {
   return clients.settings.listHooks({ cwd: cwd ?? '' });
 }
 
-export function createHook(cwd: string | undefined, hook: Record<string, unknown>): Promise<void> {
-  return clients.settings.createHook({ cwd: cwd ?? '', hook: hook as any });
+export function createHook(cwd: string | undefined, hook: UserHookConfig): Promise<void> {
+  return clients.settings.createHook({ cwd: cwd ?? '', hook });
 }
 
 export function updateHook(
   cwd: string | undefined,
   name: string,
-  hook: Record<string, unknown>
+  hook: UserHookConfig
 ): Promise<void> {
-  return clients.settings.updateHook({ cwd: cwd ?? '', name, hook: hook as any });
+  return clients.settings.updateHook({ cwd: cwd ?? '', name, hook });
 }
 
 export function deleteHook(cwd: string | undefined, name: string): Promise<void> {
@@ -226,36 +226,14 @@ export function resetHookDisabled(name: string, cwd: string): Promise<void> {
 
 // ---- Rollback / Checkpoint ----
 
-export interface CheckpointDiff {
-  turnId: number;
-  files: Array<{
-    path: string;
-    status: string;
-    diff: string;
-    insertions: number;
-    deletions: number;
-  }>;
-}
-
-export interface CodeRollbackResult {
-  reverted: boolean;
-  throughTurnId: number;
-  affectedTurns: number[];
-  selectedFiles: string[];
-}
-
-export interface RollbackPreviewDiff {
-  throughTurnId: number;
-  affectedTurns: number[];
-  diff: string;
-}
+export type { CheckpointDiff, CodeRollbackResult, RollbackPreviewDiff };
 
 export function getCheckpointDiff(
   sessionId: string,
   cwd: string,
   turnId?: number
 ): Promise<CheckpointDiff> {
-  return clients.sessions.getCheckpointDiff({ sessionId, cwd, turnId }) as any;
+  return clients.sessions.getCheckpointDiff({ sessionId, cwd, turnId });
 }
 
 export function revertCheckpointFiles(
@@ -263,7 +241,10 @@ export function revertCheckpointFiles(
   cwd: string,
   files: string[]
 ): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions.revertCheckpointFiles({ sessionId, cwd, files }) as any;
+  return clients.sessions.revertCheckpointFiles({ sessionId, cwd, files }).then((result) => ({
+    ok: true,
+    result,
+  }));
 }
 
 export function previewRollbackDiff(
@@ -271,7 +252,7 @@ export function previewRollbackDiff(
   cwd: string,
   throughTurnId: number
 ): Promise<RollbackPreviewDiff> {
-  return clients.sessions.previewRollbackDiff({ sessionId, cwd, throughTurnId }) as any;
+  return clients.sessions.previewRollbackDiff({ sessionId, cwd, throughTurnId });
 }
 
 export function rollbackCodeToTurn(
@@ -279,7 +260,9 @@ export function rollbackCodeToTurn(
   cwd: string,
   throughTurnId: number
 ): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions.rollbackCodeToTurn({ sessionId, cwd, throughTurnId }) as any;
+  return clients.sessions
+    .rollbackCodeToTurn({ sessionId, cwd, throughTurnId })
+    .then((result) => ({ ok: true, result }));
 }
 
 export function rollbackContext(
@@ -288,11 +271,14 @@ export function rollbackContext(
   throughTurnId: number
 ): Promise<{
   ok: boolean;
-  turns: any[];
+  turns: UITurn[];
   promptEstimate?: number;
-  usage?: { prompt: number; completion: number; total: number };
+  usage?: TokenUsage;
 }> {
-  return clients.sessions.rollbackContext({ sessionId, cwd, throughTurnId }) as any;
+  return clients.sessions.rollbackContext({ sessionId, cwd, throughTurnId }).then((r) => ({
+    ok: true,
+    turns: r.turns,
+  }));
 }
 
 export function rollbackBothToTurn(
@@ -301,19 +287,22 @@ export function rollbackBothToTurn(
   throughTurnId: number
 ): Promise<{
   ok: boolean;
-  turns: any[];
+  turns: UITurn[];
   codeResult: CodeRollbackResult;
   promptEstimate?: number;
-  usage?: { prompt: number; completion: number; total: number };
+  usage?: TokenUsage;
 }> {
-  return clients.sessions.rollbackBothToTurn({ sessionId, cwd, throughTurnId }) as any;
+  return clients.sessions.rollbackBothToTurn({ sessionId, cwd, throughTurnId }).then((r) => ({
+    ok: true,
+    ...r,
+  }));
 }
 
 export function forkSession(
   sessionId: string,
   cwd: string,
   atTurnId?: number
-): Promise<{ sessionId: string; turns: any[] }> {
+): Promise<{ sessionId: string; turns: UITurn[] }> {
   return clients.sessions.forkSession({ sessionId, cwd, atTurnId });
 }
 

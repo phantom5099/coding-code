@@ -45,7 +45,7 @@ export async function* agentEventToStreamChunk(
         yield { type: 'done' };
         break;
       case 'TodoUpdate':
-        yield { type: 'todo_update', items: event.items as any };
+        yield { type: 'todo_update', items: event.items };
         break;
       case 'ContextCompressed':
         yield {

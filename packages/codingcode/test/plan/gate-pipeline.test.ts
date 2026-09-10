@@ -3,11 +3,11 @@ import { Effect, Layer } from 'effect';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { runPipeline } from '../../src/approval/pipeline.js';
+import { runPipeline } from '../../src/approval/approval.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import type { ApprovalProfile } from '../../src/approval/types.js';
+import type { ProfileName } from '../../src/core/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
@@ -47,7 +47,7 @@ function runPipelineWithMock(opts: {
   input: any;
   permissionMode: 'default' | 'acceptEdits' | 'bypass';
   sessionId: string;
-  profile: ApprovalProfile;
+  profile: ProfileName;
 }) {
   capturedApproval = null;
 

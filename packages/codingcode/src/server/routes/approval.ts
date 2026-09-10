@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalWaitService } from '../../approval/wait-port.js';
-import { parseApprovalResponse } from '../../approval/response.js';
+import { parseApprovalResponse } from '../../approval/confirmation.js';
 import { errorResponse } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;

@@ -2,8 +2,6 @@ import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { AgentError } from '../core/error.js';
 import type {
-  ProfileName,
-  PermissionMode,
   AssistantEvent,
   RollbackEvent,
   SessionEvent,
@@ -14,11 +12,44 @@ import type {
   ToolResultEvent,
   UserEvent,
 } from './types.js';
+import type { ProfileName } from '../core/types.js';
+import type { PermissionMode } from '../approval/types.js';
+
+export type UITurnItem =
+  | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
+  | {
+      id: string;
+      type: 'tool_call';
+      name: string;
+      args: Record<string, unknown>;
+      status: 'pending' | 'approved' | 'rejected' | 'running';
+    }
+  | {
+      id: string;
+      type: 'tool_result';
+      callId: string;
+      name: string;
+      output: string;
+      exitCode?: number;
+      filePath?: string;
+      diff?: string;
+      insertions?: number;
+      deletions?: number;
+    }
+  | {
+      id: string;
+      type: 'summary';
+      content: string;
+      startTurnId: number;
+      endTurnId: number;
+    }
+  | { id: string; type: 'reasoning'; content: string; isVisible: boolean }
+  | { id: string; type: 'error'; message: string; code?: string };
 
 export interface UITurn {
   id: string;
-  items: object[];
-  status: string;
+  items: UITurnItem[];
+  status: 'running' | 'completed' | 'error';
 }
 
 export interface SessionShape {
@@ -43,3 +74,19 @@ export interface SessionShape {
 }
 
 export class SessionService extends Context.Tag('Session')<SessionService, SessionShape>() {}
+
+// direct/sessions.ts 实际使用的消费视图，编译期锁定真实耦合面
+export type SessionStorePort = Pick<
+  SessionShape,
+  | 'create'
+  | 'load'
+  | 'deleteSession'
+  | 'forkSession'
+  | 'listSessions'
+  | 'readUITurns'
+  | 'setActiveProfile'
+  | 'setPermissionMode'
+>;
+
+// direct/agent-runtime.ts 与 direct/settings.ts 只读/只写权限模式
+export type SessionStatePort = Pick<SessionShape, 'load' | 'setPermissionMode'>;

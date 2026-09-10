@@ -1,81 +1,7 @@
 import type { PermissionMode } from '../../approval/types.js';
-import type {
-  CheckpointDiff,
-  CodeRollbackResult,
-  RollbackPreviewDiff,
-} from '../../checkpoint/types.js';
-import type { SessionEvent, SessionIndex } from '../../session/types.js';
-import type { AgentProfileName } from '../../agent/profile.js';
+import type { SessionIndex } from '../../session/types.js';
+import type { SessionClient } from '../contracts.js';
 import type { createRequestHelpers } from './request.js';
-
-export interface SessionClient {
-  createSession(input: {
-    cwd: string;
-    activeProfile: AgentProfileName;
-    permissionMode: PermissionMode;
-    model: string;
-  }): Promise<{ sessionId: string }>;
-  resumeSession(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
-  listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
-  getSessionHistory(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
-  deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
-  getSessionProfile(input: { sessionId: string; cwd: string }): Promise<{
-    activeProfile: AgentProfileName;
-    permissionMode: PermissionMode;
-    cwd: string;
-    available: Array<{ name: string; description: string }>;
-  }>;
-  setSessionProfile(input: {
-    sessionId: string;
-    cwd: string;
-    activeProfile: AgentProfileName;
-  }): Promise<{ activeProfile: AgentProfileName; permissionMode: PermissionMode }>;
-  getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
-  setSessionPermissionMode(input: {
-    sessionId: string;
-    cwd: string;
-    mode: PermissionMode;
-  }): Promise<void>;
-  getSessionPlan(input: {
-    sessionId: string;
-    cwd: string;
-  }): Promise<{ content: string; path: string; directory: string; exists: boolean }>;
-
-  getCheckpointDiff(input: {
-    sessionId: string;
-    cwd: string;
-    turnId?: number;
-  }): Promise<CheckpointDiff>;
-  revertCheckpointFiles(input: {
-    sessionId: string;
-    cwd: string;
-    files: string[];
-  }): Promise<CodeRollbackResult>;
-  previewRollbackDiff(input: {
-    sessionId: string;
-    cwd: string;
-    throughTurnId: number;
-  }): Promise<RollbackPreviewDiff>;
-  rollbackCodeToTurn(input: {
-    sessionId: string;
-    cwd: string;
-    throughTurnId: number;
-  }): Promise<CodeRollbackResult>;
-  rollbackContext(input: {
-    sessionId: string;
-    cwd: string;
-    throughTurnId: number;
-  }): Promise<{ turns: SessionEvent[] }>;
-  rollbackBothToTurn(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<{
-    turns: SessionEvent[];
-    codeResult: CodeRollbackResult;
-  }>;
-  forkSession(input: {
-    sessionId: string;
-    cwd: string;
-    atTurnId?: number;
-  }): Promise<{ sessionId: string; turns: SessionEvent[] }>;
-}
 
 export function createHttpSessionClient(
   request: ReturnType<typeof createRequestHelpers>
@@ -97,9 +23,7 @@ export function createHttpSessionClient(
     },
 
     async getSessionHistory({ sessionId, cwd }) {
-      return apiGet<SessionEvent[]>(
-        `/api/sessions/${sessionId}/history?cwd=${encodeURIComponent(cwd)}`
-      );
+      return apiGet(`/api/sessions/${sessionId}/history?cwd=${encodeURIComponent(cwd)}`);
     },
 
     async deleteSession({ sessionId, cwd }) {
@@ -137,7 +61,11 @@ export function createHttpSessionClient(
     },
 
     async revertCheckpointFiles({ sessionId, cwd, files }) {
-      return apiPost(`/api/sessions/${sessionId}/checkpoints/latest/revert-files`, { cwd, files });
+      const res = await apiPost<{ ok: boolean; result: import('../../checkpoint/types.js').CodeRollbackResult }>(
+        `/api/sessions/${sessionId}/checkpoints/latest/revert-files`,
+        { cwd, files }
+      );
+      return res.result;
     },
 
     async previewRollbackDiff({ sessionId, cwd, throughTurnId }) {
@@ -147,7 +75,11 @@ export function createHttpSessionClient(
     },
 
     async rollbackCodeToTurn({ sessionId, cwd, throughTurnId }) {
-      return apiPost(`/api/sessions/${sessionId}/rollback-code-to-turn`, { cwd, throughTurnId });
+      const res = await apiPost<{ ok: boolean; result: import('../../checkpoint/types.js').CodeRollbackResult }>(
+        `/api/sessions/${sessionId}/rollback-code-to-turn`,
+        { cwd, throughTurnId }
+      );
+      return res.result;
     },
 
     async rollbackContext({ sessionId, cwd, throughTurnId }) {
@@ -163,3 +95,5 @@ export function createHttpSessionClient(
     },
   };
 }
+
+export type { SessionClient };

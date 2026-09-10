@@ -9,7 +9,7 @@ import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import type { ApprovalProfile } from '../../src/approval/types.js';
+import type { ProfileName } from '../../src/core/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
 
@@ -98,7 +98,7 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
   async function evaluateAsProfile(
     tool: string,
     input: any,
-    profile: ApprovalProfile
+    profile: ProfileName
   ): Promise<any> {
     return rt.runPromise(
       Effect.gen(function* () {

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { Thread, Turn, Item, TodoItem } from '@shared/types';
-import type { AgentProfileName } from '@codingcode/core/agent/profile';
+import type { ProfileName } from '@codingcode/core/core/types';
 import type { PermissionMode } from '@codingcode/core/approval/types';
 import { buildToolDiff } from '../lib/diff-compute';
 import { createDebouncedStorage, normalizeCwd } from './storage';
@@ -42,7 +42,7 @@ export interface PendingPlan {
 }
 
 export interface StoredProfile {
-  activeProfile: AgentProfileName;
+  activeProfile: ProfileName;
   permissionMode: PermissionMode;
   fetchedAt: number;
   optimistic: boolean;
@@ -69,15 +69,15 @@ interface AgentActions {
   setCurrentThread: (id: string | null) => void;
   setCurrentThreadWithProfile: (
     id: string,
-    info: { activeProfile: AgentProfileName; permissionMode: PermissionMode; optimistic?: boolean }
+    info: { activeProfile: ProfileName; permissionMode: PermissionMode; optimistic?: boolean }
   ) => void;
   setProfileForThread: (
     id: string,
-    info: { activeProfile: AgentProfileName; permissionMode: PermissionMode; requestedAt?: number }
+    info: { activeProfile: ProfileName; permissionMode: PermissionMode; requestedAt?: number }
   ) => void;
   setOptimisticProfileForThread: (
     id: string,
-    info: { activeProfile: AgentProfileName; permissionMode: PermissionMode }
+    info: { activeProfile: ProfileName; permissionMode: PermissionMode }
   ) => void;
   removeThread: (id: string) => void;
   upsertThread: (thread: Thread) => void;

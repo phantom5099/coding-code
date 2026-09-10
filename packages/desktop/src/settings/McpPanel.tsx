@@ -9,6 +9,7 @@ import {
   updateMcpServer,
   deleteMcpServer,
 } from '../lib/core-api';
+import type { McpServerConfig } from '@codingcode/core/mcp/types';
 
 interface McpEntry {
   name: string;
@@ -104,7 +105,7 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
   };
 
   const saveForm = async () => {
-    const server: Record<string, unknown> = {
+    const server: McpServerConfig = {
       name: form.name,
       concurrency: form.concurrency,
       autoReconnect: form.autoReconnect,

@@ -1,49 +1,14 @@
+import type { AgentRuntimeClient } from '../contracts.js';
 import type { StreamChunk } from '../types.js';
+import type { TodoItem } from '../../todo/port.js';
 import { parseSseStream } from '../sse.js';
 import type { createRequestHelpers } from './request.js';
-
-export interface AgentRuntimeClient {
-  sendMessage(
-    input: string,
-    options: { sessionId?: string; cwd: string; signal?: AbortSignal }
-  ): AsyncGenerator<StreamChunk>;
-
-  sendApprovalResponse(input: {
-    sessionId: string;
-    approvalId: string;
-    response: string;
-  }): Promise<void>;
-  compact(input: { sessionId: string; cwd: string }): Promise<void>;
-
-  getCheckpointDiff(turnId?: number): Promise<import('../../checkpoint/types.js').CheckpointDiff>;
-  revertCheckpointFiles(
-    turnId: number,
-    files: string[]
-  ): Promise<import('../../checkpoint/types.js').CodeRollbackResult>;
-  previewRollbackDiff(
-    throughTurnId: number
-  ): Promise<import('../../checkpoint/types.js').RollbackPreviewDiff>;
-  rollbackCodeToTurn(
-    throughTurnId: number
-  ): Promise<import('../../checkpoint/types.js').CodeRollbackResult>;
-  rollbackContext(throughTurnId: number): Promise<{
-    turns: Array<{ id: string; items: object[]; status: string }>;
-  }>;
-  rollbackBothToTurn(throughTurnId: number): Promise<{
-    turns: Array<{ id: string; items: object[]; status: string }>;
-    codeResult: import('../../checkpoint/types.js').CodeRollbackResult;
-  }>;
-  forkSession(atTurnId?: number): Promise<{
-    sessionId: string;
-    turns: Array<{ id: string; items: object[]; status: string }>;
-  }>;
-}
 
 export function createHttpAgentClient(
   baseUrl: string,
   request: ReturnType<typeof createRequestHelpers>
 ): AgentRuntimeClient {
-  const { apiPost, apiGet } = request;
+  const { apiPost } = request;
 
   return {
     async *sendMessage(input, { sessionId, cwd, signal }) {
@@ -112,7 +77,7 @@ export function createHttpAgentClient(
             };
             break;
           case 'todo_update':
-            yield { type: 'todo_update', items: data.items as any };
+            yield { type: 'todo_update', items: data.items as TodoItem[] };
             break;
           case 'context_compressed':
             yield {
@@ -147,37 +112,7 @@ export function createHttpAgentClient(
     async compact({ sessionId, cwd }) {
       await apiPost(`/api/sessions/${sessionId}/compact`, { cwd });
     },
-
-    async getCheckpointDiff(turnId?: number) {
-      const segment = turnId != null ? String(turnId) : 'latest';
-      return apiGet(`/api/sessions/_/checkpoints/${segment}/diff?cwd=_`);
-    },
-
-    async revertCheckpointFiles(turnId: number, files: string[]) {
-      return apiPost(`/api/sessions/_/checkpoints/latest/revert-files?cwd=_`, {
-        turnId,
-        files,
-      });
-    },
-
-    async previewRollbackDiff(throughTurnId: number) {
-      return apiGet(`/api/sessions/_/rollback-preview?cwd=_&throughTurnId=${throughTurnId}`);
-    },
-
-    async rollbackCodeToTurn(throughTurnId: number) {
-      return apiPost(`/api/sessions/_/rollback-code-to-turn?cwd=_`, { throughTurnId });
-    },
-
-    async rollbackContext(throughTurnId: number) {
-      return apiPost(`/api/sessions/_/rollback-context?cwd=_`, { throughTurnId });
-    },
-
-    async rollbackBothToTurn(throughTurnId: number) {
-      return apiPost(`/api/sessions/_/rollback-both-to-turn?cwd=_`, { throughTurnId });
-    },
-
-    async forkSession(atTurnId?: number) {
-      return apiPost('/api/sessions/_/fork?cwd=_', { atTurnId });
-    },
   };
 }
+
+export type { AgentRuntimeClient };

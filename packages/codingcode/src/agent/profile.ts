@@ -1,7 +1,7 @@
-export type AgentProfileName = 'plan' | 'build';
+import type { ProfileName } from '../core/types.js';
 
 export interface AgentProfile {
-  name: AgentProfileName;
+  name: ProfileName;
   systemPrompt?: string;
 }
 
@@ -137,11 +137,11 @@ export function isPlanProfile(p: { name: string } | null | undefined): boolean {
   return p?.name === PLAN_PROFILE_NAME;
 }
 
-function isAgentProfileName(name: string): name is AgentProfileName {
+export function isAgentProfileName(name: string): name is ProfileName {
   return name === PLAN_PROFILE_NAME || name === BUILD_PROFILE_NAME;
 }
 
-export function resolveProfile(name: AgentProfileName): AgentProfile {
+export function resolveProfile(name: ProfileName): AgentProfile {
   return name === PLAN_PROFILE_NAME ? PLAN_PROFILE : BUILD_PROFILE;
 }
 
@@ -152,3 +152,8 @@ export function resolveSubagentProfile(name: string): AgentProfile | undefined {
 export function getToolNames(profile: AgentProfile | undefined): readonly string[] {
   return isPlanProfile(profile) ? PLAN_TOOL_NAMES : BUILD_TOOL_NAMES;
 }
+
+export const AVAILABLE_PROFILES: Array<{ name: ProfileName; description: string }> = [
+  { name: PLAN_PROFILE_NAME, description: 'Planning agent' },
+  { name: BUILD_PROFILE_NAME, description: 'Build agent' },
+];

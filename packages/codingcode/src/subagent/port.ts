@@ -8,7 +8,7 @@ export interface RunSubagentOptions {
   sessionId?: string;
   cwd: string;
   signal?: AbortSignal;
-  activeProfile?: import('../agent/profile.js').AgentProfileName;
+  activeProfile?: import('../core/types.js').ProfileName;
   permissionMode?: import('../approval/types.js').PermissionMode;
   model?: string;
   parentSessionId?: string;

@@ -14,8 +14,8 @@ import {
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import { getProjectBaseDir } from '../core/path.js';
-import { projectSessionsDir, sessionJsonlPathFromCwd } from '../core/path.js';
-import type { PermissionMode } from './types.js';
+import { sessionJsonlPathFromCwd } from '../core/path.js';
+import type { PermissionMode } from '../approval/types.js';
 import type { SessionEvent, SessionMetaEvent, SessionIndex } from './types.js';
 
 export function ensureDirs(transcriptPath: string): void {

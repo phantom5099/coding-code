@@ -1,10 +1,5 @@
-import type { SelectableModel } from '../../llm/port.js';
+import type { ModelClient } from '../contracts.js';
 import type { createRequestHelpers } from './request.js';
-
-export interface ModelClient {
-  listModels(): Promise<{ models: SelectableModel[]; activeId: string | null }>;
-  switchModel(input: { id: string }): Promise<void>;
-}
 
 export function createHttpModelClient(
   request: ReturnType<typeof createRequestHelpers>
@@ -21,3 +16,5 @@ export function createHttpModelClient(
     },
   };
 }
+
+export type { ModelClient };

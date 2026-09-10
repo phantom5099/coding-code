@@ -16,8 +16,6 @@ export const PLAN_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   'submit_plan',
 ]);
 
-export type ApprovalProfile = 'plan' | 'build';
-
 export function isPermissionMode(value: unknown): value is PermissionMode {
   return typeof value === 'string' && (PERMISSION_MODES as readonly string[]).includes(value);
 }

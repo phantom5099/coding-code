@@ -3,7 +3,7 @@ import { Effect, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import type { SessionStoreState } from '../../session/types.js';
-import type { AgentProfileName } from '../../agent/profile.js';
+import type { ProfileName } from '../../core/types.js';
 import { SessionService } from '../../session/port.js';
 import { computePaths } from '../../core/path.js';
 import { ContextService } from '../../context/port.js';
@@ -14,7 +14,7 @@ import { LLMFactoryService } from '../../llm/port.js';
 import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
 import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
-import { BUILD_PROFILE, PLAN_PROFILE } from '../../agent/profile.js';
+import { AVAILABLE_PROFILES, isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode, type PermissionMode } from '../../approval/types.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -57,11 +57,11 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions', async (c) => {
     const body = (await c.req.json()) as {
       cwd: string;
-      activeProfile: AgentProfileName;
+      activeProfile: ProfileName;
       permissionMode: PermissionMode;
       model: string;
     };
-    if (body.activeProfile !== 'plan' && body.activeProfile !== 'build') {
+    if (!isAgentProfileName(body.activeProfile)) {
       return c.json({ error: `Invalid activeProfile: ${body.activeProfile}` }, 400);
     }
     if (!isPermissionMode(body.permissionMode)) {
@@ -260,13 +260,13 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     return c.json({
       ...result.value,
       cwd,
-      available: [{ name: PLAN_PROFILE.name }, { name: BUILD_PROFILE.name }],
+      available: AVAILABLE_PROFILES,
     });
   });
 
   router.post('/api/sessions/:id/profile', async (c) => {
     const sessionId = c.req.param('id');
-    const body = (await c.req.json()) as { cwd?: string; activeProfile: AgentProfileName };
+    const body = (await c.req.json()) as { cwd?: string; activeProfile: ProfileName };
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
         const ws = yield* WorkspaceService;
@@ -274,7 +274,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       })
     );
     const activeProfile = body.activeProfile;
-    if (activeProfile !== 'plan' && activeProfile !== 'build') {
+    if (!isAgentProfileName(activeProfile)) {
       return c.json({ error: `Invalid activeProfile: ${activeProfile}` }, 400);
     }
     const result = await runWithLayer(

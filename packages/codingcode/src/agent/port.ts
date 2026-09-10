@@ -1,7 +1,7 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { AgentEvent } from './types.js';
-import type { AgentProfileName } from './profile.js';
+import type { ProfileName } from '../core/types.js';
 import type { PermissionMode } from '../approval/types.js';
 
 export interface RunTurnOptions {
@@ -10,7 +10,7 @@ export interface RunTurnOptions {
   signal?: AbortSignal;
   permissionMode?: PermissionMode;
   model?: string;
-  activeProfile?: AgentProfileName;
+  activeProfile?: ProfileName;
 }
 
 export interface AgentShape {

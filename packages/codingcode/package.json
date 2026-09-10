@@ -19,6 +19,10 @@
     "./agent/profile": "./src/agent/profile.ts",
     "./core/error": "./src/core/error.ts",
     "./core/types": "./src/core/types.ts",
+    "./checkpoint/types": "./src/checkpoint/types.ts",
+    "./session/port": "./src/session/port.ts",
+    "./mcp/types": "./src/mcp/types.ts",
+    "./hooks/types": "./src/hooks/types.ts",
     "./llm/client": "./src/llm/client.ts"
   },
   "dependencies": {

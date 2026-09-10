@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '../stores/workspace.store';
 import { useRollbackStore } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import type { StreamChunk } from '@codingcode/core/client/types';
-import type { AgentProfileName } from '@codingcode/core/agent/profile';
+import type { ProfileName } from '@codingcode/core/core/types';
 import type { PermissionMode } from '@codingcode/core/approval/types';
 import { ApiError } from '../lib/api';
 import {
@@ -289,7 +289,7 @@ export function useAgentCore() {
 
       let threadId = currentThreadId;
       if (!threadId) {
-        const activeProfile: AgentProfileName = pendingProfile;
+        const activeProfile: ProfileName = pendingProfile;
         const permissionMode: PermissionMode =
           pendingProfile === 'plan'
             ? 'default'
@@ -635,7 +635,7 @@ export function useAgent() {
 // ---- useAgentProfile: plan/build profile switching + plan file access ----
 
 export type SessionProfileSnapshot = {
-  activeProfile: AgentProfileName;
+  activeProfile: ProfileName;
   permissionMode: PermissionMode;
   cwd: string;
   available: Array<{ name: string; description: string }>;
@@ -666,9 +666,9 @@ export function useAgentProfile() {
   const switchProfile = useCallback(
     async (
       sessionId: string,
-      activeProfile: AgentProfileName,
+      activeProfile: ProfileName,
       cwd?: string
-    ): Promise<{ activeProfile: AgentProfileName; permissionMode: PermissionMode }> => {
+    ): Promise<{ activeProfile: ProfileName; permissionMode: PermissionMode }> => {
       return setSessionProfile(sessionId, cwd ?? workspace.rootPath ?? '', activeProfile);
     },
     [workspace.rootPath]

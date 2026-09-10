@@ -1,6 +1,7 @@
-export type ProfileName = 'plan' | 'build';
+import type { ProfileName, TokenUsage, ToolCall } from '../core/types.js';
+import type { PermissionMode } from '../approval/types.js';
 
-export type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
+export type { TokenUsage };
 
 export interface SessionMetaEvent {
   type: 'session_meta';
@@ -24,7 +25,7 @@ export interface AssistantEvent {
   type: 'assistant';
   turnId: number;
   content: string;
-  toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+  toolCalls: ToolCall[];
   usage?: TokenUsage;
 }
 
@@ -65,12 +66,6 @@ export type SessionEvent =
   | SummaryEvent
   | RollbackEvent
   | CompactEvent;
-
-export interface TokenUsage {
-  prompt: number;
-  completion: number;
-  total: number;
-}
 
 export interface SessionIndex {
   sessionId: string;

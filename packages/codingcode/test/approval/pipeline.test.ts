@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { runPipeline } from '../../src/approval/pipeline.js';
+import { runPipeline } from '../../src/approval/approval.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import type { PermissionRule } from '../../src/approval/types.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';

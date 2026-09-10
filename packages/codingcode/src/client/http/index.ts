@@ -1,8 +1,14 @@
 import { createRequestHelpers } from './request.js';
-import { createHttpAgentClient, type AgentRuntimeClient } from './agent-runtime.js';
-import { createHttpSessionClient, type SessionClient } from './sessions.js';
-import { createHttpModelClient, type ModelClient } from './models.js';
-import { createHttpSettingsClient, type SettingsClient } from './settings.js';
+import { createHttpAgentClient } from './agent-runtime.js';
+import { createHttpSessionClient } from './sessions.js';
+import { createHttpModelClient } from './models.js';
+import { createHttpSettingsClient } from './settings.js';
+import type {
+  AgentRuntimeClient,
+  SessionClient,
+  ModelClient,
+  SettingsClient,
+} from '../contracts.js';
 
 export type { AgentRuntimeClient, SessionClient, ModelClient, SettingsClient };
 

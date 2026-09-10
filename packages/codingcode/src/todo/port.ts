@@ -1,9 +1,8 @@
 import { Context } from 'effect';
+import type { TodoItem } from '../core/types.js';
 
-export interface Todo {
-  step: string;
-  status: 'pending' | 'in_progress' | 'completed';
-}
+export type { TodoItem };
+export type Todo = TodoItem;
 
 export interface TodoCounts {
   pending: number;

@@ -15,10 +15,10 @@ import type {
   TokenUsage,
   SessionEvent,
   SessionStoreState,
-  ProfileName,
-  PermissionMode,
   CompactEvent,
 } from './types.js';
+import type { ProfileName } from '../core/types.js';
+import type { PermissionMode } from '../approval/types.js';
 import { SessionService } from './port.js';
 import type { UITurn } from './port.js';
 import {
@@ -145,14 +145,13 @@ export function sessionEventsToTurns(events: SessionEvent[]): UITurn[] {
         }
         break;
       case 'tool_result': {
-        const item: Record<string, unknown> = {
+        turn.items.push({
           id: `result-${event.toolCallId}`,
           type: 'tool_result',
           callId: event.toolCallId,
           name: event.toolName,
           output: event.output,
-        };
-        turn.items.push(item);
+        });
         break;
       }
     }

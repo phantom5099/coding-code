@@ -259,7 +259,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
           break;
         }
 
-        for (const tc of toolCalls as any[]) {
+        for (const tc of toolCalls) {
           yield* q.offer({ _tag: 'ToolStart', id: tc.id, name: tc.name, args: tc.arguments ?? {} });
         }
 
@@ -267,7 +267,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
         const approvedCalls: any[] = [];
         const deniedResults: any[] = [];
-        for (const tc of toolCalls as any[]) {
+        for (const tc of toolCalls) {
           const decision = yield* approval.evaluate({
             tool: tc.name,
             input: tc.arguments ?? {},
@@ -302,7 +302,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
             yield* q.offer({ _tag: 'ToolResult', id: r.id, name: r.name, output: resultOut, ok: r.type === 'ok' });
           }
           if (!todoPrinted && r.name === 'todo_write') {
-            yield* q.offer({ _tag: 'TodoUpdate', items: todo.read(sid) as any });
+            yield* q.offer({ _tag: 'TodoUpdate', items: todo.read(sid) });
             todoPrinted = true;
           }
         }
