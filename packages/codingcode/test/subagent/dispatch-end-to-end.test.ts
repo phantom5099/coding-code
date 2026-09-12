@@ -31,17 +31,16 @@ import { readHistory } from '../../src/session/file-ops.js';
 import { encodeProjectPath, normalizePath, setProjectBaseDir, computePaths } from '../../src/core/path.js';
 import type { Message } from '../../src/core/types.js';
 import type { LLMClient } from '../../src/llm/client.js';
-import { Result } from '../../src/core/result.js';
+import type { FrameBody } from '../../src/core/frame.js';
 
 function makeMockLLM(content: string): LLMClient {
   return {
-    complete: () => Effect.succeed({ content, finishReason: 'stop' as const }),
-    completeStream: () => ({
-      stream: (async function* () {
-        yield content;
+    complete: () => Effect.succeed({ content }),
+    completeStream: () =>
+      (async function* () {
+        yield { type: 'text' as const, text: content };
+        yield { type: 'end' as const };
       })(),
-      response: Promise.resolve(Result.ok({ content, finishReason: 'stop' as const })),
-    }),
     modelInfo: {
       provider: 'mock',
       model: 'mock',
@@ -115,9 +114,8 @@ const AgentDeps = Layer.mergeAll(
     listProjectMcpTools: () => [],
   } as any),
   Layer.succeed(ContextPort, {
-    assemblePayload: async (transcriptPath: string) => ({
-      messages: readMessages(transcriptPath),
-    }),
+    willCompact: async () => false,
+    assemblePayload: async (transcriptPath: string) => readMessages(transcriptPath),
   } as any),
   Layer.succeed(MemoryPort, {
     loadMemoryForPrompt: () => '',
@@ -166,16 +164,21 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(Runtime as any)) as any);
 }
 
-/** Consume an event stream to completion (mirrors what dispatch.ts does). */
-function drainStream(stream: AsyncGenerator<any>): Effect.Effect<string, Error> {
+/** Consume a frame stream to completion (mirrors what dispatch.ts does). */
+function drainStream(stream: AsyncGenerator<FrameBody>): Effect.Effect<string, Error> {
   return Effect.async<string, Error>((resume) => {
     (async () => {
       let content = '';
       try {
-        for await (const event of stream) {
-          if (event._tag === 'Done') content = event.content;
-          else if (event._tag === 'Error') {
-            resume(Effect.fail(new Error(`subagent failed: ${event.error.message}`)));
+        for await (const body of stream) {
+          if (body.family === 'event' && body.event.type === 'text_delta') {
+            content += body.event.text;
+          } else if (
+            body.family === 'transition' &&
+            body.transition.to === 'end' &&
+            body.transition.reason === 'error'
+          ) {
+            resume(Effect.fail(new Error(`subagent failed: ${body.transition.error.message}`)));
             return;
           }
         }

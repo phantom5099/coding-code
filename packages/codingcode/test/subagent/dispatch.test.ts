@@ -5,7 +5,7 @@ import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import type { ToolExecCtx } from '../../src/tools/types.js';
-import type { AgentEvent } from '../../src/agent/types.js';
+import type { FrameBody } from '../../src/core/frame.js';
 
 const mockHooks = {
   register: () => Effect.succeed(() => {}),
@@ -29,9 +29,10 @@ const mockRunner = {
   ),
 };
 
-function makeRunStream(): AsyncGenerator<AgentEvent> {
+function makeRunStream(): AsyncGenerator<FrameBody> {
   return (async function* () {
-    yield { _tag: 'Done', content: 'done' } as AgentEvent;
+    yield { family: 'event', event: { type: 'text_delta', text: 'done' } };
+    yield { family: 'transition', transition: { to: 'end', reason: 'done' } };
   })();
 }
 

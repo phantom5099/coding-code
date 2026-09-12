@@ -1,6 +1,6 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { AgentEvent } from './types.js';
+import type { FrameBody } from '../core/frame.js';
 import type { ProfileName } from '../core/types.js';
 import type { PermissionMode } from '../approval/types.js';
 
@@ -18,7 +18,7 @@ export interface AgentShape {
     input: string,
     opts: RunTurnOptions
   ): Effect.Effect<{
-    stream: AsyncGenerator<AgentEvent>;
+    stream: AsyncGenerator<FrameBody>;
     sessionId: string;
   }>;
 }

@@ -1,4 +1,4 @@
-import type { Message, ToolDescription } from '../core/types.js';
+import type { Message, ToolCall, ToolDescription, TokenUsage } from '../core/types.js';
 
 export interface LLMRequest {
   messages: Message[];
@@ -10,14 +10,20 @@ export interface LLMRequest {
 
 export interface LLMResponse {
   content: string;
-  toolCalls?: Array<{
-    id: string;
-    name: string;
-    arguments: Record<string, unknown>;
-  }>;
-  usage?: { prompt: number; completion: number; total: number };
-  finishReason: 'stop' | 'tool_calls' | 'length' | 'error';
+  toolCalls?: ToolCall[];
+  usage?: TokenUsage;
 }
+
+/** 一次 LLM 调用的流式部件：内容与终结边界 */
+export type LLMStreamPart =
+  | { readonly type: 'text'; readonly text: string }
+  | {
+      readonly type: 'tool_call';
+      readonly id: string;
+      readonly name: string;
+      readonly args: Record<string, unknown>;
+    }
+  | { readonly type: 'end'; readonly usage?: TokenUsage };
 
 export interface ModelInfo {
   provider: string;

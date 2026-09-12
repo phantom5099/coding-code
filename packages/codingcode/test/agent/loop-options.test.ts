@@ -1,6 +1,6 @@
 import { expect, it, describe, vi } from 'vitest';
 import { Effect } from 'effect';
-import { makeState, runAgentTurn } from '../helpers/agent-harness.js';
+import { makeState, runAgentTurn, llmStream, pText, pEnd, endReason } from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
@@ -23,13 +23,7 @@ const mockState = makeState({ sessionId: 'test-sid', cwd: '/tmp', title: 'test' 
 
 function makeCapturingLlm(opts: { content?: string } = {}) {
   const llm = {
-    completeStream: vi.fn(() => ({
-      stream: (async function* () {})(),
-      response: Promise.resolve({
-        ok: true,
-        value: { content: opts.content ?? 'Done', toolCalls: [] },
-      }),
-    })),
+    completeStream: vi.fn(() => llmStream(pText(opts.content ?? 'Done'), pEnd())),
     modelInfo: { maxTokens: 1000 },
   } as any;
   return llm;
@@ -43,20 +37,6 @@ function mockHooks() {
 }
 
 describe('agent runTurn loop options', () => {
-  it('Step events report max from global config maxSteps', async () => {
-    const llm = makeCapturingLlm();
-    const { events } = await runAgentTurn(
-      { llm, state: mockState },
-      { sessionId: 'test-sid', cwd: '/tmp' }
-    );
-
-    const stepEvents = events.filter((e: any) => e._tag === 'Step');
-    expect(stepEvents.length).toBeGreaterThan(0);
-    for (const s of stepEvents) {
-      expect((s as any).max).toBe(5);
-    }
-  });
-
   it('should emit turn hooks agent.turn.start / agent.turn.end after stopping', async () => {
     const llm = makeCapturingLlm();
     const hooks = mockHooks();
@@ -75,7 +55,7 @@ describe('agent runTurn loop options', () => {
     );
   });
 
-  it('should not produce Done when a pre-aborted signal is passed', async () => {
+  it('should not end with done when a pre-aborted signal is passed', async () => {
     const controller = new AbortController();
     controller.abort();
 
@@ -85,6 +65,6 @@ describe('agent runTurn loop options', () => {
       { sessionId: 'test-sid', cwd: '/tmp', signal: controller.signal }
     );
 
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(false);
+    expect(endReason(events)).not.toBe('done');
   });
 });

@@ -2,6 +2,11 @@ import { expect, it, describe } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 
+const SAMPLE_FRAME = {
+  family: 'event',
+  event: { type: 'text_delta', text: 'test-result' },
+} as const;
+
 describe('SubagentRunnerService', () => {
   it('should be a valid Effect Service with the SubagentRunner tag', () => {
     expect(SubagentRunnerService.key).toBe('SubagentRunner');
@@ -11,7 +16,7 @@ describe('SubagentRunnerService', () => {
     const mockRunSubagent = (_input: string, _opts: { cwd: string }) =>
       Effect.succeed({
         stream: (async function* () {
-          yield { _tag: 'Done' as const, content: 'test-result' };
+          yield SAMPLE_FRAME;
         })(),
         sessionId: 'child-1',
       });
@@ -35,7 +40,7 @@ describe('SubagentRunnerService', () => {
     const mockRunSubagent = (_input: string, _opts: { cwd: string }) =>
       Effect.succeed({
         stream: (async function* () {
-          yield { _tag: 'Done' as const, content: 'test-result' };
+          yield SAMPLE_FRAME;
         })(),
         sessionId: 'child-1',
       });
@@ -62,6 +67,6 @@ describe('SubagentRunnerService', () => {
     );
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ _tag: 'Done', content: 'test-result' });
+    expect(result[0]).toEqual(SAMPLE_FRAME);
   });
 });

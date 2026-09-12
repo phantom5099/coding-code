@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { makeState, runAgentTurn } from './helpers/agent-harness.js';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pEnd,
+  texts,
+  endReason,
+} from './helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
@@ -15,33 +23,23 @@ const state = makeState({ sessionId: 'test-session', cwd: '/tmp/test', title: 't
 
 function makeLlm() {
   const llm = {
-    completeStream: () => ({
-      stream: (async function* () {
-        yield 'Hello';
-        yield ' ';
-        yield 'world';
-      })(),
-      response: Promise.resolve({
-        ok: true,
-        value: { content: 'Hello world', toolCalls: [] },
-      }),
-    }),
+    completeStream: () => llmStream(pText('Hello'), pText(' '), pText('world'), pEnd()),
     modelInfo: { maxTokens: 1000 },
   } as any;
   return llm;
 }
 
 describe('runTurn event stream', () => {
-  it('should yield LlmChunk events from LLM stream', async () => {
+  it('should yield text_delta events from LLM stream', async () => {
     const { events } = await runAgentTurn(
       { llm: makeLlm(), state },
       { sessionId: 'test-session', cwd: '/tmp/test' }
     );
 
-    const textChunks = events.filter((e: any) => e._tag === 'LlmChunk').map((e: any) => e.text);
-    expect(textChunks).toContain('Hello');
-    expect(textChunks).toContain(' ');
-    expect(textChunks).toContain('world');
+    const chunks = texts(events);
+    expect(chunks).toContain('Hello');
+    expect(chunks).toContain(' ');
+    expect(chunks).toContain('world');
   });
 
   it('should produce a non-empty event stream for a normal LLM response', async () => {
@@ -51,6 +49,6 @@ describe('runTurn event stream', () => {
     );
 
     expect(events.length).toBeGreaterThan(0);
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
+    expect(endReason(events)).toBe('done');
   });
 });

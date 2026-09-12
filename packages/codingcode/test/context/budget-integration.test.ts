@@ -108,16 +108,16 @@ describe('assemblePayload integration', () => {
 
   it('returns messages assembled from the transcript', async () => {
     const ctx = await getCtxService();
-    const result = await ctx.assemblePayload(jsonlPath, 128000, null);
+    const messages = await ctx.assemblePayload(jsonlPath, 128000, null);
 
-    expect(result.messages.length).toBeGreaterThan(0);
+    expect(messages.length).toBeGreaterThan(0);
   });
 
   it('returns an empty message list when the transcript is empty', async () => {
     const emptyJsonl = join(sessionDir, `${sessionId}-empty.jsonl`);
     writeFileSync(emptyJsonl, '', 'utf8');
     const ctx = await getCtxService();
-    const result = await ctx.assemblePayload(emptyJsonl, 128000, null);
-    expect(result.messages).toEqual([]);
+    const messages = await ctx.assemblePayload(emptyJsonl, 128000, null);
+    expect(messages).toEqual([]);
   });
 });

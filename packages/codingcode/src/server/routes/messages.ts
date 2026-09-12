@@ -2,7 +2,6 @@ import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { AgentService } from '../../agent/port.js';
 import { WorkspaceService } from '../../core/workspace.js';
-import { toSseEvents } from '../adapter.js';
 import { errorResponse } from '../util.js';
 import { createSseHandler } from '../handler.js';
 
@@ -58,12 +57,9 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
 
     return sseHandler(
       async function* () {
-        yield* toSseEvents(stream);
+        yield* stream;
       },
-      {
-        initialEvents: [{ type: 'session_id', sessionId }],
-        sessionId,
-      }
+      { sessionId }
     )(c);
   });
 }

@@ -1,5 +1,8 @@
 // Agent 循环测试基座：通过公开的 AgentService.runTurn 驱动 agent，
 // 替代已删除的 agentLoop 自由函数。所有 agent 内部服务均以窄端口 mock 注入。
+//
+// 自 frame 协议重构后，runTurn 产出 FrameBody（信封由装配器另盖），
+// 本文件同时提供从 FrameBody[] 中抽取内容的纯函数，供各测试断言使用。
 import { Effect, Layer } from 'effect';
 import { AgentLayer } from '../../src/agent/agent.js';
 import { ToolEnvLayer } from '../../src/agent/tool-env.js';
@@ -23,15 +26,108 @@ import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
-import type { AgentEvent } from '../../src/agent/types.js';
+import type { FrameBody, RuntimeEvent, Transition } from '../../src/core/frame.js';
+import type { TokenUsage } from '../../src/core/types.js';
+import type { LLMStreamPart } from '../../src/llm/types.js';
 import type { SessionStoreState } from '../../src/session/types.js';
+
+// ---- LLM 部件构造器 ----
+
+export function llmStream(...parts: LLMStreamPart[]): AsyncIterable<LLMStreamPart> {
+  return (async function* () {
+    for (const p of parts) yield p;
+  })();
+}
+
+export function pText(text: string): LLMStreamPart {
+  return { type: 'text', text };
+}
+
+export function pToolCall(
+  id: string,
+  name: string,
+  args: Record<string, unknown> = {}
+): LLMStreamPart {
+  return { type: 'tool_call', id, name, args };
+}
+
+export function pEnd(usage?: TokenUsage): LLMStreamPart {
+  return usage ? { type: 'end', usage } : { type: 'end' };
+}
+
+// ---- FrameBody 抽取器 ----
+
+export type EventOf<T extends RuntimeEvent['type']> = Extract<RuntimeEvent, { type: T }>;
+export type TransitionOf<T extends Transition['to']> = Extract<Transition, { to: T }>;
+
+function eventOf<T extends RuntimeEvent['type']>(
+  events: readonly FrameBody[],
+  type: T
+): EventOf<T>[] {
+  const out: EventOf<T>[] = [];
+  for (const b of events) {
+    if (b.family === 'event' && b.event.type === type) out.push(b.event as EventOf<T>);
+  }
+  return out;
+}
+
+export function textDeltas(events: readonly FrameBody[]): EventOf<'text_delta'>[] {
+  return eventOf(events, 'text_delta');
+}
+
+export function texts(events: readonly FrameBody[]): string[] {
+  return textDeltas(events).map((e) => e.text);
+}
+
+export function toolCalls(events: readonly FrameBody[]): EventOf<'tool_call'>[] {
+  return eventOf(events, 'tool_call');
+}
+
+export function approvalRequests(events: readonly FrameBody[]): EventOf<'approval_request'>[] {
+  return eventOf(events, 'approval_request');
+}
+
+export function toolResults(events: readonly FrameBody[]): EventOf<'tool_result'>[] {
+  return eventOf(events, 'tool_result');
+}
+
+/** 含 todos 的 tool_result（todo_write 回执） */
+export function todoResults(events: readonly FrameBody[]): EventOf<'tool_result'>[] {
+  return toolResults(events).filter((e) => e.todos !== undefined);
+}
+
+export function endOf(events: readonly FrameBody[]): TransitionOf<'end'> | undefined {
+  for (const b of events) {
+    if (b.family === 'transition' && b.transition.to === 'end') return b.transition;
+  }
+  return undefined;
+}
+
+export function hasEnd(events: readonly FrameBody[]): boolean {
+  return endOf(events) !== undefined;
+}
+
+export function endReason(events: readonly FrameBody[]): TransitionOf<'end'>['reason'] | undefined {
+  return endOf(events)?.reason;
+}
+
+export function fatalOf(events: readonly FrameBody[]): { message: string; code: string } | undefined {
+  for (const b of events) {
+    if (b.family === 'fatal') return b.fatal;
+  }
+  return undefined;
+}
+
+/** 本次流中是否发出了压缩信号（compress 转移） */
+export function hasCompress(events: readonly FrameBody[]): boolean {
+  return events.some((b) => b.family === 'transition' && b.transition.to === 'compress');
+}
+
+// ---- 依赖 mock ----
 
 export interface HarnessMocks {
   llm: {
-    completeStream: (params: any, signal?: AbortSignal) => {
-      stream: AsyncGenerator<string>;
-      response: Promise<any>;
-    };
+    completeStream: (params: any, signal?: AbortSignal) => AsyncIterable<LLMStreamPart>;
     modelInfo: { maxTokens: number };
   };
   state?: Partial<SessionStoreState>;
@@ -44,13 +140,10 @@ export interface HarnessMocks {
   };
   todo?: Map<string, Array<{ step: string; status: string }>>;
   memorySnapshot?: string;
-  /** 可选：覆盖 ContextPort.assemblePayload 的返回（默认不压缩）。 */
-  contextAssemble?: () => Promise<{
-    messages: Array<{ role: string; content: string }>;
-    compressed: boolean;
-    released: number;
-    promptEstimate: number;
-  }>;
+  /** 可选：覆盖 ContextPort.assemblePayload 的返回（默认一条 user 消息）。 */
+  contextAssemble?: () => Promise<Array<{ role: string; content: string }>>;
+  /** 可选：覆盖 ContextPort.willCompact（默认 false）。 */
+  contextWillCompact?: () => Promise<boolean>;
   /** 可选：覆盖 SessionPort 窄端口的个别方法（默认实现见 makeAgentLayer）。 */
   sessionPort?: Partial<{
     load: (cwd: string, sid: string) => any;
@@ -85,10 +178,7 @@ export function makeDefaultMocks(overrides: Partial<HarnessMocks> = {}): Harness
   const llm =
     overrides.llm ??
     ({
-      completeStream: () => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve({ ok: true, value: { content: '', toolCalls: [] } }),
-      }),
+      completeStream: () => llmStream(),
       modelInfo: { maxTokens: 1000 },
     } as any);
   const todo = overrides.todo ?? new Map<string, Array<{ step: string; status: string }>>();
@@ -162,15 +252,9 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
   };
   const context = {
+    willCompact: async () => (mocks.contextWillCompact ? mocks.contextWillCompact() : false),
     assemblePayload: async () =>
-      mocks.contextAssemble
-        ? mocks.contextAssemble()
-        : {
-            messages: [{ role: 'user' as const, content: 'hi' }],
-            compressed: false,
-            released: 0,
-            promptEstimate: 10,
-          },
+      mocks.contextAssemble ? mocks.contextAssemble() : [{ role: 'user' as const, content: 'hi' }],
   };
   const memory = {
     loadMemoryForPrompt: () => mocks.memorySnapshot ?? '',
@@ -236,24 +320,18 @@ function tick(): Promise<void> {
   return new Promise((r) => setTimeout(r, 0));
 }
 
-// 模拟真实 LLM 延迟：将 stream 分块与 response 放在宏任务上推进，
-// 避免 producer fiber 在微任务队列中一口气跑完导致队列事件被丢弃。
+// 模拟真实 LLM 延迟：每个部件后让出宏任务，避免 producer fiber 在微任务队列中
+// 一口气跑完导致队列事件被丢弃。
 function paceLlm(llm: any): any {
   const completeStream = llm.completeStream.bind(llm);
   llm.completeStream = (params: any, signal?: AbortSignal) => {
-    const out = completeStream(params, signal);
-    const rawStream = out.stream as AsyncGenerator<string>;
-    out.stream = (async function* () {
-      for await (const c of rawStream) {
-        yield c;
+    const raw = completeStream(params, signal) as AsyncIterable<LLMStreamPart>;
+    return (async function* () {
+      for await (const part of raw) {
+        yield part;
         await tick();
       }
     })();
-    out.response = Promise.resolve(out.response).then(async (r) => {
-      await tick();
-      return r;
-    });
-    return out;
   };
   return llm;
 }
@@ -261,7 +339,7 @@ function paceLlm(llm: any): any {
 export async function runAgentTurn(
   mocks: HarnessMocks,
   opts: RunAgentOptions = {}
-): Promise<{ events: AgentEvent[]; sessionId: string }> {
+): Promise<{ events: FrameBody[]; sessionId: string }> {
   const llm = paceLlm(mocks.llm);
   const services = makeAgentLayer({ ...mocks, llm });
   const appLayer = Layer.mergeAll(services, AgentLayer.pipe(Layer.provide(services))) as any;
@@ -274,7 +352,7 @@ export async function runAgentTurn(
     if (opts.permissionMode) runOpts.permissionMode = opts.permissionMode;
     return yield* agent.runTurn(opts.input ?? 'test', runOpts);
   });
-  let runRes: { stream: AsyncGenerator<AgentEvent>; sessionId: string };
+  let runRes: { stream: AsyncGenerator<FrameBody>; sessionId: string };
   try {
     runRes = await Effect.runPromise(Effect.provide(program, appLayer) as any);
   } catch (err) {
@@ -282,7 +360,7 @@ export async function runAgentTurn(
     throw err;
   }
   const { stream, sessionId } = runRes;
-  const events: AgentEvent[] = [];
+  const events: FrameBody[] = [];
   try {
     for await (const e of stream) events.push(e);
   } catch (err) {

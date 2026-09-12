@@ -4,24 +4,45 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useAgentStore } from '../src/stores/agent.store';
 import { useWorkspaceStore } from '../src/stores/workspace.store';
+import { createStreamState, reduceFrame } from '../src/lib/frame-reducer';
+import type { StreamEffects } from '../src/lib/frame-reducer';
+import type { Frame } from '@codingcode/core/core/frame';
 
-// Reconstruct the context_compressed stream handler from useAgentCore's
-// streamChunkToItem. Mirrors the case body so we can drive it standalone.
-function handleContextCompressed(
-  threadId: string,
-  event: { promptEstimate: number }
-): void {
-  const contextUsage = useAgentStore.getState().contextUsage;
-  if (contextUsage) {
-    useAgentStore.getState().setContextUsage({
-      used: event.promptEstimate,
-      contextWindow: contextUsage.contextWindow,
-    });
-  }
-  useAgentStore.getState().clearThreadUsage(threadId);
+// 用真实 store 实现 reducer 的副作用出口，覆盖 setCompacted 的落库行为
+// （与 useAgent 中 StreamEffects.setCompacted 的语义一致）。
+function storeEffects(threadId: string): StreamEffects {
+  return {
+    applyItem: () => {},
+    applyTodo: () => {},
+    setUsage: (usage) => {
+      useAgentStore.getState().setThreadUsage(threadId, usage);
+      const s = useAgentStore.getState();
+      const model = s.models.find((m) => m.id === s.model);
+      if (model) {
+        s.setContextUsage({ used: usage.prompt, contextWindow: model.context_window });
+      }
+    },
+    setCompacted: () => {
+      useAgentStore.getState().clearThreadUsage(threadId);
+    },
+    syncTurnId: () => {},
+    newId: () => 'id',
+  };
 }
 
-describe('context_compressed stream handler', () => {
+const compressFrame: Frame = {
+  sessionId: 's',
+  turnId: 1,
+  seq: 1,
+  family: 'transition',
+  transition: { to: 'compress' },
+};
+
+function applyCompaction(threadId: string): void {
+  reduceFrame(compressFrame, createStreamState('m1'), storeEffects(threadId));
+}
+
+describe('compaction effect (reduceFrame → store)', () => {
   it('clears usageByThreadId for the affected thread only', () => {
     useAgentStore
       .getState()
@@ -30,7 +51,7 @@ describe('context_compressed stream handler', () => {
       .getState()
       .setThreadUsage('thread-2', { prompt: 800, completion: 400, total: 1200 });
 
-    handleContextCompressed('thread-1', { promptEstimate: 1200 });
+    applyCompaction('thread-1');
 
     expect(useAgentStore.getState().usageByThreadId['thread-1']).toBeUndefined();
     expect(useAgentStore.getState().usageByThreadId['thread-2']).toEqual({
@@ -40,10 +61,40 @@ describe('context_compressed stream handler', () => {
     });
   });
 
-  it('updates contextUsage.used to the post-compression promptEstimate', () => {
-    handleContextCompressed('thread-1', { promptEstimate: 1200 });
+  it('leaves contextUsage untouched on the compress frame (no numeric payload on the frame)', () => {
+    applyCompaction('thread-1');
     expect(useAgentStore.getState().contextUsage).toEqual({
-      used: 1200,
+      used: 50000,
+      contextWindow: 128000,
+    });
+  });
+
+  it('adopts the real post-compaction usage from the following responded frame', () => {
+    const fx = storeEffects('thread-1');
+    const state = createStreamState('m1');
+    reduceFrame(compressFrame, state, fx);
+    reduceFrame(
+      {
+        sessionId: 's',
+        turnId: 1,
+        seq: 2,
+        family: 'transition',
+        transition: {
+          to: 'executing',
+          responded: { usage: { prompt: 700, completion: 30, total: 730 } },
+        },
+      },
+      state,
+      fx
+    );
+
+    expect(useAgentStore.getState().usageByThreadId['thread-1']).toEqual({
+      prompt: 700,
+      completion: 30,
+      total: 730,
+    });
+    expect(useAgentStore.getState().contextUsage).toEqual({
+      used: 700,
       contextWindow: 128000,
     });
   });
@@ -54,7 +105,7 @@ describe('context_compressed stream handler', () => {
       .getState()
       .setThreadUsage('thread-1', { prompt: 3000, completion: 500, total: 3500 });
 
-    expect(() => handleContextCompressed('thread-1', { promptEstimate: 1200 })).not.toThrow();
+    expect(() => applyCompaction('thread-1')).not.toThrow();
     expect(useAgentStore.getState().usageByThreadId['thread-1']).toBeUndefined();
   });
 });

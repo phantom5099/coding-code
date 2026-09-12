@@ -9,7 +9,6 @@ import { SessionService } from '../../../src/session/port.js';
 import { SessionLayer } from '../../../src/session/session.js';
 import { LLMFactoryService } from '../../../src/llm/port.js';
 import type { LLMClient } from '../../../src/llm/client.js';
-import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
 import { filterForContext, buildContextMessages } from '../../../src/context/context.js';
 import { readHistory } from '../../../src/session/file-ops.js';
@@ -101,13 +100,12 @@ function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
 
 function makeMockLLM(content: string): LLMClient {
   return {
-    complete: () => Effect.succeed({ content, finishReason: 'stop' as const }),
-    completeStream: () => ({
-      stream: (async function* () {
-        yield content;
+    complete: () => Effect.succeed({ content }),
+    completeStream: () =>
+      (async function* () {
+        yield { type: 'text' as const, text: content };
+        yield { type: 'end' as const };
       })(),
-      response: Promise.resolve(Result.ok({ content, finishReason: 'stop' as const })),
-    }),
     modelInfo: {
       provider: 'mock',
       model: 'mock',
@@ -215,40 +213,32 @@ describe('compressor behavior', () => {
     });
   });
 
-  describe('assemblePayload compression status', () => {
+  describe('assemblePayload compaction', () => {
     const SUMMARY =
       '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne';
 
-    it('reports compressed when history exceeds the window', async () => {
+    it('folds history into a compacted summary message when it exceeds the window', async () => {
       const fx = makeFixture({ numTurns: 3, toolContentSize: 8000 });
       try {
         const ctx = await getCtxService();
-        const result = await ctx.assemblePayload(
-          fx.transcriptPath,
-          1000,
-          makeMockLLM(SUMMARY)
-        );
-        expect(result.compressed).toBe(true);
-        expect(result.released).toBeGreaterThan(0);
-        expect(result.promptEstimate).toBeGreaterThan(0);
-        expect(result.messages.length).toBeGreaterThan(0);
+        const messages = await ctx.assemblePayload(fx.transcriptPath, 1000, makeMockLLM(SUMMARY));
+        expect(messages.length).toBeGreaterThan(0);
+        expect(messages.some((m) => m.name === 'compacted_history')).toBe(true);
       } finally {
         cleanup(fx.slug);
       }
     });
 
-    it('reports not compressed when history fits the window', async () => {
+    it('leaves history uncompacted when it fits the window', async () => {
       const fx = makeFixture({ numTurns: 2, toolContentSize: 20 });
       try {
         const ctx = await getCtxService();
-        const result = await ctx.assemblePayload(
+        const messages = await ctx.assemblePayload(
           fx.transcriptPath,
           2_000_000,
           makeMockLLM(SUMMARY)
         );
-        expect(result.compressed).toBe(false);
-        expect(result.released).toBe(0);
-        expect(result.promptEstimate).toBeGreaterThan(0);
+        expect(messages.some((m) => m.name === 'compacted_history')).toBe(false);
       } finally {
         cleanup(fx.slug);
       }

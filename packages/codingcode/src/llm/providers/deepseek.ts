@@ -1,12 +1,12 @@
-import { generateText, streamText, stepCountIs, type ModelMessage } from 'ai';
+import { generateText, streamText, stepCountIs } from 'ai';
 import type { LanguageModelV3 } from '@ai-sdk/provider';
 import { Effect } from 'effect';
-import { AgentError } from '../../core/error.js';
+import type { AgentError } from '../../core/error.js';
 import { mapLlmError } from '../errors.js';
 import type { LLMClient } from '../client.js';
-import type { LLMRequest, LLMResponse } from '../types.js';
+import type { LLMRequest, LLMResponse, LLMStreamPart } from '../types.js';
 import type { SelectableModel } from '../port.js';
-import { convertMessages, convertTools, parseResponseMessages } from './shared.js';
+import { convertMessages, convertTools, toTokenUsage } from './shared.js';
 
 export class DeepSeekProvider implements LLMClient {
   constructor(
@@ -36,22 +36,24 @@ export class DeepSeekProvider implements LLMClient {
           abortSignal: signal,
         });
 
-        const response = parseResponseMessages(result.response.messages as ModelMessage[]);
-        if (result.usage) {
-          const usage = result.usage as any;
-          response.usage = {
-            prompt: usage.promptTokens ?? 0,
-            completion: usage.completionTokens ?? 0,
-            total: usage.totalTokens ?? 0,
-          };
-        }
-        return response;
+        return {
+          content: result.text,
+          toolCalls:
+            result.toolCalls.length > 0
+              ? result.toolCalls.map((tc) => ({
+                  id: tc.toolCallId,
+                  name: tc.toolName,
+                  arguments: (tc.input ?? {}) as Record<string, unknown>,
+                }))
+              : undefined,
+          usage: toTokenUsage(result.usage),
+        };
       },
       catch: (e) => mapLlmError('deepseek', e),
     });
   }
 
-  completeStream(req: LLMRequest, signal?: AbortSignal): import('../client.js').StreamResult {
+  completeStream(req: LLMRequest, signal?: AbortSignal): AsyncIterable<LLMStreamPart> {
     const result = streamText({
       model: this.model,
       system: req.system,
@@ -61,32 +63,27 @@ export class DeepSeekProvider implements LLMClient {
       abortSignal: signal,
     });
 
-    const stream = (async function* () {
+    return (async function* () {
       for await (const part of result.fullStream) {
-        if (part.type === 'text-delta') {
-          yield part.text;
+        switch (part.type) {
+          case 'text-delta':
+            yield { type: 'text', text: part.text };
+            break;
+          case 'tool-call':
+            yield {
+              type: 'tool_call',
+              id: part.toolCallId,
+              name: part.toolName,
+              args: (part.input ?? {}) as Record<string, unknown>,
+            };
+            break;
+          case 'finish':
+            yield { type: 'end', usage: toTokenUsage(part.totalUsage) };
+            break;
+          case 'error':
+            throw mapLlmError('deepseek', part.error);
         }
       }
     })();
-
-    const response = (async () => {
-      try {
-        const resp = await result.response;
-        const parsed = parseResponseMessages(resp.messages as ModelMessage[]);
-        if ((resp as any).usage) {
-          const usage = (resp as any).usage as any;
-          parsed.usage = {
-            prompt: usage.promptTokens ?? 0,
-            completion: usage.completionTokens ?? 0,
-            total: usage.totalTokens ?? 0,
-          };
-        }
-        return { ok: true as const, value: parsed };
-      } catch (e) {
-        return { ok: false as const, error: mapLlmError('deepseek', e) };
-      }
-    })();
-
-    return { stream, response };
   }
 }

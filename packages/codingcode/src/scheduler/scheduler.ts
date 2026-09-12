@@ -53,11 +53,15 @@ export const SchedulerLayer = Layer.effect(SchedulerService, Effect.sync(() => {
         );
 
         let lastContent = '';
-        for await (const event of stream) {
-          if (event._tag === 'Done') {
-            lastContent = event.content;
-          } else if (event._tag === 'Error') {
-            logger.error(`Automation ${auto.id} agent error:`, event.error);
+        for await (const body of stream) {
+          if (body.family === 'event' && body.event.type === 'text_delta') {
+            lastContent += body.event.text;
+          } else if (
+            body.family === 'transition' &&
+            body.transition.to === 'end' &&
+            body.transition.reason === 'error'
+          ) {
+            logger.error(`Automation ${auto.id} agent error:`, body.transition.error);
           }
         }
 
@@ -179,9 +183,13 @@ export const SchedulerLayer = Layer.effect(SchedulerService, Effect.sync(() => {
             })
           );
 
-          for await (const event of stream) {
-            if (event._tag === 'Error') {
-              logger.error(`Manual run for ${id} agent error:`, event.error);
+          for await (const body of stream) {
+            if (
+              body.family === 'transition' &&
+              body.transition.to === 'end' &&
+              body.transition.reason === 'error'
+            ) {
+              logger.error(`Manual run for ${id} agent error:`, body.transition.error);
             }
           }
 

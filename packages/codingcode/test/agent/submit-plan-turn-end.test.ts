@@ -1,6 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { makeState, runAgentTurn } from '../helpers/agent-harness.js';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pToolCall,
+  pEnd,
+  endReason,
+} from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
@@ -19,10 +27,6 @@ vi.mock('@codingcode/infra/config', () => ({
 
 const mockState = makeState({ sessionId: 'test-session', cwd: '/tmp', title: 'test' });
 
-function okResponse(content: string, toolCalls?: any[]) {
-  return Promise.resolve({ ok: true, value: { content, toolCalls } });
-}
-
 /** LLM 先调用一次 submit_plan，再以纯文本收尾。 */
 function makeSubmitPlanLlm() {
   let callCount = 0;
@@ -30,21 +34,15 @@ function makeSubmitPlanLlm() {
     completeStream: vi.fn(() => {
       callCount++;
       if (callCount === 1) {
-        return {
-          stream: (async function* () {})(),
-          response: okResponse('', [
-            {
-              id: 'tc-1',
-              name: 'submit_plan',
-              arguments: { title: 'My Plan', plan_content: '## Goal\nfix bug' },
-            },
-          ]),
-        };
+        return llmStream(
+          pToolCall('tc-1', 'submit_plan', {
+            title: 'My Plan',
+            plan_content: '## Goal\nfix bug',
+          }),
+          pEnd()
+        );
       }
-      return {
-        stream: (async function* () {})(),
-        response: okResponse('Plan is ready for your review.'),
-      };
+      return llmStream(pText('Plan is ready for your review.'), pEnd());
     }),
     modelInfo: { maxTokens: 1000 },
   } as any;
@@ -85,7 +83,7 @@ describe('agent treats submit_plan as an ordinary tool', () => {
       { sessionId: 'test-session', cwd: '/tmp' }
     );
 
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
+    expect(endReason(events)).toBe('done');
     // plan.ready hook point has been removed — the agent no longer announces submit_plan.
     expect(emittedPoints.includes('plan.ready')).toBe(false);
     expect(emittedPoints.filter((p) => p.startsWith('plan.'))).toHaveLength(0);
@@ -106,7 +104,7 @@ describe('agent treats submit_plan as an ordinary tool', () => {
       { sessionId: 'test-session', cwd: '/tmp' }
     );
 
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
+    expect(endReason(events)).toBe('done');
     expect(setActiveProfile).not.toHaveBeenCalled();
   });
 });

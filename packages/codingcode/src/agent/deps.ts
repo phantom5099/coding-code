@@ -56,16 +56,12 @@ export class McpPort extends Context.Tag('AgentMcpPort')<McpPort, {
 }>() {}
 
 export class ContextPort extends Context.Tag('AgentContextPort')<ContextPort, {
+  willCompact(transcriptPath: string, contextWindow: number): Promise<boolean>;
   assemblePayload(
     transcriptPath: string,
     contextWindow: number,
     llm: LLMClient | null
-  ): Promise<{
-    messages: Message[];
-    compressed: boolean;
-    released: number;
-    promptEstimate: number;
-  }>;
+  ): Promise<Message[]>;
 }>() {}
 
 export class MemoryPort extends Context.Tag('AgentMemoryPort')<MemoryPort, {

@@ -9,7 +9,6 @@
   "exports": {
     ".": "./src/layer.ts",
     "./client": "./src/client/http/index.ts",
-    "./client/types": "./src/client/types.ts",
     "./server": "./src/server/index.ts",
     "./direct/agent-runtime": "./src/direct/agent-runtime.ts",
     "./direct/sessions": "./src/direct/sessions.ts",
@@ -17,6 +16,7 @@
     "./direct/models": "./src/direct/models.ts",
     "./approval/types": "./src/approval/types.ts",
     "./agent/profile": "./src/agent/profile.ts",
+    "./core/frame": "./src/core/frame.ts",
     "./core/error": "./src/core/error.ts",
     "./core/types": "./src/core/types.ts",
     "./checkpoint/types": "./src/checkpoint/types.ts",

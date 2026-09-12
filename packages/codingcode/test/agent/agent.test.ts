@@ -1,7 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import type { AgentEvent } from '../../src/agent/types.js';
-import { makeState, runAgentTurn, type HarnessMocks } from '../helpers/agent-harness.js';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pToolCall,
+  pEnd,
+  texts,
+  toolResults,
+  endReason,
+} from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
@@ -15,59 +24,45 @@ vi.mock('@codingcode/infra/config', () => ({
 
 const mockState = makeState({ sessionId: 'test-sid', cwd: '/tmp', title: 'test' });
 
-function okResponse(content: string, toolCalls?: any[]) {
-  return Promise.resolve({ ok: true, value: { content, toolCalls } });
-}
-
-function makeCapturingLlm(opts: { content?: string; toolCalls?: any[]; stream?: string[] }) {
-  const calls: any[] = [];
+function makeCapturingLlm(parts: () => AsyncIterable<any>) {
   const llm = {
-    completeStream: vi.fn(() => {
-      calls.push({});
-      return {
-        stream: (async function* () {
-          for (const c of opts.stream ?? []) yield c;
-        })(),
-        response: okResponse(opts.content ?? 'Hello world', opts.toolCalls),
-      };
-    }),
+    completeStream: vi.fn(() => parts()),
     modelInfo: { maxTokens: 1000 },
   } as any;
-  return { llm, calls };
+  return llm;
 }
 
 describe('agent runTurn loop', () => {
   it('should yield text chunks from LLM stream', async () => {
-    const { llm } = makeCapturingLlm({ content: 'Hello world', stream: ['Hello', ' ', 'world'] });
-    const { events } = await runAgentTurn({ llm, state: mockState }, { sessionId: 'test-sid', cwd: '/tmp' });
+    const llm = makeCapturingLlm(() => llmStream(pText('Hello'), pText(' '), pText('world'), pEnd()));
+    const { events } = await runAgentTurn(
+      { llm, state: mockState },
+      { sessionId: 'test-sid', cwd: '/tmp' }
+    );
 
-    const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
-    expect(textEvents.map((e: any) => e.text)).toEqual(['Hello', ' ', 'world']);
+    expect(texts(events)).toEqual(['Hello', ' ', 'world']);
   });
 
   it('should handle empty LLM stream gracefully', async () => {
-    const { llm } = makeCapturingLlm({ content: '' });
-    const { events } = await runAgentTurn({ llm, state: mockState }, { sessionId: 'test-sid', cwd: '/tmp' });
+    const llm = makeCapturingLlm(() => llmStream(pEnd()));
+    const { events } = await runAgentTurn(
+      { llm, state: mockState },
+      { sessionId: 'test-sid', cwd: '/tmp' }
+    );
 
-    const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
-    expect(textEvents).toHaveLength(0);
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
+    expect(texts(events)).toHaveLength(0);
+    expect(endReason(events)).toBe('done');
   });
 
-  it('should surface tool results as ToolResult events', async () => {
+  it('should surface tool results as tool_result events', async () => {
     let callCount = 0;
     const llm = {
       completeStream: vi.fn(() => {
         callCount++;
         if (callCount === 1) {
-          return {
-            stream: (async function* () {})(),
-            response: okResponse('', [
-              { id: 'tc1', name: 'execute_command', arguments: { command: 'git status' } },
-            ]),
-          };
+          return llmStream(pToolCall('tc1', 'execute_command', { command: 'git status' }), pEnd());
         }
-        return { stream: (async function* () {})(), response: okResponse('done') };
+        return llmStream(pText('done'), pEnd());
       }),
       modelInfo: { maxTokens: 1000 },
     } as any;
@@ -87,12 +82,12 @@ describe('agent runTurn loop', () => {
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    const toolResults = events.filter(
-      (e: AgentEvent): e is Extract<AgentEvent, { _tag: 'ToolResult' }> => e._tag === 'ToolResult'
-    );
-    expect(toolResults).toHaveLength(1);
-    expect(toolResults[0]!.output).toBe('On branch main\nnothing to commit');
-    expect(toolResults[0]!.ok).toBe(true);
+    const results = toolResults(events);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.outcome).toEqual({
+      status: 'ok',
+      output: 'On branch main\nnothing to commit',
+    });
   });
 
   it('should forward text markers from LLM stream', async () => {
@@ -101,16 +96,13 @@ describe('agent runTurn loop', () => {
       completeStream: vi.fn(() => {
         callCount++;
         if (callCount === 1) {
-          return {
-            stream: (async function* () {
-              yield '\n[Using: readFile]\n';
-            })(),
-            response: okResponse('', [
-              { id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } },
-            ]),
-          };
+          return llmStream(
+            pText('\n[Using: readFile]\n'),
+            pToolCall('tc1', 'readFile', { path: 'test.txt' }),
+            pEnd()
+          );
         }
-        return { stream: (async function* () {})(), response: okResponse('done') };
+        return llmStream(pEnd());
       }),
       modelInfo: { maxTokens: 1000 },
     } as any;
@@ -119,19 +111,13 @@ describe('agent runTurn loop', () => {
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
-    expect(textEvents.map((e: any) => e.text)).toEqual(['\n[Using: readFile]\n']);
+    expect(texts(events)).toEqual(['\n[Using: readFile]\n']);
   });
 
-  it('should yield a single maxSteps error and a single turn.end hook when maxSteps is exhausted', async () => {
+  it('should end with maxSteps and emit a single turn.end hook when maxSteps is exhausted', async () => {
     // LLM always requests a tool call → the loop never reaches a natural stop.
     const llm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {
-          yield 'calling tool';
-        })(),
-        response: okResponse('', [{ id: 'tc1', name: 'read_file', arguments: { path: 'x' } }]),
-      })),
+      completeStream: vi.fn(() => llmStream(pText('calling tool'), pToolCall('tc1', 'read_file', { path: 'x' }), pEnd())),
       modelInfo: { maxTokens: 1000 },
     } as any;
     const turnEndCalls: any[] = [];
@@ -147,10 +133,7 @@ describe('agent runTurn loop', () => {
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    const maxStepErrors = events.filter(
-      (e: any) => e._tag === 'Error' && e.error?.code === 'MAX_STEPS_REACHED'
-    );
-    expect(maxStepErrors).toHaveLength(1);
+    expect(endReason(events)).toBe('maxSteps');
     expect(turnEndCalls).toHaveLength(1);
     expect(turnEndCalls[0].status).toBe('maxSteps');
   });

@@ -47,12 +47,18 @@ const TestLayer = Layer.mergeAll(
 const rt = ManagedRuntime.make(TestLayer);
 
 const noopLlm: LLMClient = {
-  completeStream: () => ({
-    stream: (async function* () {})(),
-    response: Promise.resolve({ ok: true, value: { content: '', finishReason: 'stop' as const } }),
-  }),
-  complete: () => Effect.succeed({ content: '' } as any),
-  modelInfo: { id: 'test', provider: 'test', name: 'Test', contextWindow: 128000 } as any,
+  completeStream: () =>
+    (async function* () {
+      yield { type: 'end' as const };
+    })(),
+  complete: () => Effect.succeed({ content: '' }),
+  modelInfo: {
+    provider: 'test',
+    model: 'test-model',
+    maxTokens: 128000,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
 };
 
 describe('type replacements: AppRuntime and LLMClient', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { makeState, runAgentTurn } from '../helpers/agent-harness.js';
+import { makeState, runAgentTurn, llmStream, pEnd } from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
@@ -30,10 +30,7 @@ function makeCapturingLlm() {
     completeStream: vi.fn((params: any) => {
       captured.system = params.system;
       captured.messages = params.messages;
-      return {
-        stream: (async function* () {})(),
-        response: Promise.resolve({ ok: true, value: { content: '' } }),
-      };
+      return llmStream(pEnd());
     }),
     modelInfo: { maxTokens: 1000 },
   } as any;

@@ -2,7 +2,7 @@ import { Layer, Effect } from 'effect';
 import { SubagentRunnerService } from './port.js';
 import type { RunSubagentOptions } from './port.js';
 import { AgentService } from '../agent/port.js';
-import type { AgentEvent } from '../agent/types.js';
+import type { FrameBody } from '../core/frame.js';
 import type { Result } from '../core/result.js';
 
 export const SubagentRunnerLayer = Layer.effect(
@@ -21,7 +21,7 @@ export const SubagentRunnerLayer = Layer.effect(
           model: opts.model,
         });
         return {
-          stream: result.stream as AsyncGenerator<AgentEvent, Result<string, any>, unknown>,
+          stream: result.stream as AsyncGenerator<FrameBody, Result<string, any>, unknown>,
           sessionId: result.sessionId,
         };
       });

@@ -58,10 +58,17 @@ export const dispatchAgentTool: ToolDefinition<
         let content = '';
         (async () => {
           try {
-            for await (const event of stream) {
-              if (event._tag === 'Done') content = event.content;
-              else if (event._tag === 'Error') {
-                resume(Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Subagent failed: ${event.error.message}`)));
+            for await (const body of stream) {
+              if (body.family === 'event') {
+                if (body.event.type === 'text_delta') content += body.event.text;
+                continue;
+              }
+              if (
+                body.family === 'transition' &&
+                body.transition.to === 'end' &&
+                body.transition.reason === 'error'
+              ) {
+                resume(Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Subagent failed: ${body.transition.error.message}`)));
                 return;
               }
             }

@@ -1,6 +1,5 @@
 import type { AgentRuntimeClient } from '../contracts.js';
-import type { StreamChunk } from '../types.js';
-import type { TodoItem } from '../../todo/port.js';
+import { decodeFrame } from '../../core/frame-io.js';
 import { parseSseStream } from '../sse.js';
 import type { createRequestHelpers } from './request.js';
 
@@ -21,87 +20,12 @@ export function createHttpAgentClient(
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       for await (const data of parseSseStream(response)) {
-        switch (data.type) {
-          case 'session_id':
-            yield { type: 'session_id', sessionId: data.sessionId as string };
-            break;
-          case 'turn_id':
-            yield { type: 'turn_id', turnId: data.turnId as number };
-            break;
-          case 'text':
-            yield {
-              type: 'text',
-              text: data.text as string,
-              messageId: data.messageId as number | undefined,
-            };
-            break;
-          case 'message':
-            yield {
-              type: 'message',
-              id: data.id as number,
-              content: data.content as string,
-              partial: false,
-            };
-            break;
-          case 'approval_request':
-            yield {
-              type: 'approval_request',
-              id: data.id as string,
-              tool: data.tool as string,
-              args: data.args as Record<string, unknown>,
-            };
-            break;
-          case 'tool_start':
-            yield {
-              type: 'tool_start',
-              id: data.id as string,
-              name: data.name as string,
-              args: data.args as Record<string, unknown>,
-            };
-            break;
-          case 'tool_result':
-            yield {
-              type: 'tool_result',
-              id: data.id as string,
-              name: data.name as string,
-              output: data.output as string,
-              ok: data.ok as boolean,
-            };
-            break;
-          case 'tool_denied':
-            yield {
-              type: 'tool_denied',
-              id: data.id as string,
-              name: data.name as string,
-              reason: data.reason as string,
-            };
-            break;
-          case 'todo_update':
-            yield { type: 'todo_update', items: data.items as TodoItem[] };
-            break;
-          case 'context_compressed':
-            yield {
-              type: 'context_compressed',
-              released: data.released as number,
-              promptEstimate: data.promptEstimate as number,
-            };
-            break;
-          case 'usage':
-            yield {
-              type: 'usage',
-              prompt: data.prompt as number,
-              completion: data.completion as number,
-              total: data.total as number,
-            };
-            break;
-          case 'error':
-            yield { type: 'error', message: data.message as string, code: data.code as string };
-            return;
-          case 'done':
-            break;
-          case 'complete':
-            return;
+        const decoded = decodeFrame(data);
+        if (!decoded.ok) {
+          console.warn(`[agent-runtime] dropped frame (${decoded.reason})`, decoded.raw);
+          continue;
         }
+        yield decoded.frame;
       }
     },
 

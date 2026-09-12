@@ -137,13 +137,7 @@ const MockSchedulerLayer = Layer.succeed(SchedulerService, {
 } as any);
 
 const MockContextLayer = Layer.succeed(ContextService, {
-  assemblePayload: () => ({
-    messages: [],
-    compactedEvents: [],
-    promptEstimate: 0,
-    currentTurnId: 0,
-    compactedTurnIds: new Set(),
-  }),
+  assemblePayload: async () => [],
   compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 }),
 } as any);
 

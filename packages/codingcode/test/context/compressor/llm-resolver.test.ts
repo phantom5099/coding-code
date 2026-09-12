@@ -22,11 +22,11 @@ const mockFactory = {
 import { resolveLLM } from '../../../src/llm/llm-resolver.js';
 
 const fakeFallback: LLMClient = {
-  complete: () => Effect.succeed({ content: '', finishReason: 'stop' }),
-  completeStream: () => ({
-    stream: (async function* () {})(),
-    response: Promise.resolve({ ok: true as const, value: { content: '', finishReason: 'stop' } }),
-  }),
+  complete: () => Effect.succeed({ content: '' }),
+  completeStream: () =>
+    (async function* () {
+      yield { type: 'end' as const };
+    })(),
   modelInfo: {
     provider: 'fake',
     model: 'fake',

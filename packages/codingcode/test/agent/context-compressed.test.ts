@@ -1,42 +1,46 @@
 import { describe, it, expect } from 'vitest';
-import { makeState, runAgentTurn } from '../helpers/agent-harness.js';
-import { agentEventToStreamChunk } from '../../src/agent/stream-adapter.js';
-import { agentEventToSseEvent, toSseEvents } from '../../src/server/adapter.js';
+import { makeState, runAgentTurn, llmStream, pText, pEnd, hasCompress } from '../helpers/agent-harness.js';
 
 function makePlainLlm(content = 'ok') {
   return {
-    completeStream: () => ({
-      stream: (async function* () {
-        yield content;
-      })(),
-      response: Promise.resolve({ ok: true, value: { content, toolCalls: [] } }),
-    }),
-    complete: () => Promise.resolve({ content, toolCalls: [] }),
+    completeStream: () => llmStream(pText(content), pEnd()),
     modelInfo: { provider: 'mock', model: 'mock', maxTokens: 1000 },
   } as any;
 }
 
-describe('ContextCompressed', () => {
-  it('emits ContextCompressed when assemblePayload reports compression', async () => {
+function phaseOrder(events: readonly unknown[]): string[] {
+  return (events as any[]).flatMap((b) => (b.family === 'transition' ? [b.transition.to] : []));
+}
+
+describe('compaction transition', () => {
+  it('emits the compress signal when willCompact is true', async () => {
     const { events } = await runAgentTurn(
       {
         llm: makePlainLlm(),
         state: makeState(),
-        contextAssemble: async () => ({
-          messages: [{ role: 'user', content: 'hi' }],
-          compressed: true,
-          released: 4321,
-          promptEstimate: 999,
-        }),
+        contextWillCompact: async () => true,
       },
       { sessionId: 'sid', cwd: '/tmp' }
     );
-    const compressed = events.filter((e: any) => e._tag === 'ContextCompressed');
-    expect(compressed).toHaveLength(1);
-    expect(compressed[0]).toMatchObject({ released: 4321, promptEstimate: 999 });
+
+    expect(hasCompress(events)).toBe(true);
   });
 
-  it('does not emit ContextCompressed when assemblePayload reports no compression', async () => {
+  it('returns to executing right after compress (compress is an enter/return pair)', async () => {
+    const { events } = await runAgentTurn(
+      {
+        llm: makePlainLlm(),
+        state: makeState(),
+        contextWillCompact: async () => true,
+      },
+      { sessionId: 'sid', cwd: '/tmp' }
+    );
+
+    const tos = phaseOrder(events);
+    expect(tos[tos.indexOf('compress') + 1]).toBe('executing');
+  });
+
+  it('emits no compress signal when willCompact is false', async () => {
     const { events } = await runAgentTurn(
       {
         llm: makePlainLlm(),
@@ -44,42 +48,7 @@ describe('ContextCompressed', () => {
       },
       { sessionId: 'sid', cwd: '/tmp' }
     );
-    expect(events.filter((e: any) => e._tag === 'ContextCompressed')).toHaveLength(0);
-  });
-});
 
-describe('ContextCompressed adapters', () => {
-  const event = {
-    _tag: 'ContextCompressed',
-    released: 500,
-    promptEstimate: 1200,
-  } as any;
-
-  it('agentEventToStreamChunk maps to context_compressed chunk', async () => {
-    const chunks: any[] = [];
-    for await (const c of agentEventToStreamChunk((async function* () {
-      yield event;
-    })() as any)) {
-      chunks.push(c);
-    }
-    expect(chunks).toEqual([{ type: 'context_compressed', released: 500, promptEstimate: 1200 }]);
-  });
-
-  it('agentEventToSseEvent maps to context_compressed SSE event', () => {
-    expect(agentEventToSseEvent(event)).toEqual({
-      type: 'context_compressed',
-      released: 500,
-      promptEstimate: 1200,
-    });
-  });
-
-  it('toSseEvents forwards context_compressed', async () => {
-    const out: any[] = [];
-    for await (const e of toSseEvents((async function* () {
-      yield event;
-    })() as any)) {
-      out.push(e);
-    }
-    expect(out).toEqual([{ type: 'context_compressed', released: 500, promptEstimate: 1200 }]);
+    expect(hasCompress(events)).toBe(false);
   });
 });

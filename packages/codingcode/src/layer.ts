@@ -84,6 +84,7 @@ const AgentMcpAdapter = Layer.effect(McpPort, Effect.gen(function* () {
 const AgentContextAdapter = Layer.effect(ContextPort, Effect.gen(function* () {
   const c = yield* ContextService;
   return {
+    willCompact: c.willCompact.bind(c),
     assemblePayload: c.assemblePayload.bind(c),
   };
 }));

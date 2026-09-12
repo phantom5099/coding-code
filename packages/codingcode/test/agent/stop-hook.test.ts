@@ -1,6 +1,14 @@
 import { expect, it, describe, vi } from 'vitest';
 import { Effect } from 'effect';
-import { makeState, runAgentTurn } from '../helpers/agent-harness.js';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pEnd,
+  endOf,
+  endReason,
+} from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
@@ -27,10 +35,7 @@ function makeContentOnlyLlm() {
   const llm = {
     completeStream: vi.fn((params: any) => {
       seenMessages.push(params.messages ?? []);
-      return {
-        stream: (async function* () {})(),
-        response: Promise.resolve({ ok: true, value: { content: 'Response', toolCalls: [] } }),
-      };
+      return llmStream(pText('Response'), pEnd());
     }),
     modelInfo: { maxTokens: 1000 },
   } as any;
@@ -42,16 +47,6 @@ function makeStopDecision(decision: any) {
     point === 'agent.turn.stop' ? Effect.succeed(decision) : Effect.succeed(null)
   );
   return emitDecision;
-}
-
-function allUserContents(seenMessages: any[][]): string[] {
-  const out: string[] = [];
-  for (const msgs of seenMessages) {
-    for (const m of msgs) {
-      if (m.role === 'user' && typeof m.content === 'string') out.push(m.content);
-    }
-  }
-  return out;
 }
 
 describe('agent runTurn stop hook', () => {
@@ -71,7 +66,7 @@ describe('agent runTurn stop hook', () => {
     );
     // 限制为 2 次续跑：continue 三次后触发 AGENT_LOOP_DETECTED（共 3 次 LLM 调用）
     expect(seenMessages).toHaveLength(3);
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(false);
+    expect(endReason(events)).not.toBe('done');
   });
 
   it('should respect maxStopContinuations limit from global config', async () => {
@@ -87,10 +82,12 @@ describe('agent runTurn stop hook', () => {
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    const errorEvent = events.find((e: any) => e._tag === 'Error');
-    expect(errorEvent).toBeDefined();
-    expect((errorEvent as any)?.error?.code).toBe('AGENT_LOOP_DETECTED');
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(false);
+    const end = endOf(events);
+    expect(end?.reason).toBe('error');
+    if (end?.reason === 'error') {
+      expect(end.error.code).toBe('AGENT_LOOP_DETECTED');
+    }
+    expect(endReason(events)).not.toBe('done');
     expect(hooks.emit).toHaveBeenCalledWith(
       'agent.turn.end',
       expect.objectContaining({ status: 'error' })
@@ -110,8 +107,7 @@ describe('agent runTurn stop hook', () => {
     );
 
     expect(seenMessages).toHaveLength(1);
-    const doneEvent = events.find((e: any) => e._tag === 'Done');
-    expect(doneEvent).toBeDefined();
+    expect(endReason(events)).toBe('done');
   });
 
   it('should record the injection message from the stop decision', async () => {

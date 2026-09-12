@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { makeState, runAgentTurn } from '../helpers/agent-harness.js';
+import { makeState, runAgentTurn, llmStream, pText, pEnd, endReason } from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
@@ -24,10 +24,7 @@ const mockState = makeState({ sessionId: 'type-test', cwd: '/tmp', title: 'type-
 describe('agent runTurn smoke (hooks deps wiring)', () => {
   it('should build & run via AgentService.runTurn with mocked deps', async () => {
     const llm = {
-      completeStream: vi.fn(() => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve({ ok: true, value: { content: 'Hello' } }),
-      })),
+      completeStream: vi.fn(() => llmStream(pText('Hello'), pEnd())),
       modelInfo: { maxTokens: 1000 },
     } as any;
 
@@ -45,7 +42,7 @@ describe('agent runTurn smoke (hooks deps wiring)', () => {
       { sessionId: 'type-test', cwd: '/tmp' }
     );
 
-    expect(events.some((e: any) => e._tag === 'Done')).toBe(true);
+    expect(endReason(events)).toBe('done');
     expect(turnEndCalls).toHaveLength(1);
     expect(turnEndCalls[0].status).toBe('done');
   });

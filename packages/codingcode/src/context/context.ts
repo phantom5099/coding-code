@@ -17,7 +17,7 @@ import type {
 } from '../session/types.js';
 import type { LLMClient } from '../llm/client.js';
 import { ContextService } from './port.js';
-import type { BuildResult, CompressResult } from './port.js';
+import type { CompressResult } from './port.js';
 
 const COMPACTABLE_TOOLS = new Set([
   'read_file',
@@ -312,8 +312,10 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
       return Math.max(0, totalTokens - estimateMessageTokens(summaryMsg));
     }
 
-    // 组装时内部决定是否需要 LLM 压缩；是否压缩、didCompress 均不对外暴露，
-    // 仅把释放量作为状态回报给组装结果
+    function needsCompaction(s: PayloadState, contextWindow: number): boolean {
+      return estimateFor(s) > contextWindow * COMPACTION_THRESHOLD;
+    }
+
     async function summarizeToFit(
       s: PayloadState,
       contextWindow: number,
@@ -322,7 +324,7 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
       let cur = s;
       let releasedTotal = 0;
       for (let i = 0; i < MAX_AUTO_COMPACT_PASSES; i++) {
-        if (estimateFor(cur) <= contextWindow * COMPACTION_THRESHOLD) break;
+        if (!needsCompaction(cur, contextWindow)) break;
         const released = await tryCompaction(cur, llm);
         if (released <= 0) break;
         releasedTotal += released;
@@ -331,20 +333,23 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
       return { state: cur, released: releasedTotal };
     }
 
+    const willCompact = async (
+      transcriptPath: string,
+      contextWindow: number
+    ): Promise<boolean> => {
+      const s = runMicroCompact(readState(transcriptPath), contextWindow);
+      return needsCompaction(s, contextWindow);
+    };
+
     const assemblePayload = async (
       transcriptPath: string,
       contextWindow: number,
       llm: LLMClient | null
-    ): Promise<BuildResult> => {
+    ): Promise<Message[]> => {
       let s = readState(transcriptPath);
       s = runMicroCompact(s, contextWindow);
-      const { state, released } = await summarizeToFit(s, contextWindow, llm);
-      return {
-        messages: buildContextMessages(state.visible, state.compactedTurnIds),
-        compressed: released > 0,
-        released,
-        promptEstimate: estimateFor(state),
-      };
+      const { state } = await summarizeToFit(s, contextWindow, llm);
+      return buildContextMessages(state.visible, state.compactedTurnIds);
     };
 
     const compactWithLLM = async (
@@ -416,6 +421,7 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
     }
 
     return {
+      willCompact,
       assemblePayload,
       compactWithLLM,
     };

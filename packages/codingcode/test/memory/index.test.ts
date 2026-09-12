@@ -54,17 +54,14 @@ vi.mock('../../src/session/file-ops.js', async (importOriginal) => {
 
 function createMockLlm(response: string, beforeYield?: () => void) {
   return {
-    complete: vi.fn(() => Effect.succeed({ content: response, finishReason: 'stop' as const })),
-    completeStream: vi.fn(() => ({
-      stream: (async function* () {
+    complete: vi.fn(() => Effect.succeed({ content: response })),
+    completeStream: vi.fn(() =>
+      (async function* () {
         beforeYield?.();
-        yield response;
-      })(),
-      response: Promise.resolve({
-        ok: true as const,
-        value: { content: response, finishReason: 'stop' as const },
-      }),
-    })),
+        yield { type: 'text' as const, text: response };
+        yield { type: 'end' as const };
+      })()
+    ),
     modelInfo: {
       provider: 'mock',
       model: 'mock',

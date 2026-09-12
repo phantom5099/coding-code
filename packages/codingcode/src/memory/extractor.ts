@@ -29,22 +29,16 @@ ${currentMemory || '（空）'}
 ${transcript || '（空）'}`;
 
   try {
-    const result = llm.completeStream({
+    const stream = llm.completeStream({
       messages: [{ role: 'user', content: userMessage }],
       system: systemPrompt,
     });
 
-    let output = '';
-    for await (const chunk of result.stream) {
-      output += chunk;
+    let fullOutput = '';
+    for await (const part of stream) {
+      if (part.type === 'text') fullOutput += part.text;
     }
 
-    const response = await result.response;
-    if (!response.ok) {
-      return null;
-    }
-
-    const fullOutput = response.value.content || output;
     const memoryMatch = fullOutput.match(/<memory>([\s\S]*?)<\/memory>/);
 
     if (!memoryMatch) {

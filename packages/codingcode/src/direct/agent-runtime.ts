@@ -7,8 +7,8 @@ import { SessionService } from '../session/port.js';
 import type { SessionStatePort } from '../session/port.js';
 import { computePaths } from '../core/path.js';
 import type { AgentRuntimeClient } from '../client/contracts.js';
-import type { StreamChunk } from '../client/types.js';
-import { agentEventToStreamChunk } from '../agent/stream-adapter.js';
+import type { FrameBody } from '../core/frame.js';
+import { createFrameAssembler } from '../core/frame-io.js';
 import type { AppRuntime } from '../layer.js';
 import type { LLMClient } from '../llm/client.js';
 
@@ -27,9 +27,9 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
         })
       );
 
-      yield { type: 'session_id', sessionId: resolvedSessionId };
+      const assembler = createFrameAssembler({ sessionId: resolvedSessionId });
 
-      let notifyApproval: ((req: StreamChunk) => void) | null = null;
+      let notifyApproval: ((body: FrameBody) => void) | null = null;
       const waitService = await rt.runPromise(
         Effect.gen(function* () {
           return yield* ApprovalWaitService;
@@ -39,41 +39,40 @@ export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRu
         waitService.registerEmitter(
           resolvedSessionId,
           (id: string, tool: string, args: Record<string, unknown>) => {
-            notifyApproval?.({ type: 'approval_request', id, tool, args });
+            notifyApproval?.({ family: 'event', event: { type: 'approval_request', id, tool, args } });
           }
         )
       );
 
       try {
-        const gen = agentEventToStreamChunk(agentGen);
-        let pending = gen.next();
-        let currentApprovalPromise = new Promise<StreamChunk>((resolve) => {
+        let pending = agentGen.next();
+        let currentApprovalPromise = new Promise<FrameBody>((resolve) => {
           notifyApproval = resolve;
         });
 
         while (true) {
           const approvalPromise = currentApprovalPromise;
           const winner = await Promise.race([
-            pending.then((c): { tag: 'chunk'; value: IteratorResult<StreamChunk, void> } => ({
-              tag: 'chunk',
+            pending.then((c): { tag: 'body'; value: IteratorResult<FrameBody, void> } => ({
+              tag: 'body',
               value: c,
             })),
-            approvalPromise.then((req): { tag: 'approval'; value: StreamChunk } => ({
+            approvalPromise.then((body): { tag: 'approval'; value: FrameBody } => ({
               tag: 'approval',
-              value: req,
+              value: body,
             })),
           ]);
 
-          if (winner.tag === 'chunk') {
+          if (winner.tag === 'body') {
             if (winner.value.done) break;
-            yield winner.value.value;
-            currentApprovalPromise = new Promise<StreamChunk>((resolve) => {
+            yield assembler.stamp(winner.value.value);
+            currentApprovalPromise = new Promise<FrameBody>((resolve) => {
               notifyApproval = resolve;
             });
-            pending = gen.next();
+            pending = agentGen.next();
           } else {
-            yield winner.value;
-            currentApprovalPromise = new Promise<StreamChunk>((resolve) => {
+            yield assembler.stamp(winner.value);
+            currentApprovalPromise = new Promise<FrameBody>((resolve) => {
               notifyApproval = resolve;
             });
           }

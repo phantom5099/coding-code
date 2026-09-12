@@ -1,7 +1,7 @@
 import React from 'react';
 import { render } from 'ink';
 import { App } from './components/App.js';
-import type { StreamChunk } from '@codingcode/core/client/types';
+import type { Frame } from '@codingcode/core/core/frame';
 import { createDirectAgentClient } from '@codingcode/core/direct/agent-runtime';
 import { createDirectSessionClient } from '@codingcode/core/direct/sessions';
 import { createDirectSettingsClient } from '@codingcode/core/direct/settings';
@@ -9,10 +9,10 @@ import { createDirectModelClient } from '@codingcode/core/direct/models';
 import type { LLMClient } from '@codingcode/core/llm/client';
 import type { AppRuntime } from '@codingcode/core';
 
-export type { StreamChunk };
+export type { Frame };
 
 export interface TuiClient {
-  sendMessage(input: string): AsyncGenerator<StreamChunk>;
+  sendMessage(input: string): AsyncGenerator<Frame>;
   sendApprovalResponse(id: string, response: string): Promise<void>;
   getSessionId(): string;
   compact(): Promise<void>;
@@ -45,13 +45,12 @@ export function createTuiClientFromFacades(llm: LLMClient, rt: AppRuntime): TuiC
   let currentSessionId = '';
 
   return {
-    async *sendMessage(input: string): AsyncGenerator<StreamChunk> {
+    async *sendMessage(input: string): AsyncGenerator<Frame> {
       const stream = agent.sendMessage(input, { sessionId: currentSessionId, cwd: '' });
-      for await (const chunk of stream) {
-        if (chunk.type === 'session_id') {
-          currentSessionId = chunk.sessionId as string;
-        }
-        yield chunk;
+      for await (const frame of stream) {
+        // 会话 id 只来自信封，是流的唯一权威来源。
+        currentSessionId = frame.sessionId;
+        yield frame;
       }
     },
     sendApprovalResponse: (id, response) =>

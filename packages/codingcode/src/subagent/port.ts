@@ -1,6 +1,6 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { AgentEvent } from '../agent/types.js';
+import type { FrameBody } from '../core/frame.js';
 import type { AgentError } from '../core/error.js';
 import type { Result } from '../core/result.js';
 
@@ -17,7 +17,7 @@ export interface RunSubagentOptions {
 
 export interface SubagentRunnerShape {
   runSubagent(input: string, opts: RunSubagentOptions): Effect.Effect<{
-    stream: AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown>;
+    stream: AsyncGenerator<FrameBody, Result<string, AgentError>, unknown>;
     sessionId: string;
   }>;
 }

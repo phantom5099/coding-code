@@ -54,14 +54,14 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
           projectPath: opts?.projectPath,
         };
 
-        // Race tool execution against abort signal for immediate cancellation
+
         let toolEffect = tool.execute(parsedArgs, ctx);
 
         if (opts?.signal) {
           if (opts.signal.aborted) {
             return yield* Effect.fail(new AgentError('TOOL_NOT_ALLOWED', 'Tool execution aborted'));
           }
-          toolEffect = Effect.race(
+          toolEffect = Effect.raceFirst(
             toolEffect,
             Effect.async<string, AgentError>((resume) => {
               const onAbort = () =>

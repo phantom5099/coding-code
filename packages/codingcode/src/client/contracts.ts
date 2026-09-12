@@ -8,10 +8,10 @@ import type {
 import type { SelectableModel } from '../llm/port.js';
 import type { McpServerConfig, McpStatus } from '../mcp/types.js';
 import type { UserHookConfig } from '../hooks/types.js';
-import type { SessionEvent, SessionIndex } from '../session/types.js';
+import type {SessionIndex } from '../session/types.js';
 import type { UITurn } from '../session/port.js';
 import type { AVAILABLE_PROFILES } from '../agent/profile.js';
-import type { StreamChunk } from './types.js';
+import type { Frame } from '../core/frame.js';
 
 export type { TokenUsage, CheckpointDiff, CodeRollbackResult, RollbackPreviewDiff };
 
@@ -114,7 +114,7 @@ export interface AgentRuntimeClient {
   sendMessage(
     input: string,
     options: { sessionId?: string; cwd: string; signal?: AbortSignal }
-  ): AsyncGenerator<StreamChunk>;
+  ): AsyncGenerator<Frame>;
 
   sendApprovalResponse(input: {
     sessionId: string;

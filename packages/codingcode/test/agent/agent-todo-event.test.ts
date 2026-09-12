@@ -1,7 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import type { AgentEvent } from '../../src/agent/types.js';
-import { makeState, runAgentTurn, type HarnessMocks } from '../helpers/agent-harness.js';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pToolCall,
+  pEnd,
+  todoResults,
+  type HarnessMocks,
+} from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
@@ -20,22 +28,15 @@ vi.mock('@codingcode/infra/config', () => ({
   }),
 }));
 
-function okResponse(content: string, toolCalls?: any[]) {
-  return Promise.resolve({ ok: true, value: { content, toolCalls } });
-}
-
 function makeLlm(firstToolName: string) {
   let callCount = 0;
   const llm = {
     completeStream: vi.fn(() => {
       callCount++;
       if (callCount === 1) {
-        return {
-          stream: (async function* () {})(),
-          response: okResponse('', [{ id: 'tc1', name: firstToolName, arguments: {} }]),
-        };
+        return llmStream(pToolCall('tc1', firstToolName, {}), pEnd());
       }
-      return { stream: (async function* () {})(), response: okResponse('done') };
+      return llmStream(pText('done'), pEnd());
     }),
     modelInfo: { maxTokens: 1000 },
   } as any;
@@ -56,8 +57,8 @@ function makeExecutor(output: string) {
   } as any;
 }
 
-describe('TodoUpdate event', () => {
-  it('should yield TodoUpdate when todo_write tool is called', async () => {
+describe('todo_write tool result', () => {
+  it('should carry todos on the tool_result when todo_write is called', async () => {
     const todo = new Map<string, Array<{ step: string; status: string }>>();
     todo.set('test-todo-sid', [
       { step: 'setup', status: 'pending' },
@@ -72,17 +73,15 @@ describe('TodoUpdate event', () => {
 
     const { events } = await runAgentTurn(mocks, { sessionId: 'test-todo-sid', cwd: '/tmp' });
 
-    const todoUpdates = events.filter(
-      (e): e is Extract<AgentEvent, { _tag: 'TodoUpdate' }> => e._tag === 'TodoUpdate'
-    );
-    expect(todoUpdates).toHaveLength(1);
-    expect(todoUpdates[0]!.items).toEqual([
+    const results = todoResults(events);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.todos).toEqual([
       { step: 'setup', status: 'pending' },
       { step: 'test', status: 'completed' },
     ]);
   });
 
-  it('should not yield TodoUpdate when non-todo tools are called', async () => {
+  it('should not carry todos when non-todo tools are called', async () => {
     const todo = new Map<string, Array<{ step: string; status: string }>>();
     const mocks: HarnessMocks = {
       llm: makeLlm('read_file'),
@@ -93,7 +92,6 @@ describe('TodoUpdate event', () => {
 
     const { events } = await runAgentTurn(mocks, { sessionId: 'non-todo', cwd: '/tmp' });
 
-    const todoUpdates = events.filter((e: any) => e._tag === 'TodoUpdate');
-    expect(todoUpdates).toHaveLength(0);
+    expect(todoResults(events)).toHaveLength(0);
   });
 });

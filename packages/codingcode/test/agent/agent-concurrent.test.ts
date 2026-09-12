@@ -1,7 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import type { AgentEvent } from '../../src/agent/types.js';
-import { makeState, runAgentTurn } from '../helpers/agent-harness.js';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pToolCall,
+  pEnd,
+  toolResults,
+} from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
@@ -21,10 +28,6 @@ vi.mock('@codingcode/infra/config', () => ({
 }));
 
 const mockState = makeState({ sessionId: 'test-sid', cwd: '/tmp', title: 'concurrent' });
-
-function okResponse(content: string, toolCalls?: any[]) {
-  return Promise.resolve({ ok: true, value: { content, toolCalls } });
-}
 
 // 每个工具独立执行并把顺序记录到 executionOrder；由 executeBatch 并发驱动。
 function makeConcurrentExecutor(opts: { barrierPromise?: Promise<void>; failTool?: string }) {
@@ -84,12 +87,12 @@ function makeToolSequenceLlm(firstToolCalls: any[]) {
     completeStream: vi.fn(() => {
       callCount++;
       if (callCount === 1) {
-        return {
-          stream: (async function* () {})(),
-          response: okResponse('', firstToolCalls),
-        };
+        return llmStream(
+          ...firstToolCalls.map((tc) => pToolCall(tc.id, tc.name, tc.arguments ?? {})),
+          pEnd()
+        );
       }
-      return { stream: (async function* () {})(), response: okResponse('done') };
+      return llmStream(pText('done'), pEnd());
     }),
     modelInfo: { maxTokens: 1000 },
   } as any;
@@ -126,8 +129,7 @@ describe('agent runTurn concurrent tool execution', () => {
     expect(executionOrder.indexOf('tool_c')).toBeLessThan(executionOrder.indexOf('tool_a'));
     expect(executionOrder[executionOrder.length - 1]).toBe('tool_a');
 
-    const toolResults = events.filter((e: any) => e._tag === 'ToolResult');
-    expect(toolResults).toHaveLength(3);
+    expect(toolResults(events)).toHaveLength(3);
   });
 
   it('should isolate tool failures', async () => {
@@ -144,12 +146,10 @@ describe('agent runTurn concurrent tool execution', () => {
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    const toolResults = events.filter(
-      (e): e is Extract<AgentEvent, { _tag: 'ToolResult' }> => e._tag === 'ToolResult'
-    );
-    expect(toolResults).toHaveLength(3);
-    expect(toolResults.find((r) => r.name === 'good_tool')?.ok).toBe(true);
-    expect(toolResults.find((r) => r.name === 'good_tool2')?.ok).toBe(true);
-    expect(toolResults.find((r) => r.name === 'bad_tool')?.ok).toBe(false);
+    const results = toolResults(events);
+    expect(results).toHaveLength(3);
+    expect(results.find((r) => r.name === 'good_tool')?.outcome.status).toBe('ok');
+    expect(results.find((r) => r.name === 'good_tool2')?.outcome.status).toBe('ok');
+    expect(results.find((r) => r.name === 'bad_tool')?.outcome.status).toBe('error');
   });
 });
