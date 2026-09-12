@@ -15,9 +15,6 @@ import type { Frame } from '../core/frame.js';
 
 export type { TokenUsage, CheckpointDiff, CodeRollbackResult, RollbackPreviewDiff };
 
-// client 契约的单一权威源：http 与 direct 两端各自实现这些接口，不再各写一遍。
-// 本文件只 import type，无运行时依赖，不产生额外入口。
-
 export type AvailableProfiles = typeof AVAILABLE_PROFILES;
 
 export interface SessionProfileInfo {
