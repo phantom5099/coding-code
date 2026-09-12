@@ -44,6 +44,16 @@ vi.mock('../../src/memory/config.js', () => ({
   })),
 }));
 
+// setMemoryEnabled persists via the infra config store, which writes the real
+// ~/.codingcode/config.yaml. Stub the writer so the suite never touches user config.
+vi.mock('@codingcode/infra/config', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    updateMemoryEnabled: vi.fn(),
+  };
+});
+
 vi.mock('../../src/session/file-ops.js', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {

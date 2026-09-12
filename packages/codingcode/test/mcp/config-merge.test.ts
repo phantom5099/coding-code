@@ -139,7 +139,6 @@ describe('MCP disabled state', () => {
     _setGlobalConfigDir(undefined);
     rmSync(projectDir, { recursive: true, force: true });
     rmSync(globalDir, { recursive: true, force: true });
-    setGlobalMcpDisabledState(testServer, false);
   });
 
   it('should default to not disabled globally', () => {

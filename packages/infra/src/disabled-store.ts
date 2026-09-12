@@ -47,6 +47,12 @@ function deepDelete(obj: any, path: string[], name: string): void {
   }
 }
 
+/** Parse YAML into an object, defaulting to `{}` for empty/comment-only files (`parseYaml` returns `null`). */
+function parseConfigFile(raw: string): Record<string, unknown> {
+  const parsed = parseYaml(raw);
+  return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+}
+
 export function createDisabledStore(cfg: DisabledStoreConfig): DisabledStore {
   const globalConfigPath = () =>
     join(cfg.getGlobalConfigDir?.() ?? join(homedir(), '.codingcode'), 'config.yaml');
@@ -68,7 +74,7 @@ export function createDisabledStore(cfg: DisabledStoreConfig): DisabledStore {
     const dir = dirname(p);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const existing: Record<string, unknown> = existsSync(p)
-      ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
+      ? parseConfigFile(readFileSync(p, 'utf8'))
       : {};
     deepSet(existing, cfg.globalKeyPath, name, disabled);
     writeFileSync(p, stringifyYaml(existing), 'utf8');
@@ -91,7 +97,7 @@ export function createDisabledStore(cfg: DisabledStoreConfig): DisabledStore {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const p = join(dir, 'config.yaml');
     const existing: Record<string, unknown> = existsSync(p)
-      ? (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>)
+      ? parseConfigFile(readFileSync(p, 'utf8'))
       : {};
     deepSet(existing, cfg.globalKeyPath, name, disabled);
     writeFileSync(p, stringifyYaml(existing), 'utf8');
@@ -100,10 +106,7 @@ export function createDisabledStore(cfg: DisabledStoreConfig): DisabledStore {
   const resetProject = (projectRoot: string, name: string): void => {
     const p = join(projectRoot, '.codingcode', 'config.yaml');
     if (!existsSync(p)) return;
-    const existing: Record<string, unknown> = parseYaml(readFileSync(p, 'utf8')) as Record<
-      string,
-      unknown
-    >;
+    const existing: Record<string, unknown> = parseConfigFile(readFileSync(p, 'utf8'));
     deepDelete(existing, cfg.globalKeyPath, name);
     writeFileSync(p, stringifyYaml(existing), 'utf8');
   };
