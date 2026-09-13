@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import type { ConfirmResult } from '../../src/approval/confirmation.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 
-const TestLayer = ApprovalWaitService.Default;
+const TestLayer = ApprovalWaitLayer;
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(TestLayer) as any));
@@ -41,40 +42,21 @@ describe('ApprovalWaitService', () => {
     expect(result).toBe(false);
   });
 
-  it('resolveConfirm succeeds even when sessionId arg differs from stored sessionId', async () => {
-    const result = run(
+  it('resolveConfirm returns false when sessionId does not match stored sessionId', async () => {
+    const result = await run(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
         const id = 'cross-session-id';
 
-        yield* Effect.fork(
-          Effect.gen(function* () {
-            yield* Effect.sleep('10 millis');
-            // resolve using a DIFFERENT sessionId than what was stored
-            yield* svc.resolveConfirm(id, 'parent-session', { type: 'allow' });
-          })
-        );
-
-        // wait was registered with child session id
-        return yield* svc.waitForConfirm(id, 'child-session-uuid');
-      })
-    );
-
-    await expect(result).resolves.toEqual({ type: 'allow' });
-  });
-
-  it('getPending should list pending approval ids', async () => {
-    const result = await run(
-      Effect.gen(function* () {
-        const svc = yield* ApprovalWaitService;
-
-        yield* Effect.fork(svc.waitForConfirm('pending-1', 'test-session'));
+        // register a pending approval under the child session id
+        yield* Effect.fork(svc.waitForConfirm(id, 'child-session-uuid'));
         yield* Effect.sleep('5 millis');
 
-        return yield* svc.getPending();
+        // resolving with a different session id must fail (no cross-session resolve)
+        return yield* svc.resolveConfirm(id, 'parent-session', { type: 'allow' });
       })
     );
-    expect(result).toContain('pending-1');
+    expect(result).toBe(false);
   });
 });
 

@@ -3,16 +3,18 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
-import { ContextService } from '../../../src/context/service.js';
-import { SessionService } from '../../../src/session/store.js';
-import { LLMFactoryService } from '../../../src/llm/factory.js';
+import { ContextService } from '../../../src/context/port.js';
+import type { ContextShape } from '../../../src/context/port.js';
+import { SessionService } from '../../../src/session/port.js';
+import { SessionLayer } from '../../../src/session/session.js';
+import { LLMFactoryService } from '../../../src/llm/port.js';
 import type { LLMClient } from '../../../src/llm/client.js';
-import { Result } from '../../../src/core/result.js';
 import type { SessionIndex, SessionEvent, SummaryEvent } from '../../../src/session/types.js';
-import { filterForContext, buildContextMessages } from '../../../src/context/service.js';
+import { filterForContext, buildContextMessages } from '../../../src/context/context.js';
 import { readHistory } from '../../../src/session/file-ops.js';
 import { estimateTokens } from '../../../src/core/util.js';
 import { useTempProjectBase } from '../../helpers/project-base.js';
+import { ContextLayer } from '../../../src/context/context.js';
 
 const base = useTempProjectBase();
 
@@ -98,13 +100,12 @@ function readSummaryEvents(jsonlPath: string): SummaryEvent[] {
 
 function makeMockLLM(content: string): LLMClient {
   return {
-    complete: () => Effect.succeed({ content, finishReason: 'stop' as const }),
-    completeStream: () => ({
-      stream: (async function* () {
-        yield content;
+    complete: () => Effect.succeed({ content }),
+    completeStream: () =>
+      (async function* () {
+        yield { type: 'text' as const, text: content };
+        yield { type: 'end' as const };
       })(),
-      response: Promise.resolve(Result.ok({ content, finishReason: 'stop' as const })),
-    }),
     modelInfo: {
       provider: 'mock',
       model: 'mock',
@@ -116,7 +117,7 @@ function makeMockLLM(content: string): LLMClient {
 }
 
 const TestLayer = Layer.merge(
-  SessionService.Default,
+  SessionLayer,
   Layer.succeed(LLMFactoryService, {
     listModels: () => Effect.succeed([]),
     findModel: () => Effect.succeed(null),
@@ -127,11 +128,11 @@ const TestLayer = Layer.merge(
   } as any)
 );
 
-async function getCtxService(): Promise<ContextService> {
+async function getCtxService(): Promise<ContextShape> {
   return Effect.runPromise(
     Effect.gen(function* () {
       return yield* ContextService;
-    }).pipe(Effect.provide(ContextService.Default), Effect.provide(TestLayer))
+    }).pipe(Effect.provide(ContextLayer), Effect.provide(TestLayer))
   );
 }
 
@@ -161,7 +162,6 @@ describe('compressor behavior', () => {
         const ctx = await getCtxService();
         const result = await ctx.compactWithLLM(fx.transcriptPath, 1000, null);
         expect(result.didCompress).toBe(false);
-        expect(result.messages).toBeUndefined();
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
       } finally {
@@ -207,8 +207,38 @@ describe('compressor behavior', () => {
         expect(result.promptEstimate).toBeGreaterThan(0);
         expect(result.promptEstimate).toBeLessThan(before);
         expect(result.released).toBeGreaterThan(0);
-        expect(result.messages).toBeDefined();
-        expect(result.messages!.length).toBeGreaterThan(0);
+      } finally {
+        cleanup(fx.slug);
+      }
+    });
+  });
+
+  describe('assemblePayload compaction', () => {
+    const SUMMARY =
+      '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne';
+
+    it('folds history into a compacted summary message when it exceeds the window', async () => {
+      const fx = makeFixture({ numTurns: 3, toolContentSize: 8000 });
+      try {
+        const ctx = await getCtxService();
+        const messages = await ctx.assemblePayload(fx.transcriptPath, 1000, makeMockLLM(SUMMARY));
+        expect(messages.length).toBeGreaterThan(0);
+        expect(messages.some((m) => m.name === 'compacted_history')).toBe(true);
+      } finally {
+        cleanup(fx.slug);
+      }
+    });
+
+    it('leaves history uncompacted when it fits the window', async () => {
+      const fx = makeFixture({ numTurns: 2, toolContentSize: 20 });
+      try {
+        const ctx = await getCtxService();
+        const messages = await ctx.assemblePayload(
+          fx.transcriptPath,
+          2_000_000,
+          makeMockLLM(SUMMARY)
+        );
+        expect(messages.some((m) => m.name === 'compacted_history')).toBe(false);
       } finally {
         cleanup(fx.slug);
       }

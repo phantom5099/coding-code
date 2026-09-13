@@ -1,5 +1,5 @@
-import { jsonSchema, type ModelMessage } from 'ai';
-import type { LLMResponse } from '../types.js';
+import { jsonSchema, type LanguageModelUsage, type ModelMessage } from 'ai';
+import type { TokenUsage } from '../../core/types.js';
 
 export function convertMessages(
   messages: Array<{ role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string }>
@@ -48,33 +48,11 @@ export function convertTools(
   return result;
 }
 
-export function parseResponseMessages(responseMessages: ModelMessage[]): LLMResponse {
-  const lastAssistant = [...responseMessages].reverse().find((m) => m.role === 'assistant');
-  if (!lastAssistant) {
-    return { content: '', finishReason: 'stop' };
-  }
-
-  let content = '';
-  const toolCalls: LLMResponse['toolCalls'] = [];
-
-  if (typeof lastAssistant.content === 'string') {
-    content = lastAssistant.content;
-  } else if (Array.isArray(lastAssistant.content)) {
-    for (const part of lastAssistant.content as any[]) {
-      if (part.type === 'text') content += part.text ?? '';
-      if (part.type === 'tool-call') {
-        toolCalls.push({
-          id: part.toolCallId ?? 'unknown',
-          name: part.toolName ?? 'unknown',
-          arguments: part.input ?? {},
-        });
-      }
-    }
-  }
-
+/** SDK v6 的 inputTokens 已含 cached，此处不做减法：prompt 同时充当上下文占用 */
+export function toTokenUsage(u: LanguageModelUsage): TokenUsage {
   return {
-    content,
-    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-    finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+    prompt: u.inputTokens ?? 0,
+    completion: u.outputTokens ?? 0,
+    total: u.totalTokens ?? 0,
   };
 }

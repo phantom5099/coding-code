@@ -1,246 +1,189 @@
-import { Effect, Queue, Stream, Fiber } from 'effect';
-import type { Message } from '../core/types.js';
+import { Effect, Either, Queue, Stream, Fiber, Layer } from 'effect';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
-import type { LLMClient } from '../llm/client.js';
-import { ToolExecutorService, type ToolLookup } from '../tools/executor.js';
-import { SessionService } from '../session/store.js';
-import { CheckpointService } from '../checkpoint/checkpoint-service.js';
-import { ApprovalService } from '../approval/index.js';
-import { ApprovalWaitService } from '../approval/async-confirm.js';
+import { AgentService } from './port.js';
+import type { RunTurnOptions } from './port.js';
+import {
+  SessionPort, ToolExecutorPort, CheckpointPort, HookPort,
+  ApprovalPort, SkillPort, McpPort, ContextPort, MemoryPort,
+  LlmPort, RulesPort, TodoPort, ToolEnvPort, ToolCatalogPort,
+} from './deps.js';
+import type { ToolEnv, ToolCatalog } from './deps.js';
 import { buildSystemPrompt } from './prompt.js';
-import type { AgentEvent, RunStreamOptions } from './types.js';
-import { resolveConfig } from './config.js';
-import { TodoService } from './todo.js';
-import { HookService } from '../hooks/registry.js';
-import { SkillService } from '../skills/service.js';
-import { McpService } from '../mcp/index.js';
-import { ContextService } from '../context/service.js';
-import { MemoryService } from '../memory/index.js';
+import type { FrameBody, FrameError, ResponseMeta, Transition, ToolOutcome } from '../core/frame.js';
+import { isTurnEnd } from '../core/frame.js';
+import type { ToolCall } from '../core/types.js';
+import { loadConfig } from '@codingcode/infra/config';
 import { createLogger } from '@codingcode/infra/logger';
-import { ProjectRuntimeService } from '../runtime/project-runtime.js';
-import { registerBuiltinTools } from '../tools/builtin-tools.js';
-import { ToolRegistry } from '../tools/registry.js';
-import { submitPlanTool } from '../tools/domains/subagent/submit-plan.js';
-import { createDispatchAgentTool } from '../tools/domains/subagent/dispatch.js';
-import { normalizePath } from '../core/path.js';
-import { isPlanProfile } from './profile.js';
-import type { AgentProfileName } from '../subagent/types.js';
+import { normalizePath, computePaths } from '../core/path.js';
+import { resolveProfile, getToolNames } from './profile.js';
+import type { AgentProfile } from './profile.js';
 import type { PermissionMode } from '../approval/types.js';
-
-const REACTIVE_COMPACT_MAX_RETRIES = 3;
-import { RulesService } from '../rules/index.js';
 
 const logger = createLogger();
 
-export class AgentService extends Effect.Service<AgentService>()('Agent', {
-  effect: Effect.gen(function* () {
-    const executor = yield* ToolExecutorService;
-    const hooks = yield* HookService;
-    const approval = yield* ApprovalService;
-    const approvalWait = yield* ApprovalWaitService;
-    const session = yield* SessionService;
-    const checkpoint = yield* CheckpointService;
-    const runtime = yield* ProjectRuntimeService;
-    const todo = yield* TodoService;
-    const context = yield* ContextService;
-    const memory = yield* MemoryService;
-    const { maxSteps, maxStopContinuations } = resolveConfig();
+function toFrameError(e: AgentError): FrameError {
+  return { message: e.message, code: e.code };
+}
 
-    const runStream = (
-      opts: RunStreamOptions
-    ): AsyncGenerator<AgentEvent, Result<string, AgentError>, unknown> => {
-      const q = Effect.runSync(Queue.unbounded<AgentEvent>());
+export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
+  const session = yield* SessionPort;
+  const executor = yield* ToolExecutorPort;
+  const checkpoint = yield* CheckpointPort;
+  const hooks = yield* HookPort;
+  const approval = yield* ApprovalPort;
+  const skills = yield* SkillPort;
+  const mcp = yield* McpPort;
+  const context = yield* ContextPort;
+  const memory = yield* MemoryPort;
+  const llmFactory = yield* LlmPort;
+  const rules = yield* RulesPort;
+  const todo = yield* TodoPort;
+  const toolEnvPort = yield* ToolEnvPort;
+  const toolCatalog = yield* ToolCatalogPort;
+  const cfg = loadConfig();
+  const maxSteps = cfg.maxSteps ?? 250;
+  const maxStopContinuations = cfg.maxStopContinuations ?? 3;
 
-      const program = Effect.scoped(
-        Effect.gen(function* () {
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => {
-              hooks.disposeSession(opts.state.sessionId);
-            })
-          );
-          return yield* agentLoop(executor, hooks, maxSteps, maxStopContinuations, opts, q);
-        }).pipe(
-          Effect.provideService(HookService, hooks),
-          Effect.provideService(ToolExecutorService, executor),
-          Effect.provideService(ApprovalService, approval),
-          Effect.provideService(ApprovalWaitService, approvalWait),
-          Effect.provideService(SessionService, session),
-          Effect.provideService(CheckpointService, checkpoint),
-          Effect.provideService(ProjectRuntimeService, runtime),
-          Effect.provideService(TodoService, todo),
-          Effect.provideService(ContextService, context),
-          Effect.provideService(MemoryService, memory)
-        )
-      );
+  const runTurn = (input: string, opts: RunTurnOptions) =>
+    Effect.gen(function* () {
+      const normalizedCwd = normalizePath(opts.cwd);
 
-      return (async function* () {
-        const fiber = Effect.runFork(program);
+      rules.evictProjectRules(normalizedCwd);
+      yield* hooks.emit('agent.turn.start', { sessionId: '' }).pipe(Effect.catchAll(() => Effect.void));
+      yield* mcp.syncConnections(normalizedCwd).pipe(Effect.catchAll(() => Effect.void));
 
-        if (opts.abortSignal) {
-          opts.abortSignal.addEventListener(
-            'abort',
-            () => {
-              Effect.runFork(Fiber.interrupt(fiber));
-            },
-            { once: true }
-          );
-          if (opts.abortSignal.aborted) {
-            Effect.runFork(Fiber.interrupt(fiber));
-          }
-        }
-
-        const stream = Stream.fromQueue(q).pipe(Stream.interruptWhen(Fiber.await(fiber)));
-
-        for await (const event of Stream.toAsyncIterable(stream) as AsyncIterable<AgentEvent>) {
-          yield event;
-        }
-
-        try {
-          const result = await Effect.runPromise(Fiber.join(fiber));
-          return result;
-        } catch (e) {
-          return Result.err(
-            e instanceof AgentError ? e : new AgentError('AGENT_ABORTED' as any, String(e))
+      let sessionId = opts.sessionId;
+      const llm = yield* llmFactory.getLLMClient();
+      if (!sessionId) {
+        if (!opts.activeProfile || !opts.permissionMode) {
+          return yield* Effect.fail(
+            new AgentError('CONFIG_MISSING', 'new session requires activeProfile and permissionMode')
           );
         }
-      })();
-    };
-
-    return { runStream };
-  }),
-}) {}
-
-export const sendMessage = (
-  sessionId: string | undefined,
-  input: string,
-  cwd: string,
-  llm: LLMClient,
-  options: {
-    signal?: AbortSignal;
-    approvalOverride?: import('../approval/index.js').ApprovalService;
-    activeProfile?: AgentProfileName;
-    permissionMode?: PermissionMode;
-    model?: string;
-  }
-) =>
-  Effect.gen(function* () {
-    const session = yield* SessionService;
-    const agent = yield* AgentService;
-    const hooks = yield* HookService;
-    const mcp = yield* McpService;
-    const checkpoint = yield* CheckpointService;
-    const approval = yield* ApprovalService;
-    const skills = yield* SkillService;
-    const runtime = yield* ProjectRuntimeService;
-    const todo = yield* TodoService;
-    const rules = yield* RulesService;
-    const context = yield* ContextService;
-    const memory = yield* MemoryService;
-
-    const normalizedCwd = normalizePath(cwd);
-    yield* runtime.prepareProject(normalizedCwd);
-    yield* skills.evictProject(normalizedCwd);
-
-    if (!sessionId) {
-      if (!options.activeProfile || !options.permissionMode || !options.model) {
-        return yield* Effect.fail(
-          new AgentError(
-            'CONFIG_MISSING',
-            'new session requires activeProfile, permissionMode, and model'
-          )
-        );
+        const model = opts.model ?? llm.modelInfo.model;
+        const created = yield* session.create(normalizedCwd, {
+          model,
+          activeProfile: opts.activeProfile,
+          permissionMode: opts.permissionMode,
+        });
+        sessionId = created.sessionId;
       }
-      const created = yield* session.create(normalizedCwd, {
-        model: options.model,
-        activeProfile: options.activeProfile,
-        permissionMode: options.permissionMode,
+
+      const state = yield* session.load(normalizedCwd, sessionId);
+
+      // restore session profile/permission from the frontend request, falling back to persisted values
+      const profileName = opts.activeProfile ?? state.activeProfile;
+      const effectivePerm = opts.permissionMode ?? state.permissionMode;
+      if (opts.permissionMode) {
+        yield* session.setPermissionMode(normalizedCwd, sessionId, opts.permissionMode);
+      }
+      if (opts.activeProfile) {
+        yield* session.setActiveProfile(normalizedCwd, sessionId, opts.activeProfile);
+      }
+
+      state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
+
+      const profile: AgentProfile | undefined = profileName ? resolveProfile(profileName) : undefined;
+
+      // get MCP tools
+      const mcpTools = mcp.listProjectMcpTools(normalizedCwd);
+
+      const catalog = toolCatalog.register(getToolNames(profile), mcpTools);
+
+      const toolEnv = yield* toolEnvPort.getToolEnv();
+
+      // record user (increments turn) + extract skill
+      const [, actualInput] = yield* skills.extractSkill(state.cwd, input);
+      const userEvent = yield* session.recordUser(state, actualInput);
+
+      // checkpoint baseline
+      yield* checkpoint.snapshotBaseline(state.cwd, sessionId, userEvent.turnId);
+
+      // get rules text
+      const rulesText = rules.getAllRules(state.cwd);
+
+      // run agent loop
+      const stream = runAgentLoop({
+        state, llm, profile, catalog,
+        toolEnv,
+        abortSignal: opts.signal, rulesText,
+        sid: sessionId, projectPath: state.cwd, permissionMode: effectivePerm,
       });
-      sessionId = created.sessionId;
-    }
-    const state = yield* session.load(normalizedCwd, sessionId);
-    yield* runtime.restoreSessionProfile(
-      normalizedCwd,
-      state.sessionId,
-      state.activeProfile,
-      state.permissionMode
-    );
-    state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
-    const sid = state.sessionId;
 
-    const profile = runtime.resolveMainAgentProfile(normalizedCwd, state.sessionId);
-    const policy = runtime.getToolPolicy(profile);
-
-    const dispatchTool = yield* createDispatchAgentTool();
-
-    const activeLlm = llm;
-    const effectiveMaxSteps = profile?.maxSteps;
-    const effectiveApproval: any = options?.approvalOverride;
-
-    const mcpTools = mcp.listProjectMcpTools(normalizedCwd);
-
-    const turnId = session.incrementTurn(state);
-    const [, actualInput] = yield* skills.extractSkill(state.cwd, input);
-
-    yield* session.recordUser(state, actualInput);
-
-    yield* checkpoint.snapshotBaseline(state.cwd, sid, turnId);
-
-    const rulesText = rules.getAllRules(state.cwd);
-
-    const stream = agent.runStream({
-      state,
-      llm: activeLlm,
-      profile,
-      toolPolicy: policy,
-      maxStepsOverride: effectiveMaxSteps,
-      approvalOverride: effectiveApproval,
-      mcpTools,
-      abortSignal: options?.signal,
-      rulesText,
-      dispatchTool,
+      return { stream, sessionId };
     });
 
-    return { stream, sessionId: sid };
-  });
+  function runAgentLoop(opts: {
+    state: any; llm: any; profile: AgentProfile | undefined;
+    abortSignal: AbortSignal | undefined;
+    catalog: ToolCatalog;
+    toolEnv: ToolEnv;
+    rulesText: string;
+    sid: string; projectPath: string; permissionMode: PermissionMode;
+  }): AsyncGenerator<FrameBody> {
+    const q = Effect.runSync(Queue.unbounded<FrameBody>());
 
-export function agentLoop(
-  executor: ToolExecutorService,
-  hooks: HookService,
-  maxSteps: number,
-  maxStopContinuations: number,
-  opts: RunStreamOptions,
-  q: Queue.Queue<AgentEvent>
-): Effect.Effect<
-  Result<string, AgentError>,
-  AgentError,
-  | HookService
-  | ToolExecutorService
-  | CheckpointService
-  | SessionService
-  | ProjectRuntimeService
-  | TodoService
-  | ContextService
-  | MemoryService
-> {
-  const state = opts.state;
-  const llm = opts.llm;
-  const profile = opts.profile;
-  const sessionId = state.sessionId;
-  const projectPath = state.cwd;
+    const program: any = Effect.scoped(
+      Effect.gen(function* () {
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => { hooks.disposeSession(opts.sid); })
+        );
+        return yield* agentLoopInternal(opts, q);
+      }).pipe(
+        Effect.provideService(SessionPort, session),
+        Effect.provideService(ToolExecutorPort, executor),
+        Effect.provideService(CheckpointPort, checkpoint),
+        Effect.provideService(HookPort, hooks),
+        Effect.provideService(ApprovalPort, approval),
+        Effect.provideService(SkillPort, skills),
+        Effect.provideService(McpPort, mcp),
+        Effect.provideService(ContextPort, context),
+        Effect.provideService(MemoryPort, memory),
+        Effect.provideService(LlmPort, llmFactory),
+        Effect.provideService(RulesPort, rules),
+        Effect.provideService(TodoPort, todo),
+      )
+    );
 
-  return Effect.gen(function* () {
-    const checkpoint = yield* CheckpointService;
-    const session = yield* SessionService;
-    const runtime = yield* ProjectRuntimeService;
-    const todo = yield* TodoService;
-    const context = yield* ContextService;
-    const memory = yield* MemoryService;
-    const { rulesText } = opts;
+    return (async function* () {
+      const fiber = Effect.runFork(opts.toolEnv.provide(program));
+      if (opts.abortSignal) {
+        opts.abortSignal.addEventListener('abort', () => {
+          Effect.runFork(Fiber.interrupt(fiber));
+        }, { once: true });
+        if (opts.abortSignal.aborted) Effect.runFork(Fiber.interrupt(fiber));
+      }
 
-    const basePrompt =
-      opts.systemOverride ??
-      buildSystemPrompt({
+      const stream = Stream.fromQueue(q).pipe(
+        Stream.takeUntil((body: FrameBody) => isTurnEnd(body))
+      );
+      for await (const body of Stream.toAsyncIterable(stream) as AsyncIterable<FrameBody>) {
+        yield body;
+      }
+    })();
+  }
+
+  function agentLoopInternal(opts: {
+    state: any; llm: any; profile: AgentProfile | undefined;
+    abortSignal: AbortSignal | undefined;
+    catalog: ToolCatalog;
+    rulesText: string;
+    sid: string; projectPath: string; permissionMode: PermissionMode;
+  }, q: Queue.Queue<FrameBody>): any {
+    const { state, llm, profile, abortSignal, catalog, rulesText, sid, projectPath, permissionMode } = opts;
+    const { tools, lookup: toolLookup } = catalog;
+
+    let ended = false;
+    const offerEnd = (transition: Extract<Transition, { to: 'end' }>) =>
+      Effect.sync(() => {
+        if (ended) return;
+        ended = true;
+        Effect.runSync(q.offer({ family: 'transition', transition }));
+      });
+
+    return Effect.gen(function* () {
+      const basePrompt = buildSystemPrompt({
         cwd: projectPath,
         platform: process.platform,
         shell: process.env.SHELL || process.env.ComSpec || 'bash',
@@ -248,318 +191,195 @@ export function agentLoop(
         profileSystemPrompt: profile?.systemPrompt,
       });
 
-    const memoryBlock = state.memorySnapshot;
-    const memorySection = memoryBlock ? `## Session Memory\n\n${memoryBlock}` : '';
-    const system = [basePrompt, memorySection].filter(Boolean).join('\n\n');
+      const memoryBlock = state.memorySnapshot;
+      const memorySection = memoryBlock ? `## Session Memory\n\n${memoryBlock}` : '';
+      const system = [basePrompt, memorySection].filter(Boolean).join('\n\n');
 
-    const maxOverflowRetries = REACTIVE_COMPACT_MAX_RETRIES;
-    const effectiveMaxSteps = opts.maxStepsOverride ?? maxSteps;
-
-    let stopContinuations = 0;
-    const effectiveMaxStopContinuations = opts.maxStopContinuations ?? maxStopContinuations;
-
-    const registry = new ToolRegistry();
-    yield* registerBuiltinTools(registry);
-    registry.register(...(opts.mcpTools ?? []));
-    if (opts.dispatchTool) registry.register(opts.dispatchTool);
-    if (isPlanProfile(profile)) registry.register(submitPlanTool);
-
-    let messages: Message[] = [];
-    let submittedPlanTitle: string | null = null;
-
-    for (let attempt = 0; attempt <= maxOverflowRetries; attempt++) {
-      const payload = yield* Effect.sync(() =>
-        context.assemblePayload(session.getTranscriptPath(state), llm.modelInfo.maxTokens)
-      );
-      messages = payload.messages;
+      let stopContinuations = 0;
+      const effectiveMaxStopContinuations = maxStopContinuations;
 
       let lastResult: Result<string, AgentError> | null = null;
-      let overflow = false;
 
-      yield* hooks.emit('agent.turn.start', { sessionId });
+      yield* hooks.emit('agent.turn.start', { sessionId: sid });
+      yield* q.offer({ family: 'transition', transition: { to: 'start', turnId: state.currentTurnId } });
 
-      yield* q.offer({ _tag: 'TurnId', turnId: state.currentTurnId });
+      for (let step = 0; step < maxSteps; step++) {
+        yield* hooks.emitDecision('agent.step.before', { sessionId: sid, step: step + 1 });
 
-      for (let step = 0; step < effectiveMaxSteps; step++) {
-        yield* q.offer({ _tag: 'Step', step: step + 1, max: effectiveMaxSteps });
-
-        const allowedByPolicy = opts.toolPolicy?.allowedTools;
-        const tools = registry.describe(allowedByPolicy);
-        const toolLookup: ToolLookup = (name: string) => registry.get(name, allowedByPolicy);
-        const systemWithCatalog = system;
-
-        const stepBeforePayload = { sessionId, step: step + 1 };
-        yield* hooks.emitDecision('agent.step.before', stepBeforePayload);
-
-        const compressResult = yield* Effect.tryPromise({
-          try: () =>
-            context.compactIfNeeded(
-              session.getTranscriptPath(state),
-              messages,
-              llm.modelInfo.maxTokens,
-              llm
-            ),
-          catch: (e) => new AgentError('LLM_FAILED', String(e)),
-        });
-        if (compressResult.didCompress && compressResult.messages) {
-          yield* q.offer({
-            _tag: 'ReactiveCompact',
-            attempt: 1,
-            released: compressResult.released,
-            promptEstimate: compressResult.promptEstimate,
-          });
-
-          messages = compressResult.messages;
-          state.usage = undefined;
+        if (step === 0) {
+          yield* q.offer({ family: 'transition', transition: { to: 'executing' } });
         }
 
-        const llmMessages = [...messages];
+        const transcriptPath = computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath;
 
-        const { stream: rawStream, response: respPromise } = llm.completeStream(
-          {
-            messages: llmMessages,
-            system: systemWithCatalog,
-            tools,
-            maxSteps: 1,
-          },
-          opts.abortSignal
-        );
+        const willCompact = yield* Effect.either(Effect.tryPromise({
+          try: () => context.willCompact(transcriptPath, llm.modelInfo.maxTokens),
+          catch: (e) => new AgentError('LLM_FAILED', String(e)),
+        }));
+        if (Either.isLeft(willCompact)) {
+          yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(willCompact.left) });
+          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error' });
+          return Result.err(willCompact.left);
+        }
+        if (willCompact.right) {
+          yield* q.offer({ family: 'transition', transition: { to: 'compress' } });
+        }
 
-        yield* Effect.tryPromise({
+        const assembled = yield* Effect.either(Effect.tryPromise({
+          try: () => context.assemblePayload(transcriptPath, llm.modelInfo.maxTokens, llm),
+          catch: (e) => new AgentError('LLM_FAILED', String(e)),
+        }));
+        if (Either.isLeft(assembled)) {
+          yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(assembled.left) });
+          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error' });
+          return Result.err(assembled.left);
+        }
+        if (willCompact.right) {
+          yield* q.offer({ family: 'transition', transition: { to: 'executing' } });
+        }
+
+        const llmMessages = [...assembled.right];
+
+        let content = '';
+        const toolCalls: ToolCall[] = [];
+        let responded: ResponseMeta = {};
+
+        const streamed = yield* Effect.either(Effect.tryPromise({
           try: async () => {
-            for await (const chunk of rawStream) {
-              if (opts.abortSignal?.aborted) break;
-              Effect.runSync(q.offer({ _tag: 'LlmChunk', text: chunk }));
+            for await (const part of llm.completeStream({ messages: llmMessages, system, tools, maxSteps: 1 }, abortSignal)) {
+              if (abortSignal?.aborted) break;
+              if (part.type === 'text') {
+                content += part.text;
+                Effect.runSync(q.offer({ family: 'event', event: { type: 'text_delta', text: part.text } }));
+              } else if (part.type === 'tool_call') {
+                toolCalls.push({ id: part.id, name: part.name, arguments: part.args });
+                Effect.runSync(q.offer({
+                  family: 'event',
+                  event: { type: 'tool_call', id: part.id, name: part.name, args: part.args },
+                }));
+              } else {
+                responded = part.usage ? { usage: part.usage } : {};
+                Effect.runSync(q.offer({
+                  family: 'transition',
+                  transition: { to: 'executing', responded },
+                }));
+              }
             }
           },
-          catch: (e) => new AgentError('LLM_FAILED', String(e)),
-        });
-
-        const llmResult = yield* Effect.tryPromise({
-          try: () => respPromise,
-          catch: (e) => new AgentError('LLM_FAILED', String(e)),
-        });
-        if (!llmResult.ok) {
-          if (llmResult.error.code === 'CONTEXT_OVERFLOW' && attempt < maxOverflowRetries) {
-            const compressResult = yield* Effect.tryPromise({
-              try: () =>
-                context.compactWithLLM(
-                  session.getTranscriptPath(state),
-                  llm.modelInfo.maxTokens,
-                  llm,
-                  undefined
-                ),
-              catch: (e) => new AgentError('LLM_FAILED', String(e)),
-            });
-            if (compressResult.didCompress && compressResult.messages) {
-              messages = compressResult.messages;
-            }
-            yield* q.offer({
-              _tag: 'ReactiveCompact',
-              attempt: attempt + 1,
-              released: compressResult.released,
-              promptEstimate: compressResult.promptEstimate,
-            });
-            overflow = true;
-            break;
-          }
-          yield* q.offer({ _tag: 'Error', error: llmResult.error });
-          lastResult = Result.err(llmResult.error);
-          yield* hooks.emit('agent.turn.end', {
-            sessionId,
-            turnId: state.currentTurnId,
-            status: 'error',
-          });
-          break;
+          catch: (e) => (e instanceof AgentError ? e : new AgentError('LLM_FAILED', String(e))),
+        }));
+        if (Either.isLeft(streamed)) {
+          yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(streamed.left) });
+          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error' });
+          return Result.err(streamed.left);
         }
 
-        const resp = llmResult.value;
-        const toolCalls = resp.toolCalls;
-        const assistantMsg: Message = { role: 'assistant', content: resp.content };
-        if (toolCalls && toolCalls.length > 0) {
-          assistantMsg.tool_calls = toolCalls;
-        }
-        messages.push(assistantMsg);
-        yield* q.offer({ _tag: 'Assistant', content: resp.content, toolCalls });
-        if (resp.usage) {
-          yield* q.offer({
-            _tag: 'Usage',
-            prompt: resp.usage.prompt,
-            completion: resp.usage.completion,
-            total: resp.usage.total,
-          });
-        }
-
-        if (!toolCalls || toolCalls.length === 0) {
-          if (session) {
-            yield* session.recordAssistant(state, resp.content, toolCalls || [], resp.usage);
-          }
-          const stopDecision = yield* hooks.emitDecision('agent.turn.stop', {
-            sessionId,
-            content: resp.content,
-            turnId: state.currentTurnId,
-          });
+        if (toolCalls.length === 0) {
+          yield* session.recordAssistant(state, content, [], responded.usage);
+          const stopDecision = yield* hooks.emitDecision('agent.turn.stop', { sessionId: sid, content, turnId: state.currentTurnId });
 
           if (stopDecision && stopDecision.decision === 'continue') {
             if (stopContinuations >= effectiveMaxStopContinuations) {
-              yield* q.offer({
-                _tag: 'Error',
-                error: new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded'),
-              });
-              yield* hooks.emit('agent.turn.end', {
-                sessionId,
-                turnId: state.currentTurnId,
-                status: 'error',
-              });
-              memory
-                .flushSessionToMemory(state.sessionId, llm, state.cwd)
-                .catch((e) => logger.error('memory flush failed:', e));
-              return Result.err(
-                new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded')
-              );
+              const loopErr = new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded');
+              yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(loopErr) });
+              yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error' });
+              memory.flushSessionToMemory(state.sessionId, llm, state.cwd).catch((e) => logger.error('memory flush failed:', e));
+              return Result.err(loopErr);
             }
             stopContinuations++;
             const injection = stopDecision.injection ?? '(continue)';
-            if (session) {
-              yield* session.recordUser(state, injection);
-            }
-            messages.push({ role: 'user', content: injection });
+            yield* session.recordSystem(state, injection);
             continue;
           }
 
-          if (submittedPlanTitle !== null) {
-            yield* hooks.emit('plan.ready', {
-              sessionId,
-              projectPath,
-              title: submittedPlanTitle,
-            });
-            submittedPlanTitle = null;
-          }
-
-          yield* q.offer({ _tag: 'Done', content: resp.content });
-          lastResult = Result.ok(resp.content);
-          yield* hooks.emit('agent.turn.end', {
-            sessionId,
-            turnId: state.currentTurnId,
-            status: 'done',
-          });
+          yield* offerEnd({ to: 'end', reason: 'done' });
+          lastResult = Result.ok(content);
+          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'done' });
           break;
         }
 
-        if (toolCalls) {
-          for (const tc of toolCalls) {
-            yield* q.offer({
-              _tag: 'ToolStart',
-              id: tc.id,
-              name: tc.name,
-              args: tc.arguments ?? {},
-            });
+        yield* session.recordAssistant(state, content, toolCalls, responded.usage);
+
+        const approvedCalls: any[] = [];
+        const deniedResults: any[] = [];
+        for (const tc of toolCalls) {
+          const decision = yield* approval.evaluate({
+            tool: tc.name,
+            input: tc.arguments ?? {},
+            callId: tc.id,
+            sessionId: state.sessionId,
+            projectPath,
+            permissionMode,
+            profile: profile?.name,
+          });
+          if (decision.type === 'deny') {
+            deniedResults.push({ type: 'denied', id: tc.id, name: tc.name, reason: decision.reason });
+          } else {
+            approvedCalls.push(tc);
           }
         }
 
-        const record = yield* session.recordAssistant(state, resp.content, toolCalls!, resp.usage);
-        const allResults = yield* executor.executeBatch(toolCalls, state.sessionId, {
-          turnId: state.currentTurnId,
-          projectPath,
-          signal: opts.abortSignal,
-          approval: opts.approvalOverride,
-          toolLookup,
-        });
+        const approvedResults = approvedCalls.length > 0
+          ? yield* executor.executeBatch(approvedCalls, state.sessionId, {
+              turnId: state.currentTurnId, projectPath, signal: abortSignal, toolLookup,
+            })
+          : [];
+
+        const allResults = [...approvedResults, ...deniedResults];
 
         let todoPrinted = false;
         for (const r of allResults) {
           const resultOut = r.type === 'denied' ? '' : r.output;
           yield* session.recordToolResult(state, r.name, r.id, resultOut);
-          if (r.type === 'denied') {
-            yield* q.offer({ _tag: 'ToolDenied', id: r.id, name: r.name, reason: r.reason });
-          } else {
-            const isOk = r.type === 'ok';
-            yield* q.offer({
-              _tag: 'ToolResult',
-              id: r.id,
-              name: r.name,
-              output: resultOut,
-              ok: isOk,
-            });
-          }
-          if (!messages.find((m) => m.tool_call_id === r.id)) {
-            const content =
-              r.type === 'denied'
-                ? `[Denied] Tool "${r.name}" was denied: ${r.reason}`
-                : (r.output ?? '');
-            messages.push({ role: 'tool', content, tool_call_id: r.id, tool_name: r.name });
-          }
-          if (!todoPrinted && r.name === 'todo_write') {
-            yield* q.offer({ _tag: 'TodoUpdate', items: todo.read(sessionId) });
-            todoPrinted = true;
-          }
-        }
-
-        const submitPlanCall = toolCalls?.find((tc) => tc.name === 'submit_plan');
-        const submitPlanResult = allResults.find(
-          (r) => r.name === 'submit_plan' && r.type === 'ok'
-        );
-        if (submitPlanCall && submitPlanResult && submittedPlanTitle === null) {
-          submittedPlanTitle = String(submitPlanCall.arguments?.title ?? '');
+          const outcome: ToolOutcome = r.type === 'denied'
+            ? { status: 'denied', reason: r.reason }
+            : r.type === 'ok'
+              ? { status: 'ok', output: resultOut }
+              : { status: 'error', output: resultOut };
+          const todos = !todoPrinted && r.type === 'ok' && r.name === 'todo_write'
+            ? todo.read(sid)
+            : undefined;
+          if (todos) todoPrinted = true;
+          yield* q.offer({
+            family: 'event',
+            event: {
+              type: 'tool_result', id: r.id, name: r.name, outcome,
+              ...(todos ? { todos } : {}),
+            },
+          });
         }
       }
 
-      if (overflow) continue;
-
       yield* checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
-
-      memory
-        .flushSessionToMemory(state.sessionId, llm, state.cwd)
-        .catch((e) => logger.error('memory flush failed:', e));
+      memory.flushSessionToMemory(state.sessionId, llm, state.cwd).catch((e) => logger.error('memory flush failed:', e));
 
       if (lastResult) return lastResult;
 
-      yield* q.offer({ _tag: 'Error', error: AgentError.maxStepsReached(effectiveMaxSteps) });
-      yield* hooks.emit('agent.turn.end', {
-        sessionId,
-        turnId: state.currentTurnId,
-        status: 'maxSteps',
-      });
-      return Result.err(AgentError.maxStepsReached(effectiveMaxSteps));
-    }
+      const maxErr = AgentError.maxStepsReached(maxSteps);
+      yield* offerEnd({ to: 'end', reason: 'maxSteps' });
+      yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'maxSteps' });
+      return Result.err(maxErr);
+    }).pipe(
+      Effect.interruptible,
+      Effect.onInterrupt(() =>
+        Effect.gen(function* () {
+          yield* offerEnd({ to: 'end', reason: 'aborted' });
+          yield* hooks.emit('agent.turn.end', { sessionId: opts.sid, turnId: opts.state.currentTurnId, status: 'aborted' }).pipe(Effect.ignore);
+        })
+      ),
+      Effect.ensuring(
+        Effect.gen(function* () {
+          yield* offerEnd({
+            to: 'end',
+            reason: 'error',
+            error: { message: 'agent terminated without end frame', code: 'AGENT_TERMINATED' },
+          });
+          yield* checkpoint.snapshotFinal(opts.projectPath, opts.sid, opts.state.currentTurnId).pipe(Effect.ignore);
+          memory.flushSessionToMemory(opts.state.sessionId, opts.llm, opts.projectPath).catch((e) => logger.error('memory flush failed:', e));
+        })
+      )
+    );
+  }
 
-    yield* q.offer({ _tag: 'Error', error: AgentError.maxStepsReached(effectiveMaxSteps) });
-    yield* hooks.emit('agent.turn.end', {
-      sessionId,
-      turnId: state.currentTurnId,
-      status: 'maxSteps',
-    });
-    memory
-      .flushSessionToMemory(state.sessionId, llm, state.cwd)
-      .catch((e) => logger.error('memory flush failed:', e));
-    return Result.err(AgentError.maxStepsReached(effectiveMaxSteps));
-  }).pipe(
-    Effect.interruptible,
-    Effect.onInterrupt(() =>
-      Effect.gen(function* () {
-        yield* Effect.sync(() => {
-          Effect.runSync(
-            q.offer({ _tag: 'Error', error: new AgentError('AGENT_ABORTED', 'cancelled') })
-          );
-        });
-        yield* hooks
-          .emit('agent.turn.end', {
-            sessionId,
-            turnId: state.currentTurnId,
-            status: 'aborted',
-          })
-          .pipe(Effect.ignore);
-      })
-    ),
-    Effect.ensuring(
-      Effect.gen(function* () {
-        const cp = yield* CheckpointService;
-        yield* cp.snapshotFinal(projectPath, sessionId, state.currentTurnId).pipe(Effect.ignore);
-        const mem = yield* MemoryService;
-        mem
-          .flushSessionToMemory(state.sessionId, llm, state.cwd)
-          .catch((e) => logger.error('memory flush failed:', e));
-      })
-    )
-  );
-}
+  return { runTurn };
+} as any));

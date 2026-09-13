@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { LLMFactoryService } from '../../llm/factory.js';
+import { LLMFactoryService } from '../../llm/port.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 

@@ -14,10 +14,9 @@ import {
 import { homedir } from 'os';
 import { join, dirname } from 'path';
 import { getProjectBaseDir } from '../core/path.js';
-import { computePaths, projectSessionsDir, sessionJsonlPathFromCwd } from '../core/path.js';
+import { sessionJsonlPathFromCwd } from '../core/path.js';
+import type { PermissionMode } from '../approval/types.js';
 import type { SessionEvent, SessionMetaEvent, SessionIndex } from './types.js';
-
-export { computePaths, projectSessionsDir, sessionJsonlPathFromCwd };
 
 export function ensureDirs(transcriptPath: string): void {
   const codingcodeDir = join(homedir(), '.codingcode');
@@ -131,6 +130,10 @@ export function readCurrentIndex(indexPath: string): Partial<SessionIndex> | nul
   }
 }
 
+export function readTranscript(cwd: string, sessionId: string): SessionEvent[] {
+  return readHistory(sessionJsonlPathFromCwd(cwd, sessionId));
+}
+
 export function writeIndexAtomic(indexPath: string, patch: Partial<SessionIndex>): void {
   let current: Partial<SessionIndex> = {};
   if (existsSync(indexPath)) {
@@ -147,7 +150,7 @@ export function writeIndexAtomic(indexPath: string, patch: Partial<SessionIndex>
 export function setPermissionMode(
   sessionId: string,
   indexPath: string,
-  mode: import('../approval/types.js').PermissionMode
+  mode: PermissionMode
 ): void {
   let index: SessionIndex | null = null;
   if (existsSync(indexPath)) {
@@ -161,16 +164,6 @@ export function setPermissionMode(
   index.permissionMode = mode;
   index.updatedAt = new Date().toISOString();
   writeFileSync(indexPath, JSON.stringify(index, null, 2), 'utf8');
-}
-
-export function getPermissionMode(indexPath: string): string {
-  if (!existsSync(indexPath)) return 'default';
-  try {
-    const index = JSON.parse(readFileSync(indexPath, 'utf8')) as SessionIndex;
-    return index.permissionMode ?? 'default';
-  } catch {
-    return 'default';
-  }
 }
 
 export function deleteSession(sessionId: string, cwd: string): void {

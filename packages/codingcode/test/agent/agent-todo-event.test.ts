@@ -1,13 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Effect, Layer, Queue, Chunk } from 'effect';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import { TodoService } from '../../src/agent/todo.js';
-import { ContextService } from '../../src/context/service.js';
-import { MemoryService } from '../../src/memory/index.js';
+import { Effect } from 'effect';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pToolCall,
+  pEnd,
+  todoResults,
+  type HarnessMocks,
+} from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
+    maxSteps: 5,
+    maxStopContinuations: 2,
     context: {
       compactionModel: '',
     },
@@ -16,174 +23,75 @@ vi.mock('@codingcode/infra/config', () => ({
       model: '',
       maxBytes: 16384,
       promptMaxBytes: 8192,
-      extraTypes: [],
-      disabledTypes: [],
     },
     server: { port: 8080 },
   }),
 }));
 
-import { agentLoop } from '../../src/agent/agent.js';
-import { Result } from '../../src/core/result.js';
-import { SessionService } from '../../src/session/store.js';
-
-/** Mutable todo store for testing - backs the TodoService mock. */
-const todoStore = new Map<string, any[]>();
-
-const AllMockLayer = Layer.mergeAll(
-  Layer.succeed(CheckpointService, {
-    snapshotBaseline: () => Effect.void,
-    snapshotFinal: () => Effect.void,
-  } as any),
-  Layer.succeed(SessionService, {
-    getTranscriptPath: () => '/tmp/test.jsonl',
-    recordAssistant: () => Effect.succeed({}),
-    recordUser: () => Effect.succeed({}),
-    recordToolResult: () => Effect.succeed({}),
-  } as any),
-  Layer.succeed(ProjectRuntimeService, {
-    prepareProject: () => Effect.void,
-    resolveMainAgentProfile: () => undefined,
-    resolveSubagentProfile: () => undefined,
-    listAgentProfiles: () => [],
-    getToolPolicy: () => ({
-      allowedTools: undefined,
-      allowedMcpServers: undefined,
+function makeLlm(firstToolName: string) {
+  let callCount = 0;
+  const llm = {
+    completeStream: vi.fn(() => {
+      callCount++;
+      if (callCount === 1) {
+        return llmStream(pToolCall('tc1', firstToolName, {}), pEnd());
+      }
+      return llmStream(pText('done'), pEnd());
     }),
-    setSessionProfile: () => {},
-    restoreSessionProfile: () => Effect.void,
-    getSessionProfile: () => undefined,
-    disposeSession: () => Effect.void,
-    disposeProject: () => Effect.void,
-  } as any),
-  Layer.succeed(TodoService, {
-    read: (sessionId: string) => todoStore.get(sessionId) ?? [],
-    write: (sessionId: string, items: any[]) => {
-      todoStore.set(sessionId, items);
-    },
-    reset: () => {
-      todoStore.clear();
-    },
-  } as any),
-  Layer.succeed(ContextService, {
-    assemblePayload: () => ({
-      messages: [{ role: 'user' as const, content: 'hi' }],
-      compactedEvents: [],
-      promptEstimate: 10,
-      currentTurnId: 1,
-      compactedTurnIds: new Set<number>(),
-    }),
-    compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-    compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-  } as any),
-  Layer.succeed(MemoryService, {
-    getMemoryEnabled: () => false,
-    setMemoryEnabled: () => {},
-    loadMemoryForPrompt: () => '',
-    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
-  } as any)
-);
+    modelInfo: { maxTokens: 1000 },
+  } as any;
+  return llm;
+}
 
-const mockHooks = {
-  emit: () => Effect.succeed(undefined),
-  emitDecision: () => Effect.succeed(null),
-} as any;
+function makeExecutor(output: string) {
+  return {
+    executeBatch: (calls: any[]) =>
+      Effect.succeed(
+        calls.map((c: any) => ({
+          type: 'ok' as const,
+          id: c.id,
+          name: c.name,
+          output,
+        }))
+      ),
+  } as any;
+}
 
-const mockState = {
-  sessionId: 'test-todo-sid',
-  cwd: '/tmp',
-  messageCount: 0,
-  currentTurnId: 1,
-  sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
-  model: 'test-model',
-  title: 'test',
-  activeProfile: 'build' as const,
-  permissionMode: 'default' as const,
-  usage: undefined,
-  memorySnapshot: '',
-};
-
-const mockLlm = {
-  completeStream: (_params: any) => ({
-    stream: (async function* () {})(),
-    response: Promise.resolve(
-      Result.ok({
-        content: '',
-        toolCalls: [{ id: 'tc1', name: 'execute_command', arguments: { command: 'echo hi' } }],
-      })
-    ),
-  }),
-};
-
-describe('TodoUpdate event', () => {
-  it('should yield TodoUpdate when todo_write tool is called', async () => {
-    todoStore.set('test-todo-sid', [
+describe('todo_write tool result', () => {
+  it('should carry todos on the tool_result when todo_write is called', async () => {
+    const todo = new Map<string, Array<{ step: string; status: string }>>();
+    todo.set('test-todo-sid', [
       { step: 'setup', status: 'pending' },
       { step: 'test', status: 'completed' },
     ]);
-
-    const mockExecutor = {
-      execute: () => Effect.succeed('done'),
-      executeBatch: () =>
-        Effect.succeed([
-          {
-            type: 'ok' as const,
-            id: 'tc1',
-            name: 'todo_write',
-            output: 'pending=1 completed=1 in_progress=0',
-          },
-        ]),
+    const mocks: HarnessMocks = {
+      llm: makeLlm('todo_write'),
+      state: makeState({ sessionId: 'test-todo-sid', cwd: '/tmp' }),
+      todo,
+      executor: makeExecutor('pending=1 completed=1 in_progress=0'),
     };
 
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop(
-        mockExecutor as any,
-        mockHooks,
-        1,
-        2,
-        { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any },
-        q
-      ).pipe(Effect.provide(AllMockLayer)) as any
-    );
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
+    const { events } = await runAgentTurn(mocks, { sessionId: 'test-todo-sid', cwd: '/tmp' });
 
-    const todoUpdates = events.filter((e: any) => e._tag === 'TodoUpdate');
-    expect(todoUpdates).toHaveLength(1);
-    expect(todoUpdates[0].items).toEqual([
+    const results = todoResults(events);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.todos).toEqual([
       { step: 'setup', status: 'pending' },
       { step: 'test', status: 'completed' },
     ]);
   });
 
-  it('should not yield TodoUpdate when non-todo tools are called', async () => {
-    todoStore.set('non-todo', []);
-
-    const mockExecutor = {
-      execute: () => Effect.succeed('done'),
-      executeBatch: () =>
-        Effect.succeed([
-          { type: 'ok' as const, id: 'tc1', name: 'read_file', output: 'file content' },
-        ]),
+  it('should not carry todos when non-todo tools are called', async () => {
+    const todo = new Map<string, Array<{ step: string; status: string }>>();
+    const mocks: HarnessMocks = {
+      llm: makeLlm('read_file'),
+      state: makeState({ sessionId: 'non-todo', cwd: '/tmp' }),
+      todo,
+      executor: makeExecutor('file content'),
     };
 
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop(
-        mockExecutor as any,
-        mockHooks,
-        1,
-        2,
-        {
-          state: { ...mockState, sessionId: 'non-todo' },
-          llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-        },
-        q
-      ).pipe(Effect.provide(AllMockLayer)) as any
-    );
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
+    const { events } = await runAgentTurn(mocks, { sessionId: 'non-todo', cwd: '/tmp' });
 
-    const todoUpdates = events.filter((e: any) => e._tag === 'TodoUpdate');
-    expect(todoUpdates).toHaveLength(0);
+    expect(todoResults(events)).toHaveLength(0);
   });
 });

@@ -1,4 +1,5 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { LLMStreamPart } from '../../src/llm/types.js';
 
 const generateText = vi.fn();
 const streamText = vi.fn();
@@ -12,12 +13,15 @@ vi.mock('ai', () => ({
   jsonSchema,
 }));
 
-async function collect(stream: AsyncIterable<string>): Promise<string[]> {
-  const chunks: string[] = [];
-  for await (const chunk of stream) {
-    chunks.push(chunk);
+const USAGE = { inputTokens: 100, outputTokens: 50, totalTokens: 150 };
+const EXPECTED_USAGE = { prompt: 100, completion: 50, total: 150 };
+
+async function collect(stream: AsyncIterable<LLMStreamPart>): Promise<LLMStreamPart[]> {
+  const parts: LLMStreamPart[] = [];
+  for await (const part of stream) {
+    parts.push(part);
   }
-  return chunks;
+  return parts;
 }
 
 function entry(provider: string) {
@@ -47,19 +51,12 @@ function request(withTools: boolean) {
 describe('OpenAIProvider completeStream', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    generateText.mockResolvedValue({
-      response: {
-        messages: [{ role: 'assistant', content: 'done' }],
-      },
-    });
+    generateText.mockResolvedValue({ text: 'done', toolCalls: [], usage: USAGE });
     streamText.mockReturnValue({
       fullStream: (async function* () {
         yield { type: 'text-delta', text: 'streamed' };
+        yield { type: 'finish', totalUsage: USAGE };
       })(),
-      response: Promise.resolve({
-        messages: [{ role: 'assistant', content: 'streamed' }],
-        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-      }),
     });
   });
 
@@ -67,21 +64,26 @@ describe('OpenAIProvider completeStream', () => {
     const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
     const provider = new OpenAIProvider({} as any, entry('sansen'));
 
-    const result = provider.completeStream(request(true) as any);
-    await expect(result.response).resolves.toMatchObject({ ok: true, value: { content: 'done' } });
-    await expect(collect(result.stream)).resolves.toEqual(['done']);
+    const parts = await collect(provider.completeStream(request(true) as any));
 
+    expect(parts).toEqual([
+      { type: 'text', text: 'done' },
+      { type: 'end', usage: EXPECTED_USAGE },
+    ]);
     expect(generateText).toHaveBeenCalledTimes(1);
     expect(streamText).not.toHaveBeenCalled();
-  });
+  }, 30000);
 
   it('keeps streaming for sansen requests without tools', async () => {
     const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
     const provider = new OpenAIProvider({} as any, entry('sansen'));
 
-    const result = provider.completeStream(request(false) as any);
-    await expect(collect(result.stream)).resolves.toEqual(['streamed']);
+    const parts = await collect(provider.completeStream(request(false) as any));
 
+    expect(parts).toEqual([
+      { type: 'text', text: 'streamed' },
+      { type: 'end', usage: EXPECTED_USAGE },
+    ]);
     expect(streamText).toHaveBeenCalledTimes(1);
     expect(generateText).not.toHaveBeenCalled();
   });
@@ -90,22 +92,43 @@ describe('OpenAIProvider completeStream', () => {
     const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
     const provider = new OpenAIProvider({} as any, entry('openai'));
 
-    const result = provider.completeStream(request(true) as any);
-    await expect(collect(result.stream)).resolves.toEqual(['streamed']);
+    const parts = await collect(provider.completeStream(request(true) as any));
 
+    expect(parts).toEqual([
+      { type: 'text', text: 'streamed' },
+      { type: 'end', usage: EXPECTED_USAGE },
+    ]);
     expect(streamText).toHaveBeenCalledTimes(1);
     expect(generateText).not.toHaveBeenCalled();
   });
 
-  it('extracts usage from streamText response', async () => {
+  it('maps tool-call parts to tool_call stream parts', async () => {
+    streamText.mockReturnValue({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', text: 'reading' };
+        yield { type: 'tool-call', toolCallId: 'tc-1', toolName: 'read_file', input: { path: 'a.ts' } };
+        yield { type: 'finish', totalUsage: USAGE };
+      })(),
+    });
     const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
     const provider = new OpenAIProvider({} as any, entry('openai'));
 
-    const result = provider.completeStream(request(false) as any);
-    const resp = await result.response;
-    expect(resp.ok).toBe(true);
-    if (resp.ok) {
-      expect(resp.value.usage).toEqual({ prompt: 100, completion: 50, total: 150 });
-    }
+    const parts = await collect(provider.completeStream(request(false) as any));
+
+    expect(parts).toEqual([
+      { type: 'text', text: 'reading' },
+      { type: 'tool_call', id: 'tc-1', name: 'read_file', args: { path: 'a.ts' } },
+      { type: 'end', usage: EXPECTED_USAGE },
+    ]);
   });
+
+  it('extracts usage from the finish part', async () => {
+    const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
+    const provider = new OpenAIProvider({} as any, entry('openai'));
+
+    const parts = await collect(provider.completeStream(request(false) as any));
+    const end = parts.find((p) => p.type === 'end');
+
+    expect(end).toEqual({ type: 'end', usage: EXPECTED_USAGE });
+  }, 30000);
 });

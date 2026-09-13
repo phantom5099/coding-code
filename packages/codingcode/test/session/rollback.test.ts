@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { filterForContext, buildContextMessages } from '../../src/context/service.js';
+import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionIndex } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';

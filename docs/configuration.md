@@ -40,10 +40,7 @@ context:
 memory:
   enabled: false          # 启用长期记忆
   model: ""               # 记忆提取模型，空字符串回退主模型
-  maxBytes: 16384         # 记忆文件最大字节数
-  promptMaxBytes: 8192    # 注入提示的最大字节数
-  extraTypes: []          # 自定义记忆类型
-  disabledTypes: []       # 禁用的记忆类型名
+  promptMaxBytes: 8192    # 注入提示的记忆内容最大字节数
 ```
 
 ### 字段详细说明
@@ -57,26 +54,7 @@ memory:
 | `context.compactionModel` | `''` | 上下文压缩使用的模型，空字符串回退到主会话 LLM |
 | `memory.enabled` | `false` | 是否启用长期记忆系统 |
 | `memory.model` | `''` | 记忆提取使用的模型，空字符串回退到主模型 |
-| `memory.maxBytes` | `16384` | 单个记忆文件的最大字节数 |
 | `memory.promptMaxBytes` | `8192` | 注入 system prompt 的记忆内容最大字节数 |
-| `memory.extraTypes` | `[]` | 自定义记忆类型列表 |
-| `memory.disabledTypes` | `[]` | 禁用的内置记忆类型名列表 |
-
-### 自定义记忆类型示例
-
-```yaml
-memory:
-  enabled: true
-  extraTypes:
-    - name: feedback
-      description: 工作流程中的教训和已验证的方法
-      enabled: true
-    - name: decision
-      description: 重要的架构和设计决策
-      enabled: true
-  disabledTypes:
-    - reference
-```
 
 ---
 

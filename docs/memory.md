@@ -1,116 +1,74 @@
 # 长期记忆系统
 
-Coding Code 支持跨会话的长期记忆，自动从对话中提取和存储关键信息。本文档介绍记忆类型、内容分类、自动提取机制和手动编辑方法。
+Coding Code 支持跨会话的长期记忆：自动从对话中提取关键信息，并在下一次会话开始时重新注入。本文档介绍记忆文件、自动提取机制和手动编辑方法。
 
 ---
 
-## 内存类型
+## 记忆文件
 
-记忆文件存储在项目的 `.codingcode/memory.md` 中。
+记忆存储为单个 Markdown 文件：
 
----
+```
+.codingcode/memory.md
+```
 
-## 记忆内容
+**整个文件就是长期记忆**，没有分区、没有标记块。文件的全部内容会作为记忆注入，也会作为"已有记忆"参与下一次提取。
 
-内置三种记忆类型：
+```markdown
+### 项目
+- 采用 monorepo 架构，使用 pnpm workspaces
+- 入口文件：packages/codingcode/src/cli.ts
 
-| 类型 | 提取来源 | 内容 |
-|------|---------|------|
-| `user` | `[user]` 标签的消息 | 用户角色、技能栈、工作偏好及对 Agent 的纠正 |
-| `project` | `[user]` + `[assistant]` 消息 | 架构决策、技术选型、部署信息 |
-| `reference` | `[user]` + `[tool:*]` 消息 | 外部资源、文档、Dashboard 链接 |
-
-可通过 `memory.extraTypes` 添加自定义记忆类型，通过 `memory.disabledTypes` 禁用内置类型。
+### 用户偏好
+- 偏好结构化 Markdown 输出
+```
 
 ---
 
 ## 自动提取
 
-Agent 在每次会话后自动执行记忆提取：
+记忆模式开启后，Agent 在会话结束时自动执行记忆更新：
 
-1. 构建 system prompt，包含各记忆类型的提取指引
-2. 发送已有记忆 + 会话记录给 LLM
-3. LLM 输出 `<memory>...</memory>` 块
-4. 提取块内容，返回新记忆文本（null 表示无新内容）
-5. 矛盾时新信息替换旧条目，同一会话以最新为准
+1. 读取记忆文件全文作为"已有记忆"
+2. 将会话记录（按 `[user]` / `[assistant]` / `[tool:名称]` 标注）与已有记忆一起发送给 LLM
+3. LLM 输出整份**最新版记忆**，放在 `<memory>...</memory>` 块中
+4. 直接用输出内容整体替换记忆文件（受字节上限约束）
+
+模型自行决定更新哪些内容：可以新增条目、修改过时信息、删除不再相关的内容，代码不做"模型只改动哪部分"的任何假设。若模型没有输出有效内容、或输出与当前文件一致，则不写入。
+
+### 提取提示词
+
+提取行为的规范全部写在提示词中，代码不感知记忆内容结构：
+
+- 只保留值得跨会话记住的信息：用户偏好与纠正、项目架构决策、技术选型、外部资源与链接等
+- 忽略一次性任务、调试过程、报错堆栈、闲聊
+- 输出必须是一份完整、自洽的最新记忆，而不是只输出变动部分
+- 新旧信息矛盾时以最新为准
+- 记忆用 `### 主题` 小节组织，小节下用 `- ` 列要点
 
 提取使用的模型可通过 `memory.model` 配置，留空则回退到主会话模型。
 
 ---
 
-## 记忆文件格式
+## 手动编辑
 
-记忆文件使用 Markdown 格式，自动提取内容包裹在标记块中：
+记忆文件就是普通 Markdown，用户可以直接编辑：
 
-```markdown
-<!-- auto:begin -->
-### user
-- 偏好使用函数式编程风格
-- 常用技术栈：React + TypeScript
-
-### project
-- 采用 monorepo 架构，使用 pnpm workspaces
-- 入口文件：packages/codingcode/src/cli.ts
-
-### reference
-- [API 文档](https://example.com/api)
-<!-- auto:end -->
-
-手动添加的内容可以写在标记块之外，不会被自动提取覆盖。
-```
-
-### 标记块机制
-
-- `replaceAutoBlock()`：原子替换 `<!-- auto:begin -->` 和 `<!-- auto:end -->` 之间的内容
-- `stripMarkersForPrompt()`：去掉标记后注入系统提示
-- `enforceMaxBytes()`：按 `### ` 小节逐个裁剪到字节上限（默认 16384 字节）
-- `mergeAutoBlocks()`：以 `### ` 小节名为 key 合并，incoming 覆盖 base
+- 手动写下的内容会在下次会话时作为记忆注入 Agent
+- 手动编辑也会被下一次自动提取作为"已有记忆"读到；保留、修改还是删除由模型根据后续对话自行决定
+- 自动提取在写入前会重新检查文件：若提取期间文件被手动改动，则放弃本次写入，避免覆盖用户编辑
 
 ---
 
 ## 配置
 
-在 `codingcode.yaml` 中配置记忆系统：
+在 `~/.codingcode/config.yaml` 中配置记忆系统：
 
 ```yaml
 memory:
-  enabled: true              # 启用长期记忆（默认 false）
-  model: ""                  # 记忆提取模型，空字符串回退到主模型
-  maxBytes: 16384            # 记忆文件最大字节数
-  promptMaxBytes: 8192       # 注入提示的最大字节数
-  extraTypes: []             # 自定义记忆类型
-  disabledTypes: []          # 禁用的记忆类型名
+  enabled: true         # 启用长期记忆（默认 false）
+  model: ""             # 记忆提取模型，空字符串回退到主模型
+  promptMaxBytes: 8192  # 注入提示词的记忆内容最大字节数
 ```
 
-### 自定义记忆类型
-
-```yaml
-memory:
-  enabled: true
-  extraTypes:
-    - name: feedback
-      description: 工作流程中的教训和已验证的方法
-      enabled: true
-    - name: decision
-      description: 重要的架构和设计决策
-      enabled: true
-  disabledTypes:
-    - reference              # 禁用内置的 reference 类型
-```
-
----
-
-## 手动编辑
-
-记忆文件采用 Markdown 格式，支持手动编辑。手动内容可写在 `<!-- auto:end -->` 标记之后，不会被自动提取覆盖：
-
-```markdown
-<!-- auto:begin -->
-### user
-- 偏好使用函数式编程风格
-<!-- auto:end -->
-
-### 手动备注
-- 项目部署流程：npm run build -> scp dist/ -> pm2 restart
-- 数据库连接字符串在 Vault 中
-```
+记忆文件本身有 16KB 的硬上限，超限时按 `### ` 小节从后往前裁掉超出部分。

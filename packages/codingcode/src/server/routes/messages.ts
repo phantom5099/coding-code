@@ -1,14 +1,7 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { sendMessage } from '../../agent/agent.js';
+import { AgentService } from '../../agent/port.js';
 import { WorkspaceService } from '../../core/workspace.js';
-import { toSseEvents } from '../adapter.js';
-import { ApprovalService } from '../../approval/index.js';
-import { getPermissionMode } from '../../session/file-ops.js';
-import { computePaths } from '../../core/path.js';
-import { existsSync } from 'fs';
-import type { PermissionMode } from '../../approval/types.js';
-import { LLMFactoryService } from '../../llm/factory.js';
 import { errorResponse } from '../util.js';
 import { createSseHandler } from '../handler.js';
 
@@ -27,54 +20,24 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
       })
     );
 
-    const llmEither = await rt.runPromise(
-      Effect.gen(function* () {
-        const factory = yield* LLMFactoryService;
-        return yield* Effect.either(factory.getLLMClient());
-      })
-    );
-    if (llmEither._tag === 'Left') {
-      const { status, body } = errorResponse(llmEither.left);
-      return c.json(body, status as any);
-    }
-    const llm = llmEither.right;
-
-    // Read session permissionMode if session exists
-    let approvalOverride: any = undefined;
-    if (sessionId !== '_') {
-      const idxPath = computePaths(normalizedCwd, sessionId).indexPath;
-      if (existsSync(idxPath)) {
-        const mode = getPermissionMode(idxPath) as PermissionMode;
-        const forked: any = await rt.runPromise(
-          Effect.gen(function* () {
-            const approval = yield* ApprovalService;
-            return yield* approval.fork({ permissionMode: mode });
-          })
-        );
-        approvalOverride = forked;
-      }
-    }
-
     const isNew = sessionId === '_' || !sessionId;
-    const sendOptions: Parameters<typeof sendMessage>[4] = {
+    const runOpts: any = {
+      cwd: normalizedCwd,
       signal: c.req.raw.signal,
-      approvalOverride,
     };
     if (isNew) {
-      sendOptions.activeProfile = 'build';
-      sendOptions.permissionMode = 'default';
-      sendOptions.model = llm.modelInfo.model;
+      runOpts.activeProfile = 'build';
+      runOpts.permissionMode = 'default';
     }
-    const program = sendMessage(
-      isNew ? undefined : sessionId,
-      input,
-      normalizedCwd,
-      llm,
-      sendOptions
-    );
 
     const result = await rt.runPromise(
-      program.pipe(
+      Effect.gen(function* () {
+        const agent = yield* AgentService;
+        return yield* agent.runTurn(input, {
+          sessionId: isNew ? undefined : sessionId,
+          ...runOpts,
+        });
+      }).pipe(
         Effect.catchAllDefect((defect) =>
           Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
         ),
@@ -94,12 +57,9 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
 
     return sseHandler(
       async function* () {
-        yield* toSseEvents(stream);
+        yield* stream;
       },
-      {
-        initialEvents: [{ type: 'session_id', sessionId }],
-        sessionId,
-      }
+      { sessionId }
     )(c);
   });
 }

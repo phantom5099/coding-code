@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
-import { McpService } from '../mcp/index.js';
+import { McpService } from '../mcp/port.js';
 import type { McpServerConfig, McpStatus } from '../mcp/types.js';
-import { SkillService } from '../skills/service.js';
+import { SkillService } from '../skills/port.js';
 import type { PermissionMode } from '../approval/types.js';
 import type { UserHookConfig } from '../hooks/types.js';
 import { isGlobalCwd } from '../core/workspace.js';
@@ -26,15 +26,8 @@ import {
   resetProjectHookDisabledState,
 } from '../hooks/config.js';
 import { setHookRuntimeEnabled } from '../hooks/executor.js';
-import {
-  getMemoryConfig,
-  getAllTypesWithStatus,
-  setMemoryTypeDisabled,
-  addMemoryExtraType as _addMemoryExtraType,
-  updateMemoryExtraType as _updateMemoryExtraType,
-  deleteMemoryExtraType as _deleteMemoryExtraType,
-} from '../memory/config.js';
-import { MemoryService } from '../memory/index.js';
+import { getMemoryConfig } from '../memory/config.js';
+import { MemoryService } from '../memory/port.js';
 import { AlreadyExistsError, NotFoundError } from '../core/error.js';
 import {
   loadConfig,
@@ -42,43 +35,8 @@ import {
   updateContextCompactionModel,
 } from '@codingcode/infra/config';
 import type { AppRuntime } from '../layer.js';
-import { SessionService } from '../session/store.js';
-
-export interface SettingsClient {
-  getMemoryEnabled(): Promise<boolean>;
-  getMemoryConfig(): Promise<{
-    enabled: boolean;
-    types: Array<{ name: string; description: string; isBuiltIn: boolean; disabled: boolean }>;
-    model: string;
-  }>;
-  setMemoryEnabled(enabled: boolean): Promise<void>;
-  setMemoryTypeDisabled(name: string, disabled: boolean): Promise<void>;
-  addMemoryExtraType(type: { name: string; description: string }): Promise<void>;
-  updateMemoryExtraType(name: string, type: { name: string; description: string }): Promise<void>;
-  deleteMemoryExtraType(name: string): Promise<void>;
-  setMemoryModel(model: string): Promise<{ model: string }>;
-  getAgentConfig(): Promise<{ maxSteps: number; maxStopContinuations: number }>;
-  setCompactionModel(compactionModel: string): Promise<{ compactionModel: string }>;
-  getMcpStatus(input: { cwd: string }): Promise<McpStatus[]>;
-  setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
-  resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
-  createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
-  updateMcpServer(input: { cwd: string; name: string; server: McpServerConfig }): Promise<void>;
-  deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
-  listSkills(): Promise<Array<{ name: string; description: string; skillPath: string }>>;
-  listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
-  createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
-  updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
-  deleteHook(input: { cwd: string; name: string }): Promise<void>;
-  setHookDisabled(input: { cwd: string; name: string; disabled: boolean }): Promise<void>;
-  resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;
-  getGlobalPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
-  setGlobalPermissionMode(input: {
-    sessionId: string;
-    cwd: string;
-    mode: PermissionMode;
-  }): Promise<void>;
-}
+import { SessionService } from '../session/port.js';
+import type { SettingsClient } from '../client/contracts.js';
 
 // ---- Helpers with validation ----
 
@@ -238,7 +196,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
 
     async getMemoryConfig() {
       const cfg = getMemoryConfig();
-      return { enabled: cfg.enabled, types: getAllTypesWithStatus(cfg), model: cfg.model };
+      return { enabled: cfg.enabled, model: cfg.model };
     },
 
     async setMemoryEnabled(enabled) {
@@ -263,26 +221,6 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
     async setCompactionModel(compactionModel) {
       updateContextCompactionModel(compactionModel);
       return { compactionModel };
-    },
-
-    async setMemoryTypeDisabled(name, disabled) {
-      setMemoryTypeDisabled(name, disabled);
-    },
-
-    async addMemoryExtraType(type) {
-      _addMemoryExtraType({ name: type.name, description: type.description, enabled: true });
-    },
-
-    async updateMemoryExtraType(name, type) {
-      _updateMemoryExtraType(name, {
-        name: type.name,
-        description: type.description,
-        enabled: true,
-      });
-    },
-
-    async deleteMemoryExtraType(name) {
-      _deleteMemoryExtraType(name);
     },
 
     async getMcpStatus({ cwd }) {
@@ -426,7 +364,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
         Effect.gen(function* () {
           const session = yield* SessionService;
           const state = yield* session.load(input.cwd, input.sessionId);
-          return yield* session.getPermissionMode(state);
+          return state.permissionMode;
         })
       );
     },
@@ -439,8 +377,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
       await rt.runPromise(
         Effect.gen(function* () {
           const session = yield* SessionService;
-          const state = yield* session.load(input.cwd, input.sessionId);
-          yield* session.setPermissionMode(state, input.mode);
+          yield* session.setPermissionMode(input.cwd, input.sessionId, input.mode);
         })
       );
     },

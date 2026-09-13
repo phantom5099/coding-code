@@ -3,19 +3,18 @@ import { Effect, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import type { SessionStoreState } from '../../session/types.js';
-import type { AgentProfileName } from '../../subagent/types.js';
-import { SessionService } from '../../session/store.js';
-import { getPermissionMode, deleteSession } from '../../session/file-ops.js';
+import type { ProfileName } from '../../core/types.js';
+import { SessionService } from '../../session/port.js';
 import { computePaths } from '../../core/path.js';
-import { readUIHistory, findUserMessageForTurn } from '../../session/ui-history.js';
-import { ContextService, estimatePromptTokens } from '../../context/service.js';
-import { CheckpointService } from '../../checkpoint/checkpoint-service.js';
+import { ContextService } from '../../context/port.js';
+import { estimatePromptTokensFrom } from '../../context/context.js';
+import { CheckpointService } from '../../checkpoint/port.js';
 import { WorkspaceService } from '../../core/workspace.js';
-import { LLMFactoryService } from '../../llm/factory.js';
+import { LLMFactoryService } from '../../llm/port.js';
 import type { LLMClient } from '../../llm/client.js';
 import { errorResponse } from '../util.js';
 import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
-import { BUILD_PROFILE, PLAN_PROFILE } from '../../agent/profile.js';
+import { AVAILABLE_PROFILES, isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode, type PermissionMode } from '../../approval/types.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -58,11 +57,11 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions', async (c) => {
     const body = (await c.req.json()) as {
       cwd: string;
-      activeProfile: AgentProfileName;
+      activeProfile: ProfileName;
       permissionMode: PermissionMode;
       model: string;
     };
-    if (body.activeProfile !== 'plan' && body.activeProfile !== 'build') {
+    if (!isAgentProfileName(body.activeProfile)) {
       return c.json({ error: `Invalid activeProfile: ${body.activeProfile}` }, 400);
     }
     if (!isPermissionMode(body.permissionMode)) {
@@ -144,7 +143,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const maxTokens = llm?.modelInfo.maxTokens ?? 128000;
 
         return yield* Effect.promise(() =>
-          context.compactWithLLM(session.getTranscriptPath(state), maxTokens, llm)
+          context.compactWithLLM(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath, maxTokens, llm)
         );
       })
     );
@@ -159,7 +158,12 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ error: 'cwd required' }, 400);
-    deleteSession(sessionId, cwd);
+    await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        yield* session.deleteSession(sessionId, cwd);
+      }) as any
+    );
     return c.json({ ok: true });
   });
 
@@ -167,8 +171,17 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ error: 'cwd required' }, 400);
-    const turns = readUIHistory(sessionId, cwd);
-    return c.json(turns);
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        return yield* session.readUITurns(sessionId, cwd);
+      }) as any
+    );
+    if (!result.ok) {
+      const { status, body: errBody } = errorResponse(result.error);
+      return c.json(errBody, status as any);
+    }
+    return c.json(result.value);
   });
 
   // ---- Plan file: read the current plan document for a session ----
@@ -247,13 +260,13 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     return c.json({
       ...result.value,
       cwd,
-      available: [{ name: PLAN_PROFILE.name }, { name: BUILD_PROFILE.name }],
+      available: AVAILABLE_PROFILES,
     });
   });
 
   router.post('/api/sessions/:id/profile', async (c) => {
     const sessionId = c.req.param('id');
-    const body = (await c.req.json()) as { cwd?: string; activeProfile: AgentProfileName };
+    const body = (await c.req.json()) as { cwd?: string; activeProfile: ProfileName };
     const cwd = await rt.runPromise(
       Effect.gen(function* () {
         const ws = yield* WorkspaceService;
@@ -261,7 +274,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       })
     );
     const activeProfile = body.activeProfile;
-    if (activeProfile !== 'plan' && activeProfile !== 'build') {
+    if (!isAgentProfileName(activeProfile)) {
       return c.json({ error: `Invalid activeProfile: ${activeProfile}` }, 400);
     }
     const result = await runWithLayer(
@@ -286,10 +299,18 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
     if (!cwd) return c.json({ mode: 'default' });
-    const idxPath = computePaths(cwd, sessionId).indexPath;
-    if (!existsSync(idxPath)) return c.json({ mode: 'default' });
-    const mode = getPermissionMode(idxPath);
-    return c.json({ mode });
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        const state = yield* session.load(cwd, sessionId);
+        return { mode: state.permissionMode };
+      }) as any
+    );
+    if (!result.ok) {
+      const { status, body: errBody } = errorResponse(result.error);
+      return c.json(errBody, status as any);
+    }
+    return c.json(result.value);
   });
 
   router.put('/api/sessions/:id/permission-mode', async (c) => {
@@ -302,7 +323,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const setResult = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setPermissionModeOnDisk(cwd, sessionId, mode);
+        yield* session.setPermissionMode(cwd, sessionId, mode);
         return { ok: true };
       }) as any
     );
@@ -311,36 +332,6 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       return c.json(errBody, status as any);
     }
     return c.json({ ok: true });
-  });
-
-  router.get('/api/sessions/:id/rollback-state', async (c) => {
-    const sessionId = c.req.param('id');
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
-      })
-    );
-    const result = await runWithLayer(
-      Effect.gen(function* () {
-        const checkpoint = yield* CheckpointService;
-        const entry = yield* checkpoint.getLatestRestoreEntry(cwd, sessionId);
-        return {
-          context: { active: false, currentThroughTurnId: null },
-          code: {
-            canUndoLast: entry !== null,
-            lastEntry: entry,
-            revertedFiles: entry?.selectedFiles ?? [],
-            lastEntryId: entry?.id ?? null,
-          },
-        };
-      })
-    );
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
-    return c.json(result.value);
   });
 
   router.get('/api/sessions/:id/checkpoints/latest/diff', async (c) => {
@@ -402,17 +393,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
-        const completedTurns = yield* checkpoint.getCompletedTurns(cwd, sessionId);
-        if (completedTurns.length === 0)
-          return {
-            reverted: false,
-            throughTurnId: 0,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
-        const latestTurnId = completedTurns[completedTurns.length - 1]!;
-        return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, [body.file]);
+        return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, undefined, [body.file]);
       })
     );
     if (!result.ok) {
@@ -434,17 +415,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
-        const completedTurns = yield* checkpoint.getCompletedTurns(cwd, sessionId);
-        if (completedTurns.length === 0)
-          return {
-            reverted: false,
-            throughTurnId: 0,
-            affectedTurns: [],
-            selectedFiles: [],
-            restoreEntry: null,
-          };
-        const latestTurnId = completedTurns[completedTurns.length - 1]!;
-        return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, latestTurnId, body.files);
+        return yield* checkpoint.revertCheckpointFiles(cwd, sessionId, undefined, body.files);
       })
     );
     if (!result.ok) {
@@ -511,12 +482,11 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
-        const turns = readUIHistory(sessionId, cwd);
-        const promptEstimate = estimatePromptTokens(session.getTranscriptPath(state));
+        const turns = yield* session.readUITurns(sessionId, cwd);
+        const promptEstimate = estimatePromptTokensFrom(yield* session.readHistory(state));
         const usage = state.usage;
-        return { ok: true, turns, rolledBackMessage, promptEstimate, usage };
+        return { ok: true, turns, promptEstimate, usage };
       }) as any
     );
     if (!result.ok) {
@@ -541,16 +511,14 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const checkpoint = yield* CheckpointService;
         const codeResult = yield* checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
         const state = yield* session.load(cwd, sessionId);
-        const rolledBackMessage = findUserMessageForTurn(sessionId, body.throughTurnId, cwd);
         yield* session.rollbackToTurn(state, body.throughTurnId, 'user rollback');
-        const turns = readUIHistory(sessionId, cwd);
-        const promptEstimate = estimatePromptTokens(session.getTranscriptPath(state));
+        const turns = yield* session.readUITurns(sessionId, cwd);
+        const promptEstimate = estimatePromptTokensFrom(yield* session.readHistory(state));
         const usage = state.usage;
         return {
           ok: true,
           turns,
           codeResult,
-          rolledBackMessage,
           promptEstimate,
           usage,
         };
@@ -561,31 +529,6 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       return c.json(errBody, status as any);
     }
     return c.json(result.value);
-  });
-
-  router.post('/api/sessions/:id/undo-code-rollback', async (c) => {
-    const sessionId = c.req.param('id');
-    const body = (await c.req.json()) as { cwd: string; force?: boolean; files?: string[] };
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
-    const result = await runWithLayer(
-      Effect.gen(function* () {
-        const checkpoint = yield* CheckpointService;
-        return yield* checkpoint.undoLastCodeRollback(cwd, sessionId, {
-          force: body.force,
-          files: body.files,
-        });
-      })
-    );
-    if (!result.ok) {
-      const { status, body: errBody } = errorResponse(result.error);
-      return c.json(errBody, status as any);
-    }
-    return c.json({ ok: true, result: result.value });
   });
 
   router.post('/api/sessions/:id/fork', async (c) => {
@@ -603,9 +546,9 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
         const newSessionId = yield* session.forkSession(state, atTurnId);
-        const turns = readUIHistory(newSessionId, cwd);
+        const turns = yield* session.readUITurns(newSessionId, cwd);
         const newJsonlPath = computePaths(cwd, newSessionId).transcriptPath;
-        const promptEstimate = estimatePromptTokens(newJsonlPath);
+        const promptEstimate = estimatePromptTokensFrom(session.readEvents(newJsonlPath));
         return { sessionId: newSessionId, turns, promptEstimate };
       }) as any
     );

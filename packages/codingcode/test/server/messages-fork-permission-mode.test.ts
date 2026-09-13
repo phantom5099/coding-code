@@ -5,15 +5,12 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { registerMessagesRoutes } from '../../src/server/routes/messages.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { computePaths } from '../../src/core/path.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { McpService } from '../../src/mcp/index.js';
-import { RulesService } from '../../src/rules/index.js';
-import { ApprovalService } from '../../src/approval/index.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
+import { HookService } from '../../src/hooks/port.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { AgentService } from '../../src/agent/port.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -30,24 +27,11 @@ const mockHookService = {
   enableHook: () => Effect.succeed(undefined),
   disposeSession: () => Effect.succeed(undefined),
   disposeProject: () => Effect.succeed(undefined),
-};
-
-const mockMcpService = {
-  syncConnections: () => Effect.succeed(undefined),
-  connectServers: () => Effect.succeed(undefined),
-  listProjectMcpTools: () => [],
-  disposeSession: () => Effect.succeed(undefined),
-} as any;
-
-const mockRulesService = {
-  getAllRules: () => '',
-  evictProjectRules: () => undefined,
 } as any;
 
 const mockApprovalWaitService = {
   waitForConfirm: () => Effect.dieMessage('not implemented'),
   resolveConfirm: () => Effect.succeed(false),
-  getPending: () => Effect.succeed([]),
   emitApprovalRequest: () => Effect.succeed(undefined),
   registerEmitter: () => Effect.succeed(undefined),
   delegateEmitter: () => Effect.succeed(undefined),
@@ -55,43 +39,36 @@ const mockApprovalWaitService = {
   hasEmitter: () => Effect.succeed(false),
 };
 
-const mockLLMFactory = {
-  getLLMClient: () => Effect.dieMessage('not used in this test'),
-  listModels: () => Effect.succeed([]),
-  getActiveEntry: () => Effect.dieMessage('not used'),
-  findModel: () => Effect.succeed(null),
-  createClient: () => Effect.dieMessage('not used'),
+const mockWorkspace = {
+  resolveWorkspaceCwd: (cwd: string | undefined) => cwd || '/tmp',
 } as any;
 
-const mockWorkspace = {
-  resolveWorkspaceCwd: (cwd: string | undefined) => Effect.succeed(cwd || '/tmp'),
+// The message-send path now lives in AgentService.runTurn. A real runTurn loads
+// the persisted session (which reads permissionMode from the on-disk index)
+// before streaming. We mirror that seam here so the test keeps validating that
+// the fork/send path starts from the persisted session state.
+const loadedPermissionModes: string[] = [];
+
+const mockAgentService = {
+  runTurn: (_input: string, opts: any) =>
+    Effect.gen(function* () {
+      const session = yield* SessionService;
+      const state = yield* session.load(opts.cwd, opts.sessionId);
+      loadedPermissionModes.push(state.permissionMode);
+      return {
+        stream: (async function* () {})() as any,
+        sessionId: state.sessionId,
+      };
+    }),
 } as any;
 
 function makeLayer() {
   return Layer.mergeAll(
-    ProjectRuntimeService.Default.pipe(
-      Layer.provide(
-        Layer.mergeAll(
-          Layer.succeed(HookService, mockHookService as any),
-          Layer.succeed(McpService, mockMcpService),
-          Layer.succeed(RulesService, mockRulesService),
-          SessionService.Default
-        )
-      )
-    ),
-    SessionService.Default,
-    Layer.succeed(HookService, mockHookService as any),
+    Layer.succeed(HookService, mockHookService),
     Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any),
-    ApprovalService.Default.pipe(
-      Layer.provide(
-        Layer.mergeAll(
-          Layer.succeed(HookService, mockHookService as any),
-          Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any)
-        )
-      )
-    ),
-    Layer.succeed(LLMFactoryService, mockLLMFactory as any),
-    Layer.succeed(WorkspaceService, mockWorkspace as any)
+    Layer.succeed(WorkspaceService, mockWorkspace),
+    Layer.succeed(AgentService, mockAgentService),
+    SessionLayer
   );
 }
 
@@ -120,6 +97,8 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
     idx.permissionMode = 'bypass';
     writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
+    loadedPermissionModes.length = 0;
+
     app = new Hono();
     registerMessagesRoutes(app, rt);
   });
@@ -129,12 +108,13 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  it('does not crash and reaches the sendMessage path (fork uses disk permissionMode)', async () => {
+  it('does not crash and the message path loads the persisted session (disk permissionMode)', async () => {
     const res = await app.request('/api/sessions/' + sessionId + '/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ input: 'hello', cwd }),
     });
     expect(res.status).not.toBe(404);
+    expect(loadedPermissionModes[0]).toBe('bypass');
   });
 });

@@ -1,292 +1,110 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Effect, Layer, Queue, Chunk } from 'effect';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import { TodoService } from '../../src/agent/todo.js';
-import { ContextService } from '../../src/context/service.js';
-import { MemoryService } from '../../src/memory/index.js';
+import { Effect } from 'effect';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pToolCall,
+  pEnd,
+  endReason,
+} from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
+    maxSteps: 5,
+    maxStopContinuations: 2,
     context: { compactionModel: '' },
     memory: {
       enabled: false,
       model: '',
       maxBytes: 16384,
       promptMaxBytes: 8192,
-      extraTypes: [],
-      disabledTypes: [],
     },
     server: { port: 8080 },
   }),
 }));
 
-import { agentLoop } from '../../src/agent/agent';
-import { Result } from '../../src/core/result';
-import type { RunStreamOptions } from '../../src/agent/types';
-import { SessionService } from '../../src/session/store.js';
+const mockState = makeState({ sessionId: 'test-session', cwd: '/tmp', title: 'test' });
 
-const AllMockLayer = Layer.mergeAll(
-  Layer.succeed(CheckpointService, {
-    snapshotBaseline: () => Effect.void,
-    snapshotFinal: () => Effect.void,
-  } as any),
-  Layer.succeed(SessionService, {
-    getTranscriptPath: () => '/tmp/test.jsonl',
-    recordAssistant: () => Effect.succeed({}),
-    recordUser: () => Effect.succeed({}),
-    recordToolResult: () => Effect.succeed({}),
-  } as any),
-  Layer.succeed(ProjectRuntimeService, {
-    prepareProject: () => Effect.void,
-    resolveMainAgentProfile: () => undefined,
-    resolveSubagentProfile: () => undefined,
-    listAgentProfiles: () => [],
-    getToolPolicy: () => ({
-      allowedTools: undefined,
-      allowedMcpServers: undefined,
+/** LLM 先调用一次 submit_plan，再以纯文本收尾。 */
+function makeSubmitPlanLlm() {
+  let callCount = 0;
+  const llm = {
+    completeStream: vi.fn(() => {
+      callCount++;
+      if (callCount === 1) {
+        return llmStream(
+          pToolCall('tc-1', 'submit_plan', {
+            title: 'My Plan',
+            plan_content: '## Goal\nfix bug',
+          }),
+          pEnd()
+        );
+      }
+      return llmStream(pText('Plan is ready for your review.'), pEnd());
     }),
-    setSessionProfile: () => {},
-    restoreSessionProfile: () => Effect.void,
-    getSessionProfile: () => undefined,
-    disposeSession: () => Effect.void,
-    disposeProject: () => Effect.void,
-  } as any),
-  Layer.succeed(TodoService, {
-    read: () => [],
-    write: () => {},
-    reset: () => {},
-  } as any),
-  Layer.succeed(ContextService, {
-    assemblePayload: () => ({
-      messages: [{ role: 'user' as const, content: 'hi' }],
-      compactedEvents: [],
-      promptEstimate: 10,
-      currentTurnId: 1,
-      compactedTurnIds: new Set<number>(),
+    modelInfo: { maxTokens: 1000 },
+  } as any;
+  return llm;
+}
+
+function makeOkExecutor() {
+  return {
+    executeBatch: (calls: any[]) =>
+      Effect.succeed(
+        calls.map((tc: any) => ({
+          type: 'ok' as const,
+          id: tc.id,
+          name: tc.name,
+          output: 'Plan written to /tmp/plans/my-plan.md',
+        }))
+      ),
+  } as any;
+}
+
+function makeCapturingHooks() {
+  const emittedPoints: string[] = [];
+  const hooks = {
+    emit: vi.fn((point: string, _payload: any) => {
+      emittedPoints.push(point);
+      return Effect.succeed(undefined);
     }),
-    compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-    compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-  } as any),
-  Layer.succeed(MemoryService, {
-    getMemoryEnabled: () => false,
-    setMemoryEnabled: () => {},
-    loadMemoryForPrompt: () => '',
-    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
-  } as any)
-);
+    emitDecision: vi.fn(() => Effect.succeed(null)),
+  } as any;
+  return { hooks, emittedPoints };
+}
 
-const mockState = {
-  sessionId: 'test-session',
-  cwd: process.cwd(),
-  currentTurnId: 1,
-  sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
-  model: 'test-model',
-  title: 'test',
-  usage: undefined,
-  activeProfile: 'build' as const,
-  permissionMode: 'default' as const,
-  messageCount: 0,
-  memorySnapshot: '',
-};
-
-describe('agentLoop plan.ready emission on turn-end', () => {
-  it('emits plan.ready when turn ends naturally after submit_plan tool call', async () => {
-    let callCount = 0;
-    const mockLlm = {
-      completeStream: vi.fn(() => {
-        callCount++;
-        if (callCount === 1) {
-          // First call: LLM emits submit_plan tool call
-          return {
-            stream: (async function* () {})(),
-            response: Promise.resolve(
-              Result.ok({
-                content: '',
-                toolCalls: [
-                  {
-                    id: 'tc-1',
-                    name: 'submit_plan',
-                    arguments: { title: 'My Plan', plan_content: '## Goal\nfix bug' },
-                  },
-                ],
-              })
-            ),
-          };
-        }
-        // Second call: LLM emits pure content, turn ends
-        return {
-          stream: (async function* () {})(),
-          response: Promise.resolve(
-            Result.ok({ content: 'Plan is ready for your review.', toolCalls: [] })
-          ),
-        };
-      }),
-    };
-
-    const planReadyEmits: any[] = [];
-    const mockHooks = {
-      emit: vi.fn((point: string, payload: any) => {
-        if (point === 'plan.ready') planReadyEmits.push(payload);
-        return Effect.succeed(undefined);
-      }),
-      emitDecision: vi.fn(() => Effect.succeed(null)),
-    } as any;
-
-    const executor = {
-      execute: () => Effect.succeed({ output: '' }),
-      executeBatch: (tcs: any[]) =>
-        Effect.succeed(
-          tcs.map((tc: any) => {
-            if (tc.name === 'submit_plan') {
-              return {
-                type: 'ok' as const,
-                id: tc.id,
-                name: tc.name,
-                output: 'Plan written to /tmp/plans/my-plan.md',
-              };
-            }
-            return { type: 'ok' as const, id: tc.id, name: tc.name, output: '' };
-          })
-        ),
-    } as any;
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop(executor, mockHooks, 5, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
+describe('agent treats submit_plan as an ordinary tool', () => {
+  it('runs submit_plan and ends the turn without any plan-specific hook events', async () => {
+    const { hooks, emittedPoints } = makeCapturingHooks();
+    const { events } = await runAgentTurn(
+      { llm: makeSubmitPlanLlm(), state: mockState, hooks, executor: makeOkExecutor() },
+      { sessionId: 'test-session', cwd: '/tmp' }
     );
 
-    // Exactly one plan.ready emitted, at turn-end (after the second LLM call)
-    expect(planReadyEmits).toHaveLength(1);
-    expect(planReadyEmits[0]).toEqual({
-      sessionId: mockState.sessionId,
-      projectPath: mockState.cwd,
-      title: 'My Plan',
-    });
+    expect(endReason(events)).toBe('done');
+    // plan.ready hook point has been removed — the agent no longer announces submit_plan.
+    expect(emittedPoints.includes('plan.ready')).toBe(false);
+    expect(emittedPoints.filter((p) => p.startsWith('plan.'))).toHaveLength(0);
   });
 
-  it('does NOT emit plan.ready when no submit_plan was called this turn', async () => {
-    let callCount = 0;
-    const mockLlm = {
-      completeStream: vi.fn(() => {
-        callCount++;
-        return {
-          stream: (async function* () {})(),
-          response: Promise.resolve(
-            Result.ok({ content: 'Just a regular response', toolCalls: [] })
-          ),
-        };
-      }),
-    };
+  it('does NOT switch profile after submit_plan (profile change is UI responsibility)', async () => {
+    const setActiveProfile = vi.fn(() => Effect.void);
+    const { hooks } = makeCapturingHooks();
 
-    const planReadyEmits: any[] = [];
-    const mockHooks = {
-      emit: vi.fn((point: string, payload: any) => {
-        if (point === 'plan.ready') planReadyEmits.push(payload);
-        return Effect.succeed(undefined);
-      }),
-      emitDecision: vi.fn(() => Effect.succeed(null)),
-    } as any;
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop({} as any, mockHooks, 5, 2, opts, q).pipe(Effect.provide(AllMockLayer)) as any
-    );
-
-    expect(planReadyEmits).toHaveLength(0);
-  });
-
-  it('does NOT switch profile after plan.ready (profile change is UI responsibility)', async () => {
-    let callCount = 0;
-    const setProfileCalls: any[] = [];
-    const mockLlm = {
-      completeStream: vi.fn(() => {
-        callCount++;
-        if (callCount === 1) {
-          return {
-            stream: (async function* () {})(),
-            response: Promise.resolve(
-              Result.ok({
-                content: '',
-                toolCalls: [
-                  {
-                    id: 'tc-1',
-                    name: 'submit_plan',
-                    arguments: { title: 'My Plan', plan_content: 'x' },
-                  },
-                ],
-              })
-            ),
-          };
-        }
-        return {
-          stream: (async function* () {})(),
-          response: Promise.resolve(Result.ok({ content: 'done', toolCalls: [] })),
-        };
-      }),
-    };
-
-    const mockRuntime = {
-      prepareProject: () => Effect.void,
-      resolveMainAgentProfile: () => undefined,
-      resolveSubagentProfile: () => undefined,
-      listAgentProfiles: () => [],
-      getToolPolicy: () => ({
-        allowedTools: undefined,
-        allowedMcpServers: undefined,
-      }),
-      setSessionProfile: (...args: any[]) => {
-        setProfileCalls.push(args);
-        return {};
+    const { events } = await runAgentTurn(
+      {
+        llm: makeSubmitPlanLlm(),
+        state: mockState,
+        hooks,
+        executor: makeOkExecutor(),
+        sessionPort: { setActiveProfile },
       },
-      getSessionProfile: () => undefined,
-      disposeSession: () => Effect.void,
-      disposeProject: () => Effect.void,
-    };
-
-    const layer = AllMockLayer.pipe(
-      Layer.provide(Layer.succeed(ProjectRuntimeService, mockRuntime as any))
+      { sessionId: 'test-session', cwd: '/tmp' }
     );
 
-    const mockHooks = {
-      emit: () => Effect.succeed(undefined),
-      emitDecision: () => Effect.succeed(null),
-    } as any;
-
-    const executor = {
-      execute: () => Effect.succeed({ output: '' }),
-      executeBatch: (tcs: any[]) =>
-        Effect.succeed(
-          tcs.map((tc: any) =>
-            tc.name === 'submit_plan'
-              ? { type: 'ok' as const, id: tc.id, name: tc.name, output: 'Plan written to /x' }
-              : { type: 'ok' as const, id: tc.id, name: tc.name, output: '' }
-          )
-        ),
-    } as any;
-
-    const opts: RunStreamOptions = {
-      state: mockState,
-      llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any,
-    };
-
-    const q = Effect.runSync(Queue.unbounded<any>());
-    await Effect.runPromise(
-      agentLoop(executor, mockHooks, 5, 2, opts, q).pipe(Effect.provide(layer)) as any
-    );
-
-    // Profile must NOT be switched as a side effect of plan submission
-    // (UI button drives the switch)
-    expect(setProfileCalls).toHaveLength(0);
+    expect(endReason(events)).toBe('done');
+    expect(setActiveProfile).not.toHaveBeenCalled();
   });
 });

@@ -1,85 +1,44 @@
 import type { LLMClient } from '../llm/client.js';
-import type { MemoryTypeConfig } from '@codingcode/infra/config';
-import type { StructuredTranscript } from './types.js';
 
 export async function extractMemory(opts: {
-  currentAuto: string;
-  transcript: StructuredTranscript;
-  types: MemoryTypeConfig[];
+  currentMemory: string;
+  transcript: string;
   llm: LLMClient;
 }): Promise<string | null> {
-  const { currentAuto, transcript, types, llm } = opts;
+  const { currentMemory, transcript, llm } = opts;
 
-  const typeDescriptions = types.map((t) => `- **${t.name}**: ${t.description}`).join('\n');
-
-  const typeGuidelineMap: Record<string, string> = {
-    user: '- **user**: 从 [user] 标签提取用户角色、技能栈、对 Agent 的工作偏好及纠正',
-    project: '- **project**: 从 [user] 和 [assistant] 标签提取架构决策、技术选型、部署信息',
-    reference: '- **reference**: 从 [user] 和 [tool:*] 标签提取外部资源、文档、Dashboard 链接',
-  };
-
-  const typeGuidance = types
-    .map((t) => typeGuidelineMap[t.name])
-    .filter(Boolean)
-    .join('\n');
-
-  const formatExamples = types
-    .map((t) => {
-      switch (t.name) {
-        case 'user':
-          return '### user\n- 要点一\n- 要点二';
-        case 'project':
-          return '### project\n- 架构决策';
-        case 'reference':
-          return '### reference\n- [标题](URL)';
-        default:
-          return '';
-      }
-    })
-    .filter(Boolean)
-    .join('\n\n');
-
-  const systemPrompt = `你是记忆提取器。从对话记录中提取值得长期记忆的内容，输出 <memory>...</memory> 块。
-如果没有值得记忆的内容，输出 <memory></memory>。
+  const systemPrompt = `你是记忆整理器。基于"已有记忆"和"会话记录"，输出整份最新版长期记忆，放在 <memory>...</memory> 块中，不要输出其它内容。
 
 规则：
-- 新信息与已有记忆矛盾时，用新信息替换旧条目
-- 同一会话内前后不一致，以最新出现的为准
-- 只输出有内容的 ### 小节，忽略临时调试、一次性任务、报错堆栈
-
-记忆类型及信息来源：
-${typeGuidance}
+- 只保留值得跨会话记住的信息：用户角色、偏好与对 Agent 的纠正，项目架构决策、技术选型与部署信息，外部资源与链接等。
+- 忽略临时内容：一次性任务、调试过程、报错堆栈、闲聊。
+- 更新哪些内容由你决定：在已有记忆基础上自行增、删、改，输出必须是一份完整、自洽的最新记忆，而不是只输出变动部分。
+- 旧记忆与对话新信息矛盾时以最新为准；同一会话前后不一致时以最后出现为准。
+- 不要编造对话中未出现的信息。
+- 若没有值得记住的新信息且已有记忆为空，输出 <memory></memory>。
 
 格式：
-${formatExamples}`;
+- 纯 Markdown，用 "### 主题" 小节组织，小节下用 "- " 列要点。
+- 条目需具体、自包含，避免"上面提到的那个"这类指代。
+- <memory> 内不要带任何解释性文字。`;
 
   const userMessage = `已有记忆：
-${currentAuto}
+${currentMemory || '（空）'}
 
-会话记录：
-[user] ${transcript.userOnly}
----
-[user+assistant] ${transcript.userAndAssistant}
----
-[user+tool] ${transcript.userAndTools}`;
+会话记录（按 [user]/[assistant]/[tool:名称] 标注）：
+${transcript || '（空）'}`;
 
   try {
-    const result = llm.completeStream({
+    const stream = llm.completeStream({
       messages: [{ role: 'user', content: userMessage }],
       system: systemPrompt,
     });
 
-    let output = '';
-    for await (const chunk of result.stream) {
-      output += chunk;
+    let fullOutput = '';
+    for await (const part of stream) {
+      if (part.type === 'text') fullOutput += part.text;
     }
 
-    const response = await result.response;
-    if (!response.ok) {
-      return null;
-    }
-
-    const fullOutput = response.value.content || output;
     const memoryMatch = fullOutput.match(/<memory>([\s\S]*?)<\/memory>/);
 
     if (!memoryMatch) {

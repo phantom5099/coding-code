@@ -3,8 +3,8 @@ import { useAgentStore, type ModelEntry } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { useRollbackStore } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
-import type { StreamChunk } from '@codingcode/core/client/types';
-import type { AgentProfileName } from '@codingcode/core/subagent/types';
+import { createStreamState, reduceFrame, type StreamEffects } from '../lib/frame-reducer';
+import type { ProfileName } from '@codingcode/core/core/types';
 import type { PermissionMode } from '@codingcode/core/approval/types';
 import { ApiError } from '../lib/api';
 import {
@@ -20,8 +20,6 @@ import {
   rollbackCodeToTurn,
   rollbackContext,
   rollbackBothToTurn,
-  undoLastCodeRollback,
-  getRollbackState,
   forkSession,
   getSessionProfile,
   setSessionProfile,
@@ -30,8 +28,6 @@ import {
 import type {
   CheckpointDiff,
   CodeRollbackResult,
-  CodeRollbackUndoResult,
-  SessionRollbackState,
 } from '../lib/core-api';
 import type { Item, Turn, Project } from '@shared/types';
 
@@ -105,6 +101,7 @@ export function useAgentCore() {
   const completeTurn = useAgentStore((s) => s.completeTurn);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
   const setPendingPlan = useAgentStore((s) => s.setPendingPlan);
+  const clearPendingPlan = useAgentStore((s) => s.clearPendingPlan);
   const clearRunningTurns = useAgentStore((s) => s.clearRunningTurns);
   const applyTodoUpdate = useAgentStore((s) => s.applyTodoUpdate);
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
@@ -115,7 +112,6 @@ export function useAgentCore() {
   const setModels = useAgentStore((s) => s.setModels);
   const setContextUsage = useAgentStore((s) => s.setContextUsage);
   const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
-  const clearThreadUsage = useAgentStore((s) => s.clearThreadUsage);
   const workspace = useWorkspaceStore();
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
   const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
@@ -188,118 +184,13 @@ export function useAgentCore() {
       });
   }, [currentThreadId, setThreadTurns]);
 
-  const streamChunkToItem = useCallback(
-    (
-      event: StreamChunk,
-      threadId: string,
-      assistantMessageId: string,
-      currentTurnId: string
-    ): Item | null => {
-      switch (event.type) {
-        case 'text':
-          return {
-            id: assistantMessageId,
-            type: 'message',
-            role: 'assistant',
-            content: event.text,
-            partial: true,
-          };
-        case 'message':
-          return {
-            id: assistantMessageId,
-            type: 'message',
-            role: 'assistant',
-            content: event.content,
-            partial: false,
-          };
-        case 'turn_id':
-          updateTurnId(threadId, currentTurnId, String(event.turnId));
-          return null;
-        case 'tool_start':
-          return {
-            id: event.id,
-            type: 'tool_call',
-            name: event.name,
-            args: event.args,
-            status: 'running',
-          };
-        case 'approval_request':
-          return {
-            id: event.id,
-            type: 'tool_call',
-            name: event.tool,
-            args: event.args,
-            status: 'pending',
-          };
-        case 'plan_ready':
-          // The server's plan.ready SSE event drives the plan-approval
-          // modal directly. We don't write a tool_call item — the modal
-          // renders from this payload via useAgentStore's pendingPlan.
-          return null;
-        case 'tool_result':
-          return {
-            id: randomId(),
-            type: 'tool_result',
-            callId: event.id,
-            name: event.name,
-            output: event.output,
-            exitCode: event.ok ? 0 : 1,
-          };
-        case 'tool_denied':
-          return {
-            id: event.id,
-            type: 'tool_call',
-            name: event.name,
-            args: {},
-            status: 'rejected',
-          };
-        case 'error':
-          return { id: randomId(), type: 'error', message: event.message, code: event.code };
-        case 'todo_update':
-          applyTodoUpdate(threadId, event.items as any);
-          return null;
-        case 'usage': {
-          setThreadUsage(threadId, {
-            prompt: event.prompt,
-            completion: event.completion,
-            total: event.total,
-          });
-          const agentState = useAgentStore.getState();
-          const model = agentState.models.find((m) => m.id === agentState.model);
-          if (model) {
-            setContextUsage({ used: event.prompt, contextWindow: model.context_window });
-          }
-          return null;
-        }
-        case 'reactive_compact':
-          {
-            const contextUsage = useAgentStore.getState().contextUsage;
-            if (contextUsage) {
-              setContextUsage({
-                used: event.promptEstimate,
-                contextWindow: contextUsage.contextWindow,
-              });
-            }
-            clearThreadUsage(threadId);
-          }
-          return null;
-        case 'done':
-        case 'session_id':
-          return null;
-        default:
-          return null;
-      }
-    },
-    [applyTodoUpdate, updateTurnId, setThreadUsage, setContextUsage, clearThreadUsage]
-  );
-
   const sendMessage = useCallback(
     async (content: string, cwd?: string) => {
       const effectiveCwd = cwd || workspace.rootPath || '';
 
-      let threadId = currentThreadId;
-      if (!threadId) {
-        const activeProfile: AgentProfileName = pendingProfile;
+      let resolvedThreadId = currentThreadId;
+      if (!resolvedThreadId) {
+        const activeProfile: ProfileName = pendingProfile;
         const permissionMode: PermissionMode =
           pendingProfile === 'plan'
             ? 'default'
@@ -313,21 +204,46 @@ export function useAgentCore() {
           permissionMode,
           model,
         });
-        threadId = data.sessionId;
-        setCurrentThreadWithProfile(threadId, { activeProfile, permissionMode, optimistic: true });
+        resolvedThreadId = data.sessionId;
+        setCurrentThreadWithProfile(resolvedThreadId, {
+          activeProfile,
+          permissionMode,
+          optimistic: true,
+        });
       }
+      const threadId: string = resolvedThreadId;
 
       if (inflightControllers.has(threadId)) return;
+      clearPendingPlan(threadId);
 
-      let turnId = randomId();
-      let assistantMessageId = randomId();
+      let activeTurnId = randomId();
       const userItem: Item = { id: randomId(), type: 'message', role: 'user', content };
-      const turn: Turn = { id: turnId, items: [userItem], status: 'running' };
-
+      const turn: Turn = { id: activeTurnId, items: [userItem], status: 'running' };
       startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) });
 
       const controller = new AbortController();
       registerInflight(threadId, controller);
+
+      const state = createStreamState(randomId());
+      const fx: StreamEffects = {
+        applyItem: (item) => applyChunk(threadId, activeTurnId, item),
+        applyTodo: (items) => applyTodoUpdate(threadId, items),
+        setUsage: (usage) => {
+          setThreadUsage(threadId, usage);
+          const s = useAgentStore.getState();
+          const model = s.models.find((m) => m.id === s.model);
+          if (model) setContextUsage({ used: usage.prompt, contextWindow: model.context_window });
+        },
+        setCompacted: () => {
+          useAgentStore.getState().clearThreadUsage(threadId);
+        },
+        syncTurnId: (turnId) => {
+          const next = String(turnId);
+          updateTurnId(threadId, activeTurnId, next);
+          activeTurnId = next;
+        },
+        newId: () => randomId(),
+      };
 
       try {
         const stream = agentClient.sendMessage(content, {
@@ -336,40 +252,18 @@ export function useAgentCore() {
           signal: controller.signal,
         });
 
-        let hasError = false;
-        for await (const event of stream) {
-          if (event.type === 'session_id') continue;
-
-          if (event.type === 'error') {
-            hasError = true;
-          }
-
-          if (event.type === 'plan_ready') {
-            setPendingPlan(threadId, {
-              sessionId: event.sessionId,
-              title: event.title,
-            });
-          }
-
-          const item = streamChunkToItem(event, threadId, assistantMessageId, turnId);
-          if (item) {
-            applyChunk(threadId, turnId, item);
-          }
-
-          if (event.type === 'turn_id') {
-            turnId = String(event.turnId);
-          }
-
-          if (event.type === 'tool_start' || event.type === 'approval_request') {
-            assistantMessageId = randomId();
-          }
+        for await (const frame of stream) {
+          reduceFrame(frame, state, fx);
         }
 
-        completeTurn(threadId, turnId, hasError ? 'error' : 'completed');
+        completeTurn(threadId, activeTurnId, state.hasError ? 'error' : 'completed');
+        if (!state.hasError && state.planTitle !== null) {
+          setPendingPlan(threadId, { sessionId: threadId, title: state.planTitle });
+        }
       } catch (err: any) {
         const msg = err instanceof ApiError ? (err.body?.message ?? err.message) : String(err);
-        applyChunk(threadId, turnId, { id: randomId(), type: 'error', message: msg });
-        completeTurn(threadId, turnId, 'error');
+        applyChunk(threadId, activeTurnId, { id: randomId(), type: 'error', message: msg });
+        completeTurn(threadId, activeTurnId, 'error');
       } finally {
         abortAndClear(threadId);
       }
@@ -377,10 +271,14 @@ export function useAgentCore() {
     [
       startTurn,
       setCurrentThreadWithProfile,
-      streamChunkToItem,
       applyChunk,
+      applyTodoUpdate,
       completeTurn,
       setPendingPlan,
+      clearPendingPlan,
+      updateTurnId,
+      setThreadUsage,
+      setContextUsage,
       workspace.rootPath,
       approvalPolicy,
       pendingProfile,
@@ -442,12 +340,9 @@ export function useAgentRollback() {
   const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
   // Rollback store
   const revertedFilesByTurnId = useRollbackStore((s) => s.revertedFilesByTurnId);
-  const setRollbackState = useRollbackStore((s) => s.setRollbackState);
   const setCheckpointDiff = useRollbackStore((s) => s.setCheckpointDiff);
   const markFileReverted = useRollbackStore((s) => s.markFileReverted);
-  const markFileRestored = useRollbackStore((s) => s.markFileRestored);
   const setTurnCheckpointMapping = useRollbackStore((s) => s.setTurnCheckpointMapping);
-  const initRevertedFilesFromState = useRollbackStore((s) => s.initRevertedFilesFromState);
 
   const resolveUITurnId = useCallback((threadId: string, checkpointId: number): string => {
     const mapping = useRollbackStore.getState().turnCheckpointMapping;
@@ -526,12 +421,19 @@ export function useAgentRollback() {
   const rollbackCtx = useCallback(
     async (threadId: string, throughTurnId: number) => {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
+      const targetTurn = useAgentStore.getState().threads[threadId]?.turns.find(
+        (t) => t.id === String(throughTurnId)
+      );
+      const userMsg = targetTurn?.items.find(
+        (i) => i.type === 'message' && (i as any).role === 'user'
+      );
+      const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
       const res = await rollbackContext(threadId, cwd, throughTurnId);
       clearRunningTurns(threadId);
       setThreadTurns(threadId, res.turns as Turn[]);
       setThreadUsage(threadId, res.usage ?? { prompt: 0, completion: 0, total: 0 });
-      if (res.rolledBackMessage) {
-        setPendingInput(res.rolledBackMessage);
+      if (userContent) {
+        setPendingInput(userContent);
       }
       if (res.promptEstimate != null) {
         const agentState = useAgentStore.getState();
@@ -556,11 +458,18 @@ export function useAgentRollback() {
   const rollbackBoth = useCallback(
     async (threadId: string, throughTurnId: number) => {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
+      const targetTurn = useAgentStore.getState().threads[threadId]?.turns.find(
+        (t) => t.id === String(throughTurnId)
+      );
+      const userMsg = targetTurn?.items.find(
+        (i) => i.type === 'message' && (i as any).role === 'user'
+      );
+      const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
       const res = await rollbackBothToTurn(threadId, cwd, throughTurnId);
       setThreadTurns(threadId, res.turns as Turn[]);
       setThreadUsage(threadId, res.usage ?? { prompt: 0, completion: 0, total: 0 });
-      if (res.rolledBackMessage) {
-        setPendingInput(res.rolledBackMessage);
+      if (userContent) {
+        setPendingInput(userContent);
       }
       if (res.promptEstimate != null) {
         const agentState = useAgentStore.getState();
@@ -575,20 +484,6 @@ export function useAgentRollback() {
     [workspace.rootPath, setThreadTurns, setThreadUsage, setPendingInput, setContextUsage]
   );
 
-  const undoCodeRollback = useCallback(
-    async (threadId: string, uiTurnId: string, force?: boolean, files?: string[]) => {
-      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await undoLastCodeRollback(threadId, cwd, force, files);
-      if (result.restored) {
-        for (const f of result.restoredFiles) {
-          markFileRestored(threadId, uiTurnId, f);
-        }
-      }
-      return result;
-    },
-    [workspace.rootPath, markFileRestored]
-  );
-
   const forkThread = useCallback(
     async (threadId: string, atTurnId?: number) => {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
@@ -596,20 +491,6 @@ export function useAgentRollback() {
       return res.sessionId;
     },
     [workspace.rootPath]
-  );
-
-  const initRollbackState = useCallback(
-    async (threadId: string) => {
-      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
-      try {
-        const state = await getRollbackState(threadId, cwd);
-        setRollbackState(threadId, state);
-        initRevertedFilesFromState(threadId);
-      } catch {
-        /* ignore */
-      }
-    },
-    [workspace.rootPath, setRollbackState, initRevertedFilesFromState]
   );
 
   const deleteThread = useCallback(async (threadId: string) => {
@@ -635,9 +516,7 @@ export function useAgentRollback() {
     rollbackCode,
     rollbackCtx,
     rollbackBoth,
-    undoCodeRollback,
     forkThread,
-    initRollbackState,
     deleteThread,
     revertedFilesByTurnId,
   };
@@ -655,7 +534,7 @@ export function useAgent() {
 // ---- useAgentProfile: plan/build profile switching + plan file access ----
 
 export type SessionProfileSnapshot = {
-  activeProfile: AgentProfileName;
+  activeProfile: ProfileName;
   permissionMode: PermissionMode;
   cwd: string;
   available: Array<{ name: string; description: string }>;
@@ -686,9 +565,9 @@ export function useAgentProfile() {
   const switchProfile = useCallback(
     async (
       sessionId: string,
-      activeProfile: AgentProfileName,
+      activeProfile: ProfileName,
       cwd?: string
-    ): Promise<{ activeProfile: AgentProfileName; permissionMode: PermissionMode }> => {
+    ): Promise<{ activeProfile: ProfileName; permissionMode: PermissionMode }> => {
       return setSessionProfile(sessionId, cwd ?? workspace.rootPath ?? '', activeProfile);
     },
     [workspace.rootPath]

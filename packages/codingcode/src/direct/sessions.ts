@@ -1,105 +1,20 @@
 import { Effect } from 'effect';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join } from 'path';
-import { SessionService } from '../session/store.js';
-import { deleteSession } from '../session/file-ops.js';
+import { SessionService } from '../session/port.js';
+import type { SessionStorePort } from '../session/port.js';
 import { encodeProjectPath, getProjectBaseDir } from '../core/path.js';
 import type { PermissionMode } from '../approval/types.js';
-import type {
-  CheckpointDiff,
-  CodeRollbackResult,
-  CodeRollbackUndoResult,
-  RollbackPreviewDiff,
-  RollbackState,
-} from '../checkpoint/types.js';
-import type { SessionEvent, SessionIndex } from '../session/types.js';
-import type { AgentProfileName } from '../subagent/types.js';
+import { AVAILABLE_PROFILES } from '../agent/profile.js';
+import type { SessionClient } from '../client/contracts.js';
 import type { AppRuntime } from '../layer.js';
-
-export interface SessionClient {
-  createSession(input: {
-    cwd: string;
-    activeProfile: AgentProfileName;
-    permissionMode: PermissionMode;
-    model: string;
-  }): Promise<{ sessionId: string }>;
-  resumeSession(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
-  listSessions(input: { cwd: string }): Promise<SessionIndex[]>;
-  getSessionHistory(input: { sessionId: string; cwd: string }): Promise<SessionEvent[]>;
-
-  deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
-  getSessionProfile(input: { sessionId: string; cwd: string }): Promise<{
-    activeProfile: AgentProfileName;
-    permissionMode: PermissionMode;
-    cwd: string;
-    available: Array<{ name: string; description: string }>;
-  }>;
-  setSessionProfile(input: {
-    sessionId: string;
-    cwd: string;
-    activeProfile: AgentProfileName;
-  }): Promise<{ activeProfile: AgentProfileName; permissionMode: PermissionMode }>;
-  getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
-  setSessionPermissionMode(input: {
-    sessionId: string;
-    cwd: string;
-    mode: PermissionMode;
-  }): Promise<void>;
-  getSessionPlan(input: {
-    sessionId: string;
-    cwd: string;
-  }): Promise<{ content: string; path: string; directory: string; exists: boolean }>;
-
-  getCheckpointDiff(input: {
-    sessionId: string;
-    cwd: string;
-    turnId?: number;
-  }): Promise<CheckpointDiff>;
-  revertCheckpointFiles(input: {
-    sessionId: string;
-    cwd: string;
-    files: string[];
-  }): Promise<CodeRollbackResult>;
-  previewRollbackDiff(input: {
-    sessionId: string;
-    cwd: string;
-    throughTurnId: number;
-  }): Promise<RollbackPreviewDiff>;
-  rollbackCodeToTurn(input: {
-    sessionId: string;
-    cwd: string;
-    throughTurnId: number;
-  }): Promise<CodeRollbackResult>;
-  rollbackContext(input: {
-    sessionId: string;
-    cwd: string;
-    throughTurnId: number;
-  }): Promise<{ turns: SessionEvent[]; rollbackState: RollbackState }>;
-  rollbackBothToTurn(input: { sessionId: string; cwd: string; throughTurnId: number }): Promise<{
-    turns: SessionEvent[];
-    codeResult: CodeRollbackResult;
-    rollbackState: RollbackState;
-  }>;
-  undoLastCodeRollback(input: {
-    sessionId: string;
-    cwd: string;
-    force?: boolean;
-    files?: string[];
-  }): Promise<CodeRollbackUndoResult>;
-  getRollbackState(input: { sessionId: string; cwd: string }): Promise<RollbackState>;
-  forkSession(input: {
-    sessionId: string;
-    cwd: string;
-    atTurnId?: number;
-  }): Promise<{ sessionId: string; turns: SessionEvent[] }>;
-}
 
 export function createDirectSessionClient(rt: AppRuntime): SessionClient {
   return {
     async createSession({ cwd, activeProfile, permissionMode, model }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session = yield* SessionService;
+          const session: SessionStorePort = yield* SessionService;
           const state = yield* session.create(cwd, {
             model,
             activeProfile,
@@ -113,9 +28,8 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async resumeSession({ sessionId, cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session = yield* SessionService;
-          const state = yield* session.load(cwd, sessionId);
-          return yield* session.readHistory(state);
+          const session: SessionStorePort = yield* SessionService;
+          return yield* session.readUITurns(sessionId, cwd);
         })
       );
     },
@@ -123,7 +37,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async listSessions({ cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session = yield* SessionService;
+          const session: SessionStorePort = yield* SessionService;
           return yield* session.listSessions(cwd);
         })
       );
@@ -132,30 +46,31 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async getSessionHistory({ sessionId, cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session = yield* SessionService;
-          const state = yield* session.load(cwd, sessionId);
-          return yield* session.readHistory(state);
+          const session: SessionStorePort = yield* SessionService;
+          return yield* session.readUITurns(sessionId, cwd);
         })
       );
     },
 
     async deleteSession({ sessionId, cwd }) {
-      deleteSession(sessionId, cwd);
+      await rt.runPromise(
+        Effect.gen(function* () {
+          const session: SessionStorePort = yield* SessionService;
+          yield* session.deleteSession(sessionId, cwd);
+        })
+      );
     },
 
     async getSessionProfile({ sessionId, cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session = yield* SessionService;
+          const session: SessionStorePort = yield* SessionService;
           const state = yield* session.load(cwd, sessionId);
           return {
             activeProfile: state.activeProfile,
             permissionMode: state.permissionMode,
             cwd,
-            available: [
-              { name: 'plan', description: 'Planning agent' },
-              { name: 'build', description: 'Default build agent' },
-            ],
+            available: AVAILABLE_PROFILES,
           };
         })
       );
@@ -164,7 +79,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async setSessionProfile({ sessionId, cwd, activeProfile }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session = yield* SessionService;
+          const session: SessionStorePort = yield* SessionService;
           yield* session.setActiveProfile(cwd, sessionId, activeProfile);
           const state = yield* session.load(cwd, sessionId);
           return { activeProfile: state.activeProfile, permissionMode: state.permissionMode };
@@ -175,9 +90,9 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async getSessionPermissionMode({ sessionId, cwd }): Promise<PermissionMode> {
       const mode = await rt.runPromise(
         Effect.gen(function* () {
-          const session = yield* SessionService;
+          const session: SessionStorePort = yield* SessionService;
           const state = yield* session.load(cwd, sessionId);
-          return yield* session.getPermissionMode(state);
+          return state.permissionMode;
         })
       );
       return mode as PermissionMode;
@@ -186,9 +101,8 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async setSessionPermissionMode({ sessionId, cwd, mode }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session = yield* SessionService;
-          const state = yield* session.load(cwd, sessionId);
-          yield* session.setPermissionMode(state, mode);
+          const session: SessionStorePort = yield* SessionService;
+          yield* session.setPermissionMode(cwd, sessionId, mode);
         })
       );
     },
@@ -223,7 +137,6 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
         throughTurnId: 0,
         affectedTurns: [],
         selectedFiles: [],
-        restoreEntry: null,
       };
     },
     async previewRollbackDiff() {
@@ -235,68 +148,31 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
         throughTurnId: 0,
         affectedTurns: [],
         selectedFiles: [],
-        restoreEntry: null,
       };
     },
     async rollbackContext() {
-      return {
-        turns: [] as SessionEvent[],
-        rollbackState: {
-          context: { active: false, currentThroughTurnId: null },
-          code: {
-            canUndoLast: false,
-            lastEntry: null,
-            revertedFiles: [] as string[],
-            lastEntryId: null,
-          },
-        } as RollbackState,
-      };
+      return { turns: [] };
     },
     async rollbackBothToTurn() {
       return {
-        turns: [] as SessionEvent[],
+        turns: [],
         codeResult: {
           reverted: false,
           throughTurnId: 0,
           affectedTurns: [],
           selectedFiles: [],
-          restoreEntry: null,
         },
-        rollbackState: {
-          context: { active: false, currentThroughTurnId: null },
-          code: {
-            canUndoLast: false,
-            lastEntry: null,
-            revertedFiles: [] as string[],
-            lastEntryId: null,
-          },
-        } as RollbackState,
-      };
-    },
-    async undoLastCodeRollback() {
-      return {
-        restored: false,
-        conflict: false,
-        conflictFiles: [],
-        restoredFiles: [],
-        remainingRolledBack: [],
-      };
-    },
-    async getRollbackState() {
-      return {
-        context: { active: false, currentThroughTurnId: null },
-        code: { canUndoLast: false, lastEntry: null, revertedFiles: [], lastEntryId: null },
       };
     },
     async forkSession({ sessionId, cwd, atTurnId }) {
       const newSessionId = await rt.runPromise(
         Effect.gen(function* () {
-          const session = yield* SessionService;
+          const session: SessionStorePort = yield* SessionService;
           const state = yield* session.load(cwd, sessionId);
           return yield* session.forkSession(state, atTurnId ?? 0);
         })
       );
-      return { sessionId: newSessionId, turns: [] as SessionEvent[] };
+      return { sessionId: newSessionId, turns: [] };
     },
   };
 }

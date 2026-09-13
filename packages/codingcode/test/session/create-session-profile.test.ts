@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
 
 function run<T>(effect: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(effect.pipe(Effect.provide(SessionService.Default) as any));
+  return Effect.runPromise(effect.pipe(Effect.provide(SessionLayer) as any));
 }
 
 describe('SessionService.create profile', () => {

@@ -1,9 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
-import { Effect, Layer, ManagedRuntime } from 'effect';
+import { describe, it, expect } from 'vitest';
+import { ManagedRuntime } from 'effect';
 import { createHttpSessionClient } from '../../src/client/http/sessions.js';
 import { createDirectSessionClient } from '../../src/direct/sessions.js';
-import { SessionService } from '../../src/session/store.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -34,11 +33,7 @@ describe('getSessionPlan: http + direct both implement', () => {
     writeFileSync(join(projectDir, 'second.md'), '# second');
     setProjectBaseDir(base);
     try {
-      const TestLayer = Layer.mergeAll(
-        SessionService.Default,
-        ProjectRuntimeService.Default
-      ) as Layer.Layer<SessionService | ProjectRuntimeService>;
-      const rt = ManagedRuntime.make(TestLayer);
+      const rt = ManagedRuntime.make(SessionLayer);
       const c = createDirectSessionClient(rt as any);
       const res = await c.getSessionPlan({ sessionId: 's1', cwd: '/my/cwd' });
       expect(res.exists).toBe(true);
@@ -46,8 +41,5 @@ describe('getSessionPlan: http + direct both implement', () => {
     } finally {
       setProjectBaseDir(undefined);
     }
-    void readFileSync;
-    void Effect;
-    void vi;
   });
 });

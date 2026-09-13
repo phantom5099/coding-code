@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 import { Effect } from 'effect';
 import { computePaths } from '../../src/core/path.js';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
 
 function run<T>(effect: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(effect.pipe(Effect.provide(SessionService.Default) as any));
+  return Effect.runPromise(effect.pipe(Effect.provide(SessionLayer) as any));
 }
 
 describe('session activeProfile persistence', () => {
@@ -51,15 +52,15 @@ describe('session activeProfile persistence', () => {
     await run(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.updateActiveProfile(state, 'plan');
-        yield* session.recordUser(state, 'hello');
+        yield* session.setActiveProfile(state.cwd, state.sessionId, 'plan');
+        const reloaded = yield* session.load(state.cwd, state.sessionId);
+        yield* session.recordUser(reloaded, 'hello');
       })
     );
 
     const paths = computePaths(state.cwd, state.sessionId, state.parentSessionId);
     const index = JSON.parse(readFileSync(paths.indexPath, 'utf8'));
 
-    expect(state.activeProfile).toBe('plan');
     expect(index.activeProfile).toBe('plan');
     expect(index).not.toHaveProperty('mode');
   });

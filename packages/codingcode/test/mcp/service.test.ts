@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { z } from 'zod';
-import { McpService } from '../../src/mcp/index.js';
-import { HookService } from '../../src/hooks/registry.js';
+import { McpService } from '../../src/mcp/port.js';
+import { HookService } from '../../src/hooks/port.js';
+import { McpLayer } from '../../src/mcp/mcp.js';
 
 // Mock McpClient
 vi.mock('../../src/mcp/client.js', () => {
@@ -59,7 +60,7 @@ const TEST_SESSION = 'test-session';
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   const testLayer = Layer.mergeAll(
     makeHookLayer(),
-    McpService.Default.pipe(Layer.provide(makeHookLayer()))
+    McpLayer.pipe(Layer.provide(makeHookLayer()))
   );
   return Effect.runPromise(eff.pipe(Effect.provide(testLayer) as any));
 }

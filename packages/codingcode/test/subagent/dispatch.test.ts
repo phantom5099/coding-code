@@ -1,220 +1,137 @@
-import { expect, it, describe, vi } from 'vitest';
+import { expect, it, describe, beforeEach, vi } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch.js';
-import { SessionService } from '../../src/session/store.js';
-import { ApprovalService } from '../../src/approval/index.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { McpService } from '../../src/mcp/index.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
-import { RulesService } from '../../src/rules/index.js';
-import { BUILD_PROFILE } from '../../src/agent/profile.js';
-import { SubagentRunnerService } from '../../src/subagent/runner-service.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import type { ToolDefinition, ToolExecCtx } from '../../src/tools/types.js';
-import type { AgentEvent } from '../../src/agent/types.js';
-import type { LLMClient } from '../../src/llm/client.js';
-
-const mockLlm: Partial<LLMClient> = {
-  modelInfo: {
-    model: 'test-model',
-    provider: 'test',
-    maxTokens: 8192,
-    supportsToolCalling: true,
-    supportsStreaming: true,
-  },
-};
-
-function makeMockSession(parentPermissionMode: 'default' | 'bypass' | 'acceptEdits' = 'default') {
-  const createImpl = (
-    _cwd: string,
-    options: { model: string; activeProfile: 'plan' | 'build'; permissionMode: any }
-  ) =>
-    Effect.succeed({
-      sessionId: 'child-1',
-      cwd: '/test',
-      messageCount: 0,
-      currentTurnId: 0,
-      sessionMeta: null,
-      model: options.model,
-      activeProfile: options.activeProfile,
-      permissionMode: options.permissionMode,
-      title: 'child',
-      usage: undefined,
-      memorySnapshot: '',
-    });
-  return {
-    create: createImpl,
-    load: (_cwd: string, _sid: string) =>
-      Effect.succeed({
-        sessionId: 'parent-1',
-        cwd: '/test',
-        messageCount: 0,
-        currentTurnId: 0,
-        sessionMeta: null,
-        model: 'parent-model',
-        activeProfile: 'build' as const,
-        permissionMode: parentPermissionMode,
-        title: 'parent',
-        usage: undefined,
-        memorySnapshot: '',
-      }),
-    incrementTurn: () => 0,
-    recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 } as any),
-    setActiveProfile: () => Effect.void,
-    setPermissionModeOnDisk: () => Effect.void,
-  };
-}
-
-const mockApproval = {
-  evaluate: () => Effect.succeed({ type: 'allow' as const, source: 'system' }),
-  addRule: () => Effect.void,
-  removeRule: () => Effect.void,
-  setPermissionMode: () => Effect.void,
-  getPermissionMode: () => 'default' as any,
-  fork: (opts?: { permissionMode?: any; readonly?: boolean }) =>
-    Effect.succeed(mockApproval as any),
-};
+import { dispatchAgentTool } from '../../src/tools/domains/subagent/dispatch.js';
+import { HookService } from '../../src/hooks/port.js';
+import { McpService } from '../../src/mcp/port.js';
+import { SubagentRunnerService } from '../../src/subagent/port.js';
+import type { ToolExecCtx } from '../../src/tools/types.js';
+import type { FrameBody } from '../../src/core/frame.js';
 
 const mockHooks = {
   register: () => Effect.succeed(() => {}),
   registerDecision: () => Effect.succeed(() => {}),
-  emit: () => Effect.succeed(undefined),
-  emitDecision: () => Effect.succeed(null),
+  emit: vi.fn(() => Effect.succeed(undefined)),
+  emitDecision: vi.fn(() => Effect.succeed(null)),
   reloadUserHooks: () => Effect.succeed(undefined),
-  attachSessionHooks: () => Effect.succeed(undefined),
-  disableHook: () => Effect.succeed(undefined),
-  enableHook: () => Effect.succeed(undefined),
-  disposeSession: () => Effect.succeed(undefined),
-  disposeProject: () => Effect.succeed(undefined),
+  disposeSession: vi.fn(() => Effect.succeed(undefined)),
 };
 
 const mockMcp = {
   connectServers: () => Effect.void,
   syncConnections: () => Effect.void,
   listProjectMcpTools: () => [],
-  disposeSession: () => Effect.void,
+  disposeSession: vi.fn(() => Effect.succeed(undefined)),
 };
 
-const mockLlmFactory = {
-  getLLMClient: () => Effect.succeed(mockLlm as LLMClient),
-  findModel: () => Effect.succeed(null),
-  createClient: () => Effect.succeed(mockLlm as LLMClient),
+const mockRunner = {
+  runSubagent: vi.fn(() =>
+    Effect.succeed({ stream: makeRunStream(), sessionId: 'child-1' })
+  ),
 };
 
-const mockRules = {
-  getAllRules: () => '',
-  evictProjectRules: () => undefined,
-};
-
-const mockSubagent = {
-  registerGlobal: () => undefined,
-  get: (_p: string, name: string) => {
-    if (name === 'build') return BUILD_PROFILE;
-    if (name === 'custom') {
-      return { name: 'custom' } as any;
-    }
-    if (name === 'custom-default') return { name } as any;
-    return undefined;
-  },
-  list: () => [BUILD_PROFILE],
-};
-
-const mockProjectRuntime = {
-  prepareProject: () => Effect.void,
-  resolveMainAgentProfile: () => undefined,
-  resolveSubagentProfile: (_p: string, name: string) => mockSubagent.get(_p, name),
-  getToolPolicy: () => ({
-    allowedTools: undefined,
-    allowedMcpServers: undefined,
-  }),
-  setSessionProfile: () => Effect.void,
-  restoreSessionProfile: () => Effect.void,
-  getSessionProfile: () => Effect.succeed(undefined),
-  getSessionPermissionMode: () => Effect.succeed('default' as any),
-  disposeSession: () => Effect.void,
-  disposeProject: () => Effect.void,
-};
-
-function makeRunStream(): AsyncGenerator<AgentEvent> {
+function makeRunStream(): AsyncGenerator<FrameBody> {
   return (async function* () {
-    yield { _tag: 'Done', content: 'done' } as AgentEvent;
+    yield { family: 'event', event: { type: 'text_delta', text: 'done' } };
+    yield { family: 'transition', transition: { to: 'end', reason: 'done' } };
   })();
 }
 
-function makeLayers(parentPermissionMode: 'default' | 'bypass' | 'acceptEdits' = 'default') {
-  const subagentRunner = { runStream: vi.fn().mockReturnValue(makeRunStream()) };
+function makeLayers() {
   return Layer.mergeAll(
-    Layer.succeed(
-      SessionService,
-      SessionService.make(makeMockSession(parentPermissionMode) as any)
-    ),
-    Layer.succeed(ApprovalService, ApprovalService.make(mockApproval as any)),
-    Layer.succeed(HookService, HookService.make(mockHooks as any)),
-    Layer.succeed(McpService, McpService.make(mockMcp as any)),
-    Layer.succeed(LLMFactoryService, mockLlmFactory as any),
-    Layer.succeed(RulesService, mockRules as any),
-    Layer.succeed(ProjectRuntimeService, ProjectRuntimeService.make(mockProjectRuntime as any)),
-    Layer.succeed(SubagentRunnerService, subagentRunner as any)
+    Layer.succeed(HookService, mockHooks as any),
+    Layer.succeed(McpService, mockMcp as any),
+    Layer.succeed(SubagentRunnerService, mockRunner as any)
   );
 }
 
-async function dispatchTool(
-  parentPermissionMode: 'default' | 'bypass' | 'acceptEdits' = 'default',
-  agentName: string,
-  ctx: ToolExecCtx
-) {
-  const all = makeLayers(parentPermissionMode);
-  const capturePerm: any = { value: undefined };
-  const localApproval = {
-    ...mockApproval,
-    fork: vi.fn((opts: any) => {
-      capturePerm.value = opts?.permissionMode;
-      return Effect.succeed(mockApproval as any);
-    }),
-  };
-  const allWithCapture = Layer.mergeAll(
-    Layer.succeed(
-      SessionService,
-      SessionService.make(makeMockSession(parentPermissionMode) as any)
-    ),
-    Layer.succeed(ApprovalService, ApprovalService.make(localApproval as any)),
-    Layer.succeed(HookService, HookService.make(mockHooks as any)),
-    Layer.succeed(McpService, McpService.make(mockMcp as any)),
-    Layer.succeed(LLMFactoryService, mockLlmFactory as any),
-    Layer.succeed(RulesService, mockRules as any),
-    Layer.succeed(ProjectRuntimeService, ProjectRuntimeService.make(mockProjectRuntime as any)),
-    Layer.succeed(SubagentRunnerService, {
-      runStream: vi.fn().mockReturnValue(makeRunStream()),
-    } as any)
+function runTool(args: unknown, ctx: ToolExecCtx): Promise<string> {
+  return Effect.runPromise(
+    dispatchAgentTool.execute(args, ctx).pipe(Effect.provide(makeLayers()))
   );
-  const tool = (await Effect.runPromise(
-    createDispatchAgentTool().pipe(Effect.provide(allWithCapture) as any)
-  )) as ToolDefinition;
-  await Effect.runPromise(tool.execute({ agent: agentName, prompt: 'go' }, ctx) as any);
-  return capturePerm.value;
 }
 
-describe('dispatch_agent permission-mode priority (parent > default)', () => {
-  it('case 1: child uses default when profile has no permissionMode', async () => {
-    const perm = await dispatchTool('default', 'custom', {
-      projectPath: '/test',
-      sessionId: 'parent-1',
-    } as ToolExecCtx);
-    expect(perm).toBe('default');
+describe('dispatch_agent (runner-based subagent spawn)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('case 2: profile has no permissionMode + parent has bypass → child uses parent value', async () => {
-    const perm = await dispatchTool('bypass', 'custom-default', {
-      projectPath: '/test',
-      sessionId: 'parent-1',
-    } as ToolExecCtx);
-    expect(perm).toBe('bypass');
+  it('case 1: dispatches build subagent and returns the runner output', async () => {
+    const out = await runTool(
+      { agent: 'build', prompt: 'go' },
+      { projectPath: '/test', sessionId: 'parent-1' }
+    );
+    expect(out).toBe('done');
   });
 
-  it('case 3: profile has no permissionMode + no parent (top-level) → child uses default', async () => {
-    const perm = await dispatchTool('default', 'custom-default', {
-      projectPath: '/test',
-    } as ToolExecCtx);
-    expect(perm).toBe('default');
+  it('case 2: forwards prompt, cwd and parent session id to the runner', async () => {
+    await runTool(
+      { agent: 'build', prompt: 'analyze this code' },
+      { projectPath: '/test', sessionId: 'parent-1' }
+    );
+
+    expect(mockRunner.runSubagent).toHaveBeenCalledTimes(1);
+    expect(mockRunner.runSubagent).toHaveBeenCalledWith(
+      'analyze this code',
+      expect.objectContaining({
+        cwd: '/test',
+        parentSessionId: 'parent-1',
+        activeProfile: 'build',
+        agentName: 'build',
+      })
+    );
+  });
+
+  it('case 3: rejects unknown profile (custom subagents removed)', async () => {
+    const outcome = await Effect.runPromise(
+      Effect.either(
+        dispatchAgentTool
+          .execute(
+            { agent: 'custom', prompt: 'go' },
+            { projectPath: '/test', sessionId: 'parent-1' }
+          )
+          .pipe(Effect.provide(makeLayers()))
+      )
+    );
+    expect(outcome._tag).toBe('Left');
+    if (outcome._tag === 'Left') {
+      const err: any = outcome.left;
+      expect(err.code).toBe('TOOL_EXECUTION_FAILED');
+      expect(String(err.message)).toContain('Unknown subagent: custom');
+    }
+  });
+
+  it('case 4: spawn.before deny hook blocks the dispatch', async () => {
+    mockHooks.emitDecision.mockReturnValueOnce(
+      Effect.succeed({ decision: 'deny' as const, reason: 'policy forbids it' }) as any
+    );
+    const outcome = await Effect.runPromise(
+      Effect.either(
+        dispatchAgentTool
+          .execute(
+            { agent: 'build', prompt: 'go' },
+            { projectPath: '/test', sessionId: 'parent-1' }
+          )
+          .pipe(Effect.provide(makeLayers()))
+      )
+    );
+    expect(outcome._tag).toBe('Left');
+    if (outcome._tag === 'Left') {
+      const err: any = outcome.left;
+      expect(err.code).toBe('TOOL_NOT_ALLOWED');
+    }
+  });
+
+  it('case 5: emits spawn.after and disposes the child session on completion', async () => {
+    await runTool(
+      { agent: 'build', prompt: 'go' },
+      { projectPath: '/test', sessionId: 'parent-1' }
+    );
+
+    expect(mockHooks.emit).toHaveBeenCalledWith(
+      'agent.subagent.spawn.after',
+      expect.objectContaining({ childSessionId: 'child-1', profile: 'build' })
+    );
+    expect(mockHooks.disposeSession).toHaveBeenCalledWith('child-1');
+    expect(mockMcp.disposeSession).toHaveBeenCalledWith('child-1');
   });
 });

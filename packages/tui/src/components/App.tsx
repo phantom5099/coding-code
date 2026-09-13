@@ -4,7 +4,7 @@ import { useAgentRunner } from '../hooks/useAgentRunner.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
 import { generateId, historyToUIMessages } from '../utils.js';
 import type { PanelState } from '../types.js';
-import type { StreamChunk, TuiClient } from '../index.js';
+import type { Frame, TuiClient } from '../index.js';
 import { MessageItem } from './MessageItem.js';
 import { InputBox } from './InputBox.js';
 import { LoadingIndicator } from './LoadingIndicator.js';
@@ -32,7 +32,7 @@ export function App({ client }: AppProps) {
   const { width } = useTerminalSize();
   const [sessionId, setSessionId] = useState('unknown');
   const runner = useCallback(
-    (input: string) => client.sendMessage(input) as AsyncGenerator<StreamChunk>,
+    (input: string) => client.sendMessage(input) as AsyncGenerator<Frame>,
     [client]
   );
   const {

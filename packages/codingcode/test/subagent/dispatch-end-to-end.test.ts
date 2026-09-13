@@ -1,36 +1,46 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { existsSync, readdirSync, mkdtempSync, rmSync } from 'fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createDispatchAgentTool } from '../../src/tools/domains/subagent/dispatch.js';
-import { AppLayer } from '../../src/layer.js';
-import { SessionService } from '../../src/session/store.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
+import { AgentLayer } from '../../src/agent/agent.js';
+import { ToolEnvLayer } from '../../src/agent/tool-env.js';
+import { ToolCatalogLayer } from '../../src/agent/tool-catalog.js';
+import { AgentService } from '../../src/agent/port.js';
+import {
+  SessionPort,
+  ToolExecutorPort,
+  CheckpointPort,
+  HookPort,
+  ApprovalPort,
+  SkillPort,
+  McpPort,
+  ContextPort,
+  MemoryPort,
+  LlmPort,
+  RulesPort,
+  TodoPort,
+} from '../../src/agent/deps.js';
+import { SessionLayer } from '../../src/session/session.js';
+import { SessionService } from '../../src/session/port.js';
+import { HookService } from '../../src/hooks/port.js';
+import { McpService } from '../../src/mcp/port.js';
+import { SubagentRunnerService } from '../../src/subagent/port.js';
+import { TodoService } from '../../src/todo/port.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import { encodeProjectPath, normalizePath, setProjectBaseDir } from '../../src/core/path.js';
+import { encodeProjectPath, normalizePath, setProjectBaseDir, computePaths } from '../../src/core/path.js';
+import type { Message } from '../../src/core/types.js';
 import type { LLMClient } from '../../src/llm/client.js';
-import { Result } from '../../src/core/result.js';
-
-const TestLLMLayer = Layer.succeed(LLMFactoryService, {
-  listModels: () => Effect.succeed([]),
-  findModel: () => Effect.succeed(null),
-  getActiveEntry: () => Effect.fail(new Error('no active')),
-  switchModel: () => Effect.fail(new Error('no models')),
-  getLLMClient: () => Effect.succeed(makeMockLLM('subagent final answer')),
-  createClient: () => Effect.succeed(makeMockLLM('subagent final answer')),
-} as any);
+import type { FrameBody } from '../../src/core/frame.js';
 
 function makeMockLLM(content: string): LLMClient {
   return {
-    complete: () => Effect.succeed({ content, finishReason: 'stop' as const }),
-    completeStream: () => ({
-      stream: (async function* () {
-        yield content;
+    complete: () => Effect.succeed({ content }),
+    completeStream: () =>
+      (async function* () {
+        yield { type: 'text' as const, text: content };
+        yield { type: 'end' as const };
       })(),
-      response: Promise.resolve(Result.ok({ content, finishReason: 'stop' as const })),
-    }),
     modelInfo: {
       provider: 'mock',
       model: 'mock',
@@ -41,13 +51,146 @@ function makeMockLLM(content: string): LLMClient {
   };
 }
 
-function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(
-    eff.pipe(Effect.provide(TestLLMLayer), Effect.provide(AppLayer as any)) as any
-  );
+/** Read events back into the message list an LLM would see (like context.assemblePayload). */
+function readMessages(transcriptPath: string): Message[] {
+  return readHistory(transcriptPath).flatMap((e) => {
+    if (e.type === 'user') return [{ role: 'user', content: e.content }] as Message[];
+    if (e.type === 'assistant')
+      return [{ role: 'assistant', content: e.content, tool_calls: e.toolCalls }] as Message[];
+    if (e.type === 'tool_result')
+      return [
+        {
+          role: 'tool',
+          content: e.output ?? '',
+          tool_call_id: e.toolCallId,
+          tool_name: e.toolName,
+        } as Message,
+      ];
+    return [];
+  });
 }
 
-describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
+/**
+ * Self-contained runtime used by the end-to-end tests: real AgentLayer +
+ * real file-backed SessionLayer, everything else mocked. This mirrors how
+ * the app is wired in layer.ts while keeping each dependency explicit.
+ */
+// Real SessionService narrowed to the Agent's SessionPort (mirrors layer.ts's adapter).
+const SessionPortLayer = Layer.effect(SessionPort, Effect.gen(function* () {
+  const svc = yield* SessionService;
+  return {
+    load: svc.load.bind(svc),
+    create: svc.create.bind(svc),
+    recordUser: svc.recordUser.bind(svc),
+    recordSystem: svc.recordSystem.bind(svc),
+    recordAssistant: svc.recordAssistant.bind(svc),
+    recordToolResult: svc.recordToolResult.bind(svc),
+    setPermissionMode: svc.setPermissionMode.bind(svc),
+    setActiveProfile: svc.setActiveProfile.bind(svc),
+  };
+})).pipe(Layer.provide(SessionLayer));
+
+// Narrow agent ports + TodoService required to build the real AgentLayer.
+const AgentDeps = Layer.mergeAll(
+  SessionPortLayer,
+  Layer.succeed(ToolExecutorPort, { executeBatch: () => Effect.succeed([]) } as any),
+  Layer.succeed(CheckpointPort, {
+    snapshotBaseline: () => Effect.void,
+    snapshotFinal: () => Effect.void,
+  } as any),
+  Layer.succeed(HookPort, {
+    emit: () => Effect.succeed(undefined),
+    emitDecision: () => Effect.succeed(null),
+    disposeSession: () => Effect.void,
+  } as any),
+  Layer.succeed(ApprovalPort, {
+    evaluate: () => Effect.succeed({ type: 'allow' }),
+  } as any),
+  Layer.succeed(SkillPort, {
+    extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
+  } as any),
+  Layer.succeed(McpPort, {
+    syncConnections: () => Effect.void,
+    listProjectMcpTools: () => [],
+  } as any),
+  Layer.succeed(ContextPort, {
+    willCompact: async () => false,
+    assemblePayload: async (transcriptPath: string) => readMessages(transcriptPath),
+  } as any),
+  Layer.succeed(MemoryPort, {
+    loadMemoryForPrompt: () => '',
+    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+  } as any),
+  Layer.succeed(LlmPort, {
+    getLLMClient: () => Effect.succeed(makeMockLLM('subagent final answer') as LLMClient),
+  } as any),
+  Layer.succeed(RulesPort, {
+    getAllRules: () => '',
+    evictProjectRules: () => {},
+  } as any),
+  Layer.succeed(TodoPort, { read: () => [] } as any),
+  // ToolEnvPort 在 getToolEnv 运行时从外层 Runtime 解析具体服务（见 Runtime 定义）
+  ToolEnvLayer,
+  // ToolCatalogPort：静态内置 + profile 工具的装配（同 layer.ts）
+  ToolCatalogLayer
+);
+
+// Real AgentService built on the real SessionPort + stubbed narrow ports.
+const AgentWired = AgentLayer.pipe(Layer.provide(AgentDeps as any));
+
+// Runtime exposed to the tests: real AgentService + SessionService, plus the
+// full services the dispatch_agent tool's execute pulls from the environment.
+const Runtime = Layer.mergeAll(
+  AgentWired,
+  SessionLayer,
+  Layer.succeed(HookService, {
+    register: () => Effect.succeed(() => {}),
+    registerDecision: () => Effect.succeed(() => {}),
+    emit: () => Effect.succeed(undefined),
+    emitDecision: () => Effect.succeed(null),
+    reloadUserHooks: () => Effect.succeed(undefined),
+    disposeSession: () => Effect.void,
+  } as any),
+  Layer.succeed(McpService, {
+    syncConnections: () => Effect.void,
+    listProjectMcpTools: () => [],
+  } as any),
+  Layer.succeed(SubagentRunnerService, {} as any),
+  // ToolEnvLayer.getToolEnv 运行时从外层解析 TodoService（工具执行期依赖）
+  Layer.succeed(TodoService, { read: () => [], write: () => {}, reset: () => {} } as any)
+);
+
+function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
+  return Effect.runPromise(eff.pipe(Effect.provide(Runtime as any)) as any);
+}
+
+/** Consume a frame stream to completion (mirrors what dispatch.ts does). */
+function drainStream(stream: AsyncGenerator<FrameBody>): Effect.Effect<string, Error> {
+  return Effect.async<string, Error>((resume) => {
+    (async () => {
+      let content = '';
+      try {
+        for await (const body of stream) {
+          if (body.family === 'event' && body.event.type === 'text_delta') {
+            content += body.event.text;
+          } else if (
+            body.family === 'transition' &&
+            body.transition.to === 'end' &&
+            body.transition.reason === 'error'
+          ) {
+            resume(Effect.fail(new Error(`subagent failed: ${body.transition.error.message}`)));
+            return;
+          }
+        }
+        resume(Effect.succeed(content));
+      } catch (e) {
+        resume(Effect.fail(e instanceof Error ? e : new Error(String(e))));
+      }
+    })();
+  });
+}
+
+describe('subagent run end-to-end (session transcript is read by the agent loop)', () => {
   let projectBase: string;
   let cwd: string;
 
@@ -62,88 +205,71 @@ describe('dispatch_agent end-to-end (subagent reads its own jsonl)', () => {
     if (existsSync(cwd)) rmSync(cwd, { recursive: true, force: true });
   });
 
-  it('subagent transcriptPath is <parent>/subagents/<child>.jsonl and agentLoop reads it', async () => {
+  it('runSubagent drives the agent loop and persists the transcript it reads', async () => {
     const result = await run(
       Effect.gen(function* () {
+        const agent = yield* AgentService;
         const session = yield* SessionService;
-        const runtime = yield* ProjectRuntimeService;
-
-        yield* runtime.prepareProject(cwd);
-        const parent = yield* session.create(cwd, {
-          model: 'parent-model',
+        const { stream, sessionId } = yield* agent.runTurn('analyze this code', {
+          cwd,
           activeProfile: 'build',
           permissionMode: 'default',
         });
-
-        const dispatchTool = yield* createDispatchAgentTool();
-        const output = yield* dispatchTool.execute(
-          { agent: 'build', prompt: 'analyze this code' },
-          { projectPath: cwd, sessionId: parent.sessionId } as any
-        );
-        return { output, parentId: parent.sessionId };
+        const content = yield* drainStream(stream);
+        const state = yield* session.load(normalizePath(cwd), sessionId);
+        return { content, sessionId, transcriptPath: computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath };
       })
     );
 
-    expect(typeof result.output).toBe('string');
-    expect(result.output.length).toBeGreaterThan(0);
+    expect(typeof result.sessionId).toBe('string');
+    expect(result.content.length).toBeGreaterThan(0);
+    expect(existsSync(result.transcriptPath)).toBe(true);
 
-    const sessionsRoot = join(projectBase, encodeProjectPath(normalizePath(cwd)), 'sessions');
-    const subagentDir = join(sessionsRoot, result.parentId, 'subagents');
-    expect(existsSync(subagentDir)).toBe(true);
+    const events = readHistory(result.transcriptPath);
 
-    const files = readdirSync(subagentDir).filter((f) => f.endsWith('.jsonl'));
-    expect(files.length).toBeGreaterThan(0);
-
-    const childTranscriptPath = join(subagentDir, files[0]!);
-    const events = readHistory(childTranscriptPath);
-
-    // First event: session_meta (written by session.create in dispatch.ts)
+    // First event: session_meta (written by session.create in the runner path)
     expect(events[0]!.type).toBe('session_meta');
 
-    // The user prompt recorded by dispatch.ts BEFORE invoking the runner.
-    // If agentLoop reads the wrong path, this event is invisible to the LLM,
-    // and the assistant response never lands.
+    // The user prompt recorded before the agentLoop started. If agentLoop
+    // read the wrong path, this event is invisible to the LLM and the
+    // assistant response never lands.
     const userEv = events.find((e) => e.type === 'user');
     expect(userEv).toBeDefined();
     if (userEv && userEv.type === 'user') {
       expect(userEv.content).toBe('analyze this code');
     }
 
-    // The LLM's reply lands on disk — proof that agentLoop read the jsonl,
-    // saw the user event, and emitted a real response.
+    // The LLM's reply lands on disk — proof that agentLoop read the jsonl.
     const assistantEv = events.find((e) => e.type === 'assistant');
     expect(assistantEv).toBeDefined();
   }, 30_000);
 
-  it('child session id does NOT produce a flat <sessions>/<childId>.jsonl (old bug regression)', async () => {
+  it('child session created under a parent does NOT produce a flat <sessions>/<childId>.jsonl (old bug regression)', async () => {
     const result = await run(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const runtime = yield* ProjectRuntimeService;
-        yield* runtime.prepareProject(cwd);
         const parent = yield* session.create(cwd, {
           model: 'parent-model',
           activeProfile: 'build',
           permissionMode: 'default',
         });
-        const dispatchTool = yield* createDispatchAgentTool();
-        yield* dispatchTool.execute({ agent: 'build', prompt: 'p' }, {
-          projectPath: cwd,
-          sessionId: parent.sessionId,
-        } as any);
-        return { parentId: parent.sessionId };
+        const child = yield* session.create(
+          cwd,
+          { model: 'child-model', activeProfile: 'build', permissionMode: 'default' },
+          { parentSessionId: parent.sessionId, agentName: 'build' }
+        );
+        return { parentId: parent.sessionId, childId: child.sessionId };
       })
     );
 
     const sessionsRoot = join(projectBase, encodeProjectPath(normalizePath(cwd)), 'sessions');
     const subagentDir = join(sessionsRoot, result.parentId, 'subagents');
-    const childFiles = readdirSync(subagentDir).filter((f) => f.endsWith('.jsonl'));
-    const childId = childFiles[0]!.replace('.jsonl', '');
+    const nestedFiles = readdirSync(subagentDir).filter((f) => f.endsWith('.jsonl'));
+    expect(nestedFiles).toContain(`${result.childId}.jsonl`);
 
-    // The wrong-path location (the bug from 3d493e4) MUST NOT contain the
-    // child's jsonl. If it did, some code constructed the path without
-    // parentSessionId.
-    const flatChildPath = join(sessionsRoot, `${childId}.jsonl`);
+    // The wrong-path location MUST NOT contain the child's jsonl. If it did,
+    // some code constructed the path without parentSessionId.
+    const flatChildPath = join(sessionsRoot, `${result.childId}.jsonl`);
     expect(existsSync(flatChildPath)).toBe(false);
   }, 30_000);
 });

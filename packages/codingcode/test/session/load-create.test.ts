@@ -3,7 +3,8 @@ import { mkdirSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { AgentError } from '../../src/core/error.js';
 import { encodeProjectPath, computePaths } from '../../src/core/path.js';
 import type { SessionIndex } from '../../src/session/types.js';
@@ -12,7 +13,7 @@ import { useTempProjectBase } from '../helpers/project-base.js';
 const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionLayer) as any));
 }
 
 function cleanup(dir: string) {
@@ -118,7 +119,7 @@ describe('load — restores model from disk, not overwritten', () => {
         Effect.gen(function* () {
           const svc = yield* SessionService;
           return yield* svc.load(dir, 'nonexistent-session-id');
-        }).pipe(Effect.provide(SessionService.Default))
+        }).pipe(Effect.provide(SessionLayer))
       );
 
       expect(exit._tag).toBe('Failure');
@@ -154,7 +155,7 @@ describe('load — restores model from disk, not overwritten', () => {
         Effect.gen(function* () {
           const svc = yield* SessionService;
           return yield* svc.load(otherDir, created.sessionId);
-        }).pipe(Effect.provide(SessionService.Default))
+        }).pipe(Effect.provide(SessionLayer))
       );
 
       expect(exit._tag).toBe('Failure');
@@ -274,7 +275,6 @@ describe('load restores persisted fields', () => {
         Effect.gen(function* () {
           const svc = yield* SessionService;
           const state = yield* svc.load(dir, sid);
-          svc.incrementTurn(state);
           yield* svc.recordUser(state, 'first');
         })
       );
@@ -282,7 +282,6 @@ describe('load restores persisted fields', () => {
         Effect.gen(function* () {
           const svc = yield* SessionService;
           const state = yield* svc.load(dir, sid);
-          svc.incrementTurn(state);
           yield* svc.recordUser(state, 'second');
         })
       );

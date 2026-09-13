@@ -1,4 +1,5 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { LLMStreamPart } from '../../src/llm/types.js';
 
 const streamText = vi.fn();
 const stepCountIs = vi.fn((count: number) => ({ count }));
@@ -11,12 +12,14 @@ vi.mock('ai', () => ({
   jsonSchema,
 }));
 
-async function collect(stream: AsyncIterable<string>): Promise<string[]> {
-  const chunks: string[] = [];
-  for await (const chunk of stream) {
-    chunks.push(chunk);
+const USAGE = { inputTokens: 200, outputTokens: 100, totalTokens: 300 };
+
+async function collect(stream: AsyncIterable<LLMStreamPart>): Promise<LLMStreamPart[]> {
+  const parts: LLMStreamPart[] = [];
+  for await (const part of stream) {
+    parts.push(part);
   }
-  return chunks;
+  return parts;
 }
 
 function entry() {
@@ -47,27 +50,21 @@ describe('DeepSeekProvider completeStream', () => {
     streamText.mockReturnValue({
       fullStream: (async function* () {
         yield { type: 'text-delta', text: 'streamed' };
+        yield { type: 'finish', totalUsage: USAGE };
       })(),
-      response: Promise.resolve({
-        messages: [{ role: 'assistant', content: 'streamed' }],
-        usage: { promptTokens: 200, completionTokens: 100, totalTokens: 300 },
-      }),
     });
   });
 
-  it('streams text and extracts usage from response', async () => {
+  it('streams text and extracts usage from the finish part', async () => {
     const { DeepSeekProvider } = await import('../../src/llm/providers/deepseek.js');
     const provider = new DeepSeekProvider({} as any, entry());
 
-    const result = provider.completeStream(request() as any);
-    await expect(collect(result.stream)).resolves.toEqual(['streamed']);
+    const parts = await collect(provider.completeStream(request() as any));
 
-    const resp = await result.response;
-    expect(resp.ok).toBe(true);
-    if (resp.ok) {
-      expect(resp.value.usage).toEqual({ prompt: 200, completion: 100, total: 300 });
-    }
-
+    expect(parts).toEqual([
+      { type: 'text', text: 'streamed' },
+      { type: 'end', usage: { prompt: 200, completion: 100, total: 300 } },
+    ]);
     expect(streamText).toHaveBeenCalledTimes(1);
-  });
+  }, 30000);
 });

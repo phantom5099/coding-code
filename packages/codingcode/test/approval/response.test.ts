@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
-import { parseApprovalResponse } from '../../src/approval/response.js';
+import { parseApprovalResponse } from '../../src/approval/confirmation.js';
 
 describe('parseApprovalResponse', () => {
   it('maps single-use approval responses', () => {

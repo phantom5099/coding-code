@@ -1,12 +1,15 @@
-import type { AgentProfileName } from '../subagent/types.js';
+import type { ProfileName, TokenUsage, ToolCall } from '../core/types.js';
+import type { PermissionMode } from '../approval/types.js';
+
+export type { TokenUsage };
 
 export interface SessionMetaEvent {
   type: 'session_meta';
   sessionId: string;
   cwd: string;
   createdAt: string;
-  activeProfile: AgentProfileName;
-  permissionMode: import('../approval/types.js').PermissionMode;
+  activeProfile: ProfileName;
+  permissionMode: PermissionMode;
   parentSessionId?: string;
   agentName?: string;
 }
@@ -15,13 +18,14 @@ export interface UserEvent {
   type: 'user';
   turnId: number;
   content: string;
+  source?: 'user' | 'system';
 }
 
 export interface AssistantEvent {
   type: 'assistant';
   turnId: number;
   content: string;
-  toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+  toolCalls: ToolCall[];
   usage?: TokenUsage;
 }
 
@@ -63,12 +67,6 @@ export type SessionEvent =
   | RollbackEvent
   | CompactEvent;
 
-export interface TokenUsage {
-  prompt: number;
-  completion: number;
-  total: number;
-}
-
 export interface SessionIndex {
   sessionId: string;
   cwd: string;
@@ -79,8 +77,8 @@ export interface SessionIndex {
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;
-  activeProfile: AgentProfileName;
-  permissionMode: import('../approval/types.js').PermissionMode;
+  activeProfile: ProfileName;
+  permissionMode: PermissionMode;
   memorySnapshot?: string;
   parentSessionId?: string;
 }
@@ -91,8 +89,8 @@ export interface SessionStoreState {
   messageCount: number;
   sessionMeta: SessionMetaEvent | null;
   model: string;
-  activeProfile: AgentProfileName;
-  permissionMode: import('../approval/types.js').PermissionMode;
+  activeProfile: ProfileName;
+  permissionMode: PermissionMode;
   title: string;
   currentTurnId: number;
   usage: TokenUsage | undefined;

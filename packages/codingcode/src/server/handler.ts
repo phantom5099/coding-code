@@ -1,24 +1,25 @@
 import type { Context } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
-import { ApprovalWaitService } from '../approval/async-confirm.js';
-import { HookService } from '../hooks/registry.js';
+import { ApprovalWaitService } from '../approval/wait-port.js';
 import { AgentError } from '../core/error.js';
-
-export type SseEvent = { type: string; [key: string]: unknown };
+import type { FrameBody } from '../core/frame.js';
+import { createFrameAssembler, encodeFrame } from '../core/frame-io.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export function createSseHandler(rt: ManagedRt) {
   return function sseHandler(
-    createGenerator: () => AsyncGenerator<SseEvent, void, unknown>,
-    opts?: { initialEvents?: SseEvent[]; sessionId?: string; onDone?: () => void }
+    createGenerator: () => AsyncGenerator<FrameBody, void, unknown>,
+    opts?: { sessionId?: string; onDone?: () => void }
   ): (c: Context) => Promise<Response> {
     return async (c) => {
       const sessionId = opts?.sessionId ?? c.req.param('id') ?? 'default';
       const stream = new ReadableStream({
         async start(controller) {
-          const enqueue = (data: SseEvent) => {
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`));
+          const assembler = createFrameAssembler({ sessionId });
+          const emit = (body: FrameBody) => {
+            const frame = assembler.stamp(body);
+            controller.enqueue(new TextEncoder().encode(`data: ${encodeFrame(frame)}\n\n`));
           };
 
           const waitService = await rt.runPromise(
@@ -26,55 +27,30 @@ export function createSseHandler(rt: ManagedRt) {
               return yield* ApprovalWaitService;
             })
           );
-          const hookService = await rt.runPromise(
-            Effect.gen(function* () {
-              return yield* HookService;
-            })
-          );
           Effect.runSync(
             waitService.registerEmitter(
               sessionId,
               (id: string, tool: string, args: Record<string, unknown>) => {
-                enqueue({ type: 'approval_request', id, tool, args });
+                emit({ family: 'event', event: { type: 'approval_request', id, tool, args } });
               }
             )
           );
 
-          const unregisterPlanReady = Effect.runSync(
-            hookService.register('plan.ready', (payload) => {
-              const p = payload as {
-                sessionId?: string;
-                title?: string;
-              };
-              if (p.sessionId !== sessionId) return;
-              enqueue({
-                type: 'plan_ready',
-                sessionId: p.sessionId,
-                title: p.title ?? '',
-              });
-            })
-          );
-
           try {
-            if (opts?.initialEvents) {
-              for (const ev of opts.initialEvents) enqueue(ev);
-            }
-
             const generator = createGenerator();
 
-            for await (const event of generator) {
-              enqueue(event);
+            for await (const body of generator) {
+              emit(body);
             }
-
-            enqueue({ type: 'complete' });
           } catch (e) {
-            enqueue({
-              type: 'error',
-              message: e instanceof Error ? e.message : String(e),
-              ...(e instanceof AgentError ? { code: e.code } : {}),
+            emit({
+              family: 'fatal',
+              fatal: {
+                message: e instanceof Error ? e.message : String(e),
+                code: e instanceof AgentError ? e.code : 'INTERNAL_ERROR',
+              },
             });
           } finally {
-            unregisterPlanReady();
             Effect.runSync(waitService.unregisterEmitter(sessionId));
             opts?.onDone?.();
           }

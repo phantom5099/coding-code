@@ -3,7 +3,8 @@ import { rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { computePaths, sessionJsonlPathFromCwd, projectSessionsDir } from '../../src/core/path.js';
 import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
@@ -11,7 +12,7 @@ import { useTempProjectBase } from '../helpers/project-base.js';
 const base = useTempProjectBase();
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(SessionService.Default) as any));
+  return Effect.runPromise(eff.pipe(Effect.provide(SessionLayer) as any));
 }
 
 describe('computePaths', () => {

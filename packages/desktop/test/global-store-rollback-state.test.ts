@@ -5,28 +5,10 @@ describe('Rollback state in global store', () => {
   beforeEach(() => {
     // Reset the store state
     useRollbackStore.setState({
-      rollbackStateByThreadId: {},
       checkpointDiffByTurnId: {},
       revertedFilesByTurnId: {},
       turnCheckpointMapping: {},
     });
-  });
-
-  it('setRollbackState stores session rollback state', () => {
-    const state = {
-      context: { active: false, currentThroughTurnId: null },
-      code: {
-        canUndoLast: true,
-        lastEntry: null,
-        revertedFiles: ['/test/file.ts'],
-        lastEntryId: 'entry1',
-      },
-    };
-    useRollbackStore.getState().setRollbackState('thread1', state as any);
-
-    const stored = useRollbackStore.getState().rollbackStateByThreadId['thread1'];
-    expect(stored).toBeDefined();
-    expect(stored!.code.revertedFiles).toEqual(['/test/file.ts']);
   });
 
   it('setCheckpointDiff stores diff by thread and turn', () => {
@@ -64,34 +46,6 @@ describe('Rollback state in global store', () => {
     useRollbackStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
     const reverted = useRollbackStore.getState().revertedFilesByTurnId['thread1:3'];
     expect(reverted).toEqual(['/test/a.ts']);
-  });
-
-  it('markFileRestored removes file from reverted list', () => {
-    useRollbackStore.getState().markFileReverted('thread1', '3', '/test/a.ts');
-    useRollbackStore.getState().markFileReverted('thread1', '3', '/test/b.ts');
-    useRollbackStore.getState().markFileRestored('thread1', '3', '/test/a.ts');
-
-    const reverted = useRollbackStore.getState().revertedFilesByTurnId['thread1:3'];
-    expect(reverted).toEqual(['/test/b.ts']);
-  });
-
-  it('initRevertedFilesFromState populates from server state', () => {
-    useRollbackStore.getState().setTurnCheckpointMapping('thread1', 5, 'ui-turn-5');
-    const state = {
-      context: { active: false, currentThroughTurnId: null },
-      code: {
-        canUndoLast: true,
-        lastEntry: { throughTurnId: 5 } as any,
-        revertedFiles: ['/a.ts', '/b.ts'],
-        lastEntryId: 'e1',
-      },
-    };
-    useRollbackStore.getState().setRollbackState('thread1', state as any);
-    useRollbackStore.getState().initRevertedFilesFromState('thread1');
-
-    const key = 'thread1:ui-turn-5';
-    const reverted = useRollbackStore.getState().revertedFilesByTurnId[key];
-    expect(reverted).toEqual(['/a.ts', '/b.ts']);
   });
 
   it('setTurnCheckpointMapping links checkpoint turnId to UI turnId', () => {

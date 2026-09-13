@@ -3,9 +3,9 @@ import type { ToolDefinition, ToolDescription } from './types.js';
 import { canonicalizeSchema } from './utils/canonicalize-schema.js';
 
 export class ToolRegistry {
-  private readonly tools = new Map<string, ToolDefinition>();
+  private readonly tools = new Map<string, ToolDefinition<any>>();
 
-  register(...definitions: ToolDefinition[]): void {
+  register(...definitions: ToolDefinition<any>[]): void {
     for (const definition of definitions) {
       if (this.tools.has(definition.name)) {
         throw new Error(`Tool already registered: ${definition.name}`);
@@ -14,7 +14,7 @@ export class ToolRegistry {
     }
   }
 
-  get(name: string, allowedTools?: ReadonlySet<string>): ToolDefinition | undefined {
+  get(name: string, allowedTools?: ReadonlySet<string>): ToolDefinition<any> | undefined {
     if (allowedTools && !allowedTools.has(name)) return undefined;
     return this.tools.get(name);
   }

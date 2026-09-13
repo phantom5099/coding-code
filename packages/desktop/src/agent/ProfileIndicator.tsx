@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { Eye, Hammer, Loader2 } from 'lucide-react';
 import { useAgentProfile } from '../hooks/useAgent';
 import { useAgentStore } from '../stores/agent.store';
-import type { AgentProfileName } from '@codingcode/core/subagent/types';
+import type { ProfileName } from '@codingcode/core/core/types';
 
 interface ProfileIndicatorProps {
   sessionId: string | null;
   cwd: string;
 }
 
-const PROFILE_META: Record<AgentProfileName, { label: string; color: string; Icon: typeof Eye }> = {
+const PROFILE_META: Record<ProfileName, { label: string; color: string; Icon: typeof Eye }> = {
   plan: {
     label: '计划模式',
     color: 'text-[var(--accent-warning)] bg-[var(--tag-info-bg)]',
@@ -83,9 +83,9 @@ export default function ProfileIndicator({ sessionId, cwd }: ProfileIndicatorPro
     setOptimisticProfileForThread,
   ]);
 
-  const current: AgentProfileName =
+  const current: ProfileName =
     sessionId === null ? pendingProfile : (profile?.activeProfile ?? 'build');
-  const target: AgentProfileName = current === 'plan' ? 'build' : 'plan';
+  const target: ProfileName = current === 'plan' ? 'build' : 'plan';
 
   const handleToggle = async () => {
     if (busy) return;

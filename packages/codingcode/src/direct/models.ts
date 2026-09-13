@@ -1,12 +1,7 @@
 import { Effect } from 'effect';
-import { LLMFactoryService } from '../llm/factory.js';
-import type { SelectableModel } from '../llm/factory.js';
+import { LLMFactoryService } from '../llm/port.js';
+import type { ModelClient } from '../client/contracts.js';
 import type { AppRuntime } from '../layer.js';
-
-export interface ModelClient {
-  listModels(): Promise<{ models: SelectableModel[]; activeId: string | null }>;
-  switchModel(input: { id: string }): Promise<void>;
-}
 
 export function createDirectModelClient(rt: AppRuntime): ModelClient {
   return {

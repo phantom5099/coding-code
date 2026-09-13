@@ -2,17 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
-import { SessionService } from '../../src/session/store.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
-import { ApprovalService } from '../../src/approval/index.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { SkillService } from '../../src/skills/service.js';
-import { McpService } from '../../src/mcp/index.js';
-import { MemoryService } from '../../src/memory/index.js';
-import { SchedulerService } from '../../src/scheduler/service.js';
-import { ContextService } from '../../src/context/service.js';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
+import { SessionService } from '../../src/session/port.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
+import { ApprovalService } from '../../src/approval/port.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { HookService } from '../../src/hooks/port.js';
+import { SkillService } from '../../src/skills/port.js';
+import { McpService } from '../../src/mcp/port.js';
+import { MemoryService } from '../../src/memory/port.js';
+import { SchedulerService } from '../../src/scheduler/port.js';
+import { ContextService } from '../../src/context/port.js';
+import { CheckpointService } from '../../src/checkpoint/port.js';
+import { HookLayer } from '../../src/hooks/hooks.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
+import { ApprovalLayer } from '../../src/approval/approval.js';
 
 const mockCompactWithLLM = vi.fn();
 
@@ -22,7 +25,6 @@ const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
 } as any);
 
 const MockSessionLayer = Layer.succeed(SessionService, {
-  getTranscriptPath: () => '/tmp/test.jsonl',
   create: () =>
     Effect.succeed({
       sessionId: 'test-sid',
@@ -55,7 +57,6 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       output: '',
       turnId: 0,
     }),
-  incrementTurn: () => 0,
 } as any);
 
 const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
@@ -98,18 +99,14 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
   switchModel: () => Effect.fail(new Error('no models')),
 } as any);
 
-const MockApprovalLayer = ApprovalService.Default.pipe(
-  Layer.provide(Layer.mergeAll(HookService.Default, ApprovalWaitService.Default))
+const MockApprovalLayer = ApprovalLayer.pipe(
+  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
 );
 
 const MockSkillLayer = Layer.succeed(SkillService, {
   _tag: 'Skill' as const,
   getAll: () => Effect.succeed([]),
-  findByName: () => Effect.succeed(undefined),
-  select: () => Effect.succeed(undefined),
-  selectImplicit: () => Effect.succeed(undefined),
   extractSkill: (_p: string, q: string) => Effect.sync(() => [undefined, q] as [undefined, string]),
-  evictProject: () => Effect.void,
 } as any);
 
 const MockMcpLayer = Layer.succeed(McpService, {
@@ -138,13 +135,7 @@ const MockSchedulerLayer = Layer.succeed(SchedulerService, {
 } as any);
 
 const MockContextLayer = Layer.succeed(ContextService, {
-  assemblePayload: () => ({
-    messages: [],
-    compactedEvents: [],
-    promptEstimate: 0,
-    currentTurnId: 0,
-    compactedTurnIds: new Set(),
-  }),
+  assemblePayload: async () => [],
   compactWithLLM: mockCompactWithLLM,
 } as any);
 
@@ -152,8 +143,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
   _tag: 'Checkpoint' as const,
   snapshotBaseline: () => Effect.void,
   snapshotFinal: () => Effect.void,
-  getCompletedTurns: () => Effect.succeed([]),
-  getCheckpoints: () => Effect.succeed([]),
   getCheckpointDiff: () => Effect.succeed({ turnId: 0, files: [] }),
   revertCheckpointFiles: () =>
     Effect.succeed({
@@ -161,7 +150,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
       throughTurnId: 0,
       affectedTurns: [],
       selectedFiles: [],
-      restoreEntry: null,
     }),
   previewRollbackDiff: () => Effect.succeed({ throughTurnId: 0, affectedTurns: [], diff: '' }),
   rollbackCodeToTurn: () =>
@@ -170,17 +158,7 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
       throughTurnId: 0,
       affectedTurns: [],
       selectedFiles: [],
-      restoreEntry: null,
     }),
-  undoLastCodeRollback: () =>
-    Effect.succeed({
-      restored: false,
-      conflict: false,
-      conflictFiles: [],
-      restoredFiles: [],
-      remainingRolledBack: [],
-    }),
-  getLatestRestoreEntry: () => Effect.succeed(null),
 } as any);
 
 const TestLayer = Layer.mergeAll(
@@ -188,8 +166,8 @@ const TestLayer = Layer.mergeAll(
   MockSessionLayer,
   MockLLMFactoryLayer,
   MockApprovalLayer,
-  HookService.Default,
-  ApprovalWaitService.Default,
+  HookLayer,
+  ApprovalWaitLayer,
   MockSkillLayer,
   MockMcpLayer,
   MockMemoryLayer,
@@ -198,7 +176,7 @@ const TestLayer = Layer.mergeAll(
   MockCheckpointLayer
 );
 
-const rt = ManagedRuntime.make(TestLayer);
+const rt = ManagedRuntime.make(TestLayer as any);
 
 describe('POST /api/sessions/:id/compact (manual compact)', () => {
   beforeEach(() => {
@@ -265,8 +243,8 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
       MockSessionLayer,
       FailingFactoryLayer,
       MockApprovalLayer,
-      HookService.Default,
-      ApprovalWaitService.Default,
+      HookLayer,
+      ApprovalWaitLayer,
       MockSkillLayer,
       MockMcpLayer,
       MockMemoryLayer,
@@ -274,7 +252,7 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
       MockContextLayer,
       MockCheckpointLayer
     );
-    const failRt = ManagedRuntime.make(FailLayer);
+    const failRt = ManagedRuntime.make(FailLayer as any);
     const app = await createServer(failRt);
     const res = await app.request('/api/sessions/test-sid/compact', {
       method: 'POST',

@@ -20,8 +20,8 @@ interface TurnDiffPanelProps {
   uiTurnId: string;
   isInterrupted?: boolean;
   threadId: string;
-  onRevertFile: (uiTurnId: string, file: string, isReverted: boolean) => void;
-  onRevertTurn: (uiTurnId: string, files: string[], isReverted: boolean) => void;
+  onRevertFile: (uiTurnId: string, file: string) => void;
+  onRevertTurn: (uiTurnId: string, files: string[]) => void;
 }
 
 function getCheckpointKey(
@@ -125,17 +125,17 @@ function TurnDiffPanel({
             onClick={() =>
               onRevertTurn(
                 uiTurnId,
-                diff.files.map((f: any) => f.path),
-                isTurnReverted
+                diff.files.map((f: any) => f.path)
               )
             }
+            disabled={isTurnReverted}
             className={`text-[12px] px-3 py-1 rounded ${
               isTurnReverted
-                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
+                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
                 : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--bg-active)] border border-[var(--border-strong)]'
             }`}
           >
-            {isTurnReverted ? '撤销回退本轮修改' : '回退本轮修改'}
+            {isTurnReverted ? '已回退本轮修改' : '回退本轮修改'}
           </button>
         </div>
       </div>
@@ -173,15 +173,16 @@ function TurnDiffPanel({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onRevertFile(uiTurnId, f.path, isReverted);
+                      if (!isReverted) onRevertFile(uiTurnId, f.path);
                     }}
+                    disabled={isReverted}
                     className={`text-[11px] px-2 py-0.5 rounded ${
                       isReverted
-                        ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:bg-[var(--accent-success)]/80'
+                        ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
                         : 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:bg-[var(--bg-active)]'
                     }`}
                   >
-                    {isReverted ? '撤销' : '回退'}
+                    {isReverted ? '已回退' : '回退'}
                   </button>
                   <svg
                     width="12"
@@ -225,7 +226,6 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     previewRollback,
     rollbackCtx,
     rollbackBoth,
-    undoCodeRollback,
     forkThread,
     revertedFilesByTurnId,
   } = useAgentRollback();
@@ -233,7 +233,6 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const didScrollToEndRef = useRef(false);
   const loadedCheckpointRef = useRef<string | null>(null);
-  const markFileRestored = useRollbackStore((s) => s.markFileRestored);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
 
   const [showRollbackPanel, setShowRollbackPanel] = useState<{
@@ -452,32 +451,17 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   }, [turnStatusKey, threadId, loadCheckpointDiff]);
 
   const handleRevertFile = useCallback(
-    async (uiTurnId: string, file: string, isReverted: boolean) => {
-      if (isReverted) {
-        const result = await undoCodeRollback(threadId, uiTurnId, false, [file]);
-        if (result.restored) {
-          markFileRestored(threadId, uiTurnId, file);
-        }
-      } else {
-        await revertFile(threadId, file);
-      }
+    async (_uiTurnId: string, file: string) => {
+      await revertFile(threadId, file);
     },
-    [threadId, revertFile, undoCodeRollback, markFileRestored]
+    [threadId, revertFile]
   );
 
   const handleRevertTurn = useCallback(
-    async (uiTurnId: string, files: string[], isReverted: boolean) => {
-      if (isReverted) {
-        const result = await undoCodeRollback(threadId, uiTurnId, false);
-        if (result.restored) {
-          const key = `${threadId}:${uiTurnId}`;
-          delete useRollbackStore.getState().revertedFilesByTurnId[key];
-        }
-      } else {
-        await revertFiles(threadId, files);
-      }
+    async (_uiTurnId: string, files: string[]) => {
+      await revertFiles(threadId, files);
     },
-    [threadId, revertFiles, undoCodeRollback]
+    [threadId, revertFiles]
   );
 
   const rollbackModal = showRollbackPanel && (

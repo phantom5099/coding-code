@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Fiber } from 'effect';
-import { HookService } from '../../src/hooks/registry.js';
+import { HookService } from '../../src/hooks/port.js';
+import { HookLayer } from '../../src/hooks/hooks.js';
 
 // This file pins the fix to `Effect.onInterrupt` callback in agent.ts
 // (around the `agent.turn.end` emit on abort). The old code wrapped the
@@ -22,7 +23,7 @@ describe('Effect.onInterrupt callback can yield* emit (agent.ts abort hook fix)'
     let observerRan = false;
     let serviceResolved = false;
 
-    const AppLayer = HookService.Default;
+    const AppLayer = HookLayer;
 
     const program = Effect.gen(function* () {
       const hooks = yield* HookService;

@@ -1,9 +1,9 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import type { Item } from '@shared/types';
 import { useAgentStore } from '../stores/agent.store';
 import { useAgentApproval, useAgentCore, useAgentProfile } from '../hooks/useAgent';
 import ToolCallCard from '../shared/ToolCallCard';
-import PlanApprovalModal from '../shared/PlanApprovalModal';
+import PlanDecisionModal from '../shared/PlanDecisionModal';
 import { useWorkspaceStore } from '../stores/workspace.store';
 
 interface ApprovalPanelProps {
@@ -14,38 +14,11 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { approveTool, rejectTool } = useAgentApproval();
   const { sendMessage } = useAgentCore();
-  const { fetchPlan, switchProfile } = useAgentProfile();
+  const { switchProfile } = useAgentProfile();
   const workspace = useWorkspaceStore();
 
   const pendingPlan = useAgentStore((s) => s.pendingPlanByThreadId[threadId] ?? null);
   const clearPendingPlan = useAgentStore((s) => s.clearPendingPlan);
-
-  const [planContent, setPlanContent] = useState('');
-  const [planPath, setPlanPath] = useState<string | undefined>();
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!pendingPlan) return;
-    let cancelled = false;
-    setLoading(true);
-    fetchPlan(pendingPlan.sessionId, workspace.rootPath ?? '')
-      .then((snap) => {
-        if (cancelled) return;
-        setPlanContent(snap.content);
-        setPlanPath(snap.path);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setPlanContent('');
-        setPlanPath(undefined);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pendingPlan, fetchPlan, workspace.rootPath]);
 
   const pendingKey = useAgentStore((s) => {
     const thread = s.threads[threadId];
@@ -94,11 +67,9 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
 
   if (pendingPlan) {
     return (
-      <PlanApprovalModal
-        planContent={planContent}
-        planPath={planPath}
+      <PlanDecisionModal
+        title={pendingPlan.title}
         sessionId={pendingPlan.sessionId}
-        loading={loading}
         onImplement={() => void handleImplement()}
         onSubmitOpinion={(op) => void handleSubmitOpinion(op)}
         onCancel={() => void handleCancel()}

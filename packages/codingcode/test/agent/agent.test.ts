@@ -1,394 +1,139 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Effect, Layer, Queue, Chunk } from 'effect';
-import { CheckpointService } from '../../src/checkpoint/checkpoint-service.js';
-import { SessionService } from '../../src/session/store.js';
-import { agentLoop } from '../../src/agent/agent.js';
-import type { AgentEvent } from '../../src/agent/types.js';
-import { Result } from '../../src/core/result.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { ToolExecutorService } from '../../src/tools/executor.js';
-import { ProjectRuntimeService } from '../../src/runtime/project-runtime.js';
-import { TodoService } from '../../src/agent/todo.js';
-import { ContextService } from '../../src/context/service.js';
-import { MemoryService } from '../../src/memory/index.js';
+import { Effect } from 'effect';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pToolCall,
+  pEnd,
+  texts,
+  toolResults,
+  endReason,
+} from '../helpers/agent-harness.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({
-    context: {
-      compactionModel: '',
-    },
-    memory: {
-      enabled: false,
-      model: '',
-      maxBytes: 16384,
-      promptMaxBytes: 8192,
-      extraTypes: [],
-      disabledTypes: [],
-    },
+    maxSteps: 5,
+    maxStopContinuations: 2,
+    context: { compactionModel: '' },
+    memory: { enabled: false },
     server: { port: 8080 },
   }),
 }));
 
-const mockAgentService = {
-  runStream: () => {
-    throw new Error('not implemented');
-  },
-};
+const mockState = makeState({ sessionId: 'test-sid', cwd: '/tmp', title: 'test' });
 
-const mockState = {
-  sessionId: 'test-sid',
-  cwd: '/tmp',
-  messageCount: 0,
-  currentTurnId: 1,
-  sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
-  model: 'test-model',
-  title: 'test',
-  activeProfile: 'build' as const,
-  permissionMode: 'default' as const,
-  usage: undefined,
-  memorySnapshot: '',
-};
-
-function makeDeps(overrides?: Record<string, any>) {
-  return {
-    maxSteps: 25,
-    maxStopContinuations: 2,
-    executor: null as any,
-    runtime: { listAgentProfiles: () => [] } as any,
-    agentService: mockAgentService as any,
-    hooks: {
-      emit: () => Effect.succeed(undefined),
-      emitDecision: () => Effect.succeed(null),
-      register: () => Effect.succeed(() => {}),
-      registerDecision: () => Effect.succeed(() => {}),
-      reloadUserHooks: () => Effect.succeed(undefined),
-    } as unknown as HookService,
-    ...overrides,
-  };
+function makeCapturingLlm(parts: () => AsyncIterable<any>) {
+  const llm = {
+    completeStream: vi.fn(() => parts()),
+    modelInfo: { maxTokens: 1000 },
+  } as any;
+  return llm;
 }
 
-const AllMockLayer = Layer.mergeAll(
-  Layer.succeed(CheckpointService, {
-    snapshotBaseline: () => Effect.void,
-    snapshotFinal: () => Effect.void,
-    getCompletedTurns: () => Effect.succeed([]),
-    getCheckpoints: () => Effect.succeed([]),
-    getCheckpointDiff: () => Effect.succeed({ turnId: 0, files: [] }),
-    revertCheckpointFiles: () =>
-      Effect.succeed({
-        reverted: false,
-        throughTurnId: 0,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      }),
-    previewRollbackDiff: () => Effect.succeed({ throughTurnId: 0, affectedTurns: [], diff: '' }),
-    rollbackCodeToTurn: () =>
-      Effect.succeed({
-        reverted: false,
-        throughTurnId: 0,
-        affectedTurns: [],
-        selectedFiles: [],
-        restoreEntry: null,
-      }),
-    undoLastCodeRollback: () =>
-      Effect.succeed({
-        restored: false,
-        conflict: false,
-        conflictFiles: [],
-        restoredFiles: [],
-        remainingRolledBack: [],
-      }),
-    getLatestRestoreEntry: () => Effect.succeed(null),
-  } as any),
-  Layer.succeed(SessionService, {
-    getTranscriptPath: () => '/tmp/test.jsonl',
-    recordAssistant: () => Effect.succeed({}),
-    recordUser: () => Effect.succeed({}),
-    recordToolResult: () => Effect.succeed({}),
-  } as any),
-  Layer.succeed(HookService, {
-    emit: () => Effect.succeed(undefined),
-    emitDecision: () => Effect.succeed(null),
-    register: () => Effect.succeed(() => {}),
-    registerDecision: () => Effect.succeed(() => {}),
-    reloadUserHooks: () => Effect.succeed(undefined),
-  } as any),
-  Layer.succeed(ToolExecutorService, {
-    execute: () => Effect.succeed(''),
-    executeBatch: (tcs: any[]) =>
-      Effect.succeed(
-        tcs.map((tc: any) => ({ type: 'ok' as const, id: tc.id, name: tc.name, output: '' }))
-      ),
-  } as any),
-  Layer.succeed(ProjectRuntimeService, {
-    prepareProject: () => Effect.void,
-    resolveMainAgentProfile: () => undefined,
-    resolveSubagentProfile: () => undefined,
-    listAgentProfiles: () => [],
-    getToolPolicy: () => ({
-      allowedTools: undefined,
-      allowedMcpServers: undefined,
-    }),
-    setSessionProfile: () => {},
-    restoreSessionProfile: () => Effect.void,
-    getSessionProfile: () => undefined,
-    disposeSession: () => Effect.void,
-    disposeProject: () => Effect.void,
-  } as any),
-  Layer.succeed(TodoService, {
-    read: () => [],
-    write: () => {},
-    reset: () => {},
-  } as any),
-  Layer.succeed(ContextService, {
-    assemblePayload: () => ({
-      messages: [{ role: 'user' as const, content: 'hi' }],
-      compactedEvents: [],
-      promptEstimate: 10,
-      currentTurnId: 1,
-      compactedTurnIds: new Set<number>(),
-    }),
-    compactIfNeeded: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-    compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 10 }),
-  } as any),
-  Layer.succeed(MemoryService, {
-    getMemoryEnabled: () => false,
-    setMemoryEnabled: () => {},
-    loadMemoryForPrompt: () => '',
-    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
-  } as any)
-);
-
-describe('agentLoop', () => {
+describe('agent runTurn loop', () => {
   it('should yield text chunks from LLM stream', async () => {
-    const mockLlm = {
-      completeStream: (_params: any) => ({
-        stream: (async function* () {
-          yield 'Hello';
-          yield ' ';
-          yield 'world';
-        })(),
-        response: Promise.resolve(Result.ok({ content: 'Hello world' })),
-      }),
-    };
-
-    const deps = makeDeps();
-    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
-    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
-    const effect = agentLoop(
-      deps.executor,
-      deps.hooks,
-      deps.maxSteps,
-      deps.maxStopContinuations,
-      opts,
-      q
+    const llm = makeCapturingLlm(() => llmStream(pText('Hello'), pText(' '), pText('world'), pEnd()));
+    const { events } = await runAgentTurn(
+      { llm, state: mockState },
+      { sessionId: 'test-sid', cwd: '/tmp' }
     );
-    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
-    const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
-    expect(textEvents.map((e: any) => e.text)).toEqual(['Hello', ' ', 'world']);
+    expect(texts(events)).toEqual(['Hello', ' ', 'world']);
   });
 
   it('should handle empty LLM stream gracefully', async () => {
-    const mockLlm = {
-      completeStream: (_params: any) => ({
-        stream: (async function* () {})(),
-        response: Promise.resolve(Result.ok({ content: '' })),
-      }),
-    };
-
-    const deps = makeDeps();
-    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
-    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
-    const effect = agentLoop(
-      deps.executor,
-      deps.hooks,
-      deps.maxSteps,
-      deps.maxStopContinuations,
-      opts,
-      q
+    const llm = makeCapturingLlm(() => llmStream(pEnd()));
+    const { events } = await runAgentTurn(
+      { llm, state: mockState },
+      { sessionId: 'test-sid', cwd: '/tmp' }
     );
-    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
-    const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
-    expect(textEvents).toHaveLength(0);
+    expect(texts(events)).toHaveLength(0);
+    expect(endReason(events)).toBe('done');
   });
 
-  it('should feed bash tool results back to LLM', async () => {
-    const mockLlm = {
-      completeStream: (_params: any) => ({
-        stream: (async function* () {
-          yield '\n[Using: execute_command]\n';
-        })(),
-        response: Promise.resolve(
-          Result.ok({
-            content: '',
-            toolCalls: [
-              { id: 'tc1', name: 'execute_command', arguments: { command: 'git status' } },
-            ],
-          })
-        ),
+  it('should surface tool results as tool_result events', async () => {
+    let callCount = 0;
+    const llm = {
+      completeStream: vi.fn(() => {
+        callCount++;
+        if (callCount === 1) {
+          return llmStream(pToolCall('tc1', 'execute_command', { command: 'git status' }), pEnd());
+        }
+        return llmStream(pText('done'), pEnd());
       }),
-    };
-
-    const mockExecutor = {
-      execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
-        Effect.succeed('On branch main\nnothing to commit'),
-      executeBatch: (_toolCalls: any[]) =>
+      modelInfo: { maxTokens: 1000 },
+    } as any;
+    const executor = {
+      executeBatch: (calls: any[]) =>
         Effect.succeed(
-          _toolCalls.map((tc: any) => ({
+          calls.map((tc: any) => ({
             type: 'ok' as const,
             id: tc.id,
             name: tc.name,
             output: 'On branch main\nnothing to commit',
           }))
         ),
-    };
+    } as any;
+    const { events } = await runAgentTurn(
+      { llm, state: mockState, executor },
+      { sessionId: 'test-sid', cwd: '/tmp' }
+    );
 
-    const deps = makeDeps({
-      maxSteps: 1,
-      runtime: { listAgentProfiles: () => [] } as any,
-      executor: mockExecutor as any,
+    const results = toolResults(events);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.outcome).toEqual({
+      status: 'ok',
+      output: 'On branch main\nnothing to commit',
     });
-    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
-    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
-    const effect = agentLoop(
-      deps.executor,
-      deps.hooks,
-      deps.maxSteps,
-      deps.maxStopContinuations,
-      opts,
-      q
-    );
-    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
-
-    const toolResults = events.filter(
-      (e: AgentEvent): e is Extract<AgentEvent, { _tag: 'ToolResult' }> => e._tag === 'ToolResult'
-    );
-    expect(toolResults).toHaveLength(1);
-    expect(toolResults[0]!.output).toBe('On branch main\nnothing to commit');
-    expect(toolResults[0]!.ok).toBe(true);
   });
 
-  it('should forward tool-call markers from LLM stream', async () => {
-    const mockLlm = {
-      completeStream: (_params: any) => ({
-        stream: (async function* () {
-          yield '\n[Using: readFile]\n';
-        })(),
-        response: Promise.resolve(
-          Result.ok({
-            content: '',
-            toolCalls: [{ id: 'tc1', name: 'readFile', arguments: { path: 'test.txt' } }],
-          })
-        ),
-      }),
-    };
-
-    const mockExecutor = {
-      execute: (_name: string, _args: Record<string, unknown>, _opts?: any) =>
-        Effect.succeed('file content'),
-      executeBatch: (_toolCalls: any[]) =>
-        Effect.succeed(
-          _toolCalls.map((tc: any) => ({
-            type: 'ok' as const,
-            id: tc.id,
-            name: tc.name,
-            output: 'file content',
-          }))
-        ),
-    };
-
-    const deps = makeDeps({
-      maxSteps: 1,
-      runtime: { listAgentProfiles: () => [] } as any,
-      executor: mockExecutor as any,
-    });
-    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
-    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
-    const effect = agentLoop(
-      deps.executor,
-      deps.hooks,
-      deps.maxSteps,
-      deps.maxStopContinuations,
-      opts,
-      q
-    );
-    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
-
-    const textEvents = events.filter((e: any) => e._tag === 'LlmChunk');
-    expect(textEvents.map((e: any) => e.text)).toEqual(['\n[Using: readFile]\n']);
-  });
-
-  it('should yield a single maxSteps error and a single turn.end hook when maxSteps is exhausted', async () => {
-    const mockLlm = {
-      completeStream: (_params: any) => ({
-        stream: (async function* () {
-          yield 'calling tool';
-        })(),
-        response: Promise.resolve(
-          Result.ok({
-            content: '',
-            toolCalls: [{ id: 'tc1', name: 'read_file', arguments: { path: 'x' } }],
-          })
-        ),
-      }),
-    };
-
-    const mockExecutor = {
-      executeBatch: (_toolCalls: any[]) =>
-        Effect.succeed(
-          _toolCalls.map((tc: any) => ({
-            type: 'ok' as const,
-            id: tc.id,
-            name: tc.name,
-            output: 'file content',
-          }))
-        ),
-    };
-
-    const turnEndCalls: any[] = [];
-    const trackingHooks = {
-      emit: (eventName: string, payload?: any) => {
-        if (eventName === 'agent.turn.end') {
-          turnEndCalls.push(payload);
+  it('should forward text markers from LLM stream', async () => {
+    let callCount = 0;
+    const llm = {
+      completeStream: vi.fn(() => {
+        callCount++;
+        if (callCount === 1) {
+          return llmStream(
+            pText('\n[Using: readFile]\n'),
+            pToolCall('tc1', 'readFile', { path: 'test.txt' }),
+            pEnd()
+          );
         }
+        return llmStream(pEnd());
+      }),
+      modelInfo: { maxTokens: 1000 },
+    } as any;
+    const { events } = await runAgentTurn(
+      { llm, state: mockState },
+      { sessionId: 'test-sid', cwd: '/tmp' }
+    );
+
+    expect(texts(events)).toEqual(['\n[Using: readFile]\n']);
+  });
+
+  it('should end with maxSteps and emit a single turn.end hook when maxSteps is exhausted', async () => {
+    // LLM always requests a tool call → the loop never reaches a natural stop.
+    const llm = {
+      completeStream: vi.fn(() => llmStream(pText('calling tool'), pToolCall('tc1', 'read_file', { path: 'x' }), pEnd())),
+      modelInfo: { maxTokens: 1000 },
+    } as any;
+    const turnEndCalls: any[] = [];
+    const hooks = {
+      emit: vi.fn((point: string, payload: any) => {
+        if (point === 'agent.turn.end') turnEndCalls.push(payload);
         return Effect.succeed(undefined);
-      },
+      }),
       emitDecision: () => Effect.succeed(null),
-      register: () => Effect.succeed(() => {}),
-      registerDecision: () => Effect.succeed(() => {}),
-      reloadUserHooks: () => Effect.succeed(undefined),
-    };
-
-    const deps = makeDeps({
-      maxSteps: 1,
-      runtime: { listAgentProfiles: () => [] } as any,
-      executor: mockExecutor as any,
-      hooks: trackingHooks as unknown as HookService,
-    });
-    const opts = { state: mockState, llm: { ...mockLlm, modelInfo: { maxTokens: 1000 } } as any };
-    const q = Effect.runSync(Queue.unbounded<AgentEvent>());
-    const effect = agentLoop(
-      deps.executor,
-      deps.hooks,
-      deps.maxSteps,
-      deps.maxStopContinuations,
-      opts,
-      q
+    } as any;
+    const { events } = await runAgentTurn(
+      { llm, state: mockState, hooks },
+      { sessionId: 'test-sid', cwd: '/tmp' }
     );
-    await Effect.runPromise(effect.pipe(Effect.provide(AllMockLayer)));
-    const events = Chunk.toArray(Effect.runSync(Queue.takeAll(q)));
 
-    const maxStepErrors = events.filter(
-      (e: any) => e._tag === 'Error' && e.error?.code === 'MAX_STEPS_REACHED'
-    );
-    expect(maxStepErrors).toHaveLength(1);
+    expect(endReason(events)).toBe('maxSteps');
     expect(turnEndCalls).toHaveLength(1);
     expect(turnEndCalls[0].status).toBe('maxSteps');
   });

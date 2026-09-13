@@ -108,7 +108,6 @@ describe('Hook disabled state', () => {
     _setGlobalConfigDir(undefined);
     rmSync(projectDir, { recursive: true, force: true });
     rmSync(globalDir, { recursive: true, force: true });
-    setGlobalHookDisabledState(testHook, false);
   });
 
   it('should default to not disabled globally', () => {

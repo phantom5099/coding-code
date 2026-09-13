@@ -34,9 +34,7 @@ vi.mock('../src/hooks/useAgent', () => ({
     previewRollback: vi.fn(),
     rollbackCtx: vi.fn(),
     rollbackBoth: vi.fn(),
-    undoCodeRollback: vi.fn(),
     forkThread: vi.fn(),
-    initRollbackState: vi.fn(),
     deleteThread: vi.fn(),
     revertedFilesByTurnId: {},
   }),
@@ -85,7 +83,6 @@ beforeEach(() => {
     automations: [],
   });
   useRollbackStore.setState({
-    rollbackStateByThreadId: {},
     checkpointDiffByTurnId: {},
     revertedFilesByTurnId: {},
     turnCheckpointMapping: {},

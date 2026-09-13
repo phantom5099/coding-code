@@ -1,6 +1,9 @@
 packages:
   - 'packages/*'
 
+overrides:
+  vite: ^6.4.2
+
 allowBuilds:
   electron: true
   esbuild: true

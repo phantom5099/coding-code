@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { Result } from '../../src/core/result';
-import { HookService } from '../../src/hooks/registry.js';
+import { HookService } from '../../src/hooks/port.js';
 import type { HookDecision } from '../../src/hooks/types.js';
+import { HookLayer } from '../../src/hooks/hooks.js';
 
 describe('agent.turn.stop decision type inference', () => {
   it('should infer HookDecision from emitDecision without any cast', async () => {
@@ -25,7 +26,7 @@ describe('agent.turn.stop decision type inference', () => {
     });
 
     const result = await Effect.runPromise(
-      program.pipe(Effect.provide(HookService.Default) as any)
+      program.pipe(Effect.provide(HookLayer) as any)
     );
     expect(result).toBe('(test continue)');
   });

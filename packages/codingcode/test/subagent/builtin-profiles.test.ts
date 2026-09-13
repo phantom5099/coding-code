@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAN_PROFILE, BUILD_PROFILE } from '../../src/agent/profile.js';
-import { PLAN_PROFILE_ALLOWED_TOOLS } from '../../src/agent/profile.js';
+import { PLAN_PROFILE, BUILD_PROFILE, PLAN_TOOL_NAMES } from '../../src/agent/profile.js';
 
 describe('built-in subagent profiles', () => {
   it('keeps only build and plan as built-in names', () => {
@@ -10,8 +9,12 @@ describe('built-in subagent profiles', () => {
   it('keeps plan tools independent from profile tool lists', () => {
     expect('tools' in PLAN_PROFILE).toBe(false);
     expect('tools' in BUILD_PROFILE).toBe(false);
-    expect(PLAN_PROFILE_ALLOWED_TOOLS).toEqual(
-      new Set(['read_file', 'search_files', 'search_code', 'fetch_url', 'submit_plan'])
-    );
+    expect(PLAN_TOOL_NAMES).toEqual([
+      'read_file',
+      'search_files',
+      'search_code',
+      'fetch_url',
+      'submit_plan',
+    ]);
   });
 });

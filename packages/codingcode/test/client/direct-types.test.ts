@@ -7,10 +7,11 @@ import { createDirectModelClient } from '../../src/direct/models.js';
 import { createDirectSettingsClient } from '../../src/direct/settings.js';
 import type { AppRuntime } from '../../src/layer.js';
 import type { LLMClient } from '../../src/llm/client.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
 import { AgentError } from '../../src/core/error.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 
 type AssertNotAny<T> = 0 extends 1 & T ? never : T;
 
@@ -38,7 +39,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
 } as any);
 
 const TestLayer = Layer.mergeAll(
-  ApprovalWaitService.Default,
+  ApprovalWaitLayer,
   MockWorkspaceLayer,
   MockLLMFactoryLayer
 );
@@ -46,12 +47,18 @@ const TestLayer = Layer.mergeAll(
 const rt = ManagedRuntime.make(TestLayer);
 
 const noopLlm: LLMClient = {
-  completeStream: () => ({
-    stream: (async function* () {})(),
-    response: Promise.resolve({ ok: true, value: { content: '', finishReason: 'stop' as const } }),
-  }),
-  complete: () => Effect.succeed({ content: '' } as any),
-  modelInfo: { id: 'test', provider: 'test', name: 'Test', contextWindow: 128000 } as any,
+  completeStream: () =>
+    (async function* () {
+      yield { type: 'end' as const };
+    })(),
+  complete: () => Effect.succeed({ content: '' }),
+  modelInfo: {
+    provider: 'test',
+    model: 'test-model',
+    maxTokens: 128000,
+    supportsToolCalling: true,
+    supportsStreaming: true,
+  },
 };
 
 describe('type replacements: AppRuntime and LLMClient', () => {

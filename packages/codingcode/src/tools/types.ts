@@ -6,18 +6,12 @@ export type { ToolDescription } from '../core/types.js';
 export interface ToolExecCtx {
   signal?: AbortSignal;
   sessionId?: string;
-  turnId?: number;
   projectPath?: string;
 }
 
-export interface ToolDefinition {
+export interface ToolDefinition<R = never> {
   name: string;
   description: string;
   parameters: z.ZodTypeAny;
-  execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, never>;
-}
-
-export interface ToolVisibilityPolicy {
-  allowedTools?: Set<string>;
-  allowedMcpServers?: Set<string>;
+  execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, R>;
 }

@@ -2,12 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 
 import { createDirectModelClient } from '../../src/direct/models.js';
-import { agentEventToStreamChunk } from '../../src/agent/stream-adapter.js';
-import type { LLMClient } from '../../src/llm/client.js';
-import { ApprovalWaitService } from '../../src/approval/async-confirm.js';
+import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { AgentError } from '../../src/core/error.js';
 import { WorkspaceService } from '../../src/core/workspace.js';
-import { LLMFactoryService } from '../../src/llm/factory.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
+import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 
 const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
   getWorkspaceCwd: () => '/tmp/test',
@@ -36,32 +35,12 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
 } as any);
 
 const TestLayer = Layer.mergeAll(
-  ApprovalWaitService.Default,
+  ApprovalWaitLayer,
   MockWorkspaceLayer,
   MockLLMFactoryLayer
 );
 
 const rt = ManagedRuntime.make(TestLayer);
-
-const noopLlm: LLMClient = {
-  completeStream: () => ({
-    stream: (async function* () {})(),
-    response: Promise.resolve({ ok: true, value: { content: '', finishReason: 'stop' as const } }),
-  }),
-  complete: () =>
-    Effect.succeed({
-      content: '',
-      finishReason: 'stop' as const,
-      usage: { prompt: 0, completion: 0, total: 0 },
-    }),
-  modelInfo: {
-    provider: 'test',
-    model: 'test-model',
-    maxTokens: 128000,
-    supportsToolCalling: true,
-    supportsStreaming: true,
-  },
-};
 
 describe('createDirectModelClient operations', () => {
   it('lists models from the local model catalog without HTTP', async () => {
@@ -88,47 +67,6 @@ describe('createDirectModelClient operations', () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
-  });
-});
-
-describe('agentEventToStreamChunk', () => {
-  it('yields usage chunks', async () => {
-    async function* source() {
-      yield { _tag: 'Step' as const, step: 1, max: 10 };
-      yield { _tag: 'Assistant' as const, content: 'ok' };
-      yield { _tag: 'Usage' as const, prompt: 1000, completion: 500, total: 1500 };
-    }
-
-    const chunks: any[] = [];
-    for await (const chunk of agentEventToStreamChunk(source())) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks).toEqual([
-      { type: 'message', id: 1, content: 'ok', partial: false },
-      { type: 'usage', prompt: 1000, completion: 500, total: 1500 },
-    ]);
-  });
-
-  it('yields error chunk with code from AgentError', async () => {
-    async function* source() {
-      yield { _tag: 'Error' as const, error: AgentError.toolExecutionFailed('bash', 'EACCES') };
-      yield { _tag: 'Done' as const, content: '' };
-    }
-
-    const chunks: any[] = [];
-    for await (const chunk of agentEventToStreamChunk(source())) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks).toEqual([
-      {
-        type: 'error',
-        message: expect.stringContaining('bash'),
-        code: 'TOOL_EXECUTION_FAILED',
-      },
-      { type: 'done' },
-    ]);
   });
 });
 

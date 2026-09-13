@@ -2,11 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { SessionService } from '../../src/session/store.js';
+import { SessionService } from '../../src/session/port.js';
+import { SessionLayer } from '../../src/session/session.js';
 import { computePaths } from '../../src/core/path.js';
-import { HookService } from '../../src/hooks/registry.js';
-import { McpService } from '../../src/mcp/index.js';
-import { RulesService } from '../../src/rules/index.js';
+import { HookService } from '../../src/hooks/port.js';
+import { McpService } from '../../src/mcp/port.js';
+import { RulesService } from '../../src/rules/port.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -37,7 +38,7 @@ const mockRulesService = {
 } as any;
 
 function makeLayer() {
-  return SessionService.Default.pipe(
+  return SessionLayer.pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(HookService, mockHookService as any),
@@ -74,36 +75,71 @@ describe('SessionService disk setter/getter consistency', () => {
     await rt.dispose();
   });
 
-  it('setPermissionModeOnDisk + getPermissionModeFromDisk are consistent', async () => {
+  it('setPermissionMode persists to loaded state', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setPermissionModeOnDisk(cwd, sessionId, 'bypass');
+        yield* session.setPermissionMode(cwd, sessionId, 'bypass');
       })
     );
-    const mode = await rt.runPromise(
+    const state = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        return yield* session.getPermissionModeFromDisk(cwd, sessionId);
+        return yield* session.load(cwd, sessionId);
       })
     );
-    expect(mode).toBe('bypass');
+    expect(state.permissionMode).toBe('bypass');
   });
 
-  it('setActiveProfile + getActiveProfile are consistent', async () => {
+  it('setActiveProfile persists to loaded state', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
         yield* session.setActiveProfile(cwd, sessionId, 'plan');
       })
     );
-    const profile = await rt.runPromise(
+    const state = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        return yield* session.getActiveProfile(cwd, sessionId);
+        return yield* session.load(cwd, sessionId);
       })
     );
-    expect(profile).toBe('plan');
+    expect(state.activeProfile).toBe('plan');
+  });
+
+  it('setActiveProfile to plan leaves permissionMode untouched', async () => {
+    await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        yield* session.setActiveProfile(cwd, sessionId, 'plan');
+      })
+    );
+    const state = await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        return yield* session.load(cwd, sessionId);
+      })
+    );
+    expect(state.activeProfile).toBe('plan');
+    expect(state.permissionMode).toBe('default');
+  });
+
+  it('setActiveProfile to build leaves permissionMode untouched', async () => {
+    await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        yield* session.setActiveProfile(cwd, sessionId, 'plan');
+        yield* session.setActiveProfile(cwd, sessionId, 'build');
+      })
+    );
+    const state = await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        return yield* session.load(cwd, sessionId);
+      })
+    );
+    expect(state.activeProfile).toBe('build');
+    expect(state.permissionMode).toBe('default');
   });
 
   it('setActiveProfile is durable across reload (file exists on disk)', async () => {
