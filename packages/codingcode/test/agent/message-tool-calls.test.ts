@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Message } from '../../src/core/types.js';
+import type { Message } from '../../src/contracts/types.js';
 
 describe('Message tool_calls assignment', () => {
   it('should allow direct assignment without as any cast', () => {

@@ -26,10 +26,10 @@ import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
-import type { FrameBody, RuntimeEvent, Transition } from '../../src/core/frame.js';
-import type { TokenUsage } from '../../src/core/types.js';
-import type { LLMStreamPart } from '../../src/llm/types.js';
-import type { SessionStoreState } from '../../src/session/types.js';
+import type { FrameBody, RuntimeEvent, Transition } from '../../src/contracts/frame.js';
+import type { TokenUsage } from '../../src/contracts/types.js';
+import type { LLMStreamPart } from '../../src/contracts/provider.js';
+import type { SessionStoreState } from '../../src/contracts/session.js';
 
 // ---- LLM 部件构造器 ----
 
@@ -219,7 +219,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       executeBatch: (calls: any[]) =>
         Effect.succeed(
           calls.map((c: any) => ({
-            type: 'ok' as const,
+            status: 'ok' as const,
             id: c.id,
             name: c.name,
             output: '',
@@ -260,6 +260,13 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     loadMemoryForPrompt: () => mocks.memorySnapshot ?? '',
     flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
   };
+
+  // ToolCatalogLayer 依赖 McpService，先固化再合并
+  const mcpLayer = Layer.succeed(McpService, {
+    syncConnections: () => Effect.void,
+    listProjectMcpTools: () => Effect.succeed([]),
+  } as any);
+  const toolCatalogLayer = ToolCatalogLayer.pipe(Layer.provide(mcpLayer));
 
   const services = Layer.mergeAll(
     Layer.succeed(SessionPort, session as any),
@@ -303,15 +310,12 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       reloadUserHooks: () => Effect.void,
       disposeSession: () => Effect.void,
     } as any),
-    Layer.succeed(McpService, {
-      syncConnections: () => Effect.void,
-      listProjectMcpTools: () => [],
-    } as any),
+    mcpLayer,
     Layer.succeed(SubagentRunnerService, {} as any),
     // ToolEnvPort：把上面的具体服务适配成 agent 所需的工具执行期注入能力（同 layer.ts）
     ToolEnvLayer,
     // ToolCatalogPort：静态内置工具 + profile 工具 + MCP 工具的装配（同 layer.ts）
-    ToolCatalogLayer,
+    toolCatalogLayer,
   );
   return services;
 }

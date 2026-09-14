@@ -29,9 +29,9 @@ import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import { encodeProjectPath, normalizePath, setProjectBaseDir, computePaths } from '../../src/core/path.js';
-import type { Message } from '../../src/core/types.js';
-import type { LLMClient } from '../../src/llm/client.js';
-import type { FrameBody } from '../../src/core/frame.js';
+import type { Message } from '../../src/contracts/types.js';
+import type { LLMClient } from '../../src/contracts/provider.js';
+import type { FrameBody } from '../../src/contracts/frame.js';
 
 function makeMockLLM(content: string): LLMClient {
   return {
@@ -81,7 +81,8 @@ const SessionPortLayer = Layer.effect(SessionPort, Effect.gen(function* () {
   return {
     load: svc.load.bind(svc),
     create: svc.create.bind(svc),
-    recordUser: svc.recordUser.bind(svc),
+    recordUser: (state: any, content: string) =>
+      svc.recordUser(state, content).pipe(Effect.map((e) => e.turnId)),
     recordSystem: svc.recordSystem.bind(svc),
     recordAssistant: svc.recordAssistant.bind(svc),
     recordToolResult: svc.recordToolResult.bind(svc),
@@ -91,6 +92,12 @@ const SessionPortLayer = Layer.effect(SessionPort, Effect.gen(function* () {
 })).pipe(Layer.provide(SessionLayer));
 
 // Narrow agent ports + TodoService required to build the real AgentLayer.
+const McpMock = Layer.succeed(McpService, {
+  syncConnections: () => Effect.void,
+  listProjectMcpTools: () => Effect.succeed([]),
+} as any);
+const ToolCatalogWithMcp = ToolCatalogLayer.pipe(Layer.provide(McpMock));
+
 const AgentDeps = Layer.mergeAll(
   SessionPortLayer,
   Layer.succeed(ToolExecutorPort, { executeBatch: () => Effect.succeed([]) } as any),
@@ -132,7 +139,7 @@ const AgentDeps = Layer.mergeAll(
   // ToolEnvPort 在 getToolEnv 运行时从外层 Runtime 解析具体服务（见 Runtime 定义）
   ToolEnvLayer,
   // ToolCatalogPort：静态内置 + profile 工具的装配（同 layer.ts）
-  ToolCatalogLayer
+  ToolCatalogWithMcp
 );
 
 // Real AgentService built on the real SessionPort + stubbed narrow ports.
@@ -151,10 +158,7 @@ const Runtime = Layer.mergeAll(
     reloadUserHooks: () => Effect.succeed(undefined),
     disposeSession: () => Effect.void,
   } as any),
-  Layer.succeed(McpService, {
-    syncConnections: () => Effect.void,
-    listProjectMcpTools: () => [],
-  } as any),
+  McpMock,
   Layer.succeed(SubagentRunnerService, {} as any),
   // ToolEnvLayer.getToolEnv 运行时从外层解析 TodoService（工具执行期依赖）
   Layer.succeed(TodoService, { read: () => [], write: () => {}, reset: () => {} } as any)

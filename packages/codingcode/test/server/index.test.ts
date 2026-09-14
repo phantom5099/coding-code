@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
-import { WorkspaceService } from '../../src/core/workspace.js';
+import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { SessionService } from '../../src/session/port.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';

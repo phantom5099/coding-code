@@ -1,17 +1,16 @@
-import type { PermissionMode } from '../approval/types.js';
-import type { ProfileName, TokenUsage } from '../core/types.js';
+import type { PermissionMode } from '../contracts/permission.js';
+import type { ProfileName, TokenUsage } from '../contracts/types.js';
 import type {
   CheckpointDiff,
   CodeRollbackResult,
   RollbackPreviewDiff,
 } from '../checkpoint/types.js';
-import type { SelectableModel } from '../llm/port.js';
-import type { McpServerConfig, McpStatus } from '../mcp/types.js';
-import type { UserHookConfig } from '../hooks/types.js';
-import type {SessionIndex } from '../session/types.js';
-import type { UITurn } from '../session/port.js';
+import type { SelectableModel } from '../contracts/provider.js';
+import type { McpServerConfig, McpStatus } from '../contracts/mcp.js';
+import type { UserHookConfig } from '../contracts/hooks.js';
+import type { SessionIndex, UITurn } from '../contracts/session.js';
 import type { AVAILABLE_PROFILES } from '../agent/profile.js';
-import type { Frame } from '../core/frame.js';
+import type { Frame } from '../contracts/frame.js';
 
 export type { TokenUsage, CheckpointDiff, CodeRollbackResult, RollbackPreviewDiff };
 

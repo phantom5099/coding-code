@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import { filterForUI } from '../../src/session/session.js';
-import type { SessionEvent, SessionIndex } from '../../src/session/types.js';
+import type { SessionEvent, SessionIndex } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();

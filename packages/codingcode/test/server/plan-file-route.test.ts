@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync, utimesSync } from 'fs';
 import { join } from 'path';
 import { Hono } from 'hono';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
-import { WorkspaceService } from '../../src/core/workspace.js';
+import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { SessionService } from '../../src/session/port.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';

@@ -11,7 +11,7 @@ import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { AgentService } from '../../src/agent/port.js';
-import { WorkspaceService } from '../../src/core/workspace.js';
+import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();

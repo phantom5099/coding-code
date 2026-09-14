@@ -1,5 +1,5 @@
 import { basename, resolve } from 'path';
-import type { Skill } from './types.js';
+import type { Skill } from '../contracts/skill.js';
 import { readSkillFrontMatter } from './source.js';
 
 export function loadSkill(dirPath: string): Skill | null {

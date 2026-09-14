@@ -1,10 +1,10 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { SkillService } from '../../skills/port.js';
-import { WorkspaceService, isGlobalCwd } from '../../core/workspace.js';
-import { AlreadyExistsError, NotFoundError } from '../../core/error.js';
-import type { McpServerConfig } from '../../mcp/types.js';
-import type { UserHookConfig } from '../../hooks/types.js';
+import { WorkspaceService, isGlobalCwd } from '../../workspace/workspace.js';
+import { AlreadyExistsError, NotFoundError } from '../../contracts/error.js';
+import type { McpServerConfig } from '../../contracts/mcp.js';
+import type { UserHookConfig } from '../../contracts/hooks.js';
 import {
   loadMcpConfig,
   writeMcpConfig,

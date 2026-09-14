@@ -9,7 +9,7 @@ import {
   setHookDisabled,
   resetHookDisabled,
 } from '../lib/core-api';
-import type { UserHookConfig, HookPoint } from '@codingcode/core/hooks/types';
+import type { UserHookConfig, HookPoint } from '@codingcode/core/contracts/hooks';
 
 interface HookEntry {
   name: string;

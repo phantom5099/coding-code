@@ -3,7 +3,7 @@ import {
   estimateTokensForContent,
   estimateTokens,
   estimateMessageTokens,
-} from '../../src/core/util.js';
+} from '../../src/context/tokens.js';
 
 describe('token estimation', () => {
   it('empty content returns 0', () => {

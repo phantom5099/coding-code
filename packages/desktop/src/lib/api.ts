@@ -1,4 +1,4 @@
-import { ApiError } from '@codingcode/core/core/error';
+import { ApiError } from '@codingcode/core/contracts/error';
 
 export const API_BASE = `http://127.0.0.1:${new URLSearchParams(window.location.search).get('apiPort')}`;
 

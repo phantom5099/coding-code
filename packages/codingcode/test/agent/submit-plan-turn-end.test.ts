@@ -54,7 +54,7 @@ function makeOkExecutor() {
     executeBatch: (calls: any[]) =>
       Effect.succeed(
         calls.map((tc: any) => ({
-          type: 'ok' as const,
+          status: 'ok' as const,
           id: tc.id,
           name: tc.name,
           output: 'Plan written to /tmp/plans/my-plan.md',

@@ -17,22 +17,13 @@ export function encodeProjectPath(p: string): string {
 }
 
 let _projectBaseOverride: string | undefined;
-let _projectPlansBaseOverride: string | undefined;
 
 export function setProjectBaseDir(dir: string | undefined): void {
   _projectBaseOverride = dir;
 }
 
-export function setProjectPlansBaseDir(dir: string | undefined): void {
-  _projectPlansBaseOverride = dir;
-}
-
 export function getProjectBaseDir(): string {
   return _projectBaseOverride ?? join(homedir(), '.codingcode', 'project');
-}
-
-export function getProjectPlansBaseDir(): string {
-  return _projectPlansBaseOverride ?? join(homedir(), '.codingcode', 'projects');
 }
 
 export interface SessionPaths {
@@ -45,10 +36,6 @@ export interface SessionPaths {
 
 export function projectSessionsDir(encodedProjectPath: string): string {
   return join(getProjectBaseDir(), encodedProjectPath, 'sessions');
-}
-
-export function sessionJsonlPathFromCwd(cwd: string, sessionId: string): string {
-  return computePaths(cwd, sessionId).transcriptPath;
 }
 
 export function computePaths(

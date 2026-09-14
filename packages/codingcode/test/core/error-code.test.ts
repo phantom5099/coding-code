@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { NotFoundError, AlreadyExistsError, AgentError } from '../../src/core/error.js';
+import { AgentError } from '../../src/core/error.js';
+import { NotFoundError, AlreadyExistsError } from '../../src/contracts/error.js';
 
 describe('NotFoundError has code+httpStatus', () => {
   it('code is NOT_FOUND and httpStatus returns 404', () => {

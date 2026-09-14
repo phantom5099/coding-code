@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { LLMStreamPart } from '../../src/llm/types.js';
+import type { LLMStreamPart } from '../../src/contracts/provider.js';
 
 const generateText = vi.fn();
 const streamText = vi.fn();

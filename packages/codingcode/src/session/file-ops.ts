@@ -13,10 +13,14 @@ import {
 } from 'fs';
 import { homedir } from 'os';
 import { join, dirname } from 'path';
-import { getProjectBaseDir } from '../core/path.js';
-import { sessionJsonlPathFromCwd } from '../core/path.js';
-import type { PermissionMode } from '../approval/types.js';
-import type { SessionEvent, SessionMetaEvent, SessionIndex } from './types.js';
+import { getProjectBaseDir, computePaths } from '../core/path.js';
+import type { PermissionMode } from '../contracts/permission.js';
+import type { SessionEvent, SessionMetaEvent, SessionIndex } from '../contracts/session.js';
+
+/** session 的 jsonl 转录路径：由 cwd + sessionId 推出。 */
+export function sessionJsonlPathFromCwd(cwd: string, sessionId: string): string {
+  return computePaths(cwd, sessionId).transcriptPath;
+}
 
 export function ensureDirs(transcriptPath: string): void {
   const codingcodeDir = join(homedir(), '.codingcode');

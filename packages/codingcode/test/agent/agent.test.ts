@@ -70,7 +70,7 @@ describe('agent runTurn loop', () => {
       executeBatch: (calls: any[]) =>
         Effect.succeed(
           calls.map((tc: any) => ({
-            type: 'ok' as const,
+            status: 'ok' as const,
             id: tc.id,
             name: tc.name,
             output: 'On branch main\nnothing to commit',

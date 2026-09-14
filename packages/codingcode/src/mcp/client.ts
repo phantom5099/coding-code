@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Effect, TSemaphore, STM } from 'effect';
-import type { McpServerConfig } from './types.js';
+import type { McpServerConfig } from '../contracts/mcp.js';
 
 export class McpError extends Error {
   constructor(

@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { Result } from '../../src/core/result';
 import { HookService } from '../../src/hooks/port.js';
-import type { HookDecision } from '../../src/hooks/types.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
 
 describe('agent.turn.stop decision type inference', () => {

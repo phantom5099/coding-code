@@ -1,6 +1,6 @@
 import { Context } from 'effect';
-import type { Message } from '../core/types.js';
-import type { LLMClient } from '../llm/client.js';
+import type { Message } from '../contracts/types.js';
+import type { LLMClient } from '../contracts/provider.js';
 
 export interface CompressResult {
   didCompress: boolean;

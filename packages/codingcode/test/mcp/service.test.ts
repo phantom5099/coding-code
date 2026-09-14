@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { z } from 'zod';
 import { McpService } from '../../src/mcp/port.js';
 import { HookService } from '../../src/hooks/port.js';
 import { McpLayer } from '../../src/mcp/mcp.js';
@@ -187,7 +186,7 @@ describe('McpService granular methods', () => {
     await run(program);
   });
 
-  it('converts MCP inputSchema into the tool parameters schema', async () => {
+  it('exposes MCP tools as pure-data specs, keeping the JSON Schema raw', async () => {
     mockConfigs = [
       {
         name: 'typed',
@@ -209,16 +208,18 @@ describe('McpService granular methods', () => {
     const program = Effect.gen(function* () {
       const mcp = yield* McpService;
       yield* mcp.connectServers(TEST_PROJECT, TEST_SESSION, ['typed']);
-      const [tool] = mcp.listProjectMcpTools(TEST_PROJECT);
+      const [tool] = yield* mcp.listProjectMcpTools(TEST_PROJECT);
 
       expect(tool).toBeDefined();
-      expect(z.toJSONSchema(tool!.parameters)).toMatchObject({
+      expect(tool!.server).toBe('typed');
+      expect(tool!.name).toBe('query');
+      expect(tool!.inputSchema).toMatchObject({
         type: 'object',
         properties: { text: { type: 'string' } },
         required: ['text'],
       });
-      expect(() => tool!.parameters.parse({})).toThrow();
-      expect(tool!.parameters.parse({ text: 'hello' })).toEqual({ text: 'hello' });
+      // execute 已绑定 client，zod 化留给 tools 层
+      expect(yield* tool!.execute({ text: 'hello' })).toBe('mock-result');
     });
 
     await run(program);

@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { HookPoint, UserHookConfig } from './types.js';
+import type { HookPoint, UserHookConfig } from '../contracts/hooks.js';
 import { createDisabledStore } from '@codingcode/infra/disabled-store';
 
 let _globalConfigDirOverride: string | undefined;

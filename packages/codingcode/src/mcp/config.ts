@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { McpServerConfig } from './types.js';
+import type { McpServerConfig } from '../contracts/mcp.js';
 import { createDisabledStore } from '@codingcode/infra/disabled-store';
 
 function resolveEnvVars(value: unknown): unknown {

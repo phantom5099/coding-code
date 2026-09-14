@@ -1,5 +1,5 @@
 import { jsonSchema, type LanguageModelUsage, type ModelMessage } from 'ai';
-import type { TokenUsage } from '../../core/types.js';
+import type { TokenUsage } from '../../contracts/types.js';
 
 export function convertMessages(
   messages: Array<{ role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string }>

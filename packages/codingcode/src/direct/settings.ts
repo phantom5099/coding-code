@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
 import { McpService } from '../mcp/port.js';
-import type { McpServerConfig, McpStatus } from '../mcp/types.js';
+import type { McpServerConfig, McpStatus } from '../contracts/mcp.js';
 import { SkillService } from '../skills/port.js';
-import type { PermissionMode } from '../approval/types.js';
-import type { UserHookConfig } from '../hooks/types.js';
-import { isGlobalCwd } from '../core/workspace.js';
+import type { PermissionMode } from '../contracts/permission.js';
+import type { UserHookConfig } from '../contracts/hooks.js';
+import { isGlobalCwd } from '../workspace/workspace.js';
 import {
   loadMcpConfig,
   writeMcpConfig,
@@ -28,7 +28,7 @@ import {
 import { setHookRuntimeEnabled } from '../hooks/executor.js';
 import { getMemoryConfig } from '../memory/config.js';
 import { MemoryService } from '../memory/port.js';
-import { AlreadyExistsError, NotFoundError } from '../core/error.js';
+import { AlreadyExistsError, NotFoundError } from '../contracts/error.js';
 import {
   loadConfig,
   updateMemoryModel,

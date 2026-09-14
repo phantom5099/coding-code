@@ -1,6 +1,8 @@
+import { z } from 'zod';
 import type { ToolDefinition } from './types.js';
-import type { ToolDescription } from '../core/types.js';
-import type { ToolLookup } from './port.js';
+import type { ToolDescription } from '../contracts/types.js';
+import type { ToolLookup } from '../contracts/tool.js';
+import type { McpToolSpec } from '../contracts/mcp.js';
 import { ToolRegistry } from './registry.js';
 import { readFileTool } from './domains/fs/read.js';
 import { writeFileTool } from './domains/fs/write.js';
@@ -14,8 +16,6 @@ import { todoWriteTool } from './domains/self/todo-write.js';
 import { dispatchAgentTool } from './domains/subagent/dispatch.js';
 import { submitPlanTool } from './domains/subagent/submit-plan.js';
 
-// 全量静态工具表：名字 -> 工具定义。agent 只传名字名单，这里按名查表装配，
-// 不感知 profile / allowedTools 的取舍（取舍由 agent 侧的名单本身决定）。
 const ALL_TOOLS: ToolDefinition<any>[] = [
   readFileTool,
   writeFileTool,
@@ -32,9 +32,18 @@ const ALL_TOOLS: ToolDefinition<any>[] = [
 
 const TOOLS_BY_NAME = new Map(ALL_TOOLS.map((tool) => [tool.name, tool]));
 
+function specToDefinition(spec: McpToolSpec): ToolDefinition {
+  return {
+    name: `${spec.server}:${spec.name}`,
+    description: `[MCP:${spec.server}] ${spec.description || spec.name}`,
+    parameters: z.fromJSONSchema(spec.inputSchema),
+    execute: (args) => spec.execute(args as Record<string, unknown>),
+  };
+}
+
 export function createToolCatalog(
   toolNames: readonly string[],
-  mcpTools: ToolDefinition<any>[] = []
+  mcpTools: McpToolSpec[] = []
 ): { tools: ToolDescription[]; lookup: ToolLookup } {
   const registry = new ToolRegistry();
   for (const name of toolNames) {
@@ -42,10 +51,19 @@ export function createToolCatalog(
     if (!definition) throw new Error(`Unknown tool: ${name}`);
     registry.register(definition);
   }
-  registry.register(...mcpTools);
+  registry.register(...mcpTools.map(specToDefinition));
   return {
     tools: registry.describe(),
-    lookup: (name) => registry.get(name),
+    lookup: (name) => {
+      const definition = registry.get(name);
+      return definition
+        ? {
+            name: definition.name,
+            parse: (args: unknown) => definition.parameters.parse(args),
+            execute: definition.execute,
+          }
+        : undefined;
+    },
   };
 }
 

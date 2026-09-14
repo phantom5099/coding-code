@@ -1,4 +1,4 @@
-import type { Message } from './types.js';
+import type { Message } from '../contracts/types.js';
 
 export function estimateMessageTokens(m: Message): number {
   let tokens = estimateTokensForContent(m.content ?? '');

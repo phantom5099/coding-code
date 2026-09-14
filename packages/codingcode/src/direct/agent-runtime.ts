@@ -4,13 +4,16 @@ import { ApprovalWaitService } from '../approval/wait-port.js';
 import { parseApprovalResponse } from '../approval/confirmation.js';
 import { ContextService } from '../context/port.js';
 import { SessionService } from '../session/port.js';
-import type { SessionStatePort } from '../session/port.js';
+import type { SessionShape } from '../session/port.js';
 import { computePaths } from '../core/path.js';
 import type { AgentRuntimeClient } from '../client/contracts.js';
-import type { FrameBody } from '../core/frame.js';
-import { createFrameAssembler } from '../core/frame-io.js';
+import type { FrameBody } from '../contracts/frame.js';
+import { createFrameAssembler } from '../contracts/frame-io.js';
 import type { AppRuntime } from '../layer.js';
-import type { LLMClient } from '../llm/client.js';
+import type { LLMClient } from '../contracts/provider.js';
+
+// 只读 / 只写权限模式所需的最小面
+type SessionStatePort = Pick<SessionShape, 'load' | 'setPermissionMode'>;
 
 export function createDirectAgentClient(llm: LLMClient, rt: AppRuntime): AgentRuntimeClient {
   return {

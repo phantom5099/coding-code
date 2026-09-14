@@ -1,6 +1,6 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { FrameBody } from '../core/frame.js';
+import type { FrameBody } from '../contracts/frame.js';
 import type { AgentError } from '../core/error.js';
 import type { Result } from '../core/result.js';
 
@@ -8,8 +8,8 @@ export interface RunSubagentOptions {
   sessionId?: string;
   cwd: string;
   signal?: AbortSignal;
-  activeProfile?: import('../core/types.js').ProfileName;
-  permissionMode?: import('../approval/types.js').PermissionMode;
+  activeProfile?: import('../contracts/types.js').ProfileName;
+  permissionMode?: import('../contracts/permission.js').PermissionMode;
   model?: string;
   parentSessionId?: string;
   agentName?: string;

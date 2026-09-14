@@ -8,9 +8,9 @@ import { SessionLayer } from '../../src/session/session.js';
 
 import { estimatePromptTokensFrom } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import { estimateTokensForContent } from '../../src/core/util.js';
+import { estimateTokensForContent } from '../../src/context/tokens.js';
 import { encodeProjectPath, computePaths } from '../../src/core/path.js';
-import type { SessionIndex } from '../../src/session/types.js';
+import type { SessionIndex } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();

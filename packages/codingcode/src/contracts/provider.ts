@@ -1,4 +1,6 @@
-import type { Message, ToolCall, ToolDescription, TokenUsage } from '../core/types.js';
+import type { Effect } from 'effect';
+import type { Message, ToolCall, ToolDescription, TokenUsage } from './types.js';
+import type { AgentError } from '../core/error.js';
 
 export interface LLMRequest {
   messages: Message[];
@@ -31,4 +33,22 @@ export interface ModelInfo {
   maxTokens: number;
   supportsToolCalling: boolean;
   supportsStreaming: boolean;
+}
+
+export interface LLMClient {
+  complete(req: LLMRequest, signal?: AbortSignal): Effect.Effect<LLMResponse, AgentError>;
+  /** 产出 SDK 流部件；失败时在迭代中抛出 AgentError */
+  completeStream(req: LLMRequest, signal?: AbortSignal): AsyncIterable<LLMStreamPart>;
+  readonly modelInfo: ModelInfo;
+}
+
+export interface SelectableModel {
+  id: string;
+  provider: string;
+  driver: string;
+  name: string;
+  model: string;
+  base_url: string;
+  api_key_env: string;
+  context_window: number;
 }

@@ -1,4 +1,4 @@
-import type { LLMClient } from '../llm/client.js';
+import type { LLMClient } from '../contracts/provider.js';
 
 export async function extractMemory(opts: {
   currentMemory: string;

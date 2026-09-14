@@ -10,15 +10,22 @@ import {
 } from './deps.js';
 import type { ToolEnv, ToolCatalog } from './deps.js';
 import { buildSystemPrompt } from './prompt.js';
-import type { FrameBody, FrameError, ResponseMeta, Transition, ToolOutcome } from '../core/frame.js';
-import { isTurnEnd } from '../core/frame.js';
-import type { ToolCall } from '../core/types.js';
+import type { FrameBody, FrameError, ResponseMeta, ToolOutcome, Transition } from '../contracts/frame.js';
+import { isTurnEnd } from '../contracts/frame.js';
+import type { ToolResult } from '../contracts/tool.js';
+import type { ToolCall } from '../contracts/types.js';
 import { loadConfig } from '@codingcode/infra/config';
 import { createLogger } from '@codingcode/infra/logger';
 import { normalizePath, computePaths } from '../core/path.js';
 import { resolveProfile, getToolNames } from './profile.js';
+
+function toolOutcomeOf(result: ToolResult): ToolOutcome {
+  return result.status === 'denied'
+    ? { status: 'denied', reason: result.reason }
+    : { status: result.status, output: result.output };
+}
 import type { AgentProfile } from './profile.js';
-import type { PermissionMode } from '../approval/types.js';
+import type { PermissionMode } from '../contracts/permission.js';
 
 const logger = createLogger();
 
@@ -86,19 +93,16 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
       const profile: AgentProfile | undefined = profileName ? resolveProfile(profileName) : undefined;
 
-      // get MCP tools
-      const mcpTools = mcp.listProjectMcpTools(normalizedCwd);
-
-      const catalog = toolCatalog.register(getToolNames(profile), mcpTools);
+      const catalog = yield* toolCatalog.register(getToolNames(profile), normalizedCwd);
 
       const toolEnv = yield* toolEnvPort.getToolEnv();
 
       // record user (increments turn) + extract skill
       const [, actualInput] = yield* skills.extractSkill(state.cwd, input);
-      const userEvent = yield* session.recordUser(state, actualInput);
+      const turnId = yield* session.recordUser(state, actualInput);
 
       // checkpoint baseline
-      yield* checkpoint.snapshotBaseline(state.cwd, sessionId, userEvent.turnId);
+      yield* checkpoint.snapshotBaseline(state.cwd, sessionId, turnId);
 
       // get rules text
       const rulesText = rules.getAllRules(state.cwd);
@@ -313,7 +317,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
             profile: profile?.name,
           });
           if (decision.type === 'deny') {
-            deniedResults.push({ type: 'denied', id: tc.id, name: tc.name, reason: decision.reason });
+            deniedResults.push({ status: 'denied', id: tc.id, name: tc.name, reason: decision.reason });
           } else {
             approvedCalls.push(tc);
           }
@@ -329,14 +333,10 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
         let todoPrinted = false;
         for (const r of allResults) {
-          const resultOut = r.type === 'denied' ? '' : r.output;
+          const resultOut = r.status === 'denied' ? '' : r.output;
           yield* session.recordToolResult(state, r.name, r.id, resultOut);
-          const outcome: ToolOutcome = r.type === 'denied'
-            ? { status: 'denied', reason: r.reason }
-            : r.type === 'ok'
-              ? { status: 'ok', output: resultOut }
-              : { status: 'error', output: resultOut };
-          const todos = !todoPrinted && r.type === 'ok' && r.name === 'todo_write'
+          const outcome = toolOutcomeOf(r);
+          const todos = !todoPrinted && r.status === 'ok' && r.name === 'todo_write'
             ? todo.read(sid)
             : undefined;
           if (todos) todoPrinted = true;

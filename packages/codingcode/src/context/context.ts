@@ -2,20 +2,14 @@ import { Layer, Effect } from 'effect';
 import { randomUUID } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { loadConfig } from '@codingcode/infra/config';
-import type { Message } from '../core/types.js';
+import type { Message } from '../contracts/types.js';
 import { SessionService } from '../session/port.js';
-import { estimateTokens, estimateMessageTokens } from '../core/util.js';
+import { estimateTokens, estimateMessageTokens } from './tokens.js';
 import { resolveLLM } from '../llm/llm-resolver.js';
 import { LLMFactoryService } from '../llm/port.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
-import type {
-  SessionEvent,
-  AssistantEvent,
-  ToolResultEvent,
-  CompactEvent,
-  SummaryEvent,
-} from '../session/types.js';
-import type { LLMClient } from '../llm/client.js';
+import type { SessionEvent, AssistantEvent, ToolResultEvent, CompactEvent, SummaryEvent } from '../contracts/session.js';
+import type { LLMClient } from '../contracts/provider.js';
 import { ContextService } from './port.js';
 import type { CompressResult } from './port.js';
 

@@ -1,11 +1,11 @@
-import type { ProfileName } from '../core/types.js';
+import type { ProfileName } from '../contracts/types.js';
 
 export interface AgentProfile {
   name: ProfileName;
   systemPrompt?: string;
 }
 
-import { PLAN_ALLOWED_TOOLS } from '../approval/types.js';
+import { PLAN_ALLOWED_TOOLS } from '../contracts/permission.js';
 
 export const PLAN_PROFILE_NAME = 'plan' as const;
 export const BUILD_PROFILE_NAME = 'build' as const;
@@ -115,8 +115,6 @@ export const BUILD_PROFILE: AgentProfile = {
   systemPrompt: BUILD_PROMPT,
 };
 
-// 各 profile 的工具名字名单：agent 只把这份名单交给工具模块注册，工具模块按名查表装配。
-// build 含写工具、不含 submit_plan；plan 相反（只读 + submit_plan），名单即审批层白名单。
 export const PLAN_TOOL_NAMES: readonly string[] = [...PLAN_ALLOWED_TOOLS];
 
 export const BUILD_TOOL_NAMES: readonly string[] = [
@@ -132,7 +130,6 @@ export const BUILD_TOOL_NAMES: readonly string[] = [
   'dispatch_agent',
 ];
 
-// 运行时审批兜底（plan 模式 deny 非名单工具），从名单派生
 export function isPlanProfile(p: { name: string } | null | undefined): boolean {
   return p?.name === PLAN_PROFILE_NAME;
 }

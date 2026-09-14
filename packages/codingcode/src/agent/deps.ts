@@ -1,25 +1,28 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { AgentError } from '../core/error.js';
-import type { ToolCall, Message, ToolDescription, TodoItem } from '../core/types.js';
-import type { AssistantEvent, ToolResultEvent, TokenUsage, UserEvent } from '../session/types.js';
-import type { SessionStoreState } from '../session/types.js';
-import type { HookDecision } from '../hooks/types.js';
-import type { Skill } from '../skills/types.js';
-import type { ToolResultUnion, ToolLookup } from '../tools/port.js';
-import type { ToolDefinition } from '../tools/types.js';
-import type { LLMClient } from '../llm/client.js';
-import type { ProfileName } from '../core/types.js';
-import type { PermissionMode } from '../approval/types.js';
-import type { ApprovalDecision } from '../approval/types.js';
+import type {
+  Message,
+  ToolCall,
+  ToolDescription,
+  TodoItem,
+  TokenUsage,
+  ProfileName,
+} from '../contracts/types.js';
+import type { SessionCreateOptions, SessionStoreState } from '../contracts/session.js';
+import type { HookDecision, HookPoint } from '../contracts/hooks.js';
+import type { Skill } from '../contracts/skill.js';
+import type { ApprovalDecision, PermissionMode } from '../contracts/permission.js';
+import type { LLMClient } from '../contracts/provider.js';
+import type { ToolLookup, ToolResult } from '../contracts/tool.js';
 
 export class SessionPort extends Context.Tag('AgentSessionPort')<SessionPort, {
   load(cwd: string, sid: string): Effect.Effect<SessionStoreState, AgentError>;
-  create(cwd: string, opts: { model: string; activeProfile: ProfileName; permissionMode: PermissionMode }, extra?: { parentSessionId?: string; agentName?: string }): Effect.Effect<SessionStoreState, AgentError>;
-  recordUser(state: SessionStoreState, content: string): Effect.Effect<UserEvent, AgentError>;
-  recordSystem(state: SessionStoreState, content: string): Effect.Effect<UserEvent, AgentError>;
-  recordAssistant(state: SessionStoreState, content: string, toolCalls: ToolCall[], usage?: TokenUsage): Effect.Effect<AssistantEvent, AgentError>;
-  recordToolResult(state: SessionStoreState, name: string, id: string, output: string): Effect.Effect<ToolResultEvent, AgentError>;
+  create(cwd: string, opts: SessionCreateOptions, extra?: { parentSessionId?: string; agentName?: string }): Effect.Effect<SessionStoreState, AgentError>;
+  recordUser(state: SessionStoreState, content: string): Effect.Effect<number, AgentError>;
+  recordSystem(state: SessionStoreState, content: string): Effect.Effect<void, AgentError>;
+  recordAssistant(state: SessionStoreState, content: string, toolCalls: ToolCall[], usage?: TokenUsage): Effect.Effect<void, AgentError>;
+  recordToolResult(state: SessionStoreState, name: string, id: string, output: string): Effect.Effect<void, AgentError>;
   setPermissionMode(cwd: string, sid: string, mode: PermissionMode): Effect.Effect<void, AgentError>;
   setActiveProfile(cwd: string, sid: string, profile: ProfileName): Effect.Effect<void, AgentError>;
 }>() {}
@@ -28,7 +31,7 @@ export class ToolExecutorPort extends Context.Tag('AgentToolExecutorPort')<ToolE
   executeBatch(toolCalls: ToolCall[], sid: string, opts: {
     turnId?: number; projectPath?: string; signal?: AbortSignal;
     toolLookup?: ToolLookup;
-  }): Effect.Effect<ToolResultUnion[], never, any>;
+  }): Effect.Effect<ToolResult[], never, any>;
 }>() {}
 
 export class CheckpointPort extends Context.Tag('AgentCheckpointPort')<CheckpointPort, {
@@ -37,13 +40,24 @@ export class CheckpointPort extends Context.Tag('AgentCheckpointPort')<Checkpoin
 }>() {}
 
 export class HookPort extends Context.Tag('AgentHookPort')<HookPort, {
-  emit(point: string, payload: Record<string, unknown>): Effect.Effect<void>;
-  emitDecision(point: string, payload: Record<string, unknown>): Effect.Effect<HookDecision | null>;
+  emit(point: HookPoint, payload: Record<string, unknown>): Effect.Effect<void>;
+  emitDecision(point: HookPoint, payload: Record<string, unknown>): Effect.Effect<HookDecision | null>;
   disposeSession(sid: string): Effect.Effect<void>;
 }>() {}
 
+/** 审批请求：工具 + 调用上下文 + 策略参数。仅服务 ApprovalPort.evaluate 的参数，归调用方。 */
+export interface ApprovalRequest {
+  tool: string;
+  input: Record<string, unknown>;
+  callId?: string;
+  sessionId: string;
+  projectPath?: string;
+  permissionMode?: PermissionMode;
+  profile?: ProfileName;
+}
+
 export class ApprovalPort extends Context.Tag('AgentApprovalPort')<ApprovalPort, {
-  evaluate(req: { tool: string; input: Record<string, unknown>; callId?: string; sessionId: string; projectPath?: string; permissionMode?: PermissionMode; profile?: ProfileName }): Effect.Effect<ApprovalDecision>;
+  evaluate(req: ApprovalRequest): Effect.Effect<ApprovalDecision>;
 }>() {}
 
 export class SkillPort extends Context.Tag('AgentSkillPort')<SkillPort, {
@@ -51,7 +65,6 @@ export class SkillPort extends Context.Tag('AgentSkillPort')<SkillPort, {
 }>() {}
 
 export class McpPort extends Context.Tag('AgentMcpPort')<McpPort, {
-  listProjectMcpTools(cwd: string): ToolDefinition[];
   syncConnections(cwd: string): Effect.Effect<void>;
 }>() {}
 
@@ -96,5 +109,5 @@ export interface ToolCatalog {
 }
 
 export class ToolCatalogPort extends Context.Tag('AgentToolCatalogPort')<ToolCatalogPort, {
-  register(toolNames: readonly string[], mcpTools: ToolDefinition[]): ToolCatalog;
+  register(toolNames: readonly string[], cwd: string): Effect.Effect<ToolCatalog>;
 }>() {}

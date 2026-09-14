@@ -1,15 +1,15 @@
 import { API_BASE, api } from './api';
 import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client';
-import type { PermissionMode } from '@codingcode/core/approval/types';
-import type { ProfileName, TokenUsage } from '@codingcode/core/core/types';
+import type { PermissionMode } from '@codingcode/core/contracts/permission';
+import type { ProfileName, TokenUsage } from '@codingcode/core/contracts/types';
 import type {
   CheckpointDiff,
   CodeRollbackResult,
   RollbackPreviewDiff,
 } from '@codingcode/core/checkpoint/types';
-import type { UITurn } from '@codingcode/core/session/port';
-import type { McpServerConfig } from '@codingcode/core/mcp/types';
-import type { UserHookConfig } from '@codingcode/core/hooks/types';
+import type { UITurn } from '@codingcode/core/contracts/session';
+import type { McpServerConfig } from '@codingcode/core/contracts/mcp';
+import type { UserHookConfig } from '@codingcode/core/contracts/hooks';
 
 const clients = createHttpClients(API_BASE);
 

@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { AgentError } from '../core/error.js';
 import { LLMFactoryService } from './port.js';
-import type { LLMClient } from './client.js';
+import type { LLMClient } from '../contracts/provider.js';
 
 export function resolveLLM(
   target: string | null | undefined,

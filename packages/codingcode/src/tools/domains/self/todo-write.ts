@@ -8,7 +8,7 @@ import {
   TODO_MAX_ITEMS,
   TODO_MAX_STEP_LEN,
 } from '../../../todo/port.js';
-import type { Todo } from '../../../todo/port.js';
+import type { TodoItem } from '../../../contracts/types.js';
 
 const todoSchema = z.object({
   plan: z
@@ -34,7 +34,7 @@ export const todoWriteTool: ToolDefinition<TodoService> = {
         return yield* Effect.fail(
           new AgentError('TOOL_EXECUTION_FAILED', 'todo_write requires sessionId')
         );
-      const { plan } = args as { plan: Todo[] };
+      const { plan } = args as { plan: TodoItem[] };
       todoSvc.write(sessionId, plan);
       const c = countByStatus(plan);
       return `pending=${c.pending} in_progress=${c.in_progress} completed=${c.completed}`;

@@ -1,4 +1,4 @@
-import { ApiError } from '../../core/error.js';
+import { ApiError } from '../../contracts/error.js';
 
 async function parseErrorBody(
   res: Response

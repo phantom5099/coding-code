@@ -1,8 +1,8 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { FrameBody } from '../core/frame.js';
-import type { ProfileName } from '../core/types.js';
-import type { PermissionMode } from '../approval/types.js';
+import type { FrameBody } from '../contracts/frame.js';
+import type { ProfileName } from '../contracts/types.js';
+import type { PermissionMode } from '../contracts/permission.js';
 
 export interface RunTurnOptions {
   sessionId?: string;

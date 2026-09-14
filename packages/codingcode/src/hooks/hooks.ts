@@ -7,16 +7,8 @@ import {
 } from './executor.js';
 import { createLogger } from '@codingcode/infra/logger';
 import { HookService } from './port.js';
-import type {
-  HookPoint,
-  HookDecision,
-  ObserverHandler,
-  DecisionHandler,
-  HandlerEntry,
-  ProjectPath,
-  SessionId,
-  HookName,
-} from './types.js';
+import type { HookPoint, HookDecision } from '../contracts/hooks.js';
+import type { ObserverHandler, DecisionHandler, HandlerEntry, ProjectPath, SessionId, HookName } from './types.js';
 
 const logger = createLogger();
 

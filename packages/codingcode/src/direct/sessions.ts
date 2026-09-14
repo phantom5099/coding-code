@@ -2,12 +2,25 @@ import { Effect } from 'effect';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../session/port.js';
-import type { SessionStorePort } from '../session/port.js';
+import type { SessionShape } from '../session/port.js';
 import { encodeProjectPath, getProjectBaseDir } from '../core/path.js';
-import type { PermissionMode } from '../approval/types.js';
+import type { PermissionMode } from '../contracts/permission.js';
 import { AVAILABLE_PROFILES } from '../agent/profile.js';
 import type { SessionClient } from '../client/contracts.js';
 import type { AppRuntime } from '../layer.js';
+
+// 本文件实际用到的会话存储面
+type SessionStorePort = Pick<
+  SessionShape,
+  | 'create'
+  | 'load'
+  | 'deleteSession'
+  | 'forkSession'
+  | 'listSessions'
+  | 'readUITurns'
+  | 'setActiveProfile'
+  | 'setPermissionMode'
+>;
 
 export function createDirectSessionClient(rt: AppRuntime): SessionClient {
   return {

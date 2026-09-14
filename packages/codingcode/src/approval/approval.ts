@@ -1,8 +1,9 @@
 import { Layer, Effect } from 'effect';
 import { HookService } from '../hooks/port.js';
-import type { ApprovalDecision, PermissionMode, PermissionRule, ToolCallRequest } from './types.js';
-import type { ProfileName } from '../core/types.js';
-import { PLAN_ALLOWED_TOOLS } from './types.js';
+import type { ApprovalDecision, PermissionMode } from '../contracts/permission.js';
+import type { PermissionRule, ToolCallRequest } from './types.js';
+import type { ProfileName } from '../contracts/types.js';
+import { PLAN_ALLOWED_TOOLS } from '../contracts/permission.js';
 import { createRuleEngine, type RuleEngine } from './rule-engine.js';
 import { userConfirmAsync } from './confirmation.js';
 import { ApprovalWaitService } from './wait-port.js';

@@ -2,7 +2,7 @@ import { Layer, Effect } from 'effect';
 import { SubagentRunnerService } from './port.js';
 import type { RunSubagentOptions } from './port.js';
 import { AgentService } from '../agent/port.js';
-import type { FrameBody } from '../core/frame.js';
+import type { FrameBody } from '../contracts/frame.js';
 import type { Result } from '../core/result.js';
 
 export const SubagentRunnerLayer = Layer.effect(

@@ -1,4 +1,5 @@
-import type { PermissionRule, RuleAction, ApprovalDecision } from './types.js';
+import type { ApprovalDecision } from '../contracts/permission.js';
+import type { PermissionRule, RuleAction } from './types.js';
 
 /**
  * Convert a simple glob pattern to a RegExp.

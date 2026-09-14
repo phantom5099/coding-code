@@ -48,7 +48,7 @@ function makeExecutor(output: string) {
     executeBatch: (calls: any[]) =>
       Effect.succeed(
         calls.map((c: any) => ({
-          type: 'ok' as const,
+          status: 'ok' as const,
           id: c.id,
           name: c.name,
           output,

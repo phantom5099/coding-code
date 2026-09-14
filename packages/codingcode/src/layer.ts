@@ -17,7 +17,7 @@ import { ToolEnvLayer } from './agent/tool-env.js';
 import { ToolCatalogLayer } from './agent/tool-catalog.js';
 import { SubagentRunnerLayer } from './subagent/subagent.js';
 import { SchedulerLayer } from './scheduler/scheduler.js';
-import { WorkspaceService } from './core/workspace.js';
+import { WorkspaceService } from './workspace/workspace.js';
 
 import { HookService } from './hooks/port.js';
 import { RulesService } from './rules/port.js';
@@ -26,7 +26,6 @@ import { LLMFactoryService } from './llm/port.js';
 import { McpService } from './mcp/port.js';
 import { CheckpointService } from './checkpoint/port.js';
 import { ApprovalService } from './approval/port.js';
-import { ApprovalWaitService } from './approval/wait-port.js';
 import { TodoService } from './todo/port.js';
 import { SessionService } from './session/port.js';
 import { ToolExecutorService } from './tools/port.js';
@@ -44,7 +43,8 @@ const AgentSessionAdapter = Layer.effect(SessionPort, Effect.gen(function* () {
   const s = yield* SessionService;
   return {
     load: s.load.bind(s), create: s.create.bind(s),
-    recordUser: s.recordUser.bind(s), recordSystem: s.recordSystem.bind(s), recordAssistant: s.recordAssistant.bind(s),
+    recordUser: (state, content) => s.recordUser(state, content).pipe(Effect.map((e) => e.turnId)),
+    recordSystem: s.recordSystem.bind(s), recordAssistant: s.recordAssistant.bind(s),
     recordToolResult: s.recordToolResult.bind(s),
     setPermissionMode: s.setPermissionMode.bind(s),
     setActiveProfile: s.setActiveProfile.bind(s),
@@ -78,7 +78,7 @@ const AgentSkillAdapter = Layer.effect(SkillPort, Effect.gen(function* () {
 
 const AgentMcpAdapter = Layer.effect(McpPort, Effect.gen(function* () {
   const m = yield* McpService;
-  return { listProjectMcpTools: m.listProjectMcpTools.bind(m), syncConnections: m.syncConnections.bind(m) };
+  return { syncConnections: m.syncConnections.bind(m) };
 }));
 
 const AgentContextAdapter = Layer.effect(ContextPort, Effect.gen(function* () {
@@ -121,6 +121,9 @@ const InfraLayer = Layer.mergeAll(
   WorkspaceService.Default, HookLayer, RulesLayer, SkillLayer, McpLayer, ApprovalWaitLayer, TodoLayer,
 );
 
+// catalog 需要 McpService 才能把 MCP 工具喂进来
+const ToolCatalogWithDeps = ToolCatalogLayer.pipe(Layer.provide(InfraLayer));
+
 const LlmWithDeps = LlmLayer.pipe(Layer.provide(WorkspaceService.Default));
 const ApprovalWithDeps = ApprovalLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer)));
 const ToolExecutorWithDeps = ToolExecutorLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalWithDeps)));
@@ -137,7 +140,7 @@ const AgentDepsWithDeps = AgentDepsAdapter.pipe(
 
 // agent with deps
 const AgentWithDeps = AgentLayer.pipe(
-  Layer.provide(Layer.mergeAll(AgentDepsWithDeps, ToolEnvLayer, ToolCatalogLayer))
+  Layer.provide(Layer.mergeAll(AgentDepsWithDeps, ToolEnvLayer, ToolCatalogWithDeps))
 );
 
 // subagent runner (depends on agent)

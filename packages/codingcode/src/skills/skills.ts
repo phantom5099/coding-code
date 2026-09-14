@@ -1,7 +1,7 @@
 import { Layer, Effect } from 'effect';
 import { discoverSkillDirs } from './source.js';
 import { loadSkill } from './loader.js';
-import type { Skill } from './types.js';
+import type { Skill } from '../contracts/skill.js';
 import { SkillService } from './port.js';
 
 export const SkillLayer = Layer.effect(SkillService, Effect.gen(function* () {

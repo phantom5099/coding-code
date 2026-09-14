@@ -9,7 +9,7 @@ import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import type { ProfileName } from '../../src/core/types.js';
+import type { ProfileName } from '../../src/contracts/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
 

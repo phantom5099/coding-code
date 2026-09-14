@@ -4,7 +4,7 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import type { SessionIndex } from '../../src/session/types.js';
+import type { SessionIndex } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();

@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
-import { AgentError } from './error.js';
-import { encodeProjectPath } from './path.js';
+import { AgentError } from '../core/error.js';
+import { encodeProjectPath } from '../core/path.js';
 import { loadConfig, type AppConfig } from '@codingcode/infra/config';
 
 export interface WorkspaceInit {
