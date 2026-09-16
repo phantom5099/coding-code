@@ -7,20 +7,14 @@ import { AgentLayer } from '../../src/agent/agent.js';
 import { ToolEnvLayer } from '../../src/agent/tool-env.js';
 import { ToolCatalogLayer } from '../../src/agent/tool-catalog.js';
 import { AgentService } from '../../src/agent/port.js';
-import {
-  SessionPort,
-  ToolExecutorPort,
-  CheckpointPort,
-  HookPort,
-  ApprovalPort,
-  SkillPort,
-  McpPort,
-  ContextPort,
-  MemoryPort,
-  LlmPort,
-  RulesPort,
-  TodoPort,
-} from '../../src/agent/deps.js';
+import { ApprovalService } from '../../src/approval/port.js';
+import { CheckpointService } from '../../src/checkpoint/port.js';
+import { ContextService } from '../../src/context/port.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
+import { MemoryService } from '../../src/memory/port.js';
+import { RulesService } from '../../src/rules/port.js';
+import { SkillService } from '../../src/skills/port.js';
+import { ToolExecutorService } from '../../src/tools/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { SessionService } from '../../src/session/port.js';
 import { HookService } from '../../src/hooks/port.js';
@@ -75,74 +69,65 @@ function readMessages(transcriptPath: string): Message[] {
  * real file-backed SessionLayer, everything else mocked. This mirrors how
  * the app is wired in layer.ts while keeping each dependency explicit.
  */
-// Real SessionService narrowed to the Agent's SessionPort (mirrors layer.ts's adapter).
-const SessionPortLayer = Layer.effect(SessionPort, Effect.gen(function* () {
-  const svc = yield* SessionService;
-  return {
-    load: svc.load.bind(svc),
-    create: svc.create.bind(svc),
-    recordUser: (state: any, content: string) =>
-      svc.recordUser(state, content).pipe(Effect.map((e) => e.turnId)),
-    recordSystem: svc.recordSystem.bind(svc),
-    recordAssistant: svc.recordAssistant.bind(svc),
-    recordToolResult: svc.recordToolResult.bind(svc),
-    setPermissionMode: svc.setPermissionMode.bind(svc),
-    setActiveProfile: svc.setActiveProfile.bind(svc),
-  };
-})).pipe(Layer.provide(SessionLayer));
-
-// Narrow agent ports + TodoService required to build the real AgentLayer.
+// agent 依赖的全部宽服务 stub。
 const McpMock = Layer.succeed(McpService, {
   syncConnections: () => Effect.void,
   listProjectMcpTools: () => Effect.succeed([]),
 } as any);
 const ToolCatalogWithMcp = ToolCatalogLayer.pipe(Layer.provide(McpMock));
 
+const HookMock = Layer.succeed(HookService, {
+  register: () => Effect.succeed(() => {}),
+  registerDecision: () => Effect.succeed(() => {}),
+  emit: () => Effect.succeed(undefined),
+  emitDecision: () => Effect.succeed(null),
+  reloadUserHooks: () => Effect.succeed(undefined),
+  disposeSession: () => Effect.void,
+} as any);
+
+const TodoMock = Layer.succeed(TodoService, { read: () => [], write: () => {}, reset: () => {} } as any);
+
+const SubagentMock = Layer.succeed(SubagentRunnerService, {} as any);
+
 const AgentDeps = Layer.mergeAll(
-  SessionPortLayer,
-  Layer.succeed(ToolExecutorPort, { executeBatch: () => Effect.succeed([]) } as any),
-  Layer.succeed(CheckpointPort, {
+  SessionLayer,
+  Layer.succeed(ToolExecutorService, { executeBatch: () => Effect.succeed([]) } as any),
+  Layer.succeed(CheckpointService, {
     snapshotBaseline: () => Effect.void,
     snapshotFinal: () => Effect.void,
   } as any),
-  Layer.succeed(HookPort, {
-    emit: () => Effect.succeed(undefined),
-    emitDecision: () => Effect.succeed(null),
-    disposeSession: () => Effect.void,
-  } as any),
-  Layer.succeed(ApprovalPort, {
+  Layer.succeed(ApprovalService, {
     evaluate: () => Effect.succeed({ type: 'allow' }),
   } as any),
-  Layer.succeed(SkillPort, {
+  Layer.succeed(SkillService, {
     extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
   } as any),
-  Layer.succeed(McpPort, {
-    syncConnections: () => Effect.void,
-    listProjectMcpTools: () => [],
-  } as any),
-  Layer.succeed(ContextPort, {
+  Layer.succeed(ContextService, {
     willCompact: async () => false,
     assemblePayload: async (transcriptPath: string) => readMessages(transcriptPath),
   } as any),
-  Layer.succeed(MemoryPort, {
+  Layer.succeed(MemoryService, {
     loadMemoryForPrompt: () => '',
     flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
   } as any),
-  Layer.succeed(LlmPort, {
+  Layer.succeed(LLMFactoryService, {
     getLLMClient: () => Effect.succeed(makeMockLLM('subagent final answer') as LLMClient),
   } as any),
-  Layer.succeed(RulesPort, {
+  Layer.succeed(RulesService, {
     getAllRules: () => '',
     evictProjectRules: () => {},
   } as any),
-  Layer.succeed(TodoPort, { read: () => [] } as any),
+  HookMock,
+  McpMock,
+  TodoMock,
+  SubagentMock,
   // ToolEnvPort 在 getToolEnv 运行时从外层 Runtime 解析具体服务（见 Runtime 定义）
   ToolEnvLayer,
   // ToolCatalogPort：静态内置 + profile 工具的装配（同 layer.ts）
   ToolCatalogWithMcp
 );
 
-// Real AgentService built on the real SessionPort + stubbed narrow ports.
+// Real AgentService built on the real SessionService + stubbed wide services.
 const AgentWired = AgentLayer.pipe(Layer.provide(AgentDeps as any));
 
 // Runtime exposed to the tests: real AgentService + SessionService, plus the
@@ -150,18 +135,10 @@ const AgentWired = AgentLayer.pipe(Layer.provide(AgentDeps as any));
 const Runtime = Layer.mergeAll(
   AgentWired,
   SessionLayer,
-  Layer.succeed(HookService, {
-    register: () => Effect.succeed(() => {}),
-    registerDecision: () => Effect.succeed(() => {}),
-    emit: () => Effect.succeed(undefined),
-    emitDecision: () => Effect.succeed(null),
-    reloadUserHooks: () => Effect.succeed(undefined),
-    disposeSession: () => Effect.void,
-  } as any),
+  HookMock,
   McpMock,
-  Layer.succeed(SubagentRunnerService, {} as any),
-  // ToolEnvLayer.getToolEnv 运行时从外层解析 TodoService（工具执行期依赖）
-  Layer.succeed(TodoService, { read: () => [], write: () => {}, reset: () => {} } as any)
+  SubagentMock,
+  TodoMock
 );
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {

@@ -99,7 +99,7 @@ describe('agent treats submit_plan as an ordinary tool', () => {
         state: mockState,
         hooks,
         executor: makeOkExecutor(),
-        sessionPort: { setActiveProfile },
+        session: { setActiveProfile },
       },
       { sessionId: 'test-session', cwd: '/tmp' }
     );

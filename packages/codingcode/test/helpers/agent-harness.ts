@@ -1,5 +1,5 @@
 // Agent 循环测试基座：通过公开的 AgentService.runTurn 驱动 agent，
-// 替代已删除的 agentLoop 自由函数。所有 agent 内部服务均以窄端口 mock 注入。
+// 替代已删除的 agentLoop 自由函数。agent 依赖均以宽服务 mock 注入。
 //
 // 自 frame 协议重构后，runTurn 产出 FrameBody（信封由装配器另盖），
 // 本文件同时提供从 FrameBody[] 中抽取内容的纯函数，供各测试断言使用。
@@ -8,24 +8,19 @@ import { AgentLayer } from '../../src/agent/agent.js';
 import { ToolEnvLayer } from '../../src/agent/tool-env.js';
 import { ToolCatalogLayer } from '../../src/agent/tool-catalog.js';
 import { AgentService } from '../../src/agent/port.js';
-import {
-  ApprovalPort,
-  CheckpointPort,
-  ContextPort,
-  HookPort,
-  LlmPort,
-  McpPort,
-  MemoryPort,
-  RulesPort,
-  SessionPort,
-  SkillPort,
-  TodoPort,
-  ToolExecutorPort,
-} from '../../src/agent/deps.js';
+import { ApprovalService } from '../../src/approval/port.js';
+import { CheckpointService } from '../../src/checkpoint/port.js';
+import { ContextService } from '../../src/context/port.js';
 import { HookService } from '../../src/hooks/port.js';
+import { LLMFactoryService } from '../../src/llm/port.js';
 import { McpService } from '../../src/mcp/port.js';
+import { MemoryService } from '../../src/memory/port.js';
+import { RulesService } from '../../src/rules/port.js';
+import { SessionService } from '../../src/session/port.js';
+import { SkillService } from '../../src/skills/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
+import { ToolExecutorService } from '../../src/tools/port.js';
 import type { FrameBody, RuntimeEvent, Transition } from '../../src/contracts/frame.js';
 import type { TokenUsage } from '../../src/contracts/types.js';
 import type { LLMStreamPart } from '../../src/contracts/provider.js';
@@ -140,12 +135,12 @@ export interface HarnessMocks {
   };
   todo?: Map<string, Array<{ step: string; status: string }>>;
   memorySnapshot?: string;
-  /** 可选：覆盖 ContextPort.assemblePayload 的返回（默认一条 user 消息）。 */
+  /** 可选：覆盖 ContextService.assemblePayload 的返回（默认一条 user 消息）。 */
   contextAssemble?: () => Promise<Array<{ role: string; content: string }>>;
-  /** 可选：覆盖 ContextPort.willCompact（默认 false）。 */
+  /** 可选：覆盖 ContextService.willCompact（默认 false）。 */
   contextWillCompact?: () => Promise<boolean>;
-  /** 可选：覆盖 SessionPort 窄端口的个别方法（默认实现见 makeAgentLayer）。 */
-  sessionPort?: Partial<{
+  /** 可选：覆盖 SessionService 的个别方法（默认实现见 makeAgentLayer）。 */
+  session?: Partial<{
     load: (cwd: string, sid: string) => any;
     create: (cwd: string, opts: any, extra?: any) => any;
     recordUser: (state: any, content: string) => any;
@@ -193,7 +188,7 @@ export function makeDefaultMocks(overrides: Partial<HarnessMocks> = {}): Harness
     executor: overrides.executor,
     todo,
     memorySnapshot: overrides.memorySnapshot ?? '',
-    sessionPort: overrides.sessionPort,
+    session: overrides.session,
   };
 }
 
@@ -235,19 +230,15 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
         sessionId: opts.sessionId ?? 'created-sid',
         activeProfile: opts.activeProfile ?? 'build',
       }),
-    recordUser: () => Effect.succeed({}),
+    recordUser: () => Effect.succeed({ turnId: 1 }),
     recordSystem: () => Effect.succeed({}),
     recordAssistant: () => Effect.succeed({}),
     recordToolResult: () => Effect.succeed({}),
     setPermissionMode: () => Effect.void,
     setActiveProfile: () => Effect.void,
-    ...(mocks.sessionPort ?? {}),
+    ...(mocks.session ?? {}),
   };
 
-  const mcpPort = {
-    syncConnections: () => Effect.void,
-    listProjectMcpTools: () => [],
-  };
   const skills = {
     extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
   };
@@ -269,31 +260,24 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
   const toolCatalogLayer = ToolCatalogLayer.pipe(Layer.provide(mcpLayer));
 
   const services = Layer.mergeAll(
-    Layer.succeed(SessionPort, session as any),
-    Layer.succeed(ToolExecutorPort, executor as any),
-    Layer.succeed(CheckpointPort, {
+    Layer.succeed(SessionService, session as any),
+    Layer.succeed(ToolExecutorService, executor as any),
+    Layer.succeed(CheckpointService, {
       snapshotBaseline: () => Effect.void,
       snapshotFinal: () => Effect.void,
     } as any),
-    Layer.succeed(HookPort, {
-      emit: hooks.emit,
-      emitDecision: hooks.emitDecision,
-      disposeSession: () => Effect.void,
-    } as any),
-    Layer.succeed(ApprovalPort, {
+    Layer.succeed(ApprovalService, {
       evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
     } as any),
-    Layer.succeed(SkillPort, skills as any),
-    Layer.succeed(McpPort, mcpPort as any),
-    Layer.succeed(ContextPort, context as any),
-    Layer.succeed(MemoryPort, memory as any),
-    Layer.succeed(LlmPort, { getLLMClient: () => Effect.succeed(mocks.llm) } as any),
-    Layer.succeed(RulesPort, {
+    Layer.succeed(SkillService, skills as any),
+    Layer.succeed(ContextService, context as any),
+    Layer.succeed(MemoryService, memory as any),
+    Layer.succeed(LLMFactoryService, { getLLMClient: () => Effect.succeed(mocks.llm) } as any),
+    Layer.succeed(RulesService, {
       getAllRules: () => '',
       evictProjectRules: () => {},
     } as any),
-    Layer.succeed(TodoPort, { read: (sid: string) => store.get(sid) ?? [] } as any),
-    // todo_write 工具 execute 执行时 yield* TodoService（完整 tag），窄端口 TodoPort 不可替代
+    // agent 与 todo_write 工具消费同一个 TodoService
     Layer.succeed(TodoService, {
       read: (sid: string) => store.get(sid) ?? [],
       write: (sid: string, items: any[]) => {
@@ -301,7 +285,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       },
       reset: () => store.clear(),
     } as any),
-    // dispatch_agent 工具 execute 执行时 yield* 这三个完整服务
+    // agent 与 dispatch_agent 工具消费同一个 HookService
     Layer.succeed(HookService, {
       register: () => Effect.succeed(() => {}),
       registerDecision: () => Effect.succeed(() => {}),

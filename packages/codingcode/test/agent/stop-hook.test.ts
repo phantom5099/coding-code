@@ -120,7 +120,7 @@ describe('agent runTurn stop hook', () => {
     const hooks = { emit: vi.fn(() => Effect.succeed(undefined)), emitDecision } as any;
 
     await runAgentTurn(
-      { llm, state: mockState, hooks, sessionPort: { recordSystem } },
+      { llm, state: mockState, hooks, session: { recordSystem } },
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
@@ -135,7 +135,7 @@ describe('agent runTurn stop hook', () => {
     const hooks = { emit: vi.fn(() => Effect.succeed(undefined)), emitDecision } as any;
 
     await runAgentTurn(
-      { llm, state: mockState, hooks, sessionPort: { recordSystem } },
+      { llm, state: mockState, hooks, session: { recordSystem } },
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 

@@ -40,11 +40,11 @@ const relSrc = (abs: string) => norm(relative(SRC, abs));
 const isCore = (abs: string) => abs.startsWith(norm(join(SRC, 'core')) + '/');
 const isContracts = (abs: string) => abs.startsWith(norm(join(SRC, 'contracts')) + '/');
 
-/** 契约文件：每个特性目录的 port.ts（宽 Tag） + agent 的窄端口集合 */
-const CONTRACT_FILES = FILES.filter((f) => f.endsWith('/port.ts')).concat([norm(join(SRC, 'agent/deps.ts'))]);
+/** 契约文件：每个特性目录的 port.ts（宽 Tag，agent 自持的装配端口也在 agent/port.ts） */
+const CONTRACT_FILES = FILES.filter((f) => f.endsWith('/port.ts'));
 
 describe('R1 契约不得 import 实现', () => {
-  it('所有 port.ts 与 agent/deps.ts 的跨模块引用只有 core/、contracts/ 与同目录类型', () => {
+  it('所有 port.ts 的跨模块引用只有 core/、contracts/ 与同目录类型', () => {
     const violations: string[] = [];
     for (const file of CONTRACT_FILES) {
       for (const spec of specifiersOf(file)) {
@@ -61,16 +61,15 @@ describe('R1 契约不得 import 实现', () => {
 });
 
 describe('R2 实现不得依赖消费者模块', () => {
-  it('窄端口契约只对消费者 agent/agent.ts 与组合根 layer.ts 可见', () => {
-    const depSpec = norm(join(SRC, 'agent/deps'));
-    const importers = FILES.filter((f) =>
-      specifiersOf(f).some((s) => resolveSpec(f, s) === depSpec)
+  it('agent 自持的装配端口只在 agent/ 内部出现', () => {
+    const hits = FILES.filter((f) =>
+      /\bToolEnvPort\b|\bToolCatalogPort\b/.test(readFileSync(f, 'utf8'))
     ).map(relSrc).sort();
-    expect(importers).toEqual([
+    expect(hits).toEqual([
       'agent/agent.ts',
+      'agent/port.ts',
       'agent/tool-catalog.ts',
       'agent/tool-env.ts',
-      'layer.ts',
     ]);
   });
 });
@@ -130,6 +129,7 @@ describe('contracts/ 准入：不得依赖领域实现', () => {
 
 describe('R4 一个概念只允许一处类型定义', () => {
   const CANONICAL: Record<string, string> = {
+    ApprovalRequest: 'approval/port.ts',
     TokenUsage: 'contracts/types.ts',
     TodoItem: 'contracts/types.ts',
     ProfileName: 'contracts/types.ts',
@@ -146,7 +146,6 @@ describe('R4 一个概念只允许一处类型定义', () => {
     SelectableModel: 'contracts/provider.ts',
     PermissionMode: 'contracts/permission.ts',
     ApprovalDecision: 'contracts/permission.ts',
-    ApprovalRequest: 'agent/deps.ts',
     HookPoint: 'contracts/hooks.ts',
     HookDecision: 'contracts/hooks.ts',
     Skill: 'contracts/skill.ts',

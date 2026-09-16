@@ -3,8 +3,8 @@ import { TodoService } from '../todo/port.js';
 import { HookService } from '../hooks/port.js';
 import { McpService } from '../mcp/port.js';
 import { SubagentRunnerService } from '../subagent/port.js';
-import { ToolEnvPort } from './deps.js';
-import type { ToolEnv } from './deps.js';
+import { ToolEnvPort } from './port.js';
+import type { ToolEnv } from './port.js';
 
 export const ToolEnvLayer: Layer.Layer<ToolEnvPort, never, never> = Layer.effect(
   ToolEnvPort,

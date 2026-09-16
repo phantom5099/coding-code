@@ -1,14 +1,24 @@
 import { Effect, Either, Queue, Stream, Fiber, Layer } from 'effect';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
-import { AgentService } from './port.js';
-import type { RunTurnOptions } from './port.js';
-import {
-  SessionPort, ToolExecutorPort, CheckpointPort, HookPort,
-  ApprovalPort, SkillPort, McpPort, ContextPort, MemoryPort,
-  LlmPort, RulesPort, TodoPort, ToolEnvPort, ToolCatalogPort,
-} from './deps.js';
-import type { ToolEnv, ToolCatalog } from './deps.js';
+import { AgentService, ToolEnvPort, ToolCatalogPort } from './port.js';
+import type { RunTurnOptions, ToolEnv, ToolCatalog } from './port.js';
+import type {
+  AgentCheckpoint, AgentContext, AgentHooks, AgentLlmFactory,
+  AgentMcp, AgentMemory, AgentSession, AgentSkills, AgentTodos,
+} from './views.js';
+import { ApprovalService } from '../approval/port.js';
+import { CheckpointService } from '../checkpoint/port.js';
+import { ContextService } from '../context/port.js';
+import { HookService } from '../hooks/port.js';
+import { LLMFactoryService } from '../llm/port.js';
+import { McpService } from '../mcp/port.js';
+import { MemoryService } from '../memory/port.js';
+import { RulesService } from '../rules/port.js';
+import { SessionService } from '../session/port.js';
+import { SkillService } from '../skills/port.js';
+import { TodoService } from '../todo/port.js';
+import { ToolExecutorService } from '../tools/port.js';
 import { buildSystemPrompt } from './prompt.js';
 import type { FrameBody, FrameError, ResponseMeta, ToolOutcome, Transition } from '../contracts/frame.js';
 import { isTurnEnd } from '../contracts/frame.js';
@@ -34,18 +44,18 @@ function toFrameError(e: AgentError): FrameError {
 }
 
 export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
-  const session = yield* SessionPort;
-  const executor = yield* ToolExecutorPort;
-  const checkpoint = yield* CheckpointPort;
-  const hooks = yield* HookPort;
-  const approval = yield* ApprovalPort;
-  const skills = yield* SkillPort;
-  const mcp = yield* McpPort;
-  const context = yield* ContextPort;
-  const memory = yield* MemoryPort;
-  const llmFactory = yield* LlmPort;
-  const rules = yield* RulesPort;
-  const todo = yield* TodoPort;
+  const session: AgentSession = yield* SessionService;
+  const executor = yield* ToolExecutorService;
+  const checkpoint: AgentCheckpoint = yield* CheckpointService;
+  const hooks: AgentHooks = yield* HookService;
+  const approval = yield* ApprovalService;
+  const skills: AgentSkills = yield* SkillService;
+  const mcp: AgentMcp = yield* McpService;
+  const context: AgentContext = yield* ContextService;
+  const memory: AgentMemory = yield* MemoryService;
+  const llmFactory: AgentLlmFactory = yield* LLMFactoryService;
+  const rules = yield* RulesService;
+  const todo: AgentTodos = yield* TodoService;
   const toolEnvPort = yield* ToolEnvPort;
   const toolCatalog = yield* ToolCatalogPort;
   const cfg = loadConfig();
@@ -57,6 +67,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       const normalizedCwd = normalizePath(opts.cwd);
 
       rules.evictProjectRules(normalizedCwd);
+      yield* hooks.reloadUserHooks(normalizedCwd).pipe(Effect.catchAll(() => Effect.void));
       yield* hooks.emit('agent.turn.start', { sessionId: '' }).pipe(Effect.catchAll(() => Effect.void));
       yield* mcp.syncConnections(normalizedCwd).pipe(Effect.catchAll(() => Effect.void));
 
@@ -99,7 +110,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
       // record user (increments turn) + extract skill
       const [, actualInput] = yield* skills.extractSkill(state.cwd, input);
-      const turnId = yield* session.recordUser(state, actualInput);
+      const turnId = (yield* session.recordUser(state, actualInput)).turnId;
 
       // checkpoint baseline
       yield* checkpoint.snapshotBaseline(state.cwd, sessionId, turnId);
@@ -128,26 +139,14 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   }): AsyncGenerator<FrameBody> {
     const q = Effect.runSync(Queue.unbounded<FrameBody>());
 
+    // agentLoopInternal 只经闭包引用服务，不消费任何 Tag；工具执行所需的服务由 toolEnv 注入
     const program: any = Effect.scoped(
       Effect.gen(function* () {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => { hooks.disposeSession(opts.sid); })
         );
         return yield* agentLoopInternal(opts, q);
-      }).pipe(
-        Effect.provideService(SessionPort, session),
-        Effect.provideService(ToolExecutorPort, executor),
-        Effect.provideService(CheckpointPort, checkpoint),
-        Effect.provideService(HookPort, hooks),
-        Effect.provideService(ApprovalPort, approval),
-        Effect.provideService(SkillPort, skills),
-        Effect.provideService(McpPort, mcp),
-        Effect.provideService(ContextPort, context),
-        Effect.provideService(MemoryPort, memory),
-        Effect.provideService(LlmPort, llmFactory),
-        Effect.provideService(RulesPort, rules),
-        Effect.provideService(TodoPort, todo),
-      )
+      })
     );
 
     return (async function* () {
