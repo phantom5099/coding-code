@@ -42,7 +42,7 @@ Coding Code 是 AI 编程助手。
 
 ## 架构要求
 
-**依赖倒置**：所有非叶子模块利用 `deps.ts`（消费者侧窄端口）或 `port.ts`（叶子侧宽契约）声明自己需要的接口和类型定义，使调用者不需要依赖实现方；只允许依赖下层模块。
+**依赖倒置**：所有非叶子模块利用 `port.ts`（宽契约；agent 自持的装配端口也在 `agent/port.ts`）声明自己需要的接口和类型定义，使调用者不需要依赖实现方；只允许依赖下层模块。
 
 **分层与允许依赖**：
 
@@ -50,14 +50,14 @@ Coding Code 是 AI 编程助手。
 |---|---|---|
 | L0 通用件 | `core/` | node 内置 + 同目录 |
 | L1 共享契约 | `contracts/` | `core/` + 同目录 + 第三方（type-only） |
-| L1' 端口契约 | `agent/deps.ts`、各 `xxx/port.ts` | `core/` + `contracts/` |
+| L1' 端口契约 | 各 `xxx/port.ts`（含 `agent/port.ts` 的装配端口） | `core/` + `contracts/` |
 | L2 实现 | `tools/`、`hooks/`、`session/`、`approval/`、`llm/`、`mcp/`、`context/`、`workspace/` … | L0 + L1 |
-| L3 组合根 | `layer.ts`、`agent/tool-catalog.ts`、`agent/tool-env.ts` | 全部 |
+| L3 组合根 | `layer.ts`、`agent/tool-env.ts` | 全部 |
 
-**架构边界硬规则**（由 `packages/codingcode/test/architecture/boundaries.test.ts` 静态断言，共 28 项）：
+**架构边界硬规则**（由 `packages/codingcode/test/architecture/boundaries.test.ts` 静态断言，共 29 项）：
 
 - **R1** 契约不得 import 实现：`contracts/` 与 `**/port.ts` 的相对 import 只能落在 `core/`、`contracts/` 或同目录
-- **R2** 实现不得依赖消费者模块：agent 自持的装配端口 `ToolEnvPort` / `ToolCatalogPort` 只在 `agent/` 内部出现
+- **R2** 实现不得依赖消费者模块：agent 自持的装配端口 `ToolEnvPort` 只在 `agent/` 内部出现
 - **R3** `core/` 零内部依赖：不引用 `core/` 之外的任何 src 模块
 - **R4** 一个概念只允许一处类型定义，canonical 落点为 `contracts/`
 - **准入**：`core/` 的 import 只能是 node 内置与同目录；`contracts/` 只引用 `core/`、同目录与第三方

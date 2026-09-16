@@ -2,8 +2,10 @@ import { Layer, Effect } from 'effect';
 import { AgentError } from '../core/error.js';
 import { HookService } from '../hooks/port.js';
 import type { ToolCall } from '../contracts/types.js';
-import type { ToolLookup, ToolResult } from '../contracts/tool.js';
+import type { McpToolSpec } from '../contracts/mcp.js';
+import type { ToolCatalog, ToolLookup, ToolResult } from '../contracts/tool.js';
 import { ToolExecutorService } from './port.js';
+import { createToolCatalog } from './catalog.js';
 
 export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(function* () {
     const hooks = yield* HookService;
@@ -201,5 +203,9 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
       });
     }
 
-    return { executeBatch };
+    function prepare(toolNames: readonly string[], mcpTools: McpToolSpec[] = []): Effect.Effect<ToolCatalog> {
+      return Effect.sync(() => createToolCatalog(toolNames, mcpTools));
+    }
+
+    return { prepare, executeBatch };
 } as any));

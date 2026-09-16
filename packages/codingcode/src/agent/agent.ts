@@ -1,8 +1,8 @@
 import { Effect, Either, Queue, Stream, Fiber, Layer } from 'effect';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
-import { AgentService, ToolEnvPort, ToolCatalogPort } from './port.js';
-import type { RunTurnOptions, ToolEnv, ToolCatalog } from './port.js';
+import { AgentService, ToolEnvPort } from './port.js';
+import type { RunTurnOptions, ToolEnv } from './port.js';
 import type {
   AgentCheckpoint, AgentContext, AgentHooks, AgentLlmFactory,
   AgentMcp, AgentMemory, AgentSession, AgentSkills, AgentTodos,
@@ -22,7 +22,7 @@ import { ToolExecutorService } from '../tools/port.js';
 import { buildSystemPrompt } from './prompt.js';
 import type { FrameBody, FrameError, ResponseMeta, ToolOutcome, Transition } from '../contracts/frame.js';
 import { isTurnEnd } from '../contracts/frame.js';
-import type { ToolResult } from '../contracts/tool.js';
+import type { ToolCatalog, ToolResult } from '../contracts/tool.js';
 import type { ToolCall } from '../contracts/types.js';
 import { loadConfig } from '@codingcode/infra/config';
 import { createLogger } from '@codingcode/infra/logger';
@@ -57,7 +57,6 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   const rules = yield* RulesService;
   const todo: AgentTodos = yield* TodoService;
   const toolEnvPort = yield* ToolEnvPort;
-  const toolCatalog = yield* ToolCatalogPort;
   const cfg = loadConfig();
   const maxSteps = cfg.maxSteps ?? 250;
   const maxStopContinuations = cfg.maxStopContinuations ?? 3;
@@ -104,7 +103,8 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
       const profile: AgentProfile | undefined = profileName ? resolveProfile(profileName) : undefined;
 
-      const catalog = yield* toolCatalog.register(getToolNames(profile), normalizedCwd);
+      const mcpTools = yield* mcp.listProjectMcpTools(normalizedCwd);
+      const catalog = yield* executor.prepare(getToolNames(profile), mcpTools);
 
       const toolEnv = yield* toolEnvPort.getToolEnv();
 

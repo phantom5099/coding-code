@@ -67,6 +67,7 @@ describe('agent runTurn loop', () => {
       modelInfo: { maxTokens: 1000 },
     } as any;
     const executor = {
+      prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
       executeBatch: (calls: any[]) =>
         Effect.succeed(
           calls.map((tc: any) => ({

@@ -33,6 +33,7 @@ const mockState = makeState({ sessionId: 'test-sid', cwd: '/tmp', title: 'concur
 function makeConcurrentExecutor(opts: { barrierPromise?: Promise<void>; failTool?: string }) {
   const executionOrder: string[] = [];
   const executor = {
+    prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
     execute: (name: string, _args: Record<string, unknown>) => {
       if (opts.failTool && name === opts.failTool) {
         return Effect.fail(new Error('Simulated failure') as any);

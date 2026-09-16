@@ -6,7 +6,7 @@
 import { Effect, Layer } from 'effect';
 import { AgentLayer } from '../../src/agent/agent.js';
 import { ToolEnvLayer } from '../../src/agent/tool-env.js';
-import { ToolCatalogLayer } from '../../src/agent/tool-catalog.js';
+import { createToolCatalog } from '../../src/tools/catalog.js';
 import { AgentService } from '../../src/agent/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
@@ -211,6 +211,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
   const executor =
     mocks.executor ??
     ({
+      prepare: (names: readonly string[], mcpTools: any[] = []) => Effect.succeed(createToolCatalog(names, mcpTools)),
       executeBatch: (calls: any[]) =>
         Effect.succeed(
           calls.map((c: any) => ({
@@ -252,12 +253,10 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
   };
 
-  // ToolCatalogLayer 依赖 McpService，先固化再合并
   const mcpLayer = Layer.succeed(McpService, {
     syncConnections: () => Effect.void,
     listProjectMcpTools: () => Effect.succeed([]),
   } as any);
-  const toolCatalogLayer = ToolCatalogLayer.pipe(Layer.provide(mcpLayer));
 
   const services = Layer.mergeAll(
     Layer.succeed(SessionService, session as any),
@@ -298,8 +297,6 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     Layer.succeed(SubagentRunnerService, {} as any),
     // ToolEnvPort：把上面的具体服务适配成 agent 所需的工具执行期注入能力（同 layer.ts）
     ToolEnvLayer,
-    // ToolCatalogPort：静态内置工具 + profile 工具 + MCP 工具的装配（同 layer.ts）
-    toolCatalogLayer,
   );
   return services;
 }

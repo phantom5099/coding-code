@@ -51,6 +51,7 @@ function makeSubmitPlanLlm() {
 
 function makeOkExecutor() {
   return {
+    prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
     executeBatch: (calls: any[]) =>
       Effect.succeed(
         calls.map((tc: any) => ({

@@ -63,12 +63,11 @@ describe('R1 契约不得 import 实现', () => {
 describe('R2 实现不得依赖消费者模块', () => {
   it('agent 自持的装配端口只在 agent/ 内部出现', () => {
     const hits = FILES.filter((f) =>
-      /\bToolEnvPort\b|\bToolCatalogPort\b/.test(readFileSync(f, 'utf8'))
+      /\bToolEnvPort\b/.test(readFileSync(f, 'utf8'))
     ).map(relSrc).sort();
     expect(hits).toEqual([
       'agent/agent.ts',
       'agent/port.ts',
-      'agent/tool-catalog.ts',
       'agent/tool-env.ts',
     ]);
   });
@@ -139,6 +138,7 @@ describe('R4 一个概念只允许一处类型定义', () => {
     SessionStoreState: 'contracts/session.ts',
     SessionCreateOptions: 'contracts/session.ts',
     ToolOutcome: 'contracts/frame.ts',
+    ToolCatalog: 'contracts/tool.ts',
     ToolResult: 'contracts/tool.ts',
     ToolRunner: 'contracts/tool.ts',
     ToolLookup: 'contracts/tool.ts',

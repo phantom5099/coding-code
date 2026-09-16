@@ -14,7 +14,6 @@ import { ContextLayer } from './context/context.js';
 import { MemoryLayer } from './memory/memory.js';
 import { AgentLayer } from './agent/agent.js';
 import { ToolEnvLayer } from './agent/tool-env.js';
-import { ToolCatalogLayer } from './agent/tool-catalog.js';
 import { SubagentRunnerLayer } from './subagent/subagent.js';
 import { SchedulerLayer } from './scheduler/scheduler.js';
 import { WorkspaceService } from './workspace/workspace.js';
@@ -24,12 +23,11 @@ const InfraLayer = Layer.mergeAll(
   WorkspaceService.Default, HookLayer, RulesLayer, SkillLayer, McpLayer, ApprovalWaitLayer, TodoLayer,
 );
 
-// catalog 需要 McpService 才能把 MCP 工具喂进来
-const ToolCatalogWithDeps = ToolCatalogLayer.pipe(Layer.provide(InfraLayer));
-
 const LlmWithDeps = LlmLayer.pipe(Layer.provide(WorkspaceService.Default));
 const ApprovalWithDeps = ApprovalLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer)));
-const ToolExecutorWithDeps = ToolExecutorLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalWithDeps)));
+const ToolExecutorWithDeps = ToolExecutorLayer.pipe(
+  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWithDeps))
+);
 const ContextWithDeps = ContextLayer.pipe(Layer.provide(Layer.mergeAll(SessionLayer, LlmWithDeps)));
 const MemoryWithDeps = MemoryLayer.pipe(Layer.provide(LlmWithDeps));
 
@@ -41,7 +39,7 @@ const AgentServiceLayers = Layer.mergeAll(
 
 // agent with deps
 const AgentWithDeps = AgentLayer.pipe(
-  Layer.provide(Layer.mergeAll(AgentServiceLayers, ToolEnvLayer, ToolCatalogWithDeps))
+  Layer.provide(Layer.mergeAll(AgentServiceLayers, ToolEnvLayer))
 );
 
 // subagent runner (depends on agent)

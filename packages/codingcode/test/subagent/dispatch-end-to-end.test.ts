@@ -5,7 +5,6 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { AgentLayer } from '../../src/agent/agent.js';
 import { ToolEnvLayer } from '../../src/agent/tool-env.js';
-import { ToolCatalogLayer } from '../../src/agent/tool-catalog.js';
 import { AgentService } from '../../src/agent/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
@@ -74,7 +73,6 @@ const McpMock = Layer.succeed(McpService, {
   syncConnections: () => Effect.void,
   listProjectMcpTools: () => Effect.succeed([]),
 } as any);
-const ToolCatalogWithMcp = ToolCatalogLayer.pipe(Layer.provide(McpMock));
 
 const HookMock = Layer.succeed(HookService, {
   register: () => Effect.succeed(() => {}),
@@ -91,7 +89,10 @@ const SubagentMock = Layer.succeed(SubagentRunnerService, {} as any);
 
 const AgentDeps = Layer.mergeAll(
   SessionLayer,
-  Layer.succeed(ToolExecutorService, { executeBatch: () => Effect.succeed([]) } as any),
+  Layer.succeed(ToolExecutorService, {
+    executeBatch: () => Effect.succeed([]),
+    prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
+  } as any),
   Layer.succeed(CheckpointService, {
     snapshotBaseline: () => Effect.void,
     snapshotFinal: () => Effect.void,
@@ -122,9 +123,7 @@ const AgentDeps = Layer.mergeAll(
   TodoMock,
   SubagentMock,
   // ToolEnvPort 在 getToolEnv 运行时从外层 Runtime 解析具体服务（见 Runtime 定义）
-  ToolEnvLayer,
-  // ToolCatalogPort：静态内置 + profile 工具的装配（同 layer.ts）
-  ToolCatalogWithMcp
+  ToolEnvLayer
 );
 
 // Real AgentService built on the real SessionService + stubbed wide services.

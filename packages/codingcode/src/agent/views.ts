@@ -16,7 +16,7 @@ export type AgentHooks = Pick<HookShape, 'emit' | 'emitDecision' | 'reloadUserHo
 
 export type AgentLlmFactory = Pick<LLMFactoryShape, 'getLLMClient'>;
 
-export type AgentMcp = Pick<McpShape, 'syncConnections'>;
+export type AgentMcp = Pick<McpShape, 'syncConnections' | 'listProjectMcpTools'>;
 
 export type AgentMemory = Pick<MemoryShape, 'loadMemoryForPrompt' | 'flushSessionToMemory'>;
 
