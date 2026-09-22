@@ -3,10 +3,6 @@ import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
 import { AgentService, ToolEnvPort } from './port.js';
 import type { RunTurnOptions, ToolEnv } from './port.js';
-import type {
-  AgentCheckpoint, AgentContext, AgentHooks, AgentLlmFactory,
-  AgentMcp, AgentMemory, AgentSession, AgentSkills, AgentTodos,
-} from './views.js';
 import { ApprovalService } from '../approval/port.js';
 import { CheckpointService } from '../checkpoint/port.js';
 import { ContextService } from '../context/port.js';
@@ -44,18 +40,18 @@ function toFrameError(e: AgentError): FrameError {
 }
 
 export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
-  const session: AgentSession = yield* SessionService;
+  const session = yield* SessionService;
   const executor = yield* ToolExecutorService;
-  const checkpoint: AgentCheckpoint = yield* CheckpointService;
-  const hooks: AgentHooks = yield* HookService;
+  const checkpoint = yield* CheckpointService;
+  const hooks = yield* HookService;
   const approval = yield* ApprovalService;
-  const skills: AgentSkills = yield* SkillService;
-  const mcp: AgentMcp = yield* McpService;
-  const context: AgentContext = yield* ContextService;
-  const memory: AgentMemory = yield* MemoryService;
-  const llmFactory: AgentLlmFactory = yield* LLMFactoryService;
+  const skills = yield* SkillService;
+  const mcp = yield* McpService;
+  const context = yield* ContextService;
+  const memory = yield* MemoryService;
+  const llmFactory = yield* LLMFactoryService;
   const rules = yield* RulesService;
-  const todo: AgentTodos = yield* TodoService;
+  const todo = yield* TodoService;
   const toolEnvPort = yield* ToolEnvPort;
   const cfg = loadConfig();
   const maxSteps = cfg.maxSteps ?? 250;
@@ -140,7 +136,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     const q = Effect.runSync(Queue.unbounded<FrameBody>());
 
     // agentLoopInternal 只经闭包引用服务，不消费任何 Tag；工具执行所需的服务由 toolEnv 注入
-    const program: any = Effect.scoped(
+    const program = Effect.scoped(
       Effect.gen(function* () {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => { hooks.disposeSession(opts.sid); })
@@ -173,7 +169,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     catalog: ToolCatalog;
     rulesText: string;
     sid: string; projectPath: string; permissionMode: PermissionMode;
-  }, q: Queue.Queue<FrameBody>): any {
+  }, q: Queue.Queue<FrameBody>): Effect.Effect<Result<string, AgentError>, AgentError> {
     const { state, llm, profile, abortSignal, catalog, rulesText, sid, projectPath, permissionMode } = opts;
     const { tools, lookup: toolLookup } = catalog;
 
@@ -381,4 +377,4 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   }
 
   return { runTurn };
-} as any));
+}));

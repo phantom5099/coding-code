@@ -3,6 +3,7 @@ import type { Effect } from 'effect';
 import type { FrameBody } from '../contracts/frame.js';
 import type { ProfileName } from '../contracts/types.js';
 import type { PermissionMode } from '../contracts/permission.js';
+import type { AgentError } from '../core/error.js';
 
 export interface RunTurnOptions {
   sessionId?: string;
@@ -17,10 +18,13 @@ export interface AgentShape {
   runTurn(
     input: string,
     opts: RunTurnOptions
-  ): Effect.Effect<{
-    stream: AsyncGenerator<FrameBody>;
-    sessionId: string;
-  }>;
+  ): Effect.Effect<
+    {
+      stream: AsyncGenerator<FrameBody>;
+      sessionId: string;
+    },
+    AgentError
+  >;
 }
 
 export class AgentService extends Context.Tag('AgentService')<AgentService, AgentShape>() {}
@@ -31,5 +35,5 @@ export interface ToolEnv {
 }
 
 export class ToolEnvPort extends Context.Tag('AgentToolEnvPort')<ToolEnvPort, {
-  getToolEnv(): Effect.Effect<ToolEnv, never, any>;
+  getToolEnv(): Effect.Effect<ToolEnv>;
 }>() {}

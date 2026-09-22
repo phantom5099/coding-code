@@ -1,5 +1,6 @@
 import { Layer, Effect } from 'effect';
 import { HookService } from '../hooks/port.js';
+import type { HookShape } from '../hooks/port.js';
 import type { ApprovalDecision, PermissionMode } from '../contracts/permission.js';
 import type { PermissionRule, ToolCallRequest } from './types.js';
 import type { ProfileName } from '../contracts/types.js';
@@ -8,6 +9,7 @@ import { createRuleEngine, type RuleEngine } from './rule-engine.js';
 import { userConfirmAsync } from './confirmation.js';
 import { ApprovalWaitService } from './wait-port.js';
 import { ApprovalService } from './port.js';
+import type { ApprovalRequest } from './port.js';
 
 const DANGEROUS_TOOL_NAMES = ['execute_command'];
 
@@ -65,11 +67,11 @@ function applyPermissionMode(
 }
 
 function recordAuditAndReturn(
-  hooks: any,
+  hooks: HookShape,
   request: ToolCallRequest,
   decision: ApprovalDecision,
   passedLayers: string[]
-): any {
+): Effect.Effect<ApprovalDecision> {
   return Effect.gen(function* () {
     passedLayers.push(LAYER_NAMES[4]);
     yield* hooks.emit('tool.approval.post', {
@@ -85,10 +87,10 @@ function recordAuditAndReturn(
 export function runPipeline(
   request: ToolCallRequest,
   opts: PipelineOptions
-): any {
+): Effect.Effect<ApprovalDecision, never, HookService | ApprovalWaitService> {
   return Effect.gen(function* () {
-    const hooks: any = yield* HookService;
-    const approvalWait: any = yield* ApprovalWaitService;
+    const hooks = yield* HookService;
+    const approvalWait = yield* ApprovalWaitService;
     const asyncConfirm = yield* approvalWait.hasEmitter(opts.sessionId);
     const layers: string[] = [];
 
@@ -207,16 +209,7 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
     const destructiveTools = new Set(DANGEROUS_TOOL_NAMES);
 
     return {
-      evaluate: (request: {
-        tool: string;
-        input: Record<string, unknown>;
-        context?: Record<string, unknown>;
-        callId?: string;
-        sessionId: string;
-        projectPath?: string;
-        permissionMode?: PermissionMode;
-        profile?: ProfileName;
-      }): any =>
+      evaluate: (request: ApprovalRequest): Effect.Effect<ApprovalDecision> =>
         runPipeline(
           {
             tool: request.tool,
@@ -240,4 +233,4 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
           Effect.provideService(ApprovalWaitService, approvalWait)
         ),
     };
-} as any));
+}));

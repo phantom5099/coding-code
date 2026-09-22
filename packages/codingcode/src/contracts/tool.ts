@@ -14,7 +14,7 @@ export type ToolResult = { readonly id: string; readonly name: string } & ToolOu
 export interface ToolRunner {
   readonly name: string;
   parse(args: unknown): unknown;
-  execute(args: unknown, ctx?: ToolExecCtx): Effect.Effect<string, AgentError, any>;
+  execute(args: unknown, ctx?: ToolExecCtx): Effect.Effect<string, AgentError>;
 }
 
 export type ToolLookup = (name: string) => ToolRunner | undefined;

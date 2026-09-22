@@ -59,5 +59,5 @@ export const AppLayer = Layer.mergeAll(
   SchedulerLayer,
 );
 
-export const createAppRuntime = () => ManagedRuntime.make(AppLayer as any);
+export const createAppRuntime = () => ManagedRuntime.make(AppLayer);
 export type AppRuntime = ManagedRuntime.ManagedRuntime<any, any>;

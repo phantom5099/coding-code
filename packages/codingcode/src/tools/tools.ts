@@ -21,7 +21,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         callId?: string;
         toolLookup?: ToolLookup;
       }
-    ): any {
+    ): Effect.Effect<{ output: string }, AgentError> {
       return Effect.gen(function* () {
         const tool = opts?.toolLookup?.(name);
         if (!tool) return yield* Effect.fail(AgentError.toolNotFound(name));
@@ -101,7 +101,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         signal?: AbortSignal;
         toolLookup?: ToolLookup;
       }
-    ): Effect.Effect<ToolResult, never, any> {
+    ): Effect.Effect<ToolResult> {
       return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
         Effect.matchEffect({
           onSuccess: (result: any): Effect.Effect<ToolResult> =>
@@ -150,7 +150,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         signal?: AbortSignal;
         toolLookup?: ToolLookup;
       }
-    ): Effect.Effect<ToolResult[], never, any> {
+    ): Effect.Effect<ToolResult[]> {
       return Effect.gen(function* () {
         // Separate safe & destructive tools: safe tools run in parallel, Bash runs serially
         const safeTools: ToolCall[] = [];
@@ -208,4 +208,4 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
     }
 
     return { prepare, executeBatch };
-} as any));
+}));

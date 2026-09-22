@@ -1,28 +1,18 @@
 import { Effect, Layer } from 'effect';
-import { TodoService } from '../todo/port.js';
-import { HookService } from '../hooks/port.js';
-import { McpService } from '../mcp/port.js';
-import { SubagentRunnerService } from '../subagent/port.js';
+import type { Context } from 'effect';
 import { ToolEnvPort } from './port.js';
 import type { ToolEnv } from './port.js';
 
-export const ToolEnvLayer: Layer.Layer<ToolEnvPort, never, never> = Layer.effect(
+export const ToolEnvLayer = Layer.effect(
   ToolEnvPort,
   Effect.succeed({
-    getToolEnv: (): Effect.Effect<ToolEnv, never, any> =>
+    getToolEnv: (): Effect.Effect<ToolEnv> =>
       Effect.gen(function* () {
-        const todoSvc = yield* TodoService;
-        const hookSvc = yield* HookService;
-        const mcpSvc = yield* McpService;
-        const subagentSvc = yield* SubagentRunnerService;
+
+        const ctx = yield* (Effect.context<any>() as Effect.Effect<Context.Context<any>>);
         const env: ToolEnv = {
-          provide: (effect: Effect.Effect<any, any, any>) =>
-            effect.pipe(
-              Effect.provideService(TodoService, todoSvc),
-              Effect.provideService(HookService, hookSvc),
-              Effect.provideService(McpService, mcpSvc),
-              Effect.provideService(SubagentRunnerService, subagentSvc),
-            ) as Effect.Effect<any, any, never>,
+          provide: <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, never> =>
+            Effect.provide(effect, ctx) as Effect.Effect<A, E, never>,
         };
         return env;
       }),

@@ -12,7 +12,7 @@ export interface ToolExecutorShape {
     projectPath?: string;
     signal?: AbortSignal;
     toolLookup?: ToolLookup;
-  }): Effect.Effect<ToolResult[], never, any>;
+  }): Effect.Effect<ToolResult[]>;
 }
 
 export class ToolExecutorService extends Context.Tag('ToolExecutor')<ToolExecutorService, ToolExecutorShape>() {}

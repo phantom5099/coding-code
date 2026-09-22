@@ -12,11 +12,7 @@ const mockHookService = {
   emit: () => Effect.succeed(undefined),
   emitDecision: () => Effect.succeed(null),
   reloadUserHooks: () => Effect.succeed(undefined),
-  attachSessionHooks: () => Effect.succeed(undefined),
-  disableHook: () => Effect.succeed(undefined),
-  enableHook: () => Effect.succeed(undefined),
   disposeSession: () => Effect.succeed(undefined),
-  disposeProject: () => Effect.succeed(undefined),
 };
 
 const mockApprovalWaitService = {
@@ -29,12 +25,12 @@ const mockApprovalWaitService = {
   hasEmitter: () => Effect.succeed(false),
 };
 
-const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
-const WaitTestLayer = Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any);
+const HookTestLayer = Layer.succeed(HookService, mockHookService);
+const WaitTestLayer = Layer.succeed(ApprovalWaitService, mockApprovalWaitService);
 const TestLayer = Layer.mergeAll(HookTestLayer, WaitTestLayer);
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(TestLayer) as any));
+  return Effect.runPromise(eff.pipe(Effect.provide(TestLayer)));
 }
 
 describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyWhitelist + acceptEdits)', () => {

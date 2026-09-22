@@ -16,10 +16,14 @@ export interface RunSubagentOptions {
 }
 
 export interface SubagentRunnerShape {
-  runSubagent(input: string, opts: RunSubagentOptions): Effect.Effect<{
-    stream: AsyncGenerator<FrameBody, Result<string, AgentError>, unknown>;
-    sessionId: string;
-  }>;
+  runSubagent(input: string, opts: RunSubagentOptions): Effect.Effect<
+    {
+      stream: AsyncGenerator<FrameBody, Result<string, AgentError>, unknown>;
+      sessionId: string;
+    },
+    // E：沿用 agent.runTurn 的错误通道（原先声明 never，靠 runTurn 的 as any 掩盖）
+    AgentError
+  >;
 }
 
 export class SubagentRunnerService extends Context.Tag('SubagentRunner')<SubagentRunnerService, SubagentRunnerShape>() {}
