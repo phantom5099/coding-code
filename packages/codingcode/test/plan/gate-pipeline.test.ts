@@ -7,7 +7,7 @@ import { runPipeline } from '../../src/approval/approval.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import type { ProfileName } from '../../src/core/types.js';
+import type { ProfileName } from '../../src/contracts/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();

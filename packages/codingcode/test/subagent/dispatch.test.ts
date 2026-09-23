@@ -4,8 +4,8 @@ import { dispatchAgentTool } from '../../src/tools/domains/subagent/dispatch.js'
 import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
-import type { ToolExecCtx } from '../../src/tools/types.js';
-import type { FrameBody } from '../../src/core/frame.js';
+import type { ToolExecCtx } from '../../src/contracts/tool.js';
+import type { FrameBody } from '../../src/contracts/frame.js';
 
 const mockHooks = {
   register: () => Effect.succeed(() => {}),

@@ -1,16 +1,11 @@
 import { Layer, Effect } from 'effect';
 import { AgentError } from '../core/error.js';
 import { HookService } from '../hooks/port.js';
-import type { ToolDefinition } from './types.js';
-import type { ToolCall } from '../core/types.js';
+import type { ToolCall } from '../contracts/types.js';
+import type { McpToolSpec } from '../contracts/mcp.js';
+import type { ToolCatalog, ToolLookup, ToolResult } from '../contracts/tool.js';
 import { ToolExecutorService } from './port.js';
-
-export type ToolResultUnion =
-  | { type: 'ok'; id: string; name: string; output: string }
-  | { type: 'denied'; id: string; name: string; reason: string }
-  | { type: 'error'; id: string; name: string; output: string };
-
-export type ToolLookup = (name: string) => ToolDefinition | undefined;
+import { createToolCatalog } from './catalog.js';
 
 export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(function* () {
     const hooks = yield* HookService;
@@ -26,7 +21,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         callId?: string;
         toolLookup?: ToolLookup;
       }
-    ): any {
+    ): Effect.Effect<{ output: string }, AgentError> {
       return Effect.gen(function* () {
         const tool = opts?.toolLookup?.(name);
         if (!tool) return yield* Effect.fail(AgentError.toolNotFound(name));
@@ -44,7 +39,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
           callId,
         });
 
-        const parsedArgs = yield* Effect.sync(() => tool.parameters.parse(finalArgs));
+        const parsedArgs = yield* Effect.sync(() => tool.parse(finalArgs));
         const start = Date.now();
 
         // Execute tool — now returns Effect directly
@@ -106,20 +101,20 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         signal?: AbortSignal;
         toolLookup?: ToolLookup;
       }
-    ): Effect.Effect<ToolResultUnion, never, any> {
+    ): Effect.Effect<ToolResult> {
       return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
         Effect.matchEffect({
-          onSuccess: (result: any): Effect.Effect<ToolResultUnion> =>
+          onSuccess: (result: any): Effect.Effect<ToolResult> =>
             Effect.succeed({
-              type: 'ok' as const,
+              status: 'ok' as const,
               id: tc.id,
               name: tc.name,
               output: result.output,
             }),
-          onFailure: (err): Effect.Effect<ToolResultUnion> => {
+          onFailure: (err): Effect.Effect<ToolResult> => {
             if (err instanceof AgentError && err.code === 'TOOL_NOT_ALLOWED') {
               return Effect.succeed({
-                type: 'denied' as const,
+                status: 'denied' as const,
                 id: tc.id,
                 name: tc.name,
                 reason: err.message,
@@ -128,7 +123,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
             const code = err instanceof AgentError ? err.code : 'TOOL_EXECUTION_FAILED';
             const msg = err instanceof AgentError ? err.message : String(err);
             return Effect.succeed({
-              type: 'error' as const,
+              status: 'error' as const,
               id: tc.id,
               name: tc.name,
               output: `[Error: ${code}] ${msg}`,
@@ -137,7 +132,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         }),
         Effect.catchAllDefect((defect) =>
           Effect.succeed({
-            type: 'error' as const,
+            status: 'error' as const,
             id: tc.id,
             name: tc.name,
             output: `[Unexpected] ${String(defect)}`,
@@ -155,14 +150,14 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         signal?: AbortSignal;
         toolLookup?: ToolLookup;
       }
-    ): Effect.Effect<ToolResultUnion[], never, any> {
+    ): Effect.Effect<ToolResult[]> {
       return Effect.gen(function* () {
         // Separate safe & destructive tools: safe tools run in parallel, Bash runs serially
         const safeTools: ToolCall[] = [];
         const bashTools: ToolCall[] = [];
 
         for (const tc of toolCalls) {
-          if (tc.name === 'execute_command' || tc.name === 'Bash') {
+          if (tc.name === 'execute_command') {
             bashTools.push(tc);
           } else {
             safeTools.push(tc);
@@ -176,7 +171,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
             // Check abort before each tool
             if (opts?.signal?.aborted) {
               return Effect.succeed({
-                type: 'denied' as const,
+                status: 'denied' as const,
                 id: tc.id,
                 name: tc.name,
                 reason: 'aborted',
@@ -188,12 +183,12 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         );
 
         // Bash tools — serial (avoid race conditions)
-        const bashResults: ToolResultUnion[] = [];
+        const bashResults: ToolResult[] = [];
         for (const tc of bashTools) {
           // Check abort before each tool
           if (opts?.signal?.aborted) {
             bashResults.push({
-              type: 'denied' as const,
+              status: 'denied' as const,
               id: tc.id,
               name: tc.name,
               reason: 'aborted',
@@ -208,5 +203,9 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
       });
     }
 
-    return { executeBatch };
-} as any));
+    function prepare(toolNames: readonly string[], mcpTools: McpToolSpec[] = []): Effect.Effect<ToolCatalog> {
+      return Effect.sync(() => createToolCatalog(toolNames, mcpTools));
+    }
+
+    return { prepare, executeBatch };
+}));

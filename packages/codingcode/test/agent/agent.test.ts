@@ -67,10 +67,11 @@ describe('agent runTurn loop', () => {
       modelInfo: { maxTokens: 1000 },
     } as any;
     const executor = {
+      prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
       executeBatch: (calls: any[]) =>
         Effect.succeed(
           calls.map((tc: any) => ({
-            type: 'ok' as const,
+            status: 'ok' as const,
             id: tc.id,
             name: tc.name,
             output: 'On branch main\nnothing to commit',

@@ -1,7 +1,7 @@
 ﻿import { describe, it, expect, vi } from 'vitest';
 import { createHttpAgentClient } from '../../../src/client/http/agent-runtime.js';
 import { createRequestHelpers } from '../../../src/client/http/request.js';
-import type { Frame } from '../../../src/core/frame.js';
+import type { Frame } from '../../../src/contracts/frame.js';
 
 function createSseResponse(lines: unknown[]) {
   const encoder = new TextEncoder();

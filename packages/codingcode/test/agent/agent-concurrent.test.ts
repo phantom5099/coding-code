@@ -33,6 +33,7 @@ const mockState = makeState({ sessionId: 'test-sid', cwd: '/tmp', title: 'concur
 function makeConcurrentExecutor(opts: { barrierPromise?: Promise<void>; failTool?: string }) {
   const executionOrder: string[] = [];
   const executor = {
+    prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
     execute: (name: string, _args: Record<string, unknown>) => {
       if (opts.failTool && name === opts.failTool) {
         return Effect.fail(new Error('Simulated failure') as any);
@@ -56,10 +57,10 @@ function makeConcurrentExecutor(opts: { barrierPromise?: Promise<void>; failTool
           executor.execute(tc.name, tc.arguments ?? {}).pipe(
             (Effect.matchEffect as any)({
               onSuccess: (output: any) =>
-                Effect.succeed({ type: 'ok' as const, id: tc.id, name: tc.name, output }),
+                Effect.succeed({ status: 'ok' as const, id: tc.id, name: tc.name, output }),
               onFailure: (err: any) =>
                 Effect.succeed({
-                  type: 'error' as const,
+                  status: 'error' as const,
                   id: tc.id,
                   name: tc.name,
                   output: String(err),
@@ -67,7 +68,7 @@ function makeConcurrentExecutor(opts: { barrierPromise?: Promise<void>; failTool
             }),
             (Effect.catchAllDefect as any)((defect: any) =>
               Effect.succeed({
-                type: 'error' as const,
+                status: 'error' as const,
                 id: tc.id,
                 name: tc.name,
                 output: String(defect),

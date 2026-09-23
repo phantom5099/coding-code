@@ -6,7 +6,7 @@ import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { computePaths } from '../../src/core/path.js';
-import { WorkspaceService } from '../../src/core/workspace.js';
+import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 

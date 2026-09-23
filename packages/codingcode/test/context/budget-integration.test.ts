@@ -8,7 +8,7 @@ import type { ContextShape } from '../../src/context/port.js';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
-import type { SessionEvent } from '../../src/session/types.js';
+import type { SessionEvent } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ContextLayer } from '../../src/context/context.js';
 

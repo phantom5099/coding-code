@@ -1,12 +1,12 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { TodoService, countByStatus } from '../../../src/todo/port.js';
-import type { Todo } from '../../../src/todo/port.js';
+import type { TodoItem } from '../../../src/contracts/types.js';
 import { TodoLayer } from '../../../src/todo/todo.js';
 
 describe('TodoService', () => {
   it('write then read returns full list', async () => {
-    const plan: Todo[] = [
+    const plan: TodoItem[] = [
       { step: 'step 1', status: 'pending' },
       { step: 'step 2', status: 'in_progress' },
       { step: 'step 3', status: 'completed' },
@@ -68,7 +68,7 @@ describe('TodoService', () => {
   });
 
   it('countByStatus counts correctly', () => {
-    const plan: Todo[] = [
+    const plan: TodoItem[] = [
       { step: 'a', status: 'pending' },
       { step: 'b', status: 'completed' },
       { step: 'c', status: 'pending' },

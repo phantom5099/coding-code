@@ -3,8 +3,8 @@ import { Effect } from 'effect';
 import { resolveLLM } from '../../src/llm/llm-resolver.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
 import { AgentError } from '../../src/core/error.js';
-import type { LLMClient } from '../../src/llm/client.js';
-import type { SelectableModel } from '../../src/llm/port.js';
+import type { LLMClient } from '../../src/contracts/provider.js';
+import type { SelectableModel } from '../../src/contracts/provider.js';
 
 const { mockFindModel, mockCreateClient } = vi.hoisted(() => ({
   mockFindModel: vi.fn(),

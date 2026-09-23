@@ -45,10 +45,11 @@ function makeLlm(firstToolName: string) {
 
 function makeExecutor(output: string) {
   return {
+    prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
     executeBatch: (calls: any[]) =>
       Effect.succeed(
         calls.map((c: any) => ({
-          type: 'ok' as const,
+          status: 'ok' as const,
           id: c.id,
           name: c.name,
           output,

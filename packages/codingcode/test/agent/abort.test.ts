@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeState, runAgentTurn, textDeltas } from '../helpers/agent-harness.js';
-import type { FrameBody, Transition } from '../../src/core/frame.js';
+import type { FrameBody, Transition } from '../../src/contracts/frame.js';
 
 vi.mock('@codingcode/infra/config', () => ({
   loadConfig: () => ({

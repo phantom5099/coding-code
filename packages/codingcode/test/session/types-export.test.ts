@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionStoreState } from '../../src/session/types.js';
+import type { SessionStoreState } from '../../src/contracts/session.js';
 
 describe('SessionStoreState export', () => {
   it('contains only cwd as its path source', () => {

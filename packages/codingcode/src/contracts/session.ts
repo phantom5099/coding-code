@@ -1,7 +1,5 @@
-import type { ProfileName, TokenUsage, ToolCall } from '../core/types.js';
-import type { PermissionMode } from '../approval/types.js';
-
-export type { TokenUsage };
+import type { ProfileName, TokenUsage, ToolCall } from './types.js';
+import type { PermissionMode } from './permission.js';
 
 export interface SessionMetaEvent {
   type: 'session_meta';
@@ -96,4 +94,47 @@ export interface SessionStoreState {
   usage: TokenUsage | undefined;
   memorySnapshot: string;
   parentSessionId?: string;
+}
+
+export type UITurnItem =
+  | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
+  | {
+      id: string;
+      type: 'tool_call';
+      name: string;
+      args: Record<string, unknown>;
+      status: 'pending' | 'approved' | 'rejected' | 'running';
+    }
+  | {
+      id: string;
+      type: 'tool_result';
+      callId: string;
+      name: string;
+      output: string;
+      exitCode?: number;
+      filePath?: string;
+      diff?: string;
+      insertions?: number;
+      deletions?: number;
+    }
+  | {
+      id: string;
+      type: 'summary';
+      content: string;
+      startTurnId: number;
+      endTurnId: number;
+    }
+  | { id: string; type: 'reasoning'; content: string; isVisible: boolean }
+  | { id: string; type: 'error'; message: string; code?: string };
+
+export interface UITurn {
+  id: string;
+  items: UITurnItem[];
+  status: 'running' | 'completed' | 'error';
+}
+
+export interface SessionCreateOptions {
+  model: string;
+  activeProfile: ProfileName;
+  permissionMode: PermissionMode;
 }

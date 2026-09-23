@@ -1,5 +1,5 @@
-import type { PermissionMode } from '../../approval/types.js';
-import type { SessionIndex } from '../../session/types.js';
+import type { PermissionMode } from '../../contracts/permission.js';
+import type { SessionIndex } from '../../contracts/session.js';
 import type { SessionClient } from '../contracts.js';
 import type { createRequestHelpers } from './request.js';
 

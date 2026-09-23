@@ -1,3 +1,6 @@
+import type { Effect } from 'effect';
+import type { AgentError } from '../core/error.js';
+
 export interface McpServerConfig {
   name: string;
   /** stdio: executable command */
@@ -24,4 +27,13 @@ export interface McpStatus {
   transport: 'stdio' | 'http';
   reconnectAttempts: number;
   leaseCount: number;
+}
+
+/** MCP 远端工具的纯数据描述：zod schema 与 SDK client 等机制形状由实现层持有 */
+export interface McpToolSpec {
+  server: string;
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  execute(args: Record<string, unknown>): Effect.Effect<string, AgentError>;
 }

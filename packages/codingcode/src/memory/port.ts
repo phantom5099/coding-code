@@ -1,5 +1,5 @@
 import { Context } from 'effect';
-import type { LLMClient } from '../llm/client.js';
+import type { LLMClient } from '../contracts/provider.js';
 
 export interface MemoryShape {
   getMemoryEnabled(): boolean;

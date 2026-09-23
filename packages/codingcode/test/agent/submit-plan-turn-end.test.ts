@@ -51,10 +51,11 @@ function makeSubmitPlanLlm() {
 
 function makeOkExecutor() {
   return {
+    prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
     executeBatch: (calls: any[]) =>
       Effect.succeed(
         calls.map((tc: any) => ({
-          type: 'ok' as const,
+          status: 'ok' as const,
           id: tc.id,
           name: tc.name,
           output: 'Plan written to /tmp/plans/my-plan.md',
@@ -99,7 +100,7 @@ describe('agent treats submit_plan as an ordinary tool', () => {
         state: mockState,
         hooks,
         executor: makeOkExecutor(),
-        sessionPort: { setActiveProfile },
+        session: { setActiveProfile },
       },
       { sessionId: 'test-session', cwd: '/tmp' }
     );

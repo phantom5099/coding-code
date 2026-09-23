@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { filterForContext, buildContextMessages } from '../../src/context/context.js';
-import type { SessionEvent } from '../../src/session/types.js';
+import type { SessionEvent } from '../../src/contracts/session.js';
 
 function toMessages(events: SessionEvent[]) {
   const { visible, compactedTurnIds } = filterForContext(events);

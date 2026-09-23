@@ -1,5 +1,5 @@
-import type { PermissionMode } from '../../approval/types.js';
-import type { McpStatus } from '../../mcp/types.js';
+import type { PermissionMode } from '../../contracts/permission.js';
+import type { McpStatus } from '../../contracts/mcp.js';
 import type { SettingsClient } from '../contracts.js';
 import type { createRequestHelpers } from './request.js';
 

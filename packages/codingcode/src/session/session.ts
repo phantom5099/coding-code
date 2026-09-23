@@ -4,23 +4,10 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { AgentError } from '../core/error.js';
 import { encodeProjectPath } from '../core/path.js';
-import type {
-  SessionMetaEvent,
-  UserEvent,
-  AssistantEvent,
-  ToolResultEvent,
-  SummaryEvent,
-  RollbackEvent,
-  SessionIndex,
-  TokenUsage,
-  SessionEvent,
-  SessionStoreState,
-  CompactEvent,
-} from './types.js';
-import type { ProfileName } from '../core/types.js';
-import type { PermissionMode } from '../approval/types.js';
+import type { SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, RollbackEvent, SessionIndex, SessionEvent, SessionStoreState, CompactEvent, UITurn } from '../contracts/session.js';
+import type { TokenUsage, ProfileName } from '../contracts/types.js';
+import type { PermissionMode } from '../contracts/permission.js';
 import { SessionService } from './port.js';
-import type { UITurn } from './port.js';
 import {
   ensureDirs,
   readHistory,
@@ -33,8 +20,9 @@ import {
   truncateTitle,
   findFirstUserContent,
   deleteSession as deleteSessionImpl,
+  sessionJsonlPathFromCwd,
 } from './file-ops.js';
-import { computePaths, sessionJsonlPathFromCwd } from '../core/path.js';
+import { computePaths } from '../core/path.js';
 
 function pathsFromState(state: SessionStoreState) {
   return computePaths(state.cwd, state.sessionId, state.parentSessionId);

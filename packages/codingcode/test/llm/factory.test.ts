@@ -59,7 +59,7 @@ describe('switchModel - persists to config', () => {
     mockFs();
 
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/core/workspace.js');
+    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
     const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
       model: 'model-x',
       apiKeyEnv: 'API_KEY_A',
@@ -89,7 +89,7 @@ describe('switchModel - persists to config', () => {
     mockFs();
 
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/core/workspace.js');
+    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
     const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
       model: 'model-x',
       apiKeyEnv: 'API_KEY_A',
@@ -120,7 +120,7 @@ describe('getActiveEntry - activeModel priority', () => {
     mockFs();
 
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/core/workspace.js');
+    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
     const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
       model: 'model-y',
       apiKeyEnv: 'API_KEY_A',
@@ -142,7 +142,7 @@ describe('getActiveEntry - activeModel priority', () => {
 
   it('returns error when activeModel is not set in config', async () => {
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/core/workspace.js');
+    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
     const workspaceLayer = makeWorkspaceLayer(WorkspaceService, undefined);
     const { LlmLayer } = await import('../../src/llm/llm.js');
     const factoryLayer = LlmLayer.pipe(Layer.provide(workspaceLayer));
@@ -164,7 +164,7 @@ describe('getActiveEntry - activeModel priority', () => {
     mockFs();
 
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/core/workspace.js');
+    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
     const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
       model: 'nonexistent',
       apiKeyEnv: 'UNKNOWN_KEY',
@@ -195,7 +195,7 @@ describe('createClient - API key validation', () => {
     mockFs();
 
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/core/workspace.js');
+    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
     const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
       model: 'model-x',
       apiKeyEnv: 'API_KEY_A',
@@ -232,7 +232,7 @@ describe('createClient - API key validation', () => {
     mockFs();
 
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/core/workspace.js');
+    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
     const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
       model: 'model-x',
       apiKeyEnv: 'API_KEY_A',

@@ -2,20 +2,21 @@ import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import type { SessionStoreState } from '../../session/types.js';
-import type { ProfileName } from '../../core/types.js';
+import type { SessionStoreState } from '../../contracts/session.js';
+import type { ProfileName } from '../../contracts/types.js';
 import { SessionService } from '../../session/port.js';
 import { computePaths } from '../../core/path.js';
 import { ContextService } from '../../context/port.js';
 import { estimatePromptTokensFrom } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/port.js';
-import { WorkspaceService } from '../../core/workspace.js';
+import { WorkspaceService } from '../../workspace/workspace.js';
 import { LLMFactoryService } from '../../llm/port.js';
-import type { LLMClient } from '../../llm/client.js';
+import type { LLMClient } from '../../contracts/provider.js';
 import { errorResponse } from '../util.js';
 import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
 import { AVAILABLE_PROFILES, isAgentProfileName } from '../../agent/profile.js';
-import { isPermissionMode, type PermissionMode } from '../../approval/types.js';
+import { isPermissionMode } from '../../approval/types.js';
+import type { PermissionMode } from '../../contracts/permission.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 

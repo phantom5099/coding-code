@@ -1,5 +1,6 @@
 ﻿import { describe, it, expect } from 'vitest';
-import { AgentError, ApiError } from '../../src/core/error.js';
+import { AgentError } from '../../src/core/error.js';
+import { ApiError } from '../../src/contracts/error.js';
 
 describe('AgentError.httpStatus', () => {
   it('returns 400 for CONFIG_MISSING', () => {

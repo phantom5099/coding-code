@@ -1,35 +1,16 @@
-export type PermissionMode = 'default' | 'acceptEdits' | 'bypass';
-
-export const PERMISSION_MODES: readonly PermissionMode[] = [
-  'default',
-  'acceptEdits',
-  'bypass',
-] as const;
-
-// plan 权限模式只允许这组工具（只读 + submit_plan），其余一律 deny。
-// 作为审批层的权威白名单，agent 侧的工具可见性名单也从这里派生。
-export const PLAN_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
-  'read_file',
-  'search_files',
-  'search_code',
-  'fetch_url',
-  'submit_plan',
-]);
+import { PERMISSION_MODES, type PermissionMode } from '../contracts/permission.js';
 
 export function isPermissionMode(value: unknown): value is PermissionMode {
   return typeof value === 'string' && (PERMISSION_MODES as readonly string[]).includes(value);
 }
 
+/** 工具调用请求：工具名 + 入参 + 可选调用上下文。 */
 export interface ToolCallRequest {
   tool: string;
   input: Record<string, unknown>;
   context?: Record<string, unknown>;
   callId?: string;
 }
-
-export type ApprovalDecision =
-  | { type: 'deny'; reason: string; source: string }
-  | { type: 'allow'; source: string };
 
 export type RuleAction = 'deny' | 'allow' | 'ask';
 

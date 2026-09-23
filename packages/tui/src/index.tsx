@@ -1,12 +1,12 @@
 import React from 'react';
 import { render } from 'ink';
 import { App } from './components/App.js';
-import type { Frame } from '@codingcode/core/core/frame';
+import type { Frame } from '@codingcode/core/contracts/frame';
 import { createDirectAgentClient } from '@codingcode/core/direct/agent-runtime';
 import { createDirectSessionClient } from '@codingcode/core/direct/sessions';
 import { createDirectSettingsClient } from '@codingcode/core/direct/settings';
 import { createDirectModelClient } from '@codingcode/core/direct/models';
-import type { LLMClient } from '@codingcode/core/llm/client';
+import type { LLMClient } from '@codingcode/core/contracts/provider';
 import type { AppRuntime } from '@codingcode/core';
 
 export type { Frame };
@@ -27,11 +27,11 @@ export interface TuiClient {
   getPermissionMode(input: {
     sessionId: string;
     cwd: string;
-  }): Promise<import('@codingcode/core/approval/types').PermissionMode>;
+  }): Promise<import('@codingcode/core/contracts/permission').PermissionMode>;
   setPermissionMode(input: {
     sessionId: string;
     cwd: string;
-    mode: import('@codingcode/core/approval/types').PermissionMode;
+    mode: import('@codingcode/core/contracts/permission').PermissionMode;
   }): Promise<void>;
   resumeSession(sid: string): Promise<any>;
 }

@@ -4,8 +4,8 @@ import { useWorkspaceStore } from '../stores/workspace.store';
 import { useRollbackStore } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import { createStreamState, reduceFrame, type StreamEffects } from '../lib/frame-reducer';
-import type { ProfileName } from '@codingcode/core/core/types';
-import type { PermissionMode } from '@codingcode/core/approval/types';
+import type { ProfileName } from '@codingcode/core/contracts/types';
+import type { PermissionMode } from '@codingcode/core/contracts/permission';
 import { ApiError } from '../lib/api';
 import {
   listModels,

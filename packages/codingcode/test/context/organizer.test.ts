@@ -4,7 +4,7 @@ import { ContextService } from '../../src/context/port.js';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
-import type { SessionEvent, ToolResultEvent } from '../../src/session/types.js';
+import type { SessionEvent, ToolResultEvent } from '../../src/contracts/session.js';
 import { ContextLayer } from '../../src/context/context.js';
 
 const baseConfig = {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isTurnEnd } from '../../src/core/frame.js';
-import type { Frame, FrameBody } from '../../src/core/frame.js';
+import { isTurnEnd } from '../../src/contracts/frame.js';
+import type { Frame, FrameBody } from '../../src/contracts/frame.js';
 
 const turnId = 1;
 

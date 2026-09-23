@@ -1,8 +1,9 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { FrameBody } from '../core/frame.js';
-import type { ProfileName } from '../core/types.js';
-import type { PermissionMode } from '../approval/types.js';
+import type { FrameBody } from '../contracts/frame.js';
+import type { ProfileName } from '../contracts/types.js';
+import type { PermissionMode } from '../contracts/permission.js';
+import type { AgentError } from '../core/error.js';
 
 export interface RunTurnOptions {
   sessionId?: string;
@@ -17,10 +18,22 @@ export interface AgentShape {
   runTurn(
     input: string,
     opts: RunTurnOptions
-  ): Effect.Effect<{
-    stream: AsyncGenerator<FrameBody>;
-    sessionId: string;
-  }>;
+  ): Effect.Effect<
+    {
+      stream: AsyncGenerator<FrameBody>;
+      sessionId: string;
+    },
+    AgentError
+  >;
 }
 
 export class AgentService extends Context.Tag('AgentService')<AgentService, AgentShape>() {}
+
+// agent 自持的装配端口：工具执行期注入能力，不离开 agent/
+export interface ToolEnv {
+  provide<R, E, A>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, never>;
+}
+
+export class ToolEnvPort extends Context.Tag('AgentToolEnvPort')<ToolEnvPort, {
+  getToolEnv(): Effect.Effect<ToolEnv>;
+}>() {}

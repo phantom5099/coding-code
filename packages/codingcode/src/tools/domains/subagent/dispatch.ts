@@ -46,7 +46,7 @@ export const dispatchAgentTool: ToolDefinition<
       const { stream, sessionId: childUuid } = yield* runner.runSubagent(prompt, {
         cwd: projectPath,
         signal: ctx?.signal,
-        activeProfile: profile.name as any,
+        activeProfile: profile.name,
         parentSessionId: ctx?.sessionId,
         agentName,
       });

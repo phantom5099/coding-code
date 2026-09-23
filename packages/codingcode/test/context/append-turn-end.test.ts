@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { estimateTokensForContent } from '../../src/core/util.js';
+import { estimateTokensForContent } from '../../src/context/tokens.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 vi.mock('@codingcode/infra/config', () => ({

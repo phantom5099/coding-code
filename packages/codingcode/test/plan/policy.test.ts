@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAN_ALLOWED_TOOLS } from '../../src/approval/types.js';
+import { PLAN_ALLOWED_TOOLS } from '../../src/contracts/permission.js';
 
 describe('PLAN_ALLOWED_TOOLS', () => {
   it('contains only read tools and submit_plan', () => {

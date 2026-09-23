@@ -1,5 +1,5 @@
 import type { AgentRuntimeClient } from '../contracts.js';
-import { decodeFrame } from '../../core/frame-io.js';
+import { decodeFrame } from '../../contracts/frame-io.js';
 import { parseSseStream } from '../sse.js';
 import type { createRequestHelpers } from './request.js';
 

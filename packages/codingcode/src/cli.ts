@@ -4,7 +4,7 @@ import { LLMFactoryService } from './llm/port.js';
 import { createServer } from './server/index.js';
 import { createAppRuntime } from './layer.js';
 import { loadConfig, ensureUserConfig } from '@codingcode/infra/config';
-import { WorkspaceService, parseWorkspaceArgs } from './core/workspace.js';
+import { WorkspaceService, parseWorkspaceArgs } from './workspace/workspace.js';
 import { findAvailablePort } from './server/port-discovery.js';
 import { AgentError } from './core/error.js';
 import { SchedulerService } from './scheduler/port.js';

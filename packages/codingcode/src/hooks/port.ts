@@ -1,6 +1,7 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { HookPoint, HookDecision, ObserverHandler, DecisionHandler } from './types.js';
+import type { HookPoint, HookDecision } from '../contracts/hooks.js';
+import type { ObserverHandler, DecisionHandler } from './types.js';
 
 export interface HookShape {
   register(point: HookPoint, handler: ObserverHandler, opts?: { source?: 'system' | 'user' }): Effect.Effect<() => void>;

@@ -2,8 +2,8 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { Layer, Effect } from 'effect';
 import { AgentError } from '../core/error.js';
-import { WorkspaceService } from '../core/workspace.js';
-import type { LLMClient } from './client.js';
+import { WorkspaceService } from '../workspace/workspace.js';
+import type { LLMClient, SelectableModel } from '../contracts/provider.js';
 import { OpenAIProvider } from './providers/openai.js';
 import { DeepSeekProvider } from './providers/deepseek.js';
 import { updateActiveModel } from '@codingcode/infra/config';
@@ -28,15 +28,8 @@ interface ProviderCatalog {
   providers: ProviderEntry[];
 }
 
-export interface SelectableModel {
-  id: string;
-  provider: string;
-  driver: string;
-  name: string;
-  model: string;
-  base_url: string;
-  api_key_env: string;
-  context_window: number;
+interface ProviderCatalog {
+  providers: ProviderEntry[];
 }
 
 function flattenModels(cat: ProviderCatalog): SelectableModel[] {

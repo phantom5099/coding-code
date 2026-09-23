@@ -2,9 +2,8 @@ import { Effect } from 'effect';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../session/port.js';
-import type { SessionStorePort } from '../session/port.js';
 import { encodeProjectPath, getProjectBaseDir } from '../core/path.js';
-import type { PermissionMode } from '../approval/types.js';
+import type { PermissionMode } from '../contracts/permission.js';
 import { AVAILABLE_PROFILES } from '../agent/profile.js';
 import type { SessionClient } from '../client/contracts.js';
 import type { AppRuntime } from '../layer.js';
@@ -14,7 +13,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async createSession({ cwd, activeProfile, permissionMode, model }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           const state = yield* session.create(cwd, {
             model,
             activeProfile,
@@ -28,7 +27,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async resumeSession({ sessionId, cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           return yield* session.readUITurns(sessionId, cwd);
         })
       );
@@ -37,7 +36,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async listSessions({ cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           return yield* session.listSessions(cwd);
         })
       );
@@ -46,7 +45,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async getSessionHistory({ sessionId, cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           return yield* session.readUITurns(sessionId, cwd);
         })
       );
@@ -55,7 +54,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async deleteSession({ sessionId, cwd }) {
       await rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           yield* session.deleteSession(sessionId, cwd);
         })
       );
@@ -64,7 +63,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async getSessionProfile({ sessionId, cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           const state = yield* session.load(cwd, sessionId);
           return {
             activeProfile: state.activeProfile,
@@ -79,7 +78,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async setSessionProfile({ sessionId, cwd, activeProfile }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           yield* session.setActiveProfile(cwd, sessionId, activeProfile);
           const state = yield* session.load(cwd, sessionId);
           return { activeProfile: state.activeProfile, permissionMode: state.permissionMode };
@@ -90,7 +89,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async getSessionPermissionMode({ sessionId, cwd }): Promise<PermissionMode> {
       const mode = await rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           const state = yield* session.load(cwd, sessionId);
           return state.permissionMode;
         })
@@ -101,7 +100,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async setSessionPermissionMode({ sessionId, cwd, mode }) {
       return rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           yield* session.setPermissionMode(cwd, sessionId, mode);
         })
       );
@@ -167,7 +166,7 @@ export function createDirectSessionClient(rt: AppRuntime): SessionClient {
     async forkSession({ sessionId, cwd, atTurnId }) {
       const newSessionId = await rt.runPromise(
         Effect.gen(function* () {
-          const session: SessionStorePort = yield* SessionService;
+          const session = yield* SessionService;
           const state = yield* session.load(cwd, sessionId);
           return yield* session.forkSession(state, atTurnId ?? 0);
         })

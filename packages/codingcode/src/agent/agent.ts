@@ -1,24 +1,37 @@
 import { Effect, Either, Queue, Stream, Fiber, Layer } from 'effect';
 import { AgentError } from '../core/error.js';
 import { Result } from '../core/result.js';
-import { AgentService } from './port.js';
-import type { RunTurnOptions } from './port.js';
-import {
-  SessionPort, ToolExecutorPort, CheckpointPort, HookPort,
-  ApprovalPort, SkillPort, McpPort, ContextPort, MemoryPort,
-  LlmPort, RulesPort, TodoPort, ToolEnvPort, ToolCatalogPort,
-} from './deps.js';
-import type { ToolEnv, ToolCatalog } from './deps.js';
+import { AgentService, ToolEnvPort } from './port.js';
+import type { RunTurnOptions, ToolEnv } from './port.js';
+import { ApprovalService } from '../approval/port.js';
+import { CheckpointService } from '../checkpoint/port.js';
+import { ContextService } from '../context/port.js';
+import { HookService } from '../hooks/port.js';
+import { LLMFactoryService } from '../llm/port.js';
+import { McpService } from '../mcp/port.js';
+import { MemoryService } from '../memory/port.js';
+import { RulesService } from '../rules/port.js';
+import { SessionService } from '../session/port.js';
+import { SkillService } from '../skills/port.js';
+import { TodoService } from '../todo/port.js';
+import { ToolExecutorService } from '../tools/port.js';
 import { buildSystemPrompt } from './prompt.js';
-import type { FrameBody, FrameError, ResponseMeta, Transition, ToolOutcome } from '../core/frame.js';
-import { isTurnEnd } from '../core/frame.js';
-import type { ToolCall } from '../core/types.js';
+import type { FrameBody, FrameError, ResponseMeta, ToolOutcome, Transition } from '../contracts/frame.js';
+import { isTurnEnd } from '../contracts/frame.js';
+import type { ToolCatalog, ToolResult } from '../contracts/tool.js';
+import type { ToolCall } from '../contracts/types.js';
 import { loadConfig } from '@codingcode/infra/config';
 import { createLogger } from '@codingcode/infra/logger';
 import { normalizePath, computePaths } from '../core/path.js';
 import { resolveProfile, getToolNames } from './profile.js';
+
+function toolOutcomeOf(result: ToolResult): ToolOutcome {
+  return result.status === 'denied'
+    ? { status: 'denied', reason: result.reason }
+    : { status: result.status, output: result.output };
+}
 import type { AgentProfile } from './profile.js';
-import type { PermissionMode } from '../approval/types.js';
+import type { PermissionMode } from '../contracts/permission.js';
 
 const logger = createLogger();
 
@@ -27,20 +40,19 @@ function toFrameError(e: AgentError): FrameError {
 }
 
 export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
-  const session = yield* SessionPort;
-  const executor = yield* ToolExecutorPort;
-  const checkpoint = yield* CheckpointPort;
-  const hooks = yield* HookPort;
-  const approval = yield* ApprovalPort;
-  const skills = yield* SkillPort;
-  const mcp = yield* McpPort;
-  const context = yield* ContextPort;
-  const memory = yield* MemoryPort;
-  const llmFactory = yield* LlmPort;
-  const rules = yield* RulesPort;
-  const todo = yield* TodoPort;
+  const session = yield* SessionService;
+  const executor = yield* ToolExecutorService;
+  const checkpoint = yield* CheckpointService;
+  const hooks = yield* HookService;
+  const approval = yield* ApprovalService;
+  const skills = yield* SkillService;
+  const mcp = yield* McpService;
+  const context = yield* ContextService;
+  const memory = yield* MemoryService;
+  const llmFactory = yield* LLMFactoryService;
+  const rules = yield* RulesService;
+  const todo = yield* TodoService;
   const toolEnvPort = yield* ToolEnvPort;
-  const toolCatalog = yield* ToolCatalogPort;
   const cfg = loadConfig();
   const maxSteps = cfg.maxSteps ?? 250;
   const maxStopContinuations = cfg.maxStopContinuations ?? 3;
@@ -50,6 +62,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       const normalizedCwd = normalizePath(opts.cwd);
 
       rules.evictProjectRules(normalizedCwd);
+      yield* hooks.reloadUserHooks(normalizedCwd).pipe(Effect.catchAll(() => Effect.void));
       yield* hooks.emit('agent.turn.start', { sessionId: '' }).pipe(Effect.catchAll(() => Effect.void));
       yield* mcp.syncConnections(normalizedCwd).pipe(Effect.catchAll(() => Effect.void));
 
@@ -86,19 +99,17 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
       const profile: AgentProfile | undefined = profileName ? resolveProfile(profileName) : undefined;
 
-      // get MCP tools
-      const mcpTools = mcp.listProjectMcpTools(normalizedCwd);
-
-      const catalog = toolCatalog.register(getToolNames(profile), mcpTools);
+      const mcpTools = yield* mcp.listProjectMcpTools(normalizedCwd);
+      const catalog = yield* executor.prepare(getToolNames(profile), mcpTools);
 
       const toolEnv = yield* toolEnvPort.getToolEnv();
 
       // record user (increments turn) + extract skill
       const [, actualInput] = yield* skills.extractSkill(state.cwd, input);
-      const userEvent = yield* session.recordUser(state, actualInput);
+      const turnId = (yield* session.recordUser(state, actualInput)).turnId;
 
       // checkpoint baseline
-      yield* checkpoint.snapshotBaseline(state.cwd, sessionId, userEvent.turnId);
+      yield* checkpoint.snapshotBaseline(state.cwd, sessionId, turnId);
 
       // get rules text
       const rulesText = rules.getAllRules(state.cwd);
@@ -124,26 +135,14 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   }): AsyncGenerator<FrameBody> {
     const q = Effect.runSync(Queue.unbounded<FrameBody>());
 
-    const program: any = Effect.scoped(
+    // agentLoopInternal 只经闭包引用服务，不消费任何 Tag；工具执行所需的服务由 toolEnv 注入
+    const program = Effect.scoped(
       Effect.gen(function* () {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => { hooks.disposeSession(opts.sid); })
         );
         return yield* agentLoopInternal(opts, q);
-      }).pipe(
-        Effect.provideService(SessionPort, session),
-        Effect.provideService(ToolExecutorPort, executor),
-        Effect.provideService(CheckpointPort, checkpoint),
-        Effect.provideService(HookPort, hooks),
-        Effect.provideService(ApprovalPort, approval),
-        Effect.provideService(SkillPort, skills),
-        Effect.provideService(McpPort, mcp),
-        Effect.provideService(ContextPort, context),
-        Effect.provideService(MemoryPort, memory),
-        Effect.provideService(LlmPort, llmFactory),
-        Effect.provideService(RulesPort, rules),
-        Effect.provideService(TodoPort, todo),
-      )
+      })
     );
 
     return (async function* () {
@@ -170,7 +169,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     catalog: ToolCatalog;
     rulesText: string;
     sid: string; projectPath: string; permissionMode: PermissionMode;
-  }, q: Queue.Queue<FrameBody>): any {
+  }, q: Queue.Queue<FrameBody>): Effect.Effect<Result<string, AgentError>, AgentError> {
     const { state, llm, profile, abortSignal, catalog, rulesText, sid, projectPath, permissionMode } = opts;
     const { tools, lookup: toolLookup } = catalog;
 
@@ -313,7 +312,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
             profile: profile?.name,
           });
           if (decision.type === 'deny') {
-            deniedResults.push({ type: 'denied', id: tc.id, name: tc.name, reason: decision.reason });
+            deniedResults.push({ status: 'denied', id: tc.id, name: tc.name, reason: decision.reason });
           } else {
             approvedCalls.push(tc);
           }
@@ -329,14 +328,10 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
         let todoPrinted = false;
         for (const r of allResults) {
-          const resultOut = r.type === 'denied' ? '' : r.output;
+          const resultOut = r.status === 'denied' ? '' : r.output;
           yield* session.recordToolResult(state, r.name, r.id, resultOut);
-          const outcome: ToolOutcome = r.type === 'denied'
-            ? { status: 'denied', reason: r.reason }
-            : r.type === 'ok'
-              ? { status: 'ok', output: resultOut }
-              : { status: 'error', output: resultOut };
-          const todos = !todoPrinted && r.type === 'ok' && r.name === 'todo_write'
+          const outcome = toolOutcomeOf(r);
+          const todos = !todoPrinted && r.status === 'ok' && r.name === 'todo_write'
             ? todo.read(sid)
             : undefined;
           if (todos) todoPrinted = true;
@@ -382,4 +377,4 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   }
 
   return { runTurn };
-} as any));
+}));

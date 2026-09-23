@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { AgentService } from '../../agent/port.js';
-import { WorkspaceService } from '../../core/workspace.js';
+import { WorkspaceService } from '../../workspace/workspace.js';
 import { errorResponse } from '../util.js';
 import { createSseHandler } from '../handler.js';
 

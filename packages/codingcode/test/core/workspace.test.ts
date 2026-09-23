@@ -4,7 +4,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import { WorkspaceService, parseWorkspaceArgs } from '../../src/core/workspace.js';
+import { WorkspaceService, parseWorkspaceArgs } from '../../src/workspace/workspace.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 
 describe('core/workspace', () => {

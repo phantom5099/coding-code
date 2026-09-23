@@ -9,7 +9,7 @@ import {
   updateMcpServer,
   deleteMcpServer,
 } from '../lib/core-api';
-import type { McpServerConfig } from '@codingcode/core/mcp/types';
+import type { McpServerConfig } from '@codingcode/core/contracts/mcp';
 
 interface McpEntry {
   name: string;

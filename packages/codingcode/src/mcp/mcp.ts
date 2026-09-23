@@ -1,10 +1,8 @@
 import { Effect, Layer } from 'effect';
-import { z } from 'zod';
 import { resolveMcpConfig, resolveMcpDisabled } from './config.js';
 import { McpClient } from './client.js';
 import { McpService } from './port.js';
-import type { McpServerConfig, McpStatus } from './types.js';
-import type { ToolDefinition } from '../tools/types.js';
+import type { McpServerConfig, McpStatus, McpToolSpec } from '../contracts/mcp.js';
 import { createLogger } from '@codingcode/infra/logger';
 import { AgentError } from '../core/error.js';
 
@@ -242,21 +240,22 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
         return entry ? [...entry.toolNames] : [];
       },
 
-      listProjectMcpTools: (projectPath: string): ToolDefinition[] => {
-        const projectClients = clientsByProject.get(projectPath);
-        if (!projectClients) return [];
-        const tools: ToolDefinition[] = [];
-        for (const [serverName, entry] of projectClients) {
-          for (const raw of entry.rawTools) {
-            tools.push(
-              mcpToolToDefinition(serverName, raw, entry.client, () =>
-                isDisabled(projectPath, serverName)
-              )
-            );
+      listProjectMcpTools: (projectPath: string): Effect.Effect<McpToolSpec[]> =>
+        Effect.sync(() => {
+          const projectClients = clientsByProject.get(projectPath);
+          if (!projectClients) return [];
+          const specs: McpToolSpec[] = [];
+          for (const [serverName, entry] of projectClients) {
+            for (const raw of entry.rawTools) {
+              specs.push(
+                mcpToolToSpec(serverName, raw, entry.client, () =>
+                  isDisabled(projectPath, serverName)
+                )
+              );
+            }
           }
-        }
-        return tools;
-      },
+          return specs;
+        }),
 
       status: (projectPath: string): Effect.Effect<McpStatus[]> =>
         Effect.sync(() => {
@@ -325,16 +324,17 @@ function namespacedName(serverName: string, toolName: string): string {
   return `${serverName}:${toolName}`;
 }
 
-function mcpToolToDefinition(
+function mcpToolToSpec(
   serverName: string,
   mcpTool: { name: string; description: string; inputSchema: Record<string, unknown> },
   client: McpClient,
   isDisabledFn: () => boolean
-): ToolDefinition {
+): McpToolSpec {
   return {
-    name: `${serverName}:${mcpTool.name}`,
-    description: `[MCP:${serverName}] ${mcpTool.description || mcpTool.name}`,
-    parameters: z.fromJSONSchema(mcpTool.inputSchema),
+    server: serverName,
+    name: mcpTool.name,
+    description: mcpTool.description,
+    inputSchema: mcpTool.inputSchema,
     execute: (args) => {
       if (isDisabledFn())
         return Effect.fail(

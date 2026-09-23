@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Eye, Hammer, Loader2 } from 'lucide-react';
 import { useAgentProfile } from '../hooks/useAgent';
 import { useAgentStore } from '../stores/agent.store';
-import type { ProfileName } from '@codingcode/core/core/types';
+import type { ProfileName } from '@codingcode/core/contracts/types';
 
 interface ProfileIndicatorProps {
   sessionId: string | null;
