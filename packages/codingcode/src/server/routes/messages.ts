@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { AgentService } from '../../agent/port.js';
-import { WorkspaceService } from '../../workspace/workspace.js';
+import { resolveCwd } from '../../core/path.js';
 import { errorResponse } from '../util.js';
 import { createSseHandler } from '../handler.js';
 
@@ -13,12 +13,7 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/messages', async (c) => {
     let sessionId = c.req.param('id');
     const { input, cwd } = await c.req.json<{ input: string; cwd: string }>();
-    const normalizedCwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(cwd);
-      })
-    );
+    const normalizedCwd = resolveCwd(cwd);
 
     const isNew = sessionId === '_' || !sessionId;
     const runOpts: any = {

@@ -11,7 +11,6 @@ import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { AgentService } from '../../src/agent/port.js';
-import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
@@ -39,10 +38,6 @@ const mockApprovalWaitService = {
   hasEmitter: () => Effect.succeed(false),
 };
 
-const mockWorkspace = {
-  resolveWorkspaceCwd: (cwd: string | undefined) => cwd || '/tmp',
-} as any;
-
 // The message-send path now lives in AgentService.runTurn. A real runTurn loads
 // the persisted session (which reads permissionMode from the on-disk index)
 // before streaming. We mirror that seam here so the test keeps validating that
@@ -66,7 +61,6 @@ function makeLayer() {
   return Layer.mergeAll(
     Layer.succeed(HookService, mockHookService),
     Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any),
-    Layer.succeed(WorkspaceService, mockWorkspace),
     Layer.succeed(AgentService, mockAgentService),
     SessionLayer
   );

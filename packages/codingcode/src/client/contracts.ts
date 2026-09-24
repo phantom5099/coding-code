@@ -138,7 +138,7 @@ export interface SettingsClient {
   createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
   updateMcpServer(input: { cwd: string; name: string; server: McpServerConfig }): Promise<void>;
   deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
-  listSkills(): Promise<Array<{ name: string; description: string; skillPath: string }>>;
+  listSkills(input: { cwd: string }): Promise<Array<{ name: string; description: string; skillPath: string }>>;
   listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
   createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
   updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;

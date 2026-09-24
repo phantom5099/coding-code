@@ -8,7 +8,6 @@ import { createDirectSettingsClient } from '../../src/direct/settings.js';
 import type { AppRuntime } from '../../src/layer.js';
 import type { LLMClient } from '../../src/contracts/provider.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
 import { AgentError } from '../../src/core/error.js';
 import { ApprovalWaitLayer } from '../../src/approval/wait.js';
@@ -25,10 +24,6 @@ type _RtParamNotAny = AssertNotAny<_AgentParams[1]>;
 type _SessionParams = Parameters<typeof createDirectSessionClient>;
 type _SessionRtNotAny = AssertNotAny<_SessionParams[0]>;
 
-const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
-  getWorkspaceCwd: () => '/tmp/test',
-} as any);
-
 const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
   getLLMClient: () => Effect.succeed(null),
   listModels: () => Effect.succeed([]),
@@ -40,7 +35,6 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
 
 const TestLayer = Layer.mergeAll(
   ApprovalWaitLayer,
-  MockWorkspaceLayer,
   MockLLMFactoryLayer
 );
 

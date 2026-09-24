@@ -1,5 +1,11 @@
+import { mkdirSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
+
+/** 空值 / `'global'` 表示操作全局（home）配置，而非某个项目。 */
+export function isGlobalCwd(cwd: string | undefined): boolean {
+  return !cwd || cwd === '' || cwd === 'global';
+}
 
 export function normalizePath(p: string): string {
   let s = p.replaceAll('\\', '/');
@@ -24,6 +30,20 @@ export function setProjectBaseDir(dir: string | undefined): void {
 
 export function getProjectBaseDir(): string {
   return _projectBaseOverride ?? join(homedir(), '.codingcode', 'project');
+}
+
+/** 无 cwd 的请求共用的工作目录。 */
+export function getTempCwd(): string {
+  return join(homedir(), '.codingcode', 'temp');
+}
+
+export function ensureTempCwd(): void {
+  mkdirSync(getTempCwd(), { recursive: true });
+}
+
+/** 请求级 cwd：请求没带 cwd 时落到共用的临时工作目录。 */
+export function resolveCwd(cwd?: string): string {
+  return cwd ? resolve(cwd) : getTempCwd();
 }
 
 export interface SessionPaths {

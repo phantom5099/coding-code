@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Effect, Layer } from 'effect';
-import { tmpdir } from 'os';
+import { Effect } from 'effect';
 
 const mockCatalog = {
   providers: [
@@ -30,19 +29,15 @@ function mockFs() {
   });
 }
 
-function makeWorkspaceLayer(
-  WorkspaceService: any,
-  activeModel: { model: string; apiKeyEnv: string } | undefined
+/** llm.ts 的 activeModel 来自 loadConfig()，与 updateActiveModel 同模块，一并桩掉。 */
+function mockActiveModel(
+  activeModel: { model: string; apiKeyEnv: string } | undefined,
+  extra: Record<string, unknown> = {}
 ) {
-  return Layer.succeed(WorkspaceService, {
-    init: () => {},
-    getProcessRoot: () => tmpdir(),
-    getWorkspaceCwd: () => tmpdir(),
-    resolveWorkspaceCwd: (override?: string) => override ?? tmpdir(),
-    getWorkspacePath: () => 'test',
-    resolveInWorkspace: (path: string) => path,
-    getConfig: () => ({ activeModel }) as any,
-  } as any);
+  vi.doMock('@codingcode/infra/config', async (importOriginal: any) => {
+    const orig = await importOriginal();
+    return { ...orig, loadConfig: () => ({ activeModel }), ...extra };
+  });
 }
 
 describe('switchModel - persists to config', () => {
@@ -52,26 +47,17 @@ describe('switchModel - persists to config', () => {
 
   it('calls updateActiveModel with model and api_key_env after switching', async () => {
     const updateActiveModel = vi.fn();
-    vi.doMock('@codingcode/infra/config', async (importOriginal: any) => {
-      const orig = await importOriginal();
-      return { ...orig, updateActiveModel };
-    });
+    mockActiveModel({ model: 'model-x', apiKeyEnv: 'API_KEY_A' }, { updateActiveModel });
     mockFs();
 
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
-      model: 'model-x',
-      apiKeyEnv: 'API_KEY_A',
-    });
     const { LlmLayer } = await import('../../src/llm/llm.js');
-    const factoryLayer = LlmLayer.pipe(Layer.provide(workspaceLayer));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.switchModel('model-y@API_KEY_A');
-      }).pipe(Effect.provide(factoryLayer), Effect.either)
+      }).pipe(Effect.provide(LlmLayer), Effect.either)
     );
     expect(result._tag).toBe('Right');
     if (result._tag === 'Right') {
@@ -82,26 +68,17 @@ describe('switchModel - persists to config', () => {
 
   it('does not call updateActiveModel when model id is not found', async () => {
     const updateActiveModel = vi.fn();
-    vi.doMock('@codingcode/infra/config', async (importOriginal: any) => {
-      const orig = await importOriginal();
-      return { ...orig, updateActiveModel };
-    });
+    mockActiveModel({ model: 'model-x', apiKeyEnv: 'API_KEY_A' }, { updateActiveModel });
     mockFs();
 
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
-      model: 'model-x',
-      apiKeyEnv: 'API_KEY_A',
-    });
     const { LlmLayer } = await import('../../src/llm/llm.js');
-    const factoryLayer = LlmLayer.pipe(Layer.provide(workspaceLayer));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.switchModel('nonexistent@API_KEY_A');
-      }).pipe(Effect.provide(factoryLayer), Effect.either)
+      }).pipe(Effect.provide(LlmLayer), Effect.either)
     );
     expect(result._tag).toBe('Left');
     if (result._tag === 'Left') {
@@ -119,20 +96,16 @@ describe('getActiveEntry - activeModel priority', () => {
   it('uses activeModel from config when it matches a catalog entry', async () => {
     mockFs();
 
+    mockActiveModel({ model: 'model-y', apiKeyEnv: 'API_KEY_A' });
+
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
-      model: 'model-y',
-      apiKeyEnv: 'API_KEY_A',
-    });
     const { LlmLayer } = await import('../../src/llm/llm.js');
-    const factoryLayer = LlmLayer.pipe(Layer.provide(workspaceLayer));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either)
+      }).pipe(Effect.provide(LlmLayer), Effect.either)
     );
     expect(result._tag).toBe('Right');
     if (result._tag === 'Right') {
@@ -141,17 +114,16 @@ describe('getActiveEntry - activeModel priority', () => {
   });
 
   it('returns error when activeModel is not set in config', async () => {
+    mockActiveModel(undefined);
+
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, undefined);
     const { LlmLayer } = await import('../../src/llm/llm.js');
-    const factoryLayer = LlmLayer.pipe(Layer.provide(workspaceLayer));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either)
+      }).pipe(Effect.provide(LlmLayer), Effect.either)
     );
     expect(result._tag).toBe('Left');
     if (result._tag === 'Left') {
@@ -163,20 +135,16 @@ describe('getActiveEntry - activeModel priority', () => {
   it('returns error when activeModel does not match any catalog entry', async () => {
     mockFs();
 
+    mockActiveModel({ model: 'nonexistent', apiKeyEnv: 'UNKNOWN_KEY' });
+
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
-      model: 'nonexistent',
-      apiKeyEnv: 'UNKNOWN_KEY',
-    });
     const { LlmLayer } = await import('../../src/llm/llm.js');
-    const factoryLayer = LlmLayer.pipe(Layer.provide(workspaceLayer));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either)
+      }).pipe(Effect.provide(LlmLayer), Effect.either)
     );
     expect(result._tag).toBe('Left');
     if (result._tag === 'Left') {
@@ -194,20 +162,16 @@ describe('createClient - API key validation', () => {
   it('returns CONFIG_MISSING when API key env is not set', async () => {
     mockFs();
 
+    mockActiveModel({ model: 'model-x', apiKeyEnv: 'API_KEY_A' });
+
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
-      model: 'model-x',
-      apiKeyEnv: 'API_KEY_A',
-    });
     const { LlmLayer } = await import('../../src/llm/llm.js');
-    const factoryLayer = LlmLayer.pipe(Layer.provide(workspaceLayer));
 
     const entryResult = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either)
+      }).pipe(Effect.provide(LlmLayer), Effect.either)
     );
     expect(entryResult._tag).toBe('Right');
     if (entryResult._tag === 'Left') return;
@@ -219,7 +183,7 @@ describe('createClient - API key validation', () => {
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.createClient(entryResult.right);
-      }).pipe(Effect.provide(factoryLayer), Effect.either)
+      }).pipe(Effect.provide(LlmLayer), Effect.either)
     );
     expect(result._tag).toBe('Left');
     if (result._tag === 'Left') {
@@ -231,20 +195,16 @@ describe('createClient - API key validation', () => {
   it('succeeds when OPENAI_API_KEY fallback is set', async () => {
     mockFs();
 
+    mockActiveModel({ model: 'model-x', apiKeyEnv: 'API_KEY_A' });
+
     const { LLMFactoryService } = await import('../../src/llm/port.js');
-    const { WorkspaceService } = await import('../../src/workspace/workspace.js');
-    const workspaceLayer = makeWorkspaceLayer(WorkspaceService, {
-      model: 'model-x',
-      apiKeyEnv: 'API_KEY_A',
-    });
     const { LlmLayer } = await import('../../src/llm/llm.js');
-    const factoryLayer = LlmLayer.pipe(Layer.provide(workspaceLayer));
 
     const entryResult = await Effect.runPromise(
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.getActiveEntry();
-      }).pipe(Effect.provide(factoryLayer), Effect.either)
+      }).pipe(Effect.provide(LlmLayer), Effect.either)
     );
     expect(entryResult._tag).toBe('Right');
     if (entryResult._tag === 'Left') return;
@@ -256,7 +216,7 @@ describe('createClient - API key validation', () => {
       Effect.gen(function* () {
         const factory = yield* LLMFactoryService;
         return yield* factory.createClient(entryResult.right);
-      }).pipe(Effect.provide(factoryLayer), Effect.either)
+      }).pipe(Effect.provide(LlmLayer), Effect.either)
     );
     expect(result._tag).toBe('Right');
   });

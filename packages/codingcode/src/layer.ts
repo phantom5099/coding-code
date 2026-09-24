@@ -16,25 +16,23 @@ import { AgentLayer } from './agent/agent.js';
 import { ToolEnvLayer } from './agent/tool-env.js';
 import { SubagentRunnerLayer } from './subagent/subagent.js';
 import { SchedulerLayer } from './scheduler/scheduler.js';
-import { WorkspaceService } from './workspace/workspace.js';
 
 // base layers
 const InfraLayer = Layer.mergeAll(
-  WorkspaceService.Default, HookLayer, RulesLayer, SkillLayer, McpLayer, ApprovalWaitLayer, TodoLayer,
+  HookLayer, RulesLayer, SkillLayer, McpLayer, ApprovalWaitLayer, TodoLayer,
 );
 
-const LlmWithDeps = LlmLayer.pipe(Layer.provide(WorkspaceService.Default));
 const ApprovalWithDeps = ApprovalLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer)));
 const ToolExecutorWithDeps = ToolExecutorLayer.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWithDeps))
 );
-const ContextWithDeps = ContextLayer.pipe(Layer.provide(Layer.mergeAll(SessionLayer, LlmWithDeps)));
-const MemoryWithDeps = MemoryLayer.pipe(Layer.provide(LlmWithDeps));
+const ContextWithDeps = ContextLayer.pipe(Layer.provide(Layer.mergeAll(SessionLayer, LlmLayer)));
+const MemoryWithDeps = MemoryLayer.pipe(Layer.provide(LlmLayer));
 
 // agent 直接消费的宽服务集合
 const AgentServiceLayers = Layer.mergeAll(
   InfraLayer, SessionLayer, ToolExecutorWithDeps, ApprovalWithDeps,
-  ContextWithDeps, MemoryWithDeps, CheckpointLayer, LlmWithDeps,
+  ContextWithDeps, MemoryWithDeps, CheckpointLayer, LlmLayer,
 );
 
 // agent with deps
@@ -47,7 +45,7 @@ const SubagentWithDeps = SubagentRunnerLayer.pipe(Layer.provide(AgentWithDeps));
 
 export const AppLayer = Layer.mergeAll(
   InfraLayer,
-  LlmWithDeps,
+  LlmLayer,
   ApprovalWithDeps,
   SessionLayer,
   ToolExecutorWithDeps,

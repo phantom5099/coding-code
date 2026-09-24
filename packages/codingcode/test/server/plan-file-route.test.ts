@@ -4,10 +4,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { mkdirSync, writeFileSync, utimesSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { Hono } from 'hono';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
-import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { SessionService } from '../../src/session/port.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
@@ -19,17 +18,12 @@ import { MemoryService } from '../../src/memory/port.js';
 import { SchedulerService } from '../../src/scheduler/port.js';
 import { ContextService } from '../../src/context/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
-import { setProjectBaseDir } from '../../src/core/path.js';
+import { encodeProjectPath, setProjectBaseDir } from '../../src/core/path.js';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { HookLayer } from '../../src/hooks/hooks.js';
 import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
-
-const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
-  getWorkspaceCwd: () => '/tmp/test',
-  resolveWorkspaceCwd: (override?: string) => override ?? '/tmp/test',
-} as any);
 
 const MockSessionLayer = Layer.succeed(SessionService, {
   create: () =>
@@ -164,7 +158,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
 } as any);
 
 const TestLayer = Layer.mergeAll(
-  MockWorkspaceLayer,
   MockSessionLayer,
   MockLLMFactoryLayer,
   MockApprovalLayer,
@@ -183,9 +176,9 @@ let plansDir = '';
 
 beforeEach(() => {
   tempBase = mkdtempSync(join(tmpdir(), 'codingcode-plan-route-'));
-  // The route reads getProjectBaseDir() + encodeProjectPath(cwd).
-  // encodeProjectPath('/tmp/test') -> 'tmp-test'.
-  plansDir = join(tempBase, 'tmp-test');
+  // The route resolves the query cwd to an absolute path first
+  // (core/path.resolveCwd -> path.resolve), then encodes it.
+  plansDir = join(tempBase, encodeProjectPath(resolve('/tmp/test')));
   mkdirSync(plansDir, { recursive: true });
   setProjectBaseDir(tempBase);
 });

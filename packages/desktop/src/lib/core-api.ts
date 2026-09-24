@@ -178,7 +178,7 @@ export function deleteMcpServer(cwd: string | undefined, name: string): Promise<
 
 // ---- Settings: Skills ----
 
-export function listSkills(_cwd?: string): Promise<
+export function listSkills(cwd?: string): Promise<
   Array<{
     name: string;
     description: string;
@@ -187,7 +187,7 @@ export function listSkills(_cwd?: string): Promise<
     hasProjectOverride?: boolean;
   }>
 > {
-  return clients.settings.listSkills();
+  return clients.settings.listSkills({ cwd: cwd ?? '' });
 }
 
 // ---- Settings: Hooks ----

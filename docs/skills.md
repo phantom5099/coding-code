@@ -74,10 +74,10 @@ Agent 判断技能相关后，使用 `read_file` 读取 `skillPath`，再按需�
 通过 `AgentClient` SDK 读取技能元数据：
 
 ```typescript
-const client = await createHttpClient('http://localhost:8080');
+const clients = createHttpClients('http://localhost:8080');
 
-// 列出所有技能
-const skills = await client.listSkills();
+// 列出技能：cwd 为项目路径，空串走全局分支
+const skills = await clients.settings.listSkills({ cwd: '/path/to/project' });
 // 返回：Array<{ name: string, description: string, skillPath: string }>
 ```
 
@@ -85,4 +85,4 @@ const skills = await client.listSkills();
 
 | 路由 | 方法 | 说明 |
 |------|------|------|
-| `/api/settings/skills` | GET | 列出所有技能元数据 |
+| `/api/settings/skills` | GET | 列出技能元数据；`?cwd=` 指定项目，缺省只返回全局技能 |

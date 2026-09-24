@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
-import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { SessionService } from '../../src/session/port.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
@@ -16,11 +15,6 @@ import { CheckpointService } from '../../src/checkpoint/port.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
 import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
-
-const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
-  getWorkspaceCwd: () => '/tmp/test',
-  resolveWorkspaceCwd: (override?: string) => override ?? '/tmp/test',
-} as any);
 
 const MockSessionLayer = Layer.succeed(SessionService, {
   create: () => Effect.succeed({ sessionId: 'test', cwd: '/tmp/test' }),
@@ -106,7 +100,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
 } as any);
 
 const TestLayer = Layer.mergeAll(
-  MockWorkspaceLayer,
   MockSessionLayer,
   MockLLMFactoryLayer,
   MockApprovalLayer,
