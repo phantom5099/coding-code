@@ -414,7 +414,7 @@ export function App({ client }: AppProps) {
             panel.servers.length === 0
               ? [{ label: '无已配置的 MCP 服务器', value: '' }]
               : panel.servers.map((s) => ({
-                  label: `${s.disabled ? '○' : '●'} ${s.name}  (${s.disabled ? '已禁用' : `已连接, ${s.toolCount} 个工具`})`,
+                  label: `${!s.enabled ? '○' : '●'} ${s.name}  (${!s.enabled ? '已禁用' : `已连接, ${s.toolCount} 个工具`})`,
                   value: s.name,
                 }))
           }
@@ -423,11 +423,7 @@ export function App({ client }: AppProps) {
             const server = panel.servers.find((s) => s.name === value);
             if (!server) return;
             try {
-              if (server.disabled) {
-                await client.setMcpDisabled({ name: value, disabled: false, cwd: '' });
-              } else {
-                await client.setMcpDisabled({ name: value, disabled: true, cwd: '' });
-              }
+              await client.setMcpEnabled({ name: value, enabled: !server.enabled, cwd: '' });
               const updated = await client.getMcpStatus({ cwd: '' });
               setPanel({ type: 'mcp', servers: updated });
             } catch {

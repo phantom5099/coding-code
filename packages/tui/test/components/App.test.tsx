@@ -45,7 +45,7 @@ const client = {
   switchModel: vi.fn(),
   listSessions: vi.fn(),
   getMcpStatus: vi.fn(),
-  setMcpDisabled: vi.fn(),
+  setMcpEnabled: vi.fn(),
   listSkills: vi.fn(),
   getPermissionMode: vi.fn(),
   setPermissionMode: vi.fn(),

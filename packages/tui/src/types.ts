@@ -27,7 +27,7 @@ export interface PanelItem<T = string> {
 export interface McpServerStatus {
   name: string;
   connected: boolean;
-  disabled: boolean;
+  enabled: boolean;
   toolCount: number;
   transport: 'stdio' | 'http';
   reconnectAttempts: number;

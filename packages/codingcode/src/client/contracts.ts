@@ -133,8 +133,7 @@ export interface SettingsClient {
   getAgentConfig(): Promise<{ maxSteps: number; maxStopContinuations: number }>;
   setCompactionModel(compactionModel: string): Promise<{ compactionModel: string }>;
   getMcpStatus(input: { cwd: string }): Promise<McpStatus[]>;
-  setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
-  resetMcpDisabled(body: { name: string; cwd: string }): Promise<void>;
+  setMcpEnabled(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
   createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
   updateMcpServer(input: { cwd: string; name: string; server: McpServerConfig }): Promise<void>;
   deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
@@ -143,8 +142,7 @@ export interface SettingsClient {
   createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
   updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
   deleteHook(input: { cwd: string; name: string }): Promise<void>;
-  setHookDisabled(input: { cwd: string; name: string; disabled: boolean }): Promise<void>;
-  resetHookDisabled(body: { name: string; cwd: string }): Promise<void>;
+  setHookEnabled(input: { cwd: string; name: string; enabled: boolean }): Promise<void>;
   getGlobalPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
   setGlobalPermissionMode(input: {
     sessionId: string;

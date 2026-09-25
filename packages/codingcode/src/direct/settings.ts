@@ -10,10 +10,8 @@ import {
   writeMcpConfig,
   loadGlobalMcpConfig,
   writeGlobalMcpConfig,
-  getGlobalMcpDisabledState,
-  setGlobalMcpDisabledState,
-  setProjectMcpDisabledState,
-  resetProjectMcpDisabledState,
+  setGlobalMcpServerEnabled,
+  setProjectMcpServerEnabled,
 } from '../mcp/config.js';
 import {
   loadHookConfigs,
@@ -21,11 +19,9 @@ import {
   loadGlobalHookConfigs,
   writeGlobalHookConfigs,
   resolveHookConfigs,
-  setGlobalHookDisabledState,
-  setProjectHookDisabledState,
-  resetProjectHookDisabledState,
+  setGlobalHookEnabled,
+  setProjectHookEnabled,
 } from '../hooks/config.js';
-import { setHookRuntimeEnabled } from '../hooks/executor.js';
 import { getMemoryConfig } from '../memory/config.js';
 import { MemoryService } from '../memory/port.js';
 import { AlreadyExistsError, NotFoundError } from '../contracts/error.js';
@@ -99,7 +95,11 @@ function hooksList(
   cwd: string
 ): Array<UserHookConfig & { source: 'global' | 'project'; hasProjectOverride?: boolean }> {
   if (isGlobalCwd(cwd)) {
-    return loadGlobalHookConfigs().map((h) => ({ ...h, source: 'global' as const }));
+    return loadGlobalHookConfigs().map((h) => ({
+      ...h,
+      enabled: h.enabled !== false,
+      source: 'global' as const,
+    }));
   }
   const globalHooks = loadGlobalHookConfigs();
   const projectHooks = loadHookConfigs(cwd);
@@ -112,6 +112,7 @@ function hooksList(
     const hasProjectOverride = isFromProject && isFromGlobal;
     return {
       ...h,
+      enabled: h.enabled !== false,
       source: (isFromProject ? 'project' : 'global') as 'global' | 'project',
       hasProjectOverride,
     };
@@ -173,14 +174,12 @@ function hooksDelete(cwd: string, name: string): void {
   );
 }
 
-function hooksSetDisabled(cwd: string, name: string, disabled: boolean): void {
-  setHookRuntimeEnabled(name, !disabled);
-  const hooks = loadHookConfigs(cwd);
-  const hook = hooks.find((h) => h.name === name);
-  if (hook) {
-    hook.enabled = !disabled;
-    writeHookConfigs(cwd, hooks);
+function hooksSetEnabled(cwd: string, name: string, enabled: boolean): void {
+  if (isGlobalCwd(cwd)) {
+    setGlobalHookEnabled(name, enabled);
+    return;
   }
+  setProjectHookEnabled(resolveCwd(cwd), name, enabled);
 }
 
 export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
@@ -236,7 +235,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
         return loadGlobalMcpConfig().map((s) => ({
           ...runtimeByName.get(s.name),
           name: s.name,
-          disabled: getGlobalMcpDisabledState(s.name),
+          enabled: s.enabled !== false,
           source: 'global' as const,
         })) as McpStatus[];
       }
@@ -245,7 +244,11 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
       const globalNames = new Set(globalServers.map((s) => s.name));
       const seen = new Set<string>();
       const result: Array<
-        McpStatus & { source: 'global' | 'project'; hasProjectOverride?: boolean }
+        McpStatus & {
+          enabled: boolean;
+          source: 'global' | 'project';
+          hasProjectOverride?: boolean;
+        }
       > = [];
       for (const s of projectServers) {
         seen.add(s.name);
@@ -261,7 +264,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
             toolCount: 0,
           }),
           name: s.name,
-          disabled: r?.disabled ?? false,
+          enabled: s.enabled !== false,
           source: 'project',
           hasProjectOverride: isFromGlobal,
         });
@@ -279,32 +282,19 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
             toolCount: 0,
           }),
           name: s.name,
-          disabled: r?.disabled ?? false,
+          enabled: s.enabled !== false,
           source: 'global',
         });
       }
       return result as McpStatus[];
     },
 
-    async setMcpDisabled({ name, disabled, cwd }) {
-      const projectCwd = resolveCwd(cwd);
+    async setMcpEnabled({ name, enabled, cwd }) {
       if (isGlobalCwd(cwd)) {
-        setGlobalMcpDisabledState(name, disabled);
+        setGlobalMcpServerEnabled(name, enabled);
       } else {
-        setProjectMcpDisabledState(projectCwd, name, disabled);
+        setProjectMcpServerEnabled(resolveCwd(cwd), name, enabled);
       }
-      await rt.runPromise(
-        Effect.gen(function* () {
-          const mcp = yield* McpService;
-          return yield* disabled
-            ? mcp.disable(projectCwd, name)
-            : mcp.enable(projectCwd, name);
-        })
-      );
-    },
-
-    async resetMcpDisabled({ name, cwd }) {
-      resetProjectMcpDisabledState(cwd, name);
     },
 
     async createMcpServer({ cwd, server }) {
@@ -344,17 +334,8 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
       hooksDelete(cwd, name);
     },
 
-    async setHookDisabled({ cwd, name, disabled }) {
-      if (isGlobalCwd(cwd)) {
-        setGlobalHookDisabledState(name, disabled);
-      } else {
-        setProjectHookDisabledState(cwd, name, disabled);
-      }
-      hooksSetDisabled(cwd, name, disabled);
-    },
-
-    async resetHookDisabled({ name, cwd }) {
-      resetProjectHookDisabledState(cwd, name);
+    async setHookEnabled({ cwd, name, enabled }) {
+      hooksSetEnabled(cwd, name, enabled);
     },
 
     async getGlobalPermissionMode(input: {

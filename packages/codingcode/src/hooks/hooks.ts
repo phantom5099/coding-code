@@ -1,14 +1,10 @@
 import { Layer, Effect } from 'effect';
-import { resolveHookConfigs, resolveHookDisabled } from './config.js';
-import {
-  executeHookCommand,
-  executeDecisionHookCommand,
-  isHookRuntimeEnabled,
-} from './executor.js';
+import { resolveHookConfigs } from './config.js';
+import { executeHookCommand, executeDecisionHookCommand } from './executor.js';
 import { createLogger } from '@codingcode/infra/logger';
 import { HookService } from './port.js';
 import type { HookPoint, HookDecision } from '../contracts/hooks.js';
-import type { ObserverHandler, DecisionHandler, HandlerEntry, ProjectPath, SessionId, HookName } from './types.js';
+import type { ObserverHandler, DecisionHandler, HandlerEntry, ProjectPath, SessionId } from './types.js';
 
 const logger = createLogger();
 
@@ -17,8 +13,6 @@ export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
     const globalHooks = new Map<HookPoint, HandlerEntry[]>();
     const hooksByProject = new Map<ProjectPath, Map<HookPoint, HandlerEntry[]>>();
     const hooksBySession = new Map<SessionId, Map<HookPoint, HandlerEntry[]>>();
-    const disabledHooksByProject = new Map<ProjectPath, Set<HookName>>();
-    const disabledHooksBySession = new Map<SessionId, Set<HookName>>();
 
     function getMapForScope(
       projectPath?: string,
@@ -66,12 +60,6 @@ export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
         if (sessionList) result.push(...sessionList);
       }
       return sortedEntries(point, result);
-    }
-
-    function isHookDisabled(name: string, projectPath?: string, sessionId?: string): boolean {
-      if (sessionId && disabledHooksBySession.get(sessionId)?.has(name)) return true;
-      if (projectPath && resolveHookDisabled(projectPath, name)) return true;
-      return false;
     }
 
     return {
@@ -125,8 +113,6 @@ export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
         return Effect.gen(function* () {
           for (const entry of allHandlers(point, projectPath, sessionId)) {
             if (entry.type === 'observer') {
-              const name = entry.id;
-              if (isHookDisabled(name, projectPath, sessionId)) continue;
               const result = entry.handler(payload);
               if (result == null) {
                 continue;
@@ -157,8 +143,6 @@ export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
         return Effect.promise(async () => {
           for (const entry of allHandlers(point, projectPath, sessionId)) {
             if (entry.type === 'decision') {
-              const name = entry.id;
-              if (isHookDisabled(name, projectPath, sessionId)) continue;
               try {
                 const result = await (entry.handler as DecisionHandler)(payload);
                 if (result != null) return result;
@@ -182,25 +166,22 @@ export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
           hooksByProject.delete(projectPath);
           const projectMap = new Map<HookPoint, HandlerEntry[]>();
           for (const hc of resolveHookConfigs(projectPath)) {
-            if (resolveHookDisabled(projectPath, hc.name)) continue;
+            // 开关就是配置里的 enabled 字段：被禁用的 hook 不注册
+            if (hc.enabled === false) continue;
             const hookName = hc.name;
-            const observerHandler: ObserverHandler = (payload) => {
-              if (!isHookRuntimeEnabled(hookName)) return;
-              return Effect.tryPromise({
+            const observerHandler: ObserverHandler = (payload) =>
+              Effect.tryPromise({
                 try: () => executeHookCommand(hc, payload),
                 catch: (e) => logger.error(`user hook ${hookName} error:`, e),
               }).pipe(Effect.ignore);
-            };
-            const decisionHandler: DecisionHandler = (payload) => {
-              if (!isHookRuntimeEnabled(hookName)) return null;
-              return Effect.tryPromise({
+            const decisionHandler: DecisionHandler = (payload) =>
+              Effect.tryPromise({
                 try: () => executeDecisionHookCommand(hc, payload),
                 catch: (e) => {
                   logger.error(`user decision hook ${hookName} error:`, e);
                   return null;
                 },
               }) as unknown as Promise<HookDecision | null>;
-            };
             const entry: HandlerEntry = {
               id: `${hc.type === 'observer' ? 'obs' : 'dec'}-${++entryCounter}`,
               handler: hc.type === 'observer' ? observerHandler : decisionHandler,
@@ -218,7 +199,6 @@ export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
       disposeSession: (sessionId: string): Effect.Effect<void> =>
         Effect.sync(() => {
           hooksBySession.delete(sessionId);
-          disabledHooksBySession.delete(sessionId);
         }),
     };
 }));

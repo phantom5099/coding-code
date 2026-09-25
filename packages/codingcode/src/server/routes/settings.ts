@@ -11,11 +11,8 @@ import {
   loadGlobalMcpConfig,
   writeGlobalMcpConfig,
   resolveMcpConfig,
-  resolveMcpDisabled,
-  getGlobalMcpDisabledState,
-  setGlobalMcpDisabledState,
-  setProjectMcpDisabledState,
-  resetProjectMcpDisabledState,
+  setGlobalMcpServerEnabled,
+  setProjectMcpServerEnabled,
 } from '../../mcp/config.js';
 import {
   loadHookConfigs,
@@ -23,12 +20,9 @@ import {
   loadGlobalHookConfigs,
   writeGlobalHookConfigs,
   resolveHookConfigs,
-  resolveHookDisabled,
-  setGlobalHookDisabledState,
-  setProjectHookDisabledState,
-  resetProjectHookDisabledState,
+  setGlobalHookEnabled,
+  setProjectHookEnabled,
 } from '../../hooks/config.js';
-import { setHookRuntimeEnabled } from '../../hooks/executor.js';
 import { discoverGlobalSkillDirs, discoverProjectSkillDirs } from '../../skills/source.js';
 import { getMemoryConfig } from '../../memory/config.js';
 import {
@@ -171,6 +165,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
       return c.json(
         loadGlobalHookConfigs().map((h) => ({
           ...h,
+          enabled: h.enabled !== false,
           source: 'global' as const,
         }))
       );
@@ -188,9 +183,9 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         const hasProjectOverride = isFromProject && isFromGlobal;
         return {
           ...h,
+          enabled: h.enabled !== false,
           source: isFromProject ? 'project' : 'global',
           hasProjectOverride,
-          disabled: resolveHookDisabled(cwd, h.name),
         };
       })
     );
@@ -254,39 +249,15 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
     return c.json({ ok: true });
   });
 
-  router.post('/api/settings/hooks/:name/disabled', async (c) => {
+  // 开关就是配置里的 enabled 字段：改开关 = 写回对应层的 hooks.yaml
+  router.post('/api/settings/hooks/:name/enabled', async (c) => {
     const name = c.req.param('name');
-    const body = (await c.req.json()) as { disabled: boolean };
+    const body = (await c.req.json()) as { enabled: boolean };
     const rawCwd = c.req.query('cwd');
     if (isGlobalCwd(rawCwd)) {
-      setGlobalHookDisabledState(name, body.disabled);
-      setHookRuntimeEnabled(name, !body.disabled);
-      const hooks = loadGlobalHookConfigs();
-      const hook = hooks.find((h) => h.name === name);
-      if (hook) {
-        hook.enabled = !body.disabled;
-        writeGlobalHookConfigs(hooks);
-      }
+      setGlobalHookEnabled(name, body.enabled);
     } else {
-      const cwd = resolveCwd(rawCwd);
-      setProjectHookDisabledState(cwd, name, body.disabled);
-      setHookRuntimeEnabled(name, !body.disabled);
-      const hooks = loadHookConfigs(cwd);
-      const hook = hooks.find((h) => h.name === name);
-      if (hook) {
-        hook.enabled = !body.disabled;
-        writeHookConfigs(cwd, hooks);
-      }
-    }
-    return c.json({ ok: true });
-  });
-
-  router.post('/api/settings/hooks/:name/disabled/reset', async (c) => {
-    const name = c.req.param('name');
-    const rawCwd = c.req.query('cwd');
-    // 全局态只有全局开关，没有项目覆盖可重置
-    if (!isGlobalCwd(rawCwd)) {
-      resetProjectHookDisabledState(resolveCwd(rawCwd), name);
+      setProjectHookEnabled(resolveCwd(rawCwd), name, body.enabled);
     }
     return c.json({ ok: true });
   });
@@ -298,7 +269,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
       return c.json(
         loadGlobalMcpConfig().map((s) => ({
           ...s,
-          disabled: getGlobalMcpDisabledState(s.name),
+          enabled: s.enabled !== false,
           source: 'global' as const,
         }))
       );
@@ -316,7 +287,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         const hasProjectOverride = isFromProject && isFromGlobal;
         return {
           ...s,
-          disabled: resolveMcpDisabled(cwd, s.name),
+          enabled: s.enabled !== false,
           source: isFromProject ? 'project' : 'global',
           hasProjectOverride,
         };
@@ -382,24 +353,15 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
     return c.json({ ok: true });
   });
 
-  router.post('/api/settings/mcp/:name/disabled', async (c) => {
+  // 开关就是配置里的 enabled 字段：改开关 = 写回对应层的 mcp.yaml
+  router.post('/api/settings/mcp/:name/enabled', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
-    const body = (await c.req.json()) as { disabled: boolean };
+    const body = (await c.req.json()) as { enabled: boolean };
     if (isGlobalCwd(rawCwd)) {
-      setGlobalMcpDisabledState(name, body.disabled);
+      setGlobalMcpServerEnabled(name, body.enabled);
     } else {
-      setProjectMcpDisabledState(resolveCwd(rawCwd), name, body.disabled);
-    }
-    return c.json({ ok: true });
-  });
-
-  router.post('/api/settings/mcp/:name/disabled/reset', async (c) => {
-    const name = c.req.param('name');
-    const rawCwd = c.req.query('cwd');
-    // 全局态只有全局开关，没有项目覆盖可重置
-    if (!isGlobalCwd(rawCwd)) {
-      resetProjectMcpDisabledState(resolveCwd(rawCwd), name);
+      setProjectMcpServerEnabled(resolveCwd(rawCwd), name, body.enabled);
     }
     return c.json({ ok: true });
   });

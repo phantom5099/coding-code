@@ -37,7 +37,6 @@ vi.mock('../../src/mcp/client.js', () => {
 // Mock loadMcpConfig
 vi.mock('../../src/mcp/config.js', () => ({
   resolveMcpConfig: vi.fn(() => []),
-  resolveMcpDisabled: vi.fn(() => false),
 }));
 
 function makeHookLayer() {

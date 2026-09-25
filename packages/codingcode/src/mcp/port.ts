@@ -9,8 +9,6 @@ export interface McpShape {
   getServerToolNames(projectPath: string, name: string): string[];
   listProjectMcpTools(projectPath: string): Effect.Effect<McpToolSpec[]>;
   status(projectPath: string): Effect.Effect<McpStatus[]>;
-  disable(projectPath: string, name: string): Effect.Effect<void>;
-  enable(projectPath: string, name: string): Effect.Effect<void>;
   disposeSession(sessionId: string): Effect.Effect<void>;
   disposeProject(projectPath: string): Effect.Effect<void>;
 }

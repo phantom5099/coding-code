@@ -152,12 +152,8 @@ export function listMcpServers(cwd?: string): Promise<any[]> {
   return clients.settings.getMcpStatus({ cwd: cwd ?? '' });
 }
 
-export function setMcpDisabled(name: string, disabled: boolean, cwd?: string): Promise<void> {
-  return clients.settings.setMcpDisabled({ name, disabled, cwd: cwd ?? '' });
-}
-
-export function resetMcpDisabled(name: string, cwd: string): Promise<void> {
-  return clients.settings.resetMcpDisabled({ name, cwd });
+export function setMcpEnabled(name: string, enabled: boolean, cwd?: string): Promise<void> {
+  return clients.settings.setMcpEnabled({ name, enabled, cwd: cwd ?? '' });
 }
 
 export function createMcpServer(cwd: string | undefined, server: McpServerConfig): Promise<void> {
@@ -212,16 +208,12 @@ export function deleteHook(cwd: string | undefined, name: string): Promise<void>
   return clients.settings.deleteHook({ cwd: cwd ?? '', name });
 }
 
-export function setHookDisabled(
+export function setHookEnabled(
   cwd: string | undefined,
   name: string,
-  disabled: boolean
+  enabled: boolean
 ): Promise<void> {
-  return clients.settings.setHookDisabled({ cwd: cwd ?? '', name, disabled });
-}
-
-export function resetHookDisabled(name: string, cwd: string): Promise<void> {
-  return clients.settings.resetHookDisabled({ name, cwd });
+  return clients.settings.setHookEnabled({ cwd: cwd ?? '', name, enabled });
 }
 
 // ---- Rollback / Checkpoint ----
