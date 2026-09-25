@@ -5,11 +5,10 @@ import { join } from 'path';
 import type { SessionStoreState } from '../../contracts/session.js';
 import type { ProfileName } from '../../contracts/types.js';
 import { SessionService } from '../../session/port.js';
-import { computePaths } from '../../core/path.js';
+import { computePaths, resolveCwd } from '../../core/path.js';
 import { ContextService } from '../../context/port.js';
 import { estimatePromptTokensFrom } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/port.js';
-import { WorkspaceService } from '../../workspace/workspace.js';
 import { LLMFactoryService } from '../../llm/port.js';
 import type { LLMClient } from '../../contracts/provider.js';
 import { errorResponse } from '../util.js';
@@ -36,12 +35,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   };
 
   router.get('/api/sessions', async (c) => {
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
-      })
-    );
+    const cwd = resolveCwd(c.req.query('cwd'));
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -71,12 +65,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     if (!body.model) {
       return c.json({ error: 'model required' }, 400);
     }
-    const normalizedCwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const normalizedCwd = resolveCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -98,12 +87,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/resume', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string };
-    const normalizedCwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const normalizedCwd = resolveCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -121,12 +105,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/compact', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string };
-    const normalizedCwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const normalizedCwd = resolveCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const context = yield* ContextService;
@@ -190,12 +169,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   // "current" plan is whichever .md has the most recent mtime in the
   // project's plan directory.
   router.get('/api/sessions/:id/plan', async (c) => {
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
-      })
-    );
+    const cwd = resolveCwd(c.req.query('cwd'));
     const planDir = join(getProjectBaseDir(), encodeProjectPath(cwd));
     if (!existsSync(planDir)) {
       return c.json({
@@ -238,12 +212,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   // ---- Agent profile switching ----
   router.get('/api/sessions/:id/profile', async (c) => {
     const sessionId = c.req.param('id');
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
-      })
-    );
+    const cwd = resolveCwd(c.req.query('cwd'));
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -268,12 +237,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/profile', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd?: string; activeProfile: ProfileName };
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const cwd = resolveCwd(body.cwd);
     const activeProfile = body.activeProfile;
     if (!isAgentProfileName(activeProfile)) {
       return c.json({ error: `Invalid activeProfile: ${activeProfile}` }, 400);
@@ -337,12 +301,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
 
   router.get('/api/sessions/:id/checkpoints/latest/diff', async (c) => {
     const sessionId = c.req.param('id');
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
-      })
-    );
+    const cwd = resolveCwd(c.req.query('cwd'));
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
@@ -359,12 +318,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.get('/api/sessions/:id/checkpoints/:turnId/diff', async (c) => {
     const sessionId = c.req.param('id');
     const turnId = parseInt(c.req.param('turnId'), 10);
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
-      })
-    );
+    const cwd = resolveCwd(c.req.query('cwd'));
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
@@ -385,12 +339,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/checkpoints/latest/revert-file', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; file: string };
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const cwd = resolveCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
@@ -407,12 +356,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/checkpoints/latest/revert-files', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; files: string[] };
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const cwd = resolveCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
@@ -428,12 +372,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
 
   router.get('/api/sessions/:id/rollback-preview', async (c) => {
     const sessionId = c.req.param('id');
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(c.req.query('cwd'));
-      })
-    );
+    const cwd = resolveCwd(c.req.query('cwd'));
     const throughTurnId = parseInt(c.req.query('throughTurnId') ?? '0', 10);
     const result = await runWithLayer(
       Effect.gen(function* () {
@@ -451,12 +390,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/rollback-code-to-turn', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const cwd = resolveCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const checkpoint = yield* CheckpointService;
@@ -473,12 +407,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/rollback-context', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const cwd = resolveCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -500,12 +429,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/rollback-both-to-turn', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; throughTurnId: number };
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const cwd = resolveCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -535,12 +459,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.post('/api/sessions/:id/fork', async (c) => {
     const sessionId = c.req.param('id');
     const body = (await c.req.json()) as { cwd: string; atTurnId?: number };
-    const cwd = await rt.runPromise(
-      Effect.gen(function* () {
-        const ws = yield* WorkspaceService;
-        return ws.resolveWorkspaceCwd(body.cwd);
-      })
-    );
+    const cwd = resolveCwd(body.cwd);
     const atTurnId = body.atTurnId ?? 0;
     const result = await runWithLayer(
       Effect.gen(function* () {

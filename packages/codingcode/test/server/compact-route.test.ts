@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
-import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { SessionService } from '../../src/session/port.js';
 import { LLMFactoryService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
@@ -18,11 +17,6 @@ import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
 
 const mockCompactWithLLM = vi.fn();
-
-const MockWorkspaceLayer = Layer.succeed(WorkspaceService, {
-  getWorkspaceCwd: () => '/tmp/test',
-  resolveWorkspaceCwd: (override?: string) => override ?? '/tmp/test',
-} as any);
 
 const MockSessionLayer = Layer.succeed(SessionService, {
   create: () =>
@@ -162,7 +156,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
 } as any);
 
 const TestLayer = Layer.mergeAll(
-  MockWorkspaceLayer,
   MockSessionLayer,
   MockLLMFactoryLayer,
   MockApprovalLayer,
@@ -239,7 +232,6 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
     } as any);
 
     const FailLayer = Layer.mergeAll(
-      MockWorkspaceLayer,
       MockSessionLayer,
       FailingFactoryLayer,
       MockApprovalLayer,

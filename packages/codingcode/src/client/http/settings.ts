@@ -67,8 +67,8 @@ export function createHttpSettingsClient(
       await apiDelete(`/api/settings/mcp/${encodeURIComponent(name)}${qsCwd(cwd)}`);
     },
 
-    async listSkills() {
-      return apiGet('/api/settings/skills');
+    async listSkills({ cwd }) {
+      return apiGet(`/api/settings/skills${qsCwd(cwd)}`);
     },
 
     async listHooks({ cwd }) {

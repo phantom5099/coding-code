@@ -2,11 +2,10 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { Layer, Effect } from 'effect';
 import { AgentError } from '../core/error.js';
-import { WorkspaceService } from '../workspace/workspace.js';
 import type { LLMClient, SelectableModel } from '../contracts/provider.js';
 import { OpenAIProvider } from './providers/openai.js';
 import { DeepSeekProvider } from './providers/deepseek.js';
-import { updateActiveModel } from '@codingcode/infra/config';
+import { loadConfig, updateActiveModel } from '@codingcode/infra/config';
 import { LLMFactoryService } from './port.js';
 
 export interface ModelDescriptor {
@@ -52,13 +51,12 @@ function flattenModels(cat: ProviderCatalog): SelectableModel[] {
 }
 
 export const LlmLayer = Layer.effect(LLMFactoryService, Effect.gen(function* () {
-    const workspace = yield* WorkspaceService;
     let catalog: ProviderCatalog | null = null;
     let currentEntry: SelectableModel | null = null;
     let currentClient: LLMClient | null = null;
 
     function modelsFile(): string {
-      return resolve(workspace.getProcessRoot(), 'config/models.json');
+      return resolve(process.cwd(), 'config/models.json');
     }
 
     const loadCatalog = (): Effect.Effect<ProviderCatalog, AgentError> =>
@@ -105,7 +103,7 @@ export const LlmLayer = Layer.effect(LLMFactoryService, Effect.gen(function* () 
       getActiveEntry: (): Effect.Effect<SelectableModel, AgentError> =>
         Effect.gen(function* () {
           if (currentEntry) return currentEntry;
-          const cfg = workspace.getConfig().activeModel;
+          const cfg = loadConfig().activeModel;
           if (!cfg) {
             return yield* Effect.fail(
               new AgentError(
@@ -198,7 +196,7 @@ export const LlmLayer = Layer.effect(LLMFactoryService, Effect.gen(function* () 
       getLLMClient: (): Effect.Effect<LLMClient, AgentError> =>
         Effect.gen(function* () {
           if (currentClient) return currentClient;
-          const cfg = workspace.getConfig().activeModel;
+          const cfg = loadConfig().activeModel;
           if (!cfg) {
             return yield* Effect.fail(
               new AgentError(

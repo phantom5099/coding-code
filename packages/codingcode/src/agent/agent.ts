@@ -62,9 +62,9 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       const normalizedCwd = normalizePath(opts.cwd);
 
       rules.evictProjectRules(normalizedCwd);
-      yield* hooks.reloadUserHooks(normalizedCwd).pipe(Effect.catchAll(() => Effect.void));
-      yield* hooks.emit('agent.turn.start', { sessionId: '' }).pipe(Effect.catchAll(() => Effect.void));
-      yield* mcp.syncConnections(normalizedCwd).pipe(Effect.catchAll(() => Effect.void));
+      yield* hooks.reloadUserHooks(normalizedCwd);
+      yield* hooks.emit('agent.turn.start', { sessionId: '' });
+      yield* mcp.syncConnections(normalizedCwd);
 
       let sessionId = opts.sessionId;
       const llm = yield* llmFactory.getLLMClient();

@@ -1,20 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Effect, Layer, ManagedRuntime } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 import { Hono } from 'hono';
 import { readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { computePaths } from '../../src/core/path.js';
-import { WorkspaceService } from '../../src/workspace/workspace.js';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
-
-function makeLayer() {
-  return Layer.mergeAll(SessionLayer, WorkspaceService.Default);
-}
 
 describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
   let cwd: string;
@@ -24,7 +19,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
   beforeEach(async () => {
     cwd = join(base.dir, 'create-session-active-profile');
     mkdirSync(cwd, { recursive: true });
-    rt = ManagedRuntime.make(makeLayer() as any);
+    rt = ManagedRuntime.make(SessionLayer as any);
     app = new Hono();
     registerSessionsRoutes(app, rt);
   });

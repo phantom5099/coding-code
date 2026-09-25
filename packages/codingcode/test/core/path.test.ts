@@ -1,5 +1,13 @@
 ﻿import { describe, it, expect } from 'vitest';
-import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
+import { join, resolve } from 'path';
+import { tmpdir } from 'os';
+import {
+  normalizePath,
+  encodeProjectPath,
+  resolveCwd,
+  getTempCwd,
+  isGlobalCwd,
+} from '../../src/core/path.js';
 import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
 
 describe('core/path', () => {
@@ -30,5 +38,23 @@ describe('core/path', () => {
     const path = '/tmp/my-project';
     const sg = new ShadowGit(path);
     expect(sg.gitDir).toContain(encodeProjectPath(path));
+  });
+
+  it('resolveCwd uses the request cwd when present', () => {
+    const otherDir = join(tmpdir(), 'cc-other');
+    expect(resolveCwd(otherDir)).toBe(resolve(otherDir));
+  });
+
+  it('resolveCwd falls back to the shared temp workspace', () => {
+    expect(resolveCwd()).toBe(getTempCwd());
+    expect(resolveCwd('')).toBe(getTempCwd());
+    expect(getTempCwd()).not.toBe(process.cwd());
+  });
+
+  it('isGlobalCwd treats missing, empty and "global" as global', () => {
+    expect(isGlobalCwd(undefined)).toBe(true);
+    expect(isGlobalCwd('')).toBe(true);
+    expect(isGlobalCwd('global')).toBe(true);
+    expect(isGlobalCwd('/some/project')).toBe(false);
   });
 });

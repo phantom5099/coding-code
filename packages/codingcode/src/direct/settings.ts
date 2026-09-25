@@ -4,7 +4,7 @@ import type { McpServerConfig, McpStatus } from '../contracts/mcp.js';
 import { SkillService } from '../skills/port.js';
 import type { PermissionMode } from '../contracts/permission.js';
 import type { UserHookConfig } from '../contracts/hooks.js';
-import { isGlobalCwd } from '../workspace/workspace.js';
+import { isGlobalCwd, resolveCwd } from '../core/path.js';
 import {
   loadMcpConfig,
   writeMcpConfig,
@@ -224,7 +224,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
     },
 
     async getMcpStatus({ cwd }) {
-      const projectCwd = isGlobalCwd(cwd) ? process.cwd() : cwd;
+      const projectCwd = resolveCwd(cwd);
       const runtime = await rt.runPromise(
         Effect.gen(function* () {
           const mcp = yield* McpService;
@@ -287,17 +287,18 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
     },
 
     async setMcpDisabled({ name, disabled, cwd }) {
+      const projectCwd = resolveCwd(cwd);
       if (isGlobalCwd(cwd)) {
         setGlobalMcpDisabledState(name, disabled);
       } else {
-        setProjectMcpDisabledState(cwd, name, disabled);
+        setProjectMcpDisabledState(projectCwd, name, disabled);
       }
       await rt.runPromise(
         Effect.gen(function* () {
           const mcp = yield* McpService;
           return yield* disabled
-            ? mcp.disable(isGlobalCwd(cwd) ? process.cwd() : cwd, name)
-            : mcp.enable(isGlobalCwd(cwd) ? process.cwd() : cwd, name);
+            ? mcp.disable(projectCwd, name)
+            : mcp.enable(projectCwd, name);
         })
       );
     },
@@ -318,11 +319,11 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
       mcpDeleteServer(cwd, name);
     },
 
-    async listSkills() {
+    async listSkills({ cwd }) {
       return rt.runPromise(
         Effect.gen(function* () {
           const skill = yield* SkillService;
-          return yield* skill.getAll(process.cwd());
+          return yield* skill.getAll(resolveCwd(cwd));
         })
       );
     },

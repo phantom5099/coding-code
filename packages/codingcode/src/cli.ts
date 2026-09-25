@@ -4,15 +4,15 @@ import { LLMFactoryService } from './llm/port.js';
 import { createServer } from './server/index.js';
 import { createAppRuntime } from './layer.js';
 import { loadConfig, ensureUserConfig } from '@codingcode/infra/config';
-import { WorkspaceService, parseWorkspaceArgs } from './workspace/workspace.js';
+import { ensureTempCwd } from './core/path.js';
 import { findAvailablePort } from './server/port-discovery.js';
 import { AgentError } from './core/error.js';
 import { SchedulerService } from './scheduler/port.js';
 
 async function main() {
-  const installRoot = process.cwd();
-  const { workspaceCwd, args } = parseWorkspaceArgs(process.argv.slice(2));
+  const args = process.argv.slice(2);
   ensureUserConfig();
+  ensureTempCwd();
   const config = loadConfig();
 
   const serveOnly = args.includes('serve');
@@ -22,12 +22,6 @@ async function main() {
   const rt = createAppRuntime();
 
   const program = Effect.gen(function* () {
-    const ws = yield* WorkspaceService;
-    ws.init({ processRoot: installRoot, workspaceCwd });
-    if (workspaceCwd) {
-      console.log(`Workspace: ${ws.getWorkspaceCwd()}`);
-    }
-
     const port = yield* Effect.tryPromise(() => findAvailablePort(basePort));
     const llmFactory = yield* LLMFactoryService;
 

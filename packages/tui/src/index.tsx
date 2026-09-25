@@ -64,7 +64,7 @@ export function createTuiClientFromFacades(llm: LLMClient, rt: AppRuntime): TuiC
     listSessions: () => sessions.listSessions({ cwd: '' }),
     getMcpStatus: (query) => settings.getMcpStatus(query),
     setMcpDisabled: (body) => settings.setMcpDisabled(body),
-    listSkills: () => settings.listSkills(),
+    listSkills: () => settings.listSkills({ cwd: '' }),
     getPermissionMode: (input) => settings.getGlobalPermissionMode(input),
     setPermissionMode: (input) => settings.setGlobalPermissionMode(input),
     resumeSession: (sid) => sessions.resumeSession({ sessionId: sid, cwd: '' }),

@@ -26,7 +26,6 @@ export default defineConfig({
     resolve: {
       alias: {
         '@shared': resolve('shared'),
-        '@codingcode/core/core/workspace': resolve(codingcodeRoot, 'core/workspace.ts'),
         '@codingcode/core/layer': resolve(codingcodeRoot, 'layer.ts'),
         '@codingcode/core/server/create': resolve(codingcodeRoot, 'server/index.ts'),
         '@codingcode/core/server/port-discovery': resolve(

@@ -32,7 +32,6 @@ Coding Code 是 AI 编程助手。
 - `scheduler`：定时调度
 - `todo`：任务清单
 - `rules`：全局 / 项目级规则装载
-- `workspace`：工作区信息
 - `server`：HTTP / SSE 入口
 - `client`：HTTP 客户端（`AgentClient` 的实现）
 - `direct`：进程内直连端口，免 HTTP 的 runtime / sessions / settings / models 接口
@@ -51,7 +50,7 @@ Coding Code 是 AI 编程助手。
 | L0 通用件 | `core/` | node 内置 + 同目录 |
 | L1 共享契约 | `contracts/` | `core/` + 同目录 + 第三方（type-only） |
 | L1' 端口契约 | 各 `xxx/port.ts`（含 `agent/port.ts` 的装配端口） | `core/` + `contracts/` |
-| L2 实现 | `tools/`、`hooks/`、`session/`、`approval/`、`llm/`、`mcp/`、`context/`、`workspace/` … | L0 + L1 |
+| L2 实现 | `tools/`、`hooks/`、`session/`、`approval/`、`llm/`、`mcp/`、`context/` … | L0 + L1 |
 | L3 组合根 | `layer.ts`、`agent/tool-env.ts` | 全部 |
 
 **架构边界硬规则**（由 `packages/codingcode/test/architecture/boundaries.test.ts` 静态断言，共 29 项）：

@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { SkillService } from '../../skills/port.js';
-import { WorkspaceService, isGlobalCwd } from '../../workspace/workspace.js';
+import { isGlobalCwd, resolveCwd } from '../../core/path.js';
 import { AlreadyExistsError, NotFoundError } from '../../contracts/error.js';
 import type { McpServerConfig } from '../../contracts/mcp.js';
 import type { UserHookConfig } from '../../contracts/hooks.js';
@@ -45,12 +45,6 @@ type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promise<void> {
   const runWithLayer = createRunWithLayer(rt);
-  const ws = await rt.runPromise(
-    Effect.gen(function* () {
-      return yield* WorkspaceService;
-    })
-  );
-  const resolveWorkspaceCwd = (override?: string) => ws.resolveWorkspaceCwd(override);
 
   // ---- Helpers for CRUD with validation ----
 
@@ -181,7 +175,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         }))
       );
     }
-    const cwd = resolveWorkspaceCwd(rawCwd);
+    const cwd = resolveCwd(rawCwd);
     const globalHooks = loadGlobalHookConfigs();
     const projectHooks = loadHookConfigs(cwd);
     const globalNames = new Set(globalHooks.map((h) => h.name));
@@ -214,7 +208,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         hooks.push(body);
         writeGlobalHookConfigs(hooks);
       } else {
-        hooksCreate(resolveWorkspaceCwd(rawCwd), body);
+        hooksCreate(resolveCwd(rawCwd), body);
       }
       return c.json({ ok: true });
     } catch (e) {
@@ -238,7 +232,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         hooks[idx] = body;
         writeGlobalHookConfigs(hooks);
       } else {
-        hooksUpdate(resolveWorkspaceCwd(rawCwd), name, body);
+        hooksUpdate(resolveCwd(rawCwd), name, body);
       }
       return c.json({ ok: true });
     } catch (e) {
@@ -255,7 +249,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
       const hooks = loadGlobalHookConfigs().filter((h) => h.name !== name);
       writeGlobalHookConfigs(hooks);
     } else {
-      hooksDelete(resolveWorkspaceCwd(rawCwd), name);
+      hooksDelete(resolveCwd(rawCwd), name);
     }
     return c.json({ ok: true });
   });
@@ -274,7 +268,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         writeGlobalHookConfigs(hooks);
       }
     } else {
-      const cwd = resolveWorkspaceCwd(rawCwd);
+      const cwd = resolveCwd(rawCwd);
       setProjectHookDisabledState(cwd, name, body.disabled);
       setHookRuntimeEnabled(name, !body.disabled);
       const hooks = loadHookConfigs(cwd);
@@ -290,7 +284,10 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
   router.post('/api/settings/hooks/:name/disabled/reset', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
-    resetProjectHookDisabledState(resolveWorkspaceCwd(rawCwd), name);
+    // 全局态只有全局开关，没有项目覆盖可重置
+    if (!isGlobalCwd(rawCwd)) {
+      resetProjectHookDisabledState(resolveCwd(rawCwd), name);
+    }
     return c.json({ ok: true });
   });
 
@@ -306,7 +303,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         }))
       );
     }
-    const cwd = resolveWorkspaceCwd(rawCwd);
+    const cwd = resolveCwd(rawCwd);
     const globalServers = loadGlobalMcpConfig();
     const projectServers = loadMcpConfig(cwd);
     const globalNames = new Set(globalServers.map((s) => s.name));
@@ -339,7 +336,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         servers.push(body);
         writeGlobalMcpConfig(servers);
       } else {
-        mcpCreateServer(resolveWorkspaceCwd(rawCwd), body);
+        mcpCreateServer(resolveCwd(rawCwd), body);
       }
       return c.json({ ok: true });
     } catch (e) {
@@ -363,7 +360,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         servers[idx] = body;
         writeGlobalMcpConfig(servers);
       } else {
-        mcpUpdateServer(resolveWorkspaceCwd(rawCwd), name, body);
+        mcpUpdateServer(resolveCwd(rawCwd), name, body);
       }
       return c.json({ ok: true });
     } catch (e) {
@@ -380,7 +377,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
       const servers = loadGlobalMcpConfig().filter((s) => s.name !== name);
       writeGlobalMcpConfig(servers);
     } else {
-      mcpDeleteServer(resolveWorkspaceCwd(rawCwd), name);
+      mcpDeleteServer(resolveCwd(rawCwd), name);
     }
     return c.json({ ok: true });
   });
@@ -392,7 +389,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
     if (isGlobalCwd(rawCwd)) {
       setGlobalMcpDisabledState(name, body.disabled);
     } else {
-      setProjectMcpDisabledState(resolveWorkspaceCwd(rawCwd), name, body.disabled);
+      setProjectMcpDisabledState(resolveCwd(rawCwd), name, body.disabled);
     }
     return c.json({ ok: true });
   });
@@ -400,7 +397,10 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
   router.post('/api/settings/mcp/:name/disabled/reset', async (c) => {
     const name = c.req.param('name');
     const rawCwd = c.req.query('cwd');
-    resetProjectMcpDisabledState(resolveWorkspaceCwd(rawCwd), name);
+    // 全局态只有全局开关，没有项目覆盖可重置
+    if (!isGlobalCwd(rawCwd)) {
+      resetProjectMcpDisabledState(resolveCwd(rawCwd), name);
+    }
     return c.json({ ok: true });
   });
 
@@ -408,7 +408,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
   router.get('/api/settings/skills', async (c) => {
     const rawCwd = c.req.query('cwd');
     if (isGlobalCwd(rawCwd)) {
-      const cwd = resolveWorkspaceCwd(rawCwd);
+      const cwd = resolveCwd(rawCwd);
       const result = await runWithLayer(
         Effect.gen(function* () {
           const skill = yield* SkillService;
@@ -423,7 +423,7 @@ export async function registerSettingsRoutes(router: Hono, rt: ManagedRt): Promi
         }))
       );
     }
-    const cwd = resolveWorkspaceCwd(rawCwd);
+    const cwd = resolveCwd(rawCwd);
     const globalDirs = discoverGlobalSkillDirs();
     const projectDirs = discoverProjectSkillDirs(cwd);
     const globalNames = new Set(globalDirs.map((d) => d.name));
