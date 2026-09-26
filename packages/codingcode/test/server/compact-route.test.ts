@@ -105,12 +105,8 @@ const MockSkillLayer = Layer.succeed(SkillService, {
 
 const MockMcpLayer = Layer.succeed(McpService, {
   syncConnections: () => Effect.void,
-  connectServers: () => Effect.void,
-  disconnectServers: () => Effect.void,
-  getServerToolNames: () => [],
-  disconnectAll: () => Effect.void,
-  status: () => Effect.succeed([]),
   listProjectMcpTools: () => [],
+  status: () => Effect.succeed([]),
 } as any);
 
 const MockMemoryLayer = Layer.succeed(MemoryService, {

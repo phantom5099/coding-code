@@ -1,8 +1,18 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import {
+  mergeNamed,
+  patchNamed,
+  readNamedList,
+  writeNamedList,
+  type NamedListFile,
+} from '@codingcode/infra/yaml-store';
+import { getGlobalDir, getProjectDir } from '../core/path.js';
 import type { McpServerConfig } from '../contracts/mcp.js';
+
+/** mcp 的落盘形状：`<dir>/.codingcode/mcp.yaml` 的 `servers:` */
+const MCP_FILE: NamedListFile = { fileName: 'mcp', key: 'servers' };
+
+/** 项目层的覆盖项可能只写了 name/enabled，故条目类型按部分字段读 */
+type RawMcpServerConfig = Partial<McpServerConfig> & { name: string };
 
 function resolveEnvVars(value: unknown): unknown {
   if (typeof value === 'string') {
@@ -17,100 +27,32 @@ function resolveEnvVars(value: unknown): unknown {
   return value;
 }
 
-let _globalConfigDirOverride: string | undefined;
-
-export function getGlobalConfigDir(): string {
-  return _globalConfigDirOverride ?? join(homedir(), '.codingcode');
-}
-
-/** @internal Test-only hook to override the global config directory */
-export function _setGlobalConfigDir(dir: string | undefined): void {
-  _globalConfigDirOverride = dir;
-}
-
-/** 丢掉值为 undefined 的键，避免下层未显式写的字段被擦掉 */
-function definedOnly<T extends object>(obj: T): Partial<T> {
-  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
-}
-
-/** 按 name 做字段级合并：项目层只覆盖它显式写出的字段，其余继承全局 */
-function mergeConfigs<T extends { name: string }>(global: T[], project: T[]): T[] {
-  const map = new Map<string, T>();
-  for (const item of global) map.set(item.name, { ...item });
-  for (const item of project) {
-    const base = map.get(item.name);
-    map.set(item.name, base ? { ...base, ...definedOnly(item) } : { ...item });
-  }
-  return Array.from(map.values());
-}
-
-/** 该目录下实际生效的配置文件；都不存在时给出默认写入位置 */
-function mcpConfigPath(dir: string): string {
-  const candidates = [join(dir, 'mcp.yaml'), join(dir, 'mcp.yml')];
-  return candidates.find((p) => existsSync(p)) ?? candidates[0]!;
-}
-
-function readRawServers(dir: string): McpServerConfig[] {
-  const p = mcpConfigPath(dir);
-  if (!existsSync(p)) return [];
-  try {
-    const parsed = parseYaml(readFileSync(p, 'utf8')) as { servers?: McpServerConfig[] } | null;
-    return parsed?.servers ?? [];
-  } catch {
-    return [];
-  }
-}
-
-function writeServers(dir: string, servers: McpServerConfig[]): void {
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const p = mcpConfigPath(dir);
-  let existing: Record<string, unknown> = {};
-  if (existsSync(p)) {
-    existing = (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>) ?? {};
-  }
-  existing.servers = servers;
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
-}
-
 export function loadMcpConfig(projectRoot: string): McpServerConfig[] {
-  return readRawServers(join(projectRoot, '.codingcode')).map(
+  return readNamedList<RawMcpServerConfig>(getProjectDir(projectRoot), MCP_FILE).map(
     (s) => resolveEnvVars(s) as McpServerConfig
   );
 }
 
 export function writeMcpConfig(projectRoot: string, servers: McpServerConfig[]): void {
-  writeServers(join(projectRoot, '.codingcode'), servers);
+  writeNamedList(getProjectDir(projectRoot), MCP_FILE, servers);
 }
 
 export function loadGlobalMcpConfig(): McpServerConfig[] {
-  return readRawServers(getGlobalConfigDir()).map((s) => resolveEnvVars(s) as McpServerConfig);
+  return readNamedList<RawMcpServerConfig>(getGlobalDir(), MCP_FILE).map(
+    (s) => resolveEnvVars(s) as McpServerConfig
+  );
 }
 
 export function writeGlobalMcpConfig(servers: McpServerConfig[]): void {
-  writeServers(getGlobalConfigDir(), servers);
+  writeNamedList(getGlobalDir(), MCP_FILE, servers);
 }
 
 export function resolveMcpConfig(projectRoot: string): McpServerConfig[] {
-  return mergeConfigs(loadGlobalMcpConfig(), loadMcpConfig(projectRoot));
-}
-
-function patchServerEnabled(dir: string, name: string, enabled: boolean): void {
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const p = mcpConfigPath(dir);
-  let existing: Record<string, unknown> = {};
-  if (existsSync(p)) {
-    existing = (parseYaml(readFileSync(p, 'utf8')) as Record<string, unknown>) ?? {};
-  }
-  const servers = (existing.servers as Array<Record<string, unknown>> | undefined) ?? [];
-  const idx = servers.findIndex((s) => s?.name === name);
-  if (idx === -1) servers.push({ name, enabled });
-  else servers[idx] = { ...servers[idx], enabled };
-  existing.servers = servers;
-  writeFileSync(p, stringifyYaml(existing), 'utf8');
+  return mergeNamed(loadGlobalMcpConfig(), loadMcpConfig(projectRoot));
 }
 
 export function setGlobalMcpServerEnabled(name: string, enabled: boolean): void {
-  patchServerEnabled(getGlobalConfigDir(), name, enabled);
+  patchNamed<RawMcpServerConfig>(getGlobalDir(), MCP_FILE, name, { enabled });
 }
 
 export function setProjectMcpServerEnabled(
@@ -118,5 +60,5 @@ export function setProjectMcpServerEnabled(
   name: string,
   enabled: boolean
 ): void {
-  patchServerEnabled(join(projectRoot, '.codingcode'), name, enabled);
+  patchNamed<RawMcpServerConfig>(getProjectDir(projectRoot), MCP_FILE, name, { enabled });
 }

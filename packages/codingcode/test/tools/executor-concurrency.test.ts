@@ -85,7 +85,9 @@ function makeHarness(): Harness {
   };
 
   const mcp = {
-    disposeSession: () => Effect.succeed(undefined),
+    syncConnections: () => Effect.succeed(undefined),
+    listProjectMcpTools: () => [],
+    status: () => Effect.succeed([]),
   };
 
   const runner = {

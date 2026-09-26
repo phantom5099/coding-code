@@ -44,7 +44,7 @@ Coding Code 提供可插拔的钩子点，用户可以在关键节点注入自�
 钩子以子进程形式运行，payload 是一份 JSON，所以签名只描述数据的形状：
 
 ```typescript
-type ObserverHandler = (payload: Record<string, unknown>) => void | Promise<void>;
+type ObserverHandler = (payload: Record<string, unknown>) => Effect.Effect<void, never, any>;
 
 type DecisionHandler = (
   payload: Record<string, unknown>
@@ -55,7 +55,6 @@ interface HookDecision {
   reason?: string;
   injection?: string;                       // 注入到 LLM 上下文的文本
   modifiedInput?: Record<string, unknown>;  // 修改工具调用参数
-  modifiedOutput?: unknown;                 // 修改工具输出
 }
 ```
 

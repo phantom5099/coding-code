@@ -8,7 +8,7 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { HookService } from '../../src/hooks/port.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
-import { _setGlobalConfigDir } from '../../src/hooks/config.js';
+import { useTempHome } from '../helpers/temp-home.js';
 
 const AppLayer = HookLayer;
 
@@ -22,22 +22,17 @@ vi.mock('child_process', () => ({
 
 describe('HookService.emit（YAML 定义的观察者）', () => {
   const testDir = resolve(tmpdir(), 'codingcode-test-hooks-emit');
-  const globalDir = resolve(tmpdir(), 'codingcode-test-hooks-emit-global');
+  // 全局层落在临时 home 里，避免读到开发机上的 ~/.codingcode（全局配置目录不可指定）
+  const tempHome = useTempHome('codingcode-test-hooks-emit-');
 
   beforeEach(() => {
     resetFakeSpawn();
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
-    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
     mkdirSync(join(testDir, '.codingcode'), { recursive: true });
-    mkdirSync(globalDir, { recursive: true });
-    // 全局层指向空目录，避免读到开发机上的 ~/.codingcode
-    _setGlobalConfigDir(globalDir);
   });
 
   afterEach(() => {
-    _setGlobalConfigDir(undefined);
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
-    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
   });
 
   interface HookLine {
@@ -70,7 +65,8 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
   }
 
   function writeGlobalHooksYaml(hooks: HookLine[]) {
-    writeFileSync(join(globalDir, 'hooks.yaml'), hookYaml(hooks));
+    mkdirSync(tempHome.configDir, { recursive: true });
+    writeFileSync(join(tempHome.configDir, 'hooks.yaml'), hookYaml(hooks));
   }
 
   it('把 hooks.yaml 里的观察者注册到对应点，并把 payload 原样送进子进程 stdin', async () => {

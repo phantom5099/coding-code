@@ -8,6 +8,7 @@ import { AgentError } from '../core/error.js';
 
 const logger = createLogger();
 
+/** 客户端 listTools() 的原始返回形状（SDK 类型在 client.ts 内部收口） */
 interface McpRawTool {
   name: string;
   description: string;
@@ -17,14 +18,7 @@ interface McpRawTool {
 
 interface ServerEntry {
   client: McpClient;
-  config: McpServerConfig;
-  toolNames: string[];
   rawTools: McpRawTool[];
-}
-
-interface LeaseEntry {
-  projectPath: string;
-  serverName: string;
 }
 
 type ProjectPath = string;
@@ -32,7 +26,6 @@ type ServerName = string;
 
 export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
     const clientsByProject = new Map<ProjectPath, Map<ServerName, ServerEntry>>();
-    const leasesBySession = new Map<string, Set<LeaseEntry>>();
 
     function getProjectClients(projectPath: string): Map<ServerName, ServerEntry> {
       let map = clientsByProject.get(projectPath);
@@ -51,21 +44,10 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
       );
     }
 
-    function doConnect(
-      cfg: McpServerConfig,
-      projectPath: string,
-      bumpRef: boolean,
-      sessionId?: string
-    ): Effect.Effect<string[]> {
+    function doConnect(cfg: McpServerConfig, projectPath: string): Effect.Effect<void> {
       return Effect.gen(function* () {
         const projectClients = getProjectClients(projectPath);
-        const existing = projectClients.get(cfg.name);
-        if (existing) {
-          if (bumpRef && sessionId) {
-            addLease(sessionId, projectPath, cfg.name);
-          }
-          return existing.toolNames;
-        }
+        if (projectClients.has(cfg.name)) return;
 
         const result = yield* Effect.tryPromise(async () => {
           const client = new McpClient(cfg);
@@ -81,7 +63,7 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
           })
         );
 
-        if (!result) return [];
+        if (!result) return;
 
         const rawTools: McpRawTool[] = result.mcpTools.map((mt: any) => ({
           name: mt.name,
@@ -90,33 +72,16 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
           readOnlyHint: mt.readOnlyHint ?? false,
         }));
 
-        const registeredNames: string[] = rawTools.map((mt) => namespacedName(cfg.name, mt.name));
-
-        projectClients.set(cfg.name, {
-          client: result.client,
-          config: cfg,
-          toolNames: registeredNames,
-          rawTools,
-        });
-
-        if (bumpRef && sessionId) {
-          addLease(sessionId, projectPath, cfg.name);
-        }
-
-        return registeredNames;
+        projectClients.set(cfg.name, { client: result.client, rawTools });
       });
     }
 
-    function doDisconnect(projectPath: string, name: string, force: boolean): Effect.Effect<void> {
+    function doDisconnect(projectPath: string, name: string): Effect.Effect<void> {
       return Effect.gen(function* () {
         const projectClients = clientsByProject.get(projectPath);
         if (!projectClients) return;
         const entry = projectClients.get(name);
         if (!entry) return;
-
-        if (!force) {
-          if (hasActiveLeases(projectPath, name)) return;
-        }
 
         yield* Effect.tryPromise(() => entry.client.disconnect()).pipe(
           Effect.catchAll(() => Effect.succeed(undefined))
@@ -129,52 +94,6 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
       });
     }
 
-    function addLease(sessionId: string, projectPath: string, serverName: string): void {
-      let leases = leasesBySession.get(sessionId);
-      if (!leases) {
-        leases = new Set();
-        leasesBySession.set(sessionId, leases);
-      }
-      leases.add({ projectPath, serverName });
-    }
-
-    function removeLease(sessionId: string, projectPath: string, serverName: string): void {
-      const leases = leasesBySession.get(sessionId);
-      if (!leases) return;
-      for (const lease of leases) {
-        if (lease.projectPath === projectPath && lease.serverName === serverName) {
-          leases.delete(lease);
-          break;
-        }
-      }
-      if (leases.size === 0) {
-        leasesBySession.delete(sessionId);
-      }
-    }
-
-    function hasActiveLeases(projectPath: string, serverName: string): boolean {
-      for (const [, leases] of leasesBySession) {
-        for (const lease of leases) {
-          if (lease.projectPath === projectPath && lease.serverName === serverName) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-
-    function countLeases(projectPath: string, serverName: string): number {
-      let count = 0;
-      for (const [, leases] of leasesBySession) {
-        for (const lease of leases) {
-          if (lease.projectPath === projectPath && lease.serverName === serverName) {
-            count++;
-          }
-        }
-      }
-      return count;
-    }
-
     return {
       syncConnections: (projectPath: string): Effect.Effect<void> =>
         Effect.gen(function* () {
@@ -185,60 +104,19 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
           if (projectClients) {
             for (const [name] of projectClients) {
               if (!configNames.has(name)) {
-                yield* doDisconnect(projectPath, name, true);
+                yield* doDisconnect(projectPath, name);
               }
             }
           }
 
           for (const cfg of configs) {
             if (cfg.enabled === false) {
-              yield* doDisconnect(projectPath, cfg.name, true);
+              yield* doDisconnect(projectPath, cfg.name);
               continue;
             }
-            yield* doConnect(cfg, projectPath, false);
+            yield* doConnect(cfg, projectPath);
           }
         }),
-
-      connectServers: (
-        projectPath: string,
-        sessionId: string,
-        names: string[]
-      ): Effect.Effect<void> =>
-        Effect.gen(function* () {
-          const configs = resolveMcpConfig(projectPath);
-          const configMap = new Map(configs.map((c) => [c.name, c]));
-
-          for (const name of names) {
-            const cfg = configMap.get(name);
-            if (!cfg) {
-              logger.warn(
-                `[MCP] Server '${name}' not found in mcp.yaml for project '${projectPath}', skipping`
-              );
-              continue;
-            }
-            if (cfg.enabled === false) continue;
-            yield* doConnect(cfg, projectPath, true, sessionId);
-          }
-        }),
-
-      disconnectServers: (
-        projectPath: string,
-        sessionId: string,
-        names: string[]
-      ): Effect.Effect<void> =>
-        Effect.gen(function* () {
-          for (const name of names) {
-            removeLease(sessionId, projectPath, name);
-            yield* doDisconnect(projectPath, name, false);
-          }
-        }),
-
-      getServerToolNames: (projectPath: string, name: string): string[] => {
-        const projectClients = clientsByProject.get(projectPath);
-        if (!projectClients) return [];
-        const entry = projectClients.get(name);
-        return entry ? [...entry.toolNames] : [];
-      },
 
       listProjectMcpTools: (projectPath: string): Effect.Effect<McpToolSpec[]> =>
         Effect.sync(() => {
@@ -265,48 +143,13 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
           if (!projectClients) return [];
           return Array.from(projectClients.entries()).map(([name, entry]) => ({
             name,
-            connected: entry.client.connected,
             toolCount: entry.rawTools.length,
             transport: entry.client.transportType,
-            reconnectAttempts: 0,
-            leaseCount: countLeases(projectPath, name),
           }));
-        }),
-
-      disposeSession: (sessionId: string): Effect.Effect<void> =>
-        Effect.gen(function* () {
-          const leases = leasesBySession.get(sessionId);
-          if (!leases) return;
-          for (const lease of leases) {
-            yield* doDisconnect(lease.projectPath, lease.serverName, false);
-          }
-          leasesBySession.delete(sessionId);
-        }),
-
-      disposeProject: (projectPath: string): Effect.Effect<void> =>
-        Effect.gen(function* () {
-          const projectClients = clientsByProject.get(projectPath);
-          if (!projectClients) return;
-          for (const [name] of projectClients) {
-            for (const [sessionId, leases] of leasesBySession) {
-              for (const lease of leases) {
-                if (lease.projectPath === projectPath) {
-                  leases.delete(lease);
-                }
-              }
-              if (leases.size === 0) leasesBySession.delete(sessionId);
-            }
-            yield* doDisconnect(projectPath, name, true);
-          }
-          clientsByProject.delete(projectPath);
         }),
     };
   }
 ));
-
-function namespacedName(serverName: string, toolName: string): string {
-  return `${serverName}:${toolName}`;
-}
 
 function mcpToolToSpec(
   serverName: string,

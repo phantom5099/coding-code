@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { homedir } from 'os';
+import { join, dirname } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { getGlobalDir } from './paths.js';
 
 export interface ContextConfig {
   /** Model for context compaction. Empty string falls back to main session LLM.
@@ -140,7 +140,7 @@ export function loadConfig(configPath?: string): AppConfig {
 }
 
 export function getUserConfigPath(): string {
-  return resolve(homedir(), '.codingcode', 'config.yaml');
+  return join(getGlobalDir(), 'config.yaml');
 }
 
 export function ensureUserConfig(): void {

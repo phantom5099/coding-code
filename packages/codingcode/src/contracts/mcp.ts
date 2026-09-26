@@ -23,11 +23,8 @@ export interface McpServerConfig {
 
 export interface McpStatus {
   name: string;
-  connected: boolean;
   toolCount: number;
   transport: 'stdio' | 'http';
-  reconnectAttempts: number;
-  leaseCount: number;
 }
 
 /** MCP 远端工具的纯数据描述：zod schema 与 SDK client 等机制形状由实现层持有 */

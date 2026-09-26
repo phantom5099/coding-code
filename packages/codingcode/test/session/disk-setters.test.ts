@@ -20,9 +20,8 @@ const mockHookService = {
 
 const mockMcpService = {
   syncConnections: () => Effect.succeed(undefined),
-  connectServers: () => Effect.succeed(undefined),
   listProjectMcpTools: () => [],
-  disposeSession: () => Effect.succeed(undefined),
+  status: () => Effect.succeed([]),
 } as any;
 
 const mockRulesService = {

@@ -7,7 +7,7 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { HookService } from '../../src/hooks/port.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
-import { _setGlobalConfigDir } from '../../src/hooks/config.js';
+import { useTempHome } from '../helpers/temp-home.js';
 
 vi.mock('child_process', () => ({
   spawn: (command: string, args: string[]) => fakeSpawn(command, args),
@@ -23,15 +23,13 @@ vi.mock('child_process', () => ({
 
 describe('Effect.onInterrupt 回调里 yield* HookService + emit（agent.ts abort 修法）', () => {
   const testDir = resolve(tmpdir(), 'codingcode-test-oninterrupt-emit');
-  const globalDir = resolve(tmpdir(), 'codingcode-test-oninterrupt-emit-global');
+  // 全局层落在临时 home 里，避免读到开发机上的 ~/.codingcode（全局配置目录不可指定）
+  useTempHome('codingcode-test-oninterrupt-emit-');
 
   beforeEach(() => {
     resetFakeSpawn();
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
-    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
     mkdirSync(join(testDir, '.codingcode'), { recursive: true });
-    mkdirSync(globalDir, { recursive: true });
-    _setGlobalConfigDir(globalDir);
     writeFileSync(
       join(testDir, '.codingcode', 'hooks.yaml'),
       'hooks:\n  - name: on-abort\n    point: agent.turn.end\n    type: observer\n    command: cmd-abort\n    args: []\n'
@@ -39,9 +37,7 @@ describe('Effect.onInterrupt 回调里 yield* HookService + emit（agent.ts abor
   });
 
   afterEach(() => {
-    _setGlobalConfigDir(undefined);
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
-    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
   });
 
   it('被中断时回调能解析出 HookService 并把 agent.turn.end 跑出去', async () => {

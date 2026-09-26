@@ -9,10 +9,6 @@ export interface HookRunConfig {
   env?: Record<string, string>;
 }
 
-/**
- * 跑一次 hook 子进程，把 payload 以 JSON 写到它的 stdin。
- * 超时或 spawn 失败一律 reject，由调用方决定怎么降级。
- */
 function runHook(
   config: HookRunConfig,
   payload: Record<string, unknown>,

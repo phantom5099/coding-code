@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { useTempHome } from '../helpers/temp-home.js';
 import { AgentLayer } from '../../src/agent/agent.js';
 import { ToolEnvLayer } from '../../src/agent/tool-env.js';
 import { AgentService } from '../../src/agent/port.js';
@@ -21,7 +22,12 @@ import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import { encodeProjectPath, normalizePath, setProjectBaseDir, computePaths } from '../../src/core/path.js';
+import {
+  encodeProjectPath,
+  normalizePath,
+  getProjectBaseDir,
+  computePaths,
+} from '../../src/core/path.js';
 import type { Message } from '../../src/contracts/types.js';
 import type { LLMClient } from '../../src/contracts/provider.js';
 import type { FrameBody } from '../../src/contracts/frame.js';
@@ -168,17 +174,18 @@ function drainStream(stream: AsyncGenerator<FrameBody>): Effect.Effect<string, E
 }
 
 describe('subagent run end-to-end (session transcript is read by the agent loop)', () => {
+  useTempHome('codingcode-test-e2e-home-');
+
   let projectBase: string;
   let cwd: string;
 
   beforeEach(() => {
-    projectBase = mkdtempSync(join(tmpdir(), 'codingcode-test-e2e-'));
-    setProjectBaseDir(projectBase);
+    projectBase = getProjectBaseDir();
+    mkdirSync(projectBase, { recursive: true });
     cwd = mkdtempSync(join(tmpdir(), 'codingcode-test-cwd-'));
   });
 
   afterEach(() => {
-    if (existsSync(projectBase)) rmSync(projectBase, { recursive: true, force: true });
     if (existsSync(cwd)) rmSync(cwd, { recursive: true, force: true });
   });
 

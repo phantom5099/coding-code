@@ -17,7 +17,6 @@ export interface HookDecision {
   reason?: string;
   injection?: string;
   modifiedInput?: Record<string, unknown>;
-  modifiedOutput?: unknown;
 }
 
 export interface UserHookConfig {

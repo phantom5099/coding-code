@@ -3,10 +3,11 @@ import { ManagedRuntime } from 'effect';
 import { createHttpSessionClient } from '../../src/client/http/sessions.js';
 import { createDirectSessionClient } from '../../src/direct/sessions.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { setProjectBaseDir, encodeProjectPath } from '../../src/core/path.js';
+import { getProjectBaseDir, encodeProjectPath } from '../../src/core/path.js';
+import { setFakeHome, restoreHome } from '../helpers/temp-home.js';
 
 describe('getSessionPlan: http + direct both implement', () => {
   it('http calls GET /api/sessions/:id/plan?cwd=...', async () => {
@@ -26,20 +27,22 @@ describe('getSessionPlan: http + direct both implement', () => {
   });
 
   it('direct reads latest .md from project plan directory', async () => {
-    const base = join(tmpdir(), `plan-test-${Date.now()}`);
+    const home = join(tmpdir(), `plan-test-${Date.now()}`);
+    const prevHome = setFakeHome(home);
+    const base = getProjectBaseDir();
     const projectDir = join(base, encodeProjectPath('/my/cwd'));
-    mkdirSync(projectDir, { recursive: true });
-    writeFileSync(join(projectDir, 'first.md'), '# first');
-    writeFileSync(join(projectDir, 'second.md'), '# second');
-    setProjectBaseDir(base);
     try {
+      mkdirSync(projectDir, { recursive: true });
+      writeFileSync(join(projectDir, 'first.md'), '# first');
+      writeFileSync(join(projectDir, 'second.md'), '# second');
       const rt = ManagedRuntime.make(SessionLayer);
       const c = createDirectSessionClient(rt as any);
       const res = await c.getSessionPlan({ sessionId: 's1', cwd: '/my/cwd' });
       expect(res.exists).toBe(true);
       expect(res.content === '# first' || res.content === '# second').toBe(true);
     } finally {
-      setProjectBaseDir(undefined);
+      restoreHome(prevHome);
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

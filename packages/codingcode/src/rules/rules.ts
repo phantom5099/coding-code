@@ -1,13 +1,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as os from 'node:os';
 import { Layer, Effect } from 'effect';
 import { RulesService } from './port.js';
+import { getGlobalDir } from '../core/path.js';
 
 // ── Paths ──
 
 function getGlobalRulesPath(): string {
-  return path.join(os.homedir(), '.codingcode', 'rules.md');
+  return path.join(getGlobalDir(), 'rules.md');
 }
 
 function getProjectRulesPath(projectPath?: string): string {

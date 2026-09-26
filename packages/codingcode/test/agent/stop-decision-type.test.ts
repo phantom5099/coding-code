@@ -7,7 +7,7 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { HookService } from '../../src/hooks/port.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
-import { _setGlobalConfigDir } from '../../src/hooks/config.js';
+import { useTempHome } from '../helpers/temp-home.js';
 
 vi.mock('child_process', () => ({
   spawn: (command: string, args: string[]) => fakeSpawn(command, args),
@@ -15,21 +15,17 @@ vi.mock('child_process', () => ({
 
 describe('agent.turn.stop 的决策类型推断', () => {
   const testDir = resolve(tmpdir(), 'codingcode-test-stop-decision');
-  const globalDir = resolve(tmpdir(), 'codingcode-test-stop-decision-global');
+  // 全局层落在临时 home 里，避免读到开发机上的 ~/.codingcode（全局配置目录不可指定）
+  useTempHome('codingcode-test-stop-decision-');
 
   beforeEach(() => {
     resetFakeSpawn();
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
-    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
     mkdirSync(join(testDir, '.codingcode'), { recursive: true });
-    mkdirSync(globalDir, { recursive: true });
-    _setGlobalConfigDir(globalDir);
   });
 
   afterEach(() => {
-    _setGlobalConfigDir(undefined);
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
-    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
   });
 
   it('emitDecision 直接给出 HookDecision，读 decision / injection 不需要 any', async () => {

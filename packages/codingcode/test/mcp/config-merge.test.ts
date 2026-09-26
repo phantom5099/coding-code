@@ -11,11 +11,12 @@ import {
   resolveMcpConfig,
   setGlobalMcpServerEnabled,
   setProjectMcpServerEnabled,
-  _setGlobalConfigDir,
 } from '../../src/mcp/config.js';
+import { useTempHome, setFakeHome } from '../helpers/temp-home.js';
 
 let projectDir: string;
-let globalDir: string;
+// 全局层落在临时 home 里，避免读到/写坏开发机的 ~/.codingcode（全局配置目录不可指定）
+const tempHome = useTempHome('codingcode-test-mcp-merge-');
 
 function readYaml(p: string): any {
   return parseYaml(readFileSync(p, 'utf8'));
@@ -23,19 +24,25 @@ function readYaml(p: string): any {
 
 beforeEach(() => {
   projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-project-'));
-  globalDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-global-'));
   mkdirSync(join(projectDir, '.codingcode'), { recursive: true });
-  mkdirSync(join(globalDir, '.codingcode'), { recursive: true });
-  _setGlobalConfigDir(globalDir);
 });
 
 afterEach(() => {
-  _setGlobalConfigDir(undefined);
   rmSync(projectDir, { recursive: true, force: true });
-  rmSync(globalDir, { recursive: true, force: true });
 });
 
 describe('MCP config merge', () => {
+  it('全局目录不存在时写入会自行创建', () => {
+    const nestedHome = join(tempHome.home, 'nested', 'home'); // 连 home 本身都还不存在
+    setFakeHome(nestedHome);
+
+    writeGlobalMcpConfig([{ name: 's', command: 'c' }]);
+
+    expect(readYaml(join(nestedHome, '.codingcode', 'mcp.yaml')).servers).toEqual([
+      { name: 's', command: 'c' },
+    ]);
+  });
+
   it('merges global and project by name, project wins', () => {
     writeGlobalMcpConfig([
       { name: 'global-server', command: 'global-cmd' },
@@ -97,7 +104,7 @@ describe('MCP enabled switch (a plain boolean field in mcp.yaml)', () => {
 
     setGlobalMcpServerEnabled('a', false);
 
-    expect(readYaml(join(globalDir, 'mcp.yaml')).servers).toEqual([
+    expect(readYaml(join(tempHome.configDir, 'mcp.yaml')).servers).toEqual([
       { name: 'a', command: 'x', enabled: false },
     ]);
     expect(loadGlobalMcpConfig()[0]!.enabled).toBe(false);

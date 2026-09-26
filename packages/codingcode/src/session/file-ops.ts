@@ -11,9 +11,8 @@ import {
   unlinkSync,
   rmSync,
 } from 'fs';
-import { homedir } from 'os';
 import { join, dirname } from 'path';
-import { getProjectBaseDir, computePaths } from '../core/path.js';
+import { getGlobalDir, getProjectBaseDir, computePaths } from '../core/path.js';
 import type { PermissionMode } from '../contracts/permission.js';
 import type { SessionEvent, SessionMetaEvent, SessionIndex } from '../contracts/session.js';
 
@@ -23,7 +22,7 @@ export function sessionJsonlPathFromCwd(cwd: string, sessionId: string): string 
 }
 
 export function ensureDirs(transcriptPath: string): void {
-  const codingcodeDir = join(homedir(), '.codingcode');
+  const codingcodeDir = getGlobalDir();
   if (!existsSync(codingcodeDir)) mkdirSync(codingcodeDir, { recursive: true });
   const dir = dirname(transcriptPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });

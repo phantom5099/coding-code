@@ -7,7 +7,7 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { HookService } from '../../src/hooks/port.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
-import { _setGlobalConfigDir } from '../../src/hooks/config.js';
+import { useTempHome } from '../helpers/temp-home.js';
 
 const TestLayer = HookLayer;
 
@@ -29,21 +29,17 @@ interface HookLine {
 
 describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
   const testDir = resolve(tmpdir(), 'codingcode-test-hooks-decision');
-  const globalDir = resolve(tmpdir(), 'codingcode-test-hooks-decision-global');
+  // 全局层落在临时 home 里，避免读到开发机上的 ~/.codingcode（全局配置目录不可指定）
+  useTempHome('codingcode-test-hooks-decision-');
 
   beforeEach(() => {
     resetFakeSpawn();
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
-    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
     mkdirSync(join(testDir, '.codingcode'), { recursive: true });
-    mkdirSync(globalDir, { recursive: true });
-    _setGlobalConfigDir(globalDir);
   });
 
   afterEach(() => {
-    _setGlobalConfigDir(undefined);
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
-    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
   });
 
   function writeHooksYaml(hooks: HookLine[]) {
