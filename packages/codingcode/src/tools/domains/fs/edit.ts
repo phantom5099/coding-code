@@ -7,6 +7,7 @@ import type { ToolDefinition } from '../../types.js';
 
 export const editFileTool: ToolDefinition = {
   name: 'edit_file',
+  concurrencySafe: false,
   description:
     'Perform exact string replacement in a file. Provide the exact text to replace (old_string) and the new text (new_string). If old_string is not unique in the file, the edit will fail — narrow the match to make it unique.',
   parameters: z.object({

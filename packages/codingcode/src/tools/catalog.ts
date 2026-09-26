@@ -39,6 +39,7 @@ function specToDefinition(spec: McpToolSpec): ToolDefinition {
     name: `${spec.server}:${spec.name}`,
     description: `[MCP:${spec.server}] ${spec.description || spec.name}`,
     parameters: z.fromJSONSchema(spec.inputSchema),
+    concurrencySafe: spec.readOnlyHint,
     execute: (args) => spec.execute(args as Record<string, unknown>),
   };
 }
@@ -61,9 +62,8 @@ export function createToolCatalog(
       if (!definition) return undefined;
       return {
         name: definition.name,
+        concurrencySafe: definition.concurrencySafe ?? false,
         parse: (args: unknown) => definition.parameters.parse(args),
-        // 装配点：工具声明的服务依赖（ToolDefinition<R>）由执行器在运行时经 ToolEnv 注入，
-        // 故在此把 R 收敛为 never，与 ToolRunner 的可执行形态对齐
         execute: (args: unknown, ctx?: ToolExecCtx) =>
           definition.execute(args, ctx) as Effect.Effect<string, AgentError>,
       };

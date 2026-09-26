@@ -12,6 +12,7 @@ interface McpRawTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  readOnlyHint: boolean;
 }
 
 interface ServerEntry {
@@ -90,6 +91,7 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
           name: mt.name,
           description: mt.description ?? '',
           inputSchema: mt.inputSchema ?? {},
+          readOnlyHint: mt.readOnlyHint ?? false,
         }));
 
         const registeredNames: string[] = rawTools.map((mt) => namespacedName(cfg.name, mt.name));
@@ -312,7 +314,7 @@ function namespacedName(serverName: string, toolName: string): string {
 
 function mcpToolToSpec(
   serverName: string,
-  mcpTool: { name: string; description: string; inputSchema: Record<string, unknown> },
+  mcpTool: McpRawTool,
   client: McpClient,
   isDisabledFn: () => boolean
 ): McpToolSpec {
@@ -321,6 +323,7 @@ function mcpToolToSpec(
     name: mcpTool.name,
     description: mcpTool.description,
     inputSchema: mcpTool.inputSchema,
+    readOnlyHint: mcpTool.readOnlyHint,
     execute: (args) => {
       if (isDisabledFn())
         return Effect.fail(

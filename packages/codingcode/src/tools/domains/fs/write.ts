@@ -7,6 +7,7 @@ import type { ToolDefinition } from '../../types.js';
 
 export const writeFileTool: ToolDefinition = {
   name: 'write_file',
+  concurrencySafe: false,
   description:
     'Write content to a file, creating parent directories if needed. Overwrites existing files.',
   parameters: z.object({

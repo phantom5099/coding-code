@@ -28,7 +28,6 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
 
         const finalArgs = args as Record<string, unknown>;
 
-        // Notification hook — use callId for consistent pairing
         const callId = opts?.callId;
         yield* hooks.emit('tool.execute.before', {
           toolName: name,
@@ -141,6 +140,24 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
       );
     }
 
+    function splitWaves(toolCalls: ToolCall[], toolLookup?: ToolLookup): ToolCall[][] {
+      const waves: ToolCall[][] = [];
+      let current: ToolCall[] | undefined;
+      for (const tc of toolCalls) {
+        if (toolLookup?.(tc.name)?.concurrencySafe) {
+          if (!current) {
+            current = [];
+            waves.push(current);
+          }
+          current.push(tc);
+        } else {
+          waves.push([tc]);
+          current = undefined;
+        }
+      }
+      return waves;
+    }
+
     function executeBatch(
       toolCalls: ToolCall[],
       sessionId?: string,
@@ -152,54 +169,28 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
       }
     ): Effect.Effect<ToolResult[]> {
       return Effect.gen(function* () {
-        // Separate safe & destructive tools: safe tools run in parallel, Bash runs serially
-        const safeTools: ToolCall[] = [];
-        const bashTools: ToolCall[] = [];
 
-        for (const tc of toolCalls) {
-          if (tc.name === 'execute_command') {
-            bashTools.push(tc);
-          } else {
-            safeTools.push(tc);
-          }
-        }
+        const runTool = (tc: ToolCall): Effect.Effect<ToolResult> =>
+          Effect.suspend(() =>
+            opts?.signal?.aborted
+              ? Effect.succeed({
+                  status: 'denied' as const,
+                  id: tc.id,
+                  name: tc.name,
+                  reason: 'aborted',
+                })
+              : execSingle(tc, sessionId, opts)
+          );
 
-        // Safe tools — parallel
-        const safeResults = yield* Effect.forEach(
-          safeTools,
-          (tc) => {
-            // Check abort before each tool
-            if (opts?.signal?.aborted) {
-              return Effect.succeed({
-                status: 'denied' as const,
-                id: tc.id,
-                name: tc.name,
-                reason: 'aborted',
-              });
-            }
-            return execSingle(tc, sessionId, opts);
-          },
-          { concurrency: 'unbounded' }
+        const waveResults = yield* Effect.forEach(
+          splitWaves(toolCalls, opts?.toolLookup),
+          (wave) => Effect.forEach(wave, runTool, { concurrency: 'unbounded' }),
+          { concurrency: 1 }
         );
 
-        // Bash tools — serial (avoid race conditions)
-        const bashResults: ToolResult[] = [];
-        for (const tc of bashTools) {
-          // Check abort before each tool
-          if (opts?.signal?.aborted) {
-            bashResults.push({
-              status: 'denied' as const,
-              id: tc.id,
-              name: tc.name,
-              reason: 'aborted',
-            });
-            continue;
-          }
-          const r = yield* execSingle(tc, sessionId, opts);
-          bashResults.push(r);
-        }
-
-        return [...safeResults, ...bashResults];
+        const byId = new Map<string, ToolResult>();
+        for (const wave of waveResults) for (const r of wave) byId.set(r.id, r);
+        return toolCalls.map((tc) => byId.get(tc.id)!);
       });
     }
 

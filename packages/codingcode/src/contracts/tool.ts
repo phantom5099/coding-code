@@ -13,6 +13,8 @@ export type ToolResult = { readonly id: string; readonly name: string } & ToolOu
 
 export interface ToolRunner {
   readonly name: string;
+  /** 是否可与同批其它工具并发执行；「未声明」已由装配处收敛，故此处必填 */
+  readonly concurrencySafe: boolean;
   parse(args: unknown): unknown;
   execute(args: unknown, ctx?: ToolExecCtx): Effect.Effect<string, AgentError>;
 }

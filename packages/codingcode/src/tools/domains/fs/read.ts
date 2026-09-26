@@ -7,6 +7,7 @@ import type { ToolDefinition } from '../../types.js';
 
 export const readFileTool: ToolDefinition = {
   name: 'read_file',
+  concurrencySafe: true,
   description: 'Read the contents of a file and return it with line numbers.',
   parameters: z.object({
     path: z.string().describe('Path to the file (absolute or relative)'),

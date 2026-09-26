@@ -5,6 +5,7 @@ import type { ToolDefinition } from '../../types.js';
 
 export const webFetchTool: ToolDefinition = {
   name: 'fetch_url',
+  concurrencySafe: true,
   description: 'Fetch content from a URL and return its text. Supports GET requests only.',
   parameters: z.object({
     url: z.string().url().describe('The URL to fetch (must be a valid absolute URL)'),

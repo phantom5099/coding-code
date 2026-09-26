@@ -7,6 +7,7 @@ import { AgentError } from '../../../core/error.js';
 
 export const bashTool: ToolDefinition = {
   name: 'execute_command',
+  concurrencySafe: false,
   description:
     'Execute a shell command and return its output. Use for running tests, git, npm, build, and other CLI operations.',
   parameters: z.object({

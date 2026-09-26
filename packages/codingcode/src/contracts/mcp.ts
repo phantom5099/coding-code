@@ -36,5 +36,7 @@ export interface McpToolSpec {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** MCP 注解 readOnlyHint；缺省 false（fail-closed） */
+  readOnlyHint: boolean;
   execute(args: Record<string, unknown>): Effect.Effect<string, AgentError>;
 }

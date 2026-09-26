@@ -23,6 +23,7 @@ const todoSchema = z.object({
 
 export const todoWriteTool: ToolDefinition<TodoService> = {
   name: 'todo_write',
+  concurrencySafe: true,
   description:
     'Replace the current task list. Use for multi-step work to track plan and progress. Pass the full updated plan; previous list is replaced entirely.',
   parameters: todoSchema,
