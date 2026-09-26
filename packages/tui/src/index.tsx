@@ -22,7 +22,7 @@ export interface TuiClient {
   switchModel(id: string): Promise<void>;
   listSessions(): Promise<any[]>;
   getMcpStatus(query: { cwd: string }): Promise<any[]>;
-  setMcpDisabled(body: { name: string; disabled: boolean; cwd: string }): Promise<void>;
+  setMcpEnabled(body: { name: string; enabled: boolean; cwd: string }): Promise<void>;
   listSkills(): Promise<Array<{ name: string; description: string; skillPath: string }>>;
   getPermissionMode(input: {
     sessionId: string;
@@ -63,7 +63,7 @@ export function createTuiClientFromFacades(llm: LLMClient, rt: AppRuntime): TuiC
     switchModel: (id) => models.switchModel({ id }),
     listSessions: () => sessions.listSessions({ cwd: '' }),
     getMcpStatus: (query) => settings.getMcpStatus(query),
-    setMcpDisabled: (body) => settings.setMcpDisabled(body),
+    setMcpEnabled: (body) => settings.setMcpEnabled(body),
     listSkills: () => settings.listSkills({ cwd: '' }),
     getPermissionMode: (input) => settings.getGlobalPermissionMode(input),
     setPermissionMode: (input) => settings.setGlobalPermissionMode(input),

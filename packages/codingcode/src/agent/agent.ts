@@ -324,7 +324,10 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
             })
           : [];
 
-        const allResults = [...approvedResults, ...deniedResults];
+        const resultsById = new Map<string, any>();
+        for (const r of approvedResults) resultsById.set(r.id, r);
+        for (const r of deniedResults) resultsById.set(r.id, r);
+        const allResults = toolCalls.map((tc) => resultsById.get(tc.id));
 
         let todoPrinted = false;
         for (const r of allResults) {

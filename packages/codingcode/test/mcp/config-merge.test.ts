@@ -1,121 +1,81 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { mkdtempSync, readFileSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { parse as parseYaml } from 'yaml';
 import {
   loadMcpConfig,
   writeMcpConfig,
   loadGlobalMcpConfig,
   writeGlobalMcpConfig,
   resolveMcpConfig,
-  getGlobalMcpDisabledState,
-  setGlobalMcpDisabledState,
-  getProjectMcpDisabledState,
-  setProjectMcpDisabledState,
-  resetProjectMcpDisabledState,
-  resolveMcpDisabled,
+  setGlobalMcpServerEnabled,
+  setProjectMcpServerEnabled,
   _setGlobalConfigDir,
 } from '../../src/mcp/config.js';
 
 let projectDir: string;
 let globalDir: string;
 
+function readYaml(p: string): any {
+  return parseYaml(readFileSync(p, 'utf8'));
+}
+
+beforeEach(() => {
+  projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-project-'));
+  globalDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-global-'));
+  mkdirSync(join(projectDir, '.codingcode'), { recursive: true });
+  mkdirSync(join(globalDir, '.codingcode'), { recursive: true });
+  _setGlobalConfigDir(globalDir);
+});
+
+afterEach(() => {
+  _setGlobalConfigDir(undefined);
+  rmSync(projectDir, { recursive: true, force: true });
+  rmSync(globalDir, { recursive: true, force: true });
+});
+
 describe('MCP config merge', () => {
-  beforeEach(() => {
-    projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-project-'));
-    globalDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-global-'));
-    mkdirSync(join(projectDir, '.codingcode'), { recursive: true });
-    mkdirSync(join(globalDir, '.codingcode'), { recursive: true });
-    _setGlobalConfigDir(globalDir);
-  });
-
-  afterEach(() => {
-    _setGlobalConfigDir(undefined);
-    rmSync(projectDir, { recursive: true, force: true });
-    rmSync(globalDir, { recursive: true, force: true });
-  });
-
-  it('should merge global and project configs, project overrides global', () => {
-    // Write global config
+  it('merges global and project by name, project wins', () => {
     writeGlobalMcpConfig([
-      {
-        name: 'global-server',
-        transport: 'stdio',
-        command: 'global-cmd',
-        disabled: false,
-        toolCount: 0,
-      } as any,
-      {
-        name: 'shared-server',
-        transport: 'stdio',
-        command: 'global-shared-cmd',
-        disabled: false,
-        toolCount: 0,
-      } as any,
+      { name: 'global-server', command: 'global-cmd' },
+      { name: 'shared-server', command: 'global-shared-cmd' },
     ]);
-
-    // Write project config
     writeMcpConfig(projectDir, [
-      {
-        name: 'shared-server',
-        transport: 'stdio',
-        command: 'project-shared-cmd',
-        disabled: false,
-        toolCount: 0,
-      } as any,
-      {
-        name: 'project-server',
-        transport: 'stdio',
-        command: 'project-cmd',
-        disabled: false,
-        toolCount: 0,
-      } as any,
+      { name: 'shared-server', command: 'project-shared-cmd' },
+      { name: 'project-server', command: 'project-cmd' },
     ]);
 
     const merged = resolveMcpConfig(projectDir);
 
-    // Should have 3 servers: global-server, shared-server (project override), project-server
     expect(merged).toHaveLength(3);
-
-    const globalServer = merged.find((s) => s.name === 'global-server');
-    expect(globalServer).toBeDefined();
-    expect((globalServer as any).command).toBe('global-cmd');
-
-    const sharedServer = merged.find((s) => s.name === 'shared-server');
-    expect(sharedServer).toBeDefined();
-    expect((sharedServer as any).command).toBe('project-shared-cmd'); // project overrides global
-
-    const projectServer = merged.find((s) => s.name === 'project-server');
-    expect(projectServer).toBeDefined();
-    expect((projectServer as any).command).toBe('project-cmd');
+    expect(merged.find((s) => s.name === 'global-server')!.command).toBe('global-cmd');
+    expect(merged.find((s) => s.name === 'shared-server')!.command).toBe('project-shared-cmd');
+    expect(merged.find((s) => s.name === 'project-server')!.command).toBe('project-cmd');
   });
 
-  it('should return only project config when no global config', () => {
-    writeMcpConfig(projectDir, [
-      {
-        name: 'project-server',
-        transport: 'stdio',
-        command: 'project-cmd',
-        disabled: false,
-        toolCount: 0,
-      } as any,
-    ]);
+  it('project layer only overrides the fields it declares', () => {
+    writeGlobalMcpConfig([{ name: 'shared', command: 'global-cmd', args: ['--a'], concurrency: 5 }]);
+    writeMcpConfig(projectDir, [{ name: 'shared', command: 'project-cmd' }]);
+
+    const merged = resolveMcpConfig(projectDir);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.command).toBe('project-cmd');
+    expect(merged[0]!.args).toEqual(['--a']);
+    expect(merged[0]!.concurrency).toBe(5);
+  });
+
+  it('returns only project config when no global config', () => {
+    writeMcpConfig(projectDir, [{ name: 'project-server', command: 'project-cmd' }]);
 
     const merged = resolveMcpConfig(projectDir);
     expect(merged).toHaveLength(1);
     expect(merged[0]!.name).toBe('project-server');
   });
 
-  it('should return only global config when no project config', () => {
-    writeGlobalMcpConfig([
-      {
-        name: 'global-server',
-        transport: 'stdio',
-        command: 'global-cmd',
-        disabled: false,
-        toolCount: 0,
-      } as any,
-    ]);
+  it('returns only global config when no project config', () => {
+    writeGlobalMcpConfig([{ name: 'global-server', command: 'global-cmd' }]);
 
     const merged = resolveMcpConfig(projectDir);
     expect(merged).toHaveLength(1);
@@ -123,62 +83,56 @@ describe('MCP config merge', () => {
   });
 });
 
-describe('MCP disabled state', () => {
-  const testServer = '__test_mcp_server__';
+describe('MCP enabled switch (a plain boolean field in mcp.yaml)', () => {
+  it('absent field means enabled', () => {
+    writeGlobalMcpConfig([{ name: 'a', command: 'x' }]);
 
-  beforeEach(() => {
-    projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-project-'));
-    globalDir = mkdtempSync(join(tmpdir(), 'codingcode-test-mcp-merge-global-'));
-    mkdirSync(join(projectDir, '.codingcode'), { recursive: true });
-    mkdirSync(join(globalDir, '.codingcode'), { recursive: true });
-    _setGlobalConfigDir(globalDir);
-    setGlobalMcpDisabledState(testServer, false);
+    const merged = resolveMcpConfig(projectDir);
+    expect(merged[0]!.enabled).toBeUndefined();
+    expect(merged[0]!.enabled !== false).toBe(true);
   });
 
-  afterEach(() => {
-    _setGlobalConfigDir(undefined);
-    rmSync(projectDir, { recursive: true, force: true });
-    rmSync(globalDir, { recursive: true, force: true });
+  it('writes the boolean to the global mcp.yaml', () => {
+    writeGlobalMcpConfig([{ name: 'a', command: 'x' }]);
+
+    setGlobalMcpServerEnabled('a', false);
+
+    expect(readYaml(join(globalDir, 'mcp.yaml')).servers).toEqual([
+      { name: 'a', command: 'x', enabled: false },
+    ]);
+    expect(loadGlobalMcpConfig()[0]!.enabled).toBe(false);
   });
 
-  it('should default to not disabled globally', () => {
-    expect(getGlobalMcpDisabledState(testServer)).toBe(false);
+  it('project toggle writes a minimal override that wins over the global definition', () => {
+    writeGlobalMcpConfig([{ name: 'a', command: 'x' }]);
+
+    setProjectMcpServerEnabled(projectDir, 'a', false);
+
+    expect(readYaml(join(projectDir, '.codingcode', 'mcp.yaml')).servers).toEqual([
+      { name: 'a', enabled: false },
+    ]);
+    const merged = resolveMcpConfig(projectDir);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.enabled).toBe(false);
+    expect(merged[0]!.command).toBe('x');
   });
 
-  it('should persist global disabled state', () => {
-    setGlobalMcpDisabledState(testServer, true);
-    expect(getGlobalMcpDisabledState(testServer)).toBe(true);
+  it('patches an existing project entry in place', () => {
+    writeMcpConfig(projectDir, [{ name: 'a', command: 'proj-cmd' }]);
+
+    setProjectMcpServerEnabled(projectDir, 'a', false);
+
+    expect(readYaml(join(projectDir, '.codingcode', 'mcp.yaml')).servers).toEqual([
+      { name: 'a', command: 'proj-cmd', enabled: false },
+    ]);
   });
 
-  it('should return undefined when project has no config', () => {
-    expect(getProjectMcpDisabledState(projectDir, testServer)).toBe(undefined);
-  });
+  it('round-trips back to enabled', () => {
+    writeGlobalMcpConfig([{ name: 'a', command: 'x' }]);
+    setGlobalMcpServerEnabled('a', false);
+    setGlobalMcpServerEnabled('a', true);
 
-  it('should persist project-level disabled state', () => {
-    setProjectMcpDisabledState(projectDir, testServer, true);
-    expect(getProjectMcpDisabledState(projectDir, testServer)).toBe(true);
-  });
-
-  it('should reset project-level disabled state', () => {
-    setProjectMcpDisabledState(projectDir, testServer, true);
-    resetProjectMcpDisabledState(projectDir, testServer);
-    expect(getProjectMcpDisabledState(projectDir, testServer)).toBe(undefined);
-  });
-
-  it('resolveMcpDisabled should use project-level when set', () => {
-    setGlobalMcpDisabledState(testServer, false);
-    setProjectMcpDisabledState(projectDir, testServer, true);
-    expect(resolveMcpDisabled(projectDir, testServer)).toBe(true);
-  });
-
-  it('resolveMcpDisabled should fall back to global when project not set', () => {
-    setGlobalMcpDisabledState(testServer, true);
-    expect(resolveMcpDisabled(projectDir, testServer)).toBe(true);
-  });
-
-  it('resolveMcpDisabled should use project-level enabled over global disabled', () => {
-    setGlobalMcpDisabledState(testServer, true);
-    setProjectMcpDisabledState(projectDir, testServer, false);
-    expect(resolveMcpDisabled(projectDir, testServer)).toBe(false);
+    expect(loadMcpConfig(projectDir)).toEqual([]);
+    expect(loadGlobalMcpConfig()[0]!.enabled).toBe(true);
   });
 });

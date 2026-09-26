@@ -3,6 +3,8 @@ import type { AgentError } from '../core/error.js';
 
 export interface McpServerConfig {
   name: string;
+  /** 开关：false 表示禁用。缺省（undefined）等同启用 */
+  enabled?: boolean;
   /** stdio: executable command */
   command?: string;
   /** stdio: command arguments */
@@ -22,7 +24,6 @@ export interface McpServerConfig {
 export interface McpStatus {
   name: string;
   connected: boolean;
-  disabled: boolean;
   toolCount: number;
   transport: 'stdio' | 'http';
   reconnectAttempts: number;
@@ -35,5 +36,7 @@ export interface McpToolSpec {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** MCP 注解 readOnlyHint；缺省 false（fail-closed） */
+  readOnlyHint: boolean;
   execute(args: Record<string, unknown>): Effect.Effect<string, AgentError>;
 }

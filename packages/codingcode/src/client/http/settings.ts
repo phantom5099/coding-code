@@ -42,17 +42,10 @@ export function createHttpSettingsClient(
       return apiGet<McpStatus[]>(`/api/settings/mcp${qsCwd(cwd)}`);
     },
 
-    async setMcpDisabled({ name, disabled, cwd }) {
-      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, {
-        disabled,
+    async setMcpEnabled({ name, enabled, cwd }) {
+      await apiPost(`/api/settings/mcp/${encodeURIComponent(name)}/enabled${qsCwd(cwd)}`, {
+        enabled,
       });
-    },
-
-    async resetMcpDisabled({ name, cwd }) {
-      await apiPost(
-        `/api/settings/mcp/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`,
-        {}
-      );
     },
 
     async createMcpServer({ cwd, server }) {
@@ -87,17 +80,10 @@ export function createHttpSettingsClient(
       await apiDelete(`/api/settings/hooks/${encodeURIComponent(name)}${qsCwd(cwd)}`);
     },
 
-    async setHookDisabled({ cwd, name, disabled }) {
-      await apiPost(`/api/settings/hooks/${encodeURIComponent(name)}/disabled${qsCwd(cwd)}`, {
-        disabled,
+    async setHookEnabled({ cwd, name, enabled }) {
+      await apiPost(`/api/settings/hooks/${encodeURIComponent(name)}/enabled${qsCwd(cwd)}`, {
+        enabled,
       });
-    },
-
-    async resetHookDisabled({ name, cwd }) {
-      await apiPost(
-        `/api/settings/hooks/${encodeURIComponent(name)}/disabled/reset${qsCwd(cwd)}`,
-        {}
-      );
     },
 
     async getGlobalPermissionMode(input: {

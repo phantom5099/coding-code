@@ -1,5 +1,5 @@
 import { Effect, Layer } from 'effect';
-import { resolveMcpConfig, resolveMcpDisabled } from './config.js';
+import { resolveMcpConfig } from './config.js';
 import { McpClient } from './client.js';
 import { McpService } from './port.js';
 import type { McpServerConfig, McpStatus, McpToolSpec } from '../contracts/mcp.js';
@@ -12,6 +12,7 @@ interface McpRawTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  readOnlyHint: boolean;
 }
 
 interface ServerEntry {
@@ -32,16 +33,6 @@ type ServerName = string;
 export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
     const clientsByProject = new Map<ProjectPath, Map<ServerName, ServerEntry>>();
     const leasesBySession = new Map<string, Set<LeaseEntry>>();
-    const disabledMcpByProject = new Map<ProjectPath, Set<ServerName>>();
-    const configCache = new Map<ProjectPath, McpServerConfig[]>();
-
-    function getConfig(projectPath: string): McpServerConfig[] {
-      const cached = configCache.get(projectPath);
-      if (cached) return cached;
-      const configs = resolveMcpConfig(projectPath);
-      configCache.set(projectPath, configs);
-      return configs;
-    }
 
     function getProjectClients(projectPath: string): Map<ServerName, ServerEntry> {
       let map = clientsByProject.get(projectPath);
@@ -52,8 +43,16 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
       return map;
     }
 
-    function isDisabled(projectPath: string, serverName: string): boolean {
-      return resolveMcpDisabled(projectPath, serverName);
+    /**
+     * 被禁用的 server 名集合。
+     * 开关就是 mcp.yaml 里的 `enabled` 字段，这里每次实时读配置：改开关即落盘，落盘即生效。
+     */
+    function disabledServerNames(projectPath: string): Set<ServerName> {
+      return new Set(
+        resolveMcpConfig(projectPath)
+          .filter((c) => c.enabled === false)
+          .map((c) => c.name)
+      );
     }
 
     function doConnect(
@@ -92,6 +91,7 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
           name: mt.name,
           description: mt.description ?? '',
           inputSchema: mt.inputSchema ?? {},
+          readOnlyHint: mt.readOnlyHint ?? false,
         }));
 
         const registeredNames: string[] = rawTools.map((mt) => namespacedName(cfg.name, mt.name));
@@ -183,7 +183,6 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
       syncConnections: (projectPath: string): Effect.Effect<void> =>
         Effect.gen(function* () {
           const configs = resolveMcpConfig(projectPath);
-          configCache.set(projectPath, configs);
           const configNames = new Set(configs.map((c) => c.name));
 
           const projectClients = clientsByProject.get(projectPath);
@@ -196,6 +195,10 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
           }
 
           for (const cfg of configs) {
+            if (cfg.enabled === false) {
+              yield* doDisconnect(projectPath, cfg.name, true);
+              continue;
+            }
             yield* doConnect(cfg, projectPath, false);
           }
         }),
@@ -206,7 +209,7 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
         names: string[]
       ): Effect.Effect<void> =>
         Effect.gen(function* () {
-          const configs = getConfig(projectPath);
+          const configs = resolveMcpConfig(projectPath);
           const configMap = new Map(configs.map((c) => [c.name, c]));
 
           for (const name of names) {
@@ -217,6 +220,7 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
               );
               continue;
             }
+            if (cfg.enabled === false) continue;
             yield* doConnect(cfg, projectPath, true, sessionId);
           }
         }),
@@ -244,12 +248,14 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
         Effect.sync(() => {
           const projectClients = clientsByProject.get(projectPath);
           if (!projectClients) return [];
+          const disabled = disabledServerNames(projectPath);
           const specs: McpToolSpec[] = [];
           for (const [serverName, entry] of projectClients) {
+            if (disabled.has(serverName)) continue;
             for (const raw of entry.rawTools) {
               specs.push(
                 mcpToolToSpec(serverName, raw, entry.client, () =>
-                  isDisabled(projectPath, serverName)
+                  disabledServerNames(projectPath).has(serverName)
                 )
               );
             }
@@ -264,27 +270,11 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
           return Array.from(projectClients.entries()).map(([name, entry]) => ({
             name,
             connected: entry.client.connected,
-            disabled: isDisabled(projectPath, name),
             toolCount: entry.rawTools.length,
             transport: entry.client.transportType,
             reconnectAttempts: 0,
             leaseCount: countLeases(projectPath, name),
           }));
-        }),
-
-      disable: (projectPath: string, name: string): Effect.Effect<void> =>
-        Effect.sync(() => {
-          let set = disabledMcpByProject.get(projectPath);
-          if (!set) {
-            set = new Set();
-            disabledMcpByProject.set(projectPath, set);
-          }
-          set.add(name);
-        }),
-
-      enable: (projectPath: string, name: string): Effect.Effect<void> =>
-        Effect.sync(() => {
-          disabledMcpByProject.get(projectPath)?.delete(name);
         }),
 
       disposeSession: (sessionId: string): Effect.Effect<void> =>
@@ -313,8 +303,6 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
             yield* doDisconnect(projectPath, name, true);
           }
           clientsByProject.delete(projectPath);
-          disabledMcpByProject.delete(projectPath);
-          configCache.delete(projectPath);
         }),
     };
   }
@@ -326,7 +314,7 @@ function namespacedName(serverName: string, toolName: string): string {
 
 function mcpToolToSpec(
   serverName: string,
-  mcpTool: { name: string; description: string; inputSchema: Record<string, unknown> },
+  mcpTool: McpRawTool,
   client: McpClient,
   isDisabledFn: () => boolean
 ): McpToolSpec {
@@ -335,6 +323,7 @@ function mcpToolToSpec(
     name: mcpTool.name,
     description: mcpTool.description,
     inputSchema: mcpTool.inputSchema,
+    readOnlyHint: mcpTool.readOnlyHint,
     execute: (args) => {
       if (isDisabledFn())
         return Effect.fail(

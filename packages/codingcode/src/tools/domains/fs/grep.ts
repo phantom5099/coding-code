@@ -8,6 +8,7 @@ import type { ToolDefinition } from '../../types.js';
 
 export const searchTool: ToolDefinition = {
   name: 'search_code',
+  concurrencySafe: true,
   description:
     'Search for a text or regex pattern in project files and return matching file paths and line content.',
   parameters: z.object({

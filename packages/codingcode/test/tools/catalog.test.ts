@@ -46,6 +46,7 @@ describe('createToolCatalog', () => {
       name: 'thing',
       description: 'a thing',
       inputSchema: {},
+      readOnlyHint: false,
       execute: () => Effect.succeed('ok'),
     };
     const { tools, lookup } = createToolCatalog(['read_file'], [spec]);
@@ -63,6 +64,7 @@ describe('createToolCatalog', () => {
         properties: { text: { type: 'string' } },
         required: ['text'],
       },
+      readOnlyHint: false,
       execute: () => Effect.succeed('ok'),
     };
     const { lookup } = createToolCatalog([], [spec]);
@@ -77,6 +79,7 @@ describe('createToolCatalog', () => {
       name: 'thing',
       description: '',
       inputSchema: {},
+      readOnlyHint: false,
       execute: (args) => Effect.succeed(`called:${String(args.n)}`),
     };
     const { lookup } = createToolCatalog([], [spec]);

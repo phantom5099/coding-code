@@ -3,8 +3,7 @@ import Toggle from './Toggle';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import {
   listMcpServers,
-  setMcpDisabled,
-  resetMcpDisabled,
+  setMcpEnabled,
   createMcpServer,
   updateMcpServer,
   deleteMcpServer,
@@ -14,7 +13,7 @@ import type { McpServerConfig } from '@codingcode/core/contracts/mcp';
 interface McpEntry {
   name: string;
   transport: 'stdio' | 'http';
-  disabled: boolean;
+  enabled: boolean;
   toolCount: number;
   source?: 'global' | 'project';
   hasProjectOverride?: boolean;
@@ -70,9 +69,9 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
     load();
   }, []);
 
-  const toggle = async (name: string, disabled: boolean) => {
-    await setMcpDisabled(name, disabled, cwd);
-    setServers((prev) => prev.map((s) => (s.name === name ? { ...s, disabled } : s)));
+  const toggle = async (name: string, enabled: boolean) => {
+    await setMcpEnabled(name, enabled, cwd);
+    setServers((prev) => prev.map((s) => (s.name === name ? { ...s, enabled } : s)));
   };
 
   const startCreate = () => {
@@ -314,7 +313,7 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
                     </button>
                   </>
                 )}
-                <Toggle checked={!s.disabled} onChange={(v) => toggle(s.name, !v)} />
+                <Toggle checked={s.enabled} onChange={(v) => toggle(s.name, v)} />
               </div>
             );
           })}

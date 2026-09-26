@@ -35,5 +35,6 @@ export interface UserHookConfig {
   args?: string[];
   env?: Record<string, string>;
   priority?: number;
-  enabled: boolean;
+  /** 开关：false 表示禁用。缺省（undefined）等同启用 */
+  enabled?: boolean;
 }

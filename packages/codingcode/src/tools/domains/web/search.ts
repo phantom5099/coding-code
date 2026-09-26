@@ -144,6 +144,7 @@ export function parseBaiduHtml(html: string, maxResults: number): SearchResult[]
 
 export const webSearchTool: ToolDefinition = {
   name: 'web_search',
+  concurrencySafe: true,
   description:
     'Search the web and return results with titles, URLs, and snippets. Use this when you need up-to-date information or to find documentation, references, or answers beyond your knowledge cutoff.',
   parameters: z.object({

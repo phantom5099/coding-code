@@ -11,6 +11,7 @@ export const dispatchAgentTool: ToolDefinition<
   HookService | McpService | SubagentRunnerService
 > = {
   name: 'dispatch_agent',
+  concurrencySafe: false,
   description:
     'Spawn an isolated subagent to handle specialized tasks. See "Available Subagents" in the system prompt for available profiles and their capabilities.',
   parameters: z.object({

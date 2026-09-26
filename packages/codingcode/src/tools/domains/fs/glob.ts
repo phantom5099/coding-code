@@ -7,6 +7,7 @@ import type { ToolDefinition } from '../../types.js';
 
 export const globTool: ToolDefinition = {
   name: 'search_files',
+  concurrencySafe: true,
   description:
     'Find files matching a glob pattern. Returns file paths sorted by modification time (newest first). Useful for locating files by name or extension across the project.',
   parameters: z.object({

@@ -100,7 +100,12 @@ export class McpClient {
   }
 
   async listTools(): Promise<
-    Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>
+    Array<{
+      name: string;
+      description: string;
+      inputSchema: Record<string, unknown>;
+      readOnlyHint: boolean;
+    }>
   > {
     const result = await this.client.listTools();
     this.toolNames = result.tools.map((t) => t.name);
@@ -108,6 +113,7 @@ export class McpClient {
       name: t.name,
       description: t.description ?? '',
       inputSchema: (t.inputSchema as Record<string, unknown>) ?? {},
+      readOnlyHint: t.annotations?.readOnlyHint ?? false,
     }));
   }
 

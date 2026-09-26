@@ -6,8 +6,7 @@ import {
   createHook,
   updateHook,
   deleteHook,
-  setHookDisabled,
-  resetHookDisabled,
+  setHookEnabled,
 } from '../lib/core-api';
 import type { UserHookConfig, HookPoint } from '@codingcode/core/contracts/hooks';
 
@@ -20,7 +19,7 @@ interface HookEntry {
   args?: string[];
   env?: Record<string, string>;
   priority?: number;
-  enabled: boolean;
+  enabled?: boolean;
   source?: 'global' | 'project';
   hasProjectOverride?: boolean;
 }
@@ -150,7 +149,7 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
             .join('\n')
         : '',
       priority: (h.priority ?? 0).toString(),
-      enabled: h.enabled,
+      enabled: h.enabled !== false,
     });
     setEditingName(h.name);
     setIsCreating(false);
@@ -383,10 +382,10 @@ export default function HooksPanel({ global: isGlobal }: { global?: boolean }) {
                     </>
                   )}
                   <Toggle
-                    checked={h.enabled}
+                    checked={h.enabled !== false}
                     onChange={(v) => {
-                      setHookDisabled(cwd, h.name, !v).catch((e) => {
-                        console.error('Failed to set hook disabled:', e);
+                      setHookEnabled(cwd, h.name, v).catch((e) => {
+                        console.error('Failed to set hook enabled:', e);
                       });
                       setHooks((prev) =>
                         prev.map((hh) => (hh.name === h.name ? { ...hh, enabled: v } : hh))

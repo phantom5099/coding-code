@@ -1,16 +1,5 @@
 import { spawn } from 'child_process';
 
-const _disabledHookNames = new Set<string>();
-
-export function setHookRuntimeEnabled(name: string, enabled: boolean): void {
-  if (enabled) _disabledHookNames.delete(name);
-  else _disabledHookNames.add(name);
-}
-
-export function isHookRuntimeEnabled(name: string): boolean {
-  return !_disabledHookNames.has(name);
-}
-
 export async function executeHookCommand(
   config: { command: string; args?: string[]; env?: Record<string, string> },
   payload: Record<string, unknown>
