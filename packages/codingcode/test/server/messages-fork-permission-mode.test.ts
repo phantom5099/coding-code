@@ -16,16 +16,9 @@ import { useTempProjectBase } from '../helpers/project-base.js';
 useTempProjectBase();
 
 const mockHookService = {
-  register: () => Effect.succeed(() => {}),
-  registerDecision: () => Effect.succeed(() => {}),
   emit: () => Effect.succeed(undefined),
   emitDecision: () => Effect.succeed(null),
   reloadUserHooks: () => Effect.succeed(undefined),
-  attachSessionHooks: () => Effect.succeed(undefined),
-  disableHook: () => Effect.succeed(undefined),
-  enableHook: () => Effect.succeed(undefined),
-  disposeSession: () => Effect.succeed(undefined),
-  disposeProject: () => Effect.succeed(undefined),
 } as any;
 
 const mockApprovalWaitService = {

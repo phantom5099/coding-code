@@ -86,6 +86,7 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
             toolName: name,
             args: args as Record<string, unknown>,
             error,
+            projectPath: opts?.projectPath,
           })
         )
       );

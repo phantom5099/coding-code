@@ -70,7 +70,8 @@ function recordAuditAndReturn(
   hooks: HookShape,
   request: ToolCallRequest,
   decision: ApprovalDecision,
-  passedLayers: string[]
+  passedLayers: string[],
+  projectPath: string | undefined
 ): Effect.Effect<ApprovalDecision> {
   return Effect.gen(function* () {
     passedLayers.push(LAYER_NAMES[4]);
@@ -79,6 +80,7 @@ function recordAuditAndReturn(
       input: request.input,
       decision,
       layers: passedLayers,
+      projectPath,
     });
     return decision;
   });
@@ -99,7 +101,7 @@ export function runPipeline(
       const result = opts.ruleEngine.evaluate(request.tool, request.input);
       if (result) {
         layers.push(LAYER_NAMES[0]);
-        const final = yield* recordAuditAndReturn(hooks, request, result, layers);
+        const final = yield* recordAuditAndReturn(hooks, request, result, layers, opts.projectPath);
         return final;
       }
     }
@@ -114,7 +116,7 @@ export function runPipeline(
       );
       if (modeResult) {
         layers.push(LAYER_NAMES[1]);
-        const final = yield* recordAuditAndReturn(hooks, request, modeResult, layers);
+        const final = yield* recordAuditAndReturn(hooks, request, modeResult, layers, opts.projectPath);
         return final;
       }
     }
@@ -141,12 +143,12 @@ export function runPipeline(
             reason: hookResult.reason ?? 'Denied by PreToolUse hook',
             source: 'hook',
           };
-          const final = yield* recordAuditAndReturn(hooks, request, result, layers);
+          const final = yield* recordAuditAndReturn(hooks, request, result, layers, opts.projectPath);
           return final;
         }
         if (hookResult.decision === 'allow') {
           const result: ApprovalDecision = { type: 'allow', source: 'hook' };
-          const final = yield* recordAuditAndReturn(hooks, request, result, layers);
+          const final = yield* recordAuditAndReturn(hooks, request, result, layers, opts.projectPath);
           return final;
         }
         const nextRequest: ToolCallRequest = { ...request };
@@ -167,7 +169,7 @@ export function runPipeline(
           reason: 'Approval required but no UI available',
           source: 'system',
         };
-        const final = yield* recordAuditAndReturn(hooks, request, result, layers);
+        const final = yield* recordAuditAndReturn(hooks, request, result, layers, opts.projectPath);
         return final;
       }
 
@@ -196,7 +198,7 @@ export function runPipeline(
           break;
       }
 
-      const final = yield* recordAuditAndReturn(hooks, request, result, layers);
+      const final = yield* recordAuditAndReturn(hooks, request, result, layers, opts.projectPath);
       return final;
     }
   });

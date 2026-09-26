@@ -1,266 +1,262 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+// 这个 import 必须排在 hooks.js 前面：vi.mock 的工厂要用 fakeSpawn，
+// 而工厂会在 hooks.js 首次 import child_process 时执行。
+import { spawnRecords, whenCommand, resetFakeSpawn, fakeSpawn } from './fake-spawn.js';
 import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { HookService } from '../../src/hooks/port.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
+import { _setGlobalConfigDir } from '../../src/hooks/config.js';
+
 const AppLayer = HookLayer;
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(AppLayer) as any));
 }
 
-describe('HookService', () => {
-  it('should register and emit a hook', async () => {
-    const handler = vi.fn();
+vi.mock('child_process', () => ({
+  spawn: (command: string, args: string[]) => fakeSpawn(command, args),
+}));
 
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.register('tool.execute.before', handler);
-      yield* hooks.emit('tool.execute.before', { key: 'val' });
-      return handler.mock.calls.length;
-    });
-
-    const count = await runWithLayer(program);
-    expect(count).toBe(1);
-    expect(handler).toHaveBeenCalledWith({ key: 'val' });
-  });
-
-  it('should not throw on emit with no handlers', async () => {
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.emit('tool.execute.after', {});
-      return true;
-    });
-
-    const result = await runWithLayer(program);
-    expect(result).toBe(true);
-  });
-
-  it('should return unregister function', async () => {
-    const handler = vi.fn();
-
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      const unregister = yield* hooks.register('llm.request.before', handler);
-      unregister(); // remove handler
-      yield* hooks.emit('llm.request.before', {});
-      return handler.mock.calls.length;
-    });
-
-    const count = await runWithLayer(program);
-    expect(count).toBe(0);
-  });
-
-  it('should call multiple handlers for same hook point', async () => {
-    const h1 = vi.fn();
-    const h2 = vi.fn();
-
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.register('session.save.after', h1);
-      yield* hooks.register('session.save.after', h2);
-      yield* hooks.emit('session.save.after', {});
-    });
-
-    await runWithLayer(program);
-    expect(h1).toHaveBeenCalledTimes(1);
-    expect(h2).toHaveBeenCalledTimes(1);
-  });
-
-  it('should support async handlers', async () => {
-    const results: string[] = [];
-    const handler = async () => {
-      await new Promise((r) => setTimeout(r, 5));
-      results.push('done');
-    };
-
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.register('tool.execute.after', handler);
-      yield* hooks.emit('tool.execute.after', {});
-    });
-
-    await runWithLayer(program);
-    expect(results).toEqual(['done']);
-  });
-
-  it('should isolate handler exceptions 鈥?later handlers still run after one throws', async () => {
-    const called: string[] = [];
-
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.register('session.save.before', async () => {
-        throw new Error('bad handler');
-      });
-      yield* hooks.register('session.save.before', () => {
-        called.push('second');
-      });
-      yield* hooks.emit('session.save.before', {});
-    });
-
-    await runWithLayer(program);
-    expect(called).toEqual(['second']);
-  });
-
-  it('should isolate decision handler exceptions 鈥?skips erroring handler and tries next', async () => {
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.registerDecision(
-        'agent.turn.stop',
-        async () => {
-          throw new Error('bad decision');
-        },
-        { priority: 0 }
-      );
-      yield* hooks.registerDecision(
-        'agent.turn.stop',
-        async () => ({ decision: 'continue' as const }),
-        { priority: 1 }
-      );
-      return yield* hooks.emitDecision('agent.turn.stop', {});
-    });
-
-    const result = await runWithLayer(program);
-    expect(result?.decision).toBe('continue');
-  });
-
-  it('runs Effect-returning observers in the emit fiber context (yield* services)', async () => {
-    // The whole reason ObserverHandler is allowed to return an Effect: the
-    // observer should be able to yield* services from the caller's fiber
-    // (e.g. HookService) without resorting to Effect.runFork / default
-    // runtime. This test pins that contract.
-    const sideEffect: { ran: boolean; usedService: boolean } = {
-      ran: false,
-      usedService: false,
-    };
-
-    const observer: import('../../src/hooks/types.js').ObserverHandler = (payload) =>
-      Effect.gen(function* () {
-        // yield* in the observer body — this is the contract under test.
-        // If emit runs the observer on a default runtime (no services),
-        // this line throws "Service not found: HookService".
-        const hooks = yield* HookService;
-        sideEffect.ran = true;
-        sideEffect.usedService = typeof hooks.register === 'function';
-        void payload;
-      });
-
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.register('tool.execute.after', observer, { source: 'system' });
-      yield* hooks.emit('tool.execute.after', {
-        toolName: 'submit_plan',
-        sessionId: 'sess-1',
-        projectPath: '/proj',
-        args: { plan_content: 'x' },
-        result: { output: 'Plan written to /x' },
-      });
-      return sideEffect;
-    });
-
-    const result = await runWithLayer(program);
-    expect(result.ran).toBe(true);
-    expect(result.usedService).toBe(true);
-  });
-});
-
-describe('HookService.reloadUserHooks', () => {
-  const testDir = resolve(tmpdir(), 'codingcode-test-hooks-reload');
+describe('HookService.emit（YAML 定义的观察者）', () => {
+  const testDir = resolve(tmpdir(), 'codingcode-test-hooks-emit');
+  const globalDir = resolve(tmpdir(), 'codingcode-test-hooks-emit-global');
 
   beforeEach(() => {
+    resetFakeSpawn();
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
+    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
     mkdirSync(join(testDir, '.codingcode'), { recursive: true });
+    mkdirSync(globalDir, { recursive: true });
+    // 全局层指向空目录，避免读到开发机上的 ~/.codingcode
+    _setGlobalConfigDir(globalDir);
   });
 
   afterEach(() => {
+    _setGlobalConfigDir(undefined);
     if (existsSync(testDir)) rmSync(testDir, { recursive: true, force: true });
+    if (existsSync(globalDir)) rmSync(globalDir, { recursive: true, force: true });
   });
 
-  function writeHooksYaml(hookName: string, point: string, enabled: boolean) {
-    const content = `hooks:\n  - name: ${hookName}\n    point: ${point}\n    type: observer\n    command: echo\n    args: []\n    enabled: ${enabled}\n`;
-    writeFileSync(join(testDir, '.codingcode', 'hooks.yaml'), content);
+  interface HookLine {
+    name: string;
+    point: string;
+    type?: 'observer' | 'decision';
+    command: string;
+    priority?: number;
+    enabled?: boolean;
   }
 
-  it('clears old user hooks and loads new ones from disk', async () => {
-    const called: string[] = [];
+  function hookYaml(hooks: HookLine[]): string {
+    const lines = hooks.map((h) => {
+      const parts = [
+        `  - name: ${h.name}`,
+        `    point: ${h.point}`,
+        `    type: ${h.type ?? 'observer'}`,
+        `    command: ${h.command}`,
+        '    args: []',
+      ];
+      if (h.priority !== undefined) parts.push(`    priority: ${h.priority}`);
+      if (h.enabled !== undefined) parts.push(`    enabled: ${h.enabled}`);
+      return parts.join('\n');
+    });
+    return `hooks:\n${lines.join('\n')}\n`;
+  }
 
-    writeHooksYaml('hook-a', 'tool.execute.before', true);
+  function writeHooksYaml(hooks: HookLine[]) {
+    writeFileSync(join(testDir, '.codingcode', 'hooks.yaml'), hookYaml(hooks));
+  }
 
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.register('tool.execute.before', () => {
-        called.push('system');
+  function writeGlobalHooksYaml(hooks: HookLine[]) {
+    writeFileSync(join(globalDir, 'hooks.yaml'), hookYaml(hooks));
+  }
+
+  it('把 hooks.yaml 里的观察者注册到对应点，并把 payload 原样送进子进程 stdin', async () => {
+    writeHooksYaml([{ name: 'h-a', point: 'tool.execute.before', command: 'cmd-a' }]);
+
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.before', { projectPath: testDir, toolName: 'read_file' });
+      })
+    );
+
+    expect(spawnRecords).toHaveLength(1);
+    expect(spawnRecords[0]!.command).toBe('cmd-a');
+    expect(spawnRecords[0]!.payload).toEqual({ projectPath: testDir, toolName: 'read_file' });
+  });
+
+  it('emit 在没有 handler 的点上是 no-op：不抛错、不 spawn', async () => {
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.emit('tool.execute.after', { projectPath: testDir });
+      })
+    );
+    expect(spawnRecords).toHaveLength(0);
+  });
+
+  it('enabled: false 的 hook 不注册', async () => {
+    writeHooksYaml([{ name: 'off', point: 'tool.execute.before', command: 'cmd-off', enabled: false }]);
+
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+      })
+    );
+
+    expect(spawnRecords).toHaveLength(0);
+  });
+
+  it('同一点的多个观察者按 priority 升序依次执行', async () => {
+    writeHooksYaml([
+      { name: 'late', point: 'tool.execute.before', command: 'cmd-late', priority: 20 },
+      { name: 'early', point: 'tool.execute.before', command: 'cmd-early', priority: 10 },
+      { name: 'zero', point: 'tool.execute.before', command: 'cmd-zero' },
+    ]);
+
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+      })
+    );
+
+    expect(spawnRecords.map((r) => r.command)).toEqual(['cmd-zero', 'cmd-early', 'cmd-late']);
+  });
+
+  it('reloadUserHooks 替换上一次注册的，不累积', async () => {
+    writeHooksYaml([{ name: 'first', point: 'tool.execute.before', command: 'cmd-first' }]);
+
+    const program = (label: string) =>
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.before', { projectPath: testDir, label });
       });
-      yield* hooks.reloadUserHooks(testDir);
 
-      writeHooksYaml('hook-b', 'tool.execute.before', true);
-      yield* hooks.reloadUserHooks(testDir);
-    });
+    await runWithLayer(program('one'));
+    expect(spawnRecords).toHaveLength(1);
 
-    await runWithLayer(program);
-    expect(called).toHaveLength(0);
+    writeHooksYaml([{ name: 'second', point: 'tool.execute.before', command: 'cmd-second' }]);
+    await runWithLayer(program('two'));
+
+    expect(spawnRecords.map((r) => r.command)).toEqual(['cmd-first', 'cmd-second']);
   });
 
-  it('disabled hooks in yaml are not registered', async () => {
-    writeHooksYaml('disabled-hook', 'tool.execute.before', false);
+  it('hook 只在它所属的 projectPath 下生效', async () => {
+    writeHooksYaml([{ name: 'h-a', point: 'tool.execute.before', command: 'cmd-a' }]);
 
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.reloadUserHooks(testDir);
-    });
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.before', { projectPath: '/somewhere/else' });
+        yield* hooks.emit('tool.execute.before', { projectPath: undefined });
+        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+      })
+    );
 
-    await runWithLayer(program);
+    expect(spawnRecords).toHaveLength(1);
   });
 
-  it('reloadUserHooks with empty cwd clears all user hooks', async () => {
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      yield* hooks.reloadUserHooks(join(process.cwd(), 'nonexistent-dir-xyzzy'));
-    });
+  it('单个观察者失败不阻断后面的观察者，emit 也不失败', async () => {
+    writeHooksYaml([
+      { name: 'bad', point: 'tool.execute.before', command: 'cmd-bad', priority: 1 },
+      { name: 'good', point: 'tool.execute.before', command: 'cmd-good', priority: 2 },
+    ]);
+    whenCommand('cmd-bad', { error: new Error('boom') });
 
-    await runWithLayer(program);
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+        return 'emit survived';
+      })
+    );
+
+    expect(result).toBe('emit survived');
+    // cmd-bad 挂在 error 上（error 先于 close，记录已入），cmd-good 必须照跑
+    expect(spawnRecords.map((r) => r.command)).toEqual(['cmd-bad', 'cmd-good']);
   });
 
-  it('system hooks survive reloadUserHooks', async () => {
-    const called: string[] = [];
-
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      // Register with source: 'system' 鈥?should survive reload
-      yield* hooks.register(
-        'tool.execute.before',
-        () => {
-          called.push('system');
-        },
-        { source: 'system' }
-      );
-      yield* hooks.reloadUserHooks(testDir);
-
-      // Emit should still call the system handler
-      yield* hooks.emit('tool.execute.before', {});
-    });
-
-    await runWithLayer(program);
-    expect(called).toEqual(['system']);
+  it('reloadUserHooks 指向不存在的目录时不注册任何 hook', async () => {
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(join(testDir, 'nope'));
+        yield* hooks.emit('tool.execute.before', { projectPath: join(testDir, 'nope') });
+      })
+    );
+    expect(spawnRecords).toHaveLength(0);
   });
 
-  it('register with source option defaults to user', async () => {
-    const called: string[] = [];
+  it('emit 把 payload 的全部字段（含非字符串值）序列化给子进程', async () => {
+    writeHooksYaml([{ name: 'h-a', point: 'tool.execute.after', command: 'cmd-a' }]);
 
-    const program = Effect.gen(function* () {
-      const hooks = yield* HookService;
-      // No source option 鈥?defaults to 'user', should be cleared
-      yield* hooks.register('tool.execute.before', () => {
-        called.push('default-user');
-      });
-      yield* hooks.reloadUserHooks(testDir);
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.after', {
+          projectPath: testDir,
+          toolName: 'write_file',
+          durationMs: 42,
+          args: { path: '/tmp/x', content: 'hi' },
+        });
+      })
+    );
 
-      yield* hooks.emit('tool.execute.before', {});
+    expect(spawnRecords[0]!.payload).toEqual({
+      projectPath: testDir,
+      toolName: 'write_file',
+      durationMs: 42,
+      args: { path: '/tmp/x', content: 'hi' },
     });
+  });
 
-    await runWithLayer(program);
-    expect(called).toHaveLength(0);
+  it('只在全局层定义的 hook 在项目层没写任何东西时照常生效', async () => {
+    writeGlobalHooksYaml([
+      { name: 'g', point: 'tool.execute.before', command: 'cmd-global' },
+    ]);
+
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+      })
+    );
+
+    expect(spawnRecords.map((r) => r.command)).toEqual(['cmd-global']);
+  });
+
+  it('项目层用 {name, enabled:false} 最小补丁就能关掉全局定义的 hook', async () => {
+    writeGlobalHooksYaml([
+      { name: 'stays', point: 'tool.execute.before', command: 'cmd-stays', priority: 1 },
+      { name: 'killed', point: 'tool.execute.before', command: 'cmd-killed', priority: 2 },
+    ]);
+    // 只写 name + enabled，不复制 command/point，靠字段级合并继承全局的其余字段
+    writeFileSync(
+      join(testDir, '.codingcode', 'hooks.yaml'),
+      'hooks:\n  - name: killed\n    enabled: false\n'
+    );
+
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+      })
+    );
+
+    expect(spawnRecords.map((r) => r.command)).toEqual(['cmd-stays']);
   });
 });

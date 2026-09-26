@@ -36,24 +36,8 @@ const HOOK_GROUPS: HookGroup[] = [
       { name: 'tool.execute.before', description: '工具执行前触发', type: 'decision' },
       { name: 'tool.execute.after', description: '工具执行成功后触发', type: 'observer' },
       { name: 'tool.execute.error', description: '工具执行失败后触发', type: 'observer' },
-      { name: 'tool.execute.denied', description: '工具被拒绝执行后触发', type: 'observer' },
       { name: 'tool.approval.pre', description: '工具审批请求前触发', type: 'decision' },
       { name: 'tool.approval.post', description: '工具审批完成后触发', type: 'observer' },
-    ],
-  },
-  {
-    label: 'LLM 请求',
-    points: [
-      { name: 'llm.request.before', description: '向模型发送请求前触发', type: 'decision' },
-      { name: 'llm.response.after', description: '收到模型响应后触发', type: 'observer' },
-      { name: 'llm.response.error', description: '模型响应出错时触发', type: 'observer' },
-    ],
-  },
-  {
-    label: '会话',
-    points: [
-      { name: 'session.save.before', description: '保存会话前触发', type: 'observer' },
-      { name: 'session.save.after', description: '保存会话后触发', type: 'observer' },
     ],
   },
   {

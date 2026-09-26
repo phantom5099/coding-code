@@ -43,10 +43,6 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
       return map;
     }
 
-    /**
-     * 被禁用的 server 名集合。
-     * 开关就是 mcp.yaml 里的 `enabled` 字段，这里每次实时读配置：改开关即落盘，落盘即生效。
-     */
     function disabledServerNames(projectPath: string): Set<ServerName> {
       return new Set(
         resolveMcpConfig(projectPath)

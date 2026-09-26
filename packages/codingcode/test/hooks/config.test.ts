@@ -37,7 +37,7 @@ describe('writeHookConfigs', () => {
     writeHookConfigs(testDir, [
       {
         name: 'test-hook',
-        point: 'session.save.before',
+        point: 'agent.turn.end',
         type: 'observer',
         command: 'echo',
         enabled: true,
@@ -46,7 +46,7 @@ describe('writeHookConfigs', () => {
     const result = loadHookConfigs(testDir);
     expect(result).toHaveLength(1);
     expect(result[0]!.name).toBe('test-hook');
-    expect(result[0]!.point).toBe('session.save.before');
+    expect(result[0]!.point).toBe('agent.turn.end');
     expect(result[0]!.type).toBe('observer');
   });
 

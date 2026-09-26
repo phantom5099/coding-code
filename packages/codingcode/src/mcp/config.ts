@@ -50,7 +50,6 @@ function mcpConfigPath(dir: string): string {
   return candidates.find((p) => existsSync(p)) ?? candidates[0]!;
 }
 
-/** 读原始条目：不解析 ${VAR}，写路径必须用这个，否则会把解析后的值固化回文件 */
 function readRawServers(dir: string): McpServerConfig[] {
   const p = mcpConfigPath(dir);
   if (!existsSync(p)) return [];
@@ -95,15 +94,6 @@ export function resolveMcpConfig(projectRoot: string): McpServerConfig[] {
   return mergeConfigs(loadGlobalMcpConfig(), loadMcpConfig(projectRoot));
 }
 
-// ---- MCP 开关 ----
-// 开关就是定义里的一个布尔字段 `enabled`，没有独立的开关状态存储。
-// 改开关 = 改写某一层 mcp.yaml 里该 server 的 `enabled`。
-
-/**
- * 就地改写某一层配置文件里某个 server 的 `enabled`。
- * 该层还没有这个 server 时补一条最小覆盖 `{ name, enabled }`——
- * 字段级合并下这就足以关掉/打开上层定义的 server，而不必复制它的其它字段。
- */
 function patchServerEnabled(dir: string, name: string, enabled: boolean): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const p = mcpConfigPath(dir);

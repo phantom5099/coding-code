@@ -8,12 +8,9 @@ import type { ToolExecCtx } from '../../src/contracts/tool.js';
 import type { FrameBody } from '../../src/contracts/frame.js';
 
 const mockHooks = {
-  register: () => Effect.succeed(() => {}),
-  registerDecision: () => Effect.succeed(() => {}),
   emit: vi.fn(() => Effect.succeed(undefined)),
   emitDecision: vi.fn(() => Effect.succeed(null)),
   reloadUserHooks: () => Effect.succeed(undefined),
-  disposeSession: vi.fn(() => Effect.succeed(undefined)),
 };
 
 const mockMcp = {
@@ -121,7 +118,7 @@ describe('dispatch_agent (runner-based subagent spawn)', () => {
     }
   });
 
-  it('case 5: emits spawn.after and disposes the child session on completion', async () => {
+  it('case 5: emits spawn.after and disposes the child MCP session on completion', async () => {
     await runTool(
       { agent: 'build', prompt: 'go' },
       { projectPath: '/test', sessionId: 'parent-1' }
@@ -131,7 +128,6 @@ describe('dispatch_agent (runner-based subagent spawn)', () => {
       'agent.subagent.spawn.after',
       expect.objectContaining({ childSessionId: 'child-1', profile: 'build' })
     );
-    expect(mockHooks.disposeSession).toHaveBeenCalledWith('child-1');
     expect(mockMcp.disposeSession).toHaveBeenCalledWith('child-1');
   });
 });

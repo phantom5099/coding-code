@@ -75,12 +75,9 @@ const McpMock = Layer.succeed(McpService, {
 } as any);
 
 const HookMock = Layer.succeed(HookService, {
-  register: () => Effect.succeed(() => {}),
-  registerDecision: () => Effect.succeed(() => {}),
   emit: () => Effect.succeed(undefined),
   emitDecision: () => Effect.succeed(null),
   reloadUserHooks: () => Effect.succeed(undefined),
-  disposeSession: () => Effect.void,
 } as any);
 
 const TodoMock = Layer.succeed(TodoService, { read: () => [], write: () => {}, reset: () => {} } as any);
