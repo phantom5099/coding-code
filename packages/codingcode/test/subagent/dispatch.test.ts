@@ -2,25 +2,14 @@ import { expect, it, describe, beforeEach, vi } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { dispatchAgentTool } from '../../src/tools/domains/subagent/dispatch.js';
 import { HookService } from '../../src/hooks/port.js';
-import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import type { ToolExecCtx } from '../../src/contracts/tool.js';
 import type { FrameBody } from '../../src/contracts/frame.js';
 
 const mockHooks = {
-  register: () => Effect.succeed(() => {}),
-  registerDecision: () => Effect.succeed(() => {}),
   emit: vi.fn(() => Effect.succeed(undefined)),
   emitDecision: vi.fn(() => Effect.succeed(null)),
   reloadUserHooks: () => Effect.succeed(undefined),
-  disposeSession: vi.fn(() => Effect.succeed(undefined)),
-};
-
-const mockMcp = {
-  connectServers: () => Effect.void,
-  syncConnections: () => Effect.void,
-  listProjectMcpTools: () => [],
-  disposeSession: vi.fn(() => Effect.succeed(undefined)),
 };
 
 const mockRunner = {
@@ -39,7 +28,6 @@ function makeRunStream(): AsyncGenerator<FrameBody> {
 function makeLayers() {
   return Layer.mergeAll(
     Layer.succeed(HookService, mockHooks as any),
-    Layer.succeed(McpService, mockMcp as any),
     Layer.succeed(SubagentRunnerService, mockRunner as any)
   );
 }
@@ -121,7 +109,7 @@ describe('dispatch_agent (runner-based subagent spawn)', () => {
     }
   });
 
-  it('case 5: emits spawn.after and disposes the child session on completion', async () => {
+  it('case 5: emits spawn.after and complete carrying the child session id', async () => {
     await runTool(
       { agent: 'build', prompt: 'go' },
       { projectPath: '/test', sessionId: 'parent-1' }
@@ -131,7 +119,43 @@ describe('dispatch_agent (runner-based subagent spawn)', () => {
       'agent.subagent.spawn.after',
       expect.objectContaining({ childSessionId: 'child-1', profile: 'build' })
     );
-    expect(mockHooks.disposeSession).toHaveBeenCalledWith('child-1');
-    expect(mockMcp.disposeSession).toHaveBeenCalledWith('child-1');
+    expect(mockHooks.emit).toHaveBeenCalledWith(
+      'agent.subagent.complete',
+      expect.objectContaining({ childSessionId: 'child-1', status: 'done' })
+    );
+  });
+
+  it('case 6: a stream that ends with error fails the tool and skips complete', async () => {
+    mockRunner.runSubagent.mockReturnValueOnce(
+      Effect.succeed({
+        stream: (async function* () {
+          yield {
+            family: 'transition',
+            transition: { to: 'end', reason: 'error', error: { message: 'boom' } },
+          };
+        })() as AsyncGenerator<FrameBody>,
+        sessionId: 'child-2',
+      }) as any
+    );
+
+    const outcome = await Effect.runPromise(
+      Effect.either(
+        dispatchAgentTool
+          .execute(
+            { agent: 'build', prompt: 'go' },
+            { projectPath: '/test', sessionId: 'parent-1' }
+          )
+          .pipe(Effect.provide(makeLayers()))
+      )
+    );
+
+    expect(outcome._tag).toBe('Left');
+    if (outcome._tag === 'Left') {
+      expect(String((outcome.left as any).message)).toContain('Subagent failed: boom');
+    }
+    expect(mockHooks.emit).not.toHaveBeenCalledWith(
+      'agent.subagent.complete',
+      expect.anything()
+    );
   });
 });

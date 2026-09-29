@@ -7,12 +7,9 @@ import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { HookService } from '../../src/hooks/port.js';
 
 const mockHookService = {
-  register: () => Effect.succeed(() => {}),
-  registerDecision: () => Effect.succeed(() => {}),
   emit: () => Effect.succeed(undefined),
   emitDecision: () => Effect.succeed(null),
   reloadUserHooks: () => Effect.succeed(undefined),
-  disposeSession: () => Effect.succeed(undefined),
 };
 
 const mockApprovalWaitService = {

@@ -3,13 +3,10 @@ import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition } from '../../types.js';
 import { HookService } from '../../../hooks/port.js';
-import { McpService } from '../../../mcp/port.js';
 import { SubagentRunnerService } from '../../../subagent/port.js';
 import { resolveSubagentProfile } from '../../../agent/profile.js';
 
-export const dispatchAgentTool: ToolDefinition<
-  HookService | McpService | SubagentRunnerService
-> = {
+export const dispatchAgentTool: ToolDefinition<HookService | SubagentRunnerService> = {
   name: 'dispatch_agent',
   concurrencySafe: false,
   description:
@@ -21,7 +18,6 @@ export const dispatchAgentTool: ToolDefinition<
   execute: (args, ctx) =>
     Effect.gen(function* () {
       const hooks = yield* HookService;
-      const mcp = yield* McpService;
       const runner = yield* SubagentRunnerService;
 
       const { agent: agentName, prompt } = args as { agent: string; prompt: string };
@@ -36,7 +32,7 @@ export const dispatchAgentTool: ToolDefinition<
 
       const parentSessionId = ctx?.sessionId;
       const spawnDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
-        profile: agentName, prompt, parentSessionId,
+        profile: agentName, prompt, parentSessionId, projectPath,
       });
       if (spawnDecision && spawnDecision.decision === 'deny') {
         return yield* Effect.fail(
@@ -52,7 +48,7 @@ export const dispatchAgentTool: ToolDefinition<
         agentName,
       });
 
-      yield* hooks.emit('agent.subagent.spawn.after', { childSessionId: childUuid, profile: agentName });
+      yield* hooks.emit('agent.subagent.spawn.after', { childSessionId: childUuid, profile: agentName, projectPath });
 
       let didComplete = false;
       const finalContent = yield* Effect.async<string, AgentError>((resume) => {
@@ -73,15 +69,9 @@ export const dispatchAgentTool: ToolDefinition<
                 return;
               }
             }
-            await Effect.runPromise(mcp.disposeSession(childUuid));
-            await Effect.runPromise(hooks.disposeSession(childUuid));
             didComplete = true;
             resume(Effect.succeed(content || '(subagent completed without output)'));
           } catch (e) {
-            try {
-              await Effect.runPromise(mcp.disposeSession(childUuid));
-              await Effect.runPromise(hooks.disposeSession(childUuid));
-            } catch { /* ignore */ }
             const msg = e instanceof Error ? e.message : String(e);
             resume(Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', msg)));
           }
@@ -89,7 +79,7 @@ export const dispatchAgentTool: ToolDefinition<
       });
 
       if (didComplete) {
-        yield* hooks.emit('agent.subagent.complete', { childSessionId: childUuid, profile: agentName, status: 'done' }).pipe(Effect.ignore);
+        yield* hooks.emit('agent.subagent.complete', { childSessionId: childUuid, profile: agentName, status: 'done', projectPath }).pipe(Effect.ignore);
       }
 
       return finalContent;

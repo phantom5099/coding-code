@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { mkdirSync, writeFileSync, utimesSync } from 'fs';
 import { join, resolve } from 'path';
@@ -18,9 +18,8 @@ import { MemoryService } from '../../src/memory/port.js';
 import { SchedulerService } from '../../src/scheduler/port.js';
 import { ContextService } from '../../src/context/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
-import { encodeProjectPath, setProjectBaseDir } from '../../src/core/path.js';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
+import { encodeProjectPath, getProjectBaseDir } from '../../src/core/path.js';
+import { useTempHome } from '../helpers/temp-home.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
 import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
@@ -107,12 +106,8 @@ const MockSkillLayer = Layer.succeed(SkillService, {
 
 const MockMcpLayer = Layer.succeed(McpService, {
   syncConnections: () => Effect.void,
-  connectServers: () => Effect.void,
-  disconnectServers: () => Effect.void,
-  getServerToolNames: () => [],
-  disconnectAll: () => Effect.void,
-  status: () => Effect.succeed([]),
   listProjectMcpTools: () => [],
+  status: () => Effect.succeed([]),
 } as any);
 
 const MockMemoryLayer = Layer.succeed(MemoryService, {
@@ -171,21 +166,16 @@ const TestLayer = Layer.mergeAll(
   MockCheckpointLayer
 );
 
-let tempBase = '';
+// home 指向临时目录 ⇒ getProjectBaseDir() = <temp>/.codingcode/project
+useTempHome('codingcode-plan-route-');
+
 let plansDir = '';
 
 beforeEach(() => {
-  tempBase = mkdtempSync(join(tmpdir(), 'codingcode-plan-route-'));
   // The route resolves the query cwd to an absolute path first
   // (core/path.resolveCwd -> path.resolve), then encodes it.
-  plansDir = join(tempBase, encodeProjectPath(resolve('/tmp/test')));
+  plansDir = join(getProjectBaseDir(), encodeProjectPath(resolve('/tmp/test')));
   mkdirSync(plansDir, { recursive: true });
-  setProjectBaseDir(tempBase);
-});
-
-afterEach(() => {
-  setProjectBaseDir(undefined);
-  rmSync(tempBase, { recursive: true, force: true });
 });
 
 describe('GET /api/sessions/:id/plan', () => {

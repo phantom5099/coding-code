@@ -4,6 +4,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Effect, TSemaphore, STM } from 'effect';
 import type { McpServerConfig } from '../contracts/mcp.js';
 
+/** callTool 的失败类型；导出仅为满足 d.ts 生成（模块外无 import） */
 export class McpError extends Error {
   constructor(
     public readonly serverName: string,
@@ -21,7 +22,6 @@ export class McpClient {
   private reconnectAttempts = 0;
   private maxReconnect = 3;
   private destroyed = false;
-  private toolNames: string[] = [];
 
   constructor(private config: McpServerConfig) {
     this.client = new Client({ name: 'codingcode', version: '1.0.0' }, { capabilities: {} });
@@ -44,29 +44,11 @@ export class McpClient {
     }
   }
 
-  get serverName(): string {
-    return this.config.name;
-  }
-
-  get connected(): boolean {
-    return this.transport !== null;
-  }
-
   get transportType(): 'stdio' | 'http' {
     return this.config.command ? 'stdio' : 'http';
   }
 
-  get tools(): string[] {
-    return [...this.toolNames];
-  }
-
   async connect(): Promise<void> {
-    if (this.config.command) {
-      // stdio: pipe stderr to avoid buffer deadlock
-      const tp = this.transport as StdioClientTransport;
-      // SDK handles stderr internally when 'pipe' is set
-    }
-
     await this.client.connect(this.transport);
     this.reconnectAttempts = 0;
 
@@ -108,7 +90,6 @@ export class McpClient {
     }>
   > {
     const result = await this.client.listTools();
-    this.toolNames = result.tools.map((t) => t.name);
     return result.tools.map((t) => ({
       name: t.name,
       description: t.description ?? '',

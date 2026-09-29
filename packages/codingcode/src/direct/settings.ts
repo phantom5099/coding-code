@@ -257,10 +257,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
         result.push({
           ...(r ?? {
             name: s.name,
-            connected: false,
             transport: 'stdio' as const,
-            reconnectAttempts: 0,
-            leaseCount: 0,
             toolCount: 0,
           }),
           name: s.name,
@@ -275,10 +272,7 @@ export function createDirectSettingsClient(rt: AppRuntime): SettingsClient {
         result.push({
           ...(r ?? {
             name: s.name,
-            connected: false,
             transport: 'stdio' as const,
-            reconnectAttempts: 0,
-            leaseCount: 0,
             toolCount: 0,
           }),
           name: s.name,

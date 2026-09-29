@@ -63,7 +63,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
       rules.evictProjectRules(normalizedCwd);
       yield* hooks.reloadUserHooks(normalizedCwd);
-      yield* hooks.emit('agent.turn.start', { sessionId: '' });
+      yield* hooks.emit('agent.turn.start', { sessionId: '', projectPath: normalizedCwd });
       yield* mcp.syncConnections(normalizedCwd);
 
       let sessionId = opts.sessionId;
@@ -136,14 +136,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     const q = Effect.runSync(Queue.unbounded<FrameBody>());
 
     // agentLoopInternal 只经闭包引用服务，不消费任何 Tag；工具执行所需的服务由 toolEnv 注入
-    const program = Effect.scoped(
-      Effect.gen(function* () {
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => { hooks.disposeSession(opts.sid); })
-        );
-        return yield* agentLoopInternal(opts, q);
-      })
-    );
+    const program = agentLoopInternal(opts, q);
 
     return (async function* () {
       const fiber = Effect.runFork(opts.toolEnv.provide(program));
@@ -199,11 +192,11 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
       let lastResult: Result<string, AgentError> | null = null;
 
-      yield* hooks.emit('agent.turn.start', { sessionId: sid });
+      yield* hooks.emit('agent.turn.start', { sessionId: sid, projectPath });
       yield* q.offer({ family: 'transition', transition: { to: 'start', turnId: state.currentTurnId } });
 
       for (let step = 0; step < maxSteps; step++) {
-        yield* hooks.emitDecision('agent.step.before', { sessionId: sid, step: step + 1 });
+        yield* hooks.emitDecision('agent.step.before', { sessionId: sid, step: step + 1, projectPath });
 
         if (step === 0) {
           yield* q.offer({ family: 'transition', transition: { to: 'executing' } });
@@ -217,7 +210,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         }));
         if (Either.isLeft(willCompact)) {
           yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(willCompact.left) });
-          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error' });
+          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
           return Result.err(willCompact.left);
         }
         if (willCompact.right) {
@@ -230,7 +223,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         }));
         if (Either.isLeft(assembled)) {
           yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(assembled.left) });
-          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error' });
+          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
           return Result.err(assembled.left);
         }
         if (willCompact.right) {
@@ -269,19 +262,19 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         }));
         if (Either.isLeft(streamed)) {
           yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(streamed.left) });
-          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error' });
+          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
           return Result.err(streamed.left);
         }
 
         if (toolCalls.length === 0) {
           yield* session.recordAssistant(state, content, [], responded.usage);
-          const stopDecision = yield* hooks.emitDecision('agent.turn.stop', { sessionId: sid, content, turnId: state.currentTurnId });
+          const stopDecision = yield* hooks.emitDecision('agent.turn.stop', { sessionId: sid, content, turnId: state.currentTurnId, projectPath });
 
           if (stopDecision && stopDecision.decision === 'continue') {
             if (stopContinuations >= effectiveMaxStopContinuations) {
               const loopErr = new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded');
               yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(loopErr) });
-              yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error' });
+              yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
               memory.flushSessionToMemory(state.sessionId, llm, state.cwd).catch((e) => logger.error('memory flush failed:', e));
               return Result.err(loopErr);
             }
@@ -293,7 +286,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
           yield* offerEnd({ to: 'end', reason: 'done' });
           lastResult = Result.ok(content);
-          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'done' });
+          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'done', projectPath });
           break;
         }
 
@@ -355,14 +348,14 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
       const maxErr = AgentError.maxStepsReached(maxSteps);
       yield* offerEnd({ to: 'end', reason: 'maxSteps' });
-      yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'maxSteps' });
+      yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'maxSteps', projectPath });
       return Result.err(maxErr);
     }).pipe(
       Effect.interruptible,
       Effect.onInterrupt(() =>
         Effect.gen(function* () {
           yield* offerEnd({ to: 'end', reason: 'aborted' });
-          yield* hooks.emit('agent.turn.end', { sessionId: opts.sid, turnId: opts.state.currentTurnId, status: 'aborted' }).pipe(Effect.ignore);
+          yield* hooks.emit('agent.turn.end', { sessionId: opts.sid, turnId: opts.state.currentTurnId, status: 'aborted', projectPath: opts.projectPath }).pipe(Effect.ignore);
         })
       ),
       Effect.ensuring(

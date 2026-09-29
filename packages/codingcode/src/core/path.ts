@@ -2,7 +2,16 @@ import { mkdirSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 
-/** 空值 / `'global'` 表示操作全局（home）配置，而非某个项目。 */
+export const CODINGCODE_DIRNAME = '.codingcode';
+
+export function getGlobalDir(): string {
+  return join(homedir(), CODINGCODE_DIRNAME);
+}
+
+export function getProjectDir(projectRoot: string): string {
+  return join(projectRoot, CODINGCODE_DIRNAME);
+}
+
 export function isGlobalCwd(cwd: string | undefined): boolean {
   return !cwd || cwd === '' || cwd === 'global';
 }
@@ -22,19 +31,13 @@ export function encodeProjectPath(p: string): string {
     .toLowerCase();
 }
 
-let _projectBaseOverride: string | undefined;
-
-export function setProjectBaseDir(dir: string | undefined): void {
-  _projectBaseOverride = dir;
-}
-
 export function getProjectBaseDir(): string {
-  return _projectBaseOverride ?? join(homedir(), '.codingcode', 'project');
+  return join(getGlobalDir(), 'project');
 }
 
 /** 无 cwd 的请求共用的工作目录。 */
 export function getTempCwd(): string {
-  return join(homedir(), '.codingcode', 'temp');
+  return join(getGlobalDir(), 'temp');
 }
 
 export function ensureTempCwd(): void {

@@ -286,12 +286,9 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     } as any),
     // agent 与 dispatch_agent 工具消费同一个 HookService
     Layer.succeed(HookService, {
-      register: () => Effect.succeed(() => {}),
-      registerDecision: () => Effect.succeed(() => {}),
       emit: hooks.emit,
       emitDecision: hooks.emitDecision,
       reloadUserHooks: () => Effect.void,
-      disposeSession: () => Effect.void,
     } as any),
     mcpLayer,
     Layer.succeed(SubagentRunnerService, {} as any),

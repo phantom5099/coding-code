@@ -1,141 +1,107 @@
 # 钩子系统
 
-Coding Code 提供可插拔的钩子点，用户可以在关键节点注入自定义逻辑。本文档介绍所有钩子点、回调签名、注册 API 和用户钩子配置。
+Coding Code 提供可插拔的钩子点，用户可以在关键节点注入自定义逻辑。本文档介绍所有钩子点、回调签名、触发 API 和用户钩子配置。
 
 ---
 
 ## 钩子点
 
+共 12 个。**表里列出的每个点在生产代码里都有真实触发点**；`type` 列是该点有意义的钩子类型（用户配置里写错类型不会报错，但决策不会被消费）。
+
 ### 工具执行
 
-| 钩子点 | 触发时机 | 类型 |
+| 钩子点 | 触发时机 | type |
 |--------|---------|------|
-| `tool.execute.before` | 工具执行前 | observer |
+| `tool.execute.before` | 工具执行前（已通过审批） | observer |
 | `tool.execute.after` | 工具执行成功后 | observer |
 | `tool.execute.error` | 工具执行失败后 | observer |
-| `tool.execute.denied` | 工具被审批拒绝后 | observer |
-| `tool.approval.pre` | 审批决策前 | decision |
-| `tool.approval.post` | 审批决策后 | observer |
+| `tool.approval.pre` | 审批决策前（第 3 层） | **decision** |
+| `tool.approval.post` | 审批决策后（审计，含 `decision` 与 `layers`） | observer |
 
-### LLM 调用
-
-| 钩子点 | 触发时机 | 类型 |
-|--------|---------|------|
-| `llm.request.before` | LLM 调用前 | observer |
-| `llm.response.after` | LLM 响应成功后 | observer |
-| `llm.response.error` | LLM 调用失败后 | observer |
-
-### 会话
-
-| 钩子点 | 触发时机 | 类型 |
-|--------|---------|------|
-| `session.save.before` | 会话保存前 | observer |
-| `session.save.after` | 会话保存后 | observer |
+工具被拒绝时不触发 `tool.execute.*`（工具没被执行），拒绝结果从 `tool.approval.post` 的 `decision.type === 'deny'` 读取。
 
 ### Agent 生命周期
 
-| 钩子点 | 触发时机 | 类型 |
+| 钩子点 | 触发时机 | type |
 |--------|---------|------|
-| `agent.turn.start` | Agent 轮次开始 | observer |
-| `agent.step.before` | Agent 步骤执行前 | observer |
-| `agent.turn.stop` | Agent 轮次停止 | observer |
-| `agent.turn.end` | Agent 轮次结束 | observer |
+| `agent.turn.start` | 轮次开始 | observer |
+| `agent.step.before` | 每个推理步骤前 | **decision**（返回值当前未被消费） |
+| `agent.turn.stop` | 本轮无工具调用、准备停止时裁决 | **decision** |
+| `agent.turn.end` | 轮次最终结束（`status`: done/error/aborted/maxSteps） | observer |
 
 ### 子智能体
 
-| 钩子点 | 触发时机 | 类型 |
+| 钩子点 | 触发时机 | type |
 |--------|---------|------|
-| `agent.subagent.spawn.before` | 子智能体创建前 | decision（可 deny） |
+| `agent.subagent.spawn.before` | 子智能体创建前 | **decision**（可 deny） |
 | `agent.subagent.spawn.after` | 子智能体创建后 | observer |
 | `agent.subagent.complete` | 子智能体完成时 | observer |
 
 ---
 
-## 回调函数签名
+## 回调签名
 
-### Observer 钩子
-
-```typescript
-type ObserverHandler = (payload: Record<string, unknown>) => void | Promise<void>;
-```
-
-Observer 钩子只观察事件，不返回决策。适用于日志、监控、通知等场景。
-
-### Decision 钩子
+钩子以子进程形式运行，payload 是一份 JSON，所以签名只描述数据的形状：
 
 ```typescript
-type DecisionHandler = (payload: Record<string, unknown>) => HookDecision | null | Promise<HookDecision | null>;
+type ObserverHandler = (payload: Record<string, unknown>) => Effect.Effect<void, never, any>;
+
+type DecisionHandler = (
+  payload: Record<string, unknown>
+) => HookDecision | null | Promise<HookDecision | null>;
 
 interface HookDecision {
   decision?: 'allow' | 'deny' | 'ask' | 'continue';
   reason?: string;
-  injection?: string;                    // 注入到 LLM 上下文的文本
+  injection?: string;                       // 注入到 LLM 上下文的文本
   modifiedInput?: Record<string, unknown>;  // 修改工具调用参数
-  modifiedOutput?: unknown;              // 修改工具输出
 }
 ```
 
-Decision 钩子可以返回决策，影响后续流程：
+Decision 钩子的返回语义：
 
 - `allow`：直接放行，跳过后续审批层
-- `deny`：拒绝执行，附带 reason
+- `deny`：拒绝，附带 `reason`
 - `ask`：要求用户确认
-- `continue`：继续到下一层
-- `null`：不干预，继续正常流程
+- `continue`：在 `tool.approval.pre` 上表示「不干预，继续到下一层」
+- `null`：不干预（多个 decision 钩子按 priority 升序取**首个非 null**）
+
+**每个 payload 都带 `projectPath`** —— 它是钩子作用域的定位键（见下），也是 hook 脚本判断「我在哪个项目里跑」的依据。
 
 ---
 
-## HookRegistry API
+## 触发 API
 
-`HookService` 是 Effect.Service，提供以下方法：
-
-### 注册钩子
-
-```typescript
-// 注册 observer 钩子，返回取消函数
-const unsubscribe = hookService.register('tool.execute.after', async (payload) => {
-  console.log(`工具 ${payload.toolName} 执行完成，耗时 ${payload.duration}ms`);
-});
-
-// 注册 decision 钩子，支持 priority
-const unsub = hookService.registerDecision('tool.approval.pre', async (payload) => {
-  if (payload.toolName === 'execute_command' && payload.args.command.includes('rm')) {
-    return { decision: 'ask', reason: '删除命令需要确认' };
-  }
-  return null; // 不干预
-}, { priority: 100 });
-```
-
-### 生命周期管理
+`HookService` 是 Effect Service，只有三个方法：
 
 | 方法 | 说明 |
 |------|------|
-| `register(point, handler, opts?)` | 注册 observer 钩子，返回取消函数 |
-| `registerDecision(point, handler, opts?)` | 注册 decision 钩子，支持 priority |
-| `emit(point, payload)` | 触发 observer 钩子 |
-| `emitDecision(point, payload)` | 触发 decision 钩子，返回第一个非 null 决策 |
-| `reloadUserHooks(projectPath)` | 重新加载项目级用户钩子配置 |
-| `attachSessionHooks(sessionId, hooks)` | 附加会话级钩子 |
-| `disableHook(projectPath, name)` | 禁用指定钩子 |
-| `enableHook(projectPath, name)` | 启用指定钩子 |
-| `disposeSession(sessionId)` | 清理会话级钩子 |
-| `disposeProject(projectPath)` | 清理项目级钩子 |
+| `emit(point, payload)` | 触发该点上所有 **observer** 钩子；单个钩子抛错只记日志，不带垮整轮 |
+| `emitDecision(point, payload)` | 触发该点上所有 **decision** 钩子，按 priority 升序取首个非 null |
+| `reloadUserHooks(projectPath)` | 重新解析该项目的 YAML 配置并重建注册表 |
 
-### 钩子作用域
+没有代码级注册 API：钩子只有 YAML 一个来源。运行时**每次 `emit` 都用 payload 里的 `projectPath` 查注册表**，查不到就是空表（no-op）。
 
-钩子按作用域分层，优先级从高到低：
+### 作用域
 
-1. **session** — 会话级，通过 `attachSessionHooks` 附加
-2. **project** — 项目级，从 `.codingcode/hooks.yaml` 加载
-3. **global** — 全局级，从 `~/.codingcode/hooks.yaml` 加载
+钩子按层解析，**字段级合并**：
 
-同一作用域内按 `priority` 排序，数值越大优先级越高。
+1. **project** — `.codingcode/hooks.yaml`
+2. **global** — `~/.codingcode/hooks.yaml`
+
+两层都用 `name` 对齐。项目层只覆盖它**显式声明**的字段，其余字段继承全局。所以「在项目里关掉一个只在全局定义的钩子」只需写一条最小补丁：
+
+```yaml
+hooks:
+  - name: log-llm-calls
+    enabled: false
+```
+
+同一层内按 `priority` **升序**执行，**数值小的先跑**。
 
 ---
 
 ## 用户钩子配置
-
-通过 YAML 文件配置钩子，无需编写代码：
 
 ### 配置文件位置
 
@@ -148,14 +114,13 @@ const unsub = hookService.registerDecision('tool.approval.pre', async (payload) 
 
 ```yaml
 hooks:
-  - name: log-llm-calls
-    description: 记录所有 LLM 调用
-    point: llm.request.before
+  - name: audit-log
+    description: 记录每次审批结果
+    point: tool.approval.post
     type: observer
     command: node
-    args: ["./scripts/log-llm.js"]
+    args: ["./scripts/audit.js"]
     priority: 10
-    enabled: true
 
   - name: block-dangerous-commands
     description: 阻止危险命令
@@ -166,71 +131,82 @@ hooks:
     env:
       BLOCKED_COMMANDS: "rm,rmdir,format"
     priority: 100
-    enabled: true
 ```
 
-### UserHookConfig 完整字段
+### UserHookConfig 字段
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `name` | `string` | 是 | 钩子名称，用于 enable/disable |
-| `description` | `string` | 否 | 钩子描述 |
-| `point` | `HookPoint` | 是 | 钩子点名称 |
-| `type` | `'observer' \| 'decision'` | 是 | 钩子类型 |
-| `command` | `string` | 是 | 执行命令 |
+| `name` | `string` | 是 | 钩子名称，跨层对齐与开关都靠它 |
+| `description` | `string` | 否 | 描述 |
+| `point` | `HookPoint` | 是 | 钩子点名称（上表 12 个之一） |
+| `type` | `'observer' \| 'decision'` | 是 | 决定是否读 stdout |
+| `command` | `string` | 是 | 可执行文件 |
 | `args` | `string[]` | 否 | 命令参数 |
-| `env` | `Record<string, string>` | 否 | 环境变量 |
-| `priority` | `number` | 否 | 优先级，默认 0 |
-| `enabled` | `boolean` | 是 | 是否启用 |
+| `env` | `Record<string, string>` | 否 | 追加到 `process.env` 之上 |
+| `priority` | `number` | 否 | 升序执行，默认 0 |
+| `enabled` | `boolean` | 否 | **缺省（不写）等于启用**；`false` 表示禁用 |
 
 ### 执行机制
 
-用户钩子通过子进程执行：
-
-- payload 通过 stdin 传入 JSON
-- decision 钩子从 stdout 读取 JSON 响应（需符合 `HookDecision` 格式）
-- 超时时间 30 秒
-- 非零退出码视为错误，decision 钩子错误时返回 `continue`
+- payload 以 JSON 写入子进程 stdin，随后关闭 stdin
+- `type: decision` 时读 stdout 并 `JSON.parse`；退出码非 0、超时（30 秒）、解析失败一律降级为 `null`
+- `type: observer` 忽略 stdout 与退出码，只保证跑完
+- `command` / `args` / `env` 里的 `${VAR}` 目前**不做展开**（`mcp.yaml` 会展开，两者不一致）
 
 ---
 
 ## 使用示例
 
-### 记录 LLM 调用 token 估算
+### 记录每次工具调用的耗时
 
-```typescript
-hookService.register('llm.request.before', async (payload) => {
-  const messages = payload.messages as unknown[];
-  const estimatedTokens = JSON.stringify(messages).length / 4;
-  console.log(`[Hook] 即将调用 LLM，预估 ${Math.round(estimatedTokens)} tokens`);
+```yaml
+hooks:
+  - name: slow-tool-alert
+    point: tool.execute.after
+    type: observer
+    command: node
+    args: ["./scripts/slow.js"]
+```
+
+```javascript
+// scripts/slow.js
+let raw = '';
+process.stdin.on('data', (c) => (raw += c));
+process.stdin.on('end', () => {
+  const { toolName, durationMs, projectPath } = JSON.parse(raw);
+  if (durationMs > 5000) console.error(`[slow] ${toolName} took ${durationMs}ms in ${projectPath}`);
 });
 ```
 
 ### 拦截危险命令
 
-```typescript
-hookService.registerDecision('tool.approval.pre', async (payload) => {
-  if (payload.toolName === 'execute_command') {
-    const command = payload.args?.command as string;
-    if (command?.includes('rm -rf')) {
-      return { decision: 'deny', reason: '禁止递归强制删除' };
-    }
+```yaml
+hooks:
+  - name: block-rm-rf
+    point: tool.approval.pre
+    type: decision
+    command: node
+    args: ["./scripts/check-command.js"]
+```
+
+```javascript
+// scripts/check-command.js
+let raw = '';
+process.stdin.on('data', (c) => (raw += c));
+process.stdin.on('end', () => {
+  const { toolName, args } = JSON.parse(raw);
+  if (toolName === 'execute_command' && String(args?.command ?? '').includes('rm -rf')) {
+    process.stdout.write(JSON.stringify({ decision: 'deny', reason: '禁止递归强制删除' }));
   }
-  return null;
+  // 否则什么都不输出 ⇒ 视为 null，不干预
 });
 ```
 
-### 修改工具参数
+### 让 Agent 继续跑
 
-```typescript
-hookService.registerDecision('tool.approval.pre', async (payload) => {
-  if (payload.toolName === 'execute_command') {
-    // 强制所有命令在项目目录下执行
-    return {
-      decision: 'continue',
-      modifiedInput: { ...payload.args, cwd: '/safe/directory' }
-    };
-  }
-  return null;
-});
+`agent.turn.stop` 返回 `continue` 且带 `injection` 时，`injection` 会作为 system 消息写入会话并续行（受 `maxStopContinuations` 限制，默认 3）：
+
+```javascript
+process.stdout.write(JSON.stringify({ decision: 'continue', injection: '还没跑测试，继续。' }));
 ```

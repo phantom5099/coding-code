@@ -11,12 +11,13 @@ import {
   resolveHookConfigs,
   setGlobalHookEnabled,
   setProjectHookEnabled,
-  _setGlobalConfigDir,
 } from '../../src/hooks/config.js';
 import type { UserHookConfig } from '../../src/contracts/hooks.js';
+import { useTempHome, setFakeHome } from '../helpers/temp-home.js';
 
 let projectDir: string;
-let globalDir: string;
+// 全局层落在临时 home 里，避免读到/写坏开发机的 ~/.codingcode（全局配置目录不可指定）
+const tempHome = useTempHome('codingcode-test-hooks-merge-');
 
 function readYaml(p: string): any {
   return parseYaml(readFileSync(p, 'utf8'));
@@ -28,19 +29,25 @@ function hook(name: string, command: string): UserHookConfig {
 
 beforeEach(() => {
   projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-hooks-merge-project-'));
-  globalDir = mkdtempSync(join(tmpdir(), 'codingcode-test-hooks-merge-global-'));
   mkdirSync(join(projectDir, '.codingcode'), { recursive: true });
-  mkdirSync(join(globalDir, '.codingcode'), { recursive: true });
-  _setGlobalConfigDir(globalDir);
 });
 
 afterEach(() => {
-  _setGlobalConfigDir(undefined);
   rmSync(projectDir, { recursive: true, force: true });
-  rmSync(globalDir, { recursive: true, force: true });
 });
 
 describe('Hooks config merge', () => {
+  it('全局目录不存在时写入会自行创建', () => {
+    const nestedHome = join(tempHome.home, 'nested', 'home'); // 连 home 本身都还不存在
+    setFakeHome(nestedHome);
+
+    writeGlobalHookConfigs([hook('a', 'x')]);
+
+    expect(readYaml(join(nestedHome, '.codingcode', 'hooks.yaml')).hooks).toEqual([
+      { name: 'a', point: 'tool.execute.before', type: 'observer', command: 'x' },
+    ]);
+  });
+
   it('merges global and project by name, project wins', () => {
     writeGlobalHookConfigs([hook('global-hook', 'global-cmd'), hook('shared-hook', 'global-shared')]);
     writeHookConfigs(projectDir, [
@@ -84,7 +91,7 @@ describe('Hook enabled switch (a plain boolean field in hooks.yaml)', () => {
 
     setGlobalHookEnabled('a', false);
 
-    expect(readYaml(join(globalDir, 'hooks.yaml')).hooks[0]).toEqual({
+    expect(readYaml(join(tempHome.configDir, 'hooks.yaml')).hooks[0]).toEqual({
       name: 'a',
       point: 'tool.execute.before',
       type: 'observer',

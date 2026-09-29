@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { homedir } from 'os';
+import { dirname, join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { getGlobalDir } from '../core/path.js';
 import type { Automation } from './types.js';
 
 interface AutomationsFile {
@@ -9,7 +9,7 @@ interface AutomationsFile {
 }
 
 function getAutomationsPath(): string {
-  return resolve(homedir(), '.codingcode', 'automations.yaml');
+  return join(getGlobalDir(), 'automations.yaml');
 }
 
 export function readAutomations(configPath?: string): Automation[] {
