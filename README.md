@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/)
 
-终端原生的 AI 编程助手。核心引擎纯手写 ReAct 循环，通过 HTTP 服务化对外暴露，TUI / Desktop / SDK 等所有端共享同一份编排逻辑。没有黑盒，所有行为都可定制。
+终端原生的 AI 编程助手。核心引擎纯手写 ReAct 循环，通过 HTTP 服务化对外暴露，Desktop / SDK 等所有端共享同一份编排逻辑。没有黑盒，所有行为都可定制。
 
 </div>
 
@@ -43,29 +43,24 @@ pnpm install
 # 2. 配置 API Key
 export DEEPSEEK_API_KEY=sk-xxx
 
-# 3. 启动（server + TUI）
+# 3. 启动
 pnpm start
 ```
 
-启动成功后，终端会显示交互式 TUI 界面。
-
-### 其他启动方式
-
-```bash
-pnpm start serve    # 仅启动 HTTP server（供 Web / SDK 调用）
-pnpm start tui      # 仅启动 TUI（连接已有 server）
-```
+启动成功后，HTTP server 开始监听并打印 `CODINGCODE_SERVER_READY:<port>`，可用 Desktop 或 SDK 接入。
 
 ### SDK 调用示例
 
 ```typescript
-import { createHttpClient } from '@codingcode/core/client/http';
+import { createHttpClients } from '@codingcode/core/client';
 
-const client = await createHttpClient('http://localhost:8080');
+const clients = createHttpClients('http://localhost:8080');
 
-for await (const chunk of client.sendMessage('帮我写一个快排')) {
-  if (chunk.type === 'text') {
-    process.stdout.write(chunk.text);
+for await (const frame of clients.agent.sendMessage('帮我写一个快排', {
+  cwd: process.cwd(),
+})) {
+  if (frame.family === 'event' && frame.event.type === 'text_delta') {
+    process.stdout.write(frame.event.text);
   }
 }
 ```
@@ -77,7 +72,7 @@ for await (const chunk of client.sendMessage('帮我写一个快排')) {
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                        客户端层                            │
-│  @codingcode/tui (Ink)  ·  @codingcode/desktop (Electron)  │
+│  @codingcode/desktop (Electron)                          │
 └──────────────────────────┬───────────────────────────────┘
                            │ HTTP / SSE（AgentClient 接口）
 ┌──────────────────────────┴───────────────────────────────┐
@@ -126,7 +121,7 @@ for await (const chunk of client.sendMessage('帮我写一个快排')) {
 }
 ```
 
-`driver` 支持 `"deepseek"`（原生 SDK）、`"openai"`（OpenAI 兼容 API）和 `"gemini"`（Google Gemini）。运行时可通过 `/model` 命令切换。
+`driver` 支持 `"deepseek"`（原生 SDK）、`"openai"`（OpenAI 兼容 API）和 `"gemini"`（Google Gemini）。运行时可在客户端中切换模型。
 
 ---
 
@@ -168,7 +163,6 @@ for await (const chunk of client.sendMessage('帮我写一个快排')) {
 | DI / 错误追踪 | Effect TS 3.x |
 | LLM SDK | Vercel AI SDK v6 + @ai-sdk/deepseek + @ai-sdk/openai |
 | HTTP 框架 | Hono 4.x |
-| TUI | Ink 7.x + React 19 |
 | Desktop | Electron 35 + React 19 + Zustand 5 |
 | MCP | @modelcontextprotocol/sdk 1.29.x |
 | 校验 | Zod 4.x |

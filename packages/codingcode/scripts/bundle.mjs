@@ -14,7 +14,6 @@ await build({
   outfile: resolve(root, 'dist/cli.bundle.js'),
   // pino-pretty 仅在开发模式使用，生产模式不会加载
   external: ['pino-pretty'],
-  // 动态 import 的 TUI 路径无法静态解析，保持原样
   splitting: false,
   sourcemap: true,
   minify: false,

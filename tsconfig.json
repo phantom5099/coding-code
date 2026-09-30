@@ -4,7 +4,6 @@
     { "path": "./packages/infra" },
     { "path": "./packages/codingcode" },
     { "path": "./packages/codingcode/test" },
-    { "path": "./packages/desktop" },
-    { "path": "./packages/tui" }
+    { "path": "./packages/desktop" }
   ]
 }

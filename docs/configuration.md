@@ -116,7 +116,6 @@ memory:
 
 ### 运行时切换
 
-- TUI 中输入 `/model` 命令可切换模型
 - 通过 API `POST /api/models` 切换
 
 ---
