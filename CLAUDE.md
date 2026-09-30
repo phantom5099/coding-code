@@ -10,7 +10,6 @@ Coding Code 是 AI 编程助手。
 |---|---|---|
 | `@codingcode/core` | `packages/codingcode` | 核心引擎：agent loop 与全部编排能力 |
 | `@codingcode/infra` | `packages/infra` | 基础设施：配置加载、日志、禁用项存储 |
-| `@codingcode/tui` | `packages/tui` | 终端界面（Ink + React） |
 | `@codingcode/desktop` | `packages/desktop` | 桌面端（Electron + React） |
 
 `packages/sdk`、`packages/web` 目前只有空 `src/`，尚无实现。
@@ -34,7 +33,6 @@ Coding Code 是 AI 编程助手。
 - `rules`：全局 / 项目级规则装载
 - `server`：HTTP / SSE 入口
 - `client`：HTTP 客户端（`AgentClient` 的实现）
-- `direct`：进程内直连端口，免 HTTP 的 runtime / sessions / settings / models 接口
 - `core`：通用件（`error` / `result` / `path`），不指向任何功能模块
 - `contracts`：跨领域共享契约
 - `layer.ts`：组合根，全量装配
@@ -75,7 +73,7 @@ Coding Code 是 AI 编程助手。
 - 禁止用户当前轮未明确要求就主动进行 reset、commit、push 等相关会影响 git 历史或者当前仓库代码的操作，仅用户显式要求进行某类操作才能进行；仅允许 `git diff`、`git log` 等无副作用的操作可以自主进行
 - 禁止未在用户指示下补充测试，当开发任务完成后，给用户报告完成程度，由用户决定针对哪些部分写测试
 - 禁止将工具执行细节泄漏到 agent 编排层及其他模块，agent 只依赖端口契约，不得 import 工具实现
-- 禁止将传输协议细节（HTTP / SSE）泄漏到 agent 核心及其他模块，agent 不得依赖 `server/`、`client/`、`direct/`
+- 禁止将传输协议细节（HTTP / SSE）泄漏到 agent 核心及其他模块，agent 不得依赖 `server/`、`client/`
 - 不允许假设“这是未来需要扩展的”，所以现在就不做，应该贴合用户的实际要求
 - 不允许总是有阶段性计划，分阶段完成很容易导致过程产生一堆没用的死代码
 - 不许兼容、兜底旧代码

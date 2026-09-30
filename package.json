@@ -6,7 +6,6 @@
   "workspaces": [
     "packages/infra",
     "packages/codingcode",
-    "packages/tui",
     "packages/desktop"
   ],
   "scripts": {
@@ -34,9 +33,6 @@
     "effect": "^3.21.2",
     "globby": "^14.1.0",
     "hono": "^4.12.19",
-    "ink": "^7.0.3",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
     "react": "^19.2.6",

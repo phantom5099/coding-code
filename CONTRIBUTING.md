@@ -39,16 +39,13 @@ coding-code/
 │   │   ├── subagent/             #   子智能体加载和注册
 │   │   ├── scheduler/            #   调度服务
 │   │   ├── rules/                #   规则注入
-│   │   ├── client/               #   客户端（HTTP / Direct / SSE）
+│   │   ├── client/               #   客户端（HTTP / SSE）
 │   │   ├── core/                 #   核心工具类型和路径
 │   │   ├── runtime/              #   项目运行时
 │   │   ├── sandbox/              #   沙箱（stub，预留）
 │   │   ├── server/               #   Hono HTTP 服务 + SSE
 │   │   ├── cli.ts                #   CLI 入口
 │   │   └── layer.ts              #   Effect Layer 入口
-│   ├── tui/src/                  # @codingcode/tui — Ink 终端 UI
-│   │   ├── components/           #   App, InputBox, MessageItem 等
-│   │   └── hooks/                #   useAgentRunner, useTerminalSize
 │   ├── desktop/                  # @codingcode/desktop — Electron 桌面应用
 │   │   ├── electron/             #   主进程（IPC、文件服务、Git 服务）
 │   │   └── src/                  #   React 前端（Agent UI、设置面板）

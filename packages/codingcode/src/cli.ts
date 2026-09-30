@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import { serve } from '@hono/node-server';
-import { LLMFactoryService } from './llm/port.js';
 import { createServer } from './server/index.js';
 import { createAppRuntime } from './layer.js';
 import { loadConfig, ensureUserConfig } from '@codingcode/infra/config';
@@ -10,50 +9,25 @@ import { AgentError } from './core/error.js';
 import { SchedulerService } from './scheduler/port.js';
 
 async function main() {
-  const args = process.argv.slice(2);
   ensureUserConfig();
   ensureTempCwd();
   const config = loadConfig();
 
-  const serveOnly = args.includes('serve');
-  const tuiOnly = args.includes('tui');
   const basePort = config.server.port;
 
   const rt = createAppRuntime();
 
   const program = Effect.gen(function* () {
     const port = yield* Effect.tryPromise(() => findAvailablePort(basePort));
-    const llmFactory = yield* LLMFactoryService;
 
     // Initialize scheduler with the shared runtime
     const scheduler = yield* SchedulerService;
     scheduler.setRuntime(rt);
     scheduler.initialize();
 
-    if (tuiOnly) {
-      const tuiPath = '../../tui/src/index.js';
-      const { runTui, createTuiClientFromFacades } = yield* Effect.tryPromise(
-        () => import(tuiPath)
-      );
-      const llm = yield* llmFactory.getLLMClient();
-      const client = createTuiClientFromFacades(llm, rt);
-      runTui({ client });
-      return;
-    }
-
     const app = yield* Effect.tryPromise(() => createServer(rt));
     serve({ fetch: app.fetch, port });
     console.log(`CODINGCODE_SERVER_READY:${port}`);
-
-    if (!serveOnly) {
-      const tuiPath = '../../tui/src/index.js';
-      const { runTui, createTuiClientFromFacades } = yield* Effect.tryPromise(
-        () => import(tuiPath)
-      );
-      const llm = yield* llmFactory.getLLMClient();
-      const client = createTuiClientFromFacades(llm, rt);
-      runTui({ client });
-    }
   });
 
   const result = await rt.runPromise(
