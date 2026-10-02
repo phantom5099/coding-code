@@ -7,7 +7,7 @@ import { ApprovalService } from '../approval/port.js';
 import { CheckpointService } from '../checkpoint/port.js';
 import { ContextService } from '../context/port.js';
 import { HookService } from '../hooks/port.js';
-import { LLMFactoryService } from '../llm/port.js';
+import { LLMService } from '../llm/port.js';
 import { McpService } from '../mcp/port.js';
 import { MemoryService } from '../memory/port.js';
 import { RulesService } from '../rules/port.js';
@@ -20,8 +20,8 @@ import type { FrameBody, FrameError, ResponseMeta, ToolOutcome, Transition } fro
 import { isTurnEnd } from '../contracts/frame.js';
 import type { ToolCatalog, ToolResult } from '../contracts/tool.js';
 import type { ToolCall } from '../contracts/types.js';
-import { loadConfig } from '@codingcode/infra/config';
-import { createLogger } from '@codingcode/infra/logger';
+import { loadConfig } from '../infra/config.js';
+import { createLogger } from '../infra/logger.js';
 import { normalizePath, computePaths } from '../core/path.js';
 import { resolveProfile, getToolNames } from './profile.js';
 
@@ -49,7 +49,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   const mcp = yield* McpService;
   const context = yield* ContextService;
   const memory = yield* MemoryService;
-  const llmFactory = yield* LLMFactoryService;
+  const llm = yield* LLMService;
   const rules = yield* RulesService;
   const todo = yield* TodoService;
   const toolEnvPort = yield* ToolEnvPort;
@@ -57,45 +57,59 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   const maxSteps = cfg.maxSteps ?? 250;
   const maxStopContinuations = cfg.maxStopContinuations ?? 3;
 
+  const flushMemoryInBackground = (sessionId: string, model: string, cwd: string) =>
+    Effect.forkDaemon(
+      memory.flushSessionToMemory(sessionId, model, cwd).pipe(
+        Effect.catchAllCause((cause) =>
+          Effect.sync(() => logger.error('memory flush failed:', cause))
+        )
+      )
+    );
+
   const runTurn = (input: string, opts: RunTurnOptions) =>
     Effect.gen(function* () {
       const normalizedCwd = normalizePath(opts.cwd);
 
-      rules.evictProjectRules(normalizedCwd);
+      yield* rules.evictProjectRules(normalizedCwd);
       yield* hooks.reloadUserHooks(normalizedCwd);
       yield* hooks.emit('agent.turn.start', { sessionId: '', projectPath: normalizedCwd });
       yield* mcp.syncConnections(normalizedCwd);
 
       let sessionId = opts.sessionId;
-      const llm = yield* llmFactory.getLLMClient();
+      let parentSessionId = opts.parentSessionId;
+      const model = opts.model;
       if (!sessionId) {
         if (!opts.activeProfile || !opts.permissionMode) {
           return yield* Effect.fail(
             new AgentError('CONFIG_MISSING', 'new session requires activeProfile and permissionMode')
           );
         }
-        const model = opts.model ?? llm.modelInfo.model;
-        const created = yield* session.create(normalizedCwd, {
-          model,
-          activeProfile: opts.activeProfile,
-          permissionMode: opts.permissionMode,
-        });
+        const created = yield* session.create(
+          normalizedCwd,
+          {
+            model,
+            title: input,
+            activeProfile: opts.activeProfile,
+            permissionMode: opts.permissionMode,
+          },
+          { parentSessionId, agentName: opts.agentName }
+        );
         sessionId = created.sessionId;
+        parentSessionId = created.parentSessionId;
       }
 
-      const state = yield* session.load(normalizedCwd, sessionId);
+      const state = yield* session.load(normalizedCwd, sessionId, parentSessionId);
 
-      // restore session profile/permission from the frontend request, falling back to persisted values
       const profileName = opts.activeProfile ?? state.activeProfile;
       const effectivePerm = opts.permissionMode ?? state.permissionMode;
       if (opts.permissionMode) {
-        yield* session.setPermissionMode(normalizedCwd, sessionId, opts.permissionMode);
+        yield* session.setPermissionMode(normalizedCwd, sessionId, opts.permissionMode, parentSessionId);
       }
       if (opts.activeProfile) {
-        yield* session.setActiveProfile(normalizedCwd, sessionId, opts.activeProfile);
+        yield* session.setActiveProfile(normalizedCwd, sessionId, opts.activeProfile, parentSessionId);
       }
 
-      state.memorySnapshot = memory.loadMemoryForPrompt(state.cwd);
+      state.memorySnapshot = yield* memory.loadMemoryForPrompt(state.cwd);
 
       const profile: AgentProfile | undefined = profileName ? resolveProfile(profileName) : undefined;
 
@@ -112,11 +126,11 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       yield* checkpoint.snapshotBaseline(state.cwd, sessionId, turnId);
 
       // get rules text
-      const rulesText = rules.getAllRules(state.cwd);
+      const rulesText = yield* rules.getAllRules(state.cwd);
 
       // run agent loop
       const stream = runAgentLoop({
-        state, llm, profile, catalog,
+        state, model, profile, catalog, systemPrompt: opts.systemPrompt,
         toolEnv,
         abortSignal: opts.signal, rulesText,
         sid: sessionId, projectPath: state.cwd, permissionMode: effectivePerm,
@@ -126,16 +140,16 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     });
 
   function runAgentLoop(opts: {
-    state: any; llm: any; profile: AgentProfile | undefined;
+    state: any; model: string; profile: AgentProfile | undefined;
     abortSignal: AbortSignal | undefined;
     catalog: ToolCatalog;
     toolEnv: ToolEnv;
     rulesText: string;
     sid: string; projectPath: string; permissionMode: PermissionMode;
+    systemPrompt?: string;
   }): AsyncGenerator<FrameBody> {
     const q = Effect.runSync(Queue.unbounded<FrameBody>());
 
-    // agentLoopInternal 只经闭包引用服务，不消费任何 Tag；工具执行所需的服务由 toolEnv 注入
     const program = agentLoopInternal(opts, q);
 
     return (async function* () {
@@ -157,13 +171,14 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   }
 
   function agentLoopInternal(opts: {
-    state: any; llm: any; profile: AgentProfile | undefined;
+    state: any; model: string; profile: AgentProfile | undefined;
     abortSignal: AbortSignal | undefined;
     catalog: ToolCatalog;
     rulesText: string;
     sid: string; projectPath: string; permissionMode: PermissionMode;
+    systemPrompt?: string;
   }, q: Queue.Queue<FrameBody>): Effect.Effect<Result<string, AgentError>, AgentError> {
-    const { state, llm, profile, abortSignal, catalog, rulesText, sid, projectPath, permissionMode } = opts;
+    const { state, model, profile, abortSignal, catalog, rulesText, sid, projectPath, permissionMode } = opts;
     const { tools, lookup: toolLookup } = catalog;
 
     let ended = false;
@@ -180,7 +195,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         platform: process.platform,
         shell: process.env.SHELL || process.env.ComSpec || 'bash',
         rules: rulesText,
-        profileSystemPrompt: profile?.systemPrompt,
+        profileSystemPrompt: opts.systemPrompt ?? profile?.systemPrompt,
       });
 
       const memoryBlock = state.memorySnapshot;
@@ -204,10 +219,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
         const transcriptPath = computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath;
 
-        const willCompact = yield* Effect.either(Effect.tryPromise({
-          try: () => context.willCompact(transcriptPath, llm.modelInfo.maxTokens),
-          catch: (e) => new AgentError('LLM_FAILED', String(e)),
-        }));
+        const willCompact = yield* Effect.either(context.willCompact(transcriptPath, model));
         if (Either.isLeft(willCompact)) {
           yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(willCompact.left) });
           yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
@@ -217,10 +229,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
           yield* q.offer({ family: 'transition', transition: { to: 'compress' } });
         }
 
-        const assembled = yield* Effect.either(Effect.tryPromise({
-          try: () => context.assemblePayload(transcriptPath, llm.modelInfo.maxTokens, llm),
-          catch: (e) => new AgentError('LLM_FAILED', String(e)),
-        }));
+        const assembled = yield* Effect.either(context.assemblePayload(transcriptPath, model));
         if (Either.isLeft(assembled)) {
           yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(assembled.left) });
           yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
@@ -238,7 +247,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
         const streamed = yield* Effect.either(Effect.tryPromise({
           try: async () => {
-            for await (const part of llm.completeStream({ messages: llmMessages, system, tools, maxSteps: 1 }, abortSignal)) {
+            for await (const part of llm.completeStream({ messages: llmMessages, system, tools, maxSteps: 1 }, model, abortSignal)) {
               if (abortSignal?.aborted) break;
               if (part.type === 'text') {
                 content += part.text;
@@ -275,7 +284,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
               const loopErr = new AgentError('AGENT_LOOP_DETECTED', 'max stop continuations exceeded');
               yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(loopErr) });
               yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
-              memory.flushSessionToMemory(state.sessionId, llm, state.cwd).catch((e) => logger.error('memory flush failed:', e));
+              yield* flushMemoryInBackground(state.sessionId, model, state.cwd);
               return Result.err(loopErr);
             }
             stopContinuations++;
@@ -314,6 +323,8 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         const approvedResults = approvedCalls.length > 0
           ? yield* executor.executeBatch(approvedCalls, state.sessionId, {
               turnId: state.currentTurnId, projectPath, signal: abortSignal, toolLookup,
+              activeProfile: profile?.name,
+              model,
             })
           : [];
 
@@ -342,7 +353,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       }
 
       yield* checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
-      memory.flushSessionToMemory(state.sessionId, llm, state.cwd).catch((e) => logger.error('memory flush failed:', e));
+      yield* flushMemoryInBackground(state.sessionId, model, state.cwd);
 
       if (lastResult) return lastResult;
 
@@ -366,7 +377,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
             error: { message: 'agent terminated without end frame', code: 'AGENT_TERMINATED' },
           });
           yield* checkpoint.snapshotFinal(opts.projectPath, opts.sid, opts.state.currentTurnId).pipe(Effect.ignore);
-          memory.flushSessionToMemory(opts.state.sessionId, opts.llm, opts.projectPath).catch((e) => logger.error('memory flush failed:', e));
+          yield* flushMemoryInBackground(opts.state.sessionId, opts.model, opts.projectPath);
         })
       )
     );

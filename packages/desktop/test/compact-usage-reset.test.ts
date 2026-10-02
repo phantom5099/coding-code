@@ -6,7 +6,7 @@ import { useAgentStore } from '../src/stores/agent.store';
 import { useWorkspaceStore } from '../src/stores/workspace.store';
 import { createStreamState, reduceFrame } from '../src/lib/frame-reducer';
 import type { StreamEffects } from '../src/lib/frame-reducer';
-import type { Frame } from '@codingcode/core/core/frame';
+import type { Frame } from '@codingcode/sdk';
 
 // 用真实 store 实现 reducer 的副作用出口，覆盖 setCompacted 的落库行为
 // （与 useAgent 中 StreamEffects.setCompacted 的语义一致）。
@@ -139,7 +139,7 @@ beforeEach(() => {
         updatedAt: 0,
       },
     },
-    approvalPolicy: 'ask-all',
+    profile: 'build', permissionMode: 'ask',
     model: 'model-1',
     models: [{ id: 'model-1', provider: 'p', name: 'm1', context_window: 128000 } as any],
     contextUsage: { used: 50000, contextWindow: 128000 },

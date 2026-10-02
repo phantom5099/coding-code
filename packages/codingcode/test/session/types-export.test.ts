@@ -4,16 +4,16 @@ import type { SessionStoreState } from '../../src/contracts/session.js';
 describe('SessionStoreState export', () => {
   it('contains only cwd as its path source', () => {
     const state: SessionStoreState = {
+      type: 'session_meta',
       sessionId: 'test-sid',
       cwd: '/tmp',
-      messageCount: 0,
-      sessionMeta: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
       model: 'gpt-4',
       title: '',
+      activeProfile: 'build',
+      permissionMode: 'ask',
       currentTurnId: 0,
       usage: undefined,
-      activeProfile: 'build',
-      permissionMode: 'default',
       memorySnapshot: '',
     };
 

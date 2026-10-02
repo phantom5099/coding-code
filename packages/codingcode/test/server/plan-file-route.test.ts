@@ -31,7 +31,7 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       cwd: '/tmp/test',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
     }),
   load: () =>
     Effect.succeed({
@@ -39,7 +39,7 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       cwd: '/tmp/test',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
     }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
@@ -60,7 +60,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
       id: 'deepseek-chat',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
       provider: 'deepseek',
       driver: 'openai',
       api_key_env: 'DEEPSEEK_API_KEY',
@@ -72,7 +72,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
         provider: 'deepseek',
         model: 'deepseek-chat',
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
         maxTokens: 64000,
         supportsToolCalling: true,
         supportsStreaming: true,
@@ -85,7 +85,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
       id: 'deepseek-chat',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
       provider: 'deepseek',
       driver: 'openai',
       api_key_env: 'DEEPSEEK_API_KEY',
@@ -111,10 +111,10 @@ const MockMcpLayer = Layer.succeed(McpService, {
 } as any);
 
 const MockMemoryLayer = Layer.succeed(MemoryService, {
-  getMemoryEnabled: () => true,
-  setMemoryEnabled: () => {},
-  loadMemoryForPrompt: () => '',
-  flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+  getMemoryEnabled: () => Effect.succeed(true),
+  setMemoryEnabled: () => Effect.void,
+  loadMemoryForPrompt: () => Effect.succeed(''),
+  flushSessionToMemory: () => Effect.succeed({ written: false, bytes: 0 }),
 } as any);
 
 const MockSchedulerLayer = Layer.succeed(SchedulerService, {
@@ -126,8 +126,8 @@ const MockSchedulerLayer = Layer.succeed(SchedulerService, {
 } as any);
 
 const MockContextLayer = Layer.succeed(ContextService, {
-  assemblePayload: async () => [],
-  compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 }),
+  assemblePayload: () => Effect.succeed([]),
+  compactWithLLM: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
 } as any);
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, {

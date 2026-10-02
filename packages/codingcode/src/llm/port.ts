@@ -1,15 +1,11 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { AgentError } from '../core/error.js';
-import type { LLMClient, SelectableModel } from '../contracts/provider.js';
+import type { LLMRequest, LLMResponse, LLMStreamPart } from '../contracts/provider.js';
 
-export interface LLMFactoryShape {
-  listModels(): Effect.Effect<SelectableModel[], AgentError>;
-  findModel(target: string): Effect.Effect<SelectableModel | null, AgentError>;
-  getActiveEntry(): Effect.Effect<SelectableModel, AgentError>;
-  switchModel(id: string): Effect.Effect<SelectableModel, AgentError>;
-  createClient(entry: SelectableModel): Effect.Effect<LLMClient, AgentError>;
-  getLLMClient(): Effect.Effect<LLMClient, AgentError>;
+export interface LLMShape {
+  complete(req: LLMRequest, model: string, signal?: AbortSignal): Effect.Effect<LLMResponse, AgentError>;
+  completeStream(req: LLMRequest, model: string, signal?: AbortSignal): AsyncIterable<LLMStreamPart>;
 }
 
-export class LLMFactoryService extends Context.Tag('LLMFactory')<LLMFactoryService, LLMFactoryShape>() {}
+export class LLMService extends Context.Tag('LLM')<LLMService, LLMShape>() {}

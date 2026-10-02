@@ -1,36 +1,11 @@
 import type { Hono } from 'hono';
-import { Effect, ManagedRuntime } from 'effect';
-import { LLMFactoryService } from '../../llm/port.js';
+import type { ManagedRuntime } from 'effect';
+import { activeModelId, listModels } from '../../infra/models.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-export function registerModelsRoutes(router: Hono, rt: ManagedRt): void {
-  router.get('/api/models', async (c) => {
-    const result = await rt.runPromise(
-      Effect.gen(function* () {
-        const factory = yield* LLMFactoryService;
-        const modelsResult = yield* Effect.either(factory.listModels());
-        const activeResult = yield* Effect.either(factory.getActiveEntry());
-        return {
-          models: modelsResult._tag === 'Right' ? modelsResult.right : [],
-          activeId: activeResult._tag === 'Right' ? activeResult.right.id : '',
-        };
-      })
-    );
-    return c.json(result);
-  });
-
-  router.post('/api/models/switch', async (c) => {
-    const { modelId } = (await c.req.json()) as { modelId: string };
-    const result = await rt.runPromise(
-      Effect.gen(function* () {
-        const factory = yield* LLMFactoryService;
-        return yield* Effect.either(factory.switchModel(modelId));
-      })
-    );
-    return c.json({
-      ok: result._tag === 'Right',
-      error: result._tag === 'Left' ? result.left.message : undefined,
-    });
+export function registerModelsRoutes(router: Hono, _rt: ManagedRt): void {
+  router.get('/api/models', (c) => {
+    return c.json({ models: listModels(), activeId: activeModelId() });
   });
 }

@@ -2,7 +2,10 @@ import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { AgentService } from '../../agent/port.js';
 import { resolveCwd } from '../../core/path.js';
-import { errorResponse } from '../util.js';
+import { isAgentProfileName } from '../../agent/profile.js';
+import { isPermissionMode } from '../../approval/types.js';
+import { loadConfig } from '../../infra/config.js';
+import { errorBody, errorResponse } from '../util.js';
 import { createSseHandler } from '../handler.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -12,17 +15,26 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
 
   router.post('/api/sessions/:id/messages', async (c) => {
     let sessionId = c.req.param('id');
-    const { input, cwd } = await c.req.json<{ input: string; cwd: string }>();
+    const { input, cwd, model } = await c.req.json<{ input: string; cwd: string; model?: string }>();
+    // 模型是回合的必要输入，缺失即拒绝，不允许在 agent 层兜底成空串
+    if (!model?.trim()) {
+      return c.json(errorBody('CONFIG_MISSING', 'model is required'), 400);
+    }
     const normalizedCwd = resolveCwd(cwd);
 
     const isNew = sessionId === '_' || !sessionId;
     const runOpts: any = {
       cwd: normalizedCwd,
       signal: c.req.raw.signal,
+      model,
     };
     if (isNew) {
-      runOpts.activeProfile = 'build';
-      runOpts.permissionMode = 'default';
+      // 新会话的交互/权限模式取自 config.yaml；会话一旦建立就以会话头为准
+      const cfg = loadConfig();
+      runOpts.activeProfile = isAgentProfileName(cfg.activeProfile) ? cfg.activeProfile : 'build';
+      runOpts.permissionMode = isPermissionMode(cfg.permissionMode)
+        ? cfg.permissionMode
+        : 'ask';
     }
 
     const result = await rt.runPromise(

@@ -14,7 +14,6 @@ interface MockTool {
 vi.mock('../../src/mcp/client.js', () => {
   class MockMcpClient {
     static instances: MockMcpClient[] = [];
-    transportType = 'stdio' as const;
     connectCalls = 0;
     disconnectCalls = 0;
     private _tools: MockTool[];
@@ -218,21 +217,6 @@ describe('McpService（syncConnections / listProjectMcpTools / status）', () =>
         expect(specs[1]!.readOnlyHint).toBe(false);
         // execute 已绑定 client，zod 化留给 tools 层
         expect(yield* query.execute({ text: 'hello' })).toBe('mock-result');
-      })
-    );
-  });
-
-  it('status 返回 name/toolCount/transport，未连接的项目返回空数组', async () => {
-    mockConfigs = [cfg('db', [tool('query'), tool('schema')])];
-
-    await run(
-      Effect.gen(function* () {
-        const mcp = yield* McpService;
-        yield* mcp.syncConnections(TEST_PROJECT);
-        expect(yield* mcp.status(TEST_PROJECT)).toEqual([
-          { name: 'db', toolCount: 2, transport: 'stdio' },
-        ]);
-        expect(yield* mcp.status('/other-project')).toEqual([]);
       })
     );
   });

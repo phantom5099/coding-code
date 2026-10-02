@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getGlobalDir } from '../core/path.js';
-import type { Automation } from './types.js';
+import type { Automation } from '../contracts/automation.js';
 
 interface AutomationsFile {
   automations: Automation[];

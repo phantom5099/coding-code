@@ -2,13 +2,12 @@ import { Effect, Layer } from 'effect';
 import { resolveMcpConfig } from './config.js';
 import { McpClient } from './client.js';
 import { McpService } from './port.js';
-import type { McpServerConfig, McpStatus, McpToolSpec } from '../contracts/mcp.js';
-import { createLogger } from '@codingcode/infra/logger';
+import type { McpServerConfig, McpToolSpec } from '../contracts/mcp.js';
+import { createLogger } from '../infra/logger.js';
 import { AgentError } from '../core/error.js';
 
 const logger = createLogger();
 
-/** 客户端 listTools() 的原始返回形状（SDK 类型在 client.ts 内部收口） */
 interface McpRawTool {
   name: string;
   description: string;
@@ -135,17 +134,6 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
             }
           }
           return specs;
-        }),
-
-      status: (projectPath: string): Effect.Effect<McpStatus[]> =>
-        Effect.sync(() => {
-          const projectClients = clientsByProject.get(projectPath);
-          if (!projectClients) return [];
-          return Array.from(projectClients.entries()).map(([name, entry]) => ({
-            name,
-            toolCount: entry.rawTools.length,
-            transport: entry.client.transportType,
-          }));
         }),
     };
   }

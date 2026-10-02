@@ -15,5 +15,5 @@
   },
   "include": ["src/**/*", "shared/**/*"],
   "exclude": ["node_modules", "out", "electron"],
-  "references": [{ "path": "../codingcode" }, { "path": "../infra" }]
+  "references": [{ "path": "../sdk" }]
 }

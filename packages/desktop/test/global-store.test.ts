@@ -13,8 +13,9 @@ beforeEach(() => {
   useAgentStore.setState({
     currentThreadId: null,
     threads: {},
-    approvalPolicy: 'ask-all',
+    profile: 'build', permissionMode: 'ask',
     model: '',
+    activeModel: '',
     models: [],
     contextUsage: null,
     todoByThreadId: {},
@@ -559,7 +560,7 @@ describe('global store - token usage', () => {
     useAgentStore
       .getState()
       .setModels([{ id: 'm1', name: 'Model', provider: 'openai', context_window: 128000 }]);
-    useAgentStore.getState().setModel('m1');
+    useAgentStore.getState().setActiveModel('m1');
     useAgentStore.getState().setCurrentThread('t1');
     useAgentStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 });
     expect(useAgentStore.getState().usageByThreadId['t1']).toEqual({
@@ -575,13 +576,80 @@ describe('global store - token usage', () => {
     useAgentStore
       .getState()
       .setModels([{ id: 'm1', name: 'Model', provider: 'openai', context_window: 128000 }]);
-    useAgentStore.getState().setModel('m1');
+    useAgentStore.getState().setActiveModel('m1');
     useAgentStore.getState().setThreadUsage('t1', { prompt: 1000, completion: 500, total: 1500 });
     useAgentStore.getState().setCurrentThread('t1');
     expect(useAgentStore.getState().contextUsage).toEqual({
       used: 1500,
       contextWindow: 128000,
     });
+  });
+
+  it('setCurrentThread adopts the model stored on the thread', () => {
+    useAgentStore
+      .getState()
+      .setModels([
+        { id: 'm1', name: 'Model', provider: 'openai', context_window: 128000 },
+        { id: 'm2', name: 'Other', provider: 'deepseek', context_window: 64000 },
+      ]);
+    useAgentStore.getState().setActiveModel('m1');
+    useAgentStore.getState().upsertThread({
+      id: 't1',
+      projectId: '',
+      title: 'with model',
+      cwd: '/test/cwd',
+      model: 'm2',
+      turns: [],
+      createdAt: 1000,
+      updatedAt: 1000,
+    });
+
+    useAgentStore.getState().setCurrentThread('t1');
+    expect(useAgentStore.getState().model).toBe('m2');
+
+    // 切回「新对话」应回到全局默认，而不是留在旧会话的模型上
+    useAgentStore.getState().setCurrentThread(null);
+    expect(useAgentStore.getState().model).toBe('m1');
+  });
+
+  it('setCurrentThread falls back to the global default when the thread has no model', () => {
+    useAgentStore.getState().setActiveModel('m1');
+    useAgentStore.getState().upsertThread({
+      id: 't2',
+      projectId: '',
+      title: 'no model',
+      cwd: '/test/cwd',
+      turns: [],
+      createdAt: 1000,
+      updatedAt: 1000,
+    });
+
+    useAgentStore.getState().setCurrentThread('t2');
+    expect(useAgentStore.getState().model).toBe('m1');
+  });
+
+  it('selectModel writes to the open thread, or to the global default when none is open', () => {
+    useAgentStore.getState().upsertThread({
+      id: 't1',
+      projectId: '',
+      title: 'open',
+      cwd: '/test/cwd',
+      turns: [],
+      createdAt: 1000,
+      updatedAt: 1000,
+    });
+    useAgentStore.getState().setCurrentThread('t1');
+    useAgentStore.getState().selectModel('m2');
+    expect(useAgentStore.getState().model).toBe('m2');
+    expect(useAgentStore.getState().threads['t1']!.model).toBe('m2');
+    expect(useAgentStore.getState().activeModel).toBe('');
+
+    // 关掉会话再选：写的是全局默认，且不会污染已有关话
+    useAgentStore.getState().setCurrentThread(null);
+    useAgentStore.getState().selectModel('m3');
+    expect(useAgentStore.getState().activeModel).toBe('m3');
+    expect(useAgentStore.getState().model).toBe('m3');
+    expect(useAgentStore.getState().threads['t1']!.model).toBe('m2');
   });
 
   it('setCurrentThread clears contextUsage when no usage for thread', () => {

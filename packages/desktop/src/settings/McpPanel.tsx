@@ -8,13 +8,12 @@ import {
   updateMcpServer,
   deleteMcpServer,
 } from '../lib/core-api';
-import type { McpServerConfig } from '@codingcode/core/contracts/mcp';
+import type { McpServerConfig } from '@codingcode/sdk';
 
 interface McpEntry {
   name: string;
   transport: 'stdio' | 'http';
   enabled: boolean;
-  toolCount: number;
   source?: 'global' | 'project';
   hasProjectOverride?: boolean;
 }
@@ -57,7 +56,7 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
     setLoading(true);
     try {
       const data = await listMcpServers(cwd);
-      setServers(data ?? []);
+      setServers((data ?? []).map((s) => ({ ...s, transport: s.command ? 'stdio' : 'http' })));
     } catch {
       setServers([]);
     } finally {
@@ -272,9 +271,6 @@ export default function McpPanel({ global: isGlobal }: { global?: boolean }) {
                         覆盖全局
                       </span>
                     )}
-                  </div>
-                  <div className="text-[13px] text-[var(--text-disabled)] mt-1 font-mono">
-                    {s.toolCount} 个工具
                   </div>
                 </div>
                 {canMutate && (

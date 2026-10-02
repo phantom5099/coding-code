@@ -1,11 +1,12 @@
 import { Layer, Effect, ManagedRuntime } from 'effect';
 import { CronJob } from 'cron';
 import { randomUUID } from 'crypto';
-import { createLogger } from '@codingcode/infra/logger';
-import type { Automation, CreateAutomationInput, UpdateAutomationInput } from './types.js';
+import { createLogger } from '../infra/logger.js';
+import type { Automation, CreateAutomationInput, UpdateAutomationInput } from '../contracts/automation.js';
 import { readAutomations, writeAutomations } from './store.js';
 import { AgentService } from '../agent/port.js';
 import { AgentError } from '../core/error.js';
+import { activeModelId } from '../infra/models.js';
 import { SchedulerService } from './port.js';
 
 const logger = createLogger();
@@ -46,6 +47,8 @@ export const SchedulerLayer = Layer.effect(SchedulerService, Effect.sync(() => {
             return yield* agent.runTurn(auto.description, {
               cwd: auto.projectCwd,
               signal: controller.signal,
+              // 自动化没有独立的模型配置，统一用 config.yaml 的活动模型
+              model: activeModelId(),
               activeProfile: 'build',
               permissionMode: 'bypass',
             });
@@ -177,6 +180,8 @@ export const SchedulerLayer = Layer.effect(SchedulerService, Effect.sync(() => {
               return yield* agent.runTurn(auto.description, {
                 cwd: auto.projectCwd,
                 signal: controller.signal,
+                // 自动化没有独立的模型配置，统一用 config.yaml 的活动模型
+                model: activeModelId(),
                 activeProfile: 'build',
                 permissionMode: 'bypass',
               });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus, Play, Trash2, Power, Clock, FolderOpen } from 'lucide-react';
-import { useAgentStore, type Automation } from '../stores/agent.store';
+import { useAgentStore } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { useUIStore } from '../stores/ui.store';
 import {
@@ -232,7 +232,7 @@ export function AutomationPanel() {
       {showForm && (
         <AutomationForm
           automationId={editingId}
-          defaultProjectCwd={workspace.rootPath}
+          initialProjectCwd={workspace.rootPath}
           onClose={() => {
             setShowForm(false);
             setEditingId(null);

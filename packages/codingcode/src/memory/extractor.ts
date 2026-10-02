@@ -1,11 +1,12 @@
-import type { LLMClient } from '../contracts/provider.js';
+import type { LLMShape } from '../llm/port.js';
 
 export async function extractMemory(opts: {
   currentMemory: string;
   transcript: string;
-  llm: LLMClient;
+  llm: LLMShape;
+  model: string;
 }): Promise<string | null> {
-  const { currentMemory, transcript, llm } = opts;
+  const { currentMemory, transcript, llm, model } = opts;
 
   const systemPrompt = `你是记忆整理器。基于"已有记忆"和"会话记录"，输出整份最新版长期记忆，放在 <memory>...</memory> 块中，不要输出其它内容。
 
@@ -29,10 +30,13 @@ ${currentMemory || '（空）'}
 ${transcript || '（空）'}`;
 
   try {
-    const stream = llm.completeStream({
-      messages: [{ role: 'user', content: userMessage }],
-      system: systemPrompt,
-    });
+    const stream = llm.completeStream(
+      {
+        messages: [{ role: 'user', content: userMessage }],
+        system: systemPrompt,
+      },
+      model
+    );
 
     let fullOutput = '';
     for await (const part of stream) {

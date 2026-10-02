@@ -60,7 +60,7 @@ function applyPermissionMode(
       }
       return null;
 
-    case 'default':
+    case 'ask':
     default:
       return null;
   }
@@ -222,7 +222,7 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
           {
             ruleEngine,
             destructiveTools,
-            permissionMode: request.permissionMode ?? 'default',
+            permissionMode: request.permissionMode ?? 'ask',
             profile: request.profile,
             onAlways: (rule) => ruleEngine.addRule(rule),
             onNever: (rule) => ruleEngine.addRule(rule),

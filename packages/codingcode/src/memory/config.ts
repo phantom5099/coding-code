@@ -1,4 +1,4 @@
-import { loadConfig, type MemoryConfig } from '@codingcode/infra/config';
+import { loadConfig, type MemoryConfig } from '../infra/config.js';
 
 export function getMemoryConfig(): MemoryConfig {
   return loadConfig().memory;

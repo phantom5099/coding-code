@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { Hono } from 'hono';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs';
+import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { registerMessagesRoutes } from '../../src/server/routes/messages.js';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { AgentService } from '../../src/agent/port.js';
@@ -32,7 +31,7 @@ const mockApprovalWaitService = {
 };
 
 // The message-send path now lives in AgentService.runTurn. A real runTurn loads
-// the persisted session (which reads permissionMode from the on-disk index)
+// the persisted session (which reads permissionMode from the session head)
 // before streaming. We mirror that seam here so the test keeps validating that
 // the fork/send path starts from the persisted session state.
 const loadedPermissionModes: string[] = [];
@@ -74,15 +73,17 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
         return yield* session.create(cwd, {
           model: 'm',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
     sessionId = state.sessionId;
-    const indexPath = computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath;
-    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    idx.permissionMode = 'bypass';
-    writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
+    await rt.runPromise(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        yield* session.setPermissionMode(cwd, sessionId, 'bypass');
+      })
+    );
 
     loadedPermissionModes.length = 0;
 
@@ -99,7 +100,7 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
     const res = await app.request('/api/sessions/' + sessionId + '/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ input: 'hello', cwd }),
+      body: JSON.stringify({ input: 'hello', cwd, model: 'm' }),
     });
     expect(res.status).not.toBe(404);
     expect(loadedPermissionModes[0]).toBe('bypass');

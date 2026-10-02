@@ -24,7 +24,7 @@ describe('sessionJsonlPathFromCwd', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
@@ -51,7 +51,7 @@ describe('sessionJsonlPathFromCwd', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
@@ -60,17 +60,11 @@ describe('sessionJsonlPathFromCwd', () => {
       expect(
         existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath)
       ).toBe(true);
-      expect(
-        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath)
-      ).toBe(true);
 
       deleteSession(state.sessionId, cwd);
 
       expect(
         existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath)
-      ).toBe(false);
-      expect(
-        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath)
       ).toBe(false);
     } finally {
       rmSync(

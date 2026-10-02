@@ -1,9 +1,10 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/infra" },
     { "path": "./packages/codingcode" },
     { "path": "./packages/codingcode/test" },
+    { "path": "./packages/sdk" },
+    { "path": "./packages/sdk/test" },
     { "path": "./packages/desktop" }
   ]
 }

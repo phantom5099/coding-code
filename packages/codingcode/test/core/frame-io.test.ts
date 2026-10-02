@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createFrameAssembler, decodeFrame, encodeFrame } from '../../src/contracts/frame-io.js';
+import { createFrameAssembler } from '../../src/contracts/frame-io.js';
 import type { FrameBody } from '../../src/contracts/frame.js';
 
 // ---- body builders ----
@@ -35,96 +35,5 @@ describe('createFrameAssembler — envelope', () => {
     const a = createFrameAssembler({ sessionId: 's' });
     expect(a.stamp(text())).toMatchObject({ seq: 1, family: 'event' });
     expect(a.stamp(start(2))).toMatchObject({ seq: 2, turnId: 2 });
-  });
-});
-
-// ---- codec ----
-
-describe('frame codec', () => {
-  it('round-trips an assembled frame through encode/decode', () => {
-    const f = createFrameAssembler({ sessionId: 's' });
-    const stamped = f.stamp(start(3));
-    const decoded = decodeFrame(JSON.parse(encodeFrame(stamped)));
-    expect(decoded.ok).toBe(true);
-    if (decoded.ok) expect(decoded.frame).toEqual(stamped);
-  });
-
-  it('rejects a non-object payload', () => {
-    expect(decodeFrame('nope')).toMatchObject({ ok: false, reason: 'shape' });
-  });
-
-  it('rejects a payload missing envelope fields', () => {
-    expect(decodeFrame({ family: 'event' })).toMatchObject({ ok: false, reason: 'shape' });
-  });
-
-  it('rejects a non-numeric, non-null turnId', () => {
-    expect(
-      decodeFrame({ sessionId: 's', turnId: 'x', seq: 1, family: 'fatal', fatal: { message: 'm', code: 'c' } })
-    ).toMatchObject({ ok: false, reason: 'shape' });
-  });
-
-  it('rejects an unknown family', () => {
-    expect(decodeFrame({ sessionId: 's', turnId: null, seq: 1, family: 'nope' })).toMatchObject({
-      ok: false,
-      reason: 'unknown-family',
-    });
-  });
-
-  it('rejects an unknown transition target', () => {
-    expect(
-      decodeFrame({ sessionId: 's', turnId: 1, seq: 1, family: 'transition', transition: { to: 'zzz' } })
-    ).toMatchObject({ ok: false, reason: 'unknown-transition' });
-  });
-
-  it('accepts a compress frame', () => {
-    const decoded = decodeFrame({
-      sessionId: 's',
-      turnId: 1,
-      seq: 1,
-      family: 'transition',
-      transition: { to: 'compress' },
-    });
-    expect(decoded.ok).toBe(true);
-  });
-
-  it('rejects an unknown event type', () => {
-    expect(
-      decodeFrame({ sessionId: 's', turnId: 1, seq: 1, family: 'event', event: { type: 'zzz' } })
-    ).toMatchObject({ ok: false, reason: 'unknown-event' });
-  });
-
-  it('rejects an end(error) frame without a well-formed error', () => {
-    expect(
-      decodeFrame({
-        sessionId: 's',
-        turnId: 1,
-        seq: 1,
-        family: 'transition',
-        transition: { to: 'end', reason: 'error' },
-      })
-    ).toMatchObject({ ok: false, reason: 'shape' });
-  });
-
-  it('rejects a tool_result with a malformed outcome', () => {
-    expect(
-      decodeFrame({
-        sessionId: 's',
-        turnId: 1,
-        seq: 1,
-        family: 'event',
-        event: { type: 'tool_result', id: 't1', name: 'bash', outcome: { status: 'ok' } },
-      })
-    ).toMatchObject({ ok: false, reason: 'shape' });
-  });
-
-  it('accepts a denied outcome carrying a reason', () => {
-    const decoded = decodeFrame({
-      sessionId: 's',
-      turnId: 1,
-      seq: 1,
-      family: 'event',
-      event: { type: 'tool_result', id: 't1', name: 'bash', outcome: { status: 'denied', reason: 'no' } },
-    });
-    expect(decoded.ok).toBe(true);
   });
 });

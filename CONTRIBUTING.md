@@ -25,7 +25,8 @@ coding-code/
 ├── packages/
 │   ├── codingcode/src/           # @codingcode/core — 核心引擎
 │   │   ├── agent/                #   ReAct Loop（纯引擎，无副作用）
-│   │   ├── llm/                  #   LLM 客户端工厂（多厂商）
+│   │   ├── llm/                  #   LLM 调用通道（多厂商）
+│   │   ├── infra/                #   应用配置、模型清单、YAML 存取、日志
 │   │   ├── mcp/                  #   MCP 服务集成
 │   │   ├── context/              #   上下文管理 + 自动压缩
 │   │   ├── session/              #   JSONL 会话持久化
@@ -46,10 +47,9 @@ coding-code/
 │   │   ├── server/               #   Hono HTTP 服务 + SSE
 │   │   ├── cli.ts                #   CLI 入口
 │   │   └── layer.ts              #   Effect Layer 入口
-│   ├── desktop/                  # @codingcode/desktop — Electron 桌面应用
-│   │   ├── electron/             #   主进程（IPC、文件服务、Git 服务）
-│   │   └── src/                  #   React 前端（Agent UI、设置面板）
-│   └── infra/src/                # @codingcode/infra — 基础设施
+│   └── desktop/                  # @codingcode/desktop — Electron 桌面应用
+│       ├── electron/             #   主进程（IPC、文件服务、Git 服务）
+│       └── src/                  #   React 前端（Agent UI、设置面板）
 ├── config/                        # 模型配置
 │   └── models.json               # 模型/厂商目录
 ├── docs/                         # 项目文档

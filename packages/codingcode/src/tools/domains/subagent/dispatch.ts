@@ -1,38 +1,45 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
 import { AgentError } from '../../../core/error.js';
+import { findModel } from '../../../infra/models.js';
 import type { ToolDefinition } from '../../types.js';
 import { HookService } from '../../../hooks/port.js';
 import { SubagentRunnerService } from '../../../subagent/port.js';
-import { resolveSubagentProfile } from '../../../agent/profile.js';
 
 export const dispatchAgentTool: ToolDefinition<HookService | SubagentRunnerService> = {
   name: 'dispatch_agent',
   concurrencySafe: false,
   description:
-    'Spawn an isolated subagent to handle specialized tasks. See "Available Subagents" in the system prompt for available profiles and their capabilities.',
+    'Delegate a task to a subagent. The subagent runs in the same working directory as you and returns its final output. '
+    + 'Keep the delegated write set disjoint from the files you edit yourself.',
   parameters: z.object({
-    agent: z.string().describe('subagent profile name'),
+    agentName: z.string().min(1).describe('short nickname for the subagent; used for identification and display'),
     prompt: z.string().min(1).describe('task description for the subagent'),
+    model: z.string().optional().describe('model id for the subagent; must exist in models.json, otherwise the model of the current turn is used'),
+    systemPrompt: z.string().optional().describe('replaces the middle section of the subagent system prompt; the environment block and system notes are kept'),
   }),
   execute: (args, ctx) =>
     Effect.gen(function* () {
       const hooks = yield* HookService;
       const runner = yield* SubagentRunnerService;
 
-      const { agent: agentName, prompt } = args as { agent: string; prompt: string };
+      const { agentName, prompt, model, systemPrompt } = args as {
+        agentName: string; prompt: string; model?: string; systemPrompt?: string;
+      };
       const projectPath = ctx?.projectPath || process.cwd();
 
-      const profile = resolveSubagentProfile(agentName);
-      if (!profile) {
+      if (!ctx?.activeProfile) {
         return yield* Effect.fail(
-          new AgentError('TOOL_EXECUTION_FAILED', `Unknown subagent: ${agentName}`)
+          new AgentError('CONFIG_MISSING', 'dispatch_agent requires the parent session activeProfile')
         );
       }
 
       const parentSessionId = ctx?.sessionId;
+      // 子代理只跑在模型清单内的模型上，参数空或不在清单里都继承父回合的模型
+      const requestedModel = model?.trim();
+      const effectiveModel = requestedModel && findModel(requestedModel) ? requestedModel : ctx.model;
       const spawnDecision = yield* hooks.emitDecision('agent.subagent.spawn.before', {
-        profile: agentName, prompt, parentSessionId, projectPath,
+        agentName, prompt, parentSessionId, projectPath,
       });
       if (spawnDecision && spawnDecision.decision === 'deny') {
         return yield* Effect.fail(
@@ -43,12 +50,17 @@ export const dispatchAgentTool: ToolDefinition<HookService | SubagentRunnerServi
       const { stream, sessionId: childUuid } = yield* runner.runSubagent(prompt, {
         cwd: projectPath,
         signal: ctx?.signal,
-        activeProfile: profile.name,
-        parentSessionId: ctx?.sessionId,
+        activeProfile: ctx.activeProfile,
+        permissionMode: 'bypass',
+        parentSessionId,
         agentName,
+        model: effectiveModel,
+        systemPrompt,
       });
 
-      yield* hooks.emit('agent.subagent.spawn.after', { childSessionId: childUuid, profile: agentName, projectPath });
+      yield* hooks.emit('agent.subagent.spawn.after', {
+        childSessionId: childUuid, agentName, projectPath,
+      });
 
       let didComplete = false;
       const finalContent = yield* Effect.async<string, AgentError>((resume) => {
@@ -79,7 +91,9 @@ export const dispatchAgentTool: ToolDefinition<HookService | SubagentRunnerServi
       });
 
       if (didComplete) {
-        yield* hooks.emit('agent.subagent.complete', { childSessionId: childUuid, profile: agentName, status: 'done', projectPath }).pipe(Effect.ignore);
+        yield* hooks.emit('agent.subagent.complete', {
+          childSessionId: childUuid, agentName, status: 'done', projectPath,
+        }).pipe(Effect.ignore);
       }
 
       return finalContent;

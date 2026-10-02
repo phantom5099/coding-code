@@ -6,6 +6,8 @@ export interface SessionMetaEvent {
   sessionId: string;
   cwd: string;
   createdAt: string;
+  model: string;
+  title: string;
   activeProfile: ProfileName;
   permissionMode: PermissionMode;
   parentSessionId?: string;
@@ -65,35 +67,15 @@ export type SessionEvent =
   | RollbackEvent
   | CompactEvent;
 
-export interface SessionIndex {
-  sessionId: string;
-  cwd: string;
-  model: string;
-  createdAt: string;
+export interface SessionSummary extends SessionMetaEvent {
   updatedAt: string;
-  messageCount: number;
-  title: string;
-  currentTurnId: number;
-  usage: TokenUsage | undefined;
-  activeProfile: ProfileName;
-  permissionMode: PermissionMode;
-  memorySnapshot?: string;
-  parentSessionId?: string;
+  usage?: TokenUsage;
 }
 
-export interface SessionStoreState {
-  sessionId: string;
-  cwd: string;
-  messageCount: number;
-  sessionMeta: SessionMetaEvent | null;
-  model: string;
-  activeProfile: ProfileName;
-  permissionMode: PermissionMode;
-  title: string;
+export interface SessionStoreState extends SessionMetaEvent {
   currentTurnId: number;
-  usage: TokenUsage | undefined;
   memorySnapshot: string;
-  parentSessionId?: string;
+  usage: TokenUsage | undefined;
 }
 
 export type UITurnItem =
@@ -135,6 +117,7 @@ export interface UITurn {
 
 export interface SessionCreateOptions {
   model: string;
+  title?: string;
   activeProfile: ProfileName;
   permissionMode: PermissionMode;
 }

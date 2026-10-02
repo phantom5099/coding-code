@@ -4,7 +4,7 @@ import {
   readNamedList,
   writeNamedList,
   type NamedListFile,
-} from '@codingcode/infra/yaml-store';
+} from '../infra/yaml-store.js';
 import { getGlobalDir, getProjectDir } from '../core/path.js';
 import type { UserHookConfig } from '../contracts/hooks.js';
 

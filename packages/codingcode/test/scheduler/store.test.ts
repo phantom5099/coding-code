@@ -3,7 +3,7 @@ import { existsSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve, join } from 'path';
 import { tmpdir } from 'os';
 import { readAutomations, writeAutomations } from '../../src/scheduler/store.js';
-import type { Automation } from '../../src/scheduler/types.js';
+import type { Automation } from '../../src/contracts/automation.js';
 
 const testDir = resolve(tmpdir(), 'codingcode-test-scheduler-store');
 const testFile = join(testDir, 'automations.yaml');

@@ -36,7 +36,7 @@ describe('tools/domains/bash projectPath isolation', () => {
     }
   });
 
-  const ctx = (cwd: string) => ({ projectPath: cwd });
+  const ctx = (cwd: string) => ({ projectPath: cwd, model: 'test-model' });
 
   it('executes command in ctx.projectPath when cwd arg is absent', async () => {
     // On Windows, use PowerShell to write a file in the current directory

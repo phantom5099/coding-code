@@ -10,8 +10,11 @@ export interface RunTurnOptions {
   cwd: string;
   signal?: AbortSignal;
   permissionMode?: PermissionMode;
-  model?: string;
+  model: string;
   activeProfile?: ProfileName;
+  parentSessionId?: string;
+  agentName?: string;
+  systemPrompt?: string;
 }
 
 export interface AgentShape {
@@ -29,7 +32,6 @@ export interface AgentShape {
 
 export class AgentService extends Context.Tag('AgentService')<AgentService, AgentShape>() {}
 
-// agent 自持的装配端口：工具执行期注入能力，不离开 agent/
 export interface ToolEnv {
   provide<R, E, A>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, never>;
 }

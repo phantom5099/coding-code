@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, readFileSync, rmSync } from 'fs';
+import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { AgentError } from '../../src/core/error.js';
 import { encodeProjectPath, computePaths } from '../../src/core/path.js';
-import type { SessionIndex } from '../../src/contracts/session.js';
+import { readSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -21,8 +20,8 @@ function cleanup(dir: string) {
   rmSync(dir, { recursive: true, force: true });
 }
 
-describe('load — restores model from disk, not overwritten', () => {
-  it('load restores model from index.json, not overwritten by caller', async () => {
+describe('load — keeps the persisted model untouched', () => {
+  it('load does not overwrite model in the session head', async () => {
     const slug = randomUUID();
     const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
@@ -34,7 +33,7 @@ describe('load — restores model from disk, not overwritten', () => {
           return yield* svc.create(dir, {
             model: 'gpt-4o',
             activeProfile: 'build',
-            permissionMode: 'default',
+            permissionMode: 'ask',
           });
         })
       );
@@ -47,15 +46,18 @@ describe('load — restores model from disk, not overwritten', () => {
         })
       );
 
-      expect(loaded.model).toBe('gpt-4o');
       expect(loaded.sessionId).toBe(sid);
-      expect(loaded.sessionMeta).not.toBeNull();
+
+      const meta = readSessionMeta(
+        computePaths(created.cwd, created.sessionId, created.parentSessionId).transcriptPath
+      );
+      expect(meta?.model).toBe('gpt-4o');
     } finally {
       cleanup(dir);
     }
   });
 
-  it('load then rollbackToTurn preserves real model in index.json', async () => {
+  it('load then rollbackToTurn preserves real model in the session head', async () => {
     const slug = randomUUID();
     const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
@@ -67,7 +69,7 @@ describe('load — restores model from disk, not overwritten', () => {
           return yield* svc.create(dir, {
             model: 'claude-3-5-sonnet',
             activeProfile: 'build',
-            permissionMode: 'default',
+            permissionMode: 'ask',
           });
         })
       );
@@ -81,13 +83,12 @@ describe('load — restores model from disk, not overwritten', () => {
         })
       );
 
-      const beforeRollback = JSON.parse(
-        readFileSync(
-          computePaths(created.cwd, created.sessionId, created.parentSessionId).indexPath,
-          'utf8'
-        )
-      ) as SessionIndex;
-      expect(beforeRollback.model).toBe('claude-3-5-sonnet');
+      const transcriptPath = computePaths(
+        created.cwd,
+        created.sessionId,
+        created.parentSessionId
+      ).transcriptPath;
+      expect(readSessionMeta(transcriptPath)?.model).toBe('claude-3-5-sonnet');
 
       await run(
         Effect.gen(function* () {
@@ -97,13 +98,7 @@ describe('load — restores model from disk, not overwritten', () => {
         })
       );
 
-      const afterRollback = JSON.parse(
-        readFileSync(
-          computePaths(created.cwd, created.sessionId, created.parentSessionId).indexPath,
-          'utf8'
-        )
-      ) as SessionIndex;
-      expect(afterRollback.model).toBe('claude-3-5-sonnet');
+      expect(readSessionMeta(transcriptPath)?.model).toBe('claude-3-5-sonnet');
     } finally {
       cleanup(dir);
     }
@@ -146,7 +141,7 @@ describe('load — restores model from disk, not overwritten', () => {
           return yield* svc.create(dir, {
             model: 'gpt-4o',
             activeProfile: 'build',
-            permissionMode: 'default',
+            permissionMode: 'ask',
           });
         })
       );
@@ -183,21 +178,20 @@ describe('create — generates sessionId internally', () => {
           return yield* svc.create(dir, {
             model: 'test-model',
             activeProfile: 'build',
-            permissionMode: 'default',
+            permissionMode: 'ask',
           });
         })
       );
 
       expect(state.sessionId).toBeTruthy();
       expect(state.sessionId.length).toBeGreaterThan(8);
-      expect(state.model).toBe('test-model');
-      expect(state.sessionMeta).not.toBeNull();
+      expect(state.type).toBe('session_meta');
     } finally {
       cleanup(dir);
     }
   });
 
-  it('create writes model to index.json immediately', async () => {
+  it('create writes model to the session head immediately', async () => {
     const slug = randomUUID();
     const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
@@ -209,18 +203,15 @@ describe('create — generates sessionId internally', () => {
           return yield* svc.create(dir, {
             model: 'my-special-model',
             activeProfile: 'build',
-            permissionMode: 'default',
+            permissionMode: 'ask',
           });
         })
       );
 
-      const idx = JSON.parse(
-        readFileSync(
-          computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
-          'utf8'
-        )
-      ) as SessionIndex;
-      expect(idx.model).toBe('my-special-model');
+      const meta = readSessionMeta(
+        computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
+      );
+      expect(meta?.model).toBe('my-special-model');
     } finally {
       cleanup(dir);
     }
@@ -238,7 +229,7 @@ describe('create — generates sessionId internally', () => {
           return yield* svc.create(dir, {
             model: 'test-model',
             activeProfile: 'build',
-            permissionMode: 'default',
+            permissionMode: 'ask',
           });
         })
       );
@@ -253,7 +244,7 @@ describe('create — generates sessionId internally', () => {
 });
 
 describe('load restores persisted fields', () => {
-  it('load restores currentTurnId from index.json', async () => {
+  it('load restores currentTurnId from the transcript tail', async () => {
     const slug = randomUUID();
     const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
@@ -265,7 +256,7 @@ describe('load restores persisted fields', () => {
           return yield* svc.create(dir, {
             model: 'test-model',
             activeProfile: 'build',
-            permissionMode: 'default',
+            permissionMode: 'ask',
           });
         })
       );
@@ -286,14 +277,6 @@ describe('load restores persisted fields', () => {
         })
       );
 
-      const idx = JSON.parse(
-        readFileSync(
-          computePaths(created.cwd, created.sessionId, created.parentSessionId).indexPath,
-          'utf8'
-        )
-      ) as SessionIndex;
-      expect(idx.currentTurnId).toBe(2);
-
       const loaded = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
@@ -307,7 +290,7 @@ describe('load restores persisted fields', () => {
     }
   });
 
-  it('load restores usage from index.json', async () => {
+  it('load restores usage from the transcript tail', async () => {
     const slug = randomUUID();
     const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
@@ -319,7 +302,7 @@ describe('load restores persisted fields', () => {
           return yield* svc.create(dir, {
             model: 'test-model',
             activeProfile: 'build',
-            permissionMode: 'default',
+            permissionMode: 'ask',
           });
         })
       );
@@ -343,13 +326,7 @@ describe('load restores persisted fields', () => {
         })
       );
 
-      const idx = JSON.parse(
-        readFileSync(
-          computePaths(created.cwd, created.sessionId, created.parentSessionId).indexPath,
-          'utf8'
-        )
-      ) as SessionIndex;
-      expect(idx.usage).toEqual(loaded.usage);
+      expect(loaded.usage).toBeUndefined();
     } finally {
       cleanup(dir);
     }

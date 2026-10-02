@@ -15,7 +15,7 @@ function makeEvents(extra: SessionEvent[] = []): SessionEvent[] {
       cwd: '/tmp',
       createdAt: new Date().toISOString(),
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
     },
     { type: 'user', turnId: 1, content: 'hello' },
     {
@@ -109,7 +109,7 @@ describe('buildContextMessages', () => {
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       {
         type: 'user',
@@ -136,7 +136,7 @@ describe('buildContextMessages', () => {
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       {
         type: 'user',
@@ -185,7 +185,7 @@ describe('buildContextMessages', () => {
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       {
         type: 'user',
@@ -239,7 +239,7 @@ describe('buildContextMessages', () => {
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       {
         type: 'user',
@@ -283,7 +283,7 @@ describe('buildContextMessages', () => {
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       {
         type: 'user',
@@ -326,7 +326,7 @@ describe('buildContextMessages', () => {
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       { type: 'user', turnId: 1, content: 'q1' },
       {

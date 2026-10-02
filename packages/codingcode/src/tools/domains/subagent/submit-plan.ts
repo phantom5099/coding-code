@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync } from 'fs';
 import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition } from '../../types.js';
 import { encodeProjectPath, getProjectBaseDir } from '../../../core/path.js';
-import { createLogger } from '@codingcode/infra/logger';
+import { createLogger } from '../../../infra/logger.js';
 
 const logger = createLogger();
 

@@ -23,17 +23,17 @@ export function createRunWithLayer(rt: ManagedRt) {
   };
 }
 
+/** 错误信封的唯一构造点：`{ error: { code, message } }` */
+export function errorBody(code: string, message: string) {
+  return { error: { code, message } };
+}
+
 export function errorResponse(err: unknown) {
   if (err instanceof AgentError) {
-    return { status: err.httpStatus(), body: { error: { code: err.code, message: err.message } } };
+    return { status: err.httpStatus(), body: errorBody(err.code, err.message) };
   }
   return {
     status: 500,
-    body: {
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: err instanceof Error ? err.message : 'Internal server error',
-      },
-    },
+    body: errorBody('INTERNAL_ERROR', err instanceof Error ? err.message : 'Internal server error'),
   };
 }

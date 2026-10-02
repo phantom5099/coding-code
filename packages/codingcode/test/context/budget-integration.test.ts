@@ -7,7 +7,7 @@ import { ContextService } from '../../src/context/port.js';
 import type { ContextShape } from '../../src/context/port.js';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { LLMFactoryService } from '../../src/llm/port.js';
+import { LLMService } from '../../src/llm/port.js';
 import type { SessionEvent } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ContextLayer } from '../../src/context/context.js';
@@ -16,13 +16,9 @@ const base = useTempProjectBase();
 
 const TestLayer = Layer.merge(
   SessionLayer,
-  Layer.succeed(LLMFactoryService, {
-    listModels: () => Effect.succeed([]),
-    findModel: () => Effect.succeed(null),
-    getActiveEntry: () => Effect.fail(new Error('no active model')),
-    switchModel: () => Effect.fail(new Error('no models')),
-    createClient: () => Effect.fail(new Error('no client')),
-    getLLMClient: () => Effect.fail(new Error('no client')),
+  Layer.succeed(LLMService, {
+    complete: () => Effect.fail(new Error('no llm')),
+    completeStream: () => (async function* () {})(),
   } as any)
 );
 
@@ -39,24 +35,23 @@ describe('assemblePayload integration', () => {
   let sessionId: string;
   let sessionDir: string;
   let jsonlPath: string;
-  let indexPath: string;
 
   beforeEach(() => {
     sessionId = randomUUID();
     sessionDir = join(base.dir, projectSlug, 'sessions');
     mkdirSync(sessionDir, { recursive: true });
     jsonlPath = join(sessionDir, `${sessionId}.jsonl`);
-    indexPath = join(sessionDir, `${sessionId}.index.json`);
 
     const lines: any[] = [
       {
         type: 'session_meta',
         sessionId,
         cwd: '/tmp/test',
-
         createdAt: new Date().toISOString(),
+        model: 'test-model',
+        title: 'fixture',
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       { type: 'user', turnId: 1, content: 'q1' },
       {
@@ -84,21 +79,6 @@ describe('assemblePayload integration', () => {
       },
     ];
     writeFileSync(jsonlPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
-
-    const idx = {
-      sessionId,
-      cwd: '/tmp/test',
-      model: 'test-model',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      messageCount: lines.length,
-      title: 'fixture',
-      currentTurnId: 1,
-      usage: undefined,
-      permissionMode: 'default',
-      activeProfile: 'build',
-    };
-    writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
   });
 
   afterEach(() => {
@@ -108,7 +88,7 @@ describe('assemblePayload integration', () => {
 
   it('returns messages assembled from the transcript', async () => {
     const ctx = await getCtxService();
-    const messages = await ctx.assemblePayload(jsonlPath, 128000, null);
+    const messages = await Effect.runPromise(ctx.assemblePayload(jsonlPath, 'test-model'));
 
     expect(messages.length).toBeGreaterThan(0);
   });
@@ -117,7 +97,7 @@ describe('assemblePayload integration', () => {
     const emptyJsonl = join(sessionDir, `${sessionId}-empty.jsonl`);
     writeFileSync(emptyJsonl, '', 'utf8');
     const ctx = await getCtxService();
-    const messages = await ctx.assemblePayload(emptyJsonl, 128000, null);
+    const messages = await Effect.runPromise(ctx.assemblePayload(emptyJsonl, 'test-model'));
     expect(messages).toEqual([]);
   });
 });

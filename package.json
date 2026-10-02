@@ -4,8 +4,8 @@
   "packageManager": "pnpm@11.3.0",
   "type": "module",
   "workspaces": [
-    "packages/infra",
     "packages/codingcode",
+    "packages/sdk",
     "packages/desktop"
   ],
   "scripts": {

@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { mkdtempSync, rmSync, readFileSync } from 'fs';
+import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/core/path.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
@@ -59,7 +58,6 @@ function setProfileEffect(cwd: string, sessionId: string, profile: 'plan' | 'bui
 describe('plan profile security boundary (permission-mode, disk-persisted profile)', () => {
   let cwd: string;
   let sessionId: string;
-  let indexPath: string;
   let rt: ManagedRuntime.ManagedRuntime<any, any>;
 
   beforeEach(async () => {
@@ -71,16 +69,12 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
         const state = yield* session.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
-        return {
-          sessionId: state.sessionId,
-          indexPath: computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
-        };
+        return { sessionId: state.sessionId };
       })
     );
     sessionId = result.sessionId;
-    indexPath = result.indexPath;
   });
 
   afterEach(async () => {
@@ -101,7 +95,7 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
           input,
           sessionId,
           projectPath: cwd,
-          permissionMode: 'default',
+          permissionMode: 'ask',
           profile,
         });
       })
@@ -130,9 +124,6 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
 
   it('after restart (state reloaded from disk), plan profile persists', async () => {
     await rt.runPromise(setProfileEffect(cwd, sessionId, 'plan'));
-
-    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.activeProfile).toBe('plan');
 
     await rt.dispose();
     rt = ManagedRuntime.make(makeLayer() as any);

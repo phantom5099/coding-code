@@ -8,6 +8,14 @@ export function getGlobalDir(): string {
   return join(homedir(), CODINGCODE_DIRNAME);
 }
 
+export function getProjectRoot(): string {
+  return process.env.CODINGCODE_PROJECT_ROOT ?? process.cwd();
+}
+
+export function getModelsFile(): string {
+  return join(getProjectRoot(), 'config', 'models.json');
+}
+
 export function getProjectDir(projectRoot: string): string {
   return join(projectRoot, CODINGCODE_DIRNAME);
 }
@@ -44,7 +52,6 @@ export function ensureTempCwd(): void {
   mkdirSync(getTempCwd(), { recursive: true });
 }
 
-/** 请求级 cwd：请求没带 cwd 时落到共用的临时工作目录。 */
 export function resolveCwd(cwd?: string): string {
   return cwd ? resolve(cwd) : getTempCwd();
 }
@@ -54,7 +61,6 @@ export interface SessionPaths {
   cwd: string;
   projectPath: string;
   transcriptPath: string;
-  indexPath: string;
 }
 
 export function projectSessionsDir(encodedProjectPath: string): string {
@@ -72,6 +78,5 @@ export function computePaths(
   const transcriptPath = parentSessionId
     ? join(sessionsDir, parentSessionId, 'subagents', `${sessionId}.jsonl`)
     : join(sessionsDir, `${sessionId}.jsonl`);
-  const indexPath = transcriptPath.replace('.jsonl', '.index.json');
-  return { sessionId, cwd: normalizedCwd, projectPath, transcriptPath, indexPath };
+  return { sessionId, cwd: normalizedCwd, projectPath, transcriptPath };
 }

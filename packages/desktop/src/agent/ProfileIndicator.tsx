@@ -2,14 +2,15 @@ import { useState, useEffect } from 'react';
 import { Eye, Hammer, Loader2 } from 'lucide-react';
 import { useAgentProfile } from '../hooks/useAgent';
 import { useAgentStore } from '../stores/agent.store';
-import type { ProfileName } from '@codingcode/core/contracts/types';
+import { setAgentConfig } from '../lib/core-api';
+import type { ProfileName } from '@codingcode/sdk';
 
 interface ProfileIndicatorProps {
   sessionId: string | null;
   cwd: string;
 }
 
-const PROFILE_META: Record<ProfileName, { label: string; color: string; Icon: typeof Eye }> = {
+const PROFILE_META = {
   plan: {
     label: '计划模式',
     color: 'text-[var(--accent-warning)] bg-[var(--tag-info-bg)]',
@@ -20,7 +21,7 @@ const PROFILE_META: Record<ProfileName, { label: string; color: string; Icon: ty
     color: 'text-[var(--accent-success)] bg-[var(--tag-action-bg)]',
     Icon: Hammer,
   },
-};
+} satisfies Record<ProfileName, { label: string; color: string; Icon: typeof Eye }>;
 
 /** Shows and switches the active agent profile. */
 export default function ProfileIndicator({ sessionId, cwd }: ProfileIndicatorProps) {
@@ -31,8 +32,8 @@ export default function ProfileIndicator({ sessionId, cwd }: ProfileIndicatorPro
   const profile = useAgentStore((s) =>
     sessionId ? (s.profileByThreadId[sessionId] ?? null) : null
   );
-  const pendingProfile = useAgentStore((s) => s.pendingProfile);
-  const setPendingProfile = useAgentStore((s) => s.setPendingProfile);
+  const storeProfile = useAgentStore((s) => s.profile);
+  const setProfile = useAgentStore((s) => s.setProfile);
   const setProfileForThread = useAgentStore((s) => s.setProfileForThread);
   const setOptimisticProfileForThread = useAgentStore((s) => s.setOptimisticProfileForThread);
 
@@ -44,9 +45,9 @@ export default function ProfileIndicator({ sessionId, cwd }: ProfileIndicatorPro
     if (existing && !existing.optimistic) return;
 
     if (!existing) {
-      const permissionMode = 'default' as const;
+      const permissionMode = 'ask' as const;
       setOptimisticProfileForThread(sessionId, {
-        activeProfile: pendingProfile,
+        activeProfile: storeProfile,
         permissionMode,
       });
     }
@@ -78,20 +79,29 @@ export default function ProfileIndicator({ sessionId, cwd }: ProfileIndicatorPro
     sessionId,
     cwd,
     fetchProfile,
-    pendingProfile,
+    storeProfile,
     setProfileForThread,
     setOptimisticProfileForThread,
   ]);
 
-  const current: ProfileName =
-    sessionId === null ? pendingProfile : (profile?.activeProfile ?? 'build');
-  const target: ProfileName = current === 'plan' ? 'build' : 'plan';
+  const current: 'plan' | 'build' =
+    sessionId === null ? storeProfile : (profile?.activeProfile ?? 'build');
+  const target: 'plan' | 'build' = current === 'plan' ? 'build' : 'plan';
 
   const handleToggle = async () => {
     if (busy) return;
 
     if (sessionId === null) {
-      setPendingProfile(target);
+      // 还没有会话：改的是 config.yaml 里的 activeProfile
+      setBusy(true);
+      try {
+        const cfg = await setAgentConfig({ activeProfile: target });
+        setProfile(cfg.activeProfile);
+      } catch (e) {
+        console.error('Failed to save default profile:', e);
+      } finally {
+        setBusy(false);
+      }
       return;
     }
 

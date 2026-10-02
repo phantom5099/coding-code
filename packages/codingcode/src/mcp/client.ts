@@ -44,10 +44,6 @@ export class McpClient {
     }
   }
 
-  get transportType(): 'stdio' | 'http' {
-    return this.config.command ? 'stdio' : 'http';
-  }
-
   async connect(): Promise<void> {
     await this.client.connect(this.transport);
     this.reconnectAttempts = 0;

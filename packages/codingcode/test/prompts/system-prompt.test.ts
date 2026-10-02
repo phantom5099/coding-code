@@ -30,6 +30,14 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('dispatch_agent');
   });
 
+  it('Rule 7 delegation does not point at a removed subagent catalog', () => {
+    const prompt = buildSystemPrompt(baseOpts);
+    expect(prompt).not.toContain('runtime-configured subagent');
+    expect(prompt).not.toContain('Available Subagents');
+    expect(prompt).toContain('short agentName');
+    expect(prompt).toContain('keep the delegated write set disjoint');
+  });
+
   it('includes Using your tools section', () => {
     const prompt = buildSystemPrompt(baseOpts);
     expect(prompt).toContain('Using your tools');

@@ -40,7 +40,7 @@ describe('tools/domains/fs projectPath isolation', () => {
     }
   });
 
-  const ctx = (cwd: string) => ({ projectPath: cwd });
+  const ctx = (cwd: string) => ({ projectPath: cwd, model: 'test-model' });
 
   it('read_file uses ctx.projectPath over workspaceCwd', async () => {
     writeFileSync(join(projectDir, 'a.txt'), 'hello', 'utf8');

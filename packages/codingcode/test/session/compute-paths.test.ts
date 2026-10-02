@@ -23,7 +23,6 @@ describe('computePaths', () => {
     const result = computePaths(cwd, sid);
 
     expect(result.transcriptPath).toBe(sessionJsonlPathFromCwd(cwd, sid));
-    expect(result.indexPath).toBe(result.transcriptPath.replace('.jsonl', '.index.json'));
     expect(result.sessionId).toBe(sid);
     expect(result.cwd).toBe(normalizePath(cwd));
     expect(result.projectPath).toBe(encodeProjectPath(normalizePath(cwd)));
@@ -38,7 +37,6 @@ describe('computePaths', () => {
     const sessionsDir = projectSessionsDir(encodeProjectPath(normalizePath(cwd)));
     const expectedTranscript = join(sessionsDir, parentSid, 'subagents', `${sid}.jsonl`);
     expect(result.transcriptPath).toBe(expectedTranscript);
-    expect(result.indexPath).toBe(expectedTranscript.replace('.jsonl', '.index.json'));
     expect(result.sessionId).toBe(sid);
   });
 
@@ -50,7 +48,7 @@ describe('computePaths', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
@@ -59,9 +57,6 @@ describe('computePaths', () => {
       const expected = computePaths(cwd, state.sessionId);
       expect(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath).toBe(
         expected.transcriptPath
-      );
-      expect(computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath).toBe(
-        expected.indexPath
       );
       expect(computePaths(state.cwd, state.sessionId, state.parentSessionId).projectPath).toBe(
         expected.projectPath
@@ -86,7 +81,7 @@ describe('computePaths', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
@@ -100,7 +95,7 @@ describe('computePaths', () => {
             {
               model: 'subagent-model',
               activeProfile: 'build',
-              permissionMode: 'default',
+              permissionMode: 'ask',
             },
             {
               parentSessionId: state.sessionId,
@@ -118,7 +113,6 @@ describe('computePaths', () => {
         );
         expect(actual).toEqual(expected);
         expect(existsSync(actual.transcriptPath)).toBe(true);
-        expect(existsSync(actual.indexPath)).toBe(true);
         expect(childState).not.toHaveProperty('projectPath');
         expect(childState).not.toHaveProperty('transcriptPath');
         expect(childState).not.toHaveProperty('indexPath');

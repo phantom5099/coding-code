@@ -11,7 +11,7 @@ import {
   type HarnessMocks,
 } from '../helpers/agent-harness.js';
 
-vi.mock('@codingcode/infra/config', () => ({
+vi.mock('../../src/infra/config.js', () => ({
   loadConfig: () => ({
     maxSteps: 5,
     maxStopContinuations: 2,

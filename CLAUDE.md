@@ -9,7 +9,6 @@ Coding Code 是 AI 编程助手。
 | 包 | 目录 | 职责 |
 |---|---|---|
 | `@codingcode/core` | `packages/codingcode` | 核心引擎：agent loop 与全部编排能力 |
-| `@codingcode/infra` | `packages/infra` | 基础设施：配置加载、日志、禁用项存储 |
 | `@codingcode/desktop` | `packages/desktop` | 桌面端（Electron + React） |
 
 `packages/sdk`、`packages/web` 目前只有空 `src/`，尚无实现。
@@ -19,6 +18,7 @@ Coding Code 是 AI 编程助手。
 - `agent`：本项目核心，手写 ReAct loop 与编排；不持有 Session、不感知传输协议
 - `tools`：工具系统，`domains/` 下分 fs / bash / web / self / subagent 五个域
 - `llm`：模型调用与 provider 适配
+- `infra`：应用配置（`config.yaml`）、模型清单（`models.json`）、YAML 存取、日志
 - `mcp`：Model Context Protocol 集成
 - `context`：上下文预算与压缩
 - `memory`：跨会话长期记忆

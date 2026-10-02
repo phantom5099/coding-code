@@ -4,8 +4,11 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // 架构边界回归：把 issue 里的 R1–R4 固化成断言，防止再次出现"半倒置"。
+// 扫描根是两个包：core 引擎（packages/codingcode/src）与接入层（packages/sdk/src）。
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SRC = resolve(HERE, '../../src');
+const PACKAGES = resolve(HERE, '../../..');
+const SRC = resolve(PACKAGES, 'codingcode/src');
+const SDK_SRC = resolve(PACKAGES, 'sdk/src');
 
 const norm = (p: string) => p.replace(/\\/g, '/');
 
@@ -19,7 +22,9 @@ function listTs(dir: string): string[] {
   return out;
 }
 
-const FILES = listTs(SRC);
+/** R4 的作用域是后端：sdk 是独立的客户端协议层，允许自持同形但同名的类型。 */
+const CORE_FILES = listTs(SRC);
+const FILES = [...CORE_FILES, ...listTs(SDK_SRC)];
 
 /** 抽取文件里的模块说明符（静态 import 与动态 import） */
 function specifiersOf(file: string): string[] {
@@ -37,6 +42,10 @@ function resolveSpec(file: string, spec: string): string | null {
 }
 
 const relSrc = (abs: string) => norm(relative(SRC, abs));
+const relSdk = (abs: string) => norm(relative(SDK_SRC, abs));
+/** 违规信息用：按所属包给出可读路径 */
+const relPkg = (abs: string) =>
+  abs.startsWith(norm(SDK_SRC) + '/') ? `sdk/src/${relSdk(abs)}` : `codingcode/src/${relSrc(abs)}`;
 const isCore = (abs: string) => abs.startsWith(norm(join(SRC, 'core')) + '/');
 const isContracts = (abs: string) => abs.startsWith(norm(join(SRC, 'contracts')) + '/');
 
@@ -52,7 +61,7 @@ describe('R1 契约不得 import 实现', () => {
         if (target === null) continue; // 第三方库
         const sameDir = dirname(target) === dirname(file);
         if (!isCore(target) && !isContracts(target) && !sameDir) {
-          violations.push(`${relSrc(file)} → ${spec}`);
+          violations.push(`${relPkg(file)} → ${spec}`);
         }
       }
     }
@@ -80,7 +89,7 @@ describe('R3 core 零内部依赖', () => {
       for (const spec of specifiersOf(file)) {
         const target = resolveSpec(file, spec);
         if (target === null) continue; // 第三方 / 其他 workspace 包
-        if (!isCore(target)) violations.push(`${relSrc(file)} → ${spec}`);
+        if (!isCore(target)) violations.push(`${relPkg(file)} → ${spec}`);
       }
     }
     expect(violations).toEqual([]);
@@ -99,11 +108,11 @@ describe('core/ 准入：只承载通用件', () => {
       for (const spec of specifiersOf(file)) {
         if (spec.startsWith('.')) {
           const target = resolveSpec(file, spec)!;
-          if (dirname(target) !== dirname(file)) violations.push(`${relSrc(file)} → ${spec}`);
+          if (dirname(target) !== dirname(file)) violations.push(`${relPkg(file)} → ${spec}`);
           continue;
         }
         if (!NODE_BUILTINS.has(spec.replace(/^node:/, ''))) {
-          violations.push(`${relSrc(file)} → ${spec}`);
+          violations.push(`${relPkg(file)} → ${spec}`);
         }
       }
     }
@@ -119,7 +128,7 @@ describe('contracts/ 准入：不得依赖领域实现', () => {
         const target = resolveSpec(file, spec);
         if (target === null) continue;
         const sameDir = dirname(target) === dirname(file);
-        if (!isCore(target) && !sameDir) violations.push(`${relSrc(file)} → ${spec}`);
+        if (!isCore(target) && !sameDir) violations.push(`${relPkg(file)} → ${spec}`);
       }
     }
     expect(violations).toEqual([]);
@@ -150,7 +159,10 @@ describe('R4 一个概念只允许一处类型定义', () => {
     HookDecision: 'contracts/hooks.ts',
     Skill: 'contracts/skill.ts',
     McpServerConfig: 'contracts/mcp.ts',
-    McpStatus: 'contracts/mcp.ts',
+    Automation: 'contracts/automation.ts',
+    AutomationSandbox: 'contracts/automation.ts',
+    CreateAutomationInput: 'contracts/automation.ts',
+    UpdateAutomationInput: 'contracts/automation.ts',
   };
 
   it.each(Object.entries(CANONICAL))('%s 只在 %s 声明一次', (name, expected) => {
@@ -158,7 +170,7 @@ describe('R4 一个概念只允许一处类型定义', () => {
       `^export\\s+(?:declare\\s+)?(?:abstract\\s+)?(?:interface|type|class)\\s+${name}\\b`,
       'm'
     );
-    const owners = FILES.filter((f) => re.test(readFileSync(f, 'utf8'))).map(relSrc).sort();
+    const owners = CORE_FILES.filter((f) => re.test(readFileSync(f, 'utf8'))).map(relSrc).sort();
     expect(owners).toEqual([norm(expected)]);
   });
 });
@@ -173,7 +185,7 @@ describe('相对 import 必须可解析', () => {
         const ok = ['.ts', '.tsx', '/index.ts', '/index.tsx'].some((ext) =>
           existsSync(target + ext)
         );
-        if (!ok) missing.push(`${relSrc(file)} → ${spec}`);
+        if (!ok) missing.push(`${relPkg(file)} → ${spec}`);
       }
     }
     expect(missing).toEqual([]);

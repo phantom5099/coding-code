@@ -11,7 +11,6 @@ import {
   getGlobalDir,
   getProjectDir,
 } from '../../src/core/path.js';
-import { CODINGCODE_DIRNAME as INFRA_DIRNAME } from '@codingcode/infra/paths';
 import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
 import { setFakeHome, restoreHome } from '../helpers/temp-home.js';
 
@@ -65,10 +64,8 @@ describe('core/path', () => {
 });
 
 describe('core/path：全局与工作区共用的私有目录名', () => {
-  it('目录名字面量被钉住：改它必须显式改这里（含 infra 那份副本）', () => {
+  it('目录名字面量被钉住：改它必须显式改这里', () => {
     expect(CODINGCODE_DIRNAME).toBe('.codingcode');
-    // infra 是独立 workspace 包、位于更低层，无法 import codingcode，只能各持一份
-    expect(INFRA_DIRNAME).toBe(CODINGCODE_DIRNAME);
   });
 
   it('全局目录落在用户目录下', () => {

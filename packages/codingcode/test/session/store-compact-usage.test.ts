@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
@@ -7,7 +7,7 @@ import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { computePaths } from '../../src/core/path.js';
 
-import type { SessionIndex } from '../../src/contracts/session.js';
+import type { SessionStoreState } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -29,7 +29,6 @@ function makeFixture(
   const paths = computePaths(cwd, sessionId);
   mkdirSync(join(base.dir, slug, 'sessions'), { recursive: true });
   const transcriptPath = paths.transcriptPath;
-  const indexPath = paths.indexPath;
 
   const lines: any[] = [
     {
@@ -37,6 +36,10 @@ function makeFixture(
       sessionId,
       cwd,
       createdAt: new Date().toISOString(),
+      model: 'test-model',
+      title: 'fixture',
+      activeProfile: 'build',
+      permissionMode: 'ask',
     },
   ];
   turns.forEach((t, i) => {
@@ -53,22 +56,7 @@ function makeFixture(
 
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
-  const idx: SessionIndex = {
-    sessionId,
-    cwd,
-    model: 'test-model',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messageCount: lines.length,
-    title: 'fixture',
-    currentTurnId: turns.length,
-    usage: turns[turns.length - 1]?.usage,
-    activeProfile: 'build',
-    permissionMode: 'default',
-  };
-  writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
-
-  return { cwd, transcriptPath, indexPath };
+  return { cwd, transcriptPath };
 }
 
 function buildState(
@@ -76,31 +64,24 @@ function buildState(
   cwd: string,
   initialUsage: { prompt: number; completion: number; total: number } | undefined,
   currentTurnId: number
-) {
+): SessionStoreState {
   return {
+    type: 'session_meta',
     sessionId,
     cwd,
-    messageCount: 0,
-    currentTurnId,
-    sessionMeta: {
-      type: 'session_meta' as const,
-      sessionId,
-      cwd,
-      createdAt: new Date().toISOString(),
-      activeProfile: 'build' as const,
-      permissionMode: 'default' as const,
-    },
+    createdAt: new Date().toISOString(),
     model: 'test-model',
-    activeProfile: 'build' as const,
-    permissionMode: 'default' as const,
     title: 'fixture',
-    usage: initialUsage,
+    activeProfile: 'build',
+    permissionMode: 'ask',
+    currentTurnId,
     memorySnapshot: '',
+    usage: initialUsage,
   };
 }
 
 describe('SessionService.appendSummary - state.usage reset (used by tryCompaction)', () => {
-  it('clears state.usage and persists the cleared value to the session index', async () => {
+  it('clears state.usage', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const usage1 = { prompt: 100, completion: 50, total: 150 };
@@ -114,14 +95,12 @@ describe('SessionService.appendSummary - state.usage reset (used by tryCompactio
         })
       );
       expect(state.usage).toBeUndefined();
-      const idx = JSON.parse(readFileSync(fx.indexPath, 'utf8')) as SessionIndex;
-      expect(idx.usage).toBeUndefined();
     } finally {
       rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
-  it('preserves state.usage when called with state that has no prior usage', async () => {
+  it('keeps state.usage undefined when called with state that has no prior usage', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, [{ user: 'q1', assistant: 'a1', usage: undefined }]);
@@ -134,8 +113,6 @@ describe('SessionService.appendSummary - state.usage reset (used by tryCompactio
         })
       );
       expect(state.usage).toBeUndefined();
-      const idx = JSON.parse(readFileSync(fx.indexPath, 'utf8')) as SessionIndex;
-      expect(idx.usage).toBeUndefined();
     } finally {
       rmSync(join(base.dir, slug), { recursive: true, force: true });
     }

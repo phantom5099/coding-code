@@ -1,5 +1,4 @@
 import { Layer, Effect } from 'effect';
-import type { LLMClient } from '../contracts/provider.js';
 import { readTranscript } from '../session/file-ops.js';
 import type { SessionEvent } from '../contracts/session.js';
 import {
@@ -8,26 +7,24 @@ import {
   enforceMaxBytes,
   writeMemoryFileAtomic,
 } from './storage.js';
-import { resolveLLM } from '../llm/llm-resolver.js';
-import { LLMFactoryService } from '../llm/port.js';
+import { LLMService } from '../llm/port.js';
 import { getMemoryConfig } from './config.js';
-import { updateMemoryEnabled } from '@codingcode/infra/config';
+import { updateMemoryEnabled } from '../infra/config.js';
+import { createLogger } from '../infra/logger.js';
 import { extractMemory } from './extractor.js';
 import { MemoryService } from './port.js';
 
 const MAX_BYTES = 16384;
+const NOT_WRITTEN = { written: false, bytes: 0 } as const;
+
+const logger = createLogger();
 
 export const MemoryLayer = Layer.effect(MemoryService, Effect.gen(function* () {
-    const factory = yield* LLMFactoryService;
+    const llm = yield* LLMService;
     let _runtimeEnabled: boolean | null = null;
 
-    function getMemoryEnabled(): boolean {
+    function isEnabled(): boolean {
       return _runtimeEnabled ?? getMemoryConfig().enabled;
-    }
-
-    function setMemoryEnabled(v: boolean): void {
-      _runtimeEnabled = v;
-      updateMemoryEnabled(v);
     }
 
     function truncateForPrompt(content: string, maxBytes: number): string {
@@ -49,8 +46,8 @@ export const MemoryLayer = Layer.effect(MemoryService, Effect.gen(function* () {
       return result;
     }
 
-    function loadMemoryForPrompt(cwd: string): string {
-      if (!getMemoryEnabled()) return '';
+    function loadMemoryForPromptImpl(cwd: string): string {
+      if (!isEnabled()) return '';
       const cfg = getMemoryConfig();
 
       const projectPath = resolveMemoryPath(cwd);
@@ -85,72 +82,58 @@ export const MemoryLayer = Layer.effect(MemoryService, Effect.gen(function* () {
       return lines.join('\n');
     }
 
-    async function flushSessionToMemory(
-      sessionId: string,
-      llm: LLMClient | null,
-      sessionCwd: string
-    ): Promise<{ written: boolean; bytes: number }> {
-      if (!getMemoryEnabled()) {
-        return { written: false, bytes: 0 };
-      }
-      if (!sessionCwd) {
-        return { written: false, bytes: 0 };
-      }
-
-      let events: SessionEvent[];
-      try {
-        events = readTranscript(sessionCwd, sessionId).filter((e) => e.type !== 'session_meta');
-      } catch {
-        return { written: false, bytes: 0 };
-      }
-      if (events.length === 0) {
-        return { written: false, bytes: 0 };
-      }
-
-      const cfg = getMemoryConfig();
-      const projectPath = resolveMemoryPath(sessionCwd);
-      const current = readMemoryFile(projectPath);
-
-      try {
-        const transcript = buildTranscript(events);
-
-        const resolvedLlm = await Effect.runPromise(
-          resolveLLM(cfg.model, llm).pipe(Effect.provideService(LLMFactoryService, factory))
-        );
-        if (!resolvedLlm) {
-          return { written: false, bytes: 0 };
-        }
-
-        const extracted = await extractMemory({
-          currentMemory: current,
-          transcript,
-          llm: resolvedLlm,
-        });
-        if (!extracted) {
-          return { written: false, bytes: 0 };
-        }
-
-        // 提取期间文件被手动改动则放弃本次写入
-        if (readMemoryFile(projectPath) !== current) {
-          return { written: false, bytes: 0 };
-        }
-
-        const truncated = enforceMaxBytes(extracted, MAX_BYTES);
-        if (truncated === current) {
-          return { written: false, bytes: 0 };
-        }
-
-        writeMemoryFileAtomic(projectPath, truncated);
-        return { written: true, bytes: Buffer.byteLength(truncated, 'utf-8') };
-      } catch {
-        return { written: false, bytes: 0 };
-      }
-    }
-
     return {
-      getMemoryEnabled,
-      setMemoryEnabled,
-      loadMemoryForPrompt,
-      flushSessionToMemory,
+      getMemoryEnabled: (): Effect.Effect<boolean> => Effect.sync(() => isEnabled()),
+
+      setMemoryEnabled: (v: boolean): Effect.Effect<void> =>
+        Effect.sync(() => {
+          _runtimeEnabled = v;
+          try {
+            updateMemoryEnabled(v);
+          } catch (e) {
+            logger.error('memory: failed to persist enabled flag:', e);
+          }
+        }),
+
+      loadMemoryForPrompt: (cwd: string): Effect.Effect<string> =>
+        Effect.sync(() => loadMemoryForPromptImpl(cwd)),
+
+      flushSessionToMemory: (
+        sessionId: string,
+        model: string,
+        sessionCwd: string
+      ): Effect.Effect<{ written: boolean; bytes: number }> =>
+        Effect.gen(function* () {
+          if (!isEnabled()) return { ...NOT_WRITTEN };
+          if (!sessionCwd) return { ...NOT_WRITTEN };
+
+          const events = readTranscript(sessionCwd, sessionId).filter(
+            (e) => e.type !== 'session_meta'
+          );
+          if (events.length === 0) return { ...NOT_WRITTEN };
+
+          const cfg = getMemoryConfig();
+          const projectPath = resolveMemoryPath(sessionCwd);
+          const current = readMemoryFile(projectPath);
+
+          const transcript = buildTranscript(events);
+          const extracted = yield* Effect.promise(() =>
+            extractMemory({
+              currentMemory: current,
+              transcript,
+              llm,
+              model: cfg.model?.trim() || model,
+            })
+          );
+          if (!extracted) return { ...NOT_WRITTEN };
+
+          if (readMemoryFile(projectPath) !== current) return { ...NOT_WRITTEN };
+
+          const truncated = enforceMaxBytes(extracted, MAX_BYTES);
+          if (truncated === current) return { ...NOT_WRITTEN };
+
+          writeMemoryFileAtomic(projectPath, truncated);
+          return { written: true, bytes: Buffer.byteLength(truncated, 'utf-8') };
+        }).pipe(Effect.catchAllCause(() => Effect.succeed({ ...NOT_WRITTEN }))),
     };
 }));

@@ -8,7 +8,7 @@ import {
   deleteHook,
   setHookEnabled,
 } from '../lib/core-api';
-import type { UserHookConfig, HookPoint } from '@codingcode/core/contracts/hooks';
+import type { HookPoint, UserHookConfig } from '@codingcode/sdk';
 
 interface HookEntry {
   name: string;

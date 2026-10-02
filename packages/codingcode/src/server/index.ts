@@ -45,7 +45,7 @@ export async function createServer(rt: ManagedRt): Promise<Hono> {
   registerMessagesRoutes(app, rt);
   registerModelsRoutes(app, rt);
   registerApprovalRoutes(app, rt);
-  await registerSettingsRoutes(app, rt);
+  registerSettingsRoutes(app, rt);
   registerAutomationsRoutes(app, rt);
 
   return app;

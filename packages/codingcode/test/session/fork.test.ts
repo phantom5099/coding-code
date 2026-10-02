@@ -7,7 +7,7 @@ import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import type { SessionIndex, SessionEvent } from '../../src/contracts/session.js';
+import type { SessionMetaEvent, SessionEvent } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { computePaths } from '../../src/core/path.js';
 
@@ -19,7 +19,6 @@ function makeFixture(sessionId: string, slug: string) {
   const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = paths.transcriptPath;
-  const indexPath = paths.indexPath;
 
   const lines: any[] = [
     {
@@ -27,6 +26,10 @@ function makeFixture(sessionId: string, slug: string) {
       sessionId,
       cwd,
       createdAt: new Date().toISOString(),
+      model: 'test',
+      title: 'fixture',
+      activeProfile: 'build',
+      permissionMode: 'ask',
     },
     { type: 'user', turnId: 1, content: 'first' },
     {
@@ -60,22 +63,23 @@ function makeFixture(sessionId: string, slug: string) {
 
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
-  const idx: SessionIndex = {
+  return { cwd, dir, transcriptPath };
+}
+
+function makeState(sessionId: string, cwd: string, title: string, currentTurnId: number) {
+  return {
+    type: 'session_meta' as const,
     sessionId,
     cwd,
-    model: 'test',
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messageCount: 7,
-    title: 'fixture',
-    currentTurnId: 3,
-    usage: undefined,
+    model: 'test',
+    title,
     activeProfile: 'build' as const,
-    permissionMode: 'default' as const,
+    permissionMode: 'ask' as const,
+    currentTurnId,
+    usage: undefined,
+    memorySnapshot: '',
   };
-  writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
-
-  return { cwd, dir, transcriptPath, indexPath };
 }
 
 function readEvents(jsonlPath: string): SessionEvent[] {
@@ -111,25 +115,13 @@ describe('forkSession', () => {
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
     try {
-      const state = {
-        sessionId,
-        cwd: fx.cwd,
-        messageCount: 7,
-        currentTurnId: 3,
-        sessionMeta: null,
-        model: 'test',
-        title: 'fixture',
-        usage: undefined,
-        activeProfile: 'build' as const,
-        permissionMode: 'default' as const,
-        memorySnapshot: '',
-      };
+      const state = makeState(sessionId, fx.cwd, 'fixture', 3);
 
       // Fork at turn 2 (user message "second")
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 2);
+          return yield* svc.forkSession(state as any, 2);
         })
       );
 
@@ -154,25 +146,13 @@ describe('forkSession', () => {
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
     try {
-      const state = {
-        sessionId,
-        cwd: fx.cwd,
-        messageCount: 7,
-        currentTurnId: 3,
-        sessionMeta: null,
-        model: 'test',
-        activeProfile: 'build' as const,
-        permissionMode: 'default' as const,
-        title: 'fixture',
-        usage: undefined,
-        memorySnapshot: '',
-      };
+      const state = makeState(sessionId, fx.cwd, 'fixture', 3);
 
       // Fork at non-existent turnId so chain = all events (including summary + compact)
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 999);
+          return yield* svc.forkSession(state as any, 999);
         })
       );
 
@@ -205,24 +185,12 @@ describe('forkSession', () => {
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
     try {
-      const state = {
-        sessionId,
-        cwd: fx.cwd,
-        messageCount: 7,
-        currentTurnId: 3,
-        sessionMeta: null,
-        model: 'test',
-        activeProfile: 'build' as const,
-        permissionMode: 'default' as const,
-        title: 'fixture',
-        usage: undefined,
-        memorySnapshot: '',
-      };
+      const state = makeState(sessionId, fx.cwd, 'fixture', 3);
 
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 2);
+          return yield* svc.forkSession(state as any, 2);
         })
       );
 
@@ -263,40 +231,28 @@ describe('forkSession', () => {
     }
   });
 
-  it('fork creates index.json with correct metadata', async () => {
+  it('fork writes correct metadata into the forked session head', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug);
     try {
-      const state = {
-        sessionId,
-        cwd: fx.cwd,
-        messageCount: 7,
-        currentTurnId: 3,
-        sessionMeta: null,
-        model: 'test',
-        activeProfile: 'build' as const,
-        permissionMode: 'default' as const,
-        title: 'fixture',
-        usage: undefined,
-        memorySnapshot: '',
-      };
+      const state = makeState(sessionId, fx.cwd, 'fixture', 3);
 
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 1);
+          return yield* svc.forkSession(state as any, 1);
         })
       );
 
-      const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
-      expect(existsSync(newIndexPath)).toBe(true);
+      const newTranscriptPath = join(fx.dir, `${newSessionId}.jsonl`);
+      expect(existsSync(newTranscriptPath)).toBe(true);
 
-      const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
-      expect(idx.sessionId).toBe(newSessionId);
-      expect(idx.title).toBe('fixture');
-      expect(idx.permissionMode).toBe('default');
-      expect(idx.model).toBe('test');
+      const meta = readEvents(newTranscriptPath)[0] as SessionMetaEvent;
+      expect(meta.sessionId).toBe(newSessionId);
+      expect(meta.title).toBe('fixture');
+      expect(meta.permissionMode).toBe('ask');
+      expect(meta.model).toBe('test');
     } finally {
       rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
@@ -310,7 +266,6 @@ describe('forkSession', () => {
     const dir = join(base.dir, slug, 'sessions');
     mkdirSync(dir, { recursive: true });
     const transcriptPath = paths.transcriptPath;
-    const indexPath = paths.indexPath;
 
     const fixedSummaryUuid = '11111111-1111-1111-1111-111111111111';
     const fixedCompactUuid = '22222222-2222-2222-2222-222222222222';
@@ -321,6 +276,10 @@ describe('forkSession', () => {
         sessionId,
         cwd,
         createdAt: new Date().toISOString(),
+        model: 'test',
+        title: 'uuid-fixture',
+        activeProfile: 'build',
+        permissionMode: 'ask',
       },
       { type: 'user', turnId: 1, content: 'q1' },
       { type: 'assistant', turnId: 1, content: 'a1', toolCalls: [] },
@@ -330,40 +289,14 @@ describe('forkSession', () => {
       { type: 'compact', uuid: fixedCompactUuid, startTurnId: 1, endTurnId: 2 },
     ];
     writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
-    const idx: SessionIndex = {
-      sessionId,
-      cwd,
-      model: 'test',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      messageCount: lines.length - 1,
-      title: 'uuid-fixture',
-      currentTurnId: 2,
-      usage: undefined,
-      activeProfile: 'build' as const,
-      permissionMode: 'default' as const,
-    };
-    writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
 
     try {
-      const state = {
-        sessionId,
-        cwd,
-        messageCount: lines.length - 1,
-        currentTurnId: 2,
-        sessionMeta: null,
-        model: 'test',
-        activeProfile: 'build' as const,
-        permissionMode: 'default' as const,
-        title: 'uuid-fixture',
-        usage: undefined,
-        memorySnapshot: '',
-      };
+      const state = makeState(sessionId, cwd, 'uuid-fixture', 2);
 
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.forkSession(state, 999);
+          return yield* svc.forkSession(state as any, 999);
         })
       );
 

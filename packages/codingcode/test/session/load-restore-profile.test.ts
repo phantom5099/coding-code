@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, ManagedRuntime } from 'effect';
-import { mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { computePaths } from '../../src/core/path.js';
+import { readSessionMeta, rewriteSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -12,7 +13,7 @@ const base = useTempProjectBase();
 describe('SessionStoreState.activeProfile persistence (disk only)', () => {
   let cwd: string;
   let sessionId: string;
-  let indexPath: string;
+  let transcriptPath: string;
   let rt: ManagedRuntime.ManagedRuntime<any, any>;
 
   function loadState() {
@@ -34,16 +35,17 @@ describe('SessionStoreState.activeProfile persistence (disk only)', () => {
         const state = yield* session.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
         return {
           sessionId: state.sessionId,
-          indexPath: computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
+          transcriptPath: computePaths(state.cwd, state.sessionId, state.parentSessionId)
+            .transcriptPath,
         };
       })
     );
     sessionId = result.sessionId;
-    indexPath = result.indexPath;
+    transcriptPath = result.transcriptPath;
   });
 
   afterEach(async () => {
@@ -67,11 +69,8 @@ describe('SessionStoreState.activeProfile persistence (disk only)', () => {
     expect(stateAfter.activeProfile).toBe('plan');
   });
 
-  it('state.activeProfile is set when index file has activeProfile field', async () => {
-    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    idx.activeProfile = 'plan';
-    idx.permissionMode = 'default';
-    writeFileSync(indexPath, JSON.stringify(idx, null, 2));
+  it('state.activeProfile is set when the session head carries activeProfile', async () => {
+    rewriteSessionMeta(transcriptPath, { activeProfile: 'plan', permissionMode: 'ask' });
 
     const state = await loadState();
     expect(state.activeProfile).toBe('plan');
@@ -84,7 +83,7 @@ describe('SessionStoreState.activeProfile persistence (disk only)', () => {
         yield* session.setActiveProfile(cwd, sessionId, 'plan');
       })
     );
-    const idx = JSON.parse(readFileSync(indexPath, 'utf8'));
-    expect(idx.activeProfile).toBe('plan');
+    const meta = readSessionMeta(transcriptPath);
+    expect(meta?.activeProfile).toBe('plan');
   });
 });

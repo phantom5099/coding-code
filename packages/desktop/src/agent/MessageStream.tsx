@@ -373,6 +373,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
               projectId: '',
               title: newSessionId.slice(0, 8),
               cwd: useAgentStore.getState().threads[threadId]?.cwd ?? '',
+              model: useAgentStore.getState().threads[threadId]?.model ?? '',
               turns: [],
               createdAt: Date.now(),
               updatedAt: Date.now(),

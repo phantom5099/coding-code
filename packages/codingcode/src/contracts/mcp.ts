@@ -21,12 +21,6 @@ export interface McpServerConfig {
   autoReconnect?: boolean;
 }
 
-export interface McpStatus {
-  name: string;
-  toolCount: number;
-  transport: 'stdio' | 'http';
-}
-
 /** MCP 远端工具的纯数据描述：zod schema 与 SDK client 等机制形状由实现层持有 */
 export interface McpToolSpec {
   server: string;

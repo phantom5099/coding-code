@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { serve } from '@hono/node-server';
 import { createServer } from './server/index.js';
 import { createAppRuntime } from './layer.js';
-import { loadConfig, ensureUserConfig } from '@codingcode/infra/config';
+import { loadConfig, ensureUserConfig } from './infra/config.js';
 import { ensureTempCwd } from './core/path.js';
 import { findAvailablePort } from './server/port-discovery.js';
 import { AgentError } from './core/error.js';
