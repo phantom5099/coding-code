@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getProjectDir } from '../core/path.js';
+import { CODINGCODE_DIRNAME } from '../core/path.js';
 
 export function resolveMemoryPath(cwd: string): string {
-  return path.join(getProjectDir(cwd), 'memory.md');
+  return path.join(cwd, CODINGCODE_DIRNAME, 'memory.md');
 }
 
 export function readMemoryFile(absPath: string): string {

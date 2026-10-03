@@ -4,7 +4,7 @@ import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
 import { readSessionMeta, rewriteSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 

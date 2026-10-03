@@ -14,7 +14,9 @@ import {
   renameSync,
 } from 'fs';
 import { join, dirname } from 'path';
-import { getGlobalDir, getProjectBaseDir, computePaths } from '../core/path.js';
+import { getGlobalDir } from '../core/path.js';
+import { PROJECTS_DIRNAME, SESSIONS_DIRNAME } from '../contracts/paths.js';
+import { transcriptPathOf } from './paths.js';
 import type { SessionEvent, SessionMetaEvent, SessionSummary } from '../contracts/session.js';
 import type { TokenUsage } from '../contracts/types.js';
 
@@ -24,7 +26,7 @@ const HEAD_BYTES = 8192;
 const TAIL_WINDOW_BYTES = 16 * 1024;
 
 export function sessionJsonlPathFromCwd(cwd: string, sessionId: string, parentSessionId?: string): string {
-  return computePaths(cwd, sessionId, parentSessionId).transcriptPath;
+  return transcriptPathOf(cwd, sessionId, parentSessionId);
 }
 
 export function ensureDirs(transcriptPath: string): void {
@@ -142,14 +144,14 @@ export function readLastUsage(transcriptPath: string): TokenUsage | undefined {
 
 export function listSessions(encodedProjectPath?: string): SessionSummary[] {
   const results: SessionSummary[] = [];
-  const projectBase = getProjectBaseDir();
+  const projectBase = join(getGlobalDir(), PROJECTS_DIRNAME);
   const encodedDirs = encodedProjectPath
     ? [encodedProjectPath]
     : existsSync(projectBase)
       ? readdirSync(projectBase)
       : [];
   for (const encoded of encodedDirs) {
-    const sessionsDir = join(projectBase, encoded, 'sessions');
+    const sessionsDir = join(projectBase, encoded, SESSIONS_DIRNAME);
     if (!existsSync(sessionsDir)) continue;
     for (const file of readdirSync(sessionsDir).filter((f) => f.endsWith('.jsonl'))) {
       const jsonlPath = join(sessionsDir, file);

@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import { parse as parseYaml } from 'yaml';
-import { getGlobalDir, getProjectDir } from '../core/path.js';
+import { getGlobalDir, CODINGCODE_DIRNAME } from '../core/path.js';
 
 interface SkillFrontMatter {
   name?: string;
@@ -59,7 +59,7 @@ export function discoverGlobalSkillDirs(): SkillDirectory[] {
 /** `<projectRoot>/.codingcode/skills/` —— 后加载，优先级更高 */
 export function discoverProjectSkillDirs(projectRoot: string): SkillDirectory[] {
   const dirs: SkillDirectory[] = [];
-  const projectSkillsDir = join(getProjectDir(projectRoot), 'skills');
+  const projectSkillsDir = join(projectRoot, CODINGCODE_DIRNAME, 'skills');
   if (existsSync(projectSkillsDir)) {
     for (const entry of readdirSync(projectSkillsDir)) {
       const dirPath = join(projectSkillsDir, entry);

@@ -117,14 +117,12 @@ export const MemoryLayer = Layer.effect(MemoryService, Effect.gen(function* () {
           const current = readMemoryFile(projectPath);
 
           const transcript = buildTranscript(events);
-          const extracted = yield* Effect.promise(() =>
-            extractMemory({
-              currentMemory: current,
-              transcript,
-              llm,
-              model: cfg.model?.trim() || model,
-            })
-          );
+          const extracted = yield* extractMemory({
+            currentMemory: current,
+            transcript,
+            llm,
+            model: cfg.model?.trim() || model,
+          });
           if (!extracted) return { ...NOT_WRITTEN };
 
           if (readMemoryFile(projectPath) !== current) return { ...NOT_WRITTEN };

@@ -9,7 +9,7 @@ import { filterForContext, buildContextMessages } from '../../src/context/contex
 import { readHistory } from '../../src/session/file-ops.js';
 import type { SessionMetaEvent, SessionEvent } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
-import { computePaths } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
 
 const base = useTempProjectBase();
 

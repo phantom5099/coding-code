@@ -21,8 +21,10 @@ import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import { encodeProjectPath, normalizePath, getProjectBaseDir } from '../../src/core/path.js';
-import type { SessionMetaEvent, ToolResultEvent } from '../../src/contracts/session.js';
+import { encodeProjectPath, normalizePath } from '../../src/core/path.js';
+import { projectBaseDir } from '../helpers/project-base.js';
+import { transcriptPathFor } from '../../src/context/context.js';
+import type { SessionMetaEvent, SessionRef, ToolResultEvent } from '../../src/contracts/session.js';
 import type { Message } from '../../src/contracts/types.js';
 import type { LLMStreamPart } from '../../src/contracts/provider.js';
 import type { FrameBody, ToolOutcome } from '../../src/contracts/frame.js';
@@ -126,7 +128,7 @@ const AgentDeps = Layer.mergeAll(
   } as any),
   Layer.succeed(ContextService, {
     willCompact: () => Effect.succeed(false),
-    assemblePayload: (transcriptPath: string) => Effect.sync(() => readMessages(transcriptPath)),
+    assemblePayload: (ref: SessionRef) => Effect.sync(() => readMessages(transcriptPathFor(ref))),
   } as any),
   Layer.succeed(MemoryService, {
     loadMemoryForPrompt: () => Effect.succeed(''),
@@ -167,7 +169,7 @@ describe('dispatch_agent on the production path (parent turn -> tool -> subagent
   let cwd: string;
 
   beforeEach(() => {
-    projectBase = getProjectBaseDir();
+    projectBase = projectBaseDir();
     mkdirSync(projectBase, { recursive: true });
     cwd = mkdtempSync(join(tmpdir(), 'codingcode-test-prod-path-cwd-'));
     script.length = 0;
@@ -185,7 +187,7 @@ describe('dispatch_agent on the production path (parent turn -> tool -> subagent
           type: 'tool_call',
           id: 'call-1',
           name: 'dispatch_agent',
-          args: { agentName: 'reviewer', prompt: 'inspect the module' },
+          arguments: { agentName: 'reviewer', prompt: 'inspect the module' },
         },
         { type: 'end' },
       ],

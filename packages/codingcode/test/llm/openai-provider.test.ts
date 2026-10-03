@@ -117,7 +117,7 @@ describe('OpenAIProvider completeStream', () => {
 
     expect(parts).toEqual([
       { type: 'text', text: 'reading' },
-      { type: 'tool_call', id: 'tc-1', name: 'read_file', args: { path: 'a.ts' } },
+      { type: 'tool_call', id: 'tc-1', name: 'read_file', arguments: { path: 'a.ts' } },
       { type: 'end', usage: EXPECTED_USAGE },
     ]);
   });

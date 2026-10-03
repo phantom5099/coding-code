@@ -1,3 +1,4 @@
+import { join } from 'path';
 import {
   mergeNamed,
   patchNamed,
@@ -5,7 +6,7 @@ import {
   writeNamedList,
   type NamedListFile,
 } from '../infra/yaml-store.js';
-import { getGlobalDir, getProjectDir } from '../core/path.js';
+import { getGlobalDir, CODINGCODE_DIRNAME } from '../core/path.js';
 import type { UserHookConfig } from '../contracts/hooks.js';
 
 const HOOKS_FILE: NamedListFile = { fileName: 'hooks', key: 'hooks' };
@@ -13,11 +14,11 @@ const HOOKS_FILE: NamedListFile = { fileName: 'hooks', key: 'hooks' };
 type RawHookConfig = Partial<UserHookConfig> & { name: string };
 
 export function loadHookConfigs(projectRoot: string): UserHookConfig[] {
-  return readNamedList<RawHookConfig>(getProjectDir(projectRoot), HOOKS_FILE) as UserHookConfig[];
+  return readNamedList<RawHookConfig>(join(projectRoot, CODINGCODE_DIRNAME), HOOKS_FILE) as UserHookConfig[];
 }
 
 export function writeHookConfigs(projectRoot: string, hooks: UserHookConfig[]): void {
-  writeNamedList(getProjectDir(projectRoot), HOOKS_FILE, hooks);
+  writeNamedList(join(projectRoot, CODINGCODE_DIRNAME), HOOKS_FILE, hooks);
 }
 
 export function loadGlobalHookConfigs(): UserHookConfig[] {
@@ -38,5 +39,5 @@ export function setGlobalHookEnabled(name: string, enabled: boolean): void {
 }
 
 export function setProjectHookEnabled(projectRoot: string, name: string, enabled: boolean): void {
-  patchNamed<RawHookConfig>(getProjectDir(projectRoot), HOOKS_FILE, name, { enabled });
+  patchNamed<RawHookConfig>(join(projectRoot, CODINGCODE_DIRNAME), HOOKS_FILE, name, { enabled });
 }

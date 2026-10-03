@@ -6,7 +6,7 @@ import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 
 import { deleteSession, sessionJsonlPathFromCwd } from '../../src/session/file-ops.js';
-import { computePaths } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();

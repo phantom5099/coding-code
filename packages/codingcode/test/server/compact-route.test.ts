@@ -147,7 +147,10 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
     expect(mockCompactWithLLM).toHaveBeenCalledTimes(1);
 
     const args = mockCompactWithLLM.mock.calls[0];
-    expect(typeof args?.[0]).toBe('string');
+    // context 现在收的是会话身份（cwd + sessionId），转录路径由它自己拼
+    const ref = args?.[0] as { cwd: string; sessionId: string };
+    expect(typeof ref.cwd).toBe('string');
+    expect(typeof ref.sessionId).toBe('string');
     expect(args?.[1]).toBe('deepseek-chat@deepseek');
   });
 

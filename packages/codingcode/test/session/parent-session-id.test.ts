@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
 import { readSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 

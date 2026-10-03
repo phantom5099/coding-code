@@ -1,16 +1,17 @@
 import { Effect } from 'effect';
+import { mkdirSync } from 'fs';
 import { serve } from '@hono/node-server';
 import { createServer } from './server/index.js';
 import { createAppRuntime } from './layer.js';
 import { loadConfig, ensureUserConfig } from './infra/config.js';
-import { ensureTempCwd } from './core/path.js';
+import { tempCwd } from './server/cwd.js';
 import { findAvailablePort } from './server/port-discovery.js';
 import { AgentError } from './core/error.js';
 import { SchedulerService } from './scheduler/port.js';
 
 async function main() {
   ensureUserConfig();
-  ensureTempCwd();
+  mkdirSync(tempCwd(), { recursive: true });
   const config = loadConfig();
 
   const basePort = config.server.port;

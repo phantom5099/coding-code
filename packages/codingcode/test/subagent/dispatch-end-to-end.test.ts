@@ -22,12 +22,11 @@ import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import {
-  encodeProjectPath,
-  normalizePath,
-  getProjectBaseDir,
-  computePaths,
-} from '../../src/core/path.js';
+import { encodeProjectPath, normalizePath } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
+import { transcriptPathFor } from '../../src/context/context.js';
+import { projectBaseDir } from '../helpers/project-base.js';
+import type { SessionRef } from '../../src/contracts/session.js';
 import type { Message } from '../../src/contracts/types.js';
 import type { FrameBody } from '../../src/contracts/frame.js';
 
@@ -100,7 +99,7 @@ const AgentDeps = Layer.mergeAll(
   } as any),
   Layer.succeed(ContextService, {
     willCompact: () => Effect.succeed(false),
-    assemblePayload: (transcriptPath: string) => Effect.sync(() => readMessages(transcriptPath)),
+    assemblePayload: (ref: SessionRef) => Effect.sync(() => readMessages(transcriptPathFor(ref))),
   } as any),
   Layer.succeed(MemoryService, {
     loadMemoryForPrompt: () => Effect.succeed(''),
@@ -170,7 +169,7 @@ describe('subagent run end-to-end (session transcript is read by the agent loop)
   let cwd: string;
 
   beforeEach(() => {
-    projectBase = getProjectBaseDir();
+    projectBase = projectBaseDir();
     mkdirSync(projectBase, { recursive: true });
     cwd = mkdtempSync(join(tmpdir(), 'codingcode-test-cwd-'));
   });

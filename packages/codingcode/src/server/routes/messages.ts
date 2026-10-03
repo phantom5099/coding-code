@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { AgentService } from '../../agent/port.js';
-import { resolveCwd } from '../../core/path.js';
+import { resolveWorkspaceCwd } from '../cwd.js';
 import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
 import { loadConfig } from '../../infra/config.js';
@@ -20,7 +20,8 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
     if (!model?.trim()) {
       return c.json(errorBody('CONFIG_MISSING', 'model is required'), 400);
     }
-    const normalizedCwd = resolveCwd(cwd);
+    // 工作区目录必须存在，否则拒绝（不允许带着不存在的路径开回合）
+    const normalizedCwd = resolveWorkspaceCwd(cwd);
 
     const isNew = sessionId === '_' || !sessionId;
     const runOpts: any = {

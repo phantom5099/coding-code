@@ -23,7 +23,7 @@ export type LLMStreamPart =
       readonly type: 'tool_call';
       readonly id: string;
       readonly name: string;
-      readonly args: Record<string, unknown>;
+      readonly arguments: Record<string, unknown>;
     }
   | { readonly type: 'end'; readonly usage?: TokenUsage };
 
@@ -37,7 +37,6 @@ export interface ModelInfo {
 
 export interface LLMClient {
   complete(req: LLMRequest, signal?: AbortSignal): Effect.Effect<LLMResponse, AgentError>;
-  /** 产出 SDK 流部件；失败时在迭代中抛出 AgentError */
   completeStream(req: LLMRequest, signal?: AbortSignal): AsyncIterable<LLMStreamPart>;
   readonly modelInfo: ModelInfo;
 }

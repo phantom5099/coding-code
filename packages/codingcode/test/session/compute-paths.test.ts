@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { computePaths, projectSessionsDir } from '../../src/core/path.js';
+import { computePaths, projectSessionsDir } from '../../src/session/paths.js';
 import { sessionJsonlPathFromCwd } from '../../src/session/file-ops.js';
 import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
@@ -34,7 +34,7 @@ describe('computePaths', () => {
     const parentSid = randomUUID();
     const result = computePaths(cwd, sid, parentSid);
 
-    const sessionsDir = projectSessionsDir(encodeProjectPath(normalizePath(cwd)));
+    const sessionsDir = projectSessionsDir(cwd);
     const expectedTranscript = join(sessionsDir, parentSid, 'subagents', `${sid}.jsonl`);
     expect(result.transcriptPath).toBe(expectedTranscript);
     expect(result.sessionId).toBe(sid);

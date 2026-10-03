@@ -5,13 +5,15 @@ import { join } from 'path';
 import type { SessionStoreState } from '../../contracts/session.js';
 import type { ProfileName } from '../../contracts/types.js';
 import { SessionService } from '../../session/port.js';
-import { computePaths, resolveCwd } from '../../core/path.js';
+import { computePaths } from '../../session/paths.js';
 import { ContextService } from '../../context/port.js';
 import { estimatePromptTokensFrom } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/port.js';
 import { activeModelId, setGlobalActive } from '../../infra/models.js';
 import { errorBody, errorResponse } from '../util.js';
-import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
+import { resolveCwd, resolveWorkspaceCwd } from '../cwd.js';
+import { getGlobalDir, encodeProjectPath } from '../../core/path.js';
+import { PROJECTS_DIRNAME } from '../../contracts/paths.js';
 import { AVAILABLE_PROFILES } from '../../contracts/profile.js';
 import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
@@ -68,7 +70,8 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     if (!body.model) {
       return c.json(errorBody('CONFIG_MISSING', 'model required'), 400);
     }
-    const normalizedCwd = resolveCwd(body.cwd);
+    // 建会话即建立工作区：目录必须存在
+    const normalizedCwd = resolveWorkspaceCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -115,7 +118,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const session = yield* SessionService;
         const state = yield* session.load(normalizedCwd, sessionId);
         return yield* context.compactWithLLM(
-          computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath,
+          { cwd: state.cwd, sessionId: state.sessionId, parentSessionId: state.parentSessionId },
           body.model ?? ''
         );
       })
@@ -163,7 +166,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   // project's plan directory.
   router.get('/api/sessions/:id/plan', async (c) => {
     const cwd = resolveCwd(c.req.query('cwd'));
-    const planDir = join(getProjectBaseDir(), encodeProjectPath(cwd));
+    const planDir = join(getGlobalDir(), PROJECTS_DIRNAME, encodeProjectPath(cwd));
     if (!existsSync(planDir)) {
       return c.json({
         content: '',

@@ -1,8 +1,3 @@
-// Agent 循环测试基座：通过公开的 AgentService.runTurn 驱动 agent，
-// 替代已删除的 agentLoop 自由函数。agent 依赖均以宽服务 mock 注入。
-//
-// 自 frame 协议重构后，runTurn 产出 FrameBody（信封由装配器另盖），
-// 本文件同时提供从 FrameBody[] 中抽取内容的纯函数，供各测试断言使用。
 import { Effect, Layer } from 'effect';
 import { AgentLayer } from '../../src/agent/agent.js';
 import { ToolEnvLayer } from '../../src/agent/tool-env.js';
@@ -43,7 +38,7 @@ export function pToolCall(
   name: string,
   args: Record<string, unknown> = {}
 ): LLMStreamPart {
-  return { type: 'tool_call', id, name, args };
+  return { type: 'tool_call', id, name, arguments: args };
 }
 
 export function pEnd(usage?: TokenUsage): LLMStreamPart {

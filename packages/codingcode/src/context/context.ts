@@ -1,5 +1,13 @@
 import { Layer, Effect } from 'effect';
 import { randomUUID } from 'crypto';
+import { join } from 'path';
+import { getGlobalDir, encodeProjectPath } from '../core/path.js';
+import {
+  PROJECTS_DIRNAME,
+  SESSIONS_DIRNAME,
+  SUBAGENTS_DIRNAME,
+  TRANSCRIPT_SUFFIX,
+} from '../contracts/paths.js';
 import { loadConfig } from '../infra/config.js';
 import type { Message } from '../contracts/types.js';
 import { SessionService } from '../session/port.js';
@@ -7,10 +15,22 @@ import { estimateTokens, estimateMessageTokens } from './tokens.js';
 import { LLMService } from '../llm/port.js';
 import { contextWindowOf } from '../infra/models.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
-import type { SessionEvent, AssistantEvent, ToolResultEvent, CompactEvent, SummaryEvent } from '../contracts/session.js';
+import type { SessionEvent, AssistantEvent, ToolResultEvent, CompactEvent, SummaryEvent, SessionRef } from '../contracts/session.js';
 import { AgentError } from '../core/error.js';
 import { ContextService } from './port.js';
 import type { CompressResult } from './port.js';
+
+export function transcriptPathFor(ref: SessionRef): string {
+  const sessionsDir = join(
+    getGlobalDir(),
+    PROJECTS_DIRNAME,
+    encodeProjectPath(ref.cwd),
+    SESSIONS_DIRNAME
+  );
+  return ref.parentSessionId
+    ? join(sessionsDir, ref.parentSessionId, SUBAGENTS_DIRNAME, `${ref.sessionId}${TRANSCRIPT_SUFFIX}`)
+    : join(sessionsDir, `${ref.sessionId}${TRANSCRIPT_SUFFIX}`);
+}
 
 const COMPACTABLE_TOOLS = new Set([
   'read_file',
@@ -369,20 +389,22 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
     }
 
     const willCompact = (
-      transcriptPath: string,
+      ref: SessionRef,
       model: string
     ): Effect.Effect<boolean, AgentError> =>
       Effect.gen(function* () {
+        const transcriptPath = transcriptPathFor(ref);
         const contextWindow = contextWindowOf(model);
         const s = yield* runMicroCompact(yield* readState(transcriptPath), contextWindow);
         return needsCompaction(s, contextWindow);
       });
 
     const assemblePayload = (
-      transcriptPath: string,
+      ref: SessionRef,
       model: string
     ): Effect.Effect<Message[], AgentError> =>
       Effect.gen(function* () {
+        const transcriptPath = transcriptPathFor(ref);
         const contextWindow = contextWindowOf(model);
         let s = yield* readState(transcriptPath);
         s = yield* runMicroCompact(s, contextWindow);
@@ -391,11 +413,12 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
       });
 
     const compactWithLLM = (
-      transcriptPath: string,
+      ref: SessionRef,
       model: string,
       usage?: number
     ): Effect.Effect<CompressResult, AgentError> =>
       Effect.gen(function* () {
+        const transcriptPath = transcriptPathFor(ref);
         const contextWindow = contextWindowOf(model);
         let s = yield* runMicroCompact(yield* readState(transcriptPath), contextWindow);
         const preEstimate = usage ?? estimateFor(s);

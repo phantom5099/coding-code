@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
-import { computePaths } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { readSessionMeta } from '../../src/session/file-ops.js';

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
-import { join } from 'path';
+import { dirname } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
 import { ContextService } from '../../../src/context/port.js';
@@ -8,8 +8,8 @@ import type { ContextShape } from '../../../src/context/port.js';
 import { SessionService } from '../../../src/session/port.js';
 import { SessionLayer } from '../../../src/session/session.js';
 import { LLMService } from '../../../src/llm/port.js';
-import type { SessionEvent, SummaryEvent } from '../../../src/contracts/session.js';
-import { filterForContext, buildContextMessages } from '../../../src/context/context.js';
+import type { SessionEvent, SessionRef, SummaryEvent } from '../../../src/contracts/session.js';
+import { filterForContext, buildContextMessages, transcriptPathFor } from '../../../src/context/context.js';
 import { readHistory } from '../../../src/session/file-ops.js';
 import { estimateTokens } from '../../../src/context/tokens.js';
 import { useTempProjectBase } from '../../helpers/project-base.js';
@@ -21,7 +21,7 @@ vi.mock('../../../src/infra/models.js', () => ({
   contextWindowOf: () => windowState.value,
 }));
 
-const base = useTempProjectBase();
+useTempProjectBase();
 
 interface FixtureOptions {
   numTurns: number;
@@ -29,18 +29,19 @@ interface FixtureOptions {
   toolName?: string;
 }
 
+const CWD = '/tmp/test';
+
 function makeFixture(opts: FixtureOptions) {
   const sessionId = randomUUID();
-  const slug = randomUUID();
-  const dir = join(base.dir, slug, 'sessions');
-  mkdirSync(dir, { recursive: true });
-  const transcriptPath = join(dir, `${sessionId}.jsonl`);
+  const ref: SessionRef = { cwd: CWD, sessionId };
+  const transcriptPath = transcriptPathFor(ref);
+  mkdirSync(dirname(transcriptPath), { recursive: true });
 
   const lines: any[] = [
     {
       type: 'session_meta',
       sessionId,
-      cwd: '/tmp/test',
+      cwd: CWD,
       createdAt: new Date().toISOString(),
       model: 'test-model',
       title: 'fixture',
@@ -73,11 +74,10 @@ function makeFixture(opts: FixtureOptions) {
 
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
-  return { sessionId, slug, dir, transcriptPath };
+  return { ref, sessionId, dir: dirname(transcriptPath), transcriptPath };
 }
 
-function cleanup(slug: string) {
-  const dir = join(base.dir, slug);
+function cleanup(dir: string) {
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
 }
 
@@ -130,14 +130,14 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         windowState.value = 1000;
         const ctx = await getCtxService(makeMockLLM(summary));
-        await run(ctx.compactWithLLM(fx.transcriptPath, 'test-model'));
+        await run(ctx.compactWithLLM(fx.ref, 'test-model'));
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
         expect(summaries[0]!.startTurnId).toBeLessThanOrEqual(summaries[0]!.endTurnId);
         expect(summaries[0]!.endTurnId).toBeGreaterThan(0);
       } finally {
-        cleanup(fx.slug);
+        cleanup(fx.dir);
       }
     });
 
@@ -146,12 +146,12 @@ describe('compressor behavior', () => {
       try {
         windowState.value = 1000;
         const ctx = await getCtxService(FailingLLM);
-        const result = await run(ctx.compactWithLLM(fx.transcriptPath, 'test-model'));
+        const result = await run(ctx.compactWithLLM(fx.ref, 'test-model'));
         expect(result.didCompress).toBe(false);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
       } finally {
-        cleanup(fx.slug);
+        cleanup(fx.dir);
       }
     });
   });
@@ -166,14 +166,14 @@ describe('compressor behavior', () => {
             '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
           )
         );
-        await run(ctx.compactWithLLM(fx.transcriptPath, 'test-model'));
+        await run(ctx.compactWithLLM(fx.ref, 'test-model'));
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
         expect(summaries[0]!.startTurnId).toBeLessThanOrEqual(summaries[0]!.endTurnId);
         expect(summaries[0]!.endTurnId).toBeGreaterThan(0);
       } finally {
-        cleanup(fx.slug);
+        cleanup(fx.dir);
       }
     });
   });
@@ -192,13 +192,13 @@ describe('compressor behavior', () => {
             '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
           )
         );
-        const result = await run(ctx.compactWithLLM(fx.transcriptPath, 'test-model'));
+        const result = await run(ctx.compactWithLLM(fx.ref, 'test-model'));
         expect(result.didCompress).toBe(true);
         expect(result.promptEstimate).toBeGreaterThan(0);
         expect(result.promptEstimate).toBeLessThan(before);
         expect(result.released).toBeGreaterThan(0);
       } finally {
-        cleanup(fx.slug);
+        cleanup(fx.dir);
       }
     });
   });
@@ -212,11 +212,11 @@ describe('compressor behavior', () => {
       try {
         windowState.value = 1000;
         const ctx = await getCtxService(makeMockLLM(SUMMARY));
-        const messages = await run(ctx.assemblePayload(fx.transcriptPath, 'test-model'));
+        const messages = await run(ctx.assemblePayload(fx.ref, 'test-model'));
         expect(messages.length).toBeGreaterThan(0);
         expect(messages.some((m) => m.name === 'compacted_history')).toBe(true);
       } finally {
-        cleanup(fx.slug);
+        cleanup(fx.dir);
       }
     });
 
@@ -225,10 +225,10 @@ describe('compressor behavior', () => {
       try {
         windowState.value = 2_000_000;
         const ctx = await getCtxService(makeMockLLM(SUMMARY));
-        const messages = await run(ctx.assemblePayload(fx.transcriptPath, 'test-model'));
+        const messages = await run(ctx.assemblePayload(fx.ref, 'test-model'));
         expect(messages.some((m) => m.name === 'compacted_history')).toBe(false);
       } finally {
-        cleanup(fx.slug);
+        cleanup(fx.dir);
       }
     });
   });

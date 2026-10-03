@@ -121,3 +121,9 @@ export interface SessionCreateOptions {
   activeProfile: ProfileName;
   permissionMode: PermissionMode;
 }
+
+export interface SessionRef {
+  cwd: string;
+  sessionId: string;
+  parentSessionId?: string;
+}

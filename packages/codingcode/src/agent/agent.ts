@@ -18,11 +18,12 @@ import { ToolExecutorService } from '../tools/port.js';
 import { buildSystemPrompt } from './prompt.js';
 import type { FrameBody, FrameError, ResponseMeta, ToolOutcome, Transition } from '../contracts/frame.js';
 import { isTurnEnd } from '../contracts/frame.js';
+import type { SessionRef } from '../contracts/session.js';
 import type { ToolCatalog, ToolResult } from '../contracts/tool.js';
 import type { ToolCall } from '../contracts/types.js';
 import { loadConfig } from '../infra/config.js';
 import { createLogger } from '../infra/logger.js';
-import { normalizePath, computePaths } from '../core/path.js';
+import { normalizePath } from '../core/path.js';
 import { resolveProfile, getToolNames } from './profile.js';
 
 function toolOutcomeOf(result: ToolResult): ToolOutcome {
@@ -217,9 +218,13 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
           yield* q.offer({ family: 'transition', transition: { to: 'executing' } });
         }
 
-        const transcriptPath = computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath;
+        const sessionRef: SessionRef = {
+          cwd: state.cwd,
+          sessionId: state.sessionId,
+          parentSessionId: state.parentSessionId,
+        };
 
-        const willCompact = yield* Effect.either(context.willCompact(transcriptPath, model));
+        const willCompact = yield* Effect.either(context.willCompact(sessionRef, model));
         if (Either.isLeft(willCompact)) {
           yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(willCompact.left) });
           yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
@@ -229,7 +234,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
           yield* q.offer({ family: 'transition', transition: { to: 'compress' } });
         }
 
-        const assembled = yield* Effect.either(context.assemblePayload(transcriptPath, model));
+        const assembled = yield* Effect.either(context.assemblePayload(sessionRef, model));
         if (Either.isLeft(assembled)) {
           yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(assembled.left) });
           yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
@@ -253,10 +258,10 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
                 content += part.text;
                 Effect.runSync(q.offer({ family: 'event', event: { type: 'text_delta', text: part.text } }));
               } else if (part.type === 'tool_call') {
-                toolCalls.push({ id: part.id, name: part.name, arguments: part.args });
+                toolCalls.push({ id: part.id, name: part.name, arguments: part.arguments });
                 Effect.runSync(q.offer({
                   family: 'event',
-                  event: { type: 'tool_call', id: part.id, name: part.name, args: part.args },
+                  event: { type: 'tool_call', id: part.id, name: part.name, args: part.arguments },
                 }));
               } else {
                 responded = part.usage ? { usage: part.usage } : {};

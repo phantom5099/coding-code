@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { AgentError } from '../core/error.js';
-import { getModelsFile } from '../core/path.js';
 import type { SelectableModel } from '../contracts/provider.js';
 import { loadConfig, updateActiveModel } from './config.js';
 
@@ -27,9 +27,14 @@ const DEFAULT_CONTEXT_WINDOW = 128000;
 
 let cached: ProviderCatalog | null = null;
 
+function modelsFile(): string {
+  const projectRoot = process.env.CODINGCODE_PROJECT_ROOT ?? process.cwd();
+  return join(projectRoot, 'config', 'models.json');
+}
+
 function readCatalog(): ProviderCatalog | null {
   if (cached) return cached;
-  const path = getModelsFile();
+  const path = modelsFile();
   if (!existsSync(path)) return null;
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as ProviderCatalog;

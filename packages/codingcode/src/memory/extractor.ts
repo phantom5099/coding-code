@@ -1,14 +1,7 @@
+import { Effect } from 'effect';
 import type { LLMShape } from '../llm/port.js';
 
-export async function extractMemory(opts: {
-  currentMemory: string;
-  transcript: string;
-  llm: LLMShape;
-  model: string;
-}): Promise<string | null> {
-  const { currentMemory, transcript, llm, model } = opts;
-
-  const systemPrompt = `你是记忆整理器。基于"已有记忆"和"会话记录"，输出整份最新版长期记忆，放在 <memory>...</memory> 块中，不要输出其它内容。
+const SYSTEM_PROMPT = `你是记忆整理器。基于"已有记忆"和"会话记录"，输出整份最新版长期记忆，放在 <memory>...</memory> 块中，不要输出其它内容。
 
 规则：
 - 只保留值得跨会话记住的信息：用户角色、偏好与对 Agent 的纠正，项目架构决策、技术选型与部署信息，外部资源与链接等。
@@ -23,35 +16,36 @@ export async function extractMemory(opts: {
 - 条目需具体、自包含，避免"上面提到的那个"这类指代。
 - <memory> 内不要带任何解释性文字。`;
 
+function extractFrom(content: string): string | null {
+  const memoryMatch = content.match(/<memory>([\s\S]*?)<\/memory>/);
+  if (!memoryMatch) return null;
+  return memoryMatch[1]!.trim() || null;
+}
+
+export function extractMemory(opts: {
+  currentMemory: string;
+  transcript: string;
+  llm: LLMShape;
+  model: string;
+}): Effect.Effect<string | null> {
+  const { currentMemory, transcript, llm, model } = opts;
+
   const userMessage = `已有记忆：
 ${currentMemory || '（空）'}
 
 会话记录（按 [user]/[assistant]/[tool:名称] 标注）：
 ${transcript || '（空）'}`;
 
-  try {
-    const stream = llm.completeStream(
+  return llm
+    .complete(
       {
         messages: [{ role: 'user', content: userMessage }],
-        system: systemPrompt,
+        system: SYSTEM_PROMPT,
       },
       model
+    )
+    .pipe(
+      Effect.map((res) => extractFrom(res.content)),
+      Effect.catchAllCause(() => Effect.succeed(null))
     );
-
-    let fullOutput = '';
-    for await (const part of stream) {
-      if (part.type === 'text') fullOutput += part.text;
-    }
-
-    const memoryMatch = fullOutput.match(/<memory>([\s\S]*?)<\/memory>/);
-
-    if (!memoryMatch) {
-      return null;
-    }
-
-    const extracted = memoryMatch[1]!.trim();
-    return extracted || null;
-  } catch {
-    return null;
-  }
 }

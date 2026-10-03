@@ -18,8 +18,9 @@ import { MemoryService } from '../../src/memory/port.js';
 import { SchedulerService } from '../../src/scheduler/port.js';
 import { ContextService } from '../../src/context/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
-import { encodeProjectPath, getProjectBaseDir } from '../../src/core/path.js';
+import { encodeProjectPath } from '../../src/core/path.js';
 import { useTempHome } from '../helpers/temp-home.js';
+import { projectBaseDir } from '../helpers/project-base.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
 import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
@@ -166,15 +167,15 @@ const TestLayer = Layer.mergeAll(
   MockCheckpointLayer
 );
 
-// home 指向临时目录 ⇒ getProjectBaseDir() = <temp>/.codingcode/project
+// home 指向临时目录 ⇒ projectBaseDir() = <temp>/.codingcode/project
 useTempHome('codingcode-plan-route-');
 
 let plansDir = '';
 
 beforeEach(() => {
   // The route resolves the query cwd to an absolute path first
-  // (core/path.resolveCwd -> path.resolve), then encodes it.
-  plansDir = join(getProjectBaseDir(), encodeProjectPath(resolve('/tmp/test')));
+  // (server/cwd.resolveCwd -> path.resolve), then encodes it.
+  plansDir = join(projectBaseDir(), encodeProjectPath(resolve('/tmp/test')));
   mkdirSync(plansDir, { recursive: true });
 });
 

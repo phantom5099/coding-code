@@ -9,7 +9,8 @@ import { SessionLayer } from '../../src/session/session.js';
 import { estimatePromptTokensFrom } from '../../src/context/context.js';
 import { readHistory, readLastUsage, readSessionMeta } from '../../src/session/file-ops.js';
 import { estimateTokensForContent } from '../../src/context/tokens.js';
-import { encodeProjectPath, computePaths } from '../../src/core/path.js';
+import { encodeProjectPath } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
 import type { SessionStoreState } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 

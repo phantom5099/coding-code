@@ -3,9 +3,10 @@ import { Effect, Layer } from 'effect';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { MemoryService } from '../../src/memory/port.js';
+import { MemoryService, type MemoryShape } from '../../src/memory/port.js';
 import { LLMService } from '../../src/llm/port.js';
 import { MemoryLayer } from '../../src/memory/memory.js';
+import { AgentError } from '../../src/core/error.js';
 
 const tmpDir = path.join(os.tmpdir(), 'memory-index-test');
 const memFile = path.join(tmpDir, '.codingcode', 'memory.md');
@@ -17,7 +18,7 @@ const mockLlm = {
 
 const testLayer = MemoryLayer.pipe(Layer.provide(Layer.succeed(LLMService, mockLlm)));
 
-let service: any;
+let service: MemoryShape;
 
 /** MemoryShape 现在返回 Effect，测试统一用 Effect.runPromise 驱动 */
 const run = <A, E>(eff: Effect.Effect<A, E>) => Effect.runPromise(eff);
@@ -59,14 +60,11 @@ vi.mock('../../src/session/file-ops.js', async (importOriginal) => {
   };
 });
 
-function setLlmResponse(response: string, beforeYield?: () => void) {
-  mockLlm.completeStream.mockImplementation(() =>
-    (async function* () {
-      beforeYield?.();
-      yield { type: 'text' as const, text: response };
-      yield { type: 'end' as const };
-    })()
-  );
+function setLlmResponse(response: string, beforeResolve?: () => void) {
+  mockLlm.complete.mockImplementation((_req: unknown, _model: string) => {
+    beforeResolve?.();
+    return Effect.succeed({ content: response });
+  });
 }
 
 const TEST_MODEL = 'demo-model@demo';
@@ -74,7 +72,7 @@ const TEST_MODEL = 'demo-model@demo';
 beforeEach(async () => {
   cleanup();
   fs.mkdirSync(tmpDir, { recursive: true });
-  mockLlm.completeStream.mockReset();
+  mockLlm.complete.mockReset();
   setLlmResponse('');
   const { getMemoryConfig } = await import('../../src/memory/config.js');
   vi.mocked(getMemoryConfig).mockReturnValue({
@@ -160,9 +158,9 @@ describe('flushSessionToMemory', () => {
     vi.mocked(readTranscript).mockImplementation(() => [
       { type: 'user', content: 'hello' },
     ] as any);
-    mockLlm.completeStream.mockImplementation(() => {
-      throw new Error('llm unavailable');
-    });
+    mockLlm.complete.mockImplementation(() =>
+      Effect.fail(new AgentError('LLM_FAILED', 'llm unavailable'))
+    );
     const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
     expect(result.written).toBe(false);
   });
@@ -179,7 +177,7 @@ describe('flushSessionToMemory', () => {
 
     const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
 
-    expect(mockLlm.completeStream.mock.calls[0]?.[1]).toBe(TEST_MODEL);
+    expect(mockLlm.complete.mock.calls[0]?.[1]).toBe(TEST_MODEL);
     expect(result.written).toBe(true);
     expect(result.bytes).toBeGreaterThan(0);
     expect(fs.readFileSync(memFile, 'utf-8')).toBe('### 项目\n- 新的架构决策');

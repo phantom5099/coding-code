@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { SkillService } from '../../skills/port.js';
-import { isGlobalCwd, resolveCwd } from '../../core/path.js';
+import { isGlobalCwd, resolveCwd } from '../cwd.js';
 import { discoverGlobalSkillDirs, discoverProjectSkillDirs } from '../../skills/source.js';
 import { createRunWithLayer } from '../util.js';
 

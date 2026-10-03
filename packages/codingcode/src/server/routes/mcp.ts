@@ -1,5 +1,5 @@
 import type { Hono } from 'hono';
-import { isGlobalCwd, resolveCwd } from '../../core/path.js';
+import { isGlobalCwd, resolveCwd } from '../cwd.js';
 import { AlreadyExistsError, NotFoundError } from '../../contracts/error.js';
 import type { McpServerConfig } from '../../contracts/mcp.js';
 import {
