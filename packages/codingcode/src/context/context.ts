@@ -380,12 +380,11 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
           .complete({ messages: [userMsg], system }, model)
           .pipe(Effect.either);
         if (result._tag === 'Left') return null;
-        return extractSummary(result.right.content.trim());
+        return normalizeSummary(result.right.content);
       }).pipe(Effect.catchAllCause(() => Effect.succeed(null)));
 
-    function extractSummary(raw: string): string {
-      const m = raw.match(/<summary>([\s\S]*?)<\/summary>/);
-      return (m?.[1] ?? raw).trim();
+    function normalizeSummary(raw: string): string {
+      return raw.trim();
     }
 
     const willCompact = (

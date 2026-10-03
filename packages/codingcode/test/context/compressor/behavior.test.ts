@@ -134,6 +134,8 @@ describe('compressor behavior', () => {
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
+        // 全量替换：模型原文即摘要，不做任何抽取或裁剪
+        expect(summaries[0]!.summaryText).toBe(summary);
         expect(summaries[0]!.startTurnId).toBeLessThanOrEqual(summaries[0]!.endTurnId);
         expect(summaries[0]!.endTurnId).toBeGreaterThan(0);
       } finally {

@@ -20,24 +20,28 @@ function extract(llm: LLMShape, currentMemory: string, transcript: string) {
 }
 
 describe('Memory Extractor', () => {
-  it('returns memory inside <memory> tags', async () => {
-    const response = `<memory>### 主题
-- 用户是 TypeScript 开发者</memory>`;
+  it('takes the whole model output as the new memory', async () => {
+    const response = `### 主题
+- 用户是 TypeScript 开发者`;
 
     const result = await extract(createMockLlm(response), '', '[user] I like TypeScript');
 
-    expect(result).toContain('### 主题');
-    expect(result).toContain('用户是 TypeScript 开发者');
+    expect(result).toBe(response);
   });
 
-  it('returns null when memory tags are empty', async () => {
-    const result = await extract(createMockLlm('<memory></memory>'), '', '[user] Some text');
+  it('keeps a preamble instead of trying to strip it', async () => {
+    const response = `好的，我整理了一份记忆：
 
-    expect(result).toBeNull();
+### 主题
+- 用户偏好简洁回答`;
+
+    const result = await extract(createMockLlm(response), '', '[user] 简洁点');
+
+    expect(result).toBe(response);
   });
 
-  it('returns null when memory tags not found', async () => {
-    const result = await extract(createMockLlm('No memory tags here'), '', '[user] Some text');
+  it('returns null when the model returns blank output', async () => {
+    const result = await extract(createMockLlm('   \n  '), '', '[user] Some text');
 
     expect(result).toBeNull();
   });
@@ -56,7 +60,7 @@ describe('Memory Extractor', () => {
   });
 
   it('passes currentMemory to the model as existing memory', async () => {
-    const mockLlm = createMockLlm('<memory></memory>');
+    const mockLlm = createMockLlm('');
 
     await extract(mockLlm, '### project\n- 旧信息', '[user] 新对话');
 
@@ -67,7 +71,7 @@ describe('Memory Extractor', () => {
   });
 
   it('keeps instructions in system and transcript data in messages', async () => {
-    const mockLlm = createMockLlm('<memory></memory>');
+    const mockLlm = createMockLlm('');
 
     await extract(mockLlm, '### project\n- Likes TypeScript', '[user] I use Python');
 
@@ -80,7 +84,7 @@ describe('Memory Extractor', () => {
   });
 
   it('passes the target model to the non-streaming channel', async () => {
-    const mockLlm = createMockLlm('<memory></memory>');
+    const mockLlm = createMockLlm('');
 
     await extract(mockLlm, '', '[user] hi');
 

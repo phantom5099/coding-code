@@ -5,7 +5,6 @@ import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
 import { ContextService } from '../../src/context/port.js';
 import type { ContextShape } from '../../src/context/port.js';
-import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { LLMService } from '../../src/llm/port.js';
 import type { SessionRef } from '../../src/contracts/session.js';

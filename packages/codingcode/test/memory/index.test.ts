@@ -173,7 +173,7 @@ describe('flushSessionToMemory', () => {
       { type: 'user', content: '记住新架构决策' },
       { type: 'assistant', content: '好的' },
     ] as any);
-    setLlmResponse('<memory>### 项目\n- 新的架构决策</memory>');
+    setLlmResponse('### 项目\n- 新的架构决策');
 
     const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
 
@@ -183,14 +183,14 @@ describe('flushSessionToMemory', () => {
     expect(fs.readFileSync(memFile, 'utf-8')).toBe('### 项目\n- 新的架构决策');
   });
 
-  it('keeps file unchanged when model returns empty memory', async () => {
+  it('keeps file unchanged when the model returns blank output', async () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
     const { readTranscript } = await import('../../src/session/file-ops.js');
     vi.mocked(readTranscript).mockImplementation(() => [
       { type: 'user', content: 'hello' },
     ] as any);
-    setLlmResponse('<memory></memory>');
+    setLlmResponse('');
 
     const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
 
@@ -205,7 +205,7 @@ describe('flushSessionToMemory', () => {
     vi.mocked(readTranscript).mockImplementation(() => [
       { type: 'user', content: '无新信息' },
     ] as any);
-    setLlmResponse('<memory>### 主题\n- 不变的内容</memory>');
+    setLlmResponse('### 主题\n- 不变的内容');
 
     const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
 
@@ -219,7 +219,7 @@ describe('flushSessionToMemory', () => {
     vi.mocked(readTranscript).mockImplementation(() => [
       { type: 'user', content: 'hello' },
     ] as any);
-    setLlmResponse('<memory>### 自动\n- 新记忆</memory>', () => {
+    setLlmResponse('### 自动\n- 新记忆', () => {
       writeMemory('### 手动\n- 用户并发编辑');
     });
 
