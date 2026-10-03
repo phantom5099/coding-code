@@ -1,20 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'vitest';
 import type { UITurn, UITurnItem } from '../../src/contracts/session.js';
-import type { TodoItem, TokenUsage } from '../../src/contracts/types.js';
+import type { TodoItem } from '../../src/contracts/types.js';
 
-type AssertNotAny<T> = 0 extends 1 & T ? never : T;
-
-type _UITurnNotAny = AssertNotAny<UITurnItem>;
-type _TodoNotAny = AssertNotAny<TodoItem>;
-type _UsageNotAny = AssertNotAny<TokenUsage>;
-
+// 本文件只做编译期类型约束（tsc 执行 @ts-expect-error 校验），不含运行时断言。
 describe('类型收口', () => {
-  it('UITurn.status 不再退化为 string', () => {
-    const turn: UITurn = { id: '1', items: [], status: 'completed' };
-    expect(turn.status).toBe('completed');
+  it('UITurn.status 不接受任意字符串', () => {
     // @ts-expect-error status 只能是三个字面量之一
     const bad: UITurn = { id: '1', items: [], status: 'nope' };
-    expect(bad).toBeDefined();
+    void bad;
   });
 
   it('UITurnItem 覆盖 session 产出的全部变体', () => {
@@ -26,21 +19,12 @@ describe('类型收口', () => {
       { id: 'e', type: 'reasoning', content: 'r', isVisible: false },
       { id: 'f', type: 'error', message: 'e' },
     ];
-    expect(items.map((i) => i.type)).toEqual([
-      'message',
-      'tool_call',
-      'tool_result',
-      'summary',
-      'reasoning',
-      'error',
-    ]);
+    void items;
   });
 
   it('TodoItem.status 是字面量联合而非 string', () => {
-    const todo: TodoItem = { step: 'do it', status: 'in_progress' };
-    expect(todo.status).toBe('in_progress');
     // @ts-expect-error status 只能是 pending / in_progress / completed
     const bad: TodoItem = { step: 'x', status: 'whatever' };
-    expect(bad).toBeDefined();
+    void bad;
   });
 });

@@ -1,12 +1,7 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { join } from 'path';
 import { homedir, tmpdir } from 'os';
-import {
-  normalizePath,
-  encodeProjectPath,
-  CODINGCODE_DIRNAME,
-  getGlobalDir,
-} from '../../src/core/path.js';
+import { normalizePath, encodeProjectPath, getGlobalDir } from '../../src/core/path.js';
 import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
 import { setFakeHome, restoreHome } from '../helpers/temp-home.js';
 
@@ -41,11 +36,7 @@ describe('core/path：纯格式化函数', () => {
   });
 });
 
-describe('core/path：唯一被允许的常量', () => {
-  it('目录名字面量被钉住：改它必须显式改这里', () => {
-    expect(CODINGCODE_DIRNAME).toBe('.codingcode');
-  });
-
+describe('core/path：全局目录', () => {
   it('全局目录落在用户目录下', () => {
     expect(getGlobalDir()).toBe(join(homedir(), '.codingcode'));
   });
