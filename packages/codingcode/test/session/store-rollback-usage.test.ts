@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
 
-import type { SessionIndex } from '../../src/contracts/session.js';
+import type { SessionStoreState } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -29,7 +29,6 @@ function makeFixture(
   const paths = computePaths(cwd, sessionId);
   mkdirSync(join(base.dir, slug, 'sessions'), { recursive: true });
   const transcriptPath = paths.transcriptPath;
-  const indexPath = paths.indexPath;
 
   const lines: any[] = [
     {
@@ -37,6 +36,10 @@ function makeFixture(
       sessionId,
       cwd,
       createdAt: new Date().toISOString(),
+      model: 'test-model',
+      title: 'fixture',
+      activeProfile: 'build',
+      permissionMode: 'ask',
     },
   ];
   turns.forEach((t, i) => {
@@ -53,22 +56,7 @@ function makeFixture(
 
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
-  const idx: SessionIndex = {
-    sessionId,
-    cwd,
-    model: 'test-model',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messageCount: lines.length,
-    title: 'fixture',
-    currentTurnId: turns.length,
-    usage: turns[turns.length - 1]?.usage,
-    activeProfile: 'build',
-    permissionMode: 'default',
-  };
-  writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
-
-  return { cwd, transcriptPath, indexPath };
+  return { cwd, transcriptPath };
 }
 
 function buildState(
@@ -76,26 +64,19 @@ function buildState(
   cwd: string,
   initialUsage: { prompt: number; completion: number; total: number } | undefined,
   currentTurnId: number
-) {
+): SessionStoreState {
   return {
+    type: 'session_meta',
     sessionId,
     cwd,
-    messageCount: 0,
-    currentTurnId,
-    sessionMeta: {
-      type: 'session_meta' as const,
-      sessionId,
-      cwd,
-      createdAt: new Date().toISOString(),
-      activeProfile: 'build' as const,
-      permissionMode: 'default' as const,
-    },
+    createdAt: new Date().toISOString(),
     model: 'test-model',
-    activeProfile: 'build' as const,
-    permissionMode: 'default' as const,
     title: 'fixture',
-    usage: initialUsage,
+    activeProfile: 'build',
+    permissionMode: 'ask',
+    currentTurnId,
     memorySnapshot: '',
+    usage: initialUsage,
   };
 }
 
@@ -107,15 +88,15 @@ describe('SessionService.rollbackToTurn - state.usage reset', () => {
     const fx = makeFixture(sessionId, slug, [{ user: 'q1', assistant: 'a1', usage: usage1 }]);
     try {
       const state = buildState(sessionId, fx.cwd, usage1, 1);
-      await run(
+      const reloaded = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.rollbackToTurn(state, 1, 'user rollback');
+          yield* svc.rollbackToTurn(state, 1, 'user rollback');
+          return yield* svc.load(fx.cwd, sessionId);
         })
       );
       expect(state.usage).toBeUndefined();
-      const idx = JSON.parse(readFileSync(fx.indexPath, 'utf8')) as SessionIndex;
-      expect(idx.usage).toBeUndefined();
+      expect(reloaded.usage).toBeUndefined();
     } finally {
       rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
@@ -134,15 +115,15 @@ describe('SessionService.rollbackToTurn - state.usage reset', () => {
     ]);
     try {
       const state = buildState(sessionId, fx.cwd, usage3, 3);
-      await run(
+      const reloaded = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.rollbackToTurn(state, 2, 'user rollback');
+          yield* svc.rollbackToTurn(state, 2, 'user rollback');
+          return yield* svc.load(fx.cwd, sessionId);
         })
       );
       expect(state.usage).toEqual(usage1);
-      const idx = JSON.parse(readFileSync(fx.indexPath, 'utf8')) as SessionIndex;
-      expect(idx.usage).toEqual(usage1);
+      expect(reloaded.usage).toEqual(usage1);
     } finally {
       rmSync(join(base.dir, slug), { recursive: true, force: true });
     }

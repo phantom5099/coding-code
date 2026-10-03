@@ -17,8 +17,12 @@ export const SubagentRunnerLayer = Layer.effect(
           cwd: opts.cwd,
           signal: opts.signal,
           activeProfile: opts.activeProfile,
-          permissionMode: opts.permissionMode,
+          // 子代理不经审批：调用点未给定时固定 bypass，避免继承父会话的审批链路
+          permissionMode: opts.permissionMode ?? 'bypass',
           model: opts.model,
+          parentSessionId: opts.parentSessionId,
+          agentName: opts.agentName,
+          systemPrompt: opts.systemPrompt,
         });
         return {
           stream: result.stream as AsyncGenerator<FrameBody, Result<string, any>, unknown>,

@@ -9,6 +9,7 @@ import { useAgentStore } from '../src/stores/agent.store';
 
 const fetchProfileMock = vi.fn();
 const switchProfileMock = vi.fn();
+const setAgentConfigMock = vi.fn();
 
 const stableFetchProfile = (...args: unknown[]) => fetchProfileMock(...args);
 const stableSwitchProfile = (...args: unknown[]) => switchProfileMock(...args);
@@ -21,9 +22,13 @@ vi.mock('../src/hooks/useAgent', () => ({
   }),
 }));
 
+vi.mock('../src/lib/core-api', () => ({
+  setAgentConfig: (...args: unknown[]) => setAgentConfigMock(...args),
+}));
+
 const baseProfile = {
   activeProfile: 'build' as const,
-  permissionMode: 'default' as const,
+  permissionMode: 'ask' as const,
   cwd: '/tmp',
   available: [
     { name: 'plan', description: 'plan agent' },
@@ -35,8 +40,18 @@ describe('ProfileIndicator (with live session)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fetchProfileMock.mockResolvedValue(baseProfile);
-    switchProfileMock.mockResolvedValue({ activeProfile: 'plan', permissionMode: 'default' });
-    useAgentStore.setState({ pendingProfile: 'build', profileByThreadId: {} });
+    switchProfileMock.mockResolvedValue({ activeProfile: 'plan', permissionMode: 'ask' });
+    setAgentConfigMock.mockImplementation(async (patch: any) => ({
+      maxSteps: 200,
+      maxStopContinuations: 2,
+      activeProfile: patch?.activeProfile ?? 'build',
+      permissionMode: patch?.permissionMode ?? 'ask',
+    }));
+    useAgentStore.setState({
+      profile: 'build',
+      permissionMode: 'ask',
+      profileByThreadId: {},
+    });
   });
 
   afterEach(() => {
@@ -56,7 +71,7 @@ describe('ProfileIndicator (with live session)', () => {
     fetchProfileMock.mockResolvedValue({
       ...baseProfile,
       activeProfile: 'plan',
-      permissionMode: 'default',
+      permissionMode: 'ask',
     });
     const { getByTestId, getByText } = render(<ProfileIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
@@ -81,7 +96,7 @@ describe('ProfileIndicator (with live session)', () => {
     fetchProfileMock.mockResolvedValue({
       ...baseProfile,
       activeProfile: 'plan',
-      permissionMode: 'default',
+      permissionMode: 'ask',
     });
     const { getByTestId } = render(<ProfileIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
@@ -95,7 +110,7 @@ describe('ProfileIndicator (with live session)', () => {
 
   it('updates the label from switchProfile response without refetching', async () => {
     fetchProfileMock.mockResolvedValue(baseProfile);
-    switchProfileMock.mockResolvedValue({ activeProfile: 'plan', permissionMode: 'default' });
+    switchProfileMock.mockResolvedValue({ activeProfile: 'plan', permissionMode: 'ask' });
     const { getByTestId } = render(<ProfileIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
       expect(getByTestId('profile-indicator')).toHaveTextContent('构建模式');
@@ -117,11 +132,11 @@ describe('ProfileIndicator (with live session)', () => {
     fireEvent.click(getByTestId('profile-indicator'));
     fireEvent.click(getByTestId('profile-indicator'));
     expect(switchProfileMock).toHaveBeenCalledTimes(1);
-    resolveSwitch({ activeProfile: 'plan', permissionMode: 'default' });
+    resolveSwitch({ activeProfile: 'plan', permissionMode: 'ask' });
   });
 
-  it('renders optimistically from pendingProfile while fetch is in flight', async () => {
-    useAgentStore.setState({ pendingProfile: 'plan' });
+  it('renders optimistically from the configured default profile while fetch is in flight', async () => {
+    useAgentStore.setState({ profile: 'plan' });
     let resolveFetch!: (v: unknown) => void;
     fetchProfileMock.mockReturnValue(new Promise((res) => (resolveFetch = res)));
     const { getByTestId } = render(<ProfileIndicator sessionId="s-1" cwd="/tmp" />);
@@ -134,7 +149,7 @@ describe('ProfileIndicator (with live session)', () => {
       profileByThreadId: {
         's-1': {
           activeProfile: 'plan',
-          permissionMode: 'default',
+          permissionMode: 'ask',
           fetchedAt: Date.now(),
           optimistic: false,
         },
@@ -148,7 +163,17 @@ describe('ProfileIndicator (with live session)', () => {
 describe('ProfileIndicator (welcome screen, no session)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAgentStore.setState({ pendingProfile: 'build', profileByThreadId: {} });
+    setAgentConfigMock.mockImplementation(async (patch: any) => ({
+      maxSteps: 200,
+      maxStopContinuations: 2,
+      activeProfile: patch?.activeProfile ?? 'build',
+      permissionMode: patch?.permissionMode ?? 'ask',
+    }));
+    useAgentStore.setState({
+      profile: 'build',
+      permissionMode: 'ask',
+      profileByThreadId: {},
+    });
   });
 
   afterEach(() => {
@@ -160,37 +185,45 @@ describe('ProfileIndicator (welcome screen, no session)', () => {
     expect(getByTestId('profile-indicator')).toBeInTheDocument();
   });
 
-  it('reads the current label from pendingProfile (default: build)', () => {
-    useAgentStore.setState({ pendingProfile: 'build' });
+  it('reads the current label from config.yaml activeProfile (default: build)', () => {
+    useAgentStore.setState({ profile: 'build' });
     const { getByTestId } = render(<ProfileIndicator sessionId={null} cwd="/tmp" />);
     expect(getByTestId('profile-indicator')).toHaveTextContent('构建模式');
   });
 
-  it('reads the current label from pendingProfile when set to plan', () => {
-    useAgentStore.setState({ pendingProfile: 'plan' });
+  it('reads the current label from config.yaml activeProfile when set to plan', () => {
+    useAgentStore.setState({ profile: 'plan' });
     const { getByTestId } = render(<ProfileIndicator sessionId={null} cwd="/tmp" />);
     expect(getByTestId('profile-indicator')).toHaveTextContent('计划模式');
   });
 
-  it('toggles pendingProfile locally without calling the server', () => {
-    useAgentStore.setState({ pendingProfile: 'build' });
+  it('把新的默认模式写回服务端，并据此更新 store（不再只改本地）', async () => {
+    useAgentStore.setState({ profile: 'build' });
     const { getByTestId } = render(<ProfileIndicator sessionId={null} cwd="/tmp" />);
     fireEvent.click(getByTestId('profile-indicator'));
-    expect(useAgentStore.getState().pendingProfile).toBe('plan');
+    await waitFor(() => {
+      expect(setAgentConfigMock).toHaveBeenCalledWith({ activeProfile: 'plan' });
+    });
+    await waitFor(() => {
+      expect(useAgentStore.getState().profile).toBe('plan');
+    });
+    // 无会话时不碰会话级接口
     expect(switchProfileMock).not.toHaveBeenCalled();
     expect(fetchProfileMock).not.toHaveBeenCalled();
-    fireEvent.click(getByTestId('profile-indicator'));
-    expect(useAgentStore.getState().pendingProfile).toBe('build');
   });
 
-  it('toggles back and forth and label updates after each click', () => {
-    useAgentStore.setState({ pendingProfile: 'build' });
+  it('toggles back and forth and label updates after each click', async () => {
+    useAgentStore.setState({ profile: 'build' });
     const { getByTestId } = render(<ProfileIndicator sessionId={null} cwd="/tmp" />);
     const pill = getByTestId('profile-indicator');
     expect(pill).toHaveTextContent('构建模式');
     fireEvent.click(pill);
-    expect(pill).toHaveTextContent('计划模式');
+    await waitFor(() => {
+      expect(pill).toHaveTextContent('计划模式');
+    });
     fireEvent.click(pill);
-    expect(pill).toHaveTextContent('构建模式');
+    await waitFor(() => {
+      expect(pill).toHaveTextContent('构建模式');
+    });
   });
 });

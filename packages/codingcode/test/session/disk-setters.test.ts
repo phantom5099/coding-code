@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { existsSync, readFileSync, mkdirSync } from 'fs';
+import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
+import { readSessionMeta } from '../../src/session/file-ops.js';
 import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { RulesService } from '../../src/rules/port.js';
@@ -25,8 +26,8 @@ const mockMcpService = {
 } as any;
 
 const mockRulesService = {
-  getAllRules: () => '',
-  evictProjectRules: () => undefined,
+  getAllRules: () => Effect.succeed(''),
+  evictProjectRules: () => Effect.void,
 } as any;
 
 function makeLayer() {
@@ -56,7 +57,7 @@ describe('SessionService disk setter/getter consistency', () => {
         return yield* session.create(cwd, {
           model: 'm',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
@@ -113,7 +114,7 @@ describe('SessionService disk setter/getter consistency', () => {
       })
     );
     expect(state.activeProfile).toBe('plan');
-    expect(state.permissionMode).toBe('default');
+    expect(state.permissionMode).toBe('ask');
   });
 
   it('setActiveProfile to build leaves permissionMode untouched', async () => {
@@ -131,10 +132,10 @@ describe('SessionService disk setter/getter consistency', () => {
       })
     );
     expect(state.activeProfile).toBe('build');
-    expect(state.permissionMode).toBe('default');
+    expect(state.permissionMode).toBe('ask');
   });
 
-  it('setActiveProfile is durable across reload (file exists on disk)', async () => {
+  it('setActiveProfile is durable across reload (session head on disk)', async () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -147,16 +148,10 @@ describe('SessionService disk setter/getter consistency', () => {
         return yield* session.load(cwd, sessionId);
       })
     );
-    expect(
-      existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath)
-    ).toBe(true);
-    const idx = JSON.parse(
-      readFileSync(
-        computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
-        'utf8'
-      )
+    const meta = readSessionMeta(
+      computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
     );
-    expect(idx.activeProfile).toBe('plan');
-    expect(idx).not.toHaveProperty('mode');
+    expect(meta?.activeProfile).toBe('plan');
+    expect(meta).not.toHaveProperty('mode');
   });
 });

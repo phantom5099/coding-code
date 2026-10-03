@@ -15,23 +15,15 @@ vi.mock('fs', async (importOriginal) => ({
 describe('SessionService — SESSION_IO_ERROR', () => {
   it('recordUser propagates SESSION_IO_ERROR when appendFileSync throws', async () => {
     const state: any = {
+      type: 'session_meta',
       sessionId: 'io-err-sid',
       cwd: '/tmp',
-      messageCount: 0,
-      currentTurnId: 1,
-      sessionMeta: {
-        type: 'session_meta',
-        sessionId: 'io-err-sid',
-        cwd: '/tmp',
-        createdAt: new Date().toISOString(),
-        activeProfile: 'build',
-        permissionMode: 'default',
-      },
+      createdAt: new Date().toISOString(),
       model: 'test',
+      title: 'io-err-s',
       activeProfile: 'build',
-      permissionMode: 'default',
-
-      title: 'io-err-sid'.slice(0, 8),
+      permissionMode: 'ask',
+      currentTurnId: 1,
       usage: undefined,
       memorySnapshot: '',
     };
@@ -53,23 +45,15 @@ describe('SessionService — SESSION_IO_ERROR', () => {
 
   it('recordAssistant propagates SESSION_IO_ERROR when appendFileSync throws', async () => {
     const state: any = {
+      type: 'session_meta',
       sessionId: 'io-err-asst',
       cwd: '/tmp',
-      messageCount: 0,
-      currentTurnId: 1,
-      sessionMeta: {
-        type: 'session_meta',
-        sessionId: 'io-err-asst',
-        cwd: '/tmp',
-        createdAt: new Date().toISOString(),
-        activeProfile: 'build',
-        permissionMode: 'default',
-      },
+      createdAt: new Date().toISOString(),
       model: 'test',
+      title: 'io-err-a',
       activeProfile: 'build',
-      permissionMode: 'default',
-
-      title: 'io-err-asst'.slice(0, 8),
+      permissionMode: 'ask',
+      currentTurnId: 1,
       usage: undefined,
       memorySnapshot: '',
     };
@@ -90,23 +74,15 @@ describe('SessionService — SESSION_IO_ERROR', () => {
 
   it('Effect.try wraps I/O error as SESSION_IO_ERROR in service method', async () => {
     const state: any = {
+      type: 'session_meta',
       sessionId: 'io-err-eff',
       cwd: '/tmp',
-      messageCount: 0,
-      currentTurnId: 1,
-      sessionMeta: {
-        type: 'session_meta',
-        sessionId: 'io-err-eff',
-        cwd: '/tmp',
-        createdAt: new Date().toISOString(),
-        activeProfile: 'build',
-        permissionMode: 'default',
-      },
+      createdAt: new Date().toISOString(),
       model: 'test',
+      title: 'io-err-e',
       activeProfile: 'build',
-      permissionMode: 'default',
-
-      title: 'io-err-eff'.slice(0, 8),
+      permissionMode: 'ask',
+      currentTurnId: 1,
       usage: undefined,
       memorySnapshot: '',
     };

@@ -10,7 +10,7 @@ import { AgentService } from '../../src/agent/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
 import { ContextService } from '../../src/context/port.js';
-import { LLMFactoryService } from '../../src/llm/port.js';
+import { LLMService } from '../../src/llm/port.js';
 import { MemoryService } from '../../src/memory/port.js';
 import { RulesService } from '../../src/rules/port.js';
 import { SkillService } from '../../src/skills/port.js';
@@ -22,33 +22,24 @@ import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import {
-  encodeProjectPath,
-  normalizePath,
-  getProjectBaseDir,
-  computePaths,
-} from '../../src/core/path.js';
+import { encodeProjectPath, normalizePath } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
+import { transcriptPathFor } from '../../src/context/context.js';
+import { projectBaseDir } from '../helpers/project-base.js';
+import type { SessionRef } from '../../src/contracts/session.js';
 import type { Message } from '../../src/contracts/types.js';
-import type { LLMClient } from '../../src/contracts/provider.js';
 import type { FrameBody } from '../../src/contracts/frame.js';
 
-function makeMockLLM(content: string): LLMClient {
-  return {
-    complete: () => Effect.succeed({ content }),
-    completeStream: () =>
-      (async function* () {
-        yield { type: 'text' as const, text: content };
-        yield { type: 'end' as const };
-      })(),
-    modelInfo: {
-      provider: 'mock',
-      model: 'mock',
-      maxTokens: 128000,
-      supportsToolCalling: false,
-      supportsStreaming: true,
-    },
-  };
-}
+const ANSWER = 'subagent final answer';
+
+const LLMMock = Layer.succeed(LLMService, {
+  complete: () => Effect.succeed({ content: ANSWER }),
+  completeStream: () =>
+    (async function* () {
+      yield { type: 'text' as const, text: ANSWER };
+      yield { type: 'end' as const };
+    })(),
+} as any);
 
 /** Read events back into the message list an LLM would see (like context.assemblePayload). */
 function readMessages(transcriptPath: string): Message[] {
@@ -107,19 +98,17 @@ const AgentDeps = Layer.mergeAll(
     extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
   } as any),
   Layer.succeed(ContextService, {
-    willCompact: async () => false,
-    assemblePayload: async (transcriptPath: string) => readMessages(transcriptPath),
+    willCompact: () => Effect.succeed(false),
+    assemblePayload: (ref: SessionRef) => Effect.sync(() => readMessages(transcriptPathFor(ref))),
   } as any),
   Layer.succeed(MemoryService, {
-    loadMemoryForPrompt: () => '',
-    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+    loadMemoryForPrompt: () => Effect.succeed(''),
+    flushSessionToMemory: () => Effect.succeed({ written: false, bytes: 0 }),
   } as any),
-  Layer.succeed(LLMFactoryService, {
-    getLLMClient: () => Effect.succeed(makeMockLLM('subagent final answer') as LLMClient),
-  } as any),
+  LLMMock,
   Layer.succeed(RulesService, {
-    getAllRules: () => '',
-    evictProjectRules: () => {},
+    getAllRules: () => Effect.succeed(''),
+    evictProjectRules: () => Effect.void,
   } as any),
   HookMock,
   McpMock,
@@ -180,7 +169,7 @@ describe('subagent run end-to-end (session transcript is read by the agent loop)
   let cwd: string;
 
   beforeEach(() => {
-    projectBase = getProjectBaseDir();
+    projectBase = projectBaseDir();
     mkdirSync(projectBase, { recursive: true });
     cwd = mkdtempSync(join(tmpdir(), 'codingcode-test-cwd-'));
   });
@@ -196,8 +185,9 @@ describe('subagent run end-to-end (session transcript is read by the agent loop)
         const session = yield* SessionService;
         const { stream, sessionId } = yield* agent.runTurn('analyze this code', {
           cwd,
+          model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
         const content = yield* drainStream(stream);
         const state = yield* session.load(normalizePath(cwd), sessionId);
@@ -235,11 +225,11 @@ describe('subagent run end-to-end (session transcript is read by the agent loop)
         const parent = yield* session.create(cwd, {
           model: 'parent-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
         const child = yield* session.create(
           cwd,
-          { model: 'child-model', activeProfile: 'build', permissionMode: 'default' },
+          { model: 'child-model', activeProfile: 'build', permissionMode: 'ask' },
           { parentSessionId: parent.sessionId, agentName: 'build' }
         );
         return { parentId: parent.sessionId, childId: child.sessionId };

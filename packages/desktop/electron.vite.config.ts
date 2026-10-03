@@ -4,9 +4,6 @@ import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
 
-const codingcodeRoot = resolve(__dirname, '../codingcode/src');
-const infraRoot = resolve(__dirname, '../infra/src');
-
 // 读取 package.json 获取第三方依赖列表
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
 const thirdPartyDeps = Object.keys(pkg.dependencies || {}).filter(
@@ -26,14 +23,6 @@ export default defineConfig({
     resolve: {
       alias: {
         '@shared': resolve('shared'),
-        '@codingcode/core/layer': resolve(codingcodeRoot, 'layer.ts'),
-        '@codingcode/core/server/create': resolve(codingcodeRoot, 'server/index.ts'),
-        '@codingcode/core/server/port-discovery': resolve(
-          codingcodeRoot,
-          'server/port-discovery.ts'
-        ),
-        '@codingcode/infra/config': resolve(infraRoot, 'config.ts'),
-        '@codingcode/infra/logger': resolve(infraRoot, 'logger.ts'),
       },
     },
   },

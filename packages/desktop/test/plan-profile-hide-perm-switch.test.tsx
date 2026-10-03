@@ -28,7 +28,7 @@ describe('Desktop: hide permission switcher in plan profile', () => {
   });
 
   it('does NOT silently remove the switcher for build sessions (still rendered)', () => {
-    expect(agentWorkspaceSource).toContain('POLICY_NEXT[approvalPolicy]');
-    expect(agentWorkspaceSource).toContain("POLICY_LABELS[approvalPolicy] ?? '全部询问'");
+    expect(agentWorkspaceSource).toContain('MODE_NEXT[permissionMode]');
+    expect(agentWorkspaceSource).toContain('MODE_LABELS[permissionMode]');
   });
 });

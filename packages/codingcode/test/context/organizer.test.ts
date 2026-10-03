@@ -3,7 +3,7 @@ import { Effect, Layer } from 'effect';
 import { ContextService } from '../../src/context/port.js';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { LLMFactoryService } from '../../src/llm/port.js';
+import { LLMService } from '../../src/llm/port.js';
 import type { SessionEvent, ToolResultEvent } from '../../src/contracts/session.js';
 import { ContextLayer } from '../../src/context/context.js';
 
@@ -41,13 +41,9 @@ function makeToolResult(
 
 const TestLayer = Layer.merge(
   SessionLayer,
-  Layer.succeed(LLMFactoryService, {
-    listModels: () => Effect.succeed([]),
-    findModel: () => Effect.succeed(null),
-    getActiveEntry: () => Effect.fail(new Error('no active model')),
-    switchModel: () => Effect.fail(new Error('no models')),
-    createClient: () => Effect.fail(new Error('no client')),
-    getLLMClient: () => Effect.fail(new Error('no client')),
+  Layer.succeed(LLMService, {
+    complete: () => Effect.fail(new Error('no llm')),
+    completeStream: () => (async function* () {})(),
   } as any)
 );
 

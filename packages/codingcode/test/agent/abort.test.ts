@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { makeState, runAgentTurn, textDeltas } from '../helpers/agent-harness.js';
 import type { FrameBody, Transition } from '../../src/contracts/frame.js';
 
-vi.mock('@codingcode/infra/config', () => ({
+vi.mock('../../src/infra/config.js', () => ({
   loadConfig: () => ({
     maxSteps: 5,
     maxStopContinuations: 2,

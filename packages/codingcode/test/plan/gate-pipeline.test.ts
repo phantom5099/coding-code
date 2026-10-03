@@ -38,7 +38,7 @@ function makeMockApprovalWait() {
 function runPipelineWithMock(opts: {
   tool: string;
   input: any;
-  permissionMode: 'default' | 'acceptEdits' | 'bypass';
+  permissionMode: 'ask' | 'acceptEdits' | 'bypass';
   sessionId: string;
   profile: ProfileName;
 }) {
@@ -76,7 +76,7 @@ describe('plan profile permission mode (Layer 2)', () => {
     const decision: any = await runPipelineWithMock({
       tool: 'write_file',
       input: { path: '/tmp/x', content: 'foo' },
-      permissionMode: 'default',
+      permissionMode: 'ask',
       sessionId: 's2',
       profile: 'plan',
     });
@@ -90,7 +90,7 @@ describe('plan profile permission mode (Layer 2)', () => {
     const decision: any = await runPipelineWithMock({
       tool: 'execute_command',
       input: { command: 'rm -rf /' },
-      permissionMode: 'default',
+      permissionMode: 'ask',
       sessionId: 's3',
       profile: 'plan',
     });
@@ -104,7 +104,7 @@ describe('plan profile permission mode (Layer 2)', () => {
     const decision: any = await runPipelineWithMock({
       tool: 'dispatch_agent',
       input: { agent: 'build', prompt: 'do something' },
-      permissionMode: 'default',
+      permissionMode: 'ask',
       sessionId: 's4',
       profile: 'plan',
     });
@@ -118,7 +118,7 @@ describe('plan profile permission mode (Layer 2)', () => {
     const decision: any = await runPipelineWithMock({
       tool: 'write_file',
       input: { path: '/tmp/x', content: 'foo' },
-      permissionMode: 'default',
+      permissionMode: 'ask',
       sessionId: 's5',
       profile: 'build',
     });
@@ -130,7 +130,7 @@ describe('plan profile permission mode (Layer 2)', () => {
     const decision: any = await runPipelineWithMock({
       tool: 'submit_plan',
       input: { plan_content: '# plan' },
-      permissionMode: 'default',
+      permissionMode: 'ask',
       sessionId: 's6',
       profile: 'plan',
     });

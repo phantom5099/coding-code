@@ -47,6 +47,7 @@ export interface Thread {
   projectId: string;
   title: string;
   cwd: string;
+  model?: string;
   turns: Turn[];
   createdAt: number;
   updatedAt: number;

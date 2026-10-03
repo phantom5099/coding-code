@@ -4,7 +4,6 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import type { SessionIndex } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -13,7 +12,6 @@ function makeFixture(sessionId: string, slug: string) {
   const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
-  const indexPath = join(dir, `${sessionId}.index.json`);
 
   const lines: any[] = [
     {
@@ -21,6 +19,10 @@ function makeFixture(sessionId: string, slug: string) {
       sessionId,
       cwd: '/tmp/test',
       createdAt: new Date().toISOString(),
+      model: 'test-model',
+      title: 'fixture',
+      activeProfile: 'build',
+      permissionMode: 'ask',
     },
     { type: 'user', turnId: 1, content: 'hello' },
     { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },
@@ -44,22 +46,7 @@ function makeFixture(sessionId: string, slug: string) {
 
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
-  const idx: SessionIndex = {
-    sessionId,
-    cwd: '/tmp/test',
-    model: 'test-model',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messageCount: 7,
-    title: 'fixture',
-    currentTurnId: 3,
-    usage: undefined,
-    activeProfile: 'build',
-    permissionMode: 'default',
-  };
-  writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
-
-  return { dir, transcriptPath, indexPath };
+  return { dir, transcriptPath };
 }
 
 function appendEvent(jsonlPath: string, event: object): void {

@@ -1,9 +1,9 @@
 import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { SchedulerService } from '../../scheduler/port.js';
-import { errorResponse } from '../util.js';
+import { errorBody, errorResponse } from '../util.js';
 import { NotFoundError } from '../../contracts/error.js';
-import type { CreateAutomationInput, UpdateAutomationInput } from '../../scheduler/types.js';
+import type { CreateAutomationInput, UpdateAutomationInput } from '../../contracts/automation.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
@@ -36,7 +36,10 @@ export function registerAutomationsRoutes(router: Hono, rt: ManagedRt): void {
     const body = (await c.req.json()) as CreateAutomationInput;
 
     if (!body.name || !body.description || !body.cron || !body.projectCwd) {
-      return c.json({ error: 'Missing required fields: name, description, cron, projectCwd' }, 400);
+      return c.json(
+        errorBody('CONFIG_MISSING', 'Missing required fields: name, description, cron, projectCwd'),
+        400
+      );
     }
 
     const result = await rt.runPromise(

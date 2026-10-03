@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { UITurn, UITurnItem } from '../../src/contracts/session.js';
-import type { ForkResult, RollbackContextResult } from '../../src/client/contracts.js';
 import type { TodoItem, TokenUsage } from '../../src/contracts/types.js';
 
 type AssertNotAny<T> = 0 extends 1 & T ? never : T;
@@ -8,10 +7,6 @@ type AssertNotAny<T> = 0 extends 1 & T ? never : T;
 type _UITurnNotAny = AssertNotAny<UITurnItem>;
 type _TodoNotAny = AssertNotAny<TodoItem>;
 type _UsageNotAny = AssertNotAny<TokenUsage>;
-
-// 同构断言：两侧互相可赋值才通过
-type _ForkTurnsIsUITurn = ForkResult['turns'] extends UITurn[] ? true : never;
-type _ContextTurnsIsUITurn = RollbackContextResult['turns'] extends UITurn[] ? true : never;
 
 describe('类型收口', () => {
   it('UITurn.status 不再退化为 string', () => {

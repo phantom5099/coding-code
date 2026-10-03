@@ -1,4 +1,4 @@
-import type { Frame, ToolOutcome } from '@codingcode/core/contracts/frame';
+import type { Frame, ToolOutcome } from '@codingcode/sdk';
 import type { Item, TodoItem } from '@shared/types';
 
 export interface StreamState {

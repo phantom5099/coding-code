@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
@@ -7,10 +7,11 @@ import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 
 import { estimatePromptTokensFrom } from '../../src/context/context.js';
-import { readHistory } from '../../src/session/file-ops.js';
+import { readHistory, readLastUsage, readSessionMeta } from '../../src/session/file-ops.js';
 import { estimateTokensForContent } from '../../src/context/tokens.js';
-import { encodeProjectPath, computePaths } from '../../src/core/path.js';
-import type { SessionIndex } from '../../src/contracts/session.js';
+import { encodeProjectPath } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
+import type { SessionStoreState } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -25,7 +26,6 @@ function makeFixture(
   const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = paths.transcriptPath;
-  const indexPath = paths.indexPath;
 
   const lines: any[] = [
     {
@@ -33,6 +33,10 @@ function makeFixture(
       sessionId,
       cwd,
       createdAt: new Date().toISOString(),
+      model: 'test-model',
+      title: 'fixture',
+      activeProfile: 'build',
+      permissionMode: 'ask',
     },
     {
       type: 'user',
@@ -68,22 +72,27 @@ function makeFixture(
 
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
-  const idx: SessionIndex = {
+  return { cwd, dir, transcriptPath };
+}
+
+function makeState(
+  sessionId: string,
+  cwd: string,
+  usage: { prompt: number; completion: number; total: number } | undefined
+): SessionStoreState {
+  return {
+    type: 'session_meta',
     sessionId,
     cwd,
-    model: 'test-model',
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messageCount: 4,
+    model: 'test-model',
     title: 'fixture',
+    activeProfile: 'build',
+    permissionMode: 'ask',
     currentTurnId: 2,
-    usage: usage ?? undefined,
-    activeProfile: 'build' as const,
-    permissionMode: 'default' as const,
+    memorySnapshot: '',
+    usage,
   };
-  writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
-
-  return { cwd, dir, transcriptPath, indexPath };
 }
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
@@ -91,69 +100,41 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 }
 
 describe('promptEstimate', () => {
-  it('forkSession restores usage and promptEstimate from last visible assistant', async () => {
+  it('forkSession keeps the last visible assistant usage on the forked transcript', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const usage = { prompt: 800, completion: 400, total: 1200 };
     const fx = makeFixture(sessionId, slug, usage);
     try {
-      const state = {
-        sessionId,
-        cwd: fx.cwd,
-        messageCount: 4,
-        currentTurnId: 2,
-        sessionMeta: null,
-        model: 'test-model',
-        activeProfile: 'build' as const,
-        permissionMode: 'default' as const,
-        title: 'fixture',
-        usage,
-        memorySnapshot: '',
-      };
+      const state = makeState(sessionId, fx.cwd, usage);
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
           return yield* svc.forkSession(state, 2);
         })
       );
-      const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
-      const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
-      expect(idx.usage).toEqual(usage);
+      const forkedPath = join(fx.dir, `${newSessionId}.jsonl`);
+      expect(readLastUsage(forkedPath)).toEqual(usage);
     } finally {
       rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
   });
 
-  it('forkSession falls back to estimateTokens when no assistant usage', async () => {
+  it('forkSession produces a readable session with a positive prompt estimate when no assistant usage', async () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const fx = makeFixture(sessionId, slug, undefined);
     try {
-      const state = {
-        sessionId,
-        cwd: fx.cwd,
-        messageCount: 4,
-        currentTurnId: 2,
-        sessionMeta: null,
-        model: 'test-model',
-        activeProfile: 'build' as const,
-        permissionMode: 'default' as const,
-        title: 'fixture',
-        usage: undefined,
-        memorySnapshot: '',
-      };
+      const state = makeState(sessionId, fx.cwd, undefined);
       const newSessionId = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
           return yield* svc.forkSession(state, 2);
         })
       );
-      const newIndexPath = join(fx.dir, `${newSessionId}.index.json`);
-      const idx = JSON.parse(readFileSync(newIndexPath, 'utf8')) as SessionIndex;
-      expect(idx.sessionId).toBe(newSessionId);
-      expect(
-        estimatePromptTokensFrom(readHistory(join(fx.dir, `${newSessionId}.jsonl`)))
-      ).toBeGreaterThan(0);
+      const forkedPath = join(fx.dir, `${newSessionId}.jsonl`);
+      expect(readSessionMeta(forkedPath)?.sessionId).toBe(newSessionId);
+      expect(estimatePromptTokensFrom(readHistory(forkedPath))).toBeGreaterThan(0);
     } finally {
       rmSync(join(base.dir, slug), { recursive: true, force: true });
     }
@@ -168,7 +149,7 @@ describe('token estimation', () => {
 });
 
 describe('SessionService create sets model', () => {
-  it('create sets state.model and persists it to index', async () => {
+  it('create persists model to the session head', async () => {
     const slug = randomUUID();
     const dir = join(base.dir, slug);
     mkdirSync(dir, { recursive: true });
@@ -179,19 +160,15 @@ describe('SessionService create sets model', () => {
           return yield* svc.create(dir, {
             model: 'my-test-model',
             activeProfile: 'build',
-            permissionMode: 'default',
+            permissionMode: 'ask',
           });
         })
       );
-      expect(state.model).toBe('my-test-model');
 
-      const idx = JSON.parse(
-        readFileSync(
-          computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath,
-          'utf8'
-        )
+      const meta = readSessionMeta(
+        computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
       );
-      expect(idx.model).toBe('my-test-model');
+      expect(meta?.model).toBe('my-test-model');
     } finally {
       await new Promise((r) => setTimeout(r, 50));
       rmSync(join(base.dir, encodeProjectPath(dir)), { recursive: true, force: true });

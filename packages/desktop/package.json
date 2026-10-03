@@ -20,8 +20,7 @@
     "release": "pnpm run bundle:backend && pnpm run build && electron-builder --publish always"
   },
   "dependencies": {
-    "@codingcode/core": "workspace:*",
-    "@codingcode/infra": "workspace:*",
+    "@codingcode/sdk": "workspace:*",
     "@tanstack/react-virtual": "^3.12.6",
     "immer": "^10.1.1",
     "lucide-react": "^1.17.0",

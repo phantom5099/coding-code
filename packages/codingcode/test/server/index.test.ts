@@ -57,10 +57,10 @@ const MockMcpLayer = Layer.succeed(McpService, {
 } as any);
 
 const MockMemoryLayer = Layer.succeed(MemoryService, {
-  getMemoryEnabled: () => true,
-  setMemoryEnabled: () => {},
-  loadMemoryForPrompt: () => '',
-  flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+  getMemoryEnabled: () => Effect.succeed(true),
+  setMemoryEnabled: () => Effect.void,
+  loadMemoryForPrompt: () => Effect.succeed(''),
+  flushSessionToMemory: () => Effect.succeed({ written: false, bytes: 0 }),
 } as any);
 
 const MockSchedulerLayer = Layer.succeed(SchedulerService, {

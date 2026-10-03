@@ -54,7 +54,6 @@ export class OpenAIProvider implements LLMClient {
   }
 
   completeStream(req: LLMRequest, signal?: AbortSignal): AsyncIterable<LLMStreamPart> {
-    // sansen 不支持流式工具调用：退回非流式，再拆成同样三种部件
     if (this.entry.provider === 'sansen' && req.tools && req.tools.length > 0) {
       const complete = this.complete(req, signal);
       return (async function* () {
@@ -63,7 +62,7 @@ export class OpenAIProvider implements LLMClient {
         const value = either.right;
         if (value.content) yield { type: 'text', text: value.content };
         for (const tc of value.toolCalls ?? []) {
-          yield { type: 'tool_call', id: tc.id, name: tc.name, args: tc.arguments };
+          yield { type: 'tool_call', id: tc.id, name: tc.name, arguments: tc.arguments };
         }
         yield value.usage ? { type: 'end', usage: value.usage } : { type: 'end' };
       })();
@@ -89,7 +88,7 @@ export class OpenAIProvider implements LLMClient {
               type: 'tool_call',
               id: part.toolCallId,
               name: part.toolName,
-              args: (part.input ?? {}) as Record<string, unknown>,
+              arguments: (part.input ?? {}) as Record<string, unknown>,
             };
             break;
           case 'finish':

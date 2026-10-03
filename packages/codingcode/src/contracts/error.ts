@@ -9,17 +9,6 @@ export class AlreadyExistsError extends Error {
   }
 }
 
-export class ApiError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly path: string,
-    public readonly body?: { code: string; message: string }
-  ) {
-    super(body?.message ?? `HTTP ${status}: ${path}`);
-    this.name = 'ApiError';
-  }
-}
-
 export class NotFoundError extends Error {
   readonly code = 'NOT_FOUND';
   constructor(message: string) {

@@ -5,15 +5,17 @@ import { join } from 'path';
 import type { SessionStoreState } from '../../contracts/session.js';
 import type { ProfileName } from '../../contracts/types.js';
 import { SessionService } from '../../session/port.js';
-import { computePaths, resolveCwd } from '../../core/path.js';
+import { computePaths } from '../../session/paths.js';
 import { ContextService } from '../../context/port.js';
 import { estimatePromptTokensFrom } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/port.js';
-import { LLMFactoryService } from '../../llm/port.js';
-import type { LLMClient } from '../../contracts/provider.js';
-import { errorResponse } from '../util.js';
-import { encodeProjectPath, getProjectBaseDir } from '../../core/path.js';
-import { AVAILABLE_PROFILES, isAgentProfileName } from '../../agent/profile.js';
+import { activeModelId, setGlobalActive } from '../../infra/models.js';
+import { errorBody, errorResponse } from '../util.js';
+import { resolveCwd, resolveWorkspaceCwd } from '../cwd.js';
+import { getGlobalDir, encodeProjectPath } from '../../core/path.js';
+import { PROJECTS_DIRNAME } from '../../contracts/paths.js';
+import { AVAILABLE_PROFILES } from '../../contracts/profile.js';
+import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
 import type { PermissionMode } from '../../contracts/permission.js';
 
@@ -57,15 +59,19 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       model: string;
     };
     if (!isAgentProfileName(body.activeProfile)) {
-      return c.json({ error: `Invalid activeProfile: ${body.activeProfile}` }, 400);
+      return c.json(errorBody('CONFIG_INVALID', `Invalid activeProfile: ${body.activeProfile}`), 400);
     }
     if (!isPermissionMode(body.permissionMode)) {
-      return c.json({ error: `Invalid permissionMode: ${body.permissionMode}` }, 400);
+      return c.json(
+        errorBody('CONFIG_INVALID', `Invalid permissionMode: ${body.permissionMode}`),
+        400
+      );
     }
     if (!body.model) {
-      return c.json({ error: 'model required' }, 400);
+      return c.json(errorBody('CONFIG_MISSING', 'model required'), 400);
     }
-    const normalizedCwd = resolveCwd(body.cwd);
+    // 建会话即建立工作区：目录必须存在
+    const normalizedCwd = resolveWorkspaceCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -104,26 +110,21 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
 
   router.post('/api/sessions/:id/compact', async (c) => {
     const sessionId = c.req.param('id');
-    const body = (await c.req.json()) as { cwd: string };
+    const body = (await c.req.json()) as { cwd: string; model?: string };
     const normalizedCwd = resolveCwd(body.cwd);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const context = yield* ContextService;
-        const factory = yield* LLMFactoryService;
         const session = yield* SessionService;
         const state = yield* session.load(normalizedCwd, sessionId);
-
-        let llm: LLMClient | null = null;
-        const entry = yield* factory.getActiveEntry().pipe(Effect.either);
-        if (entry._tag === 'Right') {
-          const client = yield* factory.createClient(entry.right).pipe(Effect.either);
-          if (client._tag === 'Right') llm = client.right;
-        }
-
-        const maxTokens = llm?.modelInfo.maxTokens ?? 128000;
-
-        return yield* Effect.promise(() =>
-          context.compactWithLLM(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath, maxTokens, llm)
+        return yield* context.compactWithLLM(
+          {
+            cwd: state.cwd,
+            sessionId: state.sessionId,
+            parentSessionId: state.parentSessionId,
+            currentTurnId: state.currentTurnId,
+          },
+          body.model ?? ''
         );
       })
     );
@@ -137,7 +138,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.delete('/api/sessions/:id', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
-    if (!cwd) return c.json({ error: 'cwd required' }, 400);
+    if (!cwd) return c.json(errorBody('CONFIG_MISSING', 'cwd required'), 400);
     await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -150,7 +151,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.get('/api/sessions/:id/history', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
-    if (!cwd) return c.json({ error: 'cwd required' }, 400);
+    if (!cwd) return c.json(errorBody('CONFIG_MISSING', 'cwd required'), 400);
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -170,7 +171,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   // project's plan directory.
   router.get('/api/sessions/:id/plan', async (c) => {
     const cwd = resolveCwd(c.req.query('cwd'));
-    const planDir = join(getProjectBaseDir(), encodeProjectPath(cwd));
+    const planDir = join(getGlobalDir(), PROJECTS_DIRNAME, encodeProjectPath(cwd));
     if (!existsSync(planDir)) {
       return c.json({
         content: '',
@@ -205,7 +206,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         exists: true,
       });
     } catch (e) {
-      return c.json({ error: `Failed to read plan: ${String(e)}` }, 500);
+      return c.json(errorBody('SESSION_IO_ERROR', `Failed to read plan: ${String(e)}`), 500);
     }
   });
 
@@ -240,7 +241,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     const cwd = resolveCwd(body.cwd);
     const activeProfile = body.activeProfile;
     if (!isAgentProfileName(activeProfile)) {
-      return c.json({ error: `Invalid activeProfile: ${activeProfile}` }, 400);
+      return c.json(errorBody('CONFIG_INVALID', `Invalid activeProfile: ${activeProfile}`), 400);
     }
     const result = await runWithLayer(
       Effect.gen(function* () {
@@ -263,7 +264,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.get('/api/sessions/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
-    if (!cwd) return c.json({ mode: 'default' });
+    if (!cwd) return c.json({ mode: 'ask' });
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -281,9 +282,9 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.put('/api/sessions/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
     const { cwd, mode } = await c.req.json<{ cwd: string; mode: PermissionMode }>();
-    if (!cwd) return c.json({ error: 'cwd required' }, 400);
+    if (!cwd) return c.json(errorBody('CONFIG_MISSING', 'cwd required'), 400);
     if (!isPermissionMode(mode)) {
-      return c.json({ error: `Invalid permissionMode: ${mode}` }, 400);
+      return c.json(errorBody('CONFIG_INVALID', `Invalid permissionMode: ${mode}`), 400);
     }
     const setResult = await runWithLayer(
       Effect.gen(function* () {
@@ -297,6 +298,60 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       return c.json(errBody, status as any);
     }
     return c.json({ ok: true });
+  });
+
+  // ---- Model switching ----
+  // :id 为 '_' 时切全局默认模型（写 config.yaml）；否则只写该会话头文件
+  router.put('/api/sessions/:id/model', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = (await c.req.json()) as { cwd?: string; model?: string };
+    const model = body.model?.trim();
+    if (!model) return c.json(errorBody('CONFIG_MISSING', 'model required'), 400);
+
+    if (sessionId === '_' || !sessionId) {
+      try {
+        setGlobalActive(model);
+      } catch (e) {
+        const { status, body: errBody } = errorResponse(e);
+        return c.json(errBody, status as any);
+      }
+      return c.json({ ok: true, activeId: activeModelId() });
+    }
+
+    const cwd = resolveCwd(body.cwd);
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        yield* session.setModel(cwd, sessionId, model);
+        return { ok: true };
+      }) as any
+    );
+    if (!result.ok) {
+      const { status, body: errBody } = errorResponse(result.error);
+      return c.json(errBody, status as any);
+    }
+    return c.json(result.value);
+  });
+
+  router.put('/api/sessions/:id/title', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = (await c.req.json()) as { cwd?: string; title?: string };
+    const title = body.title?.replace(/\n/g, ' ').trim();
+    if (!title) return c.json(errorBody('CONFIG_MISSING', 'title required'), 400);
+    const cwd = resolveCwd(body.cwd);
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        const state = yield* session.load(cwd, sessionId);
+        yield* session.renameSession(state, title);
+        return { ok: true };
+      }) as any
+    );
+    if (!result.ok) {
+      const { status, body: errBody } = errorResponse(result.error);
+      return c.json(errBody, status as any);
+    }
+    return c.json(result.value);
   });
 
   router.get('/api/sessions/:id/checkpoints/latest/diff', async (c) => {
@@ -468,7 +523,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const newSessionId = yield* session.forkSession(state, atTurnId);
         const turns = yield* session.readUITurns(newSessionId, cwd);
         const newJsonlPath = computePaths(cwd, newSessionId).transcriptPath;
-        const promptEstimate = estimatePromptTokensFrom(session.readEvents(newJsonlPath));
+        const promptEstimate = estimatePromptTokensFrom(yield* session.readEvents(newJsonlPath));
         return { sessionId: newSessionId, turns, promptEstimate };
       }) as any
     );

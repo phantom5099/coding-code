@@ -21,7 +21,7 @@ describe('todo_write tool', () => {
               { step: 'third', status: 'completed' },
             ],
           },
-          { sessionId: 'test-agent' }
+          { sessionId: 'test-agent', model: 'test-model' }
         )
         .pipe(Effect.provide(TodoLayer))
     );
@@ -63,7 +63,7 @@ describe('todo_write tool', () => {
   it('fails with AgentError if sessionId is missing', async () => {
     const exit = await Effect.runPromiseExit(
       tool
-        .execute({ plan: [{ step: 'x', status: 'pending' }] }, {})
+        .execute({ plan: [{ step: 'x', status: 'pending' }] }, { model: 'test-model' })
         .pipe(Effect.provide(TodoLayer))
     );
     expect(exit._tag).toBe('Failure');

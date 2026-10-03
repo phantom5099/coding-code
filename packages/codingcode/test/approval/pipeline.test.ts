@@ -41,7 +41,7 @@ describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyW
         {
           ruleEngine: createRuleEngine(rules),
           destructiveTools: new Set(),
-          permissionMode: 'default',
+          permissionMode: 'ask',
           sessionId: 'test',
         }
       )
@@ -50,14 +50,14 @@ describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyW
     expect((decision as any).source).toContain('rule:');
   });
 
-  it('default mode does NOT auto-allow read-only tools (no UI → system deny)', async () => {
+  it('ask mode does NOT auto-allow read-only tools (no UI → system deny)', async () => {
     const decision = await runWithLayer(
       runPipeline(
         { tool: 'read_file', input: { path: '/safe/file.txt' } },
         {
           ruleEngine: createRuleEngine(),
           destructiveTools: new Set(),
-          permissionMode: 'default',
+          permissionMode: 'ask',
           sessionId: 'test',
         }
       )

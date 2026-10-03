@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { useAgentStore, type Automation } from '../stores/agent.store';
+import { useAgentStore } from '../stores/agent.store';
+import type { AutomationSandbox } from '@codingcode/sdk';
 import { createAutomation, updateAutomation } from '../lib/core-api';
 
 interface AutomationFormProps {
   automationId: string | null;
-  defaultProjectCwd: string;
+  initialProjectCwd: string;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -34,12 +35,12 @@ const WEEKDAYS = [
 
 export function AutomationForm({
   automationId,
-  defaultProjectCwd,
+  initialProjectCwd,
   onClose,
   onSaved,
 }: AutomationFormProps) {
   const automations = useAgentStore((s) => s.automations);
-  const existing = automationId ? automations.find((a: Automation) => a.id === automationId) : null;
+  const existing = automationId ? automations.find((a) => a.id === automationId) : null;
 
   const [name, setName] = useState(existing?.name ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
@@ -51,10 +52,10 @@ export function AutomationForm({
   const [intervalUnit, setIntervalUnit] = useState<'hours' | 'minutes'>('hours');
   const [customCron, setCustomCron] = useState(existing?.cron ?? '');
   const [timezone, setTimezone] = useState(existing?.timezone ?? 'Asia/Shanghai');
-  const [sandbox, setSandbox] = useState<'readonly' | 'workspace-write'>(
+  const [sandbox, setSandbox] = useState<AutomationSandbox>(
     existing?.sandbox ?? 'workspace-write'
   );
-  const [projectCwd, setProjectCwd] = useState(existing?.projectCwd ?? defaultProjectCwd);
+  const [projectCwd, setProjectCwd] = useState(existing?.projectCwd ?? initialProjectCwd);
   const [runOnce, setRunOnce] = useState(existing?.runOnce ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -389,7 +390,7 @@ export function AutomationForm({
             <label className={labelClass}>沙箱模式</label>
             <select
               value={sandbox}
-              onChange={(e) => setSandbox(e.target.value as 'readonly' | 'workspace-write')}
+              onChange={(e) => setSandbox(e.target.value as AutomationSandbox)}
               className={selectClass}
             >
               <option value="workspace-write">workspace-write (可读写)</option>

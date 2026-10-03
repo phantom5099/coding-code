@@ -1,21 +1,16 @@
 ﻿import { describe, it, expect } from 'vitest';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { homedir, tmpdir } from 'os';
 import {
   normalizePath,
   encodeProjectPath,
-  resolveCwd,
-  getTempCwd,
-  isGlobalCwd,
   CODINGCODE_DIRNAME,
   getGlobalDir,
-  getProjectDir,
 } from '../../src/core/path.js';
-import { CODINGCODE_DIRNAME as INFRA_DIRNAME } from '@codingcode/infra/paths';
 import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
 import { setFakeHome, restoreHome } from '../helpers/temp-home.js';
 
-describe('core/path', () => {
+describe('core/path：纯格式化函数', () => {
   it('normalizePath unifies Windows path variants', () => {
     expect(normalizePath('C:\\Users\\proj')).toBe('c:/Users/proj');
     expect(normalizePath('/c/Users/proj')).toBe('c:/Users/proj');
@@ -44,39 +39,15 @@ describe('core/path', () => {
     const sg = new ShadowGit(path);
     expect(sg.gitDir).toContain(encodeProjectPath(path));
   });
-
-  it('resolveCwd uses the request cwd when present', () => {
-    const otherDir = join(tmpdir(), 'cc-other');
-    expect(resolveCwd(otherDir)).toBe(resolve(otherDir));
-  });
-
-  it('resolveCwd falls back to the shared temp workspace', () => {
-    expect(resolveCwd()).toBe(getTempCwd());
-    expect(resolveCwd('')).toBe(getTempCwd());
-    expect(getTempCwd()).not.toBe(process.cwd());
-  });
-
-  it('isGlobalCwd treats missing, empty and "global" as global', () => {
-    expect(isGlobalCwd(undefined)).toBe(true);
-    expect(isGlobalCwd('')).toBe(true);
-    expect(isGlobalCwd('global')).toBe(true);
-    expect(isGlobalCwd('/some/project')).toBe(false);
-  });
 });
 
-describe('core/path：全局与工作区共用的私有目录名', () => {
-  it('目录名字面量被钉住：改它必须显式改这里（含 infra 那份副本）', () => {
+describe('core/path：唯一被允许的常量', () => {
+  it('目录名字面量被钉住：改它必须显式改这里', () => {
     expect(CODINGCODE_DIRNAME).toBe('.codingcode');
-    // infra 是独立 workspace 包、位于更低层，无法 import codingcode，只能各持一份
-    expect(INFRA_DIRNAME).toBe(CODINGCODE_DIRNAME);
   });
 
   it('全局目录落在用户目录下', () => {
     expect(getGlobalDir()).toBe(join(homedir(), '.codingcode'));
-  });
-
-  it('工作区目录落在 projectRoot 下', () => {
-    expect(getProjectDir('/some/project')).toBe(join('/some/project', '.codingcode'));
   });
 
   it('每次调用时求值：把 home 指到临时目录立刻生效（测试隔离依赖这一点）', () => {

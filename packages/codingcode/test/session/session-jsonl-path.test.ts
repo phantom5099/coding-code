@@ -6,7 +6,7 @@ import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 
 import { deleteSession, sessionJsonlPathFromCwd } from '../../src/session/file-ops.js';
-import { computePaths } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -24,7 +24,7 @@ describe('sessionJsonlPathFromCwd', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
@@ -51,7 +51,7 @@ describe('sessionJsonlPathFromCwd', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
@@ -60,17 +60,11 @@ describe('sessionJsonlPathFromCwd', () => {
       expect(
         existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath)
       ).toBe(true);
-      expect(
-        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath)
-      ).toBe(true);
 
       deleteSession(state.sessionId, cwd);
 
       expect(
         existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath)
-      ).toBe(false);
-      expect(
-        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).indexPath)
       ).toBe(false);
     } finally {
       rmSync(

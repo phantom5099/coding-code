@@ -6,7 +6,7 @@ beforeEach(() => {
   useAgentStore.setState({
     currentThreadId: null,
     threads: {},
-    approvalPolicy: 'ask-all',
+    profile: 'build', permissionMode: 'ask',
     model: '',
     models: [],
     contextUsage: null,

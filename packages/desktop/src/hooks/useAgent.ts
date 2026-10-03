@@ -4,8 +4,7 @@ import { useWorkspaceStore } from '../stores/workspace.store';
 import { useRollbackStore } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import { createStreamState, reduceFrame, type StreamEffects } from '../lib/frame-reducer';
-import type { ProfileName } from '@codingcode/core/contracts/types';
-import type { PermissionMode } from '@codingcode/core/contracts/permission';
+import type { PermissionMode, ProfileName } from '@codingcode/sdk';
 import { ApiError } from '../lib/api';
 import {
   listModels,
@@ -24,9 +23,9 @@ import {
   getSessionProfile,
   setSessionProfile,
   getSessionPlan,
+  getAgentConfig as fetchAgentConfig,
 } from '../lib/core-api';
 import type {
-  CheckpointDiff,
   CodeRollbackResult,
 } from '../lib/core-api';
 import type { Item, Turn, Project } from '@shared/types';
@@ -81,16 +80,6 @@ function registerInflight(threadId: string, controller: AbortController): void {
   }
 }
 
-export const APPROVAL_POLICY_TO_PERMISSION_MODE: Record<
-  'ask-all' | 'smart-allow' | 'full-allow' | 'read-only',
-  PermissionMode
-> = {
-  'ask-all': 'default',
-  'smart-allow': 'acceptEdits',
-  'full-allow': 'bypass',
-  'read-only': 'default',
-};
-
 // ---- useAgentCore: sendMessage + abort + initialization ----
 
 export function useAgentCore() {
@@ -109,13 +98,16 @@ export function useAgentCore() {
   const loadThreads = useAgentStore((s) => s.loadThreads);
   const setThreadTurns = useAgentStore((s) => s.setThreadTurns);
   const setModel = useAgentStore((s) => s.setModel);
+  const setActiveModel = useAgentStore((s) => s.setActiveModel);
   const setModels = useAgentStore((s) => s.setModels);
   const setContextUsage = useAgentStore((s) => s.setContextUsage);
   const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
   const workspace = useWorkspaceStore();
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
-  const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
-  const pendingProfile = useAgentStore((s) => s.pendingProfile);
+  const storeProfile = useAgentStore((s) => s.profile);
+  const storePermissionMode = useAgentStore((s) => s.permissionMode);
+  const setProfile = useAgentStore((s) => s.setProfile);
+  const setPermissionMode = useAgentStore((s) => s.setPermissionMode);
   const modelId = useAgentStore((s) => s.model);
 
   // Abort all in-flight streams when the workspace root changes (project switch).
@@ -127,12 +119,27 @@ export function useAgentCore() {
     lastRootRef.current = workspace.rootPath;
   }, [workspace.rootPath]);
 
+  useEffect(() => {
+    fetchAgentConfig()
+      .then((cfg) => {
+        setProfile(cfg.activeProfile);
+        setPermissionMode(cfg.permissionMode);
+      })
+      .catch((e) => {
+        console.error('Failed to load agent config:', e);
+      });
+  }, [setProfile, setPermissionMode]);
+
   // Load sessions, models, and projects on mount
   useEffect(() => {
     listModels()
       .then((data) => {
         if (data.models) setModels(data.models);
-        if (data.activeId) setModel(data.activeId);
+        // 全局默认模型以服务端 config.yaml 为准；当前没有打开会话时才同步到当前模型
+        if (data.activeId) {
+          setActiveModel(data.activeId);
+          if (!useAgentStore.getState().currentThreadId) setModel(data.activeId);
+        }
       })
       .catch((e) => {
         console.error('Failed to load models:', e);
@@ -147,6 +154,8 @@ export function useAgentCore() {
             projectId: '',
             title: s.title ?? s.sessionId.slice(0, 8),
             cwd: normalizeCwd(s.cwd ?? ''),
+            // 会话的模型来自服务端索引；索引被重建过会是 'unknown'，那种值当作没设置
+            model: s.model && s.model !== 'unknown' ? s.model : '',
             turns: [],
             createdAt: new Date(s.createdAt).getTime(),
             updatedAt: new Date(s.updatedAt).getTime(),
@@ -166,7 +175,7 @@ export function useAgentCore() {
           console.error('Failed to load sessions:', e);
         });
     }
-  }, [loadThreads, setModel, setModels, setThreadUsage, workspace.rootPath]);
+  }, [loadThreads, setModel, setActiveModel, setModels, setThreadUsage, workspace.rootPath]);
 
   // Load history from HTTP when switching to a thread with no turns
   useEffect(() => {
@@ -189,13 +198,23 @@ export function useAgentCore() {
       const effectiveCwd = cwd || workspace.rootPath || '';
 
       let resolvedThreadId = currentThreadId;
+      let model = modelId;
       if (!resolvedThreadId) {
-        const activeProfile: ProfileName = pendingProfile;
+        const activeProfile: ProfileName = storeProfile;
         const permissionMode: PermissionMode =
-          pendingProfile === 'plan'
-            ? 'default'
-            : (APPROVAL_POLICY_TO_PERMISSION_MODE[approvalPolicy] ?? 'default');
-        const model = modelId;
+          activeProfile === 'plan' ? 'ask' : storePermissionMode;
+        // 新会话用全局配置的模型：以服务端的 activeId 为准，顺带刷新模型列表
+        try {
+          const data = await listModels();
+          if (data.models) setModels(data.models);
+          if (data.activeId) {
+            model = data.activeId;
+            // 无会话时 setActiveModel 同时把当前模型对齐成全局默认
+            setActiveModel(data.activeId);
+          }
+        } catch (e) {
+          console.error('Failed to refresh models:', e);
+        }
         if (!model) {
           throw new Error('No model selected. Please select a model first.');
         }
@@ -208,6 +227,7 @@ export function useAgentCore() {
         setCurrentThreadWithProfile(resolvedThreadId, {
           activeProfile,
           permissionMode,
+          model,
           optimistic: true,
         });
       }
@@ -219,7 +239,7 @@ export function useAgentCore() {
       let activeTurnId = randomId();
       const userItem: Item = { id: randomId(), type: 'message', role: 'user', content };
       const turn: Turn = { id: activeTurnId, items: [userItem], status: 'running' };
-      startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60) });
+      startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60), model });
 
       const controller = new AbortController();
       registerInflight(threadId, controller);
@@ -249,6 +269,7 @@ export function useAgentCore() {
         const stream = agentClient.sendMessage(content, {
           sessionId: threadId,
           cwd: effectiveCwd,
+          model,
           signal: controller.signal,
         });
 
@@ -280,10 +301,12 @@ export function useAgentCore() {
       setThreadUsage,
       setContextUsage,
       workspace.rootPath,
-      approvalPolicy,
-      pendingProfile,
+      storeProfile,
+      storePermissionMode,
       modelId,
       currentThreadId,
+      setActiveModel,
+      setModels,
     ]
   );
 

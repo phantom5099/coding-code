@@ -118,7 +118,13 @@ function tc(id: string, name: string, args: Record<string, unknown>): ToolCall {
 
 function runBatch(
   calls: ToolCall[],
-  ctx: { projectPath: string; sessionId?: string; signal?: AbortSignal },
+  ctx: {
+    projectPath: string;
+    sessionId?: string;
+    signal?: AbortSignal;
+    activeProfile?: 'plan' | 'build';
+    model: string;
+  },
   h: Harness,
   mcpSpecs: McpToolSpec[] = []
 ): Promise<ToolResult[]> {
@@ -131,6 +137,8 @@ function runBatch(
       projectPath: ctx.projectPath,
       signal: ctx.signal,
       toolLookup: catalog.lookup,
+      activeProfile: ctx.activeProfile,
+      model: ctx.model,
     });
   });
   return Effect.runPromise(
@@ -177,7 +185,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('r2', 'read_file', { path: 'b.txt' }),
         tc('r3', 'read_file', { path: 'c.txt' }),
       ],
-      { projectPath: dir },
+      { projectPath: dir, model: 'test-model' },
       h
     );
 
@@ -199,7 +207,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('e1', 'edit_file', { path: 'f.txt', old_string: 'AAA', new_string: 'XXX' }),
         tc('e2', 'edit_file', { path: 'f.txt', old_string: 'BBB', new_string: 'YYY' }),
       ],
-      { projectPath: dir },
+      { projectPath: dir, model: 'test-model' },
       h
     );
 
@@ -221,7 +229,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('c1', 'execute_command', { command: 'echo hi' }),
         tc('r1', 'read_file', { path: 'a.txt' }),
       ],
-      { projectPath: dir },
+      { projectPath: dir, model: 'test-model' },
       h
     );
 
@@ -241,7 +249,7 @@ describe('executeBatch 保序波次调度', () => {
           tc('r', 'read_file', { path: 's.txt' }),
           tc('w', 'write_file', { path: 's.txt', content: 'AFTER' }),
         ],
-        { projectPath: dir },
+        { projectPath: dir, model: 'test-model' },
         h
       );
       expect(okOutput(before[0])).toContain('BEFORE');
@@ -254,7 +262,7 @@ describe('executeBatch 保序波次调度', () => {
           tc('w', 'write_file', { path: 's.txt', content: 'AFTER' }),
           tc('r', 'read_file', { path: 's.txt' }),
         ],
-        { projectPath: dir },
+        { projectPath: dir, model: 'test-model' },
         h
       );
       expect(okOutput(after[1])).toContain('AFTER');
@@ -272,7 +280,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('e1', 'edit_file', { path: 't.txt', old_string: 'OLD', new_string: 'NEW' }),
         tc('r2', 'read_file', { path: 't.txt' }),
       ],
-      { projectPath: dir },
+      { projectPath: dir, model: 'test-model' },
       h
     );
 
@@ -299,13 +307,13 @@ describe('executeBatch 保序波次调度', () => {
     });
 
     h.clear();
-    const serial = await runBatch(calls, { projectPath: dir }, h, [makeSpec(false)]);
+    const serial = await runBatch(calls, { projectPath: dir, model: 'test-model' }, h, [makeSpec(false)]);
     expect(serial.map((r) => r.status)).toEqual(['ok', 'ok']);
     expect(okOutput(serial[1])).toBe('mcp-ok');
     expect(overlaps(intervalFor(h, 'r1'), intervalFor(h, 'm1'))).toBe(false);
 
     h.clear();
-    const parallel = await runBatch(calls, { projectPath: dir }, h, [makeSpec(true)]);
+    const parallel = await runBatch(calls, { projectPath: dir, model: 'test-model' }, h, [makeSpec(true)]);
     expect(parallel.map((r) => r.status)).toEqual(['ok', 'ok']);
     expect(overlaps(intervalFor(h, 'r1'), intervalFor(h, 'm1'))).toBe(true);
   });
@@ -320,7 +328,7 @@ describe('executeBatch 保序波次调度', () => {
           plan: [{ step: 'step one', status: 'pending' }],
         }),
       ],
-      { projectPath: dir, sessionId: 'sid-1' },
+      { projectPath: dir, sessionId: 'sid-1', model: 'test-model' },
       h
     );
 
@@ -334,10 +342,10 @@ describe('executeBatch 保序波次调度', () => {
   it('[dispatch_agent, write_file] 零重叠，且委派与写入的先后由声明顺序决定', async () => {
     const results = await runBatch(
       [
-        tc('d1', 'dispatch_agent', { agent: 'build', prompt: 'go' }),
+        tc('d1', 'dispatch_agent', { agentName: 'build', prompt: 'go' }),
         tc('w1', 'write_file', { path: 'z.txt', content: 'z' }),
       ],
-      { projectPath: dir, sessionId: 'sid-1' },
+      { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
       h
     );
 
@@ -352,9 +360,9 @@ describe('executeBatch 保序波次调度', () => {
     const reversed = await runBatch(
       [
         tc('w2', 'write_file', { path: 'z2.txt', content: 'z' }),
-        tc('d2', 'dispatch_agent', { agent: 'build', prompt: 'go' }),
+        tc('d2', 'dispatch_agent', { agentName: 'build', prompt: 'go' }),
       ],
-      { projectPath: dir, sessionId: 'sid-1' },
+      { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
       h
     );
     expect(reversed.map((r) => r.id)).toEqual(['w2', 'd2']);
@@ -372,7 +380,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('w1', 'write_file', { path: 'w.txt', content: 'x' }),
         tc('r2', 'read_file', { path: 'a.txt' }),
       ],
-      { projectPath: dir, signal: controller.signal },
+      { projectPath: dir, signal: controller.signal, model: 'test-model' },
       h
     );
 
@@ -394,7 +402,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('w1', 'write_file', { path: 'w.txt', content: 'x' }),
         tc('r2', 'read_file', { path: 'a.txt' }),
       ],
-      { projectPath: dir, signal: controller.signal },
+      { projectPath: dir, signal: controller.signal, model: 'test-model' },
       h
     );
 

@@ -10,7 +10,7 @@ import {
   endReason,
 } from '../helpers/agent-harness.js';
 
-vi.mock('@codingcode/infra/config', () => ({
+vi.mock('../../src/infra/config.js', () => ({
   loadConfig: () => ({
     maxSteps: 100,
     maxStopContinuations: 2,

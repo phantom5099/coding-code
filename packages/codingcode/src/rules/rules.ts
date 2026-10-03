@@ -52,18 +52,20 @@ export const RulesLayer = Layer.effect(RulesService, Effect.sync(() => {
     }
 
     return {
-      getAllRules(projectPath?: string): string {
-        const key = projectPath ?? process.cwd();
-        const cached = _allRulesCache.get(key);
-        if (cached !== undefined) return cached;
-        const result = buildAllRules(projectPath);
-        _allRulesCache.set(key, result);
-        return result;
-      },
+      getAllRules: (projectPath?: string): Effect.Effect<string> =>
+        Effect.sync(() => {
+          const key = projectPath ?? process.cwd();
+          const cached = _allRulesCache.get(key);
+          if (cached !== undefined) return cached;
+          const result = buildAllRules(projectPath);
+          _allRulesCache.set(key, result);
+          return result;
+        }),
 
-      evictProjectRules(projectPath: string): void {
-        _projectRulesCache.delete(projectPath);
-        _allRulesCache.delete(projectPath);
-      },
+      evictProjectRules: (projectPath: string): Effect.Effect<void> =>
+        Effect.sync(() => {
+          _projectRulesCache.delete(projectPath);
+          _allRulesCache.delete(projectPath);
+        }),
     };
 }));

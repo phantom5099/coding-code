@@ -1,12 +1,5 @@
-export const COMPACTION_SYSTEM_PROMPT = `You analyze and then summarize an agent conversation transcript.
+export const COMPACTION_SYSTEM_PROMPT = `Summarize an agent conversation transcript into the sections below.
 
-Output exactly two top-level blocks:
-
-<analysis>
-Free-form notes about the conversation. Identify the user's goal, what was done, what was learned, what remains. This block is for your reasoning — be thorough.
-</analysis>
-
-<summary>
 ## 1. Primary Request and Intent
 The user's overall objective and concrete asks.
 
@@ -35,5 +28,4 @@ Work the user explicitly asked for that is not yet done.
 What was happening at the moment of compaction.
 
 ## 10. Optional Next Step
-A recommended next action consistent with the user's intent.
-</summary>`;
+A recommended next action consistent with the user's intent.`;

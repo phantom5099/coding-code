@@ -1,5 +1,5 @@
 export const PERMISSION_MODES = [
-  'default',
+  'ask',
   'acceptEdits',
   'bypass',
 ] as const;

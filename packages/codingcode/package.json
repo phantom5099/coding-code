@@ -8,19 +8,21 @@
   },
   "exports": {
     ".": "./src/layer.ts",
-    "./client": "./src/client/http/index.ts",
     "./server": "./src/server/index.ts",
     "./approval/types": "./src/approval/types.ts",
     "./agent/profile": "./src/agent/profile.ts",
     "./contracts/frame": "./src/contracts/frame.ts",
+    "./contracts/frame-io": "./src/contracts/frame-io.ts",
     "./core/error": "./src/core/error.ts",
     "./contracts/error": "./src/contracts/error.ts",
     "./contracts/types": "./src/contracts/types.ts",
     "./contracts/permission": "./src/contracts/permission.ts",
+    "./contracts/profile": "./src/contracts/profile.ts",
     "./contracts/hooks": "./src/contracts/hooks.ts",
     "./contracts/session": "./src/contracts/session.ts",
     "./contracts/provider": "./src/contracts/provider.ts",
     "./contracts/mcp": "./src/contracts/mcp.ts",
+    "./contracts/automation": "./src/contracts/automation.ts",
     "./contracts/skill": "./src/contracts/skill.ts",
     "./contracts/tool": "./src/contracts/tool.ts",
     "./checkpoint/types": "./src/checkpoint/types.ts",
@@ -36,7 +38,9 @@
     "cron": "^3.5.0",
     "effect": "^3.21.2",
     "hono": "^4.12.19",
-    "zod": "^4.4.3",
-    "@codingcode/infra": "workspace:*"
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
   }
 }

@@ -29,6 +29,7 @@ describe('session service surface', () => {
       'renameSession',
       'rollbackToTurn',
       'setActiveProfile',
+      'setModel',
       'setPermissionMode',
     ]);
   });

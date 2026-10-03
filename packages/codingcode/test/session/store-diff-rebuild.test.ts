@@ -11,7 +11,7 @@ describe('sessionEventsToTurns', () => {
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       {
         type: 'user',
@@ -61,7 +61,7 @@ describe('sessionEventsToTurns', () => {
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       {
         type: 'user',
@@ -109,7 +109,7 @@ describe('sessionEventsToTurns', () => {
         cwd: '/tmp',
         createdAt: new Date().toISOString(),
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       },
       {
         type: 'user',

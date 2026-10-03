@@ -1,11 +1,9 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { Thread, Turn, Item, TodoItem } from '@shared/types';
-import type { ProfileName } from '@codingcode/core/contracts/types';
-import type { PermissionMode } from '@codingcode/core/contracts/permission';
+import type { Automation, PermissionMode, ProfileName } from '@codingcode/sdk';
 import { buildToolDiff } from '../lib/diff-compute';
-import { createDebouncedStorage, normalizeCwd } from './storage';
+import { normalizeCwd } from './storage';
 import { useRollbackStore } from './rollback.store';
 
 export interface ModelEntry {
@@ -19,21 +17,6 @@ interface TodoPanelState {
   items: TodoItem[];
   hasSeenNonEmptyTodo: boolean;
   collapsed: boolean;
-}
-
-export interface Automation {
-  id: string;
-  name: string;
-  description: string;
-  cron: string;
-  timezone: string;
-  sandbox: 'readonly' | 'workspace-write';
-  enabled: boolean;
-  projectCwd: string;
-  runOnce: boolean;
-  createdAt: number;
-  lastRunAt: number | null;
-  lastSessionId: string | null;
 }
 
 export interface PendingPlan {
@@ -51,9 +34,10 @@ export interface StoredProfile {
 interface AgentState {
   currentThreadId: string | null;
   threads: Record<string, Thread>;
-  approvalPolicy: 'ask-all' | 'smart-allow' | 'full-allow' | 'read-only';
-  pendingProfile: 'plan' | 'build';
+  profile: ProfileName;
+  permissionMode: PermissionMode;
   model: string;
+  activeModel: string;
   models: ModelEntry[];
   contextUsage: { used: number; contextWindow: number } | null;
   todoByThreadId: Record<string, TodoPanelState>;
@@ -69,7 +53,12 @@ interface AgentActions {
   setCurrentThread: (id: string | null) => void;
   setCurrentThreadWithProfile: (
     id: string,
-    info: { activeProfile: ProfileName; permissionMode: PermissionMode; optimistic?: boolean }
+    info: {
+      activeProfile: ProfileName;
+      permissionMode: PermissionMode;
+      model?: string;
+      optimistic?: boolean;
+    }
   ) => void;
   setProfileForThread: (
     id: string,
@@ -83,9 +72,11 @@ interface AgentActions {
   upsertThread: (thread: Thread) => void;
   setThreadTurns: (threadId: string, turns: Turn[]) => void;
   setThreadCwd: (threadId: string, cwd: string) => void;
-  setApprovalPolicy: (policy: AgentState['approvalPolicy']) => void;
-  setPendingProfile: (profile: AgentState['pendingProfile']) => void;
+  setProfile: (profile: ProfileName) => void;
+  setPermissionMode: (mode: PermissionMode) => void;
   setModel: (model: string) => void;
+  setActiveModel: (model: string) => void;
+  selectModel: (model: string) => void;
   setModels: (models: ModelEntry[]) => void;
   setContextUsage: (usage: { used: number; contextWindow: number } | null) => void;
   setThreadUsage: (
@@ -101,7 +92,11 @@ interface AgentActions {
   ) => void;
   setPendingPlan: (threadId: string, plan: PendingPlan | null) => void;
   clearPendingPlan: (threadId: string) => void;
-  startTurn: (threadId: string, turn: Turn, meta?: { cwd?: string; title?: string }) => void;
+  startTurn: (
+    threadId: string,
+    turn: Turn,
+    meta?: { cwd?: string; title?: string; model?: string }
+  ) => void;
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void;
   updateTurnId: (threadId: string, oldTurnId: string, newTurnId: string) => void;
   completeTurn: (threadId: string, turnId: string, status: 'completed' | 'error') => void;
@@ -115,13 +110,13 @@ interface AgentActions {
 }
 
 export const useAgentStore = create<AgentState & AgentActions>()(
-  persist(
-    immer((set) => ({
+  immer((set) => ({
       currentThreadId: null,
       threads: {},
-      approvalPolicy: 'ask-all',
-      pendingProfile: 'build',
+      profile: 'build',
+      permissionMode: 'ask',
       model: '',
+      activeModel: '',
       models: [],
       contextUsage: null,
       todoByThreadId: {},
@@ -135,6 +130,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setCurrentThread: (id) =>
         set((s) => {
           s.currentThreadId = id;
+          s.model = id ? s.threads[id]?.model || s.activeModel : s.activeModel;
           if (id) {
             const usage = s.usageByThreadId[id];
             const model = s.models.find((m) => m.id === s.model);
@@ -157,6 +153,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
             fetchedAt: Date.now(),
             optimistic: info.optimistic ?? false,
           };
+          s.model = info.model ?? s.threads[id]?.model ?? s.activeModel;
           if (id) {
             const usage = s.usageByThreadId[id];
             const model = s.models.find((m) => m.id === s.model);
@@ -224,19 +221,36 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           if (thread) thread.cwd = cwd;
         }),
 
-      setApprovalPolicy: (policy) =>
+      setProfile: (profile) =>
         set((s) => {
-          s.approvalPolicy = policy;
+          s.profile = profile;
         }),
 
-      setPendingProfile: (profile) =>
+      setPermissionMode: (mode) =>
         set((s) => {
-          s.pendingProfile = profile;
+          s.permissionMode = mode;
         }),
 
       setModel: (model) =>
         set((s) => {
           s.model = model;
+        }),
+
+      setActiveModel: (model) =>
+        set((s) => {
+          s.activeModel = model;
+          if (!s.currentThreadId) s.model = model;
+        }),
+
+      selectModel: (model) =>
+        set((s) => {
+          s.model = model;
+          if (s.currentThreadId) {
+            const thread = s.threads[s.currentThreadId];
+            if (thread) thread.model = model;
+          } else {
+            s.activeModel = model;
+          }
         }),
 
       setModels: (models) =>
@@ -267,7 +281,9 @@ export const useAgentStore = create<AgentState & AgentActions>()(
             const existing = s.threads[t.id];
             next[t.id] = existing ? { ...t, turns: existing.turns } : t;
           }
-          for (const [id, thread] of Object.entries(s.threads)) {
+          for (const id of Object.keys(s.threads)) {
+            const thread = s.threads[id] as Thread | undefined;
+            if (!thread) continue;
             if (!incomingIds.has(id) && thread.turns.some((t) => t.status === 'running')) {
               next[id] = thread;
             }
@@ -315,6 +331,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
               projectId: '',
               title: meta?.title ?? 'New Conversation',
               cwd: meta?.cwd ? normalizeCwd(meta.cwd) : '',
+              model: meta?.model ?? '',
               turns: [turn],
               createdAt: Date.now(),
               updatedAt: Date.now(),
@@ -511,36 +528,5 @@ export const useAgentStore = create<AgentState & AgentActions>()(
         set((s) => {
           s.isCompressing = false;
         }),
-    })),
-    {
-      name: 'codingcode-agent-store',
-      storage: createJSONStorage(() => createDebouncedStorage()),
-      partialize: (state) => ({
-        approvalPolicy: state.approvalPolicy,
-        model: state.model,
-        pendingProfile: state.pendingProfile,
-      }),
-      merge: (persisted, current) => {
-        const p = persisted as any;
-        const OLD_POLICY_MAP: Record<string, string> = {
-          suggest: 'ask-all',
-          'auto-edit': 'smart-allow',
-          'full-auto': 'full-allow',
-        };
-        const rawPolicy = p?.approvalPolicy;
-        const migratedPolicy = rawPolicy ? (OLD_POLICY_MAP[rawPolicy] ?? rawPolicy) : undefined;
-        return {
-          ...current,
-          ...p,
-          approvalPolicy: migratedPolicy ?? current.approvalPolicy,
-          pendingProfile: p?.pendingProfile === 'plan' ? 'plan' : 'build',
-          threads: {},
-          todoByThreadId: {},
-          contextUsage: null,
-          usageByThreadId: {},
-          profileByThreadId: {},
-        };
-      },
-    }
-  )
+    }))
 );

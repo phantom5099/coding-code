@@ -1,7 +1,7 @@
 import { Layer, Effect } from 'effect';
 import { resolveHookConfigs } from './config.js';
 import { executeHookCommand, executeDecisionHookCommand } from './executor.js';
-import { createLogger } from '@codingcode/infra/logger';
+import { createLogger } from '../infra/logger.js';
 import { HookService } from './port.js';
 import type { HookPoint, HookDecision } from '../contracts/hooks.js';
 import type { ObserverHandler, DecisionHandler, HandlerEntry, ProjectPath } from './types.js';

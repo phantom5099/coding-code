@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
 import { SessionService } from '../../src/session/port.js';
-import { LLMFactoryService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { HookService } from '../../src/hooks/port.js';
@@ -23,17 +22,15 @@ const MockSessionLayer = Layer.succeed(SessionService, {
     Effect.succeed({
       sessionId: 'test-sid',
       cwd: '/tmp/test',
-      model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
     }),
   load: () =>
     Effect.succeed({
       sessionId: 'test-sid',
       cwd: '/tmp/test',
-      model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
     }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
@@ -53,46 +50,6 @@ const MockSessionLayer = Layer.succeed(SessionService, {
     }),
 } as any);
 
-const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
-  findModel: () =>
-    Effect.succeed({
-      id: 'deepseek-chat',
-      model: 'deepseek-chat',
-      activeProfile: 'build',
-      permissionMode: 'default',
-      provider: 'deepseek',
-      driver: 'openai',
-      api_key_env: 'DEEPSEEK_API_KEY',
-      base_url: 'https://api.deepseek.com',
-    }),
-  createClient: () =>
-    Effect.succeed({
-      modelInfo: {
-        provider: 'deepseek',
-        model: 'deepseek-chat',
-        activeProfile: 'build',
-        permissionMode: 'default',
-        maxTokens: 64000,
-        supportsToolCalling: true,
-        supportsStreaming: true,
-      },
-    }),
-  getLLMClient: () => Effect.succeed(null),
-  listModels: () => Effect.succeed([]),
-  getActiveEntry: () =>
-    Effect.succeed({
-      id: 'deepseek-chat',
-      model: 'deepseek-chat',
-      activeProfile: 'build',
-      permissionMode: 'default',
-      provider: 'deepseek',
-      driver: 'openai',
-      api_key_env: 'DEEPSEEK_API_KEY',
-      base_url: 'https://api.deepseek.com',
-    }),
-  switchModel: () => Effect.fail(new Error('no models')),
-} as any);
-
 const MockApprovalLayer = ApprovalLayer.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
 );
@@ -110,10 +67,10 @@ const MockMcpLayer = Layer.succeed(McpService, {
 } as any);
 
 const MockMemoryLayer = Layer.succeed(MemoryService, {
-  getMemoryEnabled: () => true,
-  setMemoryEnabled: () => {},
-  loadMemoryForPrompt: () => '',
-  flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+  getMemoryEnabled: () => Effect.succeed(true),
+  setMemoryEnabled: () => Effect.void,
+  loadMemoryForPrompt: () => Effect.succeed(''),
+  flushSessionToMemory: () => Effect.succeed({ written: false, bytes: 0 }),
 } as any);
 
 const MockSchedulerLayer = Layer.succeed(SchedulerService, {
@@ -125,7 +82,7 @@ const MockSchedulerLayer = Layer.succeed(SchedulerService, {
 } as any);
 
 const MockContextLayer = Layer.succeed(ContextService, {
-  assemblePayload: async () => [],
+  assemblePayload: () => Effect.succeed([]),
   compactWithLLM: mockCompactWithLLM,
 } as any);
 
@@ -153,7 +110,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
 
 const TestLayer = Layer.mergeAll(
   MockSessionLayer,
-  MockLLMFactoryLayer,
   MockApprovalLayer,
   HookLayer,
   ApprovalWaitLayer,
@@ -170,28 +126,32 @@ const rt = ManagedRuntime.make(TestLayer as any);
 describe('POST /api/sessions/:id/compact (manual compact)', () => {
   beforeEach(() => {
     mockCompactWithLLM.mockReset();
-    mockCompactWithLLM.mockResolvedValue({
-      didCompress: true,
-      released: 5000,
-      promptEstimate: 3000,
-    });
+    mockCompactWithLLM.mockReturnValue(
+      Effect.succeed({
+        didCompress: true,
+        released: 5000,
+        promptEstimate: 3000,
+      })
+    );
   });
 
-  it('should call compactWithLLM with a non-null llm when session has a valid model', async () => {
+  it('should pass the requested model through to compactWithLLM', async () => {
     const app = await createServer(rt);
     const res = await app.request('/api/sessions/test-sid/compact', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: '' }),
+      body: JSON.stringify({ cwd: '', model: 'deepseek-chat@deepseek' }),
     });
 
     expect(res.status).toBe(200);
     expect(mockCompactWithLLM).toHaveBeenCalledTimes(1);
 
     const args = mockCompactWithLLM.mock.calls[0];
-    // args[2] is the llm parameter — should not be null
-    expect(args?.[2]).not.toBeNull();
-    expect(args?.[2].modelInfo.model).toBe('deepseek-chat');
+    // context 现在收的是会话身份（cwd + sessionId），转录路径由它自己拼
+    const ref = args?.[0] as { cwd: string; sessionId: string };
+    expect(typeof ref.cwd).toBe('string');
+    expect(typeof ref.sessionId).toBe('string');
+    expect(args?.[1]).toBe('deepseek-chat@deepseek');
   });
 
   it('should return CompressResult from the API', async () => {
@@ -206,42 +166,8 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
     expect(body).toEqual({ didCompress: true, released: 5000, promptEstimate: 3000 });
   });
 
-  it('should call compactWithLLM with null llm when getActiveEntry fails', async () => {
-    const FailingFactoryLayer = Layer.succeed(LLMFactoryService, {
-      findModel: () => Effect.succeed(null),
-      createClient: () =>
-        Effect.succeed({
-          modelInfo: {
-            provider: 'deepseek',
-            model: 'deepseek-chat',
-            activeProfile: 'build',
-            permissionMode: 'default',
-            maxTokens: 64000,
-            supportsToolCalling: true,
-            supportsStreaming: true,
-          },
-        }),
-      getLLMClient: () => Effect.succeed(null),
-      listModels: () => Effect.succeed([]),
-      getActiveEntry: () => Effect.fail(new Error('no active model')),
-      switchModel: () => Effect.fail(new Error('no models')),
-    } as any);
-
-    const FailLayer = Layer.mergeAll(
-      MockSessionLayer,
-      FailingFactoryLayer,
-      MockApprovalLayer,
-      HookLayer,
-      ApprovalWaitLayer,
-      MockSkillLayer,
-      MockMcpLayer,
-      MockMemoryLayer,
-      MockSchedulerLayer,
-      MockContextLayer,
-      MockCheckpointLayer
-    );
-    const failRt = ManagedRuntime.make(FailLayer as any);
-    const app = await createServer(failRt);
+  it('should fall back to the global model (empty string) when the request omits a model', async () => {
+    const app = await createServer(rt);
     const res = await app.request('/api/sessions/test-sid/compact', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -249,9 +175,7 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(mockCompactWithLLM).toHaveBeenCalledTimes(1);
-
     const args = mockCompactWithLLM.mock.calls[0];
-    expect(args?.[2]).toBeNull();
+    expect(args?.[1]).toBe('');
   });
 });

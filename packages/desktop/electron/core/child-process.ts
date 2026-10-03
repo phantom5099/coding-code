@@ -45,6 +45,7 @@ export async function startBackend(): Promise<number> {
         cwd: root,
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: true,
+        env: { ...process.env, CODINGCODE_PROJECT_ROOT: root },
       });
     } else {
       // 生产模式：node 运行 esbuild 打包后的单文件
@@ -54,6 +55,7 @@ export async function startBackend(): Promise<number> {
         env: {
           ...process.env,
           NODE_ENV: 'production',
+          CODINGCODE_PROJECT_ROOT: root,
         },
       });
     }

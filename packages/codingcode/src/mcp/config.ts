@@ -1,11 +1,12 @@
+import { join } from 'path';
 import {
   mergeNamed,
   patchNamed,
   readNamedList,
   writeNamedList,
   type NamedListFile,
-} from '@codingcode/infra/yaml-store';
-import { getGlobalDir, getProjectDir } from '../core/path.js';
+} from '../infra/yaml-store.js';
+import { getGlobalDir, CODINGCODE_DIRNAME } from '../core/path.js';
 import type { McpServerConfig } from '../contracts/mcp.js';
 
 /** mcp 的落盘形状：`<dir>/.codingcode/mcp.yaml` 的 `servers:` */
@@ -28,13 +29,13 @@ function resolveEnvVars(value: unknown): unknown {
 }
 
 export function loadMcpConfig(projectRoot: string): McpServerConfig[] {
-  return readNamedList<RawMcpServerConfig>(getProjectDir(projectRoot), MCP_FILE).map(
+  return readNamedList<RawMcpServerConfig>(join(projectRoot, CODINGCODE_DIRNAME), MCP_FILE).map(
     (s) => resolveEnvVars(s) as McpServerConfig
   );
 }
 
 export function writeMcpConfig(projectRoot: string, servers: McpServerConfig[]): void {
-  writeNamedList(getProjectDir(projectRoot), MCP_FILE, servers);
+  writeNamedList(join(projectRoot, CODINGCODE_DIRNAME), MCP_FILE, servers);
 }
 
 export function loadGlobalMcpConfig(): McpServerConfig[] {
@@ -60,5 +61,5 @@ export function setProjectMcpServerEnabled(
   name: string,
   enabled: boolean
 ): void {
-  patchNamed<RawMcpServerConfig>(getProjectDir(projectRoot), MCP_FILE, name, { enabled });
+  patchNamed<RawMcpServerConfig>(join(projectRoot, CODINGCODE_DIRNAME), MCP_FILE, name, { enabled });
 }

@@ -52,7 +52,7 @@ pnpm start
 ### SDK 调用示例
 
 ```typescript
-import { createHttpClients } from '@codingcode/core/client';
+import { createHttpClients } from '@codingcode/sdk';
 
 const clients = createHttpClients('http://localhost:8080');
 
@@ -73,6 +73,7 @@ for await (const frame of clients.agent.sendMessage('帮我写一个快排', {
 ┌──────────────────────────────────────────────────────────┐
 │                        客户端层                            │
 │  @codingcode/desktop (Electron)                          │
+│  @codingcode/sdk（AgentClient 契约 + HTTP/SSE 实现）      │
 └──────────────────────────┬───────────────────────────────┘
                            │ HTTP / SSE（AgentClient 接口）
 ┌──────────────────────────┴───────────────────────────────┐
@@ -80,12 +81,7 @@ for await (const frame of clients.agent.sendMessage('帮我写一个快排', {
 │  @codingcode/core                                         │
 │  ReAct Loop · 工具 · MCP · 上下文 · 记忆 · Checkpoint     │
 │  钩子 · 子智能体 · 技能 · 审批 · 会话 · 调度               │
-└──────────────────────────┬───────────────────────────────┘
-                           │
-┌──────────────────────────┴───────────────────────────────┐
-│                       基础设施层                           │
-│  @codingcode/infra                                        │
-│  配置加载 · 日志 · 共享类型                                 │
+│  模型清单 · 应用配置 · YAML 存取 · 日志 · 共享类型       │
 └──────────────────────────────────────────────────────────┘
 ```
 

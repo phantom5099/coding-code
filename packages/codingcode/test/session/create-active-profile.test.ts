@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'fs';
 import { Effect } from 'effect';
-import { computePaths } from '../../src/core/path.js';
+import { computePaths } from '../../src/session/paths.js';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
+import { readSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
@@ -21,22 +21,21 @@ describe('session activeProfile persistence', () => {
         return yield* session.create(cwd, {
           model: 'gpt-4o',
           activeProfile: 'plan',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
 
     const paths = computePaths(state.cwd, state.sessionId, state.parentSessionId);
-    const index = JSON.parse(readFileSync(paths.indexPath, 'utf8'));
+    const meta = readSessionMeta(paths.transcriptPath);
 
     expect(state.activeProfile).toBe('plan');
-    expect(state.sessionMeta?.activeProfile).toBe('plan');
-    expect(index.activeProfile).toBe('plan');
+    expect(meta?.activeProfile).toBe('plan');
     expect(state).not.toHaveProperty('mode');
-    expect(index).not.toHaveProperty('mode');
+    expect(meta).not.toHaveProperty('mode');
   });
 
-  it('keeps an updated profile when later events rewrite the index', async () => {
+  it('keeps an updated profile when later events rewrite the session head', async () => {
     const cwd = '/tmp/test-active-profile-update';
     const state = await run(
       Effect.gen(function* () {
@@ -44,7 +43,7 @@ describe('session activeProfile persistence', () => {
         return yield* session.create(cwd, {
           model: 'gpt-4o',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
@@ -59,9 +58,9 @@ describe('session activeProfile persistence', () => {
     );
 
     const paths = computePaths(state.cwd, state.sessionId, state.parentSessionId);
-    const index = JSON.parse(readFileSync(paths.indexPath, 'utf8'));
+    const meta = readSessionMeta(paths.transcriptPath);
 
-    expect(index.activeProfile).toBe('plan');
-    expect(index).not.toHaveProperty('mode');
+    expect(meta?.activeProfile).toBe('plan');
+    expect(meta).not.toHaveProperty('mode');
   });
 });

@@ -19,7 +19,7 @@ describe('recordToolResult', () => {
         return yield* svc.create('/tmp/persist-test', {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );
@@ -52,7 +52,7 @@ describe('recordToolResult', () => {
         return yield* svc.create('/tmp/persist-test-small', {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         });
       })
     );

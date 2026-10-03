@@ -7,6 +7,5 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "references": [{ "path": "../infra" }]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

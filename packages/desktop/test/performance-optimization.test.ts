@@ -57,7 +57,7 @@ describe('global store - applyChunk tool_result searches current turn first', ()
     useAgentStore.setState({
       currentThreadId: null,
       threads: {},
-      approvalPolicy: 'ask-all',
+      profile: 'build', permissionMode: 'ask',
       model: '',
       models: [],
       contextUsage: null,
@@ -142,18 +142,13 @@ describe('global store - applyChunk tool_result searches current turn first', ()
   });
 });
 
-// ─── global.store: persist partialize excludes usageByThreadId ───────────
+// ─── agent.store: 不再挂 persist ─────────────────────────────────────────
 
-describe('global store - persist partialize', () => {
-  it('partialize does not include usageByThreadId', () => {
-    const state = useAgentStore.getState();
-    // Access the persist config's partialize
+describe('agent store - 不持久化任何状态', () => {
+  it('has no persist middleware attached', () => {
+    // 模型、会话、用量、新建会话默认值全部以服务端为准，前端不留副本到磁盘
     const store: any = useAgentStore;
-    const persistConfig = store.persist?.options;
-    if (persistConfig?.partialize) {
-      const partial = persistConfig.partialize(state);
-      expect((partial as any).agent?.usageByThreadId).toBeUndefined();
-    }
+    expect(store.persist).toBeUndefined();
   });
 });
 
@@ -196,7 +191,7 @@ describe('global store - applyChunk tool_result uses push', () => {
     useAgentStore.setState({
       currentThreadId: null,
       threads: {},
-      approvalPolicy: 'ask-all',
+      profile: 'build', permissionMode: 'ask',
       model: '',
       models: [],
       contextUsage: null,

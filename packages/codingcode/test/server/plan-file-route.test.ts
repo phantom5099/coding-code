@@ -18,8 +18,9 @@ import { MemoryService } from '../../src/memory/port.js';
 import { SchedulerService } from '../../src/scheduler/port.js';
 import { ContextService } from '../../src/context/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
-import { encodeProjectPath, getProjectBaseDir } from '../../src/core/path.js';
+import { encodeProjectPath } from '../../src/core/path.js';
 import { useTempHome } from '../helpers/temp-home.js';
+import { projectBaseDir } from '../helpers/project-base.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
 import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
@@ -31,7 +32,7 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       cwd: '/tmp/test',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
     }),
   load: () =>
     Effect.succeed({
@@ -39,7 +40,7 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       cwd: '/tmp/test',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
     }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>
@@ -60,7 +61,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
       id: 'deepseek-chat',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
       provider: 'deepseek',
       driver: 'openai',
       api_key_env: 'DEEPSEEK_API_KEY',
@@ -72,7 +73,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
         provider: 'deepseek',
         model: 'deepseek-chat',
         activeProfile: 'build',
-        permissionMode: 'default',
+        permissionMode: 'ask',
         maxTokens: 64000,
         supportsToolCalling: true,
         supportsStreaming: true,
@@ -85,7 +86,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
       id: 'deepseek-chat',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'default',
+      permissionMode: 'ask',
       provider: 'deepseek',
       driver: 'openai',
       api_key_env: 'DEEPSEEK_API_KEY',
@@ -111,10 +112,10 @@ const MockMcpLayer = Layer.succeed(McpService, {
 } as any);
 
 const MockMemoryLayer = Layer.succeed(MemoryService, {
-  getMemoryEnabled: () => true,
-  setMemoryEnabled: () => {},
-  loadMemoryForPrompt: () => '',
-  flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+  getMemoryEnabled: () => Effect.succeed(true),
+  setMemoryEnabled: () => Effect.void,
+  loadMemoryForPrompt: () => Effect.succeed(''),
+  flushSessionToMemory: () => Effect.succeed({ written: false, bytes: 0 }),
 } as any);
 
 const MockSchedulerLayer = Layer.succeed(SchedulerService, {
@@ -126,8 +127,8 @@ const MockSchedulerLayer = Layer.succeed(SchedulerService, {
 } as any);
 
 const MockContextLayer = Layer.succeed(ContextService, {
-  assemblePayload: async () => [],
-  compactWithLLM: () => Promise.resolve({ didCompress: false, released: 0, promptEstimate: 0 }),
+  assemblePayload: () => Effect.succeed([]),
+  compactWithLLM: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
 } as any);
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, {
@@ -166,15 +167,15 @@ const TestLayer = Layer.mergeAll(
   MockCheckpointLayer
 );
 
-// home 指向临时目录 ⇒ getProjectBaseDir() = <temp>/.codingcode/project
+// home 指向临时目录 ⇒ projectBaseDir() = <temp>/.codingcode/project
 useTempHome('codingcode-plan-route-');
 
 let plansDir = '';
 
 beforeEach(() => {
   // The route resolves the query cwd to an absolute path first
-  // (core/path.resolveCwd -> path.resolve), then encodes it.
-  plansDir = join(getProjectBaseDir(), encodeProjectPath(resolve('/tmp/test')));
+  // (server/cwd.resolveCwd -> path.resolve), then encodes it.
+  plansDir = join(projectBaseDir(), encodeProjectPath(resolve('/tmp/test')));
   mkdirSync(plansDir, { recursive: true });
 });
 

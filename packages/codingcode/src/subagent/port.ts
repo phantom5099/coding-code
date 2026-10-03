@@ -10,7 +10,8 @@ export interface RunSubagentOptions {
   signal?: AbortSignal;
   activeProfile?: import('../contracts/types.js').ProfileName;
   permissionMode?: import('../contracts/permission.js').PermissionMode;
-  model?: string;
+  model: string;
+  systemPrompt?: string;
   parentSessionId?: string;
   agentName?: string;
 }

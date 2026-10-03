@@ -68,7 +68,7 @@ function resetStores() {
         updatedAt: 0,
       },
     },
-    approvalPolicy: 'ask-all',
+    profile: 'build', permissionMode: 'ask',
     model: 'model-1',
     models: [{ id: 'model-1', provider: 'p', name: 'm1', context_window: 128000 } as any],
     contextUsage: null,

@@ -29,7 +29,7 @@ Coding Code 采用两层压缩策略，在不同阈值下自动触发：
 |--------|-----|------|
 | 触发阈值 | `promptEstimate > modelMaxTokens * 0.9` | prompt 估算超过模型最大 token 90% 时触发 |
 | 保留最近 turn | 1 | 保留最近 1 个 turn 不压缩 |
-| 压缩方式 | 调用 LLM 生成摘要 | 输出 `<summary>...</summary>` 块 |
+| 压缩方式 | 调用 LLM 生成摘要 | 整段输出即摘要（全量替换，不做标签抽取） |
 | 增量压缩 | 是 | 找到已有 SummaryEvent，只压缩 `endTurnId` 之后的事件 |
 | 失败追踪 | 连续 3 次失败后停止 | 24 小时 TTL 后重置 |
 
@@ -37,44 +37,38 @@ Coding Code 采用两层压缩策略，在不同阈值下自动触发：
 
 ## 压缩输出格式
 
-LLM 压缩的摘要包含 10 个固定小节：
+LLM 压缩要求模型按 10 个固定小节输出；**模型的整段输出即摘要文本**，不做标签抽取：
 
 ```
-<analysis>
-自由推理区域，分析对话内容和关键信息
-</analysis>
-
-<summary>
-### Primary Request
+## 1. Primary Request and Intent
 用户的核心请求
 
-### Key Technical Concepts
+## 2. Key Technical Concepts
 涉及的关键技术概念
 
-### Files and Code Sections
+## 3. Files and Code Sections
 相关文件和代码段
 
-### Errors and Fixes
+## 4. Errors and Fixes
 遇到的错误和修复
 
-### Problem Solving
+## 5. Problem Solving
 问题解决过程
 
-### Decision Rationale
-决策理由
+## 6. Decision Rationale and Rejected Approaches
+决策理由与被否决的方案
 
-### All User Messages
-所有用户消息摘要
+## 7. All User Messages
+所有用户消息
 
-### Pending Tasks
+## 8. Pending Tasks
 待处理任务
 
-### Current Work
+## 9. Current Work
 当前工作内容
 
-### Optional Next Step
+## 10. Optional Next Step
 可选的下一步
-</summary>
 ```
 
 ---

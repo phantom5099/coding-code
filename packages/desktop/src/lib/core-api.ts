@@ -1,15 +1,23 @@
-import { API_BASE, api } from './api';
-import { createHttpClients, type AgentRuntimeClient } from '@codingcode/core/client';
-import type { PermissionMode } from '@codingcode/core/contracts/permission';
-import type { ProfileName, TokenUsage } from '@codingcode/core/contracts/types';
-import type {
-  CheckpointDiff,
-  CodeRollbackResult,
-  RollbackPreviewDiff,
-} from '@codingcode/core/checkpoint/types';
-import type { UITurn } from '@codingcode/core/contracts/session';
-import type { McpServerConfig } from '@codingcode/core/contracts/mcp';
-import type { UserHookConfig } from '@codingcode/core/contracts/hooks';
+import { API_BASE } from './api';
+import {
+  createHttpClients,
+  type AgentConfigView,
+  type AgentRuntimeClient,
+  type Automation,
+  type CheckpointDiff,
+  type CodeRollbackResult,
+  type CreateAutomationInput,
+  type McpServerConfig,
+  type McpServerEntry,
+  type PermissionMode,
+  type ProfileName,
+  type RollbackPreviewDiff,
+  type RunAutomationResult,
+  type TokenUsage,
+  type UITurn,
+  type UpdateAutomationInput,
+  type UserHookConfig,
+} from '@codingcode/sdk';
 
 const clients = createHttpClients(API_BASE);
 
@@ -26,8 +34,22 @@ export function listModels(): Promise<{
   return clients.models.listModels();
 }
 
-export function switchModel(id: string): Promise<void> {
-  return clients.models.switchModel({ id });
+export function setSessionModel(
+  sessionId: string | null,
+  cwd: string,
+  model: string
+): Promise<void> {
+  return clients.sessions.setSessionModel({ sessionId, cwd, model });
+}
+
+// ---- Compaction ----
+
+export function compactSession(
+  sessionId: string,
+  cwd: string,
+  model?: string
+): Promise<{ didCompress: boolean; released: number; promptEstimate: number }> {
+  return clients.agent.compact({ sessionId, cwd, model });
 }
 
 // ---- Sessions ----
@@ -61,6 +83,10 @@ export function setSessionPermissionMode(
   mode: PermissionMode
 ): Promise<void> {
   return clients.sessions.setSessionPermissionMode({ sessionId, cwd, mode });
+}
+
+export function renameSession(sessionId: string, cwd: string, title: string): Promise<void> {
+  return clients.sessions.renameSession({ sessionId, cwd, title });
 }
 
 export function sendApprovalResponse(
@@ -120,22 +146,17 @@ export function setMemoryModel(model: string): Promise<{ model: string }> {
 
 // ---- Settings: Agent config ----
 
-export async function getAgentConfig(): Promise<{
-  maxSteps: number;
-  maxStopContinuations: number;
-}> {
+export function getAgentConfig(): Promise<AgentConfigView> {
   return clients.settings.getAgentConfig();
 }
 
-export async function setAgentConfig(partial: {
+export function setAgentConfig(partial: {
   maxSteps?: number;
   maxStopContinuations?: number;
-}): Promise<{ maxSteps: number; maxStopContinuations: number }> {
-  return api('/api/settings/agent/config', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(partial),
-  });
+  activeProfile?: ProfileName;
+  permissionMode?: PermissionMode;
+}): Promise<AgentConfigView> {
+  return clients.settings.setAgentConfig(partial);
 }
 
 // ---- Settings: Context config ----
@@ -148,7 +169,7 @@ export async function setCompactionModel(
 
 // ---- Settings: MCP ----
 
-export function listMcpServers(cwd?: string): Promise<any[]> {
+export function listMcpServers(cwd?: string): Promise<McpServerEntry[]> {
   return clients.settings.getMcpStatus({ cwd: cwd ?? '' });
 }
 
@@ -300,78 +321,22 @@ export function forkSession(
 
 // ---- Automations ----
 
-export interface Automation {
-  id: string;
-  name: string;
-  description: string;
-  cron: string;
-  timezone: string;
-  sandbox: 'readonly' | 'workspace-write';
-  enabled: boolean;
-  projectCwd: string;
-  runOnce: boolean;
-  createdAt: number;
-  updatedAt: number;
-  lastRunAt: number | null;
-  lastSessionId: string | null;
+export function listAutomations(): Promise<Automation[]> {
+  return clients.automations.listAutomations();
 }
 
-export interface CreateAutomationInput {
-  name: string;
-  description: string;
-  cron: string;
-  timezone?: string;
-  sandbox?: 'readonly' | 'workspace-write';
-  projectCwd: string;
-  runOnce?: boolean;
+export function createAutomation(input: CreateAutomationInput): Promise<Automation> {
+  return clients.automations.createAutomation(input);
 }
 
-export interface UpdateAutomationInput {
-  name?: string;
-  description?: string;
-  cron?: string;
-  timezone?: string;
-  sandbox?: 'readonly' | 'workspace-write';
-  enabled?: boolean;
-  runOnce?: boolean;
+export function updateAutomation(id: string, input: UpdateAutomationInput): Promise<Automation> {
+  return clients.automations.updateAutomation(id, input);
 }
 
-export async function listAutomations(): Promise<Automation[]> {
-  const res = await fetch(`${API_BASE}/api/automations`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+export function deleteAutomation(id: string): Promise<void> {
+  return clients.automations.deleteAutomation(id);
 }
 
-export async function createAutomation(data: CreateAutomationInput): Promise<Automation> {
-  const res = await fetch(`${API_BASE}/api/automations`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-export async function updateAutomation(
-  id: string,
-  data: UpdateAutomationInput
-): Promise<Automation> {
-  const res = await fetch(`${API_BASE}/api/automations/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-export async function deleteAutomation(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/automations/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-}
-
-export async function runAutomationOnce(id: string): Promise<{ sessionId: string }> {
-  const res = await fetch(`${API_BASE}/api/automations/${id}/run`, { method: 'POST' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+export function runAutomationOnce(id: string): Promise<RunAutomationResult> {
+  return clients.automations.runAutomationOnce(id);
 }

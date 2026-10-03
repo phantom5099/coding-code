@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import { estimateTokensForContent } from '../../src/context/tokens.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
-vi.mock('@codingcode/infra/config', () => ({
+vi.mock('../../src/infra/config.js', () => ({
   loadConfig: () => ({
     context: {
       compactionModel: '',

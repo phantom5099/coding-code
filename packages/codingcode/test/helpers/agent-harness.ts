@@ -1,8 +1,3 @@
-// Agent 循环测试基座：通过公开的 AgentService.runTurn 驱动 agent，
-// 替代已删除的 agentLoop 自由函数。agent 依赖均以宽服务 mock 注入。
-//
-// 自 frame 协议重构后，runTurn 产出 FrameBody（信封由装配器另盖），
-// 本文件同时提供从 FrameBody[] 中抽取内容的纯函数，供各测试断言使用。
 import { Effect, Layer } from 'effect';
 import { AgentLayer } from '../../src/agent/agent.js';
 import { ToolEnvLayer } from '../../src/agent/tool-env.js';
@@ -12,7 +7,7 @@ import { ApprovalService } from '../../src/approval/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
 import { ContextService } from '../../src/context/port.js';
 import { HookService } from '../../src/hooks/port.js';
-import { LLMFactoryService } from '../../src/llm/port.js';
+import { LLMService } from '../../src/llm/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { MemoryService } from '../../src/memory/port.js';
 import { RulesService } from '../../src/rules/port.js';
@@ -43,7 +38,7 @@ export function pToolCall(
   name: string,
   args: Record<string, unknown> = {}
 ): LLMStreamPart {
-  return { type: 'tool_call', id, name, args };
+  return { type: 'tool_call', id, name, arguments: args };
 }
 
 export function pEnd(usage?: TokenUsage): LLMStreamPart {
@@ -154,22 +149,22 @@ export interface HarnessMocks {
 
 export function makeState(partial: Partial<SessionStoreState> = {}): SessionStoreState {
   return {
+    type: 'session_meta',
     sessionId: 'test-sid',
     cwd: '/tmp',
-    messageCount: 0,
-    sessionMeta: { model: 'test-model', createdAt: new Date().toISOString() } as any,
+    createdAt: new Date().toISOString(),
     model: 'test-model',
     title: 'test',
-    currentTurnId: 1,
-    usage: undefined,
     activeProfile: 'build',
-    permissionMode: 'default',
+    permissionMode: 'ask',
+    currentTurnId: 1,
     memorySnapshot: '',
+    usage: undefined,
     ...partial,
   } as SessionStoreState;
 }
 
-export function makeDefaultMocks(overrides: Partial<HarnessMocks> = {}): HarnessMocks {
+export function makeHarnessMocks(overrides: Partial<HarnessMocks> = {}): HarnessMocks {
   const llm =
     overrides.llm ??
     ({
@@ -199,6 +194,7 @@ export interface RunAgentOptions {
   signal?: AbortSignal;
   activeProfile?: 'plan' | 'build';
   permissionMode?: string;
+  model?: string;
 }
 
 export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
@@ -244,13 +240,16 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
   };
   const context = {
-    willCompact: async () => (mocks.contextWillCompact ? mocks.contextWillCompact() : false),
-    assemblePayload: async () =>
-      mocks.contextAssemble ? mocks.contextAssemble() : [{ role: 'user' as const, content: 'hi' }],
+    willCompact: () =>
+      Effect.promise(async () => (mocks.contextWillCompact ? mocks.contextWillCompact() : false)),
+    assemblePayload: () =>
+      Effect.promise(async () =>
+        mocks.contextAssemble ? mocks.contextAssemble() : [{ role: 'user' as const, content: 'hi' }]
+      ),
   };
   const memory = {
-    loadMemoryForPrompt: () => mocks.memorySnapshot ?? '',
-    flushSessionToMemory: () => Promise.resolve({ written: false, bytes: 0 }),
+    loadMemoryForPrompt: () => Effect.succeed(mocks.memorySnapshot ?? ''),
+    flushSessionToMemory: () => Effect.succeed({ written: false, bytes: 0 }),
   };
 
   const mcpLayer = Layer.succeed(McpService, {
@@ -271,10 +270,14 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     Layer.succeed(SkillService, skills as any),
     Layer.succeed(ContextService, context as any),
     Layer.succeed(MemoryService, memory as any),
-    Layer.succeed(LLMFactoryService, { getLLMClient: () => Effect.succeed(mocks.llm) } as any),
+    Layer.succeed(LLMService, {
+      complete: () => Effect.fail(new Error('complete not implemented in harness')),
+      completeStream: (params: any, model: string, signal?: AbortSignal) =>
+        mocks.llm.completeStream(params, model, signal),
+    } as any),
     Layer.succeed(RulesService, {
-      getAllRules: () => '',
-      evictProjectRules: () => {},
+      getAllRules: () => Effect.succeed(''),
+      evictProjectRules: () => Effect.void,
     } as any),
     // agent 与 todo_write 工具消费同一个 TodoService
     Layer.succeed(TodoService, {
@@ -306,8 +309,8 @@ function tick(): Promise<void> {
 // 一口气跑完导致队列事件被丢弃。
 function paceLlm(llm: any): any {
   const completeStream = llm.completeStream.bind(llm);
-  llm.completeStream = (params: any, signal?: AbortSignal) => {
-    const raw = completeStream(params, signal) as AsyncIterable<LLMStreamPart>;
+  llm.completeStream = (params: any, model: string, signal?: AbortSignal) => {
+    const raw = completeStream(params, model, signal) as AsyncIterable<LLMStreamPart>;
     return (async function* () {
       for await (const part of raw) {
         yield part;
@@ -327,7 +330,7 @@ export async function runAgentTurn(
   const appLayer = Layer.mergeAll(services, AgentLayer.pipe(Layer.provide(services))) as any;
   const program = Effect.gen(function* () {
     const agent = yield* AgentService;
-    const runOpts: any = { cwd: opts.cwd ?? '/tmp' };
+    const runOpts: any = { cwd: opts.cwd ?? '/tmp', model: opts.model ?? 'test-model' };
     if (opts.sessionId) runOpts.sessionId = opts.sessionId;
     if (opts.signal) runOpts.signal = opts.signal;
     if (opts.activeProfile) runOpts.activeProfile = opts.activeProfile;

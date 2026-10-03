@@ -1,6 +1,8 @@
 import { Context } from 'effect';
+import type { Effect } from 'effect';
 import type { Message } from '../contracts/types.js';
-import type { LLMClient } from '../contracts/provider.js';
+import type { SessionRef } from '../contracts/session.js';
+import type { AgentError } from '../core/error.js';
 
 export interface CompressResult {
   didCompress: boolean;
@@ -9,9 +11,9 @@ export interface CompressResult {
 }
 
 export interface ContextShape {
-  willCompact(transcriptPath: string, contextWindow: number): Promise<boolean>;
-  assemblePayload(transcriptPath: string, contextWindow: number, llm: LLMClient | null): Promise<Message[]>;
-  compactWithLLM(transcriptPath: string, modelMaxTokens: number, llm: LLMClient | null, usage?: number): Promise<CompressResult>;
+  willCompact(ref: SessionRef, model: string): Effect.Effect<boolean, AgentError>;
+  assemblePayload(ref: SessionRef, model: string): Effect.Effect<Message[], AgentError>;
+  compactWithLLM(ref: SessionRef, model: string, usage?: number): Effect.Effect<CompressResult, AgentError>;
 }
 
 export class ContextService extends Context.Tag('Context')<ContextService, ContextShape>() {}

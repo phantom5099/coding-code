@@ -27,7 +27,7 @@ export const BUILD_PROMPT = `You are a coding assistant —an AI agent that help
 7. For complex or broad tasks (understanding a whole module, cross-file analysis, comprehensive search):
    a. Briefly assess the task scope using your own reasoning —do not use tools for exploration at this stage, as that would consume your limited context window.
    b. If you can clearly handle it without extensive file reading or searching, proceed yourself.
-   c. Otherwise, delegate the discovery task with dispatch_agent when a runtime-configured subagent is available.
+   c. Otherwise delegate the exploration with dispatch_agent: give the subagent a short agentName and a self-contained prompt. The subagent shares your working directory, so keep the delegated write set disjoint from your own.
 
 ## Using your tools
 - **Prefer dedicated tools over shell commands.** Use read_file instead of cat, edit_file instead of sed, search_code instead of grep. Dedicated tools give the user better visibility into your work.
@@ -142,15 +142,6 @@ export function resolveProfile(name: ProfileName): AgentProfile {
   return name === PLAN_PROFILE_NAME ? PLAN_PROFILE : BUILD_PROFILE;
 }
 
-export function resolveSubagentProfile(name: string): AgentProfile | undefined {
-  return isAgentProfileName(name) ? resolveProfile(name) : undefined;
-}
-
 export function getToolNames(profile: AgentProfile | undefined): readonly string[] {
   return isPlanProfile(profile) ? PLAN_TOOL_NAMES : BUILD_TOOL_NAMES;
 }
-
-export const AVAILABLE_PROFILES: Array<{ name: ProfileName; description: string }> = [
-  { name: PLAN_PROFILE_NAME, description: 'Planning agent' },
-  { name: BUILD_PROFILE_NAME, description: 'Build agent' },
-];

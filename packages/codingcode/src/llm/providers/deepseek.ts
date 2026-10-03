@@ -74,7 +74,7 @@ export class DeepSeekProvider implements LLMClient {
               type: 'tool_call',
               id: part.toolCallId,
               name: part.toolName,
-              args: (part.input ?? {}) as Record<string, unknown>,
+              arguments: (part.input ?? {}) as Record<string, unknown>,
             };
             break;
           case 'finish':

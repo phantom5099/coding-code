@@ -1,16 +1,38 @@
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Square, ShieldAlert, ShieldCheck, Shield, Eye, FileText } from 'lucide-react';
+import { Send, Square, ShieldAlert, ShieldCheck, Shield, FileText } from 'lucide-react';
 import { useAgentStore } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
-import { API_BASE, api } from '../lib/api';
-import { setSessionPermissionMode } from '../lib/core-api';
+import {
+  compactSession,
+  setSessionModel,
+  setSessionPermissionMode,
+  setAgentConfig,
+} from '../lib/core-api';
 import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
 import ApprovalPanel from './ApprovalPanel';
 import ProfileIndicator from './ProfileIndicator';
-import { APPROVAL_POLICY_TO_PERMISSION_MODE } from '../hooks/useAgent';
 import PlanPanel from '../shared/PlanPanel';
+import type { PermissionMode } from '@codingcode/sdk';
+
+const MODE_LABELS: Record<PermissionMode, string> = {
+  ask: '全部询问',
+  acceptEdits: '半自动',
+  bypass: '完全放行',
+};
+
+const MODE_NEXT: Record<PermissionMode, PermissionMode> = {
+  ask: 'acceptEdits',
+  acceptEdits: 'bypass',
+  bypass: 'ask',
+};
+
+const MODE_ICONS: Record<PermissionMode, React.ReactNode> = {
+  ask: <ShieldAlert size={14} strokeWidth={1.5} />,
+  acceptEdits: <ShieldCheck size={14} strokeWidth={1.5} />,
+  bypass: <Shield size={14} strokeWidth={1.5} />,
+};
 
 // ─── ContextIndicator ──────────────────────────────────────────────────────
 
@@ -22,6 +44,7 @@ function ContextIndicator({ threadId }: { threadId: string }) {
   const isCompressing = useAgentStore((s) => s.isCompressing);
   const startCompressing = useAgentStore((s) => s.startCompressing);
   const stopCompressing = useAgentStore((s) => s.stopCompressing);
+  const model = useAgentStore((s) => s.model);
 
   const r = 7;
   const circ = 2 * Math.PI * r;
@@ -70,14 +93,7 @@ function ContextIndicator({ threadId }: { threadId: string }) {
       onClick={async () => {
         startCompressing();
         try {
-          const res = await api<{ promptEstimate: number; didCompress: boolean; released: number }>(
-            `/api/sessions/${threadId}/compact`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ cwd: '' }),
-            }
-          );
+          const res = await compactSession(threadId, '', model);
           if (res.didCompress && contextUsage) {
             setContextUsage({
               used: res.promptEstimate,
@@ -118,7 +134,9 @@ function ContextIndicator({ threadId }: { threadId: string }) {
 function ModelSelector() {
   const model = useAgentStore((s) => s.model);
   const models = useAgentStore((s) => s.models);
-  const setModel = useAgentStore((s) => s.setModel);
+  const selectModel = useAgentStore((s) => s.selectModel);
+  const currentThreadId = useAgentStore((s) => s.currentThreadId);
+  const rootPath = useWorkspaceStore((s) => s.rootPath);
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -169,13 +187,9 @@ function ModelSelector() {
                       type="button"
                       key={m.id}
                       onClick={async () => {
-                        setModel(m.id);
+                        selectModel(m.id);
                         setOpen(false);
-                        await api(`/api/models/switch`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ modelId: m.id }),
-                        }).catch((e) => {
+                        await setSessionModel(currentThreadId, rootPath ?? '', m.id).catch((e) => {
                           console.error('Failed to switch model:', e);
                         });
                       }}
@@ -225,15 +239,21 @@ function InputBox({
     const thread = s.threads[tid];
     return thread?.turns.some((t) => t.status === 'running') ?? false;
   });
-  const approvalPolicy = useAgentStore((s) => s.approvalPolicy);
+  const storePermissionMode = useAgentStore((s) => s.permissionMode);
+  const setPermissionMode = useAgentStore((s) => s.setPermissionMode);
   const workspace = useWorkspaceStore();
-  const setApprovalPolicy = useAgentStore((s) => s.setApprovalPolicy);
   const pendingInput = useAgentStore((s) => s.pendingInput);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
 
+  // 有会话时显示该会话真实的权限模式；还没有会话时显示 config.yaml 里的值
+  const sessionPermissionMode = useAgentStore((s) =>
+    s.currentThreadId ? (s.profileByThreadId[s.currentThreadId]?.permissionMode ?? null) : null
+  );
+  const permissionMode: PermissionMode = sessionPermissionMode ?? storePermissionMode;
+
   const isPlanProfile = useAgentStore((s) => {
     if (!s.currentThreadId) {
-      return s.pendingProfile === 'plan';
+      return s.profile === 'plan';
     }
     return s.profileByThreadId[s.currentThreadId]?.activeProfile === 'plan';
   });
@@ -259,24 +279,6 @@ function InputBox({
     sendMessage(trimmed, workspace.rootPath || undefined);
   }, [text, isStreaming, sendMessage, workspace.rootPath]);
 
-  const POLICY_LABELS: Record<string, string> = {
-    'ask-all': '全部询问',
-    'smart-allow': '半自动',
-    'full-allow': '完全放行',
-    'read-only': '只读模式',
-  };
-  const POLICY_NEXT: Record<string, 'ask-all' | 'smart-allow' | 'full-allow' | 'read-only'> = {
-    'ask-all': 'smart-allow',
-    'smart-allow': 'full-allow',
-    'full-allow': 'read-only',
-    'read-only': 'ask-all',
-  };
-  const POLICY_ICONS: Record<string, React.ReactNode> = {
-    'ask-all': <ShieldAlert size={14} strokeWidth={1.5} />,
-    'smart-allow': <ShieldCheck size={14} strokeWidth={1.5} />,
-    'full-allow': <Shield size={14} strokeWidth={1.5} />,
-    'read-only': <Eye size={14} strokeWidth={1.5} />,
-  };
 
   return (
     <div className={centered ? 'w-full max-w-[740px]' : 'px-5 pb-5 pt-2'}>
@@ -328,22 +330,30 @@ function InputBox({
             <button
               type="button"
               onClick={() => {
-                const next = POLICY_NEXT[approvalPolicy] ?? 'ask-all';
-                setApprovalPolicy(next);
+                const next = MODE_NEXT[permissionMode];
                 if (currentThreadId) {
-                  setSessionPermissionMode(
-                    currentThreadId,
-                    workspace.rootPath || '',
-                    APPROVAL_POLICY_TO_PERMISSION_MODE[next] ?? 'default'
-                  ).catch((e) => {
-                    console.error('Failed to sync permission mode:', e);
+                  const entry = useAgentStore.getState().profileByThreadId[currentThreadId];
+                  useAgentStore.getState().setProfileForThread(currentThreadId, {
+                    activeProfile: entry?.activeProfile ?? 'build',
+                    permissionMode: next,
                   });
+                  setSessionPermissionMode(currentThreadId, workspace.rootPath || '', next).catch(
+                    (e) => {
+                      console.error('Failed to sync permission mode:', e);
+                    }
+                  );
+                } else {
+                  setAgentConfig({ permissionMode: next })
+                    .then((cfg) => setPermissionMode(cfg.permissionMode))
+                    .catch((e) => {
+                      console.error('Failed to save default permission mode:', e);
+                    });
                 }
               }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
             >
-              <span className="text-[var(--accent-primary)]">{POLICY_ICONS[approvalPolicy]}</span>
-              <span>{POLICY_LABELS[approvalPolicy] ?? '全部询问'}</span>
+              <span className="text-[var(--accent-primary)]">{MODE_ICONS[permissionMode]}</span>
+              <span>{MODE_LABELS[permissionMode]}</span>
               <span className="text-[var(--text-disabled)] text-[10px]">▾</span>
             </button>
           )}

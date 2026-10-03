@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import { filterForUI } from '../../src/session/session.js';
-import type { SessionEvent, SessionIndex } from '../../src/contracts/session.js';
+import type { SessionEvent } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -14,7 +14,6 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
   const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = join(dir, `${sessionId}.jsonl`);
-  const indexPath = join(dir, `${sessionId}.index.json`);
 
   const lines: any[] = [
     {
@@ -22,6 +21,10 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
       sessionId,
       cwd: '/tmp/test',
       createdAt: new Date().toISOString(),
+      model: 'test-model',
+      title: 'fixture',
+      activeProfile: 'build',
+      permissionMode: 'ask',
     },
     { type: 'user', turnId: 1, content: 'hello' },
     { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },
@@ -46,22 +49,7 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
 
   writeFileSync(transcriptPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
 
-  const idx: SessionIndex = {
-    sessionId,
-    cwd: '/tmp/test',
-    model: 'test-model',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    messageCount: lines.length,
-    title: 'fixture',
-    currentTurnId: 3,
-    usage: undefined,
-    activeProfile: 'build',
-    permissionMode: 'default',
-  };
-  writeFileSync(indexPath, JSON.stringify(idx, null, 2), 'utf8');
-
-  return { dir, transcriptPath, indexPath };
+  return { dir, transcriptPath };
 }
 
 describe('filterForContext', () => {
@@ -75,8 +63,10 @@ describe('filterForContext', () => {
           sessionId,
           cwd: '/tmp',
           createdAt: new Date().toISOString(),
+          model: 'test-model',
+          title: 'test',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         },
         { type: 'user', turnId: 1, content: 'hello' },
         { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },
@@ -122,8 +112,10 @@ describe('readUIHistory with visibility filtering', () => {
           sessionId,
           cwd: '/tmp',
           createdAt: new Date().toISOString(),
+          model: 'test-model',
+          title: 'test',
           activeProfile: 'build',
-          permissionMode: 'default',
+          permissionMode: 'ask',
         },
         { type: 'user', turnId: 1, content: 'hello' },
         { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },
@@ -135,22 +127,6 @@ describe('readUIHistory with visibility filtering', () => {
       mkdirSync(dir, { recursive: true });
       const tp = join(dir, `${sessionId}.jsonl`);
       writeFileSync(tp, events.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
-      writeFileSync(
-        join(dir, `${sessionId}.index.json`),
-        JSON.stringify({
-          sessionId,
-          cwd: '/tmp',
-          model: 't',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          messageCount: 7,
-          title: 'test',
-          currentTurnId: 2,
-          usage: undefined,
-          activeProfile: 'build',
-          permissionMode: 'default',
-        })
-      );
 
       const visible = filterForUI(readHistory(tp));
       const turnIds = visible.filter((e) => 'turnId' in e).map((e) => (e as any).turnId);
