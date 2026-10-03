@@ -69,6 +69,7 @@ export interface SessionClient {
     cwd: string;
     mode: PermissionMode;
   }): Promise<void>;
+  renameSession(input: { sessionId: string; cwd: string; title: string }): Promise<void>;
   getSessionPlan(input: { sessionId: string; cwd: string }): Promise<SessionPlanFile>;
 
   getCheckpointDiff(input: {

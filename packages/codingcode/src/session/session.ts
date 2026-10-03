@@ -178,7 +178,7 @@ export const SessionLayer = Layer.effect(
             cwd: paths.cwd,
             createdAt: new Date().toISOString(),
             model: options.model,
-            title: options.title ? truncateTitle(options.title) : paths.sessionId.slice(0, 8),
+            title: options.title ? truncateTitle(options.title) : '',
             activeProfile: options.activeProfile,
             permissionMode: options.permissionMode,
             ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
@@ -230,7 +230,15 @@ export const SessionLayer = Layer.effect(
             content,
             source: 'user',
           };
-          appendLine(pathsFromState(state).transcriptPath, event);
+          const transcriptPath = pathsFromState(state).transcriptPath;
+          appendLine(transcriptPath, event);
+          if (!state.title) {
+            const derived = truncateTitle(content);
+            if (derived) {
+              rewriteSessionMeta(transcriptPath, { title: derived });
+              state.title = derived;
+            }
+          }
           return event;
         },
         catch: (e) =>

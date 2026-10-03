@@ -33,7 +33,7 @@ const CWD = '/tmp/test';
 
 function makeFixture(opts: FixtureOptions) {
   const sessionId = randomUUID();
-  const ref: SessionRef = { cwd: CWD, sessionId };
+  const ref: SessionRef = { cwd: CWD, sessionId, currentTurnId: opts.numTurns };
   const transcriptPath = transcriptPathFor(ref);
   mkdirSync(dirname(transcriptPath), { recursive: true });
 

@@ -131,9 +131,9 @@ importers:
 
   packages/desktop:
     dependencies:
-      '@codingcode/core':
+      '@codingcode/sdk':
         specifier: workspace:*
-        version: link:../codingcode
+        version: link:../sdk
       '@tanstack/react-virtual':
         specifier: ^3.12.6
         version: 3.14.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -210,6 +210,8 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
+
+  packages/sdk: {}
 
 packages:
 

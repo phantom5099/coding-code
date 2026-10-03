@@ -20,7 +20,7 @@ describe('会话转录路径：context 与 session 各自拼接的结果必须�
   for (const { cwd, parentSessionId } of cases) {
     it(`cwd=${cwd} parent=${parentSessionId ?? '(none)'}`, () => {
       const sessionId = randomUUID();
-      const ref: SessionRef = { cwd, sessionId, parentSessionId };
+      const ref: SessionRef = { cwd, sessionId, parentSessionId, currentTurnId: 0 };
 
       expect(transcriptPathFor(ref)).toBe(
         computePaths(cwd, sessionId, parentSessionId).transcriptPath

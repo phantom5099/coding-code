@@ -126,4 +126,5 @@ export interface SessionRef {
   cwd: string;
   sessionId: string;
   parentSessionId?: string;
+  currentTurnId: number;
 }

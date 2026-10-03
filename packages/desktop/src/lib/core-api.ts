@@ -85,6 +85,10 @@ export function setSessionPermissionMode(
   return clients.sessions.setSessionPermissionMode({ sessionId, cwd, mode });
 }
 
+export function renameSession(sessionId: string, cwd: string, title: string): Promise<void> {
+  return clients.sessions.renameSession({ sessionId, cwd, title });
+}
+
 export function sendApprovalResponse(
   sessionId: string,
   callId: string,

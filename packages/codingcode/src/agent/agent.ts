@@ -222,6 +222,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
           cwd: state.cwd,
           sessionId: state.sessionId,
           parentSessionId: state.parentSessionId,
+          currentTurnId: state.currentTurnId,
         };
 
         const willCompact = yield* Effect.either(context.willCompact(sessionRef, model));

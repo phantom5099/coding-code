@@ -118,7 +118,12 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const session = yield* SessionService;
         const state = yield* session.load(normalizedCwd, sessionId);
         return yield* context.compactWithLLM(
-          { cwd: state.cwd, sessionId: state.sessionId, parentSessionId: state.parentSessionId },
+          {
+            cwd: state.cwd,
+            sessionId: state.sessionId,
+            parentSessionId: state.parentSessionId,
+            currentTurnId: state.currentTurnId,
+          },
           body.model ?? ''
         );
       })
@@ -318,6 +323,27 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       Effect.gen(function* () {
         const session = yield* SessionService;
         yield* session.setModel(cwd, sessionId, model);
+        return { ok: true };
+      }) as any
+    );
+    if (!result.ok) {
+      const { status, body: errBody } = errorResponse(result.error);
+      return c.json(errBody, status as any);
+    }
+    return c.json(result.value);
+  });
+
+  router.put('/api/sessions/:id/title', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = (await c.req.json()) as { cwd?: string; title?: string };
+    const title = body.title?.replace(/\n/g, ' ').trim();
+    if (!title) return c.json(errorBody('CONFIG_MISSING', 'title required'), 400);
+    const cwd = resolveCwd(body.cwd);
+    const result = await runWithLayer(
+      Effect.gen(function* () {
+        const session = yield* SessionService;
+        const state = yield* session.load(cwd, sessionId);
+        yield* session.renameSession(state, title);
         return { ok: true };
       }) as any
     );

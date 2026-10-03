@@ -49,6 +49,10 @@ export function createHttpSessionClient(
       await apiPut(`/api/sessions/${sessionId}/permission-mode`, { cwd, mode });
     },
 
+    async renameSession({ sessionId, cwd, title }) {
+      await apiPut(`/api/sessions/${sessionId}/title`, { cwd, title });
+    },
+
     async getSessionPlan({ sessionId, cwd }) {
       return apiGet(`/api/sessions/${sessionId}/plan?cwd=${encodeURIComponent(cwd)}`);
     },

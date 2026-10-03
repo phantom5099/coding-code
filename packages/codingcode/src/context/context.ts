@@ -205,18 +205,14 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
     const session = yield* SessionService;
     const llm = yield* LLMService;
 
-    const readState = (transcriptPath: string): Effect.Effect<PayloadState, AgentError> =>
+    const readState = (
+      transcriptPath: string,
+      currentTurnId: number
+    ): Effect.Effect<PayloadState, AgentError> =>
       Effect.gen(function* () {
-        const jsonlPath = transcriptPath;
-        const events = yield* session.readEvents(jsonlPath);
-        let currentTurnId = 0;
-        for (const ev of events) {
-          if ('turnId' in ev && typeof ev.turnId === 'number' && ev.turnId > currentTurnId) {
-            currentTurnId = ev.turnId;
-          }
-        }
+        const events = yield* session.readEvents(transcriptPath);
         const { visible, compactedTurnIds } = filterForContext(events);
-        return { jsonlPath, currentTurnId, visible, compactedTurnIds };
+        return { jsonlPath: transcriptPath, currentTurnId, visible, compactedTurnIds };
       });
 
     const estimateFor = (s: PayloadState): number =>
@@ -271,7 +267,7 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
         if (estimateFor(s) <= contextWindow * MICRO_COMPACT_THRESHOLD) return s;
         const applied = yield* applyOldTurnCompact(s.visible, s.currentTurnId, s.jsonlPath);
         if (applied) {
-          return yield* readState(s.jsonlPath);
+          return yield* readState(s.jsonlPath, s.currentTurnId);
         }
         return s;
       });
@@ -341,7 +337,7 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
           const released = yield* tryCompaction(cur, model);
           if (released <= 0) break;
           releasedTotal += released;
-          cur = yield* readState(cur.jsonlPath);
+          cur = yield* readState(cur.jsonlPath, cur.currentTurnId);
         }
         return { state: cur, released: releasedTotal };
       });
@@ -394,7 +390,7 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
       Effect.gen(function* () {
         const transcriptPath = transcriptPathFor(ref);
         const contextWindow = contextWindowOf(model);
-        const s = yield* runMicroCompact(yield* readState(transcriptPath), contextWindow);
+        const s = yield* runMicroCompact(yield* readState(transcriptPath, ref.currentTurnId), contextWindow);
         return needsCompaction(s, contextWindow);
       });
 
@@ -405,7 +401,7 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
       Effect.gen(function* () {
         const transcriptPath = transcriptPathFor(ref);
         const contextWindow = contextWindowOf(model);
-        let s = yield* readState(transcriptPath);
+        let s = yield* readState(transcriptPath, ref.currentTurnId);
         s = yield* runMicroCompact(s, contextWindow);
         const { state } = yield* summarizeToFit(s, contextWindow, model);
         return buildContextMessages(state.visible, state.compactedTurnIds);
@@ -419,13 +415,13 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
       Effect.gen(function* () {
         const transcriptPath = transcriptPathFor(ref);
         const contextWindow = contextWindowOf(model);
-        let s = yield* runMicroCompact(yield* readState(transcriptPath), contextWindow);
+        let s = yield* runMicroCompact(yield* readState(transcriptPath, ref.currentTurnId), contextWindow);
         const preEstimate = usage ?? estimateFor(s);
         const released = yield* tryCompaction(s, model);
         if (released <= 0) {
           return { didCompress: false, released: 0, promptEstimate: preEstimate };
         }
-        s = yield* readState(transcriptPath);
+        s = yield* readState(transcriptPath, ref.currentTurnId);
         return { didCompress: true, released, promptEstimate: estimateFor(s) };
       });
 

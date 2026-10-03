@@ -36,7 +36,7 @@ describe('assemblePayload integration', () => {
   let transcriptPath: string;
 
   beforeEach(() => {
-    ref = { cwd: CWD, sessionId: randomUUID() };
+    ref = { cwd: CWD, sessionId: randomUUID(), currentTurnId: 1 };
     transcriptPath = transcriptPathFor(ref);
     mkdirSync(dirname(transcriptPath), { recursive: true });
 
@@ -92,7 +92,7 @@ describe('assemblePayload integration', () => {
   });
 
   it('returns an empty message list when the transcript is empty', async () => {
-    const emptyRef: SessionRef = { cwd: CWD, sessionId: `${ref.sessionId}-empty` };
+    const emptyRef: SessionRef = { cwd: CWD, sessionId: `${ref.sessionId}-empty`, currentTurnId: 1 };
     const emptyPath = transcriptPathFor(emptyRef);
     writeFileSync(emptyPath, '', 'utf8');
     const ctx = await getCtxService();
