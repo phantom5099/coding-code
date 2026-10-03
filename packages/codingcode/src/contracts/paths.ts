@@ -1,11 +1,3 @@
-/**
- * 领域数据目录的路径片段常量。
- *
- * 本层只放类型与纯字面量常量，不引用任何包（含 node:path 与 core/path）。
- * 拼接由各领域模块自己完成：先用 `core/path` 的纯函数把入参 cwd 归一化，
- * 再用这里的常量拼出最终路径。
- */
-
 /** `<~/.codingcode>/project` —— 所有工作区的数据根。 */
 export const PROJECTS_DIRNAME = 'project';
 
