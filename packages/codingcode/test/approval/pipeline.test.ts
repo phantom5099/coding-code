@@ -4,6 +4,7 @@ import { runPipeline } from '../../src/approval/approval.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import type { PermissionRule } from '../../src/approval/types.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { EventSinkService } from '../../src/sink/port.js';
 import { HookService } from '../../src/hooks/port.js';
 
 const mockHookService = {
@@ -13,18 +14,21 @@ const mockHookService = {
 };
 
 const mockApprovalWaitService = {
-  waitForConfirm: () => Effect.dieMessage('not implemented'),
+  waitForConfirm: () => Effect.succeed({ type: 'deny' } as const),
   resolveConfirm: () => Effect.succeed(false),
-  emitApprovalRequest: () => Effect.succeed(undefined),
-  registerEmitter: () => Effect.succeed(undefined),
-  delegateEmitter: () => Effect.succeed(undefined),
-  unregisterEmitter: () => Effect.succeed(undefined),
-  hasEmitter: () => Effect.succeed(false),
+  cancelPendingFor: () => Effect.succeed(0),
+};
+
+const mockEventSink = {
+  attach: () => Effect.succeed({} as any),
+  detach: () => Effect.void,
+  emit: () => Effect.void,
 };
 
 const HookTestLayer = Layer.succeed(HookService, mockHookService);
 const WaitTestLayer = Layer.succeed(ApprovalWaitService, mockApprovalWaitService);
-const TestLayer = Layer.mergeAll(HookTestLayer, WaitTestLayer);
+const SinkTestLayer = Layer.succeed(EventSinkService, mockEventSink as any);
+const TestLayer = Layer.mergeAll(HookTestLayer, WaitTestLayer, SinkTestLayer);
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(TestLayer)));
@@ -50,7 +54,7 @@ describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyW
     expect((decision as any).source).toContain('rule:');
   });
 
-  it('ask mode does NOT auto-allow read-only tools (no UI → system deny)', async () => {
+  it('ask mode routes read-only tools to user confirmation', async () => {
     const decision = await runWithLayer(
       runPipeline(
         { tool: 'read_file', input: { path: '/safe/file.txt' } },
@@ -63,8 +67,7 @@ describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyW
       )
     );
     expect((decision as any).type).toBe('deny');
-    expect((decision as any).source).toBe('system');
-    expect((decision as any).reason).toBe('Approval required but no UI available');
+    expect((decision as any).source).toBe('user-confirm');
   });
 
   it('acceptEdits mode auto-allows read-only tools (read-only merged into non-destructive)', async () => {

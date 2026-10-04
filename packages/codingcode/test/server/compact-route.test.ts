@@ -14,6 +14,7 @@ import { CheckpointService } from '../../src/checkpoint/port.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
 import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
+import { EventSinkLayer } from '../../src/sink/sink.js';
 
 const mockCompactWithLLM = vi.fn();
 
@@ -51,7 +52,7 @@ const MockSessionLayer = Layer.succeed(SessionService, {
 } as any);
 
 const MockApprovalLayer = ApprovalLayer.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
+  Layer.provide(Layer.mergeAll(HookLayer, EventSinkLayer, ApprovalWaitLayer))
 );
 
 const MockSkillLayer = Layer.succeed(SkillService, {
@@ -82,8 +83,10 @@ const MockSchedulerLayer = Layer.succeed(SchedulerService, {
 } as any);
 
 const MockContextLayer = Layer.succeed(ContextService, {
-  assemblePayload: () => Effect.succeed([]),
-  compactWithLLM: mockCompactWithLLM,
+  getHistory: () => Effect.succeed([]),
+  absorb: () => Effect.void,
+  compact: mockCompactWithLLM,
+  dispose: () => Effect.void,
 } as any);
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, {
@@ -112,6 +115,7 @@ const TestLayer = Layer.mergeAll(
   MockSessionLayer,
   MockApprovalLayer,
   HookLayer,
+  EventSinkLayer,
   ApprovalWaitLayer,
   MockSkillLayer,
   MockMcpLayer,
@@ -135,7 +139,7 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
     );
   });
 
-  it('should pass the requested model through to compactWithLLM', async () => {
+  it('should pass the requested model through to compact', async () => {
     const app = await createServer(rt);
     const res = await app.request('/api/sessions/test-sid/compact', {
       method: 'POST',

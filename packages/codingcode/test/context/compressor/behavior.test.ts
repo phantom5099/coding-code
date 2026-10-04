@@ -14,6 +14,7 @@ import { readHistory } from '../../../src/session/file-ops.js';
 import { estimateTokens } from '../../../src/context/tokens.js';
 import { useTempProjectBase } from '../../helpers/project-base.js';
 import { ContextLayer } from '../../../src/context/context.js';
+import { EventSinkLayer } from '../../../src/sink/sink.js';
 
 // 上下文窗口现在由 catalog 按模型值现取，测试里钉死成一个可控值
 const windowState = vi.hoisted(() => ({ value: 128000 }));
@@ -107,7 +108,7 @@ const FailingLLM = {
 } as any;
 
 function makeTestLayer(llm: unknown) {
-  return Layer.merge(SessionLayer, Layer.succeed(LLMService, llm as any));
+  return Layer.mergeAll(SessionLayer, Layer.succeed(LLMService, llm as any), EventSinkLayer);
 }
 
 async function getCtxService(llm: unknown): Promise<ContextShape> {
@@ -130,7 +131,7 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         windowState.value = 1000;
         const ctx = await getCtxService(makeMockLLM(summary));
-        await run(ctx.compactWithLLM(fx.ref, 'test-model'));
+        await run(ctx.compact(fx.ref, 'test-model'));
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
@@ -148,7 +149,7 @@ describe('compressor behavior', () => {
       try {
         windowState.value = 1000;
         const ctx = await getCtxService(FailingLLM);
-        const result = await run(ctx.compactWithLLM(fx.ref, 'test-model'));
+        const result = await run(ctx.compact(fx.ref, 'test-model'));
         expect(result.didCompress).toBe(false);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
@@ -168,7 +169,7 @@ describe('compressor behavior', () => {
             '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
           )
         );
-        await run(ctx.compactWithLLM(fx.ref, 'test-model'));
+        await run(ctx.compact(fx.ref, 'test-model'));
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
@@ -180,7 +181,7 @@ describe('compressor behavior', () => {
     });
   });
 
-  describe('compactWithLLM result', () => {
+  describe('compact result', () => {
     it('returns promptEstimate after compression', async () => {
       const fx = makeFixture({ numTurns: 5 });
       try {
@@ -194,7 +195,7 @@ describe('compressor behavior', () => {
             '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
           )
         );
-        const result = await run(ctx.compactWithLLM(fx.ref, 'test-model'));
+        const result = await run(ctx.compact(fx.ref, 'test-model'));
         expect(result.didCompress).toBe(true);
         expect(result.promptEstimate).toBeGreaterThan(0);
         expect(result.promptEstimate).toBeLessThan(before);
@@ -205,7 +206,7 @@ describe('compressor behavior', () => {
     });
   });
 
-  describe('assemblePayload compaction', () => {
+  describe('getHistory compaction', () => {
     const SUMMARY =
       '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne';
 
@@ -214,7 +215,7 @@ describe('compressor behavior', () => {
       try {
         windowState.value = 1000;
         const ctx = await getCtxService(makeMockLLM(SUMMARY));
-        const messages = await run(ctx.assemblePayload(fx.ref, 'test-model'));
+        const messages = await run(ctx.getHistory(fx.ref, 'test-model'));
         expect(messages.length).toBeGreaterThan(0);
         expect(messages.some((m) => m.name === 'compacted_history')).toBe(true);
       } finally {
@@ -227,7 +228,7 @@ describe('compressor behavior', () => {
       try {
         windowState.value = 2_000_000;
         const ctx = await getCtxService(makeMockLLM(SUMMARY));
-        const messages = await run(ctx.assemblePayload(fx.ref, 'test-model'));
+        const messages = await run(ctx.getHistory(fx.ref, 'test-model'));
         expect(messages.some((m) => m.name === 'compacted_history')).toBe(false);
       } finally {
         cleanup(fx.dir);

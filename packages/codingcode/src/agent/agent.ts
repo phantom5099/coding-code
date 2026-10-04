@@ -6,6 +6,7 @@ import type { RunTurnOptions, ToolEnv } from './port.js';
 import { ApprovalService } from '../approval/port.js';
 import { CheckpointService } from '../checkpoint/port.js';
 import { ContextService } from '../context/port.js';
+import { EventSinkService } from '../sink/port.js';
 import { HookService } from '../hooks/port.js';
 import { LLMService } from '../llm/port.js';
 import { McpService } from '../mcp/port.js';
@@ -49,6 +50,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   const skills = yield* SkillService;
   const mcp = yield* McpService;
   const context = yield* ContextService;
+  const sink = yield* EventSinkService;
   const memory = yield* MemoryService;
   const llm = yield* LLMService;
   const rules = yield* RulesService;
@@ -129,13 +131,18 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       // get rules text
       const rulesText = yield* rules.getAllRules(state.cwd);
 
-      // run agent loop
-      const stream = runAgentLoop({
-        state, model, profile, catalog, systemPrompt: opts.systemPrompt,
-        toolEnv,
-        abortSignal: opts.signal, rulesText,
-        sid: sessionId, projectPath: state.cwd, permissionMode: effectivePerm,
-      });
+      // run agent loop：出站队列挂在 sink 上，本回合是它的唯一读者
+      const q = yield* sink.attach(sessionId);
+      const emit = (body: FrameBody) => Effect.runSync(sink.emit(sessionId, body));
+      const stream = runAgentLoop(
+        {
+          state, model, profile, catalog, systemPrompt: opts.systemPrompt,
+          toolEnv,
+          abortSignal: opts.signal, rulesText,
+          sid: sessionId, projectPath: state.cwd, permissionMode: effectivePerm,
+        },
+        { q, emit, onEnd: () => Effect.runSync(sink.detach(sessionId)) }
+      );
 
       return { stream, sessionId };
     });
@@ -148,10 +155,12 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     rulesText: string;
     sid: string; projectPath: string; permissionMode: PermissionMode;
     systemPrompt?: string;
+  }, out: {
+    q: Queue.Queue<FrameBody>;
+    emit: (body: FrameBody) => void;
+    onEnd: () => void;
   }): AsyncGenerator<FrameBody> {
-    const q = Effect.runSync(Queue.unbounded<FrameBody>());
-
-    const program = agentLoopInternal(opts, q);
+    const program = agentLoopInternal(opts, out.emit);
 
     return (async function* () {
       const fiber = Effect.runFork(opts.toolEnv.provide(program));
@@ -162,11 +171,15 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         if (opts.abortSignal.aborted) Effect.runFork(Fiber.interrupt(fiber));
       }
 
-      const stream = Stream.fromQueue(q).pipe(
-        Stream.takeUntil((body: FrameBody) => isTurnEnd(body))
-      );
-      for await (const body of Stream.toAsyncIterable(stream) as AsyncIterable<FrameBody>) {
-        yield body;
+      try {
+        const stream = Stream.fromQueue(out.q).pipe(
+          Stream.takeUntil((body: FrameBody) => isTurnEnd(body))
+        );
+        for await (const body of Stream.toAsyncIterable(stream) as AsyncIterable<FrameBody>) {
+          yield body;
+        }
+      } finally {
+        out.onEnd();
       }
     })();
   }
@@ -178,7 +191,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     rulesText: string;
     sid: string; projectPath: string; permissionMode: PermissionMode;
     systemPrompt?: string;
-  }, q: Queue.Queue<FrameBody>): Effect.Effect<Result<string, AgentError>, AgentError> {
+  }, emit: (body: FrameBody) => void): Effect.Effect<Result<string, AgentError>, AgentError> {
     const { state, model, profile, abortSignal, catalog, rulesText, sid, projectPath, permissionMode } = opts;
     const { tools, lookup: toolLookup } = catalog;
 
@@ -187,7 +200,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       Effect.sync(() => {
         if (ended) return;
         ended = true;
-        Effect.runSync(q.offer({ family: 'transition', transition }));
+        emit({ family: 'transition', transition });
       });
 
     return Effect.gen(function* () {
@@ -209,13 +222,13 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
       let lastResult: Result<string, AgentError> | null = null;
 
       yield* hooks.emit('agent.turn.start', { sessionId: sid, projectPath });
-      yield* q.offer({ family: 'transition', transition: { to: 'start', turnId: state.currentTurnId } });
+      emit({ family: 'transition', transition: { to: 'start', turnId: state.currentTurnId } });
 
       for (let step = 0; step < maxSteps; step++) {
         yield* hooks.emitDecision('agent.step.before', { sessionId: sid, step: step + 1, projectPath });
 
         if (step === 0) {
-          yield* q.offer({ family: 'transition', transition: { to: 'executing' } });
+          emit({ family: 'transition', transition: { to: 'executing' } });
         }
 
         const sessionRef: SessionRef = {
@@ -225,27 +238,14 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
           currentTurnId: state.currentTurnId,
         };
 
-        const willCompact = yield* Effect.either(context.willCompact(sessionRef, model));
-        if (Either.isLeft(willCompact)) {
-          yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(willCompact.left) });
+        const history = yield* Effect.either(context.getHistory(sessionRef, model));
+        if (Either.isLeft(history)) {
+          yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(history.left) });
           yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
-          return Result.err(willCompact.left);
-        }
-        if (willCompact.right) {
-          yield* q.offer({ family: 'transition', transition: { to: 'compress' } });
+          return Result.err(history.left);
         }
 
-        const assembled = yield* Effect.either(context.assemblePayload(sessionRef, model));
-        if (Either.isLeft(assembled)) {
-          yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(assembled.left) });
-          yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
-          return Result.err(assembled.left);
-        }
-        if (willCompact.right) {
-          yield* q.offer({ family: 'transition', transition: { to: 'executing' } });
-        }
-
-        const llmMessages = [...assembled.right];
+        const llmMessages = [...history.right];
 
         let content = '';
         const toolCalls: ToolCall[] = [];
@@ -257,19 +257,19 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
               if (abortSignal?.aborted) break;
               if (part.type === 'text') {
                 content += part.text;
-                Effect.runSync(q.offer({ family: 'event', event: { type: 'text_delta', text: part.text } }));
+                emit({ family: 'event', event: { type: 'text_delta', text: part.text } });
               } else if (part.type === 'tool_call') {
                 toolCalls.push({ id: part.id, name: part.name, arguments: part.arguments });
-                Effect.runSync(q.offer({
+                emit({
                   family: 'event',
                   event: { type: 'tool_call', id: part.id, name: part.name, args: part.arguments },
-                }));
+                });
               } else {
                 responded = part.usage ? { usage: part.usage } : {};
-                Effect.runSync(q.offer({
+                emit({
                   family: 'transition',
                   transition: { to: 'executing', responded },
-                }));
+                });
               }
             }
           },
@@ -282,7 +282,8 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         }
 
         if (toolCalls.length === 0) {
-          yield* session.recordAssistant(state, content, [], responded.usage);
+          const assistantEv = yield* session.recordAssistant(state, content, [], responded.usage);
+          yield* context.absorb(sessionRef, [assistantEv]);
           const stopDecision = yield* hooks.emitDecision('agent.turn.stop', { sessionId: sid, content, turnId: state.currentTurnId, projectPath });
 
           if (stopDecision && stopDecision.decision === 'continue') {
@@ -295,7 +296,8 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
             }
             stopContinuations++;
             const injection = stopDecision.injection ?? '(continue)';
-            yield* session.recordSystem(state, injection);
+            const systemEv = yield* session.recordSystem(state, injection);
+            yield* context.absorb(sessionRef, [systemEv]);
             continue;
           }
 
@@ -305,7 +307,8 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
           break;
         }
 
-        yield* session.recordAssistant(state, content, toolCalls, responded.usage);
+        const assistantToolEv = yield* session.recordAssistant(state, content, toolCalls, responded.usage);
+        yield* context.absorb(sessionRef, [assistantToolEv]);
 
         const approvedCalls: any[] = [];
         const deniedResults: any[] = [];
@@ -342,13 +345,14 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         let todoPrinted = false;
         for (const r of allResults) {
           const resultOut = r.status === 'denied' ? '' : r.output;
-          yield* session.recordToolResult(state, r.name, r.id, resultOut);
+          const toolEv = yield* session.recordToolResult(state, r.name, r.id, resultOut);
+          yield* context.absorb(sessionRef, [toolEv]);
           const outcome = toolOutcomeOf(r);
           const todos = !todoPrinted && r.status === 'ok' && r.name === 'todo_write'
             ? todo.read(sid)
             : undefined;
           if (todos) todoPrinted = true;
-          yield* q.offer({
+          emit({
             family: 'event',
             event: {
               type: 'tool_result', id: r.id, name: r.name, outcome,

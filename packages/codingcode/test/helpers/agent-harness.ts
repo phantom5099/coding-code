@@ -12,6 +12,8 @@ import { McpService } from '../../src/mcp/port.js';
 import { MemoryService } from '../../src/memory/port.js';
 import { RulesService } from '../../src/rules/port.js';
 import { SessionService } from '../../src/session/port.js';
+import { EventSinkService } from '../../src/sink/port.js';
+import { EventSinkLayer } from '../../src/sink/sink.js';
 import { SkillService } from '../../src/skills/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
@@ -19,7 +21,7 @@ import { ToolExecutorService } from '../../src/tools/port.js';
 import type { FrameBody, RuntimeEvent, Transition } from '../../src/contracts/frame.js';
 import type { TokenUsage } from '../../src/contracts/types.js';
 import type { LLMStreamPart } from '../../src/contracts/provider.js';
-import type { SessionStoreState } from '../../src/contracts/session.js';
+import type { SessionStoreState, SessionRef } from '../../src/contracts/session.js';
 
 // ---- LLM 部件构造器 ----
 
@@ -130,9 +132,9 @@ export interface HarnessMocks {
   };
   todo?: Map<string, Array<{ step: string; status: string }>>;
   memorySnapshot?: string;
-  /** 可选：覆盖 ContextService.assemblePayload 的返回（默认一条 user 消息）。 */
+  /** 可选：覆盖 ContextService.getHistory 的返回（默认一条 user 消息）。 */
   contextAssemble?: () => Promise<Array<{ role: string; content: string }>>;
-  /** 可选：覆盖 ContextService.willCompact（默认 false）。 */
+  /** 可选：模拟压缩触发（默认 false）——为 true 时 getHistory 经 sink 发 compress/executing 帧。 */
   contextWillCompact?: () => Promise<boolean>;
   /** 可选：覆盖 SessionService 的个别方法（默认实现见 makeAgentLayer）。 */
   session?: Partial<{
@@ -239,14 +241,29 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
   const skills = {
     extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
   };
-  const context = {
-    willCompact: () =>
-      Effect.promise(async () => (mocks.contextWillCompact ? mocks.contextWillCompact() : false)),
-    assemblePayload: () =>
-      Effect.promise(async () =>
-        mocks.contextAssemble ? mocks.contextAssemble() : [{ role: 'user' as const, content: 'hi' }]
-      ),
-  };
+  // 压缩帧由 context 自己经 sink 发出（agent 不再参与），mock 同样遵守这个归属
+  const ContextMockLayer = Layer.effect(
+    ContextService,
+    Effect.gen(function* () {
+      const sink = yield* EventSinkService;
+      return {
+        getHistory: (ref: SessionRef) =>
+          Effect.gen(function* () {
+            const shouldCompact = mocks.contextWillCompact ? yield* Effect.promise(mocks.contextWillCompact) : false;
+            if (shouldCompact) {
+              yield* sink.emit(ref.sessionId, { family: 'transition', transition: { to: 'compress' } });
+              yield* sink.emit(ref.sessionId, { family: 'transition', transition: { to: 'executing' } });
+            }
+            return mocks.contextAssemble
+              ? yield* Effect.promise(mocks.contextAssemble)
+              : [{ role: 'user' as const, content: 'hi' }];
+          }),
+        absorb: () => Effect.void,
+        compact: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
+        dispose: () => Effect.void,
+      } as any;
+    })
+  ).pipe(Layer.provide(EventSinkLayer));
   const memory = {
     loadMemoryForPrompt: () => Effect.succeed(mocks.memorySnapshot ?? ''),
     flushSessionToMemory: () => Effect.succeed({ written: false, bytes: 0 }),
@@ -268,7 +285,8 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
     } as any),
     Layer.succeed(SkillService, skills as any),
-    Layer.succeed(ContextService, context as any),
+    ContextMockLayer,
+    EventSinkLayer,
     Layer.succeed(MemoryService, memory as any),
     Layer.succeed(LLMService, {
       complete: () => Effect.fail(new Error('complete not implemented in harness')),

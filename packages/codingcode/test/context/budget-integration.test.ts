@@ -10,15 +10,17 @@ import { LLMService } from '../../src/llm/port.js';
 import type { SessionRef } from '../../src/contracts/session.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ContextLayer, transcriptPathFor } from '../../src/context/context.js';
+import { EventSinkLayer } from '../../src/sink/sink.js';
 
 useTempProjectBase();
 
-const TestLayer = Layer.merge(
+const TestLayer = Layer.mergeAll(
   SessionLayer,
   Layer.succeed(LLMService, {
     complete: () => Effect.fail(new Error('no llm')),
     completeStream: () => (async function* () {})(),
-  } as any)
+  } as any),
+  EventSinkLayer
 );
 
 async function getCtxService(): Promise<ContextShape> {
@@ -31,7 +33,7 @@ async function getCtxService(): Promise<ContextShape> {
 
 const CWD = '/tmp/test';
 
-describe('assemblePayload integration', () => {
+describe('getHistory integration', () => {
   let ref: SessionRef;
   let transcriptPath: string;
 
@@ -86,7 +88,7 @@ describe('assemblePayload integration', () => {
 
   it('returns messages assembled from the transcript', async () => {
     const ctx = await getCtxService();
-    const messages = await Effect.runPromise(ctx.assemblePayload(ref, 'test-model'));
+    const messages = await Effect.runPromise(ctx.getHistory(ref, 'test-model'));
 
     expect(messages.length).toBeGreaterThan(0);
   });
@@ -96,7 +98,7 @@ describe('assemblePayload integration', () => {
     const emptyPath = transcriptPathFor(emptyRef);
     writeFileSync(emptyPath, '', 'utf8');
     const ctx = await getCtxService();
-    const messages = await Effect.runPromise(ctx.assemblePayload(emptyRef, 'test-model'));
+    const messages = await Effect.runPromise(ctx.getHistory(emptyRef, 'test-model'));
     expect(messages).toEqual([]);
   });
 });

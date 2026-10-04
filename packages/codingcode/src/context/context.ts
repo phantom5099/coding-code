@@ -19,6 +19,7 @@ import type { SessionEvent, AssistantEvent, ToolResultEvent, CompactEvent, Summa
 import { AgentError } from '../core/error.js';
 import { ContextService } from './port.js';
 import type { CompressResult } from './port.js';
+import { EventSinkService } from '../sink/port.js';
 
 export function transcriptPathFor(ref: SessionRef): string {
   const sessionsDir = join(
@@ -86,15 +87,17 @@ function applyVisibilityEvents(events: SessionEvent[]): {
   return { hiddenTurnIds, hiddenOpUuids, compactedTurnIds };
 }
 
+export function passesContextFilter(ev: SessionEvent): boolean {
+  return ev.type !== 'session_meta' && ev.type !== 'rollback' && ev.type !== 'compact';
+}
+
 export function filterForContext(events: SessionEvent[]): {
   visible: SessionEvent[];
   compactedTurnIds: Set<number>;
 } {
   const { hiddenTurnIds, hiddenOpUuids, compactedTurnIds } = applyVisibilityEvents(events);
   const visible = events.filter((ev) => {
-    if (ev.type === 'session_meta') return false;
-    if (ev.type === 'rollback') return false;
-    if (ev.type === 'compact') return false;
+    if (!passesContextFilter(ev)) return false;
     if (ev.type === 'summary' && hiddenOpUuids.has(ev.uuid)) return false;
     if ('turnId' in ev && hiddenTurnIds.has(ev.turnId)) return false;
     return true;
@@ -194,50 +197,48 @@ export function estimatePromptTokensFrom(events: SessionEvent[]): number {
   return estimateTokens(buildContextMessages(visible, compactedTurnIds));
 }
 
-interface PayloadState {
+interface ContextBuffer {
+  turnId: number;
   jsonlPath: string;
-  currentTurnId: number;
-  visible: SessionEvent[];
+  events: SessionEvent[];
   compactedTurnIds: Set<number>;
 }
 
 export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* () {
     const session = yield* SessionService;
     const llm = yield* LLMService;
+    const sink = yield* EventSinkService;
 
-    const readState = (
-      transcriptPath: string,
-      currentTurnId: number
-    ): Effect.Effect<PayloadState, AgentError> =>
+    // 回合内内存态：键 = sessionId，仅在换回合（turnId 变化）时重建
+    const buffers = new Map<string, ContextBuffer>();
+
+    const buildBuffer = (ref: SessionRef): Effect.Effect<ContextBuffer, AgentError> =>
       Effect.gen(function* () {
-        const events = yield* session.readEvents(transcriptPath);
+        const jsonlPath = transcriptPathFor(ref);
+        const events = yield* session.readEvents(jsonlPath); // 唯一读盘点
         const { visible, compactedTurnIds } = filterForContext(events);
-        return { jsonlPath: transcriptPath, currentTurnId, visible, compactedTurnIds };
+        return { turnId: ref.currentTurnId, jsonlPath, events: visible, compactedTurnIds };
       });
 
-    const estimateFor = (s: PayloadState): number =>
-      estimateTokens(buildContextMessages(s.visible, s.compactedTurnIds));
-
-    const applyOldTurnCompact = (
-      events: SessionEvent[],
-      currentTurnId: number,
-      jsonlPath: string
-    ): Effect.Effect<boolean, AgentError> =>
+    const ensureBuffer = (ref: SessionRef): Effect.Effect<ContextBuffer, AgentError> =>
       Effect.gen(function* () {
-        const compactedTurnIds = new Set<number>();
-        for (const ev of events) {
-          if (ev.type === 'compact') {
-            for (let t = ev.startTurnId; t <= ev.endTurnId; t++) {
-              compactedTurnIds.add(t);
-            }
-          }
-        }
+        const cached = buffers.get(ref.sessionId);
+        if (cached && cached.turnId === ref.currentTurnId) return cached; // 回合内复用
+        const buf = yield* buildBuffer(ref);
+        buffers.set(ref.sessionId, buf);
+        return buf;
+      });
 
+    const estimateFor = (buf: ContextBuffer): number =>
+      estimateTokens(buildContextMessages(buf.events, buf.compactedTurnIds));
+
+    const applyOldTurnCompact = (buf: ContextBuffer): Effect.Effect<boolean, AgentError> =>
+      Effect.gen(function* () {
         const oldResults: ToolResultEvent[] = [];
-        for (const ev of events) {
+        for (const ev of buf.events) {
           if (ev.type !== 'tool_result') continue;
-          if (ev.turnId >= currentTurnId - 1) continue;
-          if (compactedTurnIds.has(ev.turnId)) continue;
+          if (ev.turnId >= buf.turnId - 1) continue;
+          if (buf.compactedTurnIds.has(ev.turnId)) continue;
           if (!COMPACTABLE_TOOLS.has(ev.toolName.toLowerCase())) continue;
           if (ev.output.length <= MICRO_COMPACT_MIN_CHARS) continue;
           oldResults.push(ev);
@@ -255,32 +256,29 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
           startTurnId,
           endTurnId,
         };
-        yield* session.appendEvent(jsonlPath, compactEvent);
+        yield* session.appendEvent(buf.jsonlPath, compactEvent);
+        for (let t = startTurnId; t <= endTurnId; t++) buf.compactedTurnIds.add(t);
         return true;
       });
 
     const runMicroCompact = (
-      s: PayloadState,
+      buf: ContextBuffer,
       contextWindow: number
-    ): Effect.Effect<PayloadState, AgentError> =>
+    ): Effect.Effect<void, AgentError> =>
       Effect.gen(function* () {
-        if (estimateFor(s) <= contextWindow * MICRO_COMPACT_THRESHOLD) return s;
-        const applied = yield* applyOldTurnCompact(s.visible, s.currentTurnId, s.jsonlPath);
-        if (applied) {
-          return yield* readState(s.jsonlPath, s.currentTurnId);
-        }
-        return s;
+        if (estimateFor(buf) <= contextWindow * MICRO_COMPACT_THRESHOLD) return;
+        yield* applyOldTurnCompact(buf);
       });
 
     const tryCompaction = (
-      s: PayloadState,
+      buf: ContextBuffer,
       model: string
     ): Effect.Effect<number, AgentError> =>
       Effect.gen(function* () {
-        const endTurn = s.currentTurnId - KEEP_RECENT_TURNS - 1;
+        const endTurn = buf.turnId - KEEP_RECENT_TURNS - 1;
         if (endTurn < 1) return 0;
 
-        const inRange = s.visible.filter((ev) => {
+        const inRange = buf.events.filter((ev) => {
           if (ev.type === 'session_meta') return false;
           if ('turnId' in ev && (ev as any).turnId >= 1 && (ev as any).turnId <= endTurn) return true;
           return false;
@@ -290,7 +288,7 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
         const targetEvents = getIncrementalEvents(inRange);
         if (targetEvents.length === 0) return 0;
 
-        const msgs = buildContextMessages(targetEvents, s.compactedTurnIds);
+        const msgs = buildContextMessages(targetEvents, buf.compactedTurnIds);
         const totalTokens = estimateTokens(msgs);
 
         const configured = loadConfig().context.compactionModel?.trim();
@@ -315,31 +313,32 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
           endTurnId,
           summaryText: summary,
         };
-        yield* session.appendEvent(s.jsonlPath, summaryEvent);
+        yield* session.appendEvent(buf.jsonlPath, summaryEvent);
+
+        // 就地更新：被摘要的 turn 移出可见集，摘要追加到末尾（与重读盘后的顺序一致）
+        buf.events = buf.events.filter(
+          (ev) => !('turnId' in ev && (ev as any).turnId >= startTurnId && (ev as any).turnId <= endTurnId)
+        );
+        buf.events.push(summaryEvent);
 
         const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
         return Math.max(0, totalTokens - estimateMessageTokens(summaryMsg));
       });
 
-    const needsCompaction = (s: PayloadState, contextWindow: number): boolean =>
-      estimateFor(s) > contextWindow * COMPACTION_THRESHOLD;
+    const needsCompaction = (buf: ContextBuffer, contextWindow: number): boolean =>
+      estimateFor(buf) > contextWindow * COMPACTION_THRESHOLD;
 
     const summarizeToFit = (
-      s: PayloadState,
+      buf: ContextBuffer,
       contextWindow: number,
       model: string
-    ): Effect.Effect<{ state: PayloadState; released: number }, AgentError> =>
+    ): Effect.Effect<void, AgentError> =>
       Effect.gen(function* () {
-        let cur = s;
-        let releasedTotal = 0;
         for (let i = 0; i < MAX_AUTO_COMPACT_PASSES; i++) {
-          if (!needsCompaction(cur, contextWindow)) break;
-          const released = yield* tryCompaction(cur, model);
+          if (!needsCompaction(buf, contextWindow)) break;
+          const released = yield* tryCompaction(buf, model);
           if (released <= 0) break;
-          releasedTotal += released;
-          cur = yield* readState(cur.jsonlPath, cur.currentTurnId);
         }
-        return { state: cur, released: releasedTotal };
       });
 
     function getIncrementalEvents(inRange: SessionEvent[]): SessionEvent[] {
@@ -383,51 +382,54 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
       return raw.trim();
     }
 
-    const willCompact = (
-      ref: SessionRef,
-      model: string
-    ): Effect.Effect<boolean, AgentError> =>
+    const getHistory = (ref: SessionRef, model: string): Effect.Effect<Message[], AgentError> =>
       Effect.gen(function* () {
-        const transcriptPath = transcriptPathFor(ref);
+        const buf = yield* ensureBuffer(ref);
         const contextWindow = contextWindowOf(model);
-        const s = yield* runMicroCompact(yield* readState(transcriptPath, ref.currentTurnId), contextWindow);
-        return needsCompaction(s, contextWindow);
+        yield* runMicroCompact(buf, contextWindow);
+        if (needsCompaction(buf, contextWindow)) {
+          // 压缩判定与压缩帧都归 context，agent 不参与
+          yield* sink.emit(ref.sessionId, { family: 'transition', transition: { to: 'compress' } });
+          yield* summarizeToFit(buf, contextWindow, model);
+          yield* sink.emit(ref.sessionId, { family: 'transition', transition: { to: 'executing' } });
+        }
+        return buildContextMessages(buf.events, buf.compactedTurnIds);
       });
 
-    const assemblePayload = (
-      ref: SessionRef,
-      model: string
-    ): Effect.Effect<Message[], AgentError> =>
-      Effect.gen(function* () {
-        const transcriptPath = transcriptPathFor(ref);
-        const contextWindow = contextWindowOf(model);
-        let s = yield* readState(transcriptPath, ref.currentTurnId);
-        s = yield* runMicroCompact(s, contextWindow);
-        const { state } = yield* summarizeToFit(s, contextWindow, model);
-        return buildContextMessages(state.visible, state.compactedTurnIds);
+    const absorb = (ref: SessionRef, events: readonly SessionEvent[]): Effect.Effect<void> =>
+      Effect.sync(() => {
+        const buf = buffers.get(ref.sessionId);
+        // 未建（事件已在盘上，重建时会读到）或已换回合 ⇒ no-op
+        if (!buf || buf.turnId !== ref.currentTurnId) return;
+        for (const ev of events) if (passesContextFilter(ev)) buf.events.push(ev);
       });
 
-    const compactWithLLM = (
+    const compact = (
       ref: SessionRef,
       model: string,
       usage?: number
     ): Effect.Effect<CompressResult, AgentError> =>
       Effect.gen(function* () {
-        const transcriptPath = transcriptPathFor(ref);
+        const buf = yield* ensureBuffer(ref);
         const contextWindow = contextWindowOf(model);
-        let s = yield* runMicroCompact(yield* readState(transcriptPath, ref.currentTurnId), contextWindow);
-        const preEstimate = usage ?? estimateFor(s);
-        const released = yield* tryCompaction(s, model);
+        yield* runMicroCompact(buf, contextWindow);
+        const preEstimate = usage ?? estimateFor(buf);
+        const released = yield* tryCompaction(buf, model);
         if (released <= 0) {
           return { didCompress: false, released: 0, promptEstimate: preEstimate };
         }
-        s = yield* readState(transcriptPath, ref.currentTurnId);
-        return { didCompress: true, released, promptEstimate: estimateFor(s) };
+        return { didCompress: true, released, promptEstimate: estimateFor(buf) };
+      });
+
+    const dispose = (sessionId: string): Effect.Effect<void> =>
+      Effect.sync(() => {
+        buffers.delete(sessionId);
       });
 
     return {
-      willCompact,
-      assemblePayload,
-      compactWithLLM,
+      getHistory,
+      absorb,
+      compact,
+      dispose,
     };
 }));

@@ -7,12 +7,8 @@ interface PendingEntry {
   sessionId: string;
 }
 
-export const ApprovalWaitLayer = Layer.effect(ApprovalWaitService, Effect.gen(function* () {
+export const ApprovalWaitLayer = Layer.effect(ApprovalWaitService, Effect.sync(() => {
     const pendingConfirmations = new Map<string, PendingEntry>();
-    const approvalEmitters = new Map<
-      string,
-      (id: string, tool: string, args: Record<string, unknown>) => void
-    >();
 
     return {
       waitForConfirm: (id: string, sessionId: string): Effect.Effect<ConfirmResult> =>
@@ -35,38 +31,16 @@ export const ApprovalWaitLayer = Layer.effect(ApprovalWaitService, Effect.gen(fu
           return true;
         }),
 
-      emitApprovalRequest: (
-        sessionId: string,
-        id: string,
-        tool: string,
-        args: Record<string, unknown>
-      ): Effect.Effect<void> =>
+      cancelPendingFor: (sessionId: string): Effect.Effect<number> =>
         Effect.sync(() => {
-          approvalEmitters.get(sessionId)?.(id, tool, args);
-        }),
-
-      registerEmitter: (
-        sessionId: string,
-        fn: (id: string, tool: string, args: Record<string, unknown>) => void
-      ): Effect.Effect<void> =>
-        Effect.sync(() => {
-          approvalEmitters.set(sessionId, fn);
-        }),
-
-      delegateEmitter: (childSessionId: string, parentSessionId: string): Effect.Effect<void> =>
-        Effect.sync(() => {
-          const parentFn = approvalEmitters.get(parentSessionId);
-          if (parentFn) {
-            approvalEmitters.set(childSessionId, parentFn);
+          let cleared = 0;
+          for (const [id, entry] of pendingConfirmations) {
+            if (entry.sessionId !== sessionId) continue;
+            pendingConfirmations.delete(id);
+            Deferred.unsafeDone(entry.deferred, Effect.succeed({ type: 'deny' } as ConfirmResult));
+            cleared++;
           }
+          return cleared;
         }),
-
-      unregisterEmitter: (sessionId: string): Effect.Effect<void> =>
-        Effect.sync(() => {
-          approvalEmitters.delete(sessionId);
-        }),
-
-      hasEmitter: (sessionId: string): Effect.Effect<boolean> =>
-        Effect.sync(() => approvalEmitters.has(sessionId)),
     };
 }));

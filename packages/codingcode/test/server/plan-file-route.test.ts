@@ -24,6 +24,7 @@ import { projectBaseDir } from '../helpers/project-base.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
 import { ApprovalWaitLayer } from '../../src/approval/wait.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
+import { EventSinkLayer } from '../../src/sink/sink.js';
 
 const MockSessionLayer = Layer.succeed(SessionService, {
   create: () =>
@@ -96,7 +97,7 @@ const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
 } as any);
 
 const MockApprovalLayer = ApprovalLayer.pipe(
-  Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer))
+  Layer.provide(Layer.mergeAll(HookLayer, EventSinkLayer, ApprovalWaitLayer))
 );
 
 const MockSkillLayer = Layer.succeed(SkillService, {
@@ -127,8 +128,10 @@ const MockSchedulerLayer = Layer.succeed(SchedulerService, {
 } as any);
 
 const MockContextLayer = Layer.succeed(ContextService, {
-  assemblePayload: () => Effect.succeed([]),
-  compactWithLLM: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
+  getHistory: () => Effect.succeed([]),
+  absorb: () => Effect.void,
+  compact: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
+  dispose: () => Effect.void,
 } as any);
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, {
@@ -158,6 +161,7 @@ const TestLayer = Layer.mergeAll(
   MockLLMFactoryLayer,
   MockApprovalLayer,
   HookLayer,
+  EventSinkLayer,
   ApprovalWaitLayer,
   MockSkillLayer,
   MockMcpLayer,

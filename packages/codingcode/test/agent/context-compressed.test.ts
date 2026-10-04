@@ -13,7 +13,7 @@ function phaseOrder(events: readonly unknown[]): string[] {
 }
 
 describe('compaction transition', () => {
-  it('emits the compress signal when willCompact is true', async () => {
+  it('emits the compress signal (emitted by context via sink) when compaction triggers', async () => {
     const { events } = await runAgentTurn(
       {
         llm: makePlainLlm(),
@@ -40,7 +40,7 @@ describe('compaction transition', () => {
     expect(tos[tos.indexOf('compress') + 1]).toBe('executing');
   });
 
-  it('emits no compress signal when willCompact is false', async () => {
+  it('emits no compress signal when compaction does not trigger', async () => {
     const { events } = await runAgentTurn(
       {
         llm: makePlainLlm(),

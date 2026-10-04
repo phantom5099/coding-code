@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import type { PermissionRule } from './types.js';
 import { ApprovalWaitService } from './wait-port.js';
+import { EventSinkService } from '../sink/port.js';
 
 export type ConfirmResult =
   | { type: 'allow' }
@@ -13,12 +14,13 @@ export function userConfirmAsync(
   args: Record<string, unknown>,
   sessionId: string,
   callId: string
-): Effect.Effect<ConfirmResult, never, ApprovalWaitService> {
+): Effect.Effect<ConfirmResult, never, ApprovalWaitService | EventSinkService> {
   return Effect.gen(function* () {
     const waitSvc = yield* ApprovalWaitService;
+    const sink = yield* EventSinkService;
     const id = callId;
 
-    yield* waitSvc.emitApprovalRequest(sessionId, id, tool, args);
+    yield* sink.emit(sessionId, { family: 'event', event: { type: 'approval_request', id, tool, args } });
 
     return yield* waitSvc.waitForConfirm(id, sessionId);
   });
