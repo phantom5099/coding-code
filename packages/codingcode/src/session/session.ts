@@ -5,7 +5,7 @@ import { join, dirname } from 'path';
 import { AgentError } from '../core/error.js';
 import { encodeProjectPath } from '../core/path.js';
 import { computePaths } from './paths.js';
-import type { SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SummaryEvent, RollbackEvent, SessionEvent, SessionStoreState, SessionSummary, CompactEvent, UITurn } from '../contracts/session.js';
+import type { SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SubagentResultEvent, SummaryEvent, RollbackEvent, SessionEvent, SessionStoreState, SessionSummary, CompactEvent, UITurn } from '../contracts/session.js';
 import type { TokenUsage, ProfileName } from '../contracts/types.js';
 import type { PermissionMode } from '../contracts/permission.js';
 import { SessionService } from './port.js';
@@ -79,6 +79,7 @@ export function sessionEventsToTurns(events: SessionEvent[]): UITurn[] {
   for (const event of events) {
     if (event.type === 'session_meta') continue;
     if (event.type === 'compact' || event.type === 'rollback') continue;
+    if (event.type === 'subagent_result') continue;   // 结果进模型上下文，不占用户视野
 
     if (event.type === 'summary') {
       let turn = turnsMap.get(event.endTurnId);
@@ -319,6 +320,29 @@ export const SessionLayer = Layer.effect(
             : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
 
+    // 由父回合循环在 drain 点调用：终态先入 mailbox，到这里才落盘。
+    // 不写 state.usage —— 子代理的用量不算进父会话。
+    const recordSubagentResult = (
+      state: SessionStoreState,
+      result: { sessionId: string; agentName: string; content: string }
+    ): Effect.Effect<SubagentResultEvent, AgentError> =>
+      Effect.try({
+        try: () => {
+          const event: SubagentResultEvent = {
+            type: 'subagent_result',
+            sessionId: result.sessionId,
+            agentName: result.agentName,
+            content: result.content,
+          };
+          appendLine(pathsFromState(state).transcriptPath, event);
+          return event;
+        },
+        catch: (e) =>
+          e instanceof AgentError
+            ? e
+            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
+
     const appendSummary = (
       state: SessionStoreState,
       summaryText: string,
@@ -435,6 +459,7 @@ export const SessionLayer = Layer.effect(
       recordSystem,
       recordAssistant,
       recordToolResult,
+      recordSubagentResult,
       appendSummary,
       rollbackToTurn,
 

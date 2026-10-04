@@ -9,6 +9,7 @@ import { HookService } from '../../src/hooks/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
+import { SubagentRunRegistryService } from '../../src/subagent/registry.js';
 import { TOOLS_BY_NAME, createToolCatalog } from '../../src/tools/catalog.js';
 import type { ToolCall, TodoItem } from '../../src/contracts/types.js';
 import type { ToolResult } from '../../src/contracts/tool.js';
@@ -95,11 +96,18 @@ function makeHarness(): Harness {
       Effect.succeed({ stream: makeSubagentStream(200), sessionId: 'child-1' }),
   };
 
+  // spawn_agent 消费注册表（生产装配在 AppLayer，这里只提供最小桩）
+  const registry = {
+    spawn: () => Effect.succeed({ sessionId: 'child-1', agentName: 'build' }),
+    wait: () => Effect.succeed('completed'),
+  };
+
   h.layers = Layer.mergeAll(
     Layer.succeed(HookService, hooks as any),
     Layer.succeed(TodoService, todo as any),
     Layer.succeed(McpService, mcp as any),
-    Layer.succeed(SubagentRunnerService, runner as any)
+    Layer.succeed(SubagentRunnerService, runner as any),
+    Layer.succeed(SubagentRunRegistryService, registry as any)
   );
   return h;
 }
@@ -339,17 +347,18 @@ describe('executeBatch 保序波次调度', () => {
     expect(h.todoStore.get('sid-1')?.[0]?.step).toBe('step one');
   });
 
-  it('[dispatch_agent, write_file] 零重叠，且委派与写入的先后由声明顺序决定', async () => {
+  it('[spawn_agent, write_file] 零重叠：并发安全的 spawn 自成一波，写入独占一波，先后由声明顺序决定', async () => {
     const results = await runBatch(
       [
-        tc('d1', 'dispatch_agent', { agentName: 'build', prompt: 'go' }),
+        tc('d1', 'spawn_agent', { agentName: 'build', prompt: 'go' }),
         tc('w1', 'write_file', { path: 'z.txt', content: 'z' }),
       ],
       { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
       h
     );
 
-    expect(okOutput(results[0])).toBe('child-done');
+    // spawn 只登记后台任务后立即返回，不等待子代理
+    expect(okOutput(results[0])).toBe('spawned build (child-1)');
     expect(okOutput(results[1])).toContain('File written');
     const d1 = intervalFor(h, 'd1');
     const w1 = intervalFor(h, 'w1');
@@ -360,7 +369,7 @@ describe('executeBatch 保序波次调度', () => {
     const reversed = await runBatch(
       [
         tc('w2', 'write_file', { path: 'z2.txt', content: 'z' }),
-        tc('d2', 'dispatch_agent', { agentName: 'build', prompt: 'go' }),
+        tc('d2', 'spawn_agent', { agentName: 'build', prompt: 'go' }),
       ],
       { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
       h
@@ -410,7 +419,7 @@ describe('executeBatch 保序波次调度', () => {
     expect(h.hookPoints.filter((p) => p === 'tool.execute.before')).toHaveLength(1);
   });
 
-  it('11 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
+  it('12 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
     const expected: Record<string, boolean> = {
       read_file: true,
       search_code: true,
@@ -418,10 +427,11 @@ describe('executeBatch 保序波次调度', () => {
       fetch_url: true,
       web_search: true,
       todo_write: true,
+      spawn_agent: true,
+      wait_agent: true,
       write_file: false,
       edit_file: false,
       execute_command: false,
-      dispatch_agent: false,
       submit_plan: false,
     };
 

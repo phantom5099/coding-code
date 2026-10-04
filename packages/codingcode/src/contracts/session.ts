@@ -58,6 +58,13 @@ export interface CompactEvent {
   endTurnId: number;
 }
 
+export interface SubagentResultEvent {
+  type: 'subagent_result';
+  sessionId: string;
+  agentName: string;
+  content: string;
+}
+
 export type SessionEvent =
   | SessionMetaEvent
   | UserEvent
@@ -65,7 +72,8 @@ export type SessionEvent =
   | ToolResultEvent
   | SummaryEvent
   | RollbackEvent
-  | CompactEvent;
+  | CompactEvent
+  | SubagentResultEvent;
 
 export interface SessionSummary extends SessionMetaEvent {
   updatedAt: string;

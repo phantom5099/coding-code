@@ -14,6 +14,7 @@ import { RulesService } from '../../src/rules/port.js';
 import { SessionService } from '../../src/session/port.js';
 import { EventSinkService } from '../../src/sink/port.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
+import { MailboxLayer } from '../../src/session/mailbox.js';
 import { SkillService } from '../../src/skills/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
@@ -287,6 +288,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     Layer.succeed(SkillService, skills as any),
     ContextMockLayer,
     EventSinkLayer,
+    MailboxLayer,
     Layer.succeed(MemoryService, memory as any),
     Layer.succeed(LLMService, {
       complete: () => Effect.fail(new Error('complete not implemented in harness')),

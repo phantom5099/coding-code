@@ -18,6 +18,10 @@ export interface ActiveModelConfig {
   apiKeyEnv: string;
 }
 
+export interface SubagentConfig {
+  maxBackground: number;
+}
+
 export interface AppConfig {
   server: {
     port: number;
@@ -29,6 +33,7 @@ export interface AppConfig {
   permissionMode: string;
   context: ContextConfig;
   memory: MemoryConfig;
+  subagent: SubagentConfig;
 }
 
 const DEFAULT_CONTEXT: ContextConfig = {
@@ -41,6 +46,10 @@ export const DEFAULT_MEMORY: MemoryConfig = {
   promptMaxBytes: 8192,
 };
 
+export const DEFAULT_SUBAGENT: SubagentConfig = {
+  maxBackground: 4,
+};
+
 export const DEFAULT_CONFIG: AppConfig = {
   server: {
     port: 8080,
@@ -51,6 +60,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   permissionMode: 'ask',
   context: DEFAULT_CONTEXT,
   memory: DEFAULT_MEMORY,
+  subagent: DEFAULT_SUBAGENT,
 };
 
 function deepMerge<T extends Record<string, unknown>>(base: T, override: Partial<T>): T {

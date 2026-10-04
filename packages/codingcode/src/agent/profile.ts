@@ -27,7 +27,7 @@ export const BUILD_PROMPT = `You are a coding assistant —an AI agent that help
 7. For complex or broad tasks (understanding a whole module, cross-file analysis, comprehensive search):
    a. Briefly assess the task scope using your own reasoning —do not use tools for exploration at this stage, as that would consume your limited context window.
    b. If you can clearly handle it without extensive file reading or searching, proceed yourself.
-   c. Otherwise delegate the exploration with dispatch_agent: give the subagent a short agentName and a self-contained prompt. The subagent shares your working directory, so keep the delegated write set disjoint from your own.
+   c. Otherwise spawn_agent: give the subagent a short agentName, a self-contained prompt, and a write set that does not overlap yours. Then keep working on your own part; call wait_agent only when its result blocks your next step, and give the wait a generous timeout instead of polling.
 
 ## Using your tools
 - **Prefer dedicated tools over shell commands.** Use read_file instead of cat, edit_file instead of sed, search_code instead of grep. Dedicated tools give the user better visibility into your work.
@@ -127,7 +127,8 @@ export const BUILD_TOOL_NAMES: readonly string[] = [
   'fetch_url',
   'web_search',
   'todo_write',
-  'dispatch_agent',
+  'spawn_agent',
+  'wait_agent',
 ];
 
 export function isPlanProfile(p: { name: string } | null | undefined): boolean {

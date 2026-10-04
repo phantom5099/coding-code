@@ -1,7 +1,7 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { AgentError } from '../core/error.js';
-import type { AssistantEvent, RollbackEvent, SessionCreateOptions, SessionEvent, SessionSummary, SessionStoreState, SummaryEvent, ToolResultEvent, UITurn, UserEvent } from '../contracts/session.js';
+import type { AssistantEvent, RollbackEvent, SessionCreateOptions, SessionEvent, SessionSummary, SessionStoreState, SubagentResultEvent, SummaryEvent, ToolResultEvent, UITurn, UserEvent } from '../contracts/session.js';
 import type { TokenUsage, ProfileName } from '../contracts/types.js';
 import type { PermissionMode } from '../contracts/permission.js';
 
@@ -17,6 +17,7 @@ export interface SessionShape {
   recordSystem(state: SessionStoreState, content: string): Effect.Effect<UserEvent, AgentError>;
   recordAssistant(state: SessionStoreState, content: string, toolCalls: AssistantEvent['toolCalls'], usage?: TokenUsage): Effect.Effect<AssistantEvent, AgentError>;
   recordToolResult(state: SessionStoreState, toolName: string, toolCallId: string, output: string): Effect.Effect<ToolResultEvent, AgentError>;
+  recordSubagentResult(state: SessionStoreState, result: { sessionId: string; agentName: string; content: string }): Effect.Effect<SubagentResultEvent, AgentError>;
   appendSummary(state: SessionStoreState, summaryText: string, startTurnId: number, endTurnId: number): Effect.Effect<SummaryEvent, AgentError>;
   rollbackToTurn(state: SessionStoreState, throughTurnId: number, reason: string): Effect.Effect<RollbackEvent, AgentError>;
   readEvents(transcriptPath: string): Effect.Effect<SessionEvent[], AgentError>;

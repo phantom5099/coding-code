@@ -53,6 +53,12 @@ export type RuntimeEvent =
       readonly id: string;
       readonly tool: string;
       readonly args: Readonly<Record<string, unknown>>;
+  }
+  | {
+      readonly type: 'subagent_event';
+      readonly sessionId: string;
+      readonly agentName: string;
+      readonly status: 'spawned' | 'completed' | 'failed';
   };
 
 export interface Fatal {
@@ -66,8 +72,7 @@ export type FrameBody =
   | { readonly family: 'fatal'; readonly fatal: Fatal };
 
 export type Frame = Envelope & FrameBody;
-
-type EndTransition = Extract<Transition, { to: 'end' }>;
+export type EndTransition = Extract<Transition, { to: 'end' }>;
 
 export function isTurnEnd(
   body: FrameBody

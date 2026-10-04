@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeState, runAgentTurn, textDeltas } from '../helpers/agent-harness.js';
-import type { FrameBody, Transition } from '../../src/contracts/frame.js';
+import type { EndTransition, FrameBody } from '../../src/contracts/frame.js';
 
 vi.mock('../../src/infra/config.js', () => ({
   loadConfig: () => ({
@@ -13,8 +13,6 @@ vi.mock('../../src/infra/config.js', () => ({
 }));
 
 const state = makeState({ sessionId: 'abort-sid', cwd: '/tmp', title: 'abort' });
-
-type EndTransition = Extract<Transition, { to: 'end' }>;
 
 function endsOf(events: readonly FrameBody[]): EndTransition[] {
   const out: EndTransition[] = [];

@@ -13,7 +13,8 @@ const BUILD_NAMES = [
   'fetch_url',
   'web_search',
   'todo_write',
-  'dispatch_agent',
+  'spawn_agent',
+  'wait_agent',
 ];
 
 describe('createToolCatalog', () => {

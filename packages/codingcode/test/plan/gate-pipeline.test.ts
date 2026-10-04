@@ -109,10 +109,10 @@ describe('plan profile permission mode (Layer 2)', () => {
     expect(capturedApproval).toBeNull();
   });
 
-  it('plan profile + dispatch_agent: denied by plan mode', async () => {
+  it('plan profile + spawn_agent: denied by plan mode', async () => {
     const decision: any = await runPipelineWithMock({
-      tool: 'dispatch_agent',
-      input: { agent: 'build', prompt: 'do something' },
+      tool: 'spawn_agent',
+      input: { agentName: 'build', prompt: 'do something' },
       permissionMode: 'ask',
       sessionId: 's4',
       profile: 'plan',
