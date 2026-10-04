@@ -93,8 +93,6 @@ export function runPipeline(
 ): Effect.Effect<ApprovalDecision, never, HookService | EventSinkService | ApprovalWaitService> {
   return Effect.gen(function* () {
     const hooks = yield* HookService;
-    const sink = yield* EventSinkService;
-    const asyncConfirm = yield* sink.has(opts.sessionId);
     const layers: string[] = [];
 
     // Layer 1: Rule Engine
@@ -163,16 +161,6 @@ export function runPipeline(
     // Layer 4: User Confirmation
     {
       layers.push(LAYER_NAMES[3]);
-
-      if (!asyncConfirm) {
-        const result: ApprovalDecision = {
-          type: 'deny',
-          reason: 'Approval required but no UI available',
-          source: 'system',
-        };
-        const final = yield* recordAuditAndReturn(hooks, request, result, layers, opts.projectPath);
-        return final;
-      }
 
       const confirmResult = yield* userConfirmAsync(
         request.tool,

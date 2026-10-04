@@ -9,8 +9,6 @@ export interface EventSinkShape {
   detach(sessionId: string): Effect.Effect<void>;
   /** 任何模块投帧，插在同一队尾，与回合自己的帧严格全序 */
   emit(sessionId: string, body: FrameBody): Effect.Effect<void>;
-  /** 该会话当前是否有消费者（approval 用它判「有没有 UI」） */
-  has(sessionId: string): Effect.Effect<boolean>;
 }
 
 export class EventSinkService extends Context.Tag('EventSink')<EventSinkService, EventSinkShape>() {}

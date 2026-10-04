@@ -41,29 +41,25 @@ describe('EventSink', () => {
     expect(result.fromFirst._tag).toBe('None');
   });
 
-  it('detach 后 has=false 且 emit 静默（不抛错）', async () => {
+  it('detach 后 emit 静默丢弃（不抛错，旧队列收不到）', async () => {
     const result = await run(
       Effect.gen(function* () {
         const sink = yield* EventSinkService;
-        yield* sink.attach('s2');
-        const before = yield* sink.has('s2');
+        const q = yield* sink.attach('s2');
         yield* sink.detach('s2');
-        const after = yield* sink.has('s2');
         yield* sink.emit('s2', textDelta('dropped'));
-        return { before, after };
+        return yield* Queue.poll(q);
       })
     );
 
-    expect(result.before).toBe(true);
-    expect(result.after).toBe(false);
+    expect(result._tag).toBe('None');
   });
 
   it('未挂载的会话 emit 是静默丢弃', async () => {
     await expect(run(Effect.gen(function* () {
       const sink = yield* EventSinkService;
       yield* sink.emit('never-attached', textDelta('x'));
-      return yield* sink.has('never-attached');
-    }))).resolves.toBe(false);
+    }))).resolves.toBeUndefined();
   });
 
   it('同一队列内先入先出：投递顺序 == 取出顺序', async () => {

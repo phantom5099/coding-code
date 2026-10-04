@@ -22,7 +22,7 @@ const mockHookService = {
 };
 
 const mockApprovalWaitService = {
-  waitForConfirm: () => Effect.dieMessage('not implemented'),
+  waitForConfirm: () => Effect.succeed({ type: 'deny' } as const),
   resolveConfirm: () => Effect.succeed(false),
   cancelPendingFor: () => Effect.succeed(0),
 };

@@ -40,7 +40,6 @@ function makeMockEventSink() {
           capturedApproval = { sessionId, id: body.event.id, tool: body.event.tool, args: body.event.args };
         }
       }),
-    has: () => Effect.succeed(true),
   };
 }
 

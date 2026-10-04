@@ -20,7 +20,6 @@ export const EventSinkLayer = Layer.effect(
           const q = queues.get(sessionId);
           if (q) Effect.runSync(Queue.offer(q, body));
         }),
-      has: (sessionId: string) => Effect.sync(() => queues.has(sessionId)),
     };
   })
 );

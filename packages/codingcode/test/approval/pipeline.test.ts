@@ -14,7 +14,7 @@ const mockHookService = {
 };
 
 const mockApprovalWaitService = {
-  waitForConfirm: () => Effect.dieMessage('not implemented'),
+  waitForConfirm: () => Effect.succeed({ type: 'deny' } as const),
   resolveConfirm: () => Effect.succeed(false),
   cancelPendingFor: () => Effect.succeed(0),
 };
@@ -23,7 +23,6 @@ const mockEventSink = {
   attach: () => Effect.succeed({} as any),
   detach: () => Effect.void,
   emit: () => Effect.void,
-  has: () => Effect.succeed(false),
 };
 
 const HookTestLayer = Layer.succeed(HookService, mockHookService);
@@ -55,7 +54,7 @@ describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyW
     expect((decision as any).source).toContain('rule:');
   });
 
-  it('ask mode does NOT auto-allow read-only tools (no UI → system deny)', async () => {
+  it('ask mode routes read-only tools to user confirmation', async () => {
     const decision = await runWithLayer(
       runPipeline(
         { tool: 'read_file', input: { path: '/safe/file.txt' } },
@@ -68,8 +67,7 @@ describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyW
       )
     );
     expect((decision as any).type).toBe('deny');
-    expect((decision as any).source).toBe('system');
-    expect((decision as any).reason).toBe('Approval required but no UI available');
+    expect((decision as any).source).toBe('user-confirm');
   });
 
   it('acceptEdits mode auto-allows read-only tools (read-only merged into non-destructive)', async () => {
