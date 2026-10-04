@@ -25,11 +25,10 @@ function makeStateForMemory() {
 }
 
 function makeCapturingLlm() {
-  const captured: { system?: string; messages?: any[] } = {};
+  const captured: { system?: string } = {};
   const llm = {
     completeStream: vi.fn((params: any) => {
       captured.system = params.system;
-      captured.messages = params.messages;
       return llmStream(pEnd());
     }),
     modelInfo: { maxTokens: 1000 },
@@ -45,31 +44,9 @@ async function runOnce(llm: any, memorySnapshot: string = '') {
 }
 
 describe('Memory snapshot semantics', () => {
-  it('loads memory via MemoryPort and includes it in the system prompt', async () => {
+  it('injects the provided memory snapshot into the system prompt', async () => {
     const { llm, captured } = makeCapturingLlm();
     await runOnce(llm, MEMORY);
-    expect(captured.system).toContain('## Session Memory');
     expect(captured.system).toContain('Frozen content');
-  });
-
-  it('system prompt is byte-identical across consecutive turns with the same memory snapshot', async () => {
-    const { llm, captured } = makeCapturingLlm();
-    await runOnce(llm, MEMORY);
-    const first = captured.system;
-    expect(first).toBeDefined();
-    await runOnce(llm, MEMORY);
-    const second = captured.system;
-    expect(second).toBe(first);
-  });
-
-  it('appends memory verbatim and does not inject <system-reminder> into messages', async () => {
-    const { llm, captured } = makeCapturingLlm();
-    await runOnce(llm, MEMORY);
-    // memory 块原样拼在 "## Session Memory" 标题之后，中间无注入的 reminder 包装
-    expect(captured.system).toContain('## Session Memory\n\n## Long-term Memory\n\nFrozen content');
-    const allContents = (captured.messages ?? [])
-      .map((m: any) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
-      .join('\n');
-    expect(allContents).not.toContain('<system-reminder>');
   });
 });

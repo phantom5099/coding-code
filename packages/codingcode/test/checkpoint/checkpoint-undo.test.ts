@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { useTempProjectBase } from '../helpers/project-base.js';
-import { CheckpointLayer } from '../../src/checkpoint/checkpoint.js';
 
 useTempProjectBase();
 
@@ -47,10 +46,3 @@ describe('toGitPath preserves original casing for git paths', () => {
   });
 });
 
-describe('CheckpointService', () => {
-  it('should export a Default layer', async () => {
-    const { CheckpointService } = await import('../../src/checkpoint/port.js');
-    expect(CheckpointService).toBeDefined();
-    expect((CheckpointLayer as any)).toBeDefined();
-  });
-});

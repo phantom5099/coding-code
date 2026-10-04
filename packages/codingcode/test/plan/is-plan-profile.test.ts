@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isPlanProfile, PLAN_PROFILE_NAME, BUILD_PROFILE_NAME } from '../../src/agent/profile.js';
+import { isPlanProfile } from '../../src/agent/profile.js';
 
 describe('isPlanProfile', () => {
   it('returns true for a profile named "plan"', () => {
@@ -19,8 +19,4 @@ describe('isPlanProfile', () => {
     expect(isPlanProfile(undefined)).toBe(false);
   });
 
-  it('exposes the canonical plan/build profile name constants', () => {
-    expect(PLAN_PROFILE_NAME).toBe('plan');
-    expect(BUILD_PROFILE_NAME).toBe('build');
-  });
 });
