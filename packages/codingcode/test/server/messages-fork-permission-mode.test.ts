@@ -23,11 +23,7 @@ const mockHookService = {
 const mockApprovalWaitService = {
   waitForConfirm: () => Effect.dieMessage('not implemented'),
   resolveConfirm: () => Effect.succeed(false),
-  emitApprovalRequest: () => Effect.succeed(undefined),
-  registerEmitter: () => Effect.succeed(undefined),
-  delegateEmitter: () => Effect.succeed(undefined),
-  unregisterEmitter: () => Effect.succeed(undefined),
-  hasEmitter: () => Effect.succeed(false),
+  cancelPendingFor: () => Effect.succeed(0),
 };
 
 // The message-send path now lives in AgentService.runTurn. A real runTurn loads

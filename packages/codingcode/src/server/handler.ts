@@ -27,14 +27,6 @@ export function createSseHandler(rt: ManagedRt) {
               return yield* ApprovalWaitService;
             })
           );
-          Effect.runSync(
-            waitService.registerEmitter(
-              sessionId,
-              (id: string, tool: string, args: Record<string, unknown>) => {
-                emit({ family: 'event', event: { type: 'approval_request', id, tool, args } });
-              }
-            )
-          );
 
           try {
             const generator = createGenerator();
@@ -51,7 +43,7 @@ export function createSseHandler(rt: ManagedRt) {
               },
             });
           } finally {
-            Effect.runSync(waitService.unregisterEmitter(sessionId));
+            Effect.runSync(waitService.cancelPendingFor(sessionId));
             opts?.onDone?.();
           }
           controller.close();

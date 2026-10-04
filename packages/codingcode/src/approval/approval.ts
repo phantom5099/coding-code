@@ -8,6 +8,7 @@ import { PLAN_ALLOWED_TOOLS } from '../contracts/permission.js';
 import { createRuleEngine, type RuleEngine } from './rule-engine.js';
 import { userConfirmAsync } from './confirmation.js';
 import { ApprovalWaitService } from './wait-port.js';
+import { EventSinkService } from '../sink/port.js';
 import { ApprovalService } from './port.js';
 import type { ApprovalRequest } from './port.js';
 
@@ -89,11 +90,11 @@ function recordAuditAndReturn(
 export function runPipeline(
   request: ToolCallRequest,
   opts: PipelineOptions
-): Effect.Effect<ApprovalDecision, never, HookService | ApprovalWaitService> {
+): Effect.Effect<ApprovalDecision, never, HookService | EventSinkService | ApprovalWaitService> {
   return Effect.gen(function* () {
     const hooks = yield* HookService;
-    const approvalWait = yield* ApprovalWaitService;
-    const asyncConfirm = yield* approvalWait.hasEmitter(opts.sessionId);
+    const sink = yield* EventSinkService;
+    const asyncConfirm = yield* sink.has(opts.sessionId);
     const layers: string[] = [];
 
     // Layer 1: Rule Engine
@@ -206,6 +207,7 @@ export function runPipeline(
 
 export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* () {
     const hooks = yield* HookService;
+    const sink = yield* EventSinkService;
     const approvalWait = yield* ApprovalWaitService;
     const ruleEngine: RuleEngine = createRuleEngine();
     const destructiveTools = new Set(DANGEROUS_TOOL_NAMES);
@@ -232,6 +234,7 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
           }
         ).pipe(
           Effect.provideService(HookService, hooks),
+          Effect.provideService(EventSinkService, sink),
           Effect.provideService(ApprovalWaitService, approvalWait)
         ),
     };

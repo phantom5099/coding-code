@@ -7,6 +7,7 @@ import { runPipeline } from '../../src/approval/approval.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { EventSinkService } from '../../src/sink/port.js';
 import type { ProfileName } from '../../src/contracts/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -24,14 +25,22 @@ function makeMockApprovalWait() {
   return {
     waitForConfirm: () => Effect.succeed({ type: 'deny' }) as any,
     resolveConfirm: () => Effect.succeed(false),
-    emitApprovalRequest: (sessionId: string, id: string, tool: string, args: any) =>
+    cancelPendingFor: () => Effect.succeed(0),
+  };
+}
+
+// 审批请求现在经 EventSink 出站，捕获点从 wait 的 emitter 迁到 sink.emit
+function makeMockEventSink() {
+  return {
+    attach: () => Effect.succeed({} as any),
+    detach: () => Effect.void,
+    emit: (sessionId: string, body: any) =>
       Effect.sync(() => {
-        capturedApproval = { sessionId, id, tool, args };
+        if (body?.family === 'event' && body.event?.type === 'approval_request') {
+          capturedApproval = { sessionId, id: body.event.id, tool: body.event.tool, args: body.event.args };
+        }
       }),
-    registerEmitter: () => Effect.succeed(undefined),
-    delegateEmitter: () => Effect.succeed(undefined),
-    unregisterEmitter: () => Effect.succeed(undefined),
-    hasEmitter: () => Effect.succeed(true),
+    has: () => Effect.succeed(true),
   };
 }
 
@@ -47,7 +56,8 @@ function runPipelineWithMock(opts: {
   const mockWait = makeMockApprovalWait();
   const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
   const WaitTestLayer = Layer.succeed(ApprovalWaitService, mockWait as any);
-  const TestLayer = Layer.mergeAll(HookTestLayer, WaitTestLayer);
+  const SinkTestLayer = Layer.succeed(EventSinkService, makeMockEventSink() as any);
+  const TestLayer = Layer.mergeAll(HookTestLayer, WaitTestLayer, SinkTestLayer);
   return Effect.runPromise(
     runPipeline(
       { tool: opts.tool, input: opts.input },

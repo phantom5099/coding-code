@@ -117,7 +117,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
         const context = yield* ContextService;
         const session = yield* SessionService;
         const state = yield* session.load(normalizedCwd, sessionId);
-        return yield* context.compactWithLLM(
+        return yield* context.compact(
           {
             cwd: state.cwd,
             sessionId: state.sessionId,
@@ -142,7 +142,9 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
     await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;
+        const context = yield* ContextService;
         yield* session.deleteSession(sessionId, cwd);
+        yield* context.dispose(sessionId);
       }) as any
     );
     return c.json({ ok: true });

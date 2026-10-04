@@ -8,6 +8,7 @@ import { SessionLayer } from '../../src/session/session.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { EventSinkLayer } from '../../src/sink/sink.js';
 import type { ProfileName } from '../../src/contracts/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
@@ -23,11 +24,7 @@ const mockHookService = {
 const mockApprovalWaitService = {
   waitForConfirm: () => Effect.dieMessage('not implemented'),
   resolveConfirm: () => Effect.succeed(false),
-  emitApprovalRequest: () => Effect.succeed(undefined),
-  registerEmitter: () => Effect.succeed(undefined),
-  delegateEmitter: () => Effect.succeed(undefined),
-  unregisterEmitter: () => Effect.succeed(undefined),
-  hasEmitter: () => Effect.succeed(false),
+  cancelPendingFor: () => Effect.succeed(0),
 };
 
 function makeLayer() {
@@ -36,6 +33,7 @@ function makeLayer() {
     Layer.provide(
       Layer.mergeAll(
         HookTestLayer,
+        EventSinkLayer,
         Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any)
       )
     )
@@ -43,6 +41,7 @@ function makeLayer() {
   return Layer.mergeAll(
     SessionLayer,
     HookTestLayer,
+    EventSinkLayer,
     ApprovalTestLayer,
     Layer.succeed(ApprovalWaitService, mockApprovalWaitService as any)
   );

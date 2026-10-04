@@ -11,6 +11,7 @@ import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
 import { ContextService } from '../../src/context/port.js';
+import { EventSinkLayer } from '../../src/sink/sink.js';
 import { LLMService } from '../../src/llm/port.js';
 import { AgentError } from '../../src/core/error.js';
 import { MemoryService } from '../../src/memory/port.js';
@@ -132,9 +133,12 @@ const AgentDeps = Layer.mergeAll(
     extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
   } as any),
   Layer.succeed(ContextService, {
-    willCompact: () => Effect.succeed(false),
-    assemblePayload: (ref: SessionRef) => Effect.sync(() => readMessages(transcriptPathFor(ref))),
+    getHistory: (ref: SessionRef) => Effect.sync(() => readMessages(transcriptPathFor(ref))),
+    absorb: () => Effect.void,
+    compact: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
+    dispose: () => Effect.void,
   } as any),
+  EventSinkLayer,
   Layer.succeed(MemoryService, {
     loadMemoryForPrompt: () => Effect.succeed(''),
     flushSessionToMemory: () => Effect.succeed({ written: false, bytes: 0 }),

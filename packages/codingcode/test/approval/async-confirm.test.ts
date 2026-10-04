@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Fiber, Layer } from 'effect';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import type { ConfirmResult } from '../../src/approval/confirmation.js';
 import { ApprovalWaitLayer } from '../../src/approval/wait.js';
@@ -60,61 +60,42 @@ describe('ApprovalWaitService', () => {
   });
 });
 
-describe('delegateEmitter', () => {
-  it('delegates parent emitter to child session', async () => {
-    const parentSid = 'parent-' + Math.random().toString(36).slice(2);
-    const childSid = 'child-' + Math.random().toString(36).slice(2);
-    const calls: Array<[string, string, Record<string, unknown>]> = [];
+describe('cancelPendingFor', () => {
+  it('fails pending approvals of that session closed as deny and returns the count', async () => {
+    const sid = 'sess-' + Math.random().toString(36).slice(2);
+    const other = 'other-' + Math.random().toString(36).slice(2);
 
-    await run(
+    const results = await run(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
-        yield* svc.registerEmitter(
-          parentSid,
-          (id: string, tool: string, args: Record<string, unknown>) => calls.push([id, tool, args])
-        );
+        const mine = yield* Effect.fork(svc.waitForConfirm('a1', sid));
+        const alsoMine = yield* Effect.fork(svc.waitForConfirm('a2', sid));
+        const theirs = yield* Effect.fork(svc.waitForConfirm('b1', other));
+        yield* Effect.sleep('5 millis');
 
-        expect(yield* svc.hasEmitter(parentSid)).toBe(true);
-        expect(yield* svc.hasEmitter(childSid)).toBe(false);
-
-        yield* svc.delegateEmitter(childSid, parentSid);
-
-        expect(yield* svc.hasEmitter(childSid)).toBe(true);
-
-        yield* svc.unregisterEmitter(childSid);
-        yield* svc.unregisterEmitter(parentSid);
+        const cleared = yield* svc.cancelPendingFor(sid);
+        const mineRes = yield* Fiber.join(mine);
+        const alsoMineRes = yield* Fiber.join(alsoMine);
+        // 其它会话的待决项不受影响
+        const stillPending = yield* svc.resolveConfirm('b1', other, { type: 'allow' });
+        yield* Fiber.join(theirs);
+        return { cleared, mineRes, alsoMineRes, stillPending };
       })
     );
+
+    expect(results.cleared).toBe(2);
+    expect(results.mineRes).toEqual({ type: 'deny' });
+    expect(results.alsoMineRes).toEqual({ type: 'deny' });
+    expect(results.stillPending).toBe(true);
   });
 
-  it('child emitter fires the same callback as parent', async () => {
-    const parentSid = 'parent-cb-' + Math.random().toString(36).slice(2);
-    const childSid = 'child-cb-' + Math.random().toString(36).slice(2);
-    const received: string[] = [];
-
-    await run(
+  it('returns 0 when the session has no pending approvals', async () => {
+    const cleared = await run(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
-        yield* svc.registerEmitter(parentSid, (id: string) => received.push(id));
-        yield* svc.delegateEmitter(childSid, parentSid);
-
-        // Since we can't directly access the private map, we verify via hasEmitter
-        expect(yield* svc.hasEmitter(childSid)).toBe(true);
-
-        yield* svc.unregisterEmitter(childSid);
-        yield* svc.unregisterEmitter(parentSid);
+        return yield* svc.cancelPendingFor('nobody');
       })
     );
-  });
-
-  it('delegateEmitter is a no-op when parent has no emitter', async () => {
-    const childSid = 'child-noop-' + Math.random().toString(36).slice(2);
-    await run(
-      Effect.gen(function* () {
-        const svc = yield* ApprovalWaitService;
-        yield* svc.delegateEmitter(childSid, 'nonexistent-parent');
-        expect(yield* svc.hasEmitter(childSid)).toBe(false);
-      })
-    );
+    expect(cleared).toBe(0);
   });
 });

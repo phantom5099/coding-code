@@ -4,6 +4,7 @@ import { runPipeline } from '../../src/approval/approval.js';
 import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import type { PermissionRule } from '../../src/approval/types.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { EventSinkService } from '../../src/sink/port.js';
 import { HookService } from '../../src/hooks/port.js';
 
 const mockHookService = {
@@ -15,16 +16,20 @@ const mockHookService = {
 const mockApprovalWaitService = {
   waitForConfirm: () => Effect.dieMessage('not implemented'),
   resolveConfirm: () => Effect.succeed(false),
-  emitApprovalRequest: () => Effect.succeed(undefined),
-  registerEmitter: () => Effect.succeed(undefined),
-  delegateEmitter: () => Effect.succeed(undefined),
-  unregisterEmitter: () => Effect.succeed(undefined),
-  hasEmitter: () => Effect.succeed(false),
+  cancelPendingFor: () => Effect.succeed(0),
+};
+
+const mockEventSink = {
+  attach: () => Effect.succeed({} as any),
+  detach: () => Effect.void,
+  emit: () => Effect.void,
+  has: () => Effect.succeed(false),
 };
 
 const HookTestLayer = Layer.succeed(HookService, mockHookService);
 const WaitTestLayer = Layer.succeed(ApprovalWaitService, mockApprovalWaitService);
-const TestLayer = Layer.mergeAll(HookTestLayer, WaitTestLayer);
+const SinkTestLayer = Layer.succeed(EventSinkService, mockEventSink as any);
+const TestLayer = Layer.mergeAll(HookTestLayer, WaitTestLayer, SinkTestLayer);
 
 function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(TestLayer)));

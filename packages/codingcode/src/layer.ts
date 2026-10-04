@@ -7,6 +7,7 @@ import { McpLayer } from './mcp/mcp.js';
 import { CheckpointLayer } from './checkpoint/checkpoint.js';
 import { ApprovalLayer } from './approval/approval.js';
 import { ApprovalWaitLayer } from './approval/wait.js';
+import { EventSinkLayer } from './sink/sink.js';
 import { TodoLayer } from './todo/todo.js';
 import { SessionLayer } from './session/session.js';
 import { ToolExecutorLayer } from './tools/tools.js';
@@ -19,14 +20,18 @@ import { SchedulerLayer } from './scheduler/scheduler.js';
 
 // base layers
 const InfraLayer = Layer.mergeAll(
-  HookLayer, RulesLayer, SkillLayer, McpLayer, ApprovalWaitLayer, TodoLayer,
+  HookLayer, RulesLayer, SkillLayer, McpLayer, EventSinkLayer, ApprovalWaitLayer, TodoLayer,
 );
 
-const ApprovalWithDeps = ApprovalLayer.pipe(Layer.provide(Layer.mergeAll(HookLayer, ApprovalWaitLayer)));
+const ApprovalWithDeps = ApprovalLayer.pipe(
+  Layer.provide(Layer.mergeAll(HookLayer, EventSinkLayer, ApprovalWaitLayer))
+);
 const ToolExecutorWithDeps = ToolExecutorLayer.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWithDeps))
 );
-const ContextWithDeps = ContextLayer.pipe(Layer.provide(Layer.mergeAll(SessionLayer, LlmLayer)));
+const ContextWithDeps = ContextLayer.pipe(
+  Layer.provide(Layer.mergeAll(SessionLayer, LlmLayer, EventSinkLayer))
+);
 const MemoryWithDeps = MemoryLayer.pipe(Layer.provide(LlmLayer));
 
 // agent 直接消费的宽服务集合
@@ -55,6 +60,7 @@ export const AppLayer = Layer.mergeAll(
   AgentWithDeps,
   SubagentWithDeps,
   SchedulerLayer,
+  EventSinkLayer,
 );
 
 export const createAppRuntime = () => ManagedRuntime.make(AppLayer);
