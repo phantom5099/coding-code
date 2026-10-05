@@ -7,6 +7,7 @@ import { ApprovalService } from '../approval/port.js';
 import { CheckpointService } from '../checkpoint/port.js';
 import { ContextService } from '../context/port.js';
 import { EventSinkService } from '../sink/port.js';
+import { MailboxService } from '../session/mailbox.js';
 import { HookService } from '../hooks/port.js';
 import { LLMService } from '../llm/port.js';
 import { McpService } from '../mcp/port.js';
@@ -17,7 +18,7 @@ import { SkillService } from '../skills/port.js';
 import { TodoService } from '../todo/port.js';
 import { ToolExecutorService } from '../tools/port.js';
 import { buildSystemPrompt } from './prompt.js';
-import type { FrameBody, FrameError, ResponseMeta, ToolOutcome, Transition } from '../contracts/frame.js';
+import type { EndTransition, FrameBody, FrameError, ResponseMeta, ToolOutcome } from '../contracts/frame.js';
 import { isTurnEnd } from '../contracts/frame.js';
 import type { SessionRef } from '../contracts/session.js';
 import type { ToolCatalog, ToolResult } from '../contracts/tool.js';
@@ -51,6 +52,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
   const mcp = yield* McpService;
   const context = yield* ContextService;
   const sink = yield* EventSinkService;
+  const mailbox = yield* MailboxService;
   const memory = yield* MemoryService;
   const llm = yield* LLMService;
   const rules = yield* RulesService;
@@ -196,7 +198,8 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
     const { tools, lookup: toolLookup } = catalog;
 
     let ended = false;
-    const offerEnd = (transition: Extract<Transition, { to: 'end' }>) =>
+    let deliveryPhase: 'currentTurn' | 'nextTurn' = 'currentTurn';
+    const offerEnd = (transition: EndTransition) =>
       Effect.sync(() => {
         if (ended) return;
         ended = true;
@@ -237,6 +240,14 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
           parentSessionId: state.parentSessionId,
           currentTurnId: state.currentTurnId,
         };
+
+        const mayDrain = deliveryPhase === 'currentTurn' && step > 0;
+        if (mayDrain) {
+          for (const item of yield* mailbox.drain(state.sessionId)) {
+            const ev = yield* session.recordSubagentResult(state, item);
+            yield* context.absorb(sessionRef, [ev]);
+          }
+        }
 
         const history = yield* Effect.either(context.getHistory(sessionRef, model));
         if (Either.isLeft(history)) {
@@ -284,6 +295,7 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         if (toolCalls.length === 0) {
           const assistantEv = yield* session.recordAssistant(state, content, [], responded.usage);
           yield* context.absorb(sessionRef, [assistantEv]);
+          deliveryPhase = 'nextTurn';
           const stopDecision = yield* hooks.emitDecision('agent.turn.stop', { sessionId: sid, content, turnId: state.currentTurnId, projectPath });
 
           if (stopDecision && stopDecision.decision === 'continue') {

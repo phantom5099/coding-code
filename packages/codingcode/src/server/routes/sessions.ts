@@ -7,6 +7,7 @@ import type { ProfileName } from '../../contracts/types.js';
 import { SessionService } from '../../session/port.js';
 import { computePaths } from '../../session/paths.js';
 import { ContextService } from '../../context/port.js';
+import { MailboxService } from '../../session/mailbox.js';
 import { estimatePromptTokensFrom } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/port.js';
 import { activeModelId, setGlobalActive } from '../../infra/models.js';
@@ -143,8 +144,10 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const context = yield* ContextService;
+        const mailbox = yield* MailboxService;
         yield* session.deleteSession(sessionId, cwd);
         yield* context.dispose(sessionId);
+        yield* mailbox.dispose(sessionId);
       }) as any
     );
     return c.json({ ok: true });

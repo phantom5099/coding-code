@@ -12,6 +12,7 @@ import { ApprovalService } from '../../src/approval/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
 import { ContextService } from '../../src/context/port.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
+import { MailboxLayer } from '../../src/session/mailbox.js';
 import { LLMService } from '../../src/llm/port.js';
 import { AgentError } from '../../src/core/error.js';
 import { MemoryService } from '../../src/memory/port.js';
@@ -139,6 +140,7 @@ const AgentDeps = Layer.mergeAll(
     dispose: () => Effect.void,
   } as any),
   EventSinkLayer,
+  MailboxLayer,
   Layer.succeed(MemoryService, {
     loadMemoryForPrompt: () => Effect.succeed(''),
     flushSessionToMemory: () => Effect.succeed({ written: false, bytes: 0 }),

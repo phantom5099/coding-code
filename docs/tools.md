@@ -39,7 +39,8 @@ Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本�
 
 | 工具 | 功能 | 关键参数 |
 |---|---|---|
-| `dispatch_agent` | 将任务委派给运行时注册的子智能体 | `agent: string`, `prompt: string` |
+| `spawn_agent` | 启动一个后台子智能体并立即返回其会话 id，结果完成后自动注入本会话 | `agentName: string`, `prompt: string`, `model?: string`, `systemPrompt?: string` |
+| `wait_agent` | 等待子智能体到达终态，返回 `completed` / `failed` / `timeout` | `sessionId: string`, `timeoutMs?: number`（夹在 `[10000, 3600000]`，默认 `30000`） |
 
 ---
 
@@ -50,7 +51,7 @@ Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本�
 - **Core 工具**：始终可用，在启动时注册。包括上述所有内置工具。
 - **MCP 工具**：从 MCP 服务自动导入和注册。名称空间化为 `serverName:toolName` 格式，避免不同服务间的工具名冲突。
 
-Agent 在一次运行开始时注册内置工具、项目 MCP 工具和 `dispatch_agent`。plan 模式通过独立的 `PLAN_PROFILE_ALLOWED_TOOLS` 策略过滤工具。
+Agent 在一次运行开始时注册内置工具、项目 MCP 工具和 `spawn_agent` / `wait_agent`。plan 模式通过独立的 `PLAN_PROFILE_ALLOWED_TOOLS` 策略过滤工具。
 
 ---
 

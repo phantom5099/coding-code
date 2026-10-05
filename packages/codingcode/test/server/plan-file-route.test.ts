@@ -8,7 +8,7 @@ import { join, resolve } from 'path';
 import { Hono } from 'hono';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
 import { SessionService } from '../../src/session/port.js';
-import { LLMFactoryService } from '../../src/llm/port.js';
+import { LLMService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { HookService } from '../../src/hooks/port.js';
@@ -56,44 +56,9 @@ const MockSessionLayer = Layer.succeed(SessionService, {
     }),
 } as any);
 
-const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
-  findModel: () =>
-    Effect.succeed({
-      id: 'deepseek-chat',
-      model: 'deepseek-chat',
-      activeProfile: 'build',
-      permissionMode: 'ask',
-      provider: 'deepseek',
-      driver: 'openai',
-      api_key_env: 'DEEPSEEK_API_KEY',
-      base_url: 'https://api.deepseek.com',
-    }),
-  createClient: () =>
-    Effect.succeed({
-      modelInfo: {
-        provider: 'deepseek',
-        model: 'deepseek-chat',
-        activeProfile: 'build',
-        permissionMode: 'ask',
-        maxTokens: 64000,
-        supportsToolCalling: true,
-        supportsStreaming: true,
-      },
-    }),
-  getLLMClient: () => Effect.succeed(null),
-  listModels: () => Effect.succeed([]),
-  getActiveEntry: () =>
-    Effect.succeed({
-      id: 'deepseek-chat',
-      model: 'deepseek-chat',
-      activeProfile: 'build',
-      permissionMode: 'ask',
-      provider: 'deepseek',
-      driver: 'openai',
-      api_key_env: 'DEEPSEEK_API_KEY',
-      base_url: 'https://api.deepseek.com',
-    }),
-  switchModel: () => Effect.fail(new Error('no models')),
+const MockLLMLayer = Layer.succeed(LLMService, {
+  complete: () => Effect.fail(new Error('LLM not available in test')),
+  completeStream: () => (async function* () {})(),
 } as any);
 
 const MockApprovalLayer = ApprovalLayer.pipe(
@@ -158,7 +123,7 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
 
 const TestLayer = Layer.mergeAll(
   MockSessionLayer,
-  MockLLMFactoryLayer,
+  MockLLMLayer,
   MockApprovalLayer,
   HookLayer,
   EventSinkLayer,

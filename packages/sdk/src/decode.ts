@@ -11,7 +11,7 @@ export type DecodeResult =
   | { readonly ok: false; readonly reason: DecodeFailureReason; readonly raw: unknown };
 
 const TRANSITIONS = new Set(['start', 'executing', 'compress', 'end']);
-const EVENTS = new Set(['text_delta', 'tool_call', 'tool_result', 'approval_request']);
+const EVENTS = new Set(['text_delta', 'tool_call', 'tool_result', 'approval_request', 'subagent_event']);
 const END_REASONS = new Set<EndReason>(['done', 'error', 'maxSteps', 'aborted']);
 const OUTCOMES = new Set(['ok', 'error', 'denied']);
 
@@ -94,6 +94,11 @@ export function decodeFrame(raw: unknown): DecodeResult {
     }
     if (e.type === 'approval_request' && typeof e.tool !== 'string') {
       return { ok: false, reason: 'shape', raw };
+    }
+    if (e.type === 'subagent_event') {
+      if (typeof e.sessionId !== 'string' || typeof e.agentName !== 'string' || typeof e.status !== 'string') {
+        return { ok: false, reason: 'shape', raw };
+      }
     }
     return { ok: true, frame: raw as unknown as Frame };
   }
