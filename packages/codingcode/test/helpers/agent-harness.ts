@@ -159,7 +159,7 @@ export function makeState(partial: Partial<SessionStoreState> = {}): SessionStor
     model: 'test-model',
     title: 'test',
     activeProfile: 'build',
-    permissionMode: 'ask',
+    permissionMode: 'askBeforeExec',
     currentTurnId: 1,
     memorySnapshot: '',
     usage: undefined,

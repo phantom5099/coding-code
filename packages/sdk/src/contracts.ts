@@ -71,6 +71,7 @@ export interface SessionClient {
   }): Promise<void>;
   renameSession(input: { sessionId: string; cwd: string; title: string }): Promise<void>;
   getSessionPlan(input: { sessionId: string; cwd: string }): Promise<SessionPlanFile>;
+  stopAllSubagents(input: { sessionId: string }): Promise<{ stopped: number }>;
 
   getCheckpointDiff(input: {
     sessionId: string;

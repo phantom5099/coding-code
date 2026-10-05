@@ -5,6 +5,7 @@ import type { EndTransition, FrameBody } from '../contracts/frame.js';
 import type { ProfileName } from '../contracts/types.js';
 import { estimateTokensForContent } from '../context/tokens.js';
 import { loadConfig } from '../infra/config.js';
+import { SUBAGENT_RESULT_PREFIX } from '../contracts/session.js';
 import { MailboxService } from '../session/mailbox.js';
 import { EventSinkService } from '../sink/port.js';
 import { SubagentRunnerService } from './port.js';
@@ -31,12 +32,10 @@ export interface SpawnOptions {
   systemPrompt?: string;
 }
 
-/** 阶段二只有两个方法：调用者分别是 spawn.ts 与 wait.ts。
- *  计数 = 模块私有函数 countRunning（只服务 spawn 的配额判断）；
- *  statuses / stopAll 与它们的调用者（HTTP 路由、桌面停止下拉）一起放阶段三。 */
 export interface SubagentRunRegistryShape {
   spawn(opts: SpawnOptions): Effect.Effect<{ sessionId: string; agentName: string }, AgentError>;
   wait(sessionId: string, timeoutMs: number): Effect.Effect<WaitOutcome, AgentError>;
+  stopAll(parentSessionId: string): Effect.Effect<number>;
 }
 
 export class SubagentRunRegistryService extends Context.Tag('SubagentRunRegistry')<
@@ -73,7 +72,7 @@ function renderResult(run: SubagentRun, outcome: { end: EndTransition; content: 
     ? outcome.content
     : `${outcome.content}\nThe subagent did not finish. Spawn it again if the task is still needed.`;
   return [
-    'Message Type: FINAL_ANSWER',
+    SUBAGENT_RESULT_PREFIX,
     `Task name: ${run.parentSessionId}`,
     `Sender: ${run.sessionId}`,
     'Payload:',
@@ -215,8 +214,29 @@ export const SubagentRunRegistryLayer = Layer.scoped(
         );
       });
 
-    yield* Effect.addFinalizer(() => Effect.sync(() => runs.clear()));
+    const stopAll = (parentSessionId: string): Effect.Effect<number> =>
+      Effect.sync(() => {
+        let stopped = 0;
+        for (const run of runs.values()) {
+          if (run.parentSessionId !== parentSessionId) continue;
+          if (run.abort.signal.aborted) continue;        // 已请求过停止，不重复计数
+          if (currentStatus(run).kind !== 'running') continue;
+          run.abort.abort();
+          stopped++;
+        }
+        return stopped;
+      });
 
-    return { spawn, wait };
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        for (const run of runs.values()) {
+          run.abort.abort();
+          if (run.fiber) Effect.runFork(Fiber.interrupt(run.fiber));
+        }
+        runs.clear();
+      })
+    );
+
+    return { spawn, wait, stopAll };
   })
 );

@@ -18,7 +18,7 @@ function readAgentConfig() {
     maxSteps: cfg.maxSteps,
     maxStopContinuations: cfg.maxStopContinuations,
     activeProfile: isAgentProfileName(cfg.activeProfile) ? cfg.activeProfile : 'build',
-    permissionMode: isPermissionMode(cfg.permissionMode) ? cfg.permissionMode : 'ask',
+    permissionMode: isPermissionMode(cfg.permissionMode) ? cfg.permissionMode : 'askBeforeExec',
   };
 }
 

@@ -22,7 +22,7 @@ function makeFixture(sessionId: string, slug: string) {
       model: 'test-model',
       title: 'fixture',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     },
     { type: 'user', turnId: 1, content: 'hello' },
     { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },

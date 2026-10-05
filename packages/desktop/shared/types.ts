@@ -1,4 +1,10 @@
-export type ItemType = 'message' | 'reasoning' | 'tool_call' | 'tool_result' | 'error';
+export type ItemType =
+  | 'message'
+  | 'reasoning'
+  | 'tool_call'
+  | 'tool_result'
+  | 'error'
+  | 'subagent';
 
 export type Item =
   | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
@@ -22,7 +28,15 @@ export type Item =
       insertions?: number;
       deletions?: number;
     }
-  | { id: string; type: 'error'; message: string; code?: string };
+  | { id: string; type: 'error'; message: string; code?: string }
+  /** 后台子代理的进展条目：id = `subagent:<子会话 id>`，同一子代理后续帧原地改状态 */
+  | {
+      id: string;
+      type: 'subagent';
+      sessionId: string;
+      agentName: string;
+      status: 'running' | 'completed' | 'failed';
+    };
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed';
 

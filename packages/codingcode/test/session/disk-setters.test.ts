@@ -57,7 +57,7 @@ describe('SessionService disk setter/getter consistency', () => {
         return yield* session.create(cwd, {
           model: 'm',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
       })
     );
@@ -114,7 +114,7 @@ describe('SessionService disk setter/getter consistency', () => {
       })
     );
     expect(state.activeProfile).toBe('plan');
-    expect(state.permissionMode).toBe('ask');
+    expect(state.permissionMode).toBe('askBeforeExec');
   });
 
   it('setActiveProfile to build leaves permissionMode untouched', async () => {
@@ -132,7 +132,7 @@ describe('SessionService disk setter/getter consistency', () => {
       })
     );
     expect(state.activeProfile).toBe('build');
-    expect(state.permissionMode).toBe('ask');
+    expect(state.permissionMode).toBe('askBeforeExec');
   });
 
   it('setActiveProfile is durable across reload (session head on disk)', async () => {

@@ -42,6 +42,9 @@ vi.mock('../../src/server/routes/settings.js', () => ({
 vi.mock('../../src/server/routes/automations.js', () => ({
   registerAutomationsRoutes: register('automations'),
 }));
+vi.mock('../../src/server/routes/subagents.js', () => ({
+  registerSubagentsRoutes: register('subagents'),
+}));
 
 import { createServer } from '../../src/server/index.js';
 
@@ -63,6 +66,7 @@ describe('server route registration', () => {
       'approval',
       'settings',
       'automations',
+      'subagents',
     ]);
     expect(state.registrations.every(({ router }) => router === app)).toBe(true);
     expect(state.registrations.every(({ runtime: value }) => value === runtime)).toBe(true);

@@ -63,7 +63,7 @@ function seedEvents(): SessionEvent[] {
       model: 'test-model',
       title: 't',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     },
     { type: 'user', turnId: 1, content: 'q1' },
   ];

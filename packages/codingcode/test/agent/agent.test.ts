@@ -43,7 +43,7 @@ describe('agent runTurn loop', () => {
     expect(texts(events)).toEqual(['Hello', ' ', 'world']);
   });
 
-  it('should handle empty LLM stream gracefully', async () => {
+  it('reports an empty model response as an error instead of done', async () => {
     const llm = makeCapturingLlm(() => llmStream(pEnd()));
     const { events } = await runAgentTurn(
       { llm, state: mockState },
@@ -51,7 +51,11 @@ describe('agent runTurn loop', () => {
     );
 
     expect(texts(events)).toHaveLength(0);
-    expect(endReason(events)).toBe('done');
+    expect(endReason(events)).toBe('error');
+    const end = events.find(
+      (b) => b.family === 'transition' && b.transition.to === 'end'
+    ) as any;
+    expect(end.transition.error.code).toBe('EMPTY_RESPONSE');
   });
 
   it('should surface tool results as tool_result events', async () => {
@@ -103,7 +107,7 @@ describe('agent runTurn loop', () => {
             pEnd()
           );
         }
-        return llmStream(pEnd());
+        return llmStream(pText('ok'), pEnd());
       }),
       modelInfo: { maxTokens: 1000 },
     } as any;
@@ -112,7 +116,7 @@ describe('agent runTurn loop', () => {
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    expect(texts(events)).toEqual(['\n[Using: readFile]\n']);
+    expect(texts(events)[0]).toBe('\n[Using: readFile]\n');
   });
 
   it('should end with maxSteps and emit a single turn.end hook when maxSteps is exhausted', async () => {

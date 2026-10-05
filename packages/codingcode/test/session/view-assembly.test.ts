@@ -17,7 +17,7 @@ function makeEvents(extra: SessionEvent[] = []): SessionEvent[] {
       model: 'deepseek-chat',
       title: '',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     },
     { type: 'user', turnId: 1, content: 'hello' },
     {
@@ -113,7 +113,7 @@ describe('buildContextMessages', () => {
         model: 'deepseek-chat',
         title: '',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       {
         type: 'user',
@@ -142,7 +142,7 @@ describe('buildContextMessages', () => {
         model: 'deepseek-chat',
         title: '',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       {
         type: 'user',
@@ -193,7 +193,7 @@ describe('buildContextMessages', () => {
         model: 'deepseek-chat',
         title: '',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       {
         type: 'user',
@@ -249,7 +249,7 @@ describe('buildContextMessages', () => {
         model: 'deepseek-chat',
         title: '',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       {
         type: 'user',
@@ -295,7 +295,7 @@ describe('buildContextMessages', () => {
         model: 'deepseek-chat',
         title: '',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       {
         type: 'user',
@@ -340,7 +340,7 @@ describe('buildContextMessages', () => {
         model: 'deepseek-chat',
         title: '',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       { type: 'user', turnId: 1, content: 'q1' },
       {

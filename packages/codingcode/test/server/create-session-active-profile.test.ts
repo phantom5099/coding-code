@@ -34,7 +34,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
       body: JSON.stringify({
         cwd,
         activeProfile: 'plan',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
         model: 'gpt-4',
       }),
     });
@@ -47,7 +47,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
         const state = yield* session.load(cwd, sessionId);
         expect(state.activeProfile).toBe('plan');
         expect(state).not.toHaveProperty('mode');
-        expect(state.permissionMode).toBe('ask');
+        expect(state.permissionMode).toBe('askBeforeExec');
       })
     );
   });
@@ -105,7 +105,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cwd, activeProfile: 'build', permissionMode: 'ask' }),
+      body: JSON.stringify({ cwd, activeProfile: 'build', permissionMode: 'askBeforeExec' }),
     });
     expect(res.status).toBe(400);
   });
@@ -114,7 +114,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     const res = await app.request('/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cwd, permissionMode: 'ask', model: 'gpt-4' }),
+      body: JSON.stringify({ cwd, permissionMode: 'askBeforeExec', model: 'gpt-4' }),
     });
     expect(res.status).toBe(400);
   });
@@ -126,7 +126,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
       body: JSON.stringify({
         cwd,
         activeProfile: 'plan',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
         model: 'gpt-4',
       }),
     });
@@ -139,7 +139,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
         const state = yield* session.load(cwd, sessionId);
         expect(state.activeProfile).toBe('plan');
         expect(state).not.toHaveProperty('mode');
-        expect(state.permissionMode).toBe('ask');
+        expect(state.permissionMode).toBe('askBeforeExec');
         expect(state.activeProfile).toBe('plan');
       })
     );

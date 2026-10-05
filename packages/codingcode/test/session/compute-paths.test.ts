@@ -48,7 +48,7 @@ describe('computePaths', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
       })
     );
@@ -81,7 +81,7 @@ describe('computePaths', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
       })
     );
@@ -95,7 +95,7 @@ describe('computePaths', () => {
             {
               model: 'subagent-model',
               activeProfile: 'build',
-              permissionMode: 'ask',
+              permissionMode: 'askBeforeExec',
             },
             {
               parentSessionId: state.sessionId,

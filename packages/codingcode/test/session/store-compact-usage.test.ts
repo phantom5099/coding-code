@@ -39,7 +39,7 @@ function makeFixture(
       model: 'test-model',
       title: 'fixture',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     },
   ];
   turns.forEach((t, i) => {
@@ -73,7 +73,7 @@ function buildState(
     model: 'test-model',
     title: 'fixture',
     activeProfile: 'build',
-    permissionMode: 'ask',
+    permissionMode: 'askBeforeExec',
     currentTurnId,
     memorySnapshot: '',
     usage: initialUsage,

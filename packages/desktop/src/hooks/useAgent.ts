@@ -202,7 +202,7 @@ export function useAgentCore() {
       if (!resolvedThreadId) {
         const activeProfile: ProfileName = storeProfile;
         const permissionMode: PermissionMode =
-          activeProfile === 'plan' ? 'ask' : storePermissionMode;
+          activeProfile === 'plan' ? 'askBeforeExec' : storePermissionMode;
         // 新会话用全局配置的模型：以服务端的 activeId 为准，顺带刷新模型列表
         try {
           const data = await listModels();

@@ -36,7 +36,7 @@ describe('PUT /api/sessions/:id/title', () => {
       body: JSON.stringify({
         cwd,
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
         model: 'gpt-4',
       }),
     });

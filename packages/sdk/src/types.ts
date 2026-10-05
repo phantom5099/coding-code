@@ -1,6 +1,6 @@
 export type ProfileName = 'plan' | 'build';
 
-export type PermissionMode = 'ask' | 'acceptEdits' | 'bypass';
+export type PermissionMode = 'askBeforeExec' | 'bypass';
 
 export interface AvailableProfile {
   name: ProfileName;

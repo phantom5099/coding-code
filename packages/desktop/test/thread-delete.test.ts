@@ -58,7 +58,7 @@ function resetStores({ rootPath = '/test/cwd' }: { rootPath?: string } = {}) {
   useAgentStore.setState({
     currentThreadId: null,
     threads: {},
-    profile: 'build', permissionMode: 'ask',
+    profile: 'build', permissionMode: 'askBeforeExec',
     model: '',
     models: [],
     contextUsage: null,
@@ -115,7 +115,7 @@ describe('useAgentRollback().deleteThread', () => {
         s.usageByThreadId['thread-1'] = { prompt: 1, completion: 1, total: 2 };
         s.profileByThreadId['thread-1'] = {
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
           fetchedAt: 0,
           optimistic: false,
         };

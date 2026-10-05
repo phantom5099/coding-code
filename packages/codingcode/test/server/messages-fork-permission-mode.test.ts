@@ -69,7 +69,7 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
         return yield* session.create(cwd, {
           model: 'm',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
       })
     );

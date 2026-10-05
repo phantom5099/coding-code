@@ -70,7 +70,7 @@ describe('ApprovalPanel — pendingPlan handling', () => {
       useAgentStore.setState({
         currentThreadId: null,
         threads: {},
-        profile: 'build', permissionMode: 'ask',
+        profile: 'build', permissionMode: 'askBeforeExec',
         model: '',
         models: [],
         contextUsage: null,

@@ -24,14 +24,14 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       sessionId: 'test-sid',
       cwd: '/tmp/test',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     }),
   load: () =>
     Effect.succeed({
       sessionId: 'test-sid',
       cwd: '/tmp/test',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>

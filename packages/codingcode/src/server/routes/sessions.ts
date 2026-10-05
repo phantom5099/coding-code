@@ -171,9 +171,6 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   });
 
   // ---- Plan file: read the current plan document for a session ----
-  // submit_plan writes a <slug(title)>.md file per submission, so the
-  // "current" plan is whichever .md has the most recent mtime in the
-  // project's plan directory.
   router.get('/api/sessions/:id/plan', async (c) => {
     const cwd = resolveCwd(c.req.query('cwd'));
     const planDir = join(getGlobalDir(), PROJECTS_DIRNAME, encodeProjectPath(cwd));
@@ -269,7 +266,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   router.get('/api/sessions/:id/permission-mode', async (c) => {
     const sessionId = c.req.param('id');
     const cwd = c.req.query('cwd');
-    if (!cwd) return c.json({ mode: 'ask' });
+    if (!cwd) return c.json({ mode: 'askBeforeExec' });
     const result = await runWithLayer(
       Effect.gen(function* () {
         const session = yield* SessionService;

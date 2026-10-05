@@ -36,7 +36,7 @@ function makeFixture(
       model: 'test-model',
       title: 'fixture',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     },
     {
       type: 'user',
@@ -88,7 +88,7 @@ function makeState(
     model: 'test-model',
     title: 'fixture',
     activeProfile: 'build',
-    permissionMode: 'ask',
+    permissionMode: 'askBeforeExec',
     currentTurnId: 2,
     memorySnapshot: '',
     usage,
@@ -160,7 +160,7 @@ describe('SessionService create sets model', () => {
           return yield* svc.create(dir, {
             model: 'my-test-model',
             activeProfile: 'build',
-            permissionMode: 'ask',
+            permissionMode: 'askBeforeExec',
           });
         })
       );

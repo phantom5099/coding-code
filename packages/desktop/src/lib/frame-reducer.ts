@@ -117,8 +117,13 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
       });
       return;
     case 'subagent_event':
-      // 后台子代理的进展：阶段二不新增 UI 元素，仅显式消费该帧
-      // （不消费也不会报错，只是被静默忽略）；展示留给阶段三的状态快照。
+      fx.applyItem({
+        id: `subagent:${e.sessionId}`,
+        type: 'subagent',
+        sessionId: e.sessionId,
+        agentName: e.agentName,
+        status: e.status === 'spawned' ? 'running' : e.status,
+      });
       return;
     case 'tool_result': {
       if (e.name === 'submit_plan' && e.outcome.status !== 'ok') state.planTitle = null;

@@ -28,7 +28,7 @@ vi.mock('../src/lib/core-api', () => ({
 
 const baseProfile = {
   activeProfile: 'build' as const,
-  permissionMode: 'ask' as const,
+  permissionMode: 'askBeforeExec' as const,
   cwd: '/tmp',
   available: [
     { name: 'plan', description: 'plan agent' },
@@ -40,16 +40,16 @@ describe('ProfileIndicator (with live session)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fetchProfileMock.mockResolvedValue(baseProfile);
-    switchProfileMock.mockResolvedValue({ activeProfile: 'plan', permissionMode: 'ask' });
+    switchProfileMock.mockResolvedValue({ activeProfile: 'plan', permissionMode: 'askBeforeExec' });
     setAgentConfigMock.mockImplementation(async (patch: any) => ({
       maxSteps: 200,
       maxStopContinuations: 2,
       activeProfile: patch?.activeProfile ?? 'build',
-      permissionMode: patch?.permissionMode ?? 'ask',
+      permissionMode: patch?.permissionMode ?? 'askBeforeExec',
     }));
     useAgentStore.setState({
       profile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
       profileByThreadId: {},
     });
   });
@@ -71,7 +71,7 @@ describe('ProfileIndicator (with live session)', () => {
     fetchProfileMock.mockResolvedValue({
       ...baseProfile,
       activeProfile: 'plan',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     });
     const { getByTestId, getByText } = render(<ProfileIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
@@ -96,7 +96,7 @@ describe('ProfileIndicator (with live session)', () => {
     fetchProfileMock.mockResolvedValue({
       ...baseProfile,
       activeProfile: 'plan',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     });
     const { getByTestId } = render(<ProfileIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
@@ -110,7 +110,7 @@ describe('ProfileIndicator (with live session)', () => {
 
   it('updates the label from switchProfile response without refetching', async () => {
     fetchProfileMock.mockResolvedValue(baseProfile);
-    switchProfileMock.mockResolvedValue({ activeProfile: 'plan', permissionMode: 'ask' });
+    switchProfileMock.mockResolvedValue({ activeProfile: 'plan', permissionMode: 'askBeforeExec' });
     const { getByTestId } = render(<ProfileIndicator sessionId="s-1" cwd="/tmp" />);
     await waitFor(() => {
       expect(getByTestId('profile-indicator')).toHaveTextContent('构建模式');
@@ -132,7 +132,7 @@ describe('ProfileIndicator (with live session)', () => {
     fireEvent.click(getByTestId('profile-indicator'));
     fireEvent.click(getByTestId('profile-indicator'));
     expect(switchProfileMock).toHaveBeenCalledTimes(1);
-    resolveSwitch({ activeProfile: 'plan', permissionMode: 'ask' });
+    resolveSwitch({ activeProfile: 'plan', permissionMode: 'askBeforeExec' });
   });
 
   it('renders optimistically from the configured default profile while fetch is in flight', async () => {
@@ -149,7 +149,7 @@ describe('ProfileIndicator (with live session)', () => {
       profileByThreadId: {
         's-1': {
           activeProfile: 'plan',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
           fetchedAt: Date.now(),
           optimistic: false,
         },
@@ -167,11 +167,11 @@ describe('ProfileIndicator (welcome screen, no session)', () => {
       maxSteps: 200,
       maxStopContinuations: 2,
       activeProfile: patch?.activeProfile ?? 'build',
-      permissionMode: patch?.permissionMode ?? 'ask',
+      permissionMode: patch?.permissionMode ?? 'askBeforeExec',
     }));
     useAgentStore.setState({
       profile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
       profileByThreadId: {},
     });
   });

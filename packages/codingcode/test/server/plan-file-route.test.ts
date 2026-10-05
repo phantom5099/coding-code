@@ -33,7 +33,7 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       cwd: '/tmp/test',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     }),
   load: () =>
     Effect.succeed({
@@ -41,7 +41,7 @@ const MockSessionLayer = Layer.succeed(SessionService, {
       cwd: '/tmp/test',
       model: 'deepseek-chat',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     }),
   recordUser: () => Effect.succeed({ type: 'user', content: '', turnId: 0 }),
   recordAssistant: () =>

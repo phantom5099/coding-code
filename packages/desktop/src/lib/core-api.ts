@@ -89,6 +89,11 @@ export function renameSession(sessionId: string, cwd: string, title: string): Pr
   return clients.sessions.renameSession({ sessionId, cwd, title });
 }
 
+/** 停掉该会话下仍在跑的后台子代理（「停止全部」按钮），返回停掉的数量 */
+export function stopAllSubagents(sessionId: string): Promise<{ stopped: number }> {
+  return clients.sessions.stopAllSubagents({ sessionId });
+}
+
 export function sendApprovalResponse(
   sessionId: string,
   callId: string,

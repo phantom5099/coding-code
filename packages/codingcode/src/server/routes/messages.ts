@@ -35,7 +35,7 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
       runOpts.activeProfile = isAgentProfileName(cfg.activeProfile) ? cfg.activeProfile : 'build';
       runOpts.permissionMode = isPermissionMode(cfg.permissionMode)
         ? cfg.permissionMode
-        : 'ask';
+        : 'askBeforeExec';
     }
 
     const result = await rt.runPromise(

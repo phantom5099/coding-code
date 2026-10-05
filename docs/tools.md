@@ -103,7 +103,7 @@ interface ToolVisibilityPolicy {
 | 层级 | 名称 | 逻辑 |
 |------|------|------|
 | 1 | **RuleEngine** | 规则引擎匹配，支持 glob 模式匹配工具名和参数，按优先级排序 |
-| 2 | **PermissionMode** | 权限模式驱动的自动放行：`bypass`（全部放行）、`acceptEdits`（非破坏性工具放行，涵盖只读与编辑工具）、`ask`（不自动放行，继续下一层）。只读工具不再有无条件的独立白名单层；`plan` Profile 由 `agent/profile.ts` 中的 `planProfileGateHook` 在下一层强制，不在此层处理 |
+| 2 | **PermissionMode** | 权限模式驱动的自动放行：`bypass`（展示名「完全放行」）、`askBeforeExec`（展示名「执行前询问」：非破坏性工具放行，仅 `execute_command` 这类破坏性工具继续下一层）。只读工具不再有无条件的独立白名单层；`plan` Profile 由 `agent/profile.ts` 中的 `planProfileGateHook` 在下一层强制，不在此层处理 |
 | 3 | **HookPreToolUse** | 钩子决策，可返回 allow/deny/ask/continue，支持 `modifiedInput` 修改参数 |
 | 4 | **UserConfirmation** | 异步用户确认，支持 allow/deny/always/never 四种响应，always/never 会持久化为规则 |
 | 5 | **AuditLog** | 每一层决策后记录审计日志，通过 `tool.approval.post` 钩子发出 |
@@ -127,12 +127,11 @@ interface ToolVisibilityPolicy {
 ### 权限模式
 
 ```typescript
-type PermissionMode = 'ask' | 'acceptEdits' | 'bypass';
+type PermissionMode = 'askBeforeExec' | 'bypass';
 ```
 
-- `ask`：不自动放行任何工具（含只读工具），全部逐层审批
-- `acceptEdits`：非破坏性工具自动放行（涵盖只读工具与编辑类工具），破坏性工具仍需确认
-- `bypass`：全部放行，跳过所有审批（慎用）
+- `askBeforeExec`（展示名「执行前询问」）：非破坏性工具自动放行（涵盖只读工具与编辑类工具），破坏性工具（`execute_command`）仍需确认
+- `bypass`（展示名「完全放行」）：全部放行，跳过所有审批（慎用）
 
 ### OS 级沙箱（预留）
 

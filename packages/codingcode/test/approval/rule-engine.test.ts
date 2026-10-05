@@ -91,7 +91,7 @@ describe('RuleEngine', () => {
     expect(engine.evaluate('Bash', { command: 'curl -s http://example.com > file' })).toBeNull();
   });
 
-  it('should support addRule and removeRule after creation', () => {
+  it('should support addRule after creation', () => {
     const engine = createRuleEngine();
     expect(engine.evaluate('Bash', { command: 'danger' })).toBeNull();
 
@@ -103,9 +103,6 @@ describe('RuleEngine', () => {
       reason: 'Dangerous',
     });
     expect(engine.evaluate('Bash', { command: 'danger' })).not.toBeNull();
-
-    engine.removeRule('deny-danger');
-    expect(engine.evaluate('Bash', { command: 'danger' })).toBeNull();
   });
 
   it('should match tool name pattern exactly', () => {

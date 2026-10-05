@@ -265,6 +265,27 @@ const MessageItem = memo(function MessageItem({
     return null;
   }
 
+  if (item.type === 'subagent') {
+    const label =
+      item.status === 'running' ? '运行中' : item.status === 'completed' ? '已完成' : '已失败';
+    const tone =
+      item.status === 'failed'
+        ? 'text-[var(--accent-danger)]'
+        : item.status === 'completed'
+          ? 'text-[var(--accent-success)]'
+          : 'text-[var(--accent-primary)]';
+    return (
+      <div
+        data-testid={`subagent-${item.sessionId}`}
+        className="mb-1 flex items-center gap-1.5 text-[13px] pl-8"
+      >
+        <span className="text-[var(--text-muted)]">子代理</span>
+        <span className="font-mono text-[var(--text-primary)]">{item.agentName}</span>
+        <span className={tone}>{label}</span>
+      </div>
+    );
+  }
+
   if (item.type === 'error') {
     return (
       <div className="mb-1.5 px-4 py-3 pl-8 rounded-lg bg-[var(--accent-danger-bg)] border border-[var(--accent-danger-border)] text-[var(--accent-danger)] text-[14px] leading-relaxed">

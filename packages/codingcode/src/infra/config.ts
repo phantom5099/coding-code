@@ -57,7 +57,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   maxSteps: 200,
   maxStopContinuations: 2,
   activeProfile: 'build',
-  permissionMode: 'ask',
+  permissionMode: 'askBeforeExec',
   context: DEFAULT_CONTEXT,
   memory: DEFAULT_MEMORY,
   subagent: DEFAULT_SUBAGENT,

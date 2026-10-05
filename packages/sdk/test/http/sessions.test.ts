@@ -14,15 +14,36 @@ describe('createHttpSessionClient.setSessionPermissionMode', () => {
     await client.setSessionPermissionMode({
       sessionId: 'sess-123',
       cwd: '/test',
-      mode: 'acceptEdits' as any,
+      mode: 'askBeforeExec',
     });
 
     expect(fetchSpy).toHaveBeenCalledWith(
       'http://localhost:8080/api/sessions/sess-123/permission-mode',
       expect.objectContaining({
         method: 'PUT',
-        body: JSON.stringify({ cwd: '/test', mode: 'acceptEdits' }),
+        body: JSON.stringify({ cwd: '/test', mode: 'askBeforeExec' }),
       })
+    );
+
+    fetchSpy.mockRestore();
+  });
+});
+
+describe('createHttpSessionClient.stopAllSubagents', () => {
+  it('calls POST /api/sessions/:id/subagents/stop and returns the stopped count', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ stopped: 2 }), { status: 200 }));
+
+    const request = createRequestHelpers('http://localhost:8080');
+    const client = createHttpSessionClient(request);
+
+    const result = await client.stopAllSubagents({ sessionId: 'sess-123' });
+
+    expect(result).toEqual({ stopped: 2 });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://localhost:8080/api/sessions/sess-123/subagents/stop',
+      expect.objectContaining({ method: 'POST' })
     );
 
     fetchSpy.mockRestore();

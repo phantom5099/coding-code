@@ -7,6 +7,7 @@ import { registerModelsRoutes } from './routes/models.js';
 import { registerApprovalRoutes } from './routes/approval.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerAutomationsRoutes } from './routes/automations.js';
+import { registerSubagentsRoutes } from './routes/subagents.js';
 import { AgentError } from '../core/error.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -47,6 +48,7 @@ export async function createServer(rt: ManagedRt): Promise<Hono> {
   registerApprovalRoutes(app, rt);
   registerSettingsRoutes(app, rt);
   registerAutomationsRoutes(app, rt);
+  registerSubagentsRoutes(app, rt);
 
   return app;
 }

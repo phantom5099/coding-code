@@ -56,7 +56,7 @@ describe('global store - applyChunk tool_result searches current turn first', ()
     useAgentStore.setState({
       currentThreadId: null,
       threads: {},
-      profile: 'build', permissionMode: 'ask',
+      profile: 'build', permissionMode: 'askBeforeExec',
       model: '',
       models: [],
       contextUsage: null,
@@ -146,7 +146,7 @@ describe('global store - applyChunk tool_result uses push', () => {
     useAgentStore.setState({
       currentThreadId: null,
       threads: {},
-      profile: 'build', permissionMode: 'ask',
+      profile: 'build', permissionMode: 'askBeforeExec',
       model: '',
       models: [],
       contextUsage: null,
