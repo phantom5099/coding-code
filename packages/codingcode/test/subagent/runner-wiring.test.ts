@@ -192,7 +192,7 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
         const parent = yield* session.create(cwd, {
           model: PARENT_MODEL,
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
         const { stream, sessionId } = yield* runner.runSubagent('do the thing', {
           cwd,

@@ -21,7 +21,7 @@ describe('session activeProfile persistence', () => {
         return yield* session.create(cwd, {
           model: 'gpt-4o',
           activeProfile: 'plan',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
       })
     );
@@ -43,7 +43,7 @@ describe('session activeProfile persistence', () => {
         return yield* session.create(cwd, {
           model: 'gpt-4o',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
       })
     );

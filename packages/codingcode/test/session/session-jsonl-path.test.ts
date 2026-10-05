@@ -24,7 +24,7 @@ describe('sessionJsonlPathFromCwd', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
       })
     );
@@ -51,7 +51,7 @@ describe('sessionJsonlPathFromCwd', () => {
         return yield* svc.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
       })
     );

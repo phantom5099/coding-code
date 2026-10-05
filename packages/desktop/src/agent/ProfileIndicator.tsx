@@ -45,7 +45,7 @@ export default function ProfileIndicator({ sessionId, cwd }: ProfileIndicatorPro
     if (existing && !existing.optimistic) return;
 
     if (!existing) {
-      const permissionMode = 'ask' as const;
+      const permissionMode = 'askBeforeExec' as const;
       setOptimisticProfileForThread(sessionId, {
         activeProfile: storeProfile,
         permissionMode,

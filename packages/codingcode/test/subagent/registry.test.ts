@@ -43,10 +43,15 @@ function failStream(): AsyncGenerator<FrameBody> {
 
 function makeHarness(makeStream: () => AsyncGenerator<FrameBody>) {
   const emitted: Array<{ sessionId: string; body: FrameBody }> = [];
+  const signals: AbortSignal[] = [];
   // 每次 spawn 给一条独立流与递增的 sessionId（配额用例会连续 spawn 多次）
   let n = 0;
   const runner = Layer.succeed(SubagentRunnerService, {
-    runSubagent: () => Effect.sync(() => ({ stream: makeStream(), sessionId: `child-${++n}` })),
+    runSubagent: (_prompt: string, opts: any) =>
+      Effect.sync(() => {
+        signals.push(opts.signal);
+        return { stream: makeStream(), sessionId: `child-${++n}` };
+      }),
   } as any);
   const sink = Layer.succeed(EventSinkService, {
     attach: () => Effect.succeed(Effect.runSync(Queue.unbounded<FrameBody>())),
@@ -61,7 +66,7 @@ function makeHarness(makeStream: () => AsyncGenerator<FrameBody>) {
   const layers = SubagentRunRegistryLayer.pipe(
     Layer.provideMerge(Layer.mergeAll(runner, MailboxLayer, sink))
   );
-  return { emitted, layers };
+  return { emitted, signals, layers };
 }
 
 const run = <T>(layers: Layer.Layer<any>, eff: Effect.Effect<T, any, any>): Promise<T> =>
@@ -201,5 +206,56 @@ describe('subagent run registry', () => {
     // 默认上限 4：前四个成功，之后失败
     expect(result.slice(0, 4)).toEqual(['Right', 'Right', 'Right', 'Right']);
     expect(result.slice(4)).toEqual(['Left', 'Left']);
+  });
+
+  it('stopAll 只停仍在跑的，返回停掉的数量；重复调用不重复计数', async () => {
+    const { layers, signals } = makeHarness(hangingStream);
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const reg = yield* SubagentRunRegistryService;
+        yield* reg.spawn(spawnOpts);
+        yield* reg.spawn(spawnOpts);
+        const first = yield* reg.stopAll('parent-1');
+        const second = yield* reg.stopAll('parent-1');
+        return { first, second };
+      })
+    );
+    expect(result.first).toBe(2);
+    expect(result.second).toBe(0);
+    expect(signals.every((s) => s.aborted)).toBe(true);
+  });
+
+  it('stopAll 不碰已终态的 run，也不误伤别的父会话', async () => {
+    const { layers } = makeHarness(doneStream);
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const reg = yield* SubagentRunRegistryService;
+        yield* reg.spawn(spawnOpts);
+        yield* reg.spawn({ ...spawnOpts, parentSessionId: 'parent-2' });
+        yield* Effect.sleep(50);
+        return {
+          done: yield* reg.stopAll('parent-1'),
+          other: yield* reg.stopAll('parent-2'),
+        };
+      })
+    );
+    expect(result.done).toBe(0);
+    expect(result.other).toBe(0);
+  });
+
+  it('scope 结束（dispose）时 abort 掉所有仍活着的子代理', async () => {
+    const { layers, signals } = makeHarness(hangingStream);
+    await run(
+      layers,
+      Effect.gen(function* () {
+        const reg = yield* SubagentRunRegistryService;
+        yield* reg.spawn(spawnOpts);
+        yield* reg.spawn(spawnOpts);
+      })
+    );
+    expect(signals).toHaveLength(2);
+    expect(signals.every((s) => s.aborted)).toBe(true);
   });
 });

@@ -36,7 +36,7 @@ function runWithLayer<T, E>(eff: Effect.Effect<T, E, PipelineEnv>): Promise<T> {
   return Effect.runPromise(Effect.provide(eff, TestLayer));
 }
 
-describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyWhitelist + acceptEdits)', () => {
+describe('Approval Pipeline — PermissionMode auto-allow', () => {
   it('Rule Engine deny short-circuits regardless of mode', async () => {
     const rules: PermissionRule[] = [
       { id: 'deny', action: 'deny', toolPattern: '*', argPattern: 'rm -rf *', reason: 'Blocked' },
@@ -47,7 +47,7 @@ describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyW
         {
           ruleEngine: createRuleEngine(rules),
           destructiveTools: new Set(),
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
           sessionId: 'test',
         }
       )
@@ -56,14 +56,30 @@ describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyW
     expect((decision as any).source).toContain('rule:');
   });
 
-  it('ask mode routes read-only tools to user confirmation', async () => {
+  it('askBeforeExec allows non-destructive tools without user confirmation', async () => {
     const decision = await runWithLayer(
       runPipeline(
         { tool: 'read_file', input: { path: '/safe/file.txt' } },
         {
           ruleEngine: createRuleEngine(),
-          destructiveTools: new Set(),
-          permissionMode: 'ask',
+          destructiveTools: new Set(['execute_command']),
+          permissionMode: 'askBeforeExec',
+          sessionId: 'test',
+        }
+      )
+    );
+    expect((decision as any).type).toBe('allow');
+    expect((decision as any).source).toBe('permission-mode');
+  });
+
+  it('askBeforeExec routes execute_command to user confirmation', async () => {
+    const decision = await runWithLayer(
+      runPipeline(
+        { tool: 'execute_command', input: { command: 'ls' } },
+        {
+          ruleEngine: createRuleEngine(),
+          destructiveTools: new Set(['execute_command']),
+          permissionMode: 'askBeforeExec',
           sessionId: 'test',
         }
       )
@@ -72,14 +88,14 @@ describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyW
     expect((decision as any).source).toBe('user-confirm');
   });
 
-  it('acceptEdits mode auto-allows read-only tools (read-only merged into non-destructive)', async () => {
+  it('bypass allows even destructive tools without confirmation', async () => {
     const decision = await runWithLayer(
       runPipeline(
-        { tool: 'read_file', input: { path: '/safe/file.txt' } },
+        { tool: 'execute_command', input: { command: 'ls' } },
         {
           ruleEngine: createRuleEngine(),
-          destructiveTools: new Set(['Bash', 'execute_command']),
-          permissionMode: 'acceptEdits',
+          destructiveTools: new Set(['execute_command']),
+          permissionMode: 'bypass',
           sessionId: 'test',
         }
       )

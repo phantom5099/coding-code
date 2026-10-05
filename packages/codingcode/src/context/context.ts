@@ -152,7 +152,7 @@ export function buildContextMessages(
         messages.push({ role: 'system', name: 'compacted_history', content: event.summaryText });
         break;
       case 'subagent_result':
-        messages.push({ role: 'assistant', content: event.content });
+        messages.push({ role: 'user', content: event.content });
         break;
     }
   }

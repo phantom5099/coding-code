@@ -29,7 +29,7 @@ function makeFixture(sessionId: string, slug: string) {
       model: 'test',
       title: 'fixture',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     },
     { type: 'user', turnId: 1, content: 'first' },
     {
@@ -75,7 +75,7 @@ function makeState(sessionId: string, cwd: string, title: string, currentTurnId:
     model: 'test',
     title,
     activeProfile: 'build' as const,
-    permissionMode: 'ask' as const,
+    permissionMode: 'askBeforeExec' as const,
     currentTurnId,
     usage: undefined,
     memorySnapshot: '',
@@ -251,7 +251,7 @@ describe('forkSession', () => {
       const meta = readEvents(newTranscriptPath)[0] as SessionMetaEvent;
       expect(meta.sessionId).toBe(newSessionId);
       expect(meta.title).toBe('fixture');
-      expect(meta.permissionMode).toBe('ask');
+      expect(meta.permissionMode).toBe('askBeforeExec');
       expect(meta.model).toBe('test');
     } finally {
       rmSync(join(base.dir, slug), { recursive: true, force: true });
@@ -279,7 +279,7 @@ describe('forkSession', () => {
         model: 'test',
         title: 'uuid-fixture',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       { type: 'user', turnId: 1, content: 'q1' },
       { type: 'assistant', turnId: 1, content: 'a1', toolCalls: [] },

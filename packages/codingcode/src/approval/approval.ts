@@ -55,13 +55,12 @@ function applyPermissionMode(
     case 'bypass':
       return { type: 'allow', source: 'permission-mode' };
 
-    case 'acceptEdits':
+    case 'askBeforeExec':
       if (!destructiveTools.has(tool)) {
         return { type: 'allow', source: 'permission-mode' };
       }
       return null;
 
-    case 'ask':
     default:
       return null;
   }
@@ -212,7 +211,7 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
           {
             ruleEngine,
             destructiveTools,
-            permissionMode: request.permissionMode ?? 'ask',
+            permissionMode: request.permissionMode ?? 'askBeforeExec',
             profile: request.profile,
             onAlways: (rule) => ruleEngine.addRule(rule),
             onNever: (rule) => ruleEngine.addRule(rule),

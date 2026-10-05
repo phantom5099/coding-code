@@ -101,6 +101,10 @@ export function createHttpSessionClient(
     async setSessionModel({ sessionId, cwd, model }) {
       await apiPut(`/api/sessions/${sessionId || '_'}/model`, { cwd, model });
     },
+
+    async stopAllSubagents({ sessionId }) {
+      return apiPost<{ stopped: number }>(`/api/sessions/${sessionId}/subagents/stop`);
+    },
   };
 }
 

@@ -114,7 +114,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       currentThreadId: null,
       threads: {},
       profile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
       model: '',
       activeModel: '',
       models: [],

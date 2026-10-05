@@ -68,7 +68,7 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
         const state = yield* session.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
         return { sessionId: state.sessionId };
       })
@@ -94,7 +94,7 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
           input,
           sessionId,
           projectPath: cwd,
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
           profile,
         });
       })

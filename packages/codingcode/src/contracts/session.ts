@@ -58,6 +58,8 @@ export interface CompactEvent {
   endTurnId: number;
 }
 
+export const SUBAGENT_RESULT_PREFIX = 'Message Type: FINAL_ANSWER';
+
 export interface SubagentResultEvent {
   type: 'subagent_result';
   sessionId: string;

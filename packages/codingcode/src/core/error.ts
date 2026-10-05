@@ -15,6 +15,7 @@ export type ErrorCode =
   | 'SESSION_WORKSPACE_MISMATCH'
   | 'AGENT_ABORTED'
   | 'AGENT_LOOP_DETECTED'
+  | 'EMPTY_RESPONSE'
   | 'SESSION_IO_ERROR';
 
 export class AgentError extends Error {

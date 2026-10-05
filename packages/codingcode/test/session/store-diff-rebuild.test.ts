@@ -13,7 +13,7 @@ describe('sessionEventsToTurns', () => {
         model: 'deepseek-chat',
         title: '',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       {
         type: 'user',
@@ -65,7 +65,7 @@ describe('sessionEventsToTurns', () => {
         model: 'deepseek-chat',
         title: '',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       {
         type: 'user',
@@ -115,7 +115,7 @@ describe('sessionEventsToTurns', () => {
         model: 'deepseek-chat',
         title: '',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       {
         type: 'user',

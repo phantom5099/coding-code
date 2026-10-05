@@ -46,7 +46,7 @@ function makeMockEventSink() {
 function runPipelineWithMock(opts: {
   tool: string;
   input: any;
-  permissionMode: 'ask' | 'acceptEdits' | 'bypass';
+  permissionMode: 'askBeforeExec' | 'bypass';
   sessionId: string;
   profile: ProfileName;
 }) {
@@ -62,7 +62,7 @@ function runPipelineWithMock(opts: {
       { tool: opts.tool, input: opts.input },
       {
         ruleEngine: createRuleEngine([]),
-        destructiveTools: new Set(),
+        destructiveTools: new Set(['execute_command']),
         permissionMode: opts.permissionMode,
         profile: opts.profile,
         sessionId: opts.sessionId,
@@ -85,7 +85,7 @@ describe('plan profile permission mode (Layer 2)', () => {
     const decision: any = await runPipelineWithMock({
       tool: 'write_file',
       input: { path: '/tmp/x', content: 'foo' },
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
       sessionId: 's2',
       profile: 'plan',
     });
@@ -99,7 +99,7 @@ describe('plan profile permission mode (Layer 2)', () => {
     const decision: any = await runPipelineWithMock({
       tool: 'execute_command',
       input: { command: 'rm -rf /' },
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
       sessionId: 's3',
       profile: 'plan',
     });
@@ -113,7 +113,7 @@ describe('plan profile permission mode (Layer 2)', () => {
     const decision: any = await runPipelineWithMock({
       tool: 'spawn_agent',
       input: { agentName: 'build', prompt: 'do something' },
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
       sessionId: 's4',
       profile: 'plan',
     });
@@ -123,12 +123,25 @@ describe('plan profile permission mode (Layer 2)', () => {
     expect(capturedApproval).toBeNull();
   });
 
-  it('build profile + write_file: falls through to user confirmation', async () => {
+  it('build profile + write_file: auto-allowed, never reaches confirmation', async () => {
     const decision: any = await runPipelineWithMock({
       tool: 'write_file',
       input: { path: '/tmp/x', content: 'foo' },
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
       sessionId: 's5',
+      profile: 'build',
+    });
+    expect(decision.type).toBe('allow');
+    expect(decision.source).toBe('permission-mode');
+    expect(capturedApproval).toBeNull();
+  });
+
+  it('build profile + execute_command: falls through to user confirmation', async () => {
+    const decision: any = await runPipelineWithMock({
+      tool: 'execute_command',
+      input: { command: 'ls' },
+      permissionMode: 'askBeforeExec',
+      sessionId: 's7',
       profile: 'build',
     });
     expect(capturedApproval).not.toBeNull();
@@ -139,7 +152,7 @@ describe('plan profile permission mode (Layer 2)', () => {
     const decision: any = await runPipelineWithMock({
       tool: 'submit_plan',
       input: { plan_content: '# plan' },
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
       sessionId: 's6',
       profile: 'plan',
     });

@@ -51,7 +51,7 @@ describe('getHistory integration', () => {
         model: 'test-model',
         title: 'fixture',
         activeProfile: 'build',
-        permissionMode: 'ask',
+        permissionMode: 'askBeforeExec',
       },
       { type: 'user', turnId: 1, content: 'q1' },
       {

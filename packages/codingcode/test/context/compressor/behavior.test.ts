@@ -47,7 +47,7 @@ function makeFixture(opts: FixtureOptions) {
       model: 'test-model',
       title: 'fixture',
       activeProfile: 'build',
-      permissionMode: 'ask',
+      permissionMode: 'askBeforeExec',
     },
   ];
 

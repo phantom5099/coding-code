@@ -35,7 +35,7 @@ describe('SessionStoreState.activeProfile persistence (disk only)', () => {
         const state = yield* session.create(cwd, {
           model: 'test-model',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
         return {
           sessionId: state.sessionId,
@@ -70,7 +70,7 @@ describe('SessionStoreState.activeProfile persistence (disk only)', () => {
   });
 
   it('state.activeProfile is set when the session head carries activeProfile', async () => {
-    rewriteSessionMeta(transcriptPath, { activeProfile: 'plan', permissionMode: 'ask' });
+    rewriteSessionMeta(transcriptPath, { activeProfile: 'plan', permissionMode: 'askBeforeExec' });
 
     const state = await loadState();
     expect(state.activeProfile).toBe('plan');

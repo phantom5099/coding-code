@@ -22,7 +22,7 @@ function resetStores({ currentThreadId = null as string | null } = {}) {
   useAgentStore.setState({
     currentThreadId,
     threads: {},
-    profile: 'build', permissionMode: 'ask',
+    profile: 'build', permissionMode: 'askBeforeExec',
     model: '',
     activeModel: '',
     models: [],

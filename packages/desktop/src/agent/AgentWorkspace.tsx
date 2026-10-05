@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Square, ShieldAlert, ShieldCheck, Shield, FileText } from 'lucide-react';
+import { Send, Square, ShieldCheck, Shield, FileText } from 'lucide-react';
 import { useAgentStore } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import {
@@ -8,6 +8,7 @@ import {
   setSessionModel,
   setSessionPermissionMode,
   setAgentConfig,
+  stopAllSubagents,
 } from '../lib/core-api';
 import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
@@ -17,20 +18,17 @@ import PlanPanel from '../shared/PlanPanel';
 import type { PermissionMode } from '@codingcode/sdk';
 
 const MODE_LABELS: Record<PermissionMode, string> = {
-  ask: '全部询问',
-  acceptEdits: '半自动',
+  askBeforeExec: '执行前询问',
   bypass: '完全放行',
 };
 
 const MODE_NEXT: Record<PermissionMode, PermissionMode> = {
-  ask: 'acceptEdits',
-  acceptEdits: 'bypass',
-  bypass: 'ask',
+  askBeforeExec: 'bypass',
+  bypass: 'askBeforeExec',
 };
 
 const MODE_ICONS: Record<PermissionMode, React.ReactNode> = {
-  ask: <ShieldAlert size={14} strokeWidth={1.5} />,
-  acceptEdits: <ShieldCheck size={14} strokeWidth={1.5} />,
+  askBeforeExec: <ShieldCheck size={14} strokeWidth={1.5} />,
   bypass: <Shield size={14} strokeWidth={1.5} />,
 };
 
@@ -244,6 +242,33 @@ function InputBox({
   const workspace = useWorkspaceStore();
   const pendingInput = useAgentStore((s) => s.pendingInput);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
+  const [stopMenuOpen, setStopMenuOpen] = useState(false);
+  const stopButtonRef = useRef<HTMLButtonElement>(null);
+  const stopMenuRef = useRef<HTMLDivElement>(null);
+
+  // 输入框容器带 overflow-hidden（裁圆角），绝对定位的下拉会被裁掉。
+  // 与 ModelSelector 同法：portal 到 body + fixed 定位，绕开祖先裁剪。
+  useLayoutEffect(() => {
+    if (stopMenuOpen && stopButtonRef.current && stopMenuRef.current) {
+      const rect = stopButtonRef.current.getBoundingClientRect();
+      stopMenuRef.current.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+      stopMenuRef.current.style.right = `${window.innerWidth - rect.right}px`;
+    }
+  }, [stopMenuOpen]);
+
+  /** 「停止全部」：先让服务端 abort 所有后台子代理，再停掉当前这条流 */
+  const handleStopAll = useCallback(async () => {
+    setStopMenuOpen(false);
+    const threadId = currentThreadId;
+    if (threadId) {
+      try {
+        await stopAllSubagents(threadId);
+      } catch (e) {
+        console.error('Failed to stop subagents:', e);
+      }
+    }
+    abort();
+  }, [currentThreadId, abort]);
 
   // 有会话时显示该会话真实的权限模式；还没有会话时显示 config.yaml 里的值
   const sessionPermissionMode = useAgentStore((s) =>
@@ -302,15 +327,18 @@ function InputBox({
           />
           {/* Send / Stop — vertically centered to the right of textarea */}
           {isStreaming ? (
-            <button
-              type="button"
-              onClick={() => abort()}
-              aria-label="停止生成"
-              title="停止生成"
-              className="w-9 h-9 shrink-0 flex items-center justify-center bg-[var(--border-hover)] hover:bg-[var(--border-strong)] text-[var(--text-primary)] rounded-full transition-colors"
-            >
-              <Square size={14} strokeWidth={2} fill="currentColor" />
-            </button>
+            <div className="shrink-0">
+              <button
+                ref={stopButtonRef}
+                type="button"
+                onClick={() => setStopMenuOpen((v) => !v)}
+                aria-label="停止生成"
+                title="停止生成"
+                className="w-9 h-9 flex items-center justify-center bg-[var(--border-hover)] hover:bg-[var(--border-strong)] text-[var(--text-primary)] rounded-full transition-colors"
+              >
+                <Square size={14} strokeWidth={2} fill="currentColor" />
+              </button>
+            </div>
           ) : (
             <button
               type="button"
@@ -324,6 +352,38 @@ function InputBox({
             </button>
           )}
         </div>
+        {/* 停止菜单：portal 到 body，避免被上面容器的 overflow-hidden 裁剪 */}
+        {stopMenuOpen &&
+          createPortal(
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setStopMenuOpen(false)} />
+              <div
+                ref={stopMenuRef}
+                className="fixed z-50 w-36 py-1 rounded-md border border-[var(--text-disabled)] bg-[var(--bg-base)] shadow-lg"
+              >
+                <button
+                  type="button"
+                  data-testid="stop-current"
+                  onClick={() => {
+                    setStopMenuOpen(false);
+                    abort();
+                  }}
+                  className="block w-full text-left px-3 py-1.5 text-[12px] text-[var(--text-primary)] hover:bg-[var(--border-strong)]"
+                >
+                  停止当前生成
+                </button>
+                <button
+                  type="button"
+                  data-testid="stop-all"
+                  onClick={handleStopAll}
+                  className="block w-full text-left px-3 py-1.5 text-[12px] text-[var(--text-primary)] hover:bg-[var(--border-strong)]"
+                >
+                  停止全部
+                </button>
+              </div>
+            </>,
+            document.body
+          )}
         {/* Row 2: toolbar */}
         <div className="flex items-center gap-2 px-3 pb-3 pt-0">
           {!isPlanProfile && (

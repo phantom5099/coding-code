@@ -242,10 +242,12 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         };
 
         const mayDrain = deliveryPhase === 'currentTurn' && step > 0;
+        let drainedCount = 0;
         if (mayDrain) {
           for (const item of yield* mailbox.drain(state.sessionId)) {
             const ev = yield* session.recordSubagentResult(state, item);
             yield* context.absorb(sessionRef, [ev]);
+            drainedCount++;
           }
         }
 
@@ -293,6 +295,15 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
         }
 
         if (toolCalls.length === 0) {
+          if (content.trim() === '' && !abortSignal?.aborted) {
+            const detail = drainedCount > 0 ? ` after delivering ${drainedCount} subagent result(s)` : '';
+            const emptyErr = new AgentError('EMPTY_RESPONSE', `model returned an empty response${detail}`);
+            yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(emptyErr) });
+            yield* hooks.emit('agent.turn.end', { sessionId: sid, turnId: state.currentTurnId, status: 'error', projectPath });
+            yield* flushMemoryInBackground(state.sessionId, model, state.cwd);
+            return Result.err(emptyErr);
+          }
+
           const assistantEv = yield* session.recordAssistant(state, content, [], responded.usage);
           yield* context.absorb(sessionRef, [assistantEv]);
           deliveryPhase = 'nextTurn';

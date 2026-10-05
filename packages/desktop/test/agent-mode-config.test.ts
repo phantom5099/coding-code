@@ -15,7 +15,7 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const PERMISSION_MODES = ['ask', 'acceptEdits', 'bypass'] as const;
+const PERMISSION_MODES = ['askBeforeExec', 'bypass'] as const;
 
 describe('权限模式：直接使用服务端 PermissionMode，未创建会话时取 config.yaml', () => {
   const workspace = sourceContent('agent/AgentWorkspace.tsx');
@@ -24,7 +24,7 @@ describe('权限模式：直接使用服务端 PermissionMode，未创建会话�
   const useAgent = sourceContent('hooks/useAgent.ts');
   const coreApi = sourceContent('lib/core-api.ts');
 
-  it('工具栏只保留与服务端一致的三个档位', () => {
+  it('工具栏只保留与服务端一致的两个档位', () => {
     for (const mode of PERMISSION_MODES) {
       expect(workspace).toContain(mode);
     }
@@ -35,11 +35,23 @@ describe('权限模式：直接使用服务端 PermissionMode，未创建会话�
     expect(workspace).not.toContain('read-only');
   });
 
-  it('循环切换只在三个档位之间', () => {
+  it('循环切换只在两个档位之间', () => {
     const cycle = workspace.match(/const MODE_NEXT[\s\S]*?\n\};/)?.[0] ?? '';
-    expect(cycle).toContain("ask: 'acceptEdits'");
-    expect(cycle).toContain("acceptEdits: 'bypass'");
-    expect(cycle).toContain("bypass: 'ask'");
+    expect(cycle).toContain("askBeforeExec: 'bypass'");
+    expect(cycle).toContain("bypass: 'askBeforeExec'");
+  });
+
+  it('展示名：askBeforeExec 为「执行前询问」，bypass 为「完全放行」', () => {
+    const labels = workspace.match(/const MODE_LABELS[\s\S]*?\n\};/)?.[0] ?? '';
+    expect(labels).toContain("askBeforeExec: '执行前询问'");
+    expect(labels).toContain("bypass: '完全放行'");
+  });
+
+  it('整个 src 里不再出现已删除的档位名', () => {
+    const offenders = walk(resolve(__dirname, '..', 'src')).filter((f) =>
+      /acceptEdits/.test(readFileSync(f, 'utf-8'))
+    );
+    expect(offenders).toEqual([]);
   });
 
   it('无会话时写 config.yaml，有会话时写该会话', () => {

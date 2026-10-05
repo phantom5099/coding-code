@@ -18,7 +18,7 @@ describe('SessionService.create profile', () => {
         return yield* session.create('/tmp/test-session-profile', {
           model: 'gpt-4o',
           activeProfile: 'build',
-          permissionMode: 'ask',
+          permissionMode: 'askBeforeExec',
         });
       })
     );

@@ -27,9 +27,7 @@ function getSerializedArgs(input: Record<string, unknown>): string {
 
 export interface RuleEngine {
   addRule(rule: PermissionRule): void;
-  removeRule(id: string): void;
   evaluate(tool: string, input: Record<string, unknown>): ApprovalDecision | null;
-  getAllRules(): PermissionRule[];
 }
 
 export function createRuleEngine(initialRules: PermissionRule[] = []): RuleEngine {
@@ -74,10 +72,6 @@ export function createRuleEngine(initialRules: PermissionRule[] = []): RuleEngin
     addRule: (rule: PermissionRule) => {
       rules.set(rule.id, rule);
     },
-    removeRule: (id: string) => {
-      rules.delete(id);
-    },
     evaluate,
-    getAllRules: () => Array.from(rules.values()),
   };
 }
