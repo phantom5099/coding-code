@@ -30,8 +30,10 @@ const WaitTestLayer = Layer.succeed(ApprovalWaitService, mockApprovalWaitService
 const SinkTestLayer = Layer.succeed(EventSinkService, mockEventSink as any);
 const TestLayer = Layer.mergeAll(HookTestLayer, WaitTestLayer, SinkTestLayer);
 
-function runWithLayer<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
-  return Effect.runPromise(eff.pipe(Effect.provide(TestLayer)));
+type PipelineEnv = HookService | ApprovalWaitService | EventSinkService;
+
+function runWithLayer<T, E>(eff: Effect.Effect<T, E, PipelineEnv>): Promise<T> {
+  return Effect.runPromise(Effect.provide(eff, TestLayer));
 }
 
 describe('Approval Pipeline — PermissionMode auto-allow (merged from ReadonlyWhitelist + acceptEdits)', () => {

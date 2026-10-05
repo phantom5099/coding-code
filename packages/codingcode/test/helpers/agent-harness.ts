@@ -120,7 +120,7 @@ export function hasCompress(events: readonly FrameBody[]): boolean {
 
 export interface HarnessMocks {
   llm: {
-    completeStream: (params: any, signal?: AbortSignal) => AsyncIterable<LLMStreamPart>;
+    completeStream: (params: any, model: string, signal?: AbortSignal) => AsyncIterable<LLMStreamPart>;
     modelInfo: { maxTokens: number };
   };
   state?: Partial<SessionStoreState>;

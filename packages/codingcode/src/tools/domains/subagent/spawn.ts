@@ -16,7 +16,7 @@ export const spawnAgentTool: ToolDefinition<HookService | SubagentRunRegistrySer
   parameters: z.object({
     agentName: z.string().min(1).describe('short nickname for the subagent; used for identification and display'),
     prompt: z.string().min(1).describe('task description for the subagent'),
-    model: z.string().optional().describe('model id for the subagent; falls back to the active model when omitted or unmatched'),
+    model: z.string().optional().describe('set this only when the user asks for a specific model; omit it otherwise and the subagent inherits the parent turn model'),
     systemPrompt: z.string().optional().describe('replaces the middle section of the subagent system prompt; the environment block and system notes are kept'),
   }),
   execute: (args, ctx) =>
@@ -34,7 +34,6 @@ export const spawnAgentTool: ToolDefinition<HookService | SubagentRunRegistrySer
         );
       }
 
-      // 子代理只跑在模型清单内的模型上，参数空或不在清单里都继承父回合的模型
       const requestedModel = model?.trim();
       const effectiveModel = requestedModel && findModel(requestedModel) ? requestedModel : ctx.model;
 

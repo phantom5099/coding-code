@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
 import { SessionService } from '../../src/session/port.js';
-import { LLMFactoryService } from '../../src/llm/port.js';
+import { LLMService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { HookService } from '../../src/hooks/port.js';
@@ -37,8 +37,9 @@ const MockSessionLayer = Layer.succeed(SessionService, {
     }),
 } as any);
 
-const MockLLMFactoryLayer = Layer.succeed(LLMFactoryService, {
-  getLLMClient: () => Effect.succeed(null),
+const MockLLMLayer = Layer.succeed(LLMService, {
+  complete: () => Effect.fail(new Error('LLM not available in test')),
+  completeStream: () => (async function* () {})(),
 } as any);
 
 const MockApprovalLayer = ApprovalLayer.pipe(
@@ -103,7 +104,7 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
 
 const TestLayer = Layer.mergeAll(
   MockSessionLayer,
-  MockLLMFactoryLayer,
+  MockLLMLayer,
   MockApprovalLayer,
   HookLayer,
   EventSinkLayer,
