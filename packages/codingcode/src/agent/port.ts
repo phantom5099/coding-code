@@ -15,6 +15,7 @@ export interface RunTurnOptions {
   parentSessionId?: string;
   agentName?: string;
   systemPrompt?: string;
+  skills?: ReadonlyArray<{ name: string; path: string }>;
 }
 
 export interface AgentShape {

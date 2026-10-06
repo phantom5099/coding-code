@@ -4,6 +4,7 @@ import { SubagentRunRegistryLayer, SubagentRunRegistryService } from '../../src/
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { MailboxLayer, MailboxService } from '../../src/session/mailbox.js';
 import { EventSinkService } from '../../src/sink/port.js';
+import { HookService } from '../../src/hooks/port.js';
 import type { FrameBody } from '../../src/contracts/frame.js';
 
 const spawnOpts = {
@@ -61,10 +62,15 @@ function makeHarness(makeStream: () => AsyncGenerator<FrameBody>) {
         emitted.push({ sessionId, body });
       }),
   } as any);
+  const hooks = Layer.succeed(HookService, {
+    emit: () => Effect.void,
+    emitDecision: () => Effect.succeed(null),
+    reloadUserHooks: () => Effect.void,
+  } as any);
   // provideMerge：MailboxService 既注入注册表，也保留在输出里供断言使用
   // （同一次 Layer 构建 ⇒ 同一实例）
   const layers = SubagentRunRegistryLayer.pipe(
-    Layer.provideMerge(Layer.mergeAll(runner, MailboxLayer, sink))
+    Layer.provideMerge(Layer.mergeAll(runner, MailboxLayer, sink, hooks))
   );
   return { emitted, signals, layers };
 }

@@ -131,7 +131,8 @@ const AgentDeps = Layer.mergeAll(
     evaluate: () => Effect.succeed({ type: 'allow' }),
   } as any),
   Layer.succeed(SkillService, {
-    extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
+    getAll: () => Effect.succeed([]),
+    readContent: () => Effect.succeed(''),
   } as any),
   Layer.succeed(ContextService, {
     getHistory: (ref: SessionRef) => Effect.sync(() => readMessages(transcriptPathFor(ref))),

@@ -8,6 +8,7 @@ import { loadConfig } from '../infra/config.js';
 import { SUBAGENT_RESULT_PREFIX } from '../contracts/session.js';
 import { MailboxService } from '../session/mailbox.js';
 import { EventSinkService } from '../sink/port.js';
+import { HookService } from '../hooks/port.js';
 import { SubagentRunnerService } from './port.js';
 
 export type SubagentRunStatus =
@@ -46,6 +47,7 @@ export class SubagentRunRegistryService extends Context.Tag('SubagentRunRegistry
 interface SubagentRun {
   readonly sessionId: string;
   readonly parentSessionId: string;
+  readonly parentCwd: string;
   readonly agentName: string;
   readonly status: SubscriptionRef.SubscriptionRef<SubagentRunStatus>;
   readonly abort: AbortController;
@@ -116,6 +118,7 @@ export const SubagentRunRegistryLayer = Layer.scoped(
     const mailbox = yield* MailboxService;
     const runner = yield* SubagentRunnerService;
     const sink = yield* EventSinkService;
+    const hooks = yield* HookService;
     const runs = new Map<string, SubagentRun>();   // 键 = 子会话 sessionId；parentSessionId 只是条目上的字段
 
     /** 帧直投父会话的出站队列：EventSink 的键就是收件人会话，不需要任何回调透传 */
@@ -159,6 +162,12 @@ export const SubagentRunRegistryLayer = Layer.scoped(
           run.parentSessionId, run.sessionId, run.agentName,
           outcome.end.reason === 'done' ? 'completed' : 'failed',
         );
+        yield* hooks.emit('agent.subagent.complete', {
+          projectPath: run.parentCwd,
+          childSessionId: run.sessionId,
+          agentName: run.agentName,
+          status: outcome.end.reason === 'done' ? 'completed' : 'failed',
+        });
       });
 
     const spawn = (opts: SpawnOptions) =>
@@ -183,8 +192,8 @@ export const SubagentRunRegistryLayer = Layer.scoped(
 
         const status = yield* SubscriptionRef.make<SubagentRunStatus>({ kind: 'running' });
         const run: SubagentRun = {
-          sessionId, parentSessionId: opts.parentSessionId, agentName: opts.agentName,
-          status, abort,
+          sessionId, parentSessionId: opts.parentSessionId, parentCwd: opts.parentCwd,
+          agentName: opts.agentName, status, abort,
         };
         runs.set(sessionId, run);
         yield* emitSubagent(opts.parentSessionId, sessionId, opts.agentName, 'spawned');

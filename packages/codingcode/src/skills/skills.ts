@@ -1,5 +1,5 @@
 import { Layer, Effect } from 'effect';
-import { discoverSkillDirs } from './source.js';
+import { discoverSkillDirs, readSkillBody } from './source.js';
 import { loadSkill } from './loader.js';
 import type { Skill } from '../contracts/skill.js';
 import { SkillService } from './port.js';
@@ -23,16 +23,6 @@ export const SkillLayer = Layer.effect(SkillService, Effect.gen(function* () {
     return {
       getAll: (projectPath: string) => Effect.sync(() => readAll(projectPath)),
 
-      extractSkill: (projectPath: string, query: string) =>
-        Effect.sync(() => {
-          const match = query.match(/^@([a-zA-Z0-9-]+)(?:\s+|$)/);
-          let skill: Skill | undefined;
-          if (match) {
-            const name = match[1]!;
-            skill = readAll(projectPath).find((s) => s.name === name);
-          }
-          const actualQuery = query.replace(/^@[a-zA-Z0-9-]+\s*/, '');
-          return [skill, actualQuery] as [Skill | undefined, string];
-        }),
+      readContent: (skillPath: string) => Effect.sync(() => readSkillBody(skillPath)),
     };
 }));

@@ -148,6 +148,10 @@ export interface HarnessMocks {
     setPermissionMode: (cwd: string, sid: string, mode: any) => any;
     setActiveProfile: (cwd: string, sid: string, profile: any) => any;
   }>;
+  /** 可选：用真实 SessionLayer 替换默认 mock，用于需要真实落盘的端到端用例。 */
+  sessionLayer?: Layer.Layer<SessionService>;
+  /** 可选：用真实 SkillLayer 替换默认空实现，用于需要真实读取 skill 文件的端到端用例。 */
+  skillLayer?: Layer.Layer<SkillService>;
 }
 
 export function makeState(partial: Partial<SessionStoreState> = {}): SessionStoreState {
@@ -198,6 +202,8 @@ export interface RunAgentOptions {
   activeProfile?: 'plan' | 'build';
   permissionMode?: string;
   model?: string;
+  /** 随请求下发的显式 @ skill；缺省时 agent 不应产生任何 skill 提示块。 */
+  skills?: ReadonlyArray<{ name: string; path: string }>;
 }
 
 export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
@@ -240,7 +246,8 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
   };
 
   const skills = {
-    extractSkill: (_cwd: string, query: string) => Effect.succeed([undefined, query]),
+    getAll: () => Effect.succeed([]),
+    readContent: () => Effect.succeed(''),
   };
   // 压缩帧由 context 自己经 sink 发出（agent 不再参与），mock 同样遵守这个归属
   const ContextMockLayer = Layer.effect(
@@ -276,7 +283,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
   } as any);
 
   const services = Layer.mergeAll(
-    Layer.succeed(SessionService, session as any),
+    mocks.sessionLayer ?? Layer.succeed(SessionService, session as any),
     Layer.succeed(ToolExecutorService, executor as any),
     Layer.succeed(CheckpointService, {
       snapshotBaseline: () => Effect.void,
@@ -285,7 +292,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     Layer.succeed(ApprovalService, {
       evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
     } as any),
-    Layer.succeed(SkillService, skills as any),
+    mocks.skillLayer ?? Layer.succeed(SkillService, skills as any),
     ContextMockLayer,
     EventSinkLayer,
     MailboxLayer,
@@ -355,6 +362,7 @@ export async function runAgentTurn(
     if (opts.signal) runOpts.signal = opts.signal;
     if (opts.activeProfile) runOpts.activeProfile = opts.activeProfile;
     if (opts.permissionMode) runOpts.permissionMode = opts.permissionMode;
+    if (opts.skills) runOpts.skills = opts.skills;
     return yield* agent.runTurn(opts.input ?? 'test', runOpts);
   });
   let runRes: { stream: AsyncGenerator<FrameBody>; sessionId: string };

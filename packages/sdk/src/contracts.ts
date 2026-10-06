@@ -119,7 +119,14 @@ export interface SessionClient {
 export interface AgentRuntimeClient {
   sendMessage(
     input: string,
-    options: { sessionId?: string; cwd: string; model?: string; signal?: AbortSignal }
+    options: {
+      sessionId?: string;
+      cwd: string;
+      model?: string;
+      signal?: AbortSignal;
+      /** 用户在输入框显式 @ 的 skill，name 供对齐、path 为唯一查找键 */
+      skills?: Array<{ name: string; path: string }>;
+    }
   ): AsyncGenerator<Frame>;
 
   sendApprovalResponse(input: {

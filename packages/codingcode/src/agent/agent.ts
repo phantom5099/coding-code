@@ -17,7 +17,7 @@ import { SessionService } from '../session/port.js';
 import { SkillService } from '../skills/port.js';
 import { TodoService } from '../todo/port.js';
 import { ToolExecutorService } from '../tools/port.js';
-import { buildSystemPrompt } from './prompt.js';
+import { buildSystemPrompt, renderSkillBlock } from './prompt.js';
 import type { EndTransition, FrameBody, FrameError, ResponseMeta, ToolOutcome } from '../contracts/frame.js';
 import { isTurnEnd } from '../contracts/frame.js';
 import type { SessionRef } from '../contracts/session.js';
@@ -123,9 +123,19 @@ export const AgentLayer = Layer.effect(AgentService, Effect.gen(function* () {
 
       const toolEnv = yield* toolEnvPort.getToolEnv();
 
-      // record user (increments turn) + extract skill
-      const [, actualInput] = yield* skills.extractSkill(state.cwd, input);
-      const turnId = (yield* session.recordUser(state, actualInput)).turnId;
+      const turnId = (yield* session.recordUser(state, input)).turnId;
+
+      // 用户显式 @ 的 skill：按 path 回查权威数据，正文拼块后作为同回合的第二条 user 事件
+      if (opts.skills?.length) {
+        const all = yield* skills.getAll(state.cwd);
+        const chosen = all.filter((s) => opts.skills!.some((m) => m.path === s.skillPath));
+        if (chosen.length) {
+          const entries = yield* Effect.forEach(chosen, (s) =>
+            skills.readContent(s.skillPath).pipe(Effect.map((body) => ({ skill: s, body })))
+          );
+          yield* session.recordSystem(state, renderSkillBlock(entries));
+        }
+      }
 
       // checkpoint baseline
       yield* checkpoint.snapshotBaseline(state.cwd, sessionId, turnId);

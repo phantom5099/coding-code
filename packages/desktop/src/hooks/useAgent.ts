@@ -194,7 +194,7 @@ export function useAgentCore() {
   }, [currentThreadId, setThreadTurns]);
 
   const sendMessage = useCallback(
-    async (content: string, cwd?: string) => {
+    async (content: string, cwd?: string, skills?: Array<{ name: string; path: string }>) => {
       const effectiveCwd = cwd || workspace.rootPath || '';
 
       let resolvedThreadId = currentThreadId;
@@ -271,6 +271,7 @@ export function useAgentCore() {
           cwd: effectiveCwd,
           model,
           signal: controller.signal,
+          skills,
         });
 
         for await (const frame of stream) {
