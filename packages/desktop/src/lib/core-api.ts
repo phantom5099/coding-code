@@ -206,7 +206,6 @@ export function listSkills(cwd?: string): Promise<
     description: string;
     skillPath: string;
     source?: 'global' | 'project';
-    hasProjectOverride?: boolean;
   }>
 > {
   return clients.settings.listSkills({ cwd: cwd ?? '' });

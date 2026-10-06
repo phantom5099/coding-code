@@ -12,11 +12,11 @@ export function createHttpAgentClient(
   const { apiPost } = request;
 
   return {
-    async *sendMessage(input, { sessionId, cwd, model, signal }) {
+    async *sendMessage(input, { sessionId, cwd, model, signal, skills }) {
       const path = `/api/sessions/${sessionId || '_'}/messages`;
       const response = await fetch(`${baseUrl}${path}`, {
         method: 'POST',
-        body: JSON.stringify({ input, cwd, model }),
+        body: JSON.stringify({ input, cwd, model, skills }),
         headers: { 'Content-Type': 'application/json' },
         signal,
       });

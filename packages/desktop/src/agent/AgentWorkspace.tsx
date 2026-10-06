@@ -9,6 +9,7 @@ import {
   setSessionPermissionMode,
   setAgentConfig,
   stopAllSubagents,
+  listSkills,
 } from '../lib/core-api';
 import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
@@ -217,6 +218,16 @@ function ModelSelector() {
 
 // ─── InputBox ──────────────────────────────────────────────────────────────
 
+interface SkillOption {
+  name: string;
+  skillPath: string;
+}
+
+interface SkillRef {
+  name: string;
+  path: string;
+}
+
 function InputBox({
   centered,
   sendMessage,
@@ -224,7 +235,7 @@ function InputBox({
   onOpenPlanPanel,
 }: {
   centered?: boolean;
-  sendMessage: (content: string, cwd?: string) => Promise<void>;
+  sendMessage: (content: string, cwd?: string, skills?: SkillRef[]) => Promise<void>;
   abort: () => void;
   onOpenPlanPanel?: () => void;
 }) {
@@ -246,8 +257,6 @@ function InputBox({
   const stopButtonRef = useRef<HTMLButtonElement>(null);
   const stopMenuRef = useRef<HTMLDivElement>(null);
 
-  // 输入框容器带 overflow-hidden（裁圆角），绝对定位的下拉会被裁掉。
-  // 与 ModelSelector 同法：portal 到 body + fixed 定位，绕开祖先裁剪。
   useLayoutEffect(() => {
     if (stopMenuOpen && stopButtonRef.current && stopMenuRef.current) {
       const rect = stopButtonRef.current.getBoundingClientRect();
@@ -255,6 +264,27 @@ function InputBox({
       stopMenuRef.current.style.right = `${window.innerWidth - rect.right}px`;
     }
   }, [stopMenuOpen]);
+
+  const [skillOptions, setSkillOptions] = useState<SkillOption[]>([]);
+  const [skillMenu, setSkillMenu] = useState<{ query: string; start: number } | null>(null);
+  const [skillIndex, setSkillIndex] = useState(0);
+  const skillMenuRef = useRef<HTMLDivElement>(null);
+  const [pickedPaths, setPickedPaths] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!workspace.rootPath) return;
+    listSkills(workspace.rootPath)
+      .then((data) => setSkillOptions(data ?? []))
+      .catch(() => setSkillOptions([]));
+  }, [workspace.rootPath]);
+
+  useLayoutEffect(() => {
+    if (skillMenu && textareaRef.current && skillMenuRef.current) {
+      const rect = textareaRef.current.getBoundingClientRect();
+      skillMenuRef.current.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+      skillMenuRef.current.style.left = `${rect.left + 12}px`;
+    }
+  }, [skillMenu, skillIndex]);
 
   /** 「停止全部」：先让服务端 abort 所有后台子代理，再停掉当前这条流 */
   const handleStopAll = useCallback(async () => {
@@ -297,12 +327,49 @@ function InputBox({
     }
   }, [pendingInput, setPendingInput]);
 
+  const handleChange = (value: string, caret: number) => {
+    setText(value);
+    const m = value.slice(0, caret).match(/(?:^|\s)@([a-zA-Z0-9-]*)$/);
+    if (m) {
+      setSkillMenu({ query: m[1]!, start: caret - m[1]!.length - 1 });
+      setSkillIndex(0);
+    } else {
+      setSkillMenu(null);
+    }
+  };
+
+  const candidates = skillMenu
+    ? skillOptions.filter((s) => s.name.startsWith(skillMenu.query))
+    : [];
+
+  const confirmSkill = (option: SkillOption) => {
+    if (!skillMenu) return;
+    const rest = text.slice(skillMenu.start + 1 + skillMenu.query.length);
+    setText(`${text.slice(0, skillMenu.start)}@${option.name} ${rest}`);
+    setPickedPaths((prev) => ({ ...prev, [option.name]: option.skillPath }));
+    setSkillMenu(null);
+    textareaRef.current?.focus();
+  };
+
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed || isStreaming) return;
+    const skills: SkillRef[] = [];
+    const seen = new Set<string>();
+    for (const m of trimmed.matchAll(/@([a-zA-Z0-9-]+)/g)) {
+      const name = m[1]!;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const hits = skillOptions.filter((s) => s.name === name);
+      // 下拉点选过就用那一条；手打则要求名字唯一，同名一律不下发
+      const path = pickedPaths[name] ?? (hits.length === 1 ? hits[0]!.skillPath : undefined);
+      if (path) skills.push({ name, path });
+    }
     setText('');
-    sendMessage(trimmed, workspace.rootPath || undefined);
-  }, [text, isStreaming, sendMessage, workspace.rootPath]);
+    setPickedPaths({});
+    setSkillMenu(null);
+    sendMessage(trimmed, workspace.rootPath || undefined, skills);
+  }, [text, isStreaming, sendMessage, workspace.rootPath, pickedPaths, skillOptions]);
 
 
   return (
@@ -313,8 +380,31 @@ function InputBox({
           <textarea
             ref={textareaRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) =>
+              handleChange(e.target.value, e.target.selectionStart ?? e.target.value.length)
+            }
             onKeyDown={(e) => {
+              if (skillMenu && candidates.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setSkillIndex((i) => (i + 1) % candidates.length);
+                  return;
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setSkillIndex((i) => (i - 1 + candidates.length) % candidates.length);
+                  return;
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault();
+                  confirmSkill(candidates[skillIndex]!);
+                  return;
+                }
+                if (e.key === 'Escape') {
+                  setSkillMenu(null);
+                  return;
+                }
+              }
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
@@ -384,6 +474,39 @@ function InputBox({
             </>,
             document.body
           )}
+        {/* @ 的 skill 候选：portal 到 body，避免被上面容器的 overflow-hidden 裁剪 */}
+        {skillMenu && candidates.length > 0 &&
+          createPortal(
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setSkillMenu(null)} />
+              <div
+                ref={skillMenuRef}
+                className="fixed z-50 min-w-[280px] max-h-[240px] overflow-y-auto py-1 rounded-md border border-[var(--border-strong)] bg-[var(--bg-base)] shadow-lg"
+              >
+                {candidates.map((option, i) => (
+                  <button
+                    key={option.skillPath}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      confirmSkill(option);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-[13px] transition-colors ${
+                      i === skillIndex
+                        ? 'bg-[var(--bg-selected-hover)] text-[var(--text-primary)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                    }`}
+                  >
+                    <div className="truncate">{option.name}</div>
+                    <div className="truncate text-[11px] text-[var(--text-disabled)]">
+                      {option.skillPath}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body
+          )}
         {/* Row 2: toolbar */}
         <div className="flex items-center gap-2 px-3 pb-3 pt-0">
           {!isPlanProfile && (
@@ -443,7 +566,7 @@ function InputBox({
 // ─── AgentWorkspace ────────────────────────────────────────────────────────
 
 interface AgentWorkspaceProps {
-  sendMessage: (content: string, cwd?: string) => Promise<void>;
+  sendMessage: (content: string, cwd?: string, skills?: SkillRef[]) => Promise<void>;
   abort: () => void;
 }
 

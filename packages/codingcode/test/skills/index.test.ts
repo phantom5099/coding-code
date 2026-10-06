@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Context, Effect, Layer } from 'effect';
@@ -71,14 +71,6 @@ Test the skill system.
     }
   });
 
-  afterAll(() => {
-    try {
-      if (existsSync(TEST_ROOT)) rmSync(TEST_ROOT, { recursive: true, force: true });
-    } catch {
-      /* temp dir cleanup is best-effort */
-    }
-  });
-
   it('should load skills from .codingcode/skills/ on demand', () => {
     const skills = runWithSkill((s) => s.getAll(TEST_ROOT));
     expect(skills.length).toBeGreaterThanOrEqual(1);
@@ -140,43 +132,12 @@ Dynamic skill body.
     expect((after as any[]).length).toBe((before as any[]).length);
   });
 
-  it('should extract skill and return clean query', () => {
-    const [matched, cleanQuery] = runWithSkill((s) =>
-      s.extractSkill(TEST_ROOT, '@test-basic   do the refactoring work')
-    );
-    expect(matched).toBeDefined();
-    expect(matched!.name).toBe('test-basic');
-    expect(cleanQuery).toBe('do the refactoring work');
-  });
+  it('readContent returns the SKILL.md text verbatim, front matter included', () => {
+    const basic = runWithSkill((s) => s.getAll(TEST_ROOT)).find((s) => s.name === 'test-basic')!;
 
-  it('should support kebab-case skill names in @ prefix', () => {
-    const dir = join(TEST_CODINGCODE_DIR, 'skills', 'my-kebab-skill');
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(
-      join(dir, 'SKILL.md'),
-      `---
-name: my-kebab-skill
-description: "Kebab case test"
----
-## Kebab
-Testing kebab-case name parsing.
-`
-    );
-    const [matched] = runWithSkill((s) => s.extractSkill(TEST_ROOT, '@my-kebab-skill run tests'));
-    expect(matched).toBeDefined();
-    expect(matched!.name).toBe('my-kebab-skill');
-  });
+    const body = runWithSkill((s) => s.readContent(basic.skillPath));
 
-  it('should return undefined skill when @ prefix does not match any skill', () => {
-    const [matched] = runWithSkill((s) => s.extractSkill(TEST_ROOT, '@nonexistent do something'));
-    expect(matched).toBeUndefined();
-  });
-
-  it('should return undefined skill and keep query when no @ prefix', () => {
-    const [matched, cleanQuery] = runWithSkill((s) =>
-      s.extractSkill(TEST_ROOT, 'just a normal message')
-    );
-    expect(matched).toBeUndefined();
-    expect(cleanQuery).toBe('just a normal message');
+    expect(body.startsWith('---')).toBe(true);
+    expect(body).toContain('Test the skill system.');
   });
 });

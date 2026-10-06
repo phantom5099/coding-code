@@ -15,9 +15,13 @@ export interface SkillDirectory {
   name: string;
 }
 
-/** 全局在前、项目在后：同名 skill 由后者覆盖（消费方按 name 去重，后写者胜）。 */
 export function discoverSkillDirs(projectRoot: string): SkillDirectory[] {
   return [...discoverGlobalSkillDirs(), ...discoverProjectSkillDirs(projectRoot)];
+}
+
+/** 读取 SKILL.md 全文（含 front matter），供拼 skill 提示块使用。 */
+export function readSkillBody(skillPath: string): string {
+  return readFileSync(skillPath, 'utf8');
 }
 
 /** Parse only the SKILL.md front matter used for skill discovery. */
@@ -41,7 +45,7 @@ export function readSkillFrontMatter(dirPath: string): SkillFrontMatter | null {
 
 // ---- 辅助函数：分别获取全局/项目级 Skill 目录 ----
 
-/** `~/.codingcode/skills/` —— 先加载，同名的项目级 skill 会覆盖它 */
+/** `~/.codingcode/skills/` —— 全局 skill 目录 */
 export function discoverGlobalSkillDirs(): SkillDirectory[] {
   const dirs: SkillDirectory[] = [];
   const globalSkillsDir = join(getGlobalDir(), 'skills');
@@ -56,7 +60,7 @@ export function discoverGlobalSkillDirs(): SkillDirectory[] {
   return dirs;
 }
 
-/** `<projectRoot>/.codingcode/skills/` —— 后加载，优先级更高 */
+/** `<projectRoot>/.codingcode/skills/` —— 项目级 skill 目录 */
 export function discoverProjectSkillDirs(projectRoot: string): SkillDirectory[] {
   const dirs: SkillDirectory[] = [];
   const projectSkillsDir = join(projectRoot, CODINGCODE_DIRNAME, 'skills');

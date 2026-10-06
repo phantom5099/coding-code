@@ -1,8 +1,9 @@
 import type { Hono } from 'hono';
+import { dirname } from 'path';
 import { Effect, ManagedRuntime } from 'effect';
 import { SkillService } from '../../skills/port.js';
 import { isGlobalCwd, resolveCwd } from '../cwd.js';
-import { discoverGlobalSkillDirs, discoverProjectSkillDirs } from '../../skills/source.js';
+import { discoverGlobalSkillDirs } from '../../skills/source.js';
 import { createRunWithLayer } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
@@ -29,10 +30,7 @@ export function registerSkillsSettingsRoutes(router: Hono, rt: ManagedRt): void 
       );
     }
     const cwd = resolveCwd(rawCwd);
-    const globalDirs = discoverGlobalSkillDirs();
-    const projectDirs = discoverProjectSkillDirs(cwd);
-    const globalNames = new Set(globalDirs.map((d) => d.name));
-    const projectNames = new Set(projectDirs.map((d) => d.name));
+    const globalDirPaths = new Set(discoverGlobalSkillDirs().map((d) => d.dirPath));
     const result = await runWithLayer(
       Effect.gen(function* () {
         const skill = yield* SkillService;
@@ -40,17 +38,12 @@ export function registerSkillsSettingsRoutes(router: Hono, rt: ManagedRt): void 
       })
     );
     const skills = result.ok ? result.value : [];
+    // 按 SKILL.md 所在目录判定来源；同名同时存在于全局与项目时，两条各自标注真实来源
     return c.json(
-      skills.map((s) => {
-        const isFromProject = projectNames.has(s.name);
-        const isFromGlobal = globalNames.has(s.name);
-        const hasProjectOverride = isFromProject && isFromGlobal;
-        return {
-          ...s,
-          source: isFromProject ? 'project' : 'global',
-          hasProjectOverride,
-        };
-      })
+      skills.map((s) => ({
+        ...s,
+        source: globalDirPaths.has(dirname(s.skillPath)) ? ('global' as const) : ('project' as const),
+      }))
     );
   });
 }

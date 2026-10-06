@@ -58,7 +58,7 @@ const MockApprovalLayer = ApprovalLayer.pipe(
 const MockSkillLayer = Layer.succeed(SkillService, {
   _tag: 'Skill' as const,
   getAll: () => Effect.succeed([]),
-  extractSkill: (_p: string, q: string) => Effect.sync(() => [undefined, q] as [undefined, string]),
+  readContent: () => Effect.succeed(''),
 } as any);
 
 const MockMcpLayer = Layer.succeed(McpService, {

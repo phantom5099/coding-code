@@ -4,7 +4,7 @@ import type { Skill } from '../contracts/skill.js';
 
 export interface SkillShape {
   getAll(projectPath: string): Effect.Effect<Skill[]>;
-  extractSkill(projectPath: string, query: string): Effect.Effect<[Skill | undefined, string]>;
+  readContent(skillPath: string): Effect.Effect<string>;
 }
 
 export class SkillService extends Context.Tag('Skill')<SkillService, SkillShape>() {}

@@ -1,4 +1,5 @@
 import { BUILD_PROMPT } from './profile.js';
+import type { Skill } from '../contracts/skill.js';
 import { SUBAGENT_RESULT_PREFIX } from '../contracts/session.js';
 
 interface SystemPromptOptions {
@@ -38,4 +39,21 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   }
 
   return prompt;
+}
+
+export interface SkillBlockEntry {
+  skill: Skill;
+  body: string;
+}
+
+/** 用户显式 @ 的 skill 提示块；正文内嵌，path 供模型解析正文里的相对路径。 */
+export function renderSkillBlock(entries: ReadonlyArray<SkillBlockEntry>): string {
+  if (entries.length === 0) return '';
+  const blocks = entries
+    .map(
+      ({ skill, body }) =>
+        `<skill>\n<name>${skill.name}</name>\n<path>${skill.skillPath}</path>\n${body}\n</skill>`
+    )
+    .join('\n\n');
+  return `The user explicitly referenced the following skill(s). Follow the instructions below.\n\n${blocks}`;
 }

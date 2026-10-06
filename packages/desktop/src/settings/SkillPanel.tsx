@@ -7,7 +7,6 @@ interface SkillEntry {
   description: string;
   skillPath: string;
   source?: 'global' | 'project';
-  hasProjectOverride?: boolean;
 }
 
 export default function SkillPanel({ global: isGlobal }: { global?: boolean }) {
@@ -38,7 +37,7 @@ export default function SkillPanel({ global: isGlobal }: { global?: boolean }) {
       <div className="space-y-3">
         {skills.map((skill) => (
           <div
-            key={skill.name}
+            key={skill.skillPath}
             className="px-4 py-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-card)]"
           >
             <div className="flex items-center gap-2">
@@ -51,11 +50,6 @@ export default function SkillPanel({ global: isGlobal }: { global?: boolean }) {
               {skill.source === 'project' && (
                 <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--tag-action-bg)] text-[var(--tag-action-text)]">
                   项目
-                </span>
-              )}
-              {skill.hasProjectOverride && (
-                <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]">
-                  覆盖全局
                 </span>
               )}
             </div>

@@ -15,7 +15,12 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
 
   router.post('/api/sessions/:id/messages', async (c) => {
     let sessionId = c.req.param('id');
-    const { input, cwd, model } = await c.req.json<{ input: string; cwd: string; model?: string }>();
+    const { input, cwd, model, skills } = await c.req.json<{
+      input: string;
+      cwd: string;
+      model?: string;
+      skills?: Array<{ name: string; path: string }>;
+    }>();
     // 模型是回合的必要输入，缺失即拒绝，不允许在 agent 层兜底成空串
     if (!model?.trim()) {
       return c.json(errorBody('CONFIG_MISSING', 'model is required'), 400);
@@ -28,6 +33,7 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
       cwd: normalizedCwd,
       signal: c.req.raw.signal,
       model,
+      skills,
     };
     if (isNew) {
       // 新会话的交互/权限模式取自 config.yaml；会话一旦建立就以会话头为准
