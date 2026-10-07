@@ -7,7 +7,9 @@ interface PendingEntry {
   sessionId: string;
 }
 
-export const ApprovalWaitLayer = Layer.effect(ApprovalWaitService, Effect.sync(() => {
+export const ApprovalWaitLayer = Layer.effect(
+  ApprovalWaitService,
+  Effect.sync(() => {
     const pendingConfirmations = new Map<string, PendingEntry>();
 
     return {
@@ -43,4 +45,5 @@ export const ApprovalWaitLayer = Layer.effect(ApprovalWaitService, Effect.sync((
           return cleared;
         }),
     };
-}));
+  })
+);

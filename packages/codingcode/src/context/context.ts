@@ -1,36 +1,29 @@
 import { Layer, Effect } from 'effect';
 import { randomUUID } from 'crypto';
-import { join } from 'path';
-import { getGlobalDir, encodeProjectPath } from '../core/path.js';
-import {
-  PROJECTS_DIRNAME,
-  SESSIONS_DIRNAME,
-  SUBAGENTS_DIRNAME,
-  TRANSCRIPT_SUFFIX,
-} from '../contracts/paths.js';
 import { loadConfig } from '../infra/config.js';
-import type { Message } from '../contracts/types.js';
+import { transcriptPathOf } from '../session/paths.js';
+import type { Message } from '../llm/types.js';
+import type {
+  SessionEvent,
+  AssistantEvent,
+  ToolResultEvent,
+  CompactEvent,
+  SummaryEvent,
+} from '../session/types.js';
+import type { SessionRef } from '../session/types.js';
 import { SessionService } from '../session/port.js';
 import { estimateTokens, estimateMessageTokens } from './tokens.js';
 import { LLMService } from '../llm/port.js';
 import { contextWindowOf } from '../infra/models.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
-import type { SessionEvent, AssistantEvent, ToolResultEvent, CompactEvent, SummaryEvent, SessionRef } from '../contracts/session.js';
+
 import { AgentError } from '../core/error.js';
 import { ContextService } from './port.js';
 import type { CompressResult } from './port.js';
 import { EventSinkService } from '../sink/port.js';
 
 export function transcriptPathFor(ref: SessionRef): string {
-  const sessionsDir = join(
-    getGlobalDir(),
-    PROJECTS_DIRNAME,
-    encodeProjectPath(ref.cwd),
-    SESSIONS_DIRNAME
-  );
-  return ref.parentSessionId
-    ? join(sessionsDir, ref.parentSessionId, SUBAGENTS_DIRNAME, `${ref.sessionId}${TRANSCRIPT_SUFFIX}`)
-    : join(sessionsDir, `${ref.sessionId}${TRANSCRIPT_SUFFIX}`);
+  return transcriptPathOf(ref.cwd, ref.sessionId, ref.parentSessionId);
 }
 
 const COMPACTABLE_TOOLS = new Set([
@@ -207,7 +200,9 @@ interface ContextBuffer {
   compactedTurnIds: Set<number>;
 }
 
-export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* () {
+export const ContextLayer = Layer.effect(
+  ContextService,
+  Effect.gen(function* () {
     const session = yield* SessionService;
     const llm = yield* LLMService;
     const sink = yield* EventSinkService;
@@ -273,17 +268,15 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
         yield* applyOldTurnCompact(buf);
       });
 
-    const tryCompaction = (
-      buf: ContextBuffer,
-      model: string
-    ): Effect.Effect<number, AgentError> =>
+    const tryCompaction = (buf: ContextBuffer, model: string): Effect.Effect<number, AgentError> =>
       Effect.gen(function* () {
         const endTurn = buf.turnId - KEEP_RECENT_TURNS - 1;
         if (endTurn < 1) return 0;
 
         const inRange = buf.events.filter((ev) => {
           if (ev.type === 'session_meta') return false;
-          if ('turnId' in ev && (ev as any).turnId >= 1 && (ev as any).turnId <= endTurn) return true;
+          if ('turnId' in ev && (ev as any).turnId >= 1 && (ev as any).turnId <= endTurn)
+            return true;
           return false;
         });
         if (inRange.length === 0) return 0;
@@ -320,7 +313,12 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
 
         // 就地更新：被摘要的 turn 移出可见集，摘要追加到末尾（与重读盘后的顺序一致）
         buf.events = buf.events.filter(
-          (ev) => !('turnId' in ev && (ev as any).turnId >= startTurnId && (ev as any).turnId <= endTurnId)
+          (ev) =>
+            !(
+              'turnId' in ev &&
+              (ev as any).turnId >= startTurnId &&
+              (ev as any).turnId <= endTurnId
+            )
         );
         buf.events.push(summaryEvent);
 
@@ -394,7 +392,10 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
           // 压缩判定与压缩帧都归 context，agent 不参与
           yield* sink.emit(ref.sessionId, { family: 'transition', transition: { to: 'compress' } });
           yield* summarizeToFit(buf, contextWindow, model);
-          yield* sink.emit(ref.sessionId, { family: 'transition', transition: { to: 'executing' } });
+          yield* sink.emit(ref.sessionId, {
+            family: 'transition',
+            transition: { to: 'executing' },
+          });
         }
         return buildContextMessages(buf.events, buf.compactedTurnIds);
       });
@@ -435,4 +436,5 @@ export const ContextLayer = Layer.effect(ContextService, Effect.gen(function* ()
       compact,
       dispose,
     };
-}));
+  })
+);

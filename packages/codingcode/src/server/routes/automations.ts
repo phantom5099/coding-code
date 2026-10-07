@@ -2,8 +2,8 @@ import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { SchedulerService } from '../../scheduler/port.js';
 import { errorBody, errorResponse } from '../util.js';
-import { NotFoundError } from '../../contracts/error.js';
-import type { CreateAutomationInput, UpdateAutomationInput } from '../../contracts/automation.js';
+import { NotFoundError } from '../http-error.js';
+import type { CreateAutomationInput, UpdateAutomationInput } from '../../scheduler/types.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 

@@ -167,10 +167,7 @@ describe('McpService（syncConnections / listProjectMcpTools / status）', () =>
   });
 
   it('建连失败的 server 被跳过，不影响同批其它 server', async () => {
-    mockConfigs = [
-      { ...cfg('bad', [tool('x')]), _mockFail: true },
-      cfg('good', [tool('ok')]),
-    ];
+    mockConfigs = [{ ...cfg('bad', [tool('x')]), _mockFail: true }, cfg('good', [tool('ok')])];
 
     await run(
       Effect.gen(function* () {

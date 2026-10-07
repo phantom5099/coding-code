@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildContextMessages } from '../../src/context/context.js';
-import { SUBAGENT_RESULT_PREFIX } from '../../src/contracts/session.js';
-import type { SessionEvent } from '../../src/contracts/session.js';
-import type { Message } from '../../src/contracts/types.js';
+import { SUBAGENT_RESULT_PREFIX, type SessionEvent } from '../../src/session/types.js';
+import type { Message } from '../../src/llm/types.js';
 
 function build(events: unknown[]): Message[] {
   return buildContextMessages(events as SessionEvent[]);
@@ -28,7 +27,12 @@ describe('subagent_result 的入模形态', () => {
         toolCallId: 'tc1',
         output: 'spawned build (child-1)',
       },
-      { type: 'subagent_result', sessionId: 'child-1', agentName: 'build', content: resultContent('hello') },
+      {
+        type: 'subagent_result',
+        sessionId: 'child-1',
+        agentName: 'build',
+        content: resultContent('hello'),
+      },
     ]);
 
     const last = messages[messages.length - 1]!;
@@ -52,7 +56,12 @@ describe('subagent_result 的入模形态', () => {
         toolCallId: 'tc1',
         output: 'completed',
       },
-      { type: 'subagent_result', sessionId: 'child-1', agentName: 'build', content: resultContent('done') },
+      {
+        type: 'subagent_result',
+        sessionId: 'child-1',
+        agentName: 'build',
+        content: resultContent('done'),
+      },
     ]);
 
     expect(messages.length).toBeGreaterThan(0);

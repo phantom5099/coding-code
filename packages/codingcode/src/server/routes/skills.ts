@@ -42,7 +42,9 @@ export function registerSkillsSettingsRoutes(router: Hono, rt: ManagedRt): void 
     return c.json(
       skills.map((s) => ({
         ...s,
-        source: globalDirPaths.has(dirname(s.skillPath)) ? ('global' as const) : ('project' as const),
+        source: globalDirPaths.has(dirname(s.skillPath))
+          ? ('global' as const)
+          : ('project' as const),
       }))
     );
   });

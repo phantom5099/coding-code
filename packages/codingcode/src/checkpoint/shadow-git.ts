@@ -1,8 +1,7 @@
 import { spawnSync } from 'child_process';
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { getGlobalDir, normalizePath, encodeProjectPath } from '../core/path.js';
-import { PROJECTS_DIRNAME } from '../contracts/paths.js';
+import { normalizePath, projectDataDir } from '../core/path.js';
 
 const NULL_DEVICE = process.platform === 'win32' ? 'NUL' : '/dev/null';
 
@@ -29,8 +28,7 @@ export class ShadowGit {
 
   constructor(projectPath: string) {
     this.projectPath = normalizePath(projectPath);
-    const encoded = encodeProjectPath(this.projectPath);
-    this.gitDir = join(getGlobalDir(), PROJECTS_DIRNAME, encoded, 'checkpoint', 'repo.git');
+    this.gitDir = join(projectDataDir(this.projectPath), 'checkpoint', 'repo.git');
   }
 
   init(): void {

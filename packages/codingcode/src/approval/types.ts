@@ -1,4 +1,4 @@
-import { PERMISSION_MODES, type PermissionMode } from '../contracts/permission.js';
+import { PERMISSION_MODES, type PermissionMode } from '../session/types.js';
 
 export function isPermissionMode(value: unknown): value is PermissionMode {
   return typeof value === 'string' && (PERMISSION_MODES as readonly string[]).includes(value);

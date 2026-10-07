@@ -11,11 +11,12 @@ import { McpService } from '../../src/mcp/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { SubagentRunRegistryService } from '../../src/subagent/registry.js';
 import { TOOLS_BY_NAME, createToolCatalog } from '../../src/tools/catalog.js';
-import type { ToolCall, TodoItem } from '../../src/contracts/types.js';
-import type { ToolResult } from '../../src/contracts/tool.js';
-import type { McpToolSpec } from '../../src/contracts/mcp.js';
-import type { HookPoint } from '../../src/contracts/hooks.js';
-import type { FrameBody } from '../../src/contracts/frame.js';
+import type { ToolCall } from '../../src/llm/types.js';
+import type { TodoItem } from '../../src/todo/types.js';
+import type { ToolResult } from '../../src/tools/types.js';
+import type { McpToolSpec } from '../../src/mcp/types.js';
+import type { HookPoint } from '../../src/hooks/types.js';
+import type { FrameBody } from '../../src/sink/types.js';
 
 // 桩 hook 在工具执行窗口内 sleep，把窗口拉宽到足以用「区间是否相交」判定并发/串行
 const WINDOW_MS = 150;
@@ -92,8 +93,7 @@ function makeHarness(): Harness {
   };
 
   const runner = {
-    runSubagent: () =>
-      Effect.succeed({ stream: makeSubagentStream(200), sessionId: 'child-1' }),
+    runSubagent: () => Effect.succeed({ stream: makeSubagentStream(200), sessionId: 'child-1' }),
   };
 
   // spawn_agent 消费注册表（生产装配在 AppLayer，这里只提供最小桩）
@@ -141,10 +141,9 @@ function runBatch(
     // 只把内置名交给 catalog（去重）；MCP 工具名（含 `:`）由 spec 侧注册
     const builtinNames = [...new Set(calls.map((c) => c.name).filter((n) => TOOLS_BY_NAME.has(n)))];
     const catalog = yield* exec.prepare(builtinNames, mcpSpecs);
-    return yield* exec.executeBatch(calls, ctx.sessionId, {
+    return yield* catalog.executeBatch(calls, ctx.sessionId, {
       projectPath: ctx.projectPath,
       signal: ctx.signal,
-      toolLookup: catalog.lookup,
       activeProfile: ctx.activeProfile,
       model: ctx.model,
     });
@@ -301,10 +300,7 @@ describe('executeBatch 保序波次调度', () => {
 
   it('MCP 工具缺省（无 readOnlyHint）独占一波，声明 true 时与只读工具同波', async () => {
     await writeFile(join(dir, 'a.txt'), 'A');
-    const calls = [
-      tc('r1', 'read_file', { path: 'a.txt' }),
-      tc('m1', 'srv:slow', {}),
-    ];
+    const calls = [tc('r1', 'read_file', { path: 'a.txt' }), tc('m1', 'srv:slow', {})];
     const makeSpec = (readOnlyHint: boolean): McpToolSpec => ({
       server: 'srv',
       name: 'slow',
@@ -315,13 +311,17 @@ describe('executeBatch 保序波次调度', () => {
     });
 
     h.clear();
-    const serial = await runBatch(calls, { projectPath: dir, model: 'test-model' }, h, [makeSpec(false)]);
+    const serial = await runBatch(calls, { projectPath: dir, model: 'test-model' }, h, [
+      makeSpec(false),
+    ]);
     expect(serial.map((r) => r.status)).toEqual(['ok', 'ok']);
     expect(okOutput(serial[1])).toBe('mcp-ok');
     expect(overlaps(intervalFor(h, 'r1'), intervalFor(h, 'm1'))).toBe(false);
 
     h.clear();
-    const parallel = await runBatch(calls, { projectPath: dir, model: 'test-model' }, h, [makeSpec(true)]);
+    const parallel = await runBatch(calls, { projectPath: dir, model: 'test-model' }, h, [
+      makeSpec(true),
+    ]);
     expect(parallel.map((r) => r.status)).toEqual(['ok', 'ok']);
     expect(overlaps(intervalFor(h, 'r1'), intervalFor(h, 'm1'))).toBe(true);
   });

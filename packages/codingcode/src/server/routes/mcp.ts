@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { isGlobalCwd, resolveCwd } from '../cwd.js';
-import { AlreadyExistsError, NotFoundError } from '../../contracts/error.js';
-import type { McpServerConfig } from '../../contracts/mcp.js';
+import { AlreadyExistsError, NotFoundError } from '../http-error.js';
+import type { McpServerConfig } from '../../mcp/types.js';
 import {
   loadMcpConfig,
   writeMcpConfig,

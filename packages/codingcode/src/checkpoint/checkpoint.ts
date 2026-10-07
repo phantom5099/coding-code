@@ -10,7 +10,9 @@ import { CheckpointService } from './port.js';
 
 // ---- Effect Service ----
 
-export const CheckpointLayer = Layer.effect(CheckpointService, Effect.gen(function* () {
+export const CheckpointLayer = Layer.effect(
+  CheckpointService,
+  Effect.gen(function* () {
     const shadowGitByProject = new ProjectCache<ShadowGit>(10);
     const lockByProject = new ProjectCache<ProjectLock>(10);
 
@@ -180,4 +182,5 @@ export const CheckpointLayer = Layer.effect(CheckpointService, Effect.gen(functi
           return executeRollback(plan, selectedFiles, sg, lockFor(projectPath));
         }),
     };
-}));
+  })
+);

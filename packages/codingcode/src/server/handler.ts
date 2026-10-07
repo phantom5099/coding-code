@@ -2,8 +2,8 @@ import type { Context } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalWaitService } from '../approval/wait-port.js';
 import { AgentError } from '../core/error.js';
-import type { FrameBody } from '../contracts/frame.js';
-import { createFrameAssembler, encodeFrame } from '../contracts/frame-io.js';
+import type { FrameBody } from '../sink/types.js';
+import { createFrameAssembler, encodeFrame } from './frame-io.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 

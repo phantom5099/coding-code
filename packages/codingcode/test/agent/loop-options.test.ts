@@ -1,6 +1,13 @@
 import { expect, it, describe, vi } from 'vitest';
 import { Effect } from 'effect';
-import { makeState, runAgentTurn, llmStream, pText, pEnd, endReason } from '../helpers/agent-harness.js';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pEnd,
+  endReason,
+} from '../helpers/agent-harness.js';
 
 vi.mock('../../src/infra/config.js', () => ({
   loadConfig: () => ({
@@ -40,10 +47,7 @@ describe('agent runTurn loop options', () => {
   it('should emit turn hooks agent.turn.start / agent.turn.end after stopping', async () => {
     const llm = makeCapturingLlm();
     const hooks = mockHooks();
-    await runAgentTurn(
-      { llm, state: mockState, hooks },
-      { sessionId: 'test-sid', cwd: '/tmp' }
-    );
+    await runAgentTurn({ llm, state: mockState, hooks }, { sessionId: 'test-sid', cwd: '/tmp' });
 
     expect(hooks.emit).toHaveBeenCalledWith(
       'agent.turn.start',

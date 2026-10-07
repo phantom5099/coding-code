@@ -8,7 +8,7 @@ import {
   TODO_MAX_ITEMS,
   TODO_MAX_STEP_LEN,
 } from '../../../todo/port.js';
-import type { TodoItem } from '../../../contracts/types.js';
+import type { TodoItem } from '../../../todo/types.js';
 
 const todoSchema = z.object({
   plan: z

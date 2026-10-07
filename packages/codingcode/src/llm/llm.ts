@@ -1,9 +1,9 @@
 import { Effect, Layer } from 'effect';
 import { AgentError } from '../core/error.js';
-import type { LLMClient, LLMRequest, LLMResponse, LLMStreamPart, SelectableModel } from '../contracts/provider.js';
+import type { LLMClient, LLMRequest, LLMResponse, LLMStreamPart } from './types.js';
 import { OpenAIProvider } from './providers/openai.js';
 import { DeepSeekProvider } from './providers/deepseek.js';
-import { activeModel, activeModelError, findModel } from '../infra/models.js';
+import { activeModel, activeModelError, findModel, type SelectableModel } from '../infra/models.js';
 import { LLMService } from './port.js';
 
 function entryFor(model: string): Effect.Effect<SelectableModel, AgentError> {
@@ -80,7 +80,11 @@ async function runOrThrow<A>(eff: Effect.Effect<A, AgentError>): Promise<A> {
 }
 
 export const LlmLayer = Layer.succeed(LLMService, {
-  complete(req: LLMRequest, model: string, signal?: AbortSignal): Effect.Effect<LLMResponse, AgentError> {
+  complete(
+    req: LLMRequest,
+    model: string,
+    signal?: AbortSignal
+  ): Effect.Effect<LLMResponse, AgentError> {
     return Effect.gen(function* () {
       const entry = yield* entryFor(model);
       const client = yield* clientFor(entry);
@@ -88,7 +92,11 @@ export const LlmLayer = Layer.succeed(LLMService, {
     });
   },
 
-  completeStream(req: LLMRequest, model: string, signal?: AbortSignal): AsyncIterable<LLMStreamPart> {
+  completeStream(
+    req: LLMRequest,
+    model: string,
+    signal?: AbortSignal
+  ): AsyncIterable<LLMStreamPart> {
     return (async function* () {
       const entry = await runOrThrow(entryFor(model));
       const client = await runOrThrow(clientFor(entry));

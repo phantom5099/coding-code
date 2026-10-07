@@ -4,8 +4,7 @@ import { join } from 'path';
 import { writeFileSync, mkdirSync } from 'fs';
 import { AgentError } from '../../../core/error.js';
 import type { ToolDefinition } from '../../types.js';
-import { getGlobalDir, encodeProjectPath } from '../../../core/path.js';
-import { PROJECTS_DIRNAME } from '../../../contracts/paths.js';
+import { projectDataDir } from '../../../core/path.js';
 import { createLogger } from '../../../infra/logger.js';
 
 const logger = createLogger();
@@ -80,7 +79,7 @@ export const submitPlanTool: ToolDefinition = {
 
       warnMissingSections(rawContent);
       const initialContent = ensureH1(rawContent, title);
-      const planDir = join(getGlobalDir(), PROJECTS_DIRNAME, encodeProjectPath(projectPath));
+      const planDir = projectDataDir(projectPath);
       const initialPath = join(planDir, `${slug(title)}.md`);
 
       mkdirSync(planDir, { recursive: true });

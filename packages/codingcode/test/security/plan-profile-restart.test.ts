@@ -9,7 +9,7 @@ import { HookService } from '../../src/hooks/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
-import type { ProfileName } from '../../src/contracts/types.js';
+import type { ProfileName } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
 
@@ -81,11 +81,7 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  async function evaluateAsProfile(
-    tool: string,
-    input: any,
-    profile: ProfileName
-  ): Promise<any> {
+  async function evaluateAsProfile(tool: string, input: any, profile: ProfileName): Promise<any> {
     return rt.runPromise(
       Effect.gen(function* () {
         const approval = yield* ApprovalService;
@@ -102,7 +98,11 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
   }
 
   it('plan profile: write_file is denied by permission-mode', async () => {
-    const decision = await evaluateAsProfile('write_file', { path: '/tmp/x', content: 'foo' }, 'plan');
+    const decision = await evaluateAsProfile(
+      'write_file',
+      { path: '/tmp/x', content: 'foo' },
+      'plan'
+    );
     expect(decision.type).toBe('deny');
     expect(decision.reason).toMatch(/plan profile/i);
     expect(decision.source).toBe('permission-mode');
@@ -116,7 +116,11 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
   });
 
   it('plan profile: submit_plan is allowed by the plan allow-list', async () => {
-    const decision: any = await evaluateAsProfile('submit_plan', { plan_content: 'do things' }, 'plan');
+    const decision: any = await evaluateAsProfile(
+      'submit_plan',
+      { plan_content: 'do things' },
+      'plan'
+    );
     expect(decision.type).toBe('allow');
     expect(decision.source).toBe('permission-mode');
   });
@@ -136,7 +140,11 @@ describe('plan profile security boundary (permission-mode, disk-persisted profil
   });
 
   it('build profile: write_file is not denied by plan permission-mode', async () => {
-    const decision: any = await evaluateAsProfile('write_file', { path: '/tmp/x', content: 'foo' }, 'build');
+    const decision: any = await evaluateAsProfile(
+      'write_file',
+      { path: '/tmp/x', content: 'foo' },
+      'build'
+    );
     if (decision.type === 'deny') {
       expect(decision.source).not.toBe('permission-mode');
       expect(decision.reason).not.toMatch(/plan profile/i);

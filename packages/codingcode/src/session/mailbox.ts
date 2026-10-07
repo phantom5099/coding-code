@@ -1,5 +1,5 @@
 import { Chunk, Context, Effect, Layer, Queue } from 'effect';
-import type { SubagentResultEvent } from '../contracts/session.js';
+import type { SubagentResultEvent } from './types.js';
 
 /** 入站暂存条目。当前唯一生产者是子代理终态 —— 不预留其它变体 */
 export type MailboxItem = SubagentResultEvent;
@@ -42,7 +42,10 @@ export const MailboxLayer = Layer.scoped(
           ? Queue.takeAll(q).pipe(Effect.map(Chunk.toReadonlyArray))
           : Effect.succeed<ReadonlyArray<MailboxItem>>([]);
       },
-      dispose: (sessionId) => Effect.sync(() => { queues.delete(sessionId); }),
+      dispose: (sessionId) =>
+        Effect.sync(() => {
+          queues.delete(sessionId);
+        }),
     };
   })
 );

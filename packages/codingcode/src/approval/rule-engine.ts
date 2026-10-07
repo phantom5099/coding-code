@@ -1,4 +1,4 @@
-import type { ApprovalDecision } from '../contracts/permission.js';
+import type { ApprovalDecision } from './port.js';
 import type { PermissionRule, RuleAction } from './types.js';
 
 /**

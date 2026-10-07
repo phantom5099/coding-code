@@ -6,7 +6,8 @@ import { ContextLayer } from '../../src/context/context.js';
 import { SessionService } from '../../src/session/port.js';
 import { LLMService } from '../../src/llm/port.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
-import type { SessionEvent, SessionRef } from '../../src/contracts/session.js';
+import type { SessionEvent } from '../../src/session/types.js';
+import type { SessionRef } from '../../src/session/types.js';
 
 // 上下文窗口钉死成可控值（与其余 context 用例一致）
 const windowState = vi.hoisted(() => ({ value: 128000 }));
@@ -14,7 +15,8 @@ vi.mock('../../src/infra/models.js', () => ({
   contextWindowOf: () => windowState.value,
 }));
 
-const SUMMARY = '## Compacted History\n\n### Goal\nx\n\n### Instructions\ny\n\n### Discoveries\nz\n\n### Accomplished\nw\n\n### Relevant Files\nf';
+const SUMMARY =
+  '## Compacted History\n\n### Goal\nx\n\n### Instructions\ny\n\n### Discoveries\nz\n\n### Accomplished\nw\n\n### Relevant Files\nf';
 
 /** 计数 + 内存中的假 transcript：把「读盘」变成可断言的数字 */
 function makeCountingSession(seed: SessionEvent[]) {
@@ -96,7 +98,9 @@ describe('context memory buffer', () => {
     const ctx = await getCtx(counting);
 
     await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
-    await Effect.runPromise(ctx.absorb(REF, [{ type: 'assistant', turnId: 1, content: 'r1', toolCalls: [] }]));
+    await Effect.runPromise(
+      ctx.absorb(REF, [{ type: 'assistant', turnId: 1, content: 'r1', toolCalls: [] }])
+    );
     const messages = await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
 
     expect(messages.some((m) => m.content === 'r1')).toBe(true);
@@ -120,12 +124,19 @@ describe('context memory buffer', () => {
       const big = 'X'.repeat(8000);
       const counting = makeCountingSession([
         ...seedEvents(),
-        { type: 'assistant', turnId: 1, content: 'r1', toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }] },
+        {
+          type: 'assistant',
+          turnId: 1,
+          content: 'r1',
+          toolCalls: [{ id: 'tc1', name: 'bash', arguments: {} }],
+        },
         { type: 'tool_result', turnId: 1, toolName: 'bash', toolCallId: 'tc1', output: big },
       ]);
       const ctx = await getCtx(counting);
 
-      const messages = await Effect.runPromise(ctx.getHistory({ ...REF, currentTurnId: 3 }, 'test-model'));
+      const messages = await Effect.runPromise(
+        ctx.getHistory({ ...REF, currentTurnId: 3 }, 'test-model')
+      );
 
       expect(messages.some((m) => m.name === 'compacted_history')).toBe(true);
       expect(counting.reads.count).toBe(1);

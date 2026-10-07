@@ -1,6 +1,6 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { FrameBody } from '../contracts/frame.js';
+import type { FrameBody } from '../sink/types.js';
 import type { AgentError } from '../core/error.js';
 import type { Result } from '../core/result.js';
 
@@ -8,8 +8,8 @@ export interface RunSubagentOptions {
   sessionId?: string;
   cwd: string;
   signal?: AbortSignal;
-  activeProfile?: import('../contracts/types.js').ProfileName;
-  permissionMode?: import('../contracts/permission.js').PermissionMode;
+  activeProfile?: import('../session/types.js').ProfileName;
+  permissionMode?: import('../session/types.js').PermissionMode;
   model: string;
   systemPrompt?: string;
   parentSessionId?: string;
@@ -17,7 +17,10 @@ export interface RunSubagentOptions {
 }
 
 export interface SubagentRunnerShape {
-  runSubagent(input: string, opts: RunSubagentOptions): Effect.Effect<
+  runSubagent(
+    input: string,
+    opts: RunSubagentOptions
+  ): Effect.Effect<
     {
       stream: AsyncGenerator<FrameBody, Result<string, AgentError>, unknown>;
       sessionId: string;
@@ -27,4 +30,7 @@ export interface SubagentRunnerShape {
   >;
 }
 
-export class SubagentRunnerService extends Context.Tag('SubagentRunner')<SubagentRunnerService, SubagentRunnerShape>() {}
+export class SubagentRunnerService extends Context.Tag('SubagentRunner')<
+  SubagentRunnerService,
+  SubagentRunnerShape
+>() {}

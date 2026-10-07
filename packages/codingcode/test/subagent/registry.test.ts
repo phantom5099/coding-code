@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer, Queue } from 'effect';
-import { SubagentRunRegistryLayer, SubagentRunRegistryService } from '../../src/subagent/registry.js';
+import {
+  SubagentRunRegistryLayer,
+  SubagentRunRegistryService,
+} from '../../src/subagent/registry.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { MailboxLayer, MailboxService } from '../../src/session/mailbox.js';
 import { EventSinkService } from '../../src/sink/port.js';
 import { HookService } from '../../src/hooks/port.js';
-import type { FrameBody } from '../../src/contracts/frame.js';
+import type { FrameBody } from '../../src/sink/types.js';
 
 const spawnOpts = {
   prompt: 'do a thing',
@@ -76,9 +79,7 @@ function makeHarness(makeStream: () => AsyncGenerator<FrameBody>) {
 }
 
 const run = <T>(layers: Layer.Layer<any>, eff: Effect.Effect<T, any, any>): Promise<T> =>
-  Effect.runPromise(
-    eff.pipe(Effect.provide(layers)) as unknown as Effect.Effect<T, never, never>
-  );
+  Effect.runPromise(eff.pipe(Effect.provide(layers)) as unknown as Effect.Effect<T, never, never>);
 
 describe('subagent run registry', () => {
   it('spawn 立即返回句柄，不等子代理结束', async () => {
@@ -108,7 +109,12 @@ describe('subagent run registry', () => {
     expect(emitted[0]?.sessionId).toBe('parent-1');
     expect(emitted[0]?.body).toMatchObject({
       family: 'event',
-      event: { type: 'subagent_event', sessionId: 'child-1', agentName: 'build', status: 'spawned' },
+      event: {
+        type: 'subagent_event',
+        sessionId: 'child-1',
+        agentName: 'build',
+        status: 'spawned',
+      },
     });
   });
 
@@ -126,7 +132,11 @@ describe('subagent run registry', () => {
       })
     );
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ type: 'subagent_result', sessionId: 'child-1', agentName: 'build' });
+    expect(result[0]).toMatchObject({
+      type: 'subagent_result',
+      sessionId: 'child-1',
+      agentName: 'build',
+    });
     expect(result[0]!.content).toContain('hello');
     expect(result[0]!.content).toContain('Message Type: FINAL_ANSWER');
 

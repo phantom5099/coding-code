@@ -8,7 +8,7 @@ import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { EventSinkService } from '../../src/sink/port.js';
-import type { ProfileName } from '../../src/contracts/types.js';
+import type { ProfileName } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
@@ -37,7 +37,12 @@ function makeMockEventSink() {
     emit: (sessionId: string, body: any) =>
       Effect.sync(() => {
         if (body?.family === 'event' && body.event?.type === 'approval_request') {
-          capturedApproval = { sessionId, id: body.event.id, tool: body.event.tool, args: body.event.args };
+          capturedApproval = {
+            sessionId,
+            id: body.event.id,
+            tool: body.event.tool,
+            args: body.event.args,
+          };
         }
       }),
   };

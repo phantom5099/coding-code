@@ -3,9 +3,9 @@ import type { LanguageModelV3 } from '@ai-sdk/provider';
 import { Effect } from 'effect';
 import type { AgentError } from '../../core/error.js';
 import { mapLlmError } from '../errors.js';
-import type { LLMClient } from '../../contracts/provider.js';
-import type { LLMRequest, LLMResponse, LLMStreamPart } from '../../contracts/provider.js';
-import type { SelectableModel } from '../../contracts/provider.js';
+import type { LLMClient, LLMRequest, LLMResponse, LLMStreamPart } from '../types.js';
+import type { SelectableModel } from '../../infra/models.js';
+
 import { convertMessages, convertTools, toTokenUsage } from './shared.js';
 
 export class OpenAIProvider implements LLMClient {

@@ -2,7 +2,7 @@ import { Effect, Layer } from 'effect';
 import { resolveMcpConfig } from './config.js';
 import { McpClient } from './client.js';
 import { McpService } from './port.js';
-import type { McpServerConfig, McpToolSpec } from '../contracts/mcp.js';
+import type { McpServerConfig, McpToolSpec } from './types.js';
 import { createLogger } from '../infra/logger.js';
 import { AgentError } from '../core/error.js';
 
@@ -23,7 +23,9 @@ interface ServerEntry {
 type ProjectPath = string;
 type ServerName = string;
 
-export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
+export const McpLayer = Layer.effect(
+  McpService,
+  Effect.sync(() => {
     const clientsByProject = new Map<ProjectPath, Map<ServerName, ServerEntry>>();
 
     function getProjectClients(projectPath: string): Map<ServerName, ServerEntry> {
@@ -136,8 +138,8 @@ export const McpLayer = Layer.effect(McpService, Effect.sync(() => {
           return specs;
         }),
     };
-  }
-));
+  })
+);
 
 function mcpToolToSpec(
   serverName: string,

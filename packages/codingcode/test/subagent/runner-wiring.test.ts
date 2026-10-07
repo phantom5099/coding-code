@@ -29,10 +29,11 @@ import { encodeProjectPath, normalizePath } from '../../src/core/path.js';
 import { computePaths } from '../../src/session/paths.js';
 import { transcriptPathFor } from '../../src/context/context.js';
 import { projectBaseDir } from '../helpers/project-base.js';
-import type { SessionMetaEvent, SessionRef } from '../../src/contracts/session.js';
-import type { Message } from '../../src/contracts/types.js';
-import type { LLMRequest } from '../../src/contracts/provider.js';
-import type { FrameBody } from '../../src/contracts/frame.js';
+import type { SessionMetaEvent } from '../../src/session/types.js';
+import type { SessionRef } from '../../src/session/types.js';
+import type { Message, LLMRequest } from '../../src/llm/types.js';
+
+import type { FrameBody } from '../../src/sink/types.js';
 
 const CHILD_MODEL = 'child-model';
 const PARENT_MODEL = 'parent-model';
@@ -115,13 +116,16 @@ const HookMock = Layer.succeed(HookService, {
   reloadUserHooks: () => Effect.succeed(undefined),
 } as any);
 
-const TodoMock = Layer.succeed(TodoService, { read: () => [], write: () => {}, reset: () => {} } as any);
+const TodoMock = Layer.succeed(TodoService, {
+  read: () => [],
+  write: () => {},
+  reset: () => {},
+} as any);
 
 const AgentDeps = Layer.mergeAll(
   SessionLayer,
   Layer.succeed(ToolExecutorService, {
-    executeBatch: () => Effect.succeed([]),
-    prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
+    prepare: () => Effect.succeed({ tools: [], executeBatch: () => Effect.succeed([]) }),
   } as any),
   Layer.succeed(CheckpointService, {
     snapshotBaseline: () => Effect.void,
@@ -161,7 +165,14 @@ const AgentWired = AgentLayer.pipe(Layer.provide(AgentDeps as any));
 // 真实 SubagentRunnerLayer：这一层到 agent.runTurn 的参数折叠正是阶段一要修的地方
 const SubagentWired = SubagentRunnerLayer.pipe(Layer.provide(AgentWired));
 
-const Runtime = Layer.mergeAll(AgentWired, SubagentWired, SessionLayer, HookMock, McpMock, TodoMock);
+const Runtime = Layer.mergeAll(
+  AgentWired,
+  SubagentWired,
+  SessionLayer,
+  HookMock,
+  McpMock,
+  TodoMock
+);
 
 function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(Runtime as any)) as any);
@@ -246,9 +257,7 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
     const reloaded = await run(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const ok = yield* Effect.either(
-          session.load(normalizePath(cwd), childId, parentId)
-        );
+        const ok = yield* Effect.either(session.load(normalizePath(cwd), childId, parentId));
         const withoutParent = yield* Effect.either(session.load(normalizePath(cwd), childId));
         return { ok: ok._tag === 'Right' ? ok.right : null, withoutParent };
       })

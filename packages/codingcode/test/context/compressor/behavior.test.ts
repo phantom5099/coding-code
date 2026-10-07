@@ -8,8 +8,13 @@ import type { ContextShape } from '../../../src/context/port.js';
 import { SessionService } from '../../../src/session/port.js';
 import { SessionLayer } from '../../../src/session/session.js';
 import { LLMService } from '../../../src/llm/port.js';
-import type { SessionEvent, SessionRef, SummaryEvent } from '../../../src/contracts/session.js';
-import { filterForContext, buildContextMessages, transcriptPathFor } from '../../../src/context/context.js';
+import type { SessionEvent, SummaryEvent } from '../../../src/session/types.js';
+import type { SessionRef } from '../../../src/session/types.js';
+import {
+  filterForContext,
+  buildContextMessages,
+  transcriptPathFor,
+} from '../../../src/context/context.js';
 import { readHistory } from '../../../src/session/file-ops.js';
 import { estimateTokens } from '../../../src/context/tokens.js';
 import { useTempProjectBase } from '../../helpers/project-base.js';

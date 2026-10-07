@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { isGlobalCwd, resolveCwd } from '../cwd.js';
-import { AlreadyExistsError, NotFoundError } from '../../contracts/error.js';
-import type { UserHookConfig } from '../../contracts/hooks.js';
+import { AlreadyExistsError, NotFoundError } from '../http-error.js';
+import type { UserHookConfig } from '../../hooks/types.js';
 import {
   loadHookConfigs,
   writeHookConfigs,

@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import type { HookCommandOutput } from './types.js';
 
 /** hook 子进程的超时上限 */
 const HOOK_TIMEOUT_MS = 30000;
@@ -54,7 +55,7 @@ export async function executeHookCommand(
 export async function executeDecisionHookCommand(
   config: HookRunConfig,
   payload: Record<string, unknown>
-): Promise<Record<string, unknown> | null> {
+): Promise<HookCommandOutput | null> {
   const result = await runHook(config, payload, true).catch(() => null);
   if (!result || result.code !== 0) return null;
   try {

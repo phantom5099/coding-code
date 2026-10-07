@@ -1,6 +1,5 @@
-import type { TodoItem, TokenUsage } from './types.js';
-
-export type EndReason = 'done' | 'error' | 'maxSteps' | 'aborted';
+import type { TodoItem } from '../todo/types.js';
+import type { TokenUsage } from '../llm/types.js';
 
 export interface FrameError {
   readonly message: string;
@@ -9,12 +8,6 @@ export interface FrameError {
 
 export interface ResponseMeta {
   readonly usage?: TokenUsage;
-}
-
-export interface Envelope {
-  readonly sessionId: string;
-  readonly turnId: number | null;
-  readonly seq: number;
 }
 
 export type Transition =
@@ -53,13 +46,13 @@ export type RuntimeEvent =
       readonly id: string;
       readonly tool: string;
       readonly args: Readonly<Record<string, unknown>>;
-  }
+    }
   | {
       readonly type: 'subagent_event';
       readonly sessionId: string;
       readonly agentName: string;
       readonly status: 'spawned' | 'completed' | 'failed';
-  };
+    };
 
 export interface Fatal {
   readonly message: string;
@@ -71,7 +64,6 @@ export type FrameBody =
   | { readonly family: 'event'; readonly event: RuntimeEvent }
   | { readonly family: 'fatal'; readonly fatal: Fatal };
 
-export type Frame = Envelope & FrameBody;
 export type EndTransition = Extract<Transition, { to: 'end' }>;
 
 export function isTurnEnd(

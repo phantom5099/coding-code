@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Effect, TSemaphore, STM } from 'effect';
-import type { McpServerConfig } from '../contracts/mcp.js';
+import type { McpServerConfig } from './types.js';
 
 /** callTool 的失败类型；导出仅为满足 d.ts 生成（模块外无 import） */
 export class McpError extends Error {

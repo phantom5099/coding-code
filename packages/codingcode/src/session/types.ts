@@ -1,5 +1,29 @@
-import type { ProfileName, TokenUsage, ToolCall } from './types.js';
-import type { PermissionMode } from './permission.js';
+import type { TokenUsage, ToolCall } from '../llm/types.js';
+
+export const PLAN_PROFILE_NAME = 'plan' as const;
+export const BUILD_PROFILE_NAME = 'build' as const;
+
+export const PROFILE_NAMES = [PLAN_PROFILE_NAME, BUILD_PROFILE_NAME] as const;
+
+export type ProfileName = (typeof PROFILE_NAMES)[number];
+
+export function isPlanProfile(name: string | null | undefined): boolean {
+  return name === PLAN_PROFILE_NAME;
+}
+
+export interface AvailableProfile {
+  name: ProfileName;
+  description: string;
+}
+
+export const AVAILABLE_PROFILES: AvailableProfile[] = [
+  { name: PLAN_PROFILE_NAME, description: 'Planning agent' },
+  { name: BUILD_PROFILE_NAME, description: 'Build agent' },
+];
+
+export const PERMISSION_MODES = ['askBeforeExec', 'bypass'] as const;
+
+export type PermissionMode = (typeof PERMISSION_MODES)[number];
 
 export interface SessionMetaEvent {
   type: 'session_meta';
@@ -88,6 +112,20 @@ export interface SessionStoreState extends SessionMetaEvent {
   usage: TokenUsage | undefined;
 }
 
+export interface SessionCreateOptions {
+  model: string;
+  title?: string;
+  activeProfile: ProfileName;
+  permissionMode: PermissionMode;
+}
+
+export interface SessionRef {
+  cwd: string;
+  sessionId: string;
+  parentSessionId?: string;
+  currentTurnId: number;
+}
+
 export type UITurnItem =
   | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
   | {
@@ -123,18 +161,4 @@ export interface UITurn {
   id: string;
   items: UITurnItem[];
   status: 'running' | 'completed' | 'error';
-}
-
-export interface SessionCreateOptions {
-  model: string;
-  title?: string;
-  activeProfile: ProfileName;
-  permissionMode: PermissionMode;
-}
-
-export interface SessionRef {
-  cwd: string;
-  sessionId: string;
-  parentSessionId?: string;
-  currentTurnId: number;
 }

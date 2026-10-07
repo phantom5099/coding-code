@@ -62,7 +62,9 @@ describe('MCP config merge', () => {
   });
 
   it('project layer only overrides the fields it declares', () => {
-    writeGlobalMcpConfig([{ name: 'shared', command: 'global-cmd', args: ['--a'], concurrency: 5 }]);
+    writeGlobalMcpConfig([
+      { name: 'shared', command: 'global-cmd', args: ['--a'], concurrency: 5 },
+    ]);
     writeMcpConfig(projectDir, [{ name: 'shared', command: 'project-cmd' }]);
 
     const merged = resolveMcpConfig(projectDir);

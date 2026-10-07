@@ -1,8 +1,19 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { AgentError } from '../core/error.js';
-import type { SelectableModel } from '../contracts/provider.js';
 import { loadConfig, updateActiveModel } from './config.js';
+
+/** 模型清单里一条可被会话选中的模型。 */
+export interface SelectableModel {
+  id: string;
+  provider: string;
+  driver: string;
+  name: string;
+  model: string;
+  base_url: string;
+  api_key_env: string;
+  context_window: number;
+}
 
 export interface ModelDescriptor {
   id: string;
@@ -82,9 +93,7 @@ export function findModel(target: string): SelectableModel | null {
 export function activeModel(): SelectableModel | null {
   const cfg = loadConfig().activeModel;
   if (!cfg) return null;
-  return (
-    listModels().find((m) => m.model === cfg.model && m.api_key_env === cfg.apiKeyEnv) ?? null
-  );
+  return listModels().find((m) => m.model === cfg.model && m.api_key_env === cfg.apiKeyEnv) ?? null;
 }
 
 export function activeModelId(): string {

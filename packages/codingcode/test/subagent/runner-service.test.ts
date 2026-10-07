@@ -51,7 +51,10 @@ describe('SubagentRunnerService', () => {
       (
         Effect.gen(function* () {
           const runner = yield* SubagentRunnerService;
-          const { stream, sessionId } = yield* runner.runSubagent('go', { cwd: '/test', model: 'm' });
+          const { stream, sessionId } = yield* runner.runSubagent('go', {
+            cwd: '/test',
+            model: 'm',
+          });
           expect(sessionId).toBe('child-1');
           // Consume the async generator outside the Effect generator
           return yield* Effect.async<any, never>((resume) => {

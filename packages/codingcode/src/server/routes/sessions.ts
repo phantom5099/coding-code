@@ -2,8 +2,10 @@ import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import type { SessionStoreState } from '../../contracts/session.js';
-import type { ProfileName } from '../../contracts/types.js';
+import type { SessionStoreState } from '../../session/types.js';
+import type { ProfileName } from '../../session/types.js';
+import type { PermissionMode } from '../../session/types.js';
+
 import { SessionService } from '../../session/port.js';
 import { computePaths } from '../../session/paths.js';
 import { ContextService } from '../../context/port.js';
@@ -13,12 +15,10 @@ import { CheckpointService } from '../../checkpoint/port.js';
 import { activeModelId, setGlobalActive } from '../../infra/models.js';
 import { errorBody, errorResponse } from '../util.js';
 import { resolveCwd, resolveWorkspaceCwd } from '../cwd.js';
-import { getGlobalDir, encodeProjectPath } from '../../core/path.js';
-import { PROJECTS_DIRNAME } from '../../contracts/paths.js';
-import { AVAILABLE_PROFILES } from '../../contracts/profile.js';
+import { projectDataDir } from '../../core/path.js';
+import { AVAILABLE_PROFILES } from '../../session/types.js';
 import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
-import type { PermissionMode } from '../../contracts/permission.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
@@ -60,7 +60,10 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
       model: string;
     };
     if (!isAgentProfileName(body.activeProfile)) {
-      return c.json(errorBody('CONFIG_INVALID', `Invalid activeProfile: ${body.activeProfile}`), 400);
+      return c.json(
+        errorBody('CONFIG_INVALID', `Invalid activeProfile: ${body.activeProfile}`),
+        400
+      );
     }
     if (!isPermissionMode(body.permissionMode)) {
       return c.json(
@@ -173,7 +176,7 @@ export function registerSessionsRoutes(router: Hono, rt: ManagedRt): void {
   // ---- Plan file: read the current plan document for a session ----
   router.get('/api/sessions/:id/plan', async (c) => {
     const cwd = resolveCwd(c.req.query('cwd'));
-    const planDir = join(getGlobalDir(), PROJECTS_DIRNAME, encodeProjectPath(cwd));
+    const planDir = projectDataDir(cwd);
     if (!existsSync(planDir)) {
       return c.json({
         content: '',

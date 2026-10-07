@@ -2,7 +2,11 @@ import { Layer, Effect, ManagedRuntime } from 'effect';
 import { CronJob } from 'cron';
 import { randomUUID } from 'crypto';
 import { createLogger } from '../infra/logger.js';
-import type { Automation, CreateAutomationInput, UpdateAutomationInput } from '../contracts/automation.js';
+import type {
+  Automation,
+  CreateAutomationInput,
+  UpdateAutomationInput,
+} from './types.js';
 import { readAutomations, writeAutomations } from './store.js';
 import { AgentService } from '../agent/port.js';
 import { AgentError } from '../core/error.js';
@@ -13,7 +17,9 @@ const logger = createLogger();
 
 const TIMEOUT_MS = 5 * 60 * 1000;
 
-export const SchedulerLayer = Layer.effect(SchedulerService, Effect.sync(() => {
+export const SchedulerLayer = Layer.effect(
+  SchedulerService,
+  Effect.sync(() => {
     const jobs = new Map<string, CronJob>();
     let _rt: ManagedRuntime.ManagedRuntime<any, any> | null = null;
 
@@ -220,4 +226,5 @@ export const SchedulerLayer = Layer.effect(SchedulerService, Effect.sync(() => {
         jobs.clear();
       },
     };
-}));
+  })
+);

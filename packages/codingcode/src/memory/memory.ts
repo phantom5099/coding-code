@@ -1,6 +1,6 @@
 import { Layer, Effect } from 'effect';
 import { readTranscript } from '../session/file-ops.js';
-import type { SessionEvent } from '../contracts/session.js';
+import type { SessionEvent } from '../session/types.js';
 import {
   readMemoryFile,
   resolveMemoryPath,
@@ -19,7 +19,9 @@ const NOT_WRITTEN = { written: false, bytes: 0 } as const;
 
 const logger = createLogger();
 
-export const MemoryLayer = Layer.effect(MemoryService, Effect.gen(function* () {
+export const MemoryLayer = Layer.effect(
+  MemoryService,
+  Effect.gen(function* () {
     const llm = yield* LLMService;
     let _runtimeEnabled: boolean | null = null;
 
@@ -134,4 +136,5 @@ export const MemoryLayer = Layer.effect(MemoryService, Effect.gen(function* () {
           return { written: true, bytes: Buffer.byteLength(truncated, 'utf-8') };
         }).pipe(Effect.catchAllCause(() => Effect.succeed({ ...NOT_WRITTEN }))),
     };
-}));
+  })
+);

@@ -1,13 +1,18 @@
 import { Layer, Effect } from 'effect';
 import { AgentError } from '../core/error.js';
 import { HookService } from '../hooks/port.js';
-import type { ToolCall, ProfileName } from '../contracts/types.js';
-import type { McpToolSpec } from '../contracts/mcp.js';
-import type { ToolCatalog, ToolLookup, ToolResult } from '../contracts/tool.js';
+import type { ToolCall } from '../llm/types.js';
+import type { ProfileName } from '../session/types.js';
+import type { McpToolSpec } from '../mcp/types.js';
+import type { ToolCatalog, ToolExecOpts, ToolResult, ToolRunner } from './types.js';
 import { ToolExecutorService } from './port.js';
 import { createToolCatalog } from './catalog.js';
 
-export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(function* () {
+type Lookup = (name: string) => ToolRunner | undefined;
+
+export const ToolExecutorLayer = Layer.effect(
+  ToolExecutorService,
+  Effect.gen(function* () {
     const hooks = yield* HookService;
 
     function execute(
@@ -19,13 +24,13 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
         turnId?: number;
         projectPath?: string;
         callId?: string;
-        toolLookup?: ToolLookup;
         activeProfile?: ProfileName;
         model: string;
-      }
+      },
+      lookup: Lookup
     ): Effect.Effect<{ output: string }, AgentError> {
       return Effect.gen(function* () {
-        const tool = opts.toolLookup?.(name);
+        const tool = lookup(name);
         if (!tool) return yield* Effect.fail(AgentError.toolNotFound(name));
 
         const finalArgs = args as Record<string, unknown>;
@@ -51,7 +56,6 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
           activeProfile: opts.activeProfile,
           model: opts.model,
         };
-
 
         let toolEffect = tool.execute(parsedArgs, ctx);
 
@@ -99,16 +103,10 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
     function execSingle(
       tc: ToolCall,
       sessionId: string | undefined,
-      opts: {
-        turnId?: number;
-        projectPath?: string;
-        signal?: AbortSignal;
-        toolLookup?: ToolLookup;
-        activeProfile?: ProfileName;
-        model: string;
-      }
+      opts: ToolExecOpts,
+      lookup: Lookup
     ): Effect.Effect<ToolResult> {
-      return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }).pipe(
+      return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }, lookup).pipe(
         Effect.matchEffect({
           onSuccess: (result: any): Effect.Effect<ToolResult> =>
             Effect.succeed({
@@ -147,11 +145,11 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
       );
     }
 
-    function splitWaves(toolCalls: ToolCall[], toolLookup?: ToolLookup): ToolCall[][] {
+    function splitWaves(toolCalls: ToolCall[], lookup: Lookup): ToolCall[][] {
       const waves: ToolCall[][] = [];
       let current: ToolCall[] | undefined;
       for (const tc of toolCalls) {
-        if (toolLookup?.(tc.name)?.concurrencySafe) {
+        if (lookup(tc.name)?.concurrencySafe) {
           if (!current) {
             current = [];
             waves.push(current);
@@ -165,20 +163,13 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
       return waves;
     }
 
-    function executeBatch(
+    function runBatch(
       toolCalls: ToolCall[],
       sessionId: string | undefined,
-      opts: {
-        turnId?: number;
-        projectPath?: string;
-        signal?: AbortSignal;
-        toolLookup?: ToolLookup;
-        activeProfile?: ProfileName;
-        model: string;
-      }
+      opts: ToolExecOpts,
+      lookup: Lookup
     ): Effect.Effect<ToolResult[]> {
       return Effect.gen(function* () {
-
         const runTool = (tc: ToolCall): Effect.Effect<ToolResult> =>
           Effect.suspend(() =>
             opts.signal?.aborted
@@ -188,11 +179,11 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
                   name: tc.name,
                   reason: 'aborted',
                 })
-              : execSingle(tc, sessionId, opts)
+              : execSingle(tc, sessionId, opts, lookup)
           );
 
         const waveResults = yield* Effect.forEach(
-          splitWaves(toolCalls, opts.toolLookup),
+          splitWaves(toolCalls, lookup),
           (wave) => Effect.forEach(wave, runTool, { concurrency: 'unbounded' }),
           { concurrency: 1 }
         );
@@ -203,9 +194,20 @@ export const ToolExecutorLayer = Layer.effect(ToolExecutorService, Effect.gen(fu
       });
     }
 
-    function prepare(toolNames: readonly string[], mcpTools: McpToolSpec[] = []): Effect.Effect<ToolCatalog> {
-      return Effect.sync(() => createToolCatalog(toolNames, mcpTools));
+    function prepare(
+      toolNames: readonly string[],
+      mcpTools: McpToolSpec[] = []
+    ): Effect.Effect<ToolCatalog> {
+      return Effect.sync(() => {
+        const source = createToolCatalog(toolNames, mcpTools);
+        return {
+          tools: source.tools,
+          executeBatch: (toolCalls, sessionId, opts) =>
+            runBatch(toolCalls, sessionId, opts, source.lookup),
+        };
+      });
     }
 
-    return { prepare, executeBatch };
-}));
+    return { prepare };
+  })
+);

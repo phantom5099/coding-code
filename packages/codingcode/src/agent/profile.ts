@@ -1,14 +1,9 @@
-import type { ProfileName } from '../contracts/types.js';
+import { PLAN_PROFILE_NAME, BUILD_PROFILE_NAME, type ProfileName } from '../session/types.js';
 
 export interface AgentProfile {
   name: ProfileName;
   systemPrompt?: string;
 }
-
-import { PLAN_ALLOWED_TOOLS } from '../contracts/permission.js';
-
-export const PLAN_PROFILE_NAME = 'plan' as const;
-export const BUILD_PROFILE_NAME = 'build' as const;
 
 export const BUILD_PROMPT = `You are a coding assistant —an AI agent that helps users with software engineering tasks.
 
@@ -115,34 +110,10 @@ export const BUILD_PROFILE: AgentProfile = {
   systemPrompt: BUILD_PROMPT,
 };
 
-export const PLAN_TOOL_NAMES: readonly string[] = [...PLAN_ALLOWED_TOOLS];
-
-export const BUILD_TOOL_NAMES: readonly string[] = [
-  'read_file',
-  'write_file',
-  'edit_file',
-  'execute_command',
-  'search_code',
-  'search_files',
-  'fetch_url',
-  'web_search',
-  'todo_write',
-  'spawn_agent',
-  'wait_agent',
-];
-
-export function isPlanProfile(p: { name: string } | null | undefined): boolean {
-  return p?.name === PLAN_PROFILE_NAME;
-}
-
 export function isAgentProfileName(name: string): name is ProfileName {
   return name === PLAN_PROFILE_NAME || name === BUILD_PROFILE_NAME;
 }
 
 export function resolveProfile(name: ProfileName): AgentProfile {
   return name === PLAN_PROFILE_NAME ? PLAN_PROFILE : BUILD_PROFILE;
-}
-
-export function getToolNames(profile: AgentProfile | undefined): readonly string[] {
-  return isPlanProfile(profile) ? PLAN_TOOL_NAMES : BUILD_TOOL_NAMES;
 }

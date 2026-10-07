@@ -1,7 +1,9 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { Message } from '../contracts/types.js';
-import type { SessionRef, SessionEvent } from '../contracts/session.js';
+import type { Message } from '../llm/types.js';
+import type { SessionRef } from '../session/types.js';
+import type { SessionEvent } from '../session/types.js';
+
 import type { AgentError } from '../core/error.js';
 
 export interface CompressResult {
@@ -16,7 +18,11 @@ export interface ContextShape {
   /** 把本回合自己写进 transcript 的事件并入内存态（零 IO） */
   absorb(ref: SessionRef, events: readonly SessionEvent[]): Effect.Effect<void>;
   /** 手动压缩入口（HTTP /compact），不受阈值限制 */
-  compact(ref: SessionRef, model: string, usage?: number): Effect.Effect<CompressResult, AgentError>;
+  compact(
+    ref: SessionRef,
+    model: string,
+    usage?: number
+  ): Effect.Effect<CompressResult, AgentError>;
   /** 会话删除时丢弃缓存 */
   dispose(sessionId: string): Effect.Effect<void>;
 }

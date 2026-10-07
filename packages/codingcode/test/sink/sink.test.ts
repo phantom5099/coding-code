@@ -2,12 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { Effect, Queue } from 'effect';
 import { EventSinkService } from '../../src/sink/port.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
-import type { FrameBody } from '../../src/contracts/frame.js';
+import type { FrameBody } from '../../src/sink/types.js';
 
 const run = <A, E>(eff: Effect.Effect<A, E, EventSinkService>): Promise<A> =>
   Effect.runPromise(eff.pipe(Effect.provide(EventSinkLayer)));
 
-const textDelta = (t: string): FrameBody => ({ family: 'event', event: { type: 'text_delta', text: t } });
+const textDelta = (t: string): FrameBody => ({
+  family: 'event',
+  event: { type: 'text_delta', text: t },
+});
 const toolCall = (id: string): FrameBody => ({
   family: 'event',
   event: { type: 'tool_call', id, name: 'read_file', args: {} },
@@ -56,10 +59,14 @@ describe('EventSink', () => {
   });
 
   it('未挂载的会话 emit 是静默丢弃', async () => {
-    await expect(run(Effect.gen(function* () {
-      const sink = yield* EventSinkService;
-      yield* sink.emit('never-attached', textDelta('x'));
-    }))).resolves.toBeUndefined();
+    await expect(
+      run(
+        Effect.gen(function* () {
+          const sink = yield* EventSinkService;
+          yield* sink.emit('never-attached', textDelta('x'));
+        })
+      )
+    ).resolves.toBeUndefined();
   });
 
   it('同一队列内先入先出：投递顺序 == 取出顺序', async () => {

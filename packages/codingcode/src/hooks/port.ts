@@ -1,10 +1,13 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { HookPoint, HookDecision } from '../contracts/hooks.js';
+import type { HookPoint, HookDecision } from './types.js';
 
 export interface HookShape {
   emit(point: HookPoint, payload: Record<string, unknown>): Effect.Effect<void>;
-  emitDecision(point: HookPoint, payload: Record<string, unknown>): Effect.Effect<HookDecision | null>;
+  emitDecision(
+    point: HookPoint,
+    payload: Record<string, unknown>
+  ): Effect.Effect<HookDecision | null>;
   reloadUserHooks(projectPath: string): Effect.Effect<void>;
 }
 

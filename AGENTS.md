@@ -33,45 +33,16 @@ Coding Code 是 AI 编程助手。
 - `rules`：全局 / 项目级规则装载
 - `server`：HTTP / SSE 入口
 - `client`：HTTP 客户端（`AgentClient` 的实现）
-- `core`：通用件（`error` / `result` / `path`），不指向任何功能模块
-- `contracts`：跨领域共享契约
+- `core`：通用件（`error` / `result` / `path`：路径归一化与工作区数据目录），不指向任何功能模块
+- 类型归属：类型跟拥有者走——仅本模块用的进本模块 `types.ts`；跨模块一律 `import type` 指向对方的 `types.ts`
 - `layer.ts`：组合根，全量装配
-
-## 架构要求
-
-**依赖倒置**：所有非叶子模块利用 `port.ts`（宽契约；agent 自持的装配端口也在 `agent/port.ts`）声明自己需要的接口和类型定义，使调用者不需要依赖实现方；只允许依赖下层模块。
-
-**分层与允许依赖**：
-
-| 层 | 落点 | 允许依赖 |
-|---|---|---|
-| L0 通用件 | `core/` | node 内置 + 同目录 |
-| L1 共享契约 | `contracts/` | `core/` + 同目录 + 第三方（type-only） |
-| L1' 端口契约 | 各 `xxx/port.ts`（含 `agent/port.ts` 的装配端口） | `core/` + `contracts/` |
-| L2 实现 | `tools/`、`hooks/`、`session/`、`approval/`、`llm/`、`mcp/`、`context/` … | L0 + L1 |
-| L3 组合根 | `layer.ts`、`agent/tool-env.ts` | 全部 |
-
-**架构边界硬规则**（由 `packages/codingcode/test/architecture/boundaries.test.ts` 静态断言，共 29 项）：
-
-- **R1** 契约不得 import 实现：`contracts/` 与 `**/port.ts` 的相对 import 只能落在 `core/`、`contracts/` 或同目录
-- **R2** 实现不得依赖消费者模块：agent 自持的装配端口 `ToolEnvPort` 只在 `agent/` 内部出现
-- **R3** `core/` 零内部依赖：不引用 `core/` 之外的任何 src 模块
-- **R4** 一个概念只允许一处类型定义，canonical 落点为 `contracts/`
-- **准入**：`core/` 的 import 只能是 node 内置与同目录；`contracts/` 只引用 `core/`、同目录与第三方
-- **可解析**：`src/**` 的每条相对 import 都必须能在仓库内找到落点
-
-**类型落点判据**（先判归属，再判引用面）：
-
-- 判据一 —— 有无领域归属：不指向任何功能模块的（错误基类、结果容器、路径运算）→ `core/`；指向某功能模块的 → 判据二
-- 判据二 —— 引用面，**只作用于领域件**：仅 1 个 src 领域引用 → 回该领域**已有**的归属文件；只出现在某调用方接口签名里 → 内联进调用方；≥2 个 src 领域，或 ≥1 个跨包 → `contracts/`
-
-**机制形状例外**：`z.ZodTypeAny`、SDK client、Effect 的 R 通道类型必须留在叶子模块，不得进 `contracts/`。契约只暴露窄的纯数据描述——MCP 契约返回 `McpToolSpec`，`z.fromJSONSchema` 的转换由拥有机制的 `tools/catalog.ts` 自己做。
 
 ## 开发规则
 
 - 禁止用户当前轮未明确要求就主动修改仓库中任何内容，包括源代码、配置文件、文档等
 - 禁止用户当前轮未明确要求就主动进行 reset、commit、push 等相关会影响 git 历史或者当前仓库代码的操作，仅用户显式要求进行某类操作才能进行；仅允许 `git diff`、`git log` 等无副作用的操作可以自主进行
 - 禁止未在用户指示下补充测试，当开发任务完成后，给用户报告完成程度，由用户决定针对哪些部分写测试
+- 禁止只是修改代码格式的无效修改，污染diff内容
 - 禁止将工具执行细节泄漏到 agent 编排层及其他模块，agent 只依赖端口契约，不得 import 工具实现
 - 禁止将传输协议细节（HTTP / SSE）泄漏到 agent 核心及其他模块，agent 不得依赖 `server/`、`client/`
 - 不允许假设“这是未来需要扩展的”，所以现在就不做，应该贴合用户的实际要求
@@ -99,7 +70,7 @@ Coding Code 是 AI 编程助手。
 3. 存在性 / 导出断言——断言文件存在、类 / 函数 / layer 已导出、方法存在。真断裂时编译与上层用例会同时失败，此类用例不提供额外信息。
 4. 常量钉死——断言常量等于它自身的字面量。需要守护的是行为，不是常量的副本。
 5. 测试内重新实现逻辑——在测试里重写一遍待测算法再断言自己写的副本，只证明写法一致，发现不了实现缺陷。
-6. 源码文本 / 结构扫描——用字符串或正则解析源码断言导入、布局或写法。这属于静态分析：类型与导入可解析性由 `tsc` 保证，无需重复；架构分层等 `tsc` 无法表达的约束，改用 ESLint 规则或 AST 解析，而不是正则匹配源码文本（现有 `test/architecture/boundaries.test.ts`、`test/hooks/points-coverage.test.ts` 应按此方向迁移）。
+6. 源码文本 / 结构扫描——用字符串或正则解析源码断言导入、布局或写法。这属于静态分析：类型与导入可解析性由 `tsc` 保证，无需重复；架构分层等 `tsc` 无法表达的约束，改用 ESLint 规则或 AST 解析（`test/architecture/boundaries.test.ts`、`test/hooks/points-coverage.test.ts` 已按此实现）。
 7. 占位 / 恒真断言——`expect(true).toBe(true)`、只 `toBeDefined()` 不校验值、以及无论如何都会通过的断言。
 8. 重复用例——与已有用例覆盖同一行为的副本；发现重复应合并，不要并存。
 

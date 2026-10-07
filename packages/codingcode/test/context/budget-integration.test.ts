@@ -7,7 +7,7 @@ import { ContextService } from '../../src/context/port.js';
 import type { ContextShape } from '../../src/context/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { LLMService } from '../../src/llm/port.js';
-import type { SessionRef } from '../../src/contracts/session.js';
+import type { SessionRef } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ContextLayer, transcriptPathFor } from '../../src/context/context.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
@@ -94,7 +94,11 @@ describe('getHistory integration', () => {
   });
 
   it('returns an empty message list when the transcript is empty', async () => {
-    const emptyRef: SessionRef = { cwd: CWD, sessionId: `${ref.sessionId}-empty`, currentTurnId: 1 };
+    const emptyRef: SessionRef = {
+      cwd: CWD,
+      sessionId: `${ref.sessionId}-empty`,
+      currentTurnId: 1,
+    };
     const emptyPath = transcriptPathFor(emptyRef);
     writeFileSync(emptyPath, '', 'utf8');
     const ctx = await getCtxService();

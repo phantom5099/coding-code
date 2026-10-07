@@ -22,7 +22,13 @@ import { SchedulerLayer } from './scheduler/scheduler.js';
 
 // base layers
 const InfraLayer = Layer.mergeAll(
-  HookLayer, RulesLayer, SkillLayer, McpLayer, EventSinkLayer, ApprovalWaitLayer, TodoLayer,
+  HookLayer,
+  RulesLayer,
+  SkillLayer,
+  McpLayer,
+  EventSinkLayer,
+  ApprovalWaitLayer,
+  TodoLayer
 );
 
 const ApprovalWithDeps = ApprovalLayer.pipe(
@@ -38,8 +44,15 @@ const MemoryWithDeps = MemoryLayer.pipe(Layer.provide(LlmLayer));
 
 // agent 直接消费的宽服务集合
 const AgentServiceLayers = Layer.mergeAll(
-  InfraLayer, SessionLayer, MailboxLayer, ToolExecutorWithDeps, ApprovalWithDeps,
-  ContextWithDeps, MemoryWithDeps, CheckpointLayer, LlmLayer,
+  InfraLayer,
+  SessionLayer,
+  MailboxLayer,
+  ToolExecutorWithDeps,
+  ApprovalWithDeps,
+  ContextWithDeps,
+  MemoryWithDeps,
+  CheckpointLayer,
+  LlmLayer
 );
 
 // agent with deps
@@ -71,7 +84,7 @@ export const AppLayer = Layer.mergeAll(
   SubagentWithDeps,
   SubagentRunRegistryWithDeps,
   SchedulerLayer,
-  EventSinkLayer,
+  EventSinkLayer
 );
 
 export const createAppRuntime = () => ManagedRuntime.make(AppLayer);

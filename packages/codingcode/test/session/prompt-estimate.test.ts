@@ -11,7 +11,7 @@ import { readHistory, readLastUsage, readSessionMeta } from '../../src/session/f
 import { estimateTokensForContent } from '../../src/context/tokens.js';
 import { encodeProjectPath } from '../../src/core/path.js';
 import { computePaths } from '../../src/session/paths.js';
-import type { SessionStoreState } from '../../src/contracts/session.js';
+import type { SessionStoreState } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();

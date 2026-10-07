@@ -1,10 +1,12 @@
 import { Layer, Effect } from 'effect';
 import { discoverSkillDirs, readSkillBody } from './source.js';
 import { loadSkill } from './loader.js';
-import type { Skill } from '../contracts/skill.js';
+import type { Skill } from './types.js';
 import { SkillService } from './port.js';
 
-export const SkillLayer = Layer.effect(SkillService, Effect.gen(function* () {
+export const SkillLayer = Layer.effect(
+  SkillService,
+  Effect.gen(function* () {
     const cachedByProject = new Map<string, Skill[]>();
 
     function readAll(projectPath: string): Skill[] {
@@ -25,4 +27,5 @@ export const SkillLayer = Layer.effect(SkillService, Effect.gen(function* () {
 
       readContent: (skillPath: string) => Effect.sync(() => readSkillBody(skillPath)),
     };
-}));
+  })
+);

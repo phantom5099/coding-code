@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { makeState, runAgentTurn, llmStream, pText, pEnd, hasCompress } from '../helpers/agent-harness.js';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pEnd,
+  hasCompress,
+} from '../helpers/agent-harness.js';
 
 function makePlainLlm(content = 'ok') {
   return {

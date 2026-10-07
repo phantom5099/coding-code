@@ -84,11 +84,7 @@ describe('catalog - listModels / findModel', () => {
     const { listModels } = await import('../../src/infra/models.js');
 
     const ids = listModels().map((m) => m.id);
-    expect(ids).toEqual([
-      'model-x@provider-a',
-      'model-y@provider-a',
-      'model-x@provider-b',
-    ]);
+    expect(ids).toEqual(['model-x@provider-a', 'model-y@provider-a', 'model-x@provider-b']);
   });
 
   it('prefers the exact compound id over a bare-name match', async () => {

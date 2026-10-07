@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolDescription } from '../contracts/types.js';
+import type { ToolDescription } from '../llm/types.js';
 import type { ToolDefinition } from './types.js';
 import { canonicalizeSchema } from './utils/canonicalize-schema.js';
 

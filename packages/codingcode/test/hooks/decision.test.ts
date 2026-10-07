@@ -93,9 +93,27 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
 
   it('按 priority 升序取首个非 null 的决策，命中即不再跑后面的', async () => {
     writeHooksYaml([
-      { name: 'null', point: 'tool.approval.pre', type: 'decision', command: 'cmd-null', priority: 1 },
-      { name: 'deny', point: 'tool.approval.pre', type: 'decision', command: 'cmd-deny', priority: 2 },
-      { name: 'never', point: 'tool.approval.pre', type: 'decision', command: 'cmd-never', priority: 3 },
+      {
+        name: 'null',
+        point: 'tool.approval.pre',
+        type: 'decision',
+        command: 'cmd-null',
+        priority: 1,
+      },
+      {
+        name: 'deny',
+        point: 'tool.approval.pre',
+        type: 'decision',
+        command: 'cmd-deny',
+        priority: 2,
+      },
+      {
+        name: 'never',
+        point: 'tool.approval.pre',
+        type: 'decision',
+        command: 'cmd-never',
+        priority: 3,
+      },
     ]);
     whenCommand('cmd-deny', { stdout: '{"decision":"deny"}' });
 
@@ -113,8 +131,20 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
 
   it('非零退出降级为 null，落到下一个决策 hook', async () => {
     writeHooksYaml([
-      { name: 'fail', point: 'tool.approval.pre', type: 'decision', command: 'cmd-fail', priority: 1 },
-      { name: 'ask', point: 'tool.approval.pre', type: 'decision', command: 'cmd-ask', priority: 2 },
+      {
+        name: 'fail',
+        point: 'tool.approval.pre',
+        type: 'decision',
+        command: 'cmd-fail',
+        priority: 1,
+      },
+      {
+        name: 'ask',
+        point: 'tool.approval.pre',
+        type: 'decision',
+        command: 'cmd-ask',
+        priority: 2,
+      },
     ]);
     whenCommand('cmd-fail', { code: 1, stdout: '{"decision":"deny"}' });
     whenCommand('cmd-ask', { stdout: '{"decision":"ask"}' });
@@ -132,8 +162,20 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
 
   it('stdout 不是合法 JSON 时降级为 null，落到下一个决策 hook', async () => {
     writeHooksYaml([
-      { name: 'junk', point: 'tool.approval.pre', type: 'decision', command: 'cmd-junk', priority: 1 },
-      { name: 'allow', point: 'tool.approval.pre', type: 'decision', command: 'cmd-allow', priority: 2 },
+      {
+        name: 'junk',
+        point: 'tool.approval.pre',
+        type: 'decision',
+        command: 'cmd-junk',
+        priority: 1,
+      },
+      {
+        name: 'allow',
+        point: 'tool.approval.pre',
+        type: 'decision',
+        command: 'cmd-allow',
+        priority: 2,
+      },
     ]);
     whenCommand('cmd-junk', { stdout: 'not json at all' });
     whenCommand('cmd-allow', { stdout: '{"decision":"allow"}' });
@@ -193,7 +235,10 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        return yield* hooks.emitDecision('agent.turn.stop', { projectPath: testDir, content: 'hi' });
+        return yield* hooks.emitDecision('agent.turn.stop', {
+          projectPath: testDir,
+          content: 'hi',
+        });
       })
     );
 

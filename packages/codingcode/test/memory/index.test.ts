@@ -155,9 +155,7 @@ describe('flushSessionToMemory', () => {
   it('gracefully handles an LLM failure', async () => {
     await enableConfig();
     const { readTranscript } = await import('../../src/session/file-ops.js');
-    vi.mocked(readTranscript).mockImplementation(() => [
-      { type: 'user', content: 'hello' },
-    ] as any);
+    vi.mocked(readTranscript).mockImplementation(() => [{ type: 'user', content: 'hello' }] as any);
     mockLlm.complete.mockImplementation(() =>
       Effect.fail(new AgentError('LLM_FAILED', 'llm unavailable'))
     );
@@ -169,10 +167,13 @@ describe('flushSessionToMemory', () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
     const { readTranscript } = await import('../../src/session/file-ops.js');
-    vi.mocked(readTranscript).mockImplementation(() => [
-      { type: 'user', content: '记住新架构决策' },
-      { type: 'assistant', content: '好的' },
-    ] as any);
+    vi.mocked(readTranscript).mockImplementation(
+      () =>
+        [
+          { type: 'user', content: '记住新架构决策' },
+          { type: 'assistant', content: '好的' },
+        ] as any
+    );
     setLlmResponse('### 项目\n- 新的架构决策');
 
     const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
@@ -187,9 +188,7 @@ describe('flushSessionToMemory', () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
     const { readTranscript } = await import('../../src/session/file-ops.js');
-    vi.mocked(readTranscript).mockImplementation(() => [
-      { type: 'user', content: 'hello' },
-    ] as any);
+    vi.mocked(readTranscript).mockImplementation(() => [{ type: 'user', content: 'hello' }] as any);
     setLlmResponse('');
 
     const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
@@ -202,9 +201,9 @@ describe('flushSessionToMemory', () => {
     await enableConfig();
     writeMemory('### 主题\n- 不变的内容');
     const { readTranscript } = await import('../../src/session/file-ops.js');
-    vi.mocked(readTranscript).mockImplementation(() => [
-      { type: 'user', content: '无新信息' },
-    ] as any);
+    vi.mocked(readTranscript).mockImplementation(
+      () => [{ type: 'user', content: '无新信息' }] as any
+    );
     setLlmResponse('### 主题\n- 不变的内容');
 
     const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
@@ -216,9 +215,7 @@ describe('flushSessionToMemory', () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
     const { readTranscript } = await import('../../src/session/file-ops.js');
-    vi.mocked(readTranscript).mockImplementation(() => [
-      { type: 'user', content: 'hello' },
-    ] as any);
+    vi.mocked(readTranscript).mockImplementation(() => [{ type: 'user', content: 'hello' }] as any);
     setLlmResponse('### 自动\n- 新记忆', () => {
       writeMemory('### 手动\n- 用户并发编辑');
     });

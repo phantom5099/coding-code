@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { LLMStreamPart } from '../../src/contracts/provider.js';
+import type { LLMStreamPart } from '../../src/llm/types.js';
 
 const streamText = vi.fn();
 const stepCountIs = vi.fn((count: number) => ({ count }));

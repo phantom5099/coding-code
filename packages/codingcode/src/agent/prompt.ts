@@ -1,6 +1,6 @@
 import { BUILD_PROMPT } from './profile.js';
-import type { Skill } from '../contracts/skill.js';
-import { SUBAGENT_RESULT_PREFIX } from '../contracts/session.js';
+import type { Skill } from '../skills/types.js';
+import { SUBAGENT_RESULT_PREFIX } from '../session/types.js';
 
 interface SystemPromptOptions {
   cwd: string;
