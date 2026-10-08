@@ -2,11 +2,13 @@ import type { Hono } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalWaitService } from '../../approval/wait-port.js';
 import { parseApprovalResponse } from '../../approval/confirmation.js';
-import { errorResponse } from '../util.js';
+import { createRunWithLayer } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export function registerApprovalRoutes(router: Hono, rt: ManagedRt): void {
+  const runWithLayer = createRunWithLayer(rt);
+
   router.post('/api/sessions/:sessionId/approval/:id', async (c) => {
     const id = c.req.param('id');
     const sessionId = c.req.param('sessionId');
@@ -15,25 +17,13 @@ export function registerApprovalRoutes(router: Hono, rt: ManagedRt): void {
     };
     const response = typeof body.response === 'string' ? body.response : '';
 
-    const result = await rt.runPromise(
+    const resolved = await runWithLayer(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
         return yield* svc.resolveConfirm(id, sessionId, parseApprovalResponse(response));
-      }).pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
-        ),
-        Effect.match({
-          onSuccess: (a) => ({ ok: true as const, value: a }),
-          onFailure: (e) => ({ ok: false as const, error: e }),
-        })
-      )
+      })
     );
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
 
-    return c.json({ ok: result.value });
+    return c.json({ ok: resolved });
   });
 }

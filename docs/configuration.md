@@ -24,9 +24,6 @@ Coding Code 的核心哲学是所有行为都可配置。本文档详细介绍�
 ### 完整配置项
 
 ```yaml
-server:
-  port: 8080              # HTTP 服务端口
-
 maxSteps: 200             # Agent 最大步数
 maxStopContinuations: 2   # 最大停止续行次数
 
@@ -47,7 +44,6 @@ memory:
 
 | 字段 | 默认值 | 说明 |
 |------|--------|------|
-| `server.port` | `8080` | HTTP 服务监听端口 |
 | `maxSteps` | `200` | 单次 Agent 执行的最大步数限制 |
 | `maxStopContinuations` | `2` | Agent 停止后最大续行次数 |
 | `activeModel` | 无（可选） | 覆盖 models.json 中的默认模型，不设置则使用 models.json 配置 |
@@ -55,6 +51,8 @@ memory:
 | `memory.enabled` | `false` | 是否启用长期记忆系统 |
 | `memory.model` | `''` | 记忆提取使用的模型，空字符串回退到主模型 |
 | `memory.promptMaxBytes` | `8192` | 注入 system prompt 的记忆内容最大字节数 |
+
+> **HTTP 端口不可配置**。服务启动时监听端口 `0`，由操作系统原子地分配一个空闲端口，避免多实例或“先探测再绑定”之间的竞态。实际端口通过 stdout 的 `CODINGCODE_SERVER_READY:<port>` 上报给拉起方（Desktop、SDK 等）。
 
 ---
 

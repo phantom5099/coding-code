@@ -21,11 +21,11 @@ export const writeFileTool: ToolDefinition = {
       const filePath = resolve(base, path);
       yield* Effect.tryPromise({
         try: () => mkdir(dirname(filePath), { recursive: true }),
-        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+        catch: (e) => AgentError.toolExecutionFailed('write_file', e),
       });
       yield* Effect.tryPromise({
         try: () => writeFile(filePath, content),
-        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+        catch: (e) => AgentError.toolExecutionFailed('write_file', e),
       });
       const relPath = relative(base, filePath) || '.';
       return `File written: ${relPath} (${content.split('\n').length} lines, ${content.length} bytes)`;

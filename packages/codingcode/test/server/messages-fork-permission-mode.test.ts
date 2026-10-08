@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { registerMessagesRoutes } from '../../src/server/routes/messages.js';
+import { registerErrorHandler } from '../../src/server/util.js';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { HookService } from '../../src/hooks/port.js';
@@ -84,6 +85,7 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
     loadedPermissionModes.length = 0;
 
     app = new Hono();
+    registerErrorHandler(app);
     registerMessagesRoutes(app, rt);
   });
 

@@ -34,13 +34,13 @@ import { loadConfig } from '../infra/config.js';
 import { createLogger } from '../infra/logger.js';
 import { normalizePath } from '../core/path.js';
 import { resolveProfile } from './profile.js';
+import type { AgentProfile } from './profile.js';
 
 function toolOutcomeOf(result: ToolResult): ToolOutcome {
   return result.status === 'denied'
     ? { status: 'denied', reason: result.reason }
     : { status: result.status, output: result.output };
 }
-import type { AgentProfile } from './profile.js';
 
 const logger = createLogger();
 

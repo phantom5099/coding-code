@@ -8,28 +8,14 @@ import { registerApprovalRoutes } from './routes/approval.js';
 import { registerSettingsRoutes } from './routes/settings.js';
 import { registerAutomationsRoutes } from './routes/automations.js';
 import { registerSubagentsRoutes } from './routes/subagents.js';
-import { AgentError } from '../core/error.js';
+import { registerErrorHandler } from './util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export async function createServer(rt: ManagedRt): Promise<Hono> {
   const app = new Hono();
 
-  app.onError((err, c) => {
-    if (err instanceof AgentError) {
-      return c.json({ error: { code: err.code, message: err.message } }, err.httpStatus() as any);
-    }
-    if (
-      err &&
-      typeof (err as { code?: unknown }).code === 'string' &&
-      typeof (err as { httpStatus?: unknown }).httpStatus === 'function'
-    ) {
-      const e = err as unknown as { code: string; message: string; httpStatus: () => number };
-      return c.json({ error: { code: e.code, message: e.message } }, e.httpStatus() as any);
-    }
-    console.error('[500 INTERNAL_ERROR]', err);
-    return c.json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } }, 500);
-  });
+  registerErrorHandler(app);
 
   app.use(
     '*',

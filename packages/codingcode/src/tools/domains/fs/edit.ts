@@ -28,7 +28,7 @@ export const editFileTool: ToolDefinition = {
       const filePath = resolve(ctx?.projectPath ?? process.cwd(), path);
       const content = yield* Effect.tryPromise({
         try: () => readFile(filePath, 'utf-8'),
-        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+        catch: (e) => AgentError.toolExecutionFailed('edit_file', e),
       });
 
       let idx = 0;
@@ -53,7 +53,7 @@ export const editFileTool: ToolDefinition = {
         content.slice(0, lastIdx) + new_string + content.slice(lastIdx + old_string.length);
       yield* Effect.tryPromise({
         try: () => writeFile(filePath, newContent),
-        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+        catch: (e) => AgentError.toolExecutionFailed('edit_file', e),
       });
 
       const newLines = newContent.split('\n').length;

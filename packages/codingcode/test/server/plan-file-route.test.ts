@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync, utimesSync } from 'fs';
 import { join, resolve } from 'path';
 import { Hono } from 'hono';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
+import { registerErrorHandler } from '../../src/server/util.js';
 import { SessionService } from '../../src/session/port.js';
 import { LLMService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
@@ -152,6 +153,7 @@ describe('GET /api/sessions/:id/plan', () => {
   it('returns exists:false with empty content when no .md file is present', async () => {
     const rt = ManagedRuntime.make(TestLayer as any);
     const app = new Hono();
+    registerErrorHandler(app);
     registerSessionsRoutes(app, rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
     expect(res.status).toBe(200);
@@ -179,6 +181,7 @@ describe('GET /api/sessions/:id/plan', () => {
 
     const rt = ManagedRuntime.make(TestLayer as any);
     const app = new Hono();
+    registerErrorHandler(app);
     registerSessionsRoutes(app, rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
     expect(res.status).toBe(200);
@@ -199,6 +202,7 @@ describe('GET /api/sessions/:id/plan', () => {
 
     const rt = ManagedRuntime.make(TestLayer as any);
     const app = new Hono();
+    registerErrorHandler(app);
     registerSessionsRoutes(app, rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
     const body = (await res.json()) as { content: string; exists: boolean };

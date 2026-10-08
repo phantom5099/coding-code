@@ -8,7 +8,6 @@ vi.mock('../../src/infra/config.js', () => ({
     maxStopContinuations: 2,
     context: { compactionModel: '' },
     memory: { enabled: false },
-    server: { port: 8080 },
   }),
 }));
 

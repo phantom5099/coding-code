@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { Effect, ManagedRuntime } from 'effect';
 import { ApprovalWaitService } from '../approval/wait-port.js';
-import { AgentError } from '../core/error.js';
+import { isHttpError } from './http-error.js';
 import type { FrameBody } from '../sink/types.js';
 import { createFrameAssembler, encodeFrame } from './frame-io.js';
 
@@ -39,7 +39,7 @@ export function createSseHandler(rt: ManagedRt) {
               family: 'fatal',
               fatal: {
                 message: e instanceof Error ? e.message : String(e),
-                code: e instanceof AgentError ? e.code : 'INTERNAL_ERROR',
+                code: isHttpError(e) ? e.code : 'INTERNAL_ERROR',
               },
             });
           } finally {

@@ -15,13 +15,12 @@ export function registerSkillsSettingsRoutes(router: Hono, rt: ManagedRt): void 
     const rawCwd = c.req.query('cwd');
     if (isGlobalCwd(rawCwd)) {
       const cwd = resolveCwd(rawCwd);
-      const result = await runWithLayer(
+      const skills = await runWithLayer(
         Effect.gen(function* () {
           const skill = yield* SkillService;
           return yield* skill.getAll(cwd);
         })
       );
-      const skills = result.ok ? result.value : [];
       return c.json(
         skills.map((s) => ({
           ...s,
@@ -31,13 +30,12 @@ export function registerSkillsSettingsRoutes(router: Hono, rt: ManagedRt): void 
     }
     const cwd = resolveCwd(rawCwd);
     const globalDirPaths = new Set(discoverGlobalSkillDirs().map((d) => d.dirPath));
-    const result = await runWithLayer(
+    const skills = await runWithLayer(
       Effect.gen(function* () {
         const skill = yield* SkillService;
         return yield* skill.getAll(cwd);
       })
     );
-    const skills = result.ok ? result.value : [];
     // 按 SKILL.md 所在目录判定来源；同名同时存在于全局与项目时，两条各自标注真实来源
     return c.json(
       skills.map((s) => ({

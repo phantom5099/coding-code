@@ -1,4 +1,4 @@
-export type ErrorCode =
+type ErrorCode =
   | 'LLM_TIMEOUT'
   | 'LLM_RATE_LIMITED'
   | 'LLM_FAILED'
@@ -6,7 +6,6 @@ export type ErrorCode =
   | 'TOOL_NOT_FOUND'
   | 'TOOL_NOT_ALLOWED'
   | 'TOOL_EXECUTION_FAILED'
-  | 'PATH_NOT_ALLOWED'
   | 'MAX_STEPS_REACHED'
   | 'CONFIG_MISSING'
   | 'CONFIG_INVALID'
@@ -46,9 +45,6 @@ export class AgentError extends Error {
   }
   static toolExecutionFailed(name: string, e: unknown) {
     return new AgentError('TOOL_EXECUTION_FAILED', `Tool "${name}" failed: ${String(e)}`, e);
-  }
-  static pathNotAllowed(path: string) {
-    return new AgentError('PATH_NOT_ALLOWED', `Path "${path}" is outside allowed scope`);
   }
   static maxStepsReached(max: number) {
     return new AgentError('MAX_STEPS_REACHED', `Max steps (${max}) reached`);

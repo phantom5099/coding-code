@@ -43,7 +43,7 @@ export const globTool: ToolDefinition = {
             absolute: true,
             onlyFiles: true,
           }),
-        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+        catch: (e) => AgentError.toolExecutionFailed('search_files', e),
       });
 
       const truncated = files.slice(0, max_results);

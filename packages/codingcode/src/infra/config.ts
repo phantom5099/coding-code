@@ -23,9 +23,6 @@ export interface SubagentConfig {
 }
 
 export interface AppConfig {
-  server: {
-    port: number;
-  };
   maxSteps: number;
   maxStopContinuations: number;
   activeModel?: ActiveModelConfig;
@@ -51,9 +48,6 @@ export const DEFAULT_SUBAGENT: SubagentConfig = {
 };
 
 export const DEFAULT_CONFIG: AppConfig = {
-  server: {
-    port: 8080,
-  },
   maxSteps: 200,
   maxStopContinuations: 2,
   activeProfile: 'build',

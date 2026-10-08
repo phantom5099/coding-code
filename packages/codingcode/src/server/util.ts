@@ -1,39 +1,45 @@
-import { Effect, ManagedRuntime } from 'effect';
-import { AgentError } from '../core/error.js';
+import type { Hono } from 'hono';
+import { Cause, Effect, Exit, ManagedRuntime } from 'effect';
+import { isHttpError } from './http-error.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
-export type Result<A, E> = { ok: true; value: A } | { ok: false; error: E };
+function toError(u: unknown): Error {
+  if (u instanceof Error) return u;
+  return new Error(typeof u === 'string' ? u : `Unexpected error: ${String(u)}`);
+}
+
 
 export function createRunWithLayer(rt: ManagedRt) {
-  return async function runWithLayer<A, E>(eff: Effect.Effect<A, E, any>): Promise<Result<A, E>> {
-    return rt.runPromise(
-      eff.pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(
-            new AgentError('SESSION_IO_ERROR' as any, `Unexpected error: ${String(defect)}`, defect)
-          )
-        ),
-        Effect.match({
-          onSuccess: (a) => ({ ok: true as const, value: a }),
-          onFailure: (e) => ({ ok: false as const, error: e as E }),
-        })
-      )
-    ) as Promise<Result<A, E>>;
+  return async function runWithLayer<A, E>(eff: Effect.Effect<A, E, any>): Promise<A> {
+    const exit = await rt.runPromiseExit(eff);
+    if (Exit.isSuccess(exit)) return exit.value;
+    throw toError(Cause.squash(exit.cause));
   };
 }
 
-/** 错误信封的唯一构造点：`{ error: { code, message } }` */
 export function errorBody(code: string, message: string) {
   return { error: { code, message } };
 }
 
-export function errorResponse(err: unknown) {
-  if (err instanceof AgentError) {
+/** 错误值 → HTTP 状态码 + 响应体。**唯一映射点**，只由 `onError` 调用。 */
+export function errorResponse(err: unknown): {
+  status: number;
+  body: { error: { code: string; message: string } };
+} {
+  if (isHttpError(err)) {
     return { status: err.httpStatus(), body: errorBody(err.code, err.message) };
   }
   return {
     status: 500,
     body: errorBody('INTERNAL_ERROR', err instanceof Error ? err.message : 'Internal server error'),
   };
+}
+
+export function registerErrorHandler(app: Hono): void {
+  app.onError((err, c) => {
+    const { status, body } = errorResponse(err);
+    if (status >= 500) console.error(`[${status} ${body.error.code}]`, err);
+    return c.json(body, status as any);
+  });
 }

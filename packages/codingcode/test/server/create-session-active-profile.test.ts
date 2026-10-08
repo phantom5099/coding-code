@@ -6,6 +6,7 @@ import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
+import { registerErrorHandler } from '../../src/server/util.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -20,6 +21,7 @@ describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
     mkdirSync(cwd, { recursive: true });
     rt = ManagedRuntime.make(SessionLayer as any);
     app = new Hono();
+    registerErrorHandler(app);
     registerSessionsRoutes(app, rt);
   });
 

@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, ManagedRuntime } from 'effect';
 import { registerSubagentsRoutes } from '../../src/server/routes/subagents.js';
+import { registerErrorHandler } from '../../src/server/util.js';
 import { SubagentRunRegistryService } from '../../src/subagent/registry.js';
 
 function makeApp(stopAll: (sessionId: string) => Effect.Effect<number>) {
   const layer = Layer.succeed(SubagentRunRegistryService, { stopAll } as any);
-  const rt = {
-    runPromise: (eff: any) => Effect.runPromise(eff.pipe(Effect.provide(layer))),
-  } as any;
+  const rt = ManagedRuntime.make(layer);
   const app = new Hono();
+  registerErrorHandler(app);
   registerSubagentsRoutes(app, rt);
   return app;
 }

@@ -3,10 +3,13 @@ import { Effect, ManagedRuntime } from 'effect';
 import { MemoryService } from '../../memory/port.js';
 import { getMemoryConfig } from '../../memory/config.js';
 import { updateMemoryModel } from '../../infra/config.js';
+import { createRunWithLayer } from '../util.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export function registerMemorySettingsRoutes(router: Hono, rt: ManagedRt): void {
+  const runWithLayer = createRunWithLayer(rt);
+
   router.get('/api/settings/memory/config', (c) => {
     const cfg = getMemoryConfig();
     return c.json({
@@ -17,15 +20,10 @@ export function registerMemorySettingsRoutes(router: Hono, rt: ManagedRt): void 
 
   router.post('/api/settings/memory/enabled', async (c) => {
     const body = (await c.req.json()) as { enabled: boolean };
-    await rt.runPromise(
+    const enabled = await runWithLayer(
       Effect.gen(function* () {
         const m = yield* MemoryService;
         yield* m.setMemoryEnabled(body.enabled);
-      })
-    );
-    const enabled = await rt.runPromise(
-      Effect.gen(function* () {
-        const m = yield* MemoryService;
         return yield* m.getMemoryEnabled();
       })
     );

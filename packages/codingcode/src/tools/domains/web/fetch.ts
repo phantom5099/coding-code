@@ -34,7 +34,7 @@ export const webFetchTool: ToolDefinition = {
               },
               redirect: 'follow',
             }),
-          catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+          catch: (e) => AgentError.toolExecutionFailed('fetch_url', e),
         });
 
         if (!response.ok) {
@@ -44,7 +44,7 @@ export const webFetchTool: ToolDefinition = {
         const contentType = response.headers.get('content-type') || '';
         const text = yield* Effect.tryPromise({
           try: () => response.text(),
-          catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+          catch: (e) => AgentError.toolExecutionFailed('fetch_url', e),
         });
         const truncated =
           text.length > max_length

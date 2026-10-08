@@ -5,16 +5,17 @@ import { resolveWorkspaceCwd } from '../cwd.js';
 import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
 import { loadConfig } from '../../infra/config.js';
-import { errorBody, errorResponse } from '../util.js';
+import { createRunWithLayer, errorBody } from '../util.js';
 import { createSseHandler } from '../handler.js';
 
 type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
 
 export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
+  const runWithLayer = createRunWithLayer(rt);
   const sseHandler = createSseHandler(rt);
 
   router.post('/api/sessions/:id/messages', async (c) => {
-    let sessionId = c.req.param('id');
+    const sessionId = c.req.param('id');
     const { input, cwd, model, skills } = await c.req.json<{
       input: string;
       cwd: string;
@@ -44,36 +45,21 @@ export function registerMessagesRoutes(router: Hono, rt: ManagedRt): void {
         : 'askBeforeExec';
     }
 
-    const result = await rt.runPromise(
+    const { stream, sessionId: actualSid } = (await runWithLayer(
       Effect.gen(function* () {
         const agent = yield* AgentService;
         return yield* agent.runTurn(input, {
           sessionId: isNew ? undefined : sessionId,
           ...runOpts,
         });
-      }).pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
-        ),
-        Effect.match({
-          onSuccess: (a) => ({ ok: true as const, value: a }),
-          onFailure: (e) => ({ ok: false as const, error: e }),
-        })
-      )
-    );
-
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
-    const { stream, sessionId: actualSid } = result.value as any;
-    sessionId = actualSid;
+      })
+    )) as any;
 
     return sseHandler(
       async function* () {
         yield* stream;
       },
-      { sessionId }
+      { sessionId: actualSid }
     )(c);
   });
 }
