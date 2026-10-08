@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { Effect } from 'effect';
-import type { ToolDefinition, ToolExecCtx, ToolRunner } from './types.js';
-import type { ToolDescription } from '../llm/types.js';
+import type { ToolDefinition, ToolExecCtx, ToolCatalog } from './types.js';
 import type { McpToolSpec } from '../mcp/types.js';
 import type { AgentError } from '../util/error.js';
 import { ToolRegistry } from './registry.js';
@@ -45,16 +44,10 @@ function specToDefinition(spec: McpToolSpec): ToolDefinition {
   };
 }
 
-/** 装配产物：给模型看的描述 + 内部查找（不对外暴露）。 */
-export interface ToolCatalogSource {
-  readonly tools: ToolDescription[];
-  readonly lookup: (name: string) => ToolRunner | undefined;
-}
-
 export function createToolCatalog(
   toolNames: readonly string[],
   mcpTools: McpToolSpec[] = []
-): ToolCatalogSource {
+): ToolCatalog {
   const registry = new ToolRegistry();
   for (const name of toolNames) {
     const definition = TOOLS_BY_NAME.get(name);

@@ -125,7 +125,8 @@ const TodoMock = Layer.succeed(TodoService, {
 const AgentDeps = Layer.mergeAll(
   SessionLayer,
   Layer.succeed(ToolExecutorService, {
-    prepare: () => Effect.succeed({ tools: [], executeBatch: () => Effect.succeed([]) }),
+    prepare: () => Effect.succeed({ tools: [], lookup: () => undefined }),
+    executeBatch: () => Effect.succeed([]),
   } as any),
   Layer.succeed(CheckpointService, {
     snapshotBaseline: () => Effect.void,

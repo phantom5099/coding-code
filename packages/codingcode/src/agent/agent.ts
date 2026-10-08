@@ -265,7 +265,7 @@ export const AgentLayer = Layer.effect(
         projectPath,
         permissionMode,
       } = opts;
-      const { tools } = catalog;
+      const { tools, lookup: toolLookup } = catalog;
 
       let ended = false;
       let deliveryPhase: 'currentTurn' | 'nextTurn' = 'currentTurn';
@@ -486,13 +486,18 @@ export const AgentLayer = Layer.effect(
 
           const approvedResults =
             approvedCalls.length > 0
-              ? yield* catalog.executeBatch(approvedCalls, state.sessionId, {
-                  turnId: state.currentTurnId,
-                  projectPath,
-                  signal: abortSignal,
-                  activeProfile: profile?.name,
-                  model,
-                })
+              ? yield* executor.executeBatch(
+                  approvedCalls,
+                  state.sessionId,
+                  {
+                    turnId: state.currentTurnId,
+                    projectPath,
+                    signal: abortSignal,
+                    activeProfile: profile?.name,
+                    model,
+                  },
+                  toolLookup
+                )
               : [];
 
           const resultsById = new Map<string, any>();

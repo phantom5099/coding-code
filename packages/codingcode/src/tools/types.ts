@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
 import type { AgentError } from '../util/error.js';
-import type { ToolCall, ToolDescription } from '../llm/types.js';
+import type { ToolDescription } from '../llm/types.js';
 import type { ProfileName } from '../util/enums.js';
 import type { ToolOutcome } from '../sink/types.js';
 
@@ -32,6 +32,7 @@ export interface ToolRunner {
   execute(args: unknown, ctx?: ToolExecCtx): Effect.Effect<string, AgentError>;
 }
 
+export type ToolLookup = (name: string) => ToolRunner | undefined;
 
 export type ToolExecOpts = Omit<ToolExecCtx, 'sessionId'> & { turnId?: number };
 
@@ -39,9 +40,5 @@ export type ToolExecCall = ToolExecOpts & { sessionId?: string; callId?: string 
 
 export interface ToolCatalog {
   tools: ToolDescription[];
-  executeBatch(
-    toolCalls: ToolCall[],
-    sessionId: string | undefined,
-    opts: ToolExecOpts
-  ): Effect.Effect<ToolResult[]>;
+  lookup: ToolLookup;
 }

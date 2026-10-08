@@ -231,11 +231,12 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       ));
   const executor = {
     prepare: (names: readonly string[], mcpTools: any[] = []) =>
-      Effect.succeed({
-        tools: createToolCatalog(names, mcpTools).tools,
-        executeBatch: (calls: any[], sessionId?: string, opts?: any) =>
-          batch(calls, sessionId, opts),
+      Effect.sync(() => {
+        const { tools, lookup } = createToolCatalog(names, mcpTools);
+        return { tools, lookup };
       }),
+    executeBatch: (calls: any[], sessionId?: string, opts?: any) =>
+      batch(calls, sessionId, opts),
   } as any;
 
   const session: Record<string, any> = {

@@ -141,12 +141,12 @@ function runBatch(
     // 只把内置名交给 catalog（去重）；MCP 工具名（含 `:`）由 spec 侧注册
     const builtinNames = [...new Set(calls.map((c) => c.name).filter((n) => TOOLS_BY_NAME.has(n)))];
     const catalog = yield* exec.prepare(builtinNames, mcpSpecs);
-    return yield* catalog.executeBatch(calls, ctx.sessionId, {
+    return yield* exec.executeBatch(calls, ctx.sessionId, {
       projectPath: ctx.projectPath,
       signal: ctx.signal,
       activeProfile: ctx.activeProfile,
       model: ctx.model,
-    });
+    }, catalog.lookup);
   });
   return Effect.runPromise(
     program.pipe(Effect.provide(ToolExecutorLayer), Effect.provide(h.layers))

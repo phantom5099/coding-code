@@ -40,7 +40,12 @@ function runProbe(opts: ToolExecOpts, sessionId: string | undefined): Promise<vo
   const program = Effect.gen(function* () {
     const exec = yield* ToolExecutorService;
     const catalog = yield* exec.prepare([PROBE]);
-    yield* catalog.executeBatch([{ id: 'c1', name: PROBE, arguments: {} }], sessionId, opts);
+    yield* exec.executeBatch(
+      [{ id: 'c1', name: PROBE, arguments: {} }],
+      sessionId,
+      opts,
+      catalog.lookup
+    );
   });
   // prepare 的 catalog 只依赖 HookService，其余服务与探针无关
   const live = ToolExecutorLayer.pipe(Layer.provide(Layer.succeed(HookService, hooksStub() as any)));

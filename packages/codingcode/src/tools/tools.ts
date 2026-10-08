@@ -8,6 +8,7 @@ import type {
   ToolExecCall,
   ToolExecCtx,
   ToolExecOpts,
+  ToolLookup,
   ToolResult,
   ToolRunner,
 } from './types.js';
@@ -160,12 +161,13 @@ export const ToolExecutorLayer = Layer.effect(
       return waves;
     }
 
-    function runBatch(
+    function executeBatch(
       toolCalls: ToolCall[],
       sessionId: string | undefined,
       opts: ToolExecOpts,
-      lookup: Lookup
+      toolLookup: ToolLookup
     ): Effect.Effect<ToolResult[]> {
+      const lookup: Lookup = toolLookup;
       return Effect.gen(function* () {
         const runTool = (tc: ToolCall): Effect.Effect<ToolResult> =>
           Effect.suspend(() =>
@@ -195,16 +197,9 @@ export const ToolExecutorLayer = Layer.effect(
       toolNames: readonly string[],
       mcpTools: McpToolSpec[] = []
     ): Effect.Effect<ToolCatalog> {
-      return Effect.sync(() => {
-        const source = createToolCatalog(toolNames, mcpTools);
-        return {
-          tools: source.tools,
-          executeBatch: (toolCalls, sessionId, opts) =>
-            runBatch(toolCalls, sessionId, opts, source.lookup),
-        };
-      });
+      return Effect.sync(() => createToolCatalog(toolNames, mcpTools));
     }
 
-    return { prepare };
+    return { prepare, executeBatch };
   })
 );
