@@ -4,24 +4,10 @@ import { SchedulerService } from '../../scheduler/port.js';
 import { NotFoundError } from '../http-error.js';
 import { AgentError } from '../../util/error.js';
 import { json, pathParams, readJson, type Handler, type Router } from '../handler.js';
-import type { AutomationSandbox, CreateAutomationInput } from '../../scheduler/types.js';
-
-type AutomationBody = {
-  name?: string;
-  description?: string;
-  cron?: string;
-  timezone?: string;
-  sandbox?: AutomationSandbox;
-  projectCwd?: string;
-  runOnce?: boolean;
-  enabled?: boolean;
-};
-
-/** PATCH 只能改既有自动化的字段，不接受 projectCwd */
-type AutomationPatchBody = Omit<AutomationBody, 'projectCwd'>;
+import type { CreateAutomationInput, UpdateAutomationInput } from '../../scheduler/types.js';
 
 /** 校验必填项后构造 CreateAutomationInput；缺字段返回 null，由调用方落 400。不用 `as` 断言未验证 body。 */
-function toCreateInput(body: AutomationBody): CreateAutomationInput | null {
+function toCreateInput(body: Partial<CreateAutomationInput>): CreateAutomationInput | null {
   const { name, description, cron, projectCwd } = body;
   if (!name || !description || !cron || !projectCwd) return null;
   return { ...body, name, description, cron, projectCwd };
@@ -33,7 +19,7 @@ const listAutomations: Handler = Effect.gen(function* () {
 });
 
 const createAutomation: Handler = Effect.gen(function* () {
-  const body = yield* readJson<AutomationBody>();
+  const body = yield* readJson<Partial<CreateAutomationInput>>();
   const input = toCreateInput(body);
   if (!input) {
     return yield* Effect.fail(
@@ -49,7 +35,8 @@ const createAutomation: Handler = Effect.gen(function* () {
 
 const patchAutomation: Handler = Effect.gen(function* () {
   const { id } = yield* pathParams;
-  const body = yield* readJson<AutomationPatchBody>();
+  // PATCH 只能改既有自动化的字段（UpdateAutomationInput 不含 projectCwd）
+  const body = yield* readJson<UpdateAutomationInput>();
   const scheduler = yield* SchedulerService;
   const updated = scheduler.update(id ?? '', body);
   if (!updated) {

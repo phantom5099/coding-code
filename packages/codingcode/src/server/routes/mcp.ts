@@ -15,21 +15,8 @@ import {
   setProjectMcpServerEnabled,
 } from '../../mcp/config.js';
 
-/** POST / PUT body 的线上形状：字段一律可选——请求体是未验证输入，必填项由 toMcpServerConfig 显式校验 */
-type McpServerBody = {
-  name?: string;
-  enabled?: boolean;
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  url?: string;
-  headers?: Record<string, string>;
-  concurrency?: number;
-  autoReconnect?: boolean;
-};
-
 /** 校验必填项后构造领域对象；缺 name 返回 null，由调用方落 400。不用 `as` 把未验证 body 断言成 McpServerConfig。 */
-function toMcpServerConfig(body: McpServerBody): McpServerConfig | null {
+function toMcpServerConfig(body: Partial<McpServerConfig>): McpServerConfig | null {
   const { name } = body;
   if (!name) return null;
   return { ...body, name };
@@ -108,7 +95,7 @@ const listServers: Handler = Effect.gen(function* () {
 
 const createServer: Handler = Effect.gen(function* () {
   const { cwd: rawCwd } = yield* query;
-  const body = yield* readJson<McpServerBody>();
+  const body = yield* readJson<Partial<McpServerConfig>>();
   const server = toMcpServerConfig(body);
   if (!server) return yield* Effect.fail(new AgentError('CONFIG_MISSING', MISSING_NAME));
 
@@ -128,7 +115,7 @@ const createServer: Handler = Effect.gen(function* () {
 const updateServer: Handler = Effect.gen(function* () {
   const { name } = yield* pathParams;
   const { cwd: rawCwd } = yield* query;
-  const body = yield* readJson<McpServerBody>();
+  const body = yield* readJson<Partial<McpServerConfig>>();
   const server = toMcpServerConfig(body);
   if (!server) return yield* Effect.fail(new AgentError('CONFIG_MISSING', MISSING_NAME));
 

@@ -4,7 +4,7 @@ import { isGlobalCwd, resolveCwd } from '../cwd.js';
 import { AlreadyExistsError, NotFoundError, type AppError } from '../http-error.js';
 import { AgentError } from '../../util/error.js';
 import { json, pathParams, query, readJson, type Handler, type Router } from '../handler.js';
-import type { HookPoint, UserHookConfig } from '../../hooks/types.js';
+import type { UserHookConfig } from '../../hooks/types.js';
 import {
   loadHookConfigs,
   writeHookConfigs,
@@ -15,19 +15,7 @@ import {
   setProjectHookEnabled,
 } from '../../hooks/config.js';
 
-type HookBody = {
-  name?: string;
-  description?: string;
-  point?: HookPoint;
-  type?: 'observer' | 'decision';
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  priority?: number;
-  enabled?: boolean;
-};
-
-function toHookConfig(body: HookBody): UserHookConfig | null {
+function toHookConfig(body: Partial<UserHookConfig>): UserHookConfig | null {
   const { name, point, type, command } = body;
   if (!name || !point || !type || !command) return null;
   return { ...body, name, point, type, command };
@@ -106,7 +94,7 @@ const listHooks: Handler = Effect.gen(function* () {
 
 const createHook: Handler = Effect.gen(function* () {
   const { cwd: rawCwd } = yield* query;
-  const body = yield* readJson<HookBody>();
+  const body = yield* readJson<Partial<UserHookConfig>>();
   const hook = toHookConfig(body);
   if (!hook) return yield* Effect.fail(new AgentError('CONFIG_MISSING', MISSING_FIELDS));
 
@@ -126,7 +114,7 @@ const createHook: Handler = Effect.gen(function* () {
 const updateHook: Handler = Effect.gen(function* () {
   const { name } = yield* pathParams;
   const { cwd: rawCwd } = yield* query;
-  const body = yield* readJson<HookBody>();
+  const body = yield* readJson<Partial<UserHookConfig>>();
   const hook = toHookConfig(body);
   if (!hook) return yield* Effect.fail(new AgentError('CONFIG_MISSING', MISSING_FIELDS));
 
