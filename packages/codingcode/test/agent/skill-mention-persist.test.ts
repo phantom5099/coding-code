@@ -13,6 +13,8 @@ import { readHistory } from '../../src/session/file-ops.js';
 import type { UserEvent } from '../../src/session/types.js';
 import { runAgentTurn, llmStream, pText, pEnd } from '../helpers/agent-harness.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { incomingText } from '../helpers/parts.js';
+import { textOf } from '../../src/llm/types.js';
 
 const base = useTempProjectBase();
 
@@ -55,7 +57,7 @@ describe('agent runTurn with an explicit @ skill', () => {
 
   /** 真实 Session + 真实 Skill、mock LLM，跑一轮带 @ skill 的回合。 */
   async function runTurnWithSkill() {
-    const input = `please @${SKILL_NAME} before shipping`;
+    const input = incomingText(`please @${SKILL_NAME} before shipping`);
     const skillPath = await canonicalSkillPath(projectDir);
 
     const { sessionId } = await runAgentTurn(
@@ -86,15 +88,15 @@ describe('agent runTurn with an explicit @ skill', () => {
     const userEvents = persisted.filter((e): e is UserEvent => e.type === 'user');
 
     expect(userEvents).toHaveLength(2);
-    expect(userEvents[0]!.content).toBe(input);
+    expect(userEvents[0]!.content).toEqual(input);
     expect(userEvents[0]!.source).toBe('user');
 
     const block = userEvents[1]!;
     expect(block.source).toBe('system');
     expect(block.turnId).toBe(userEvents[0]!.turnId);
-    expect(block.content).toContain(SKILL_NAME);
-    expect(block.content).toContain(skillPath);
-    expect(block.content).toContain('Collect merged PRs');
+    expect(textOf(block.content)).toContain(SKILL_NAME);
+    expect(textOf(block.content)).toContain(skillPath);
+    expect(textOf(block.content)).toContain('Collect merged PRs');
   });
 
   it('does not surface the skill block in the UI history', async () => {
@@ -112,7 +114,7 @@ describe('agent runTurn with an explicit @ skill', () => {
 
     const userMessages = turns
       .flatMap((t) => t.items)
-      .flatMap((i) => (i.type === 'message' && i.role === 'user' ? [i.content] : []));
+      .flatMap((i) => (i.type === 'message' && i.role === 'user' ? [i.parts] : []));
 
     expect(userMessages).toEqual([input]);
   });

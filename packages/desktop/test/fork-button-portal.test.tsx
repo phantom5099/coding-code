@@ -7,6 +7,7 @@ import '@testing-library/jest-dom/vitest';
 import { useAgentStore } from '../src/stores/agent.store';
 import MessageStream from '../src/agent/MessageStream';
 import type { Turn } from '../shared/types';
+import { textPart } from '../shared/parts';
 
 const forkThreadMock = vi.fn();
 const previewRollbackMock = vi.fn();
@@ -123,8 +124,8 @@ describe('fork button via portal', () => {
   it('renders the rollback menu in document.body (not inside the virtual row)', async () => {
     setThread('t1', [
       makeTurn('1', [
-        { id: 'u1', type: 'message', role: 'user', content: 'hi' },
-        { id: 'a1', type: 'message', role: 'assistant', content: 'hello' },
+        { id: 'u1', type: 'message', role: 'user', parts: [textPart('hi')] },
+        { id: 'a1', type: 'message', role: 'assistant', parts: [textPart('hello')] },
       ]),
     ]);
     mockGetBoundingClientRect({ top: 200, right: 600, bottom: 220, width: 20, height: 20 });
@@ -146,8 +147,8 @@ describe('fork button via portal', () => {
   it('places menu at expected fixed coordinates from getBoundingClientRect', async () => {
     setThread('t1', [
       makeTurn('1', [
-        { id: 'u1', type: 'message', role: 'user', content: 'hi' },
-        { id: 'a1', type: 'message', role: 'assistant', content: 'hello' },
+        { id: 'u1', type: 'message', role: 'user', parts: [textPart('hi')] },
+        { id: 'a1', type: 'message', role: 'assistant', parts: [textPart('hello')] },
       ]),
     ]);
     mockGetBoundingClientRect({ top: 200, right: 600, bottom: 220, width: 20, height: 20 });
@@ -167,8 +168,8 @@ describe('fork button via portal', () => {
   it('flips menu below the trigger when there is no room above', async () => {
     setThread('t1', [
       makeTurn('1', [
-        { id: 'u1', type: 'message', role: 'user', content: 'hi' },
-        { id: 'a1', type: 'message', role: 'assistant', content: 'hello' },
+        { id: 'u1', type: 'message', role: 'user', parts: [textPart('hi')] },
+        { id: 'a1', type: 'message', role: 'assistant', parts: [textPart('hello')] },
       ]),
     ]);
     mockGetBoundingClientRect({ top: 10, right: 600, bottom: 30, width: 20, height: 20 });
@@ -187,8 +188,8 @@ describe('fork button via portal', () => {
   it('updates menu position on scroll events', async () => {
     setThread('t1', [
       makeTurn('1', [
-        { id: 'u1', type: 'message', role: 'user', content: 'hi' },
-        { id: 'a1', type: 'message', role: 'assistant', content: 'hello' },
+        { id: 'u1', type: 'message', role: 'user', parts: [textPart('hi')] },
+        { id: 'a1', type: 'message', role: 'assistant', parts: [textPart('hello')] },
       ]),
     ]);
     let rect: Partial<DOMRect> = { top: 200, right: 600, bottom: 220, width: 20, height: 20 };
@@ -230,8 +231,8 @@ describe('fork button via portal', () => {
   it('clicking fork triggers forkThread with the correct threadId and numeric turnId', async () => {
     setThread('t1', [
       makeTurn('1', [
-        { id: 'u1', type: 'message', role: 'user', content: 'hello world' },
-        { id: 'a1', type: 'message', role: 'assistant', content: 'reply' },
+        { id: 'u1', type: 'message', role: 'user', parts: [textPart('hello world')] },
+        { id: 'a1', type: 'message', role: 'assistant', parts: [textPart('reply')] },
       ]),
     ]);
     mockGetBoundingClientRect({ top: 200, right: 600, bottom: 220, width: 20, height: 20 });
@@ -259,8 +260,8 @@ describe('fork button via portal', () => {
 
     setThread('t1', [
       makeTurn('1', [
-        { id: 'u1', type: 'message', role: 'user', content: 'hi' },
-        { id: 'a1', type: 'message', role: 'assistant', content: 'hello' },
+        { id: 'u1', type: 'message', role: 'user', parts: [textPart('hi')] },
+        { id: 'a1', type: 'message', role: 'assistant', parts: [textPart('hello')] },
       ]),
     ]);
     mockGetBoundingClientRect({ top: 200, right: 600, bottom: 220, width: 20, height: 20 });
@@ -282,8 +283,8 @@ describe('fork button via portal', () => {
   it('menu is in document.body, not inside MessageStream DOM tree', async () => {
     setThread('t1', [
       makeTurn('1', [
-        { id: 'u1', type: 'message', role: 'user', content: 'hi' },
-        { id: 'a1', type: 'message', role: 'assistant', content: 'hello' },
+        { id: 'u1', type: 'message', role: 'user', parts: [textPart('hi')] },
+        { id: 'a1', type: 'message', role: 'assistant', parts: [textPart('hello')] },
       ]),
     ]);
     mockGetBoundingClientRect({ top: 200, right: 600, bottom: 220, width: 20, height: 20 });

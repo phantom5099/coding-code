@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Item, Turn } from '../shared/types';
+import { textPart } from '../shared/parts';
 
 function buildRenderEntries(turns: Turn[]) {
   const renderEntries: Array<{
@@ -33,7 +34,7 @@ function buildRenderEntries(turns: Turn[]) {
 }
 
 function makeMsg(role: 'user' | 'assistant', content: string): Item {
-  return { id: 'm-' + content, type: 'message', role, content };
+  return { id: 'm-' + content, type: 'message', role, parts: [textPart(content)] };
 }
 
 function makeToolCall(

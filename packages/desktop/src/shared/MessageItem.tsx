@@ -2,15 +2,19 @@ import { useState, useRef, useLayoutEffect, useEffect, useCallback, memo } from 
 import { createPortal } from 'react-dom';
 import { Copy, Check } from 'lucide-react';
 import type { Item } from '@shared/types';
+import { textOf } from '@shared/parts';
 import ToolCallCard from './ToolCallCard';
 import DiffBlock from './DiffBlock';
 import ToolSummary from './ToolSummary';
 import MarkdownRenderer from './MarkdownRenderer';
+import MediaView from './MediaView';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 
 interface MessageItemProps {
   item: Item;
   threadId: string;
+  /** 资产按项目定位：气泡里的落盘媒体要靠它拼地址 */
+  cwd?: string;
   onApprove: (threadId: string, callId: string) => void;
   onReject: (threadId: string, callId: string) => void;
   callIdToToolName?: Record<string, string>;
@@ -25,6 +29,7 @@ const MENU_HEIGHT_EST = 70;
 const MessageItem = memo(function MessageItem({
   item,
   threadId,
+  cwd,
   onApprove,
   onReject,
   callIdToToolName,
@@ -43,8 +48,6 @@ const MessageItem = memo(function MessageItem({
     placement: 'up' | 'down';
   } | null>(null);
   const { copiedId, copy } = useCopyToClipboard();
-
-  const messageContent = item.type === 'message' ? item.content : null;
 
   const isCopied = copiedId === `msg-${item.id}`;
 
@@ -82,15 +85,22 @@ const MessageItem = memo(function MessageItem({
   }, [rollbackMenuOpen, updateMenuPos]);
 
   if (item.type === 'message') {
-    const content = item.content;
+    const parts = item.parts;
+    const text = textOf(parts);
     const isUser = item.role === 'user';
     const hasRollback = !!(onRollbackHere || onForkFromHere);
 
     if (isUser) {
+      const mediaParts = parts.filter((p) => p.type === 'media');
       return (
         <div className="flex flex-col items-end mb-4 mt-4 group">
-          <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[var(--border-card)] text-[var(--text-title)] text-[15px] leading-relaxed whitespace-pre-wrap break-words">
-            {content}
+          <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[var(--border-card)] text-[var(--text-title)] text-[15px] leading-relaxed break-words">
+            <div className="flex flex-col items-end gap-2">
+              {mediaParts.map((p, i) => (
+                <MediaView key={`m${i}`} part={p} cwd={cwd} />
+              ))}
+              {text && <div className="whitespace-pre-wrap self-stretch">{text}</div>}
+            </div>
             {hasRollback && (
               <div className="absolute -right-1 -bottom-1">
                 <button
@@ -170,7 +180,7 @@ const MessageItem = memo(function MessageItem({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                copy(content, `msg-${item.id}`);
+                copy(text, `msg-${item.id}`);
               }}
               aria-label="复制消息"
               title="复制"
@@ -190,9 +200,9 @@ const MessageItem = memo(function MessageItem({
 
     return (
       <div className="flex flex-col items-start mb-1 pl-8 group">
-        {messageContent != null && (
+        {text && (
           <div className="max-w-[80%] text-[15px] text-[var(--text-primary)] leading-relaxed">
-            <MarkdownRenderer content={messageContent} />
+            <MarkdownRenderer content={text} />
             {item.partial && (
               <span className="inline-block w-1.5 h-[1.1em] bg-[var(--accent-primary)] animate-pulse ml-0.5 align-middle" />
             )}

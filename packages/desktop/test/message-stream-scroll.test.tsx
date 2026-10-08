@@ -8,6 +8,7 @@ import { useAgentStore } from '../src/stores/agent.store';
 import { useRollbackStore } from '../src/stores/rollback.store';
 import MessageStream from '../src/agent/MessageStream';
 import type { Turn } from '../shared/types';
+import { textPart } from '../shared/parts';
 
 let lastVirtualizerOptions: Record<string, unknown> | null = null;
 const scrollToEndMock = vi.fn();
@@ -92,7 +93,7 @@ beforeEach(() => {
 describe('MessageStream scroll behavior', () => {
   it('configures virtualizer with initialOffset set to a very large value', () => {
     setThread('t1', [
-      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', parts: [textPart('hi')] }]),
     ]);
     render(<MessageStream threadId="t1" />);
     expect(lastVirtualizerOptions).not.toBeNull();
@@ -102,7 +103,7 @@ describe('MessageStream scroll behavior', () => {
 
   it('scrolls to end instantly on initial render with messages', () => {
     setThread('t1', [
-      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', parts: [textPart('hi')] }]),
     ]);
     render(<MessageStream threadId="t1" />);
     expect(scrollToEndMock).toHaveBeenCalledTimes(1);
@@ -111,15 +112,15 @@ describe('MessageStream scroll behavior', () => {
 
   it('does not scroll again when messages append to the same thread', () => {
     setThread('t1', [
-      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', parts: [textPart('hi')] }]),
     ]);
     const { rerender } = render(<MessageStream threadId="t1" />);
     expect(scrollToEndMock).toHaveBeenCalledTimes(1);
 
     act(() => {
       setThread('t1', [
-        makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
-        makeTurn('t1-2', [{ id: 'm2', type: 'message', role: 'assistant', content: 'hello' }]),
+        makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', parts: [textPart('hi')] }]),
+        makeTurn('t1-2', [{ id: 'm2', type: 'message', role: 'assistant', parts: [textPart('hello')] }]),
       ]);
     });
 
@@ -134,7 +135,7 @@ describe('MessageStream scroll behavior', () => {
 
     act(() => {
       setThread('t1', [
-        makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+        makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', parts: [textPart('hi')] }]),
       ]);
     });
 
@@ -145,10 +146,10 @@ describe('MessageStream scroll behavior', () => {
 
   it('scrolls to end again after switching to a different thread', () => {
     setThread('t1', [
-      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', content: 'hi' }]),
+      makeTurn('t1-1', [{ id: 'm1', type: 'message', role: 'user', parts: [textPart('hi')] }]),
     ]);
     setThread('t2', [
-      makeTurn('t2-1', [{ id: 'm2', type: 'message', role: 'user', content: 'yo' }]),
+      makeTurn('t2-1', [{ id: 'm2', type: 'message', role: 'user', parts: [textPart('yo')] }]),
     ]);
 
     const { unmount } = render(<MessageStream threadId="t1" />);

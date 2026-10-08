@@ -20,6 +20,7 @@ const DOMAIN_STATUS: Record<ErrorCode, number> = {
   AGENT_LOOP_DETECTED: 500,
   EMPTY_RESPONSE: 500,
   SESSION_IO_ERROR: 500,
+  INVALID_INPUT: 400,
 };
 
 export class NotFoundError extends Error {

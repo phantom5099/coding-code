@@ -15,9 +15,71 @@ export interface ToolCall {
   arguments: Record<string, unknown>;
 }
 
+/** 文本块。 */
+export interface TextPart {
+  type: 'text';
+  text: string;
+}
+/** 媒体块：出网链路真正消费的形状。落盘元数据（体积 / 宽高 / 时长）归 session 层的 StoredMediaPart。 */
+export interface MediaPart {
+  type: 'media';
+  /** 项目 assets 目录下的文件名，内容寻址、不可变；出网前经 resolveAsset 换成 data URL */
+  asset: string;
+  /** 服务端嗅探结果，不采信客户端声明；种类也由它判定 */
+  mimeType: string;
+  /** 客户端原始文件名，出网作 file part 的 filename；PDF 必填 */
+  filename?: string;
+}
+
+export type ContentPart = TextPart | MediaPart;
+
+/** 入口形态：媒体携带原始字节。只出现在请求边界与 agent 入参，落盘即消失。 */
+export interface IncomingMedia {
+  type: 'media';
+  bytes: Uint8Array;
+  filename?: string;
+  declaredMimeType?: string;
+}
+
+export type IncomingPart = TextPart | IncomingMedia;
+
+/** 媒体按 mime 主类型分档：图片 / 音频 / 其它文件。全链路唯一的判定口径。 */
+export type MediaKind = 'image' | 'audio' | 'file';
+
+export function mediaKindOf(mimeType: string): MediaKind {
+  const mime = (mimeType ?? '').toLowerCase();
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('audio/')) return 'audio';
+  return 'file';
+}
+
+/** 纯文本构造的短助手，给只有文本的构造点用。 */
+export const textPart = (text: string): TextPart => ({ type: 'text', text });
+
+const MEDIA_MARKER: Record<MediaKind, string> = {
+  image: '[image]',
+  audio: '[audio]',
+  file: '[file]',
+};
+
+/**
+ * 文本投影：标题 / 压缩模板 / 记忆摘要 / token 估算共用的唯一口径。
+ *
+ * 落盘形态与入口形态都收：入口只在 agent 首帧定标题时用一次。
+ */
+export function textOf(parts: readonly (ContentPart | IncomingPart)[]): string {
+  return parts
+    .map((p) => {
+      if (p.type === 'text') return p.text;
+      const mime = 'mimeType' in p ? p.mimeType : (p.declaredMimeType ?? '');
+      return MEDIA_MARKER[mediaKindOf(mime)];
+    })
+    .join('\n');
+}
+
 export interface Message {
   role: MessageRole;
-  content: string;
+  content: ContentPart[];
   tool_calls?: ToolCall[];
   tool_call_id?: string;
   tool_name?: string;
@@ -38,6 +100,8 @@ export interface LLMRequest {
   tools?: ToolDescription[];
   maxSteps?: number;
   temperature?: number;
+  /** 把落盘资产解析成 data URL；未命中返回 undefined */
+  resolveAsset?: (asset: string) => string | undefined;
 }
 
 export interface LLMResponse {

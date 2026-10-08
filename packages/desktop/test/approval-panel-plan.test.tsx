@@ -106,7 +106,7 @@ describe('ApprovalPanel — pendingPlan handling', () => {
     });
     expect(switchProfileMock).toHaveBeenCalledWith('t-1', 'build', expect.any(String));
     expect(sendMessageMock).toHaveBeenCalledWith(
-      expect.stringContaining('Plan approved'),
+      [expect.objectContaining({ type: 'text', text: expect.stringContaining('Plan approved') })],
       expect.any(String)
     );
     expect(useAgentStore.getState().pendingPlanByThreadId['t-1']).toBeUndefined();
@@ -140,7 +140,7 @@ describe('ApprovalPanel — pendingPlan handling', () => {
     });
     expect(switchProfileMock).not.toHaveBeenCalled();
     expect(sendMessageMock).toHaveBeenCalledWith(
-      expect.stringContaining('请加上错误处理'),
+      [expect.objectContaining({ type: 'text', text: expect.stringContaining('请加上错误处理') })],
       expect.any(String)
     );
     expect(useAgentStore.getState().pendingPlanByThreadId['t-1']).toBeUndefined();

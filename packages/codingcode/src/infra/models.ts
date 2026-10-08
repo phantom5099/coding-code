@@ -3,6 +3,18 @@ import { join } from 'path';
 import { AgentError } from '../util/error.js';
 import { loadConfig, updateActiveModel } from './config.js';
 
+/** config/models.json 里每个模型的 capabilities 声明。 */
+export interface ModelCapabilitiesEntry {
+  vision?: 'supported' | 'unsupported';
+  audio?: 'supported' | 'unsupported';
+}
+
+/** 准入要看的能力位。 */
+export interface ModelCapabilities {
+  vision: boolean;
+  audio: boolean;
+}
+
 /** 模型清单里一条可被会话选中的模型。 */
 export interface SelectableModel {
   id: string;
@@ -13,12 +25,14 @@ export interface SelectableModel {
   base_url: string;
   api_key_env: string;
   context_window: number;
+  capabilities: ModelCapabilities;
 }
 
 export interface ModelDescriptor {
   id: string;
   name: string;
   context_window?: number;
+  capabilities?: ModelCapabilitiesEntry;
 }
 
 export interface ProviderEntry {
@@ -70,6 +84,10 @@ export function flattenModels(cat: ProviderCatalog): SelectableModel[] {
         base_url: p.base_url,
         api_key_env: p.api_key_env,
         context_window: m.context_window ?? DEFAULT_CONTEXT_WINDOW,
+        capabilities: {
+          vision: m.capabilities?.vision === 'supported',
+          audio: m.capabilities?.audio === 'supported',
+        },
       });
     }
   }
@@ -113,6 +131,19 @@ export function contextWindowOf(model: string): number {
   const target = model?.trim();
   const entry = target ? findModel(target) : activeModel();
   return entry?.context_window ?? DEFAULT_CONTEXT_WINDOW;
+}
+
+/** 指定模型的能力位；模型不存在时报 CONFIG_INVALID。 */
+export function capabilitiesOf(model: string): ModelCapabilities {
+  const target = model?.trim();
+  if (!target) {
+    const entry = activeModel();
+    if (!entry) throw new AgentError('CONFIG_INVALID', activeModelError());
+    return entry.capabilities;
+  }
+  const found = findModel(target);
+  if (!found) throw new AgentError('CONFIG_INVALID', `Model "${target}" not found in models.json`);
+  return found.capabilities;
 }
 
 export function setGlobalActive(model: string): void {

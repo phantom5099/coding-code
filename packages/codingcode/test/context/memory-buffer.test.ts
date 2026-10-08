@@ -8,6 +8,8 @@ import { LLMService } from '../../src/llm/port.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
 import type { SessionEvent } from '../../src/session/types.js';
 import type { SessionRef } from '../../src/session/types.js';
+import { text } from '../helpers/parts.js';
+import { textOf } from '../../src/llm/types.js';
 
 // 上下文窗口钉死成可控值（与其余 context 用例一致）
 const windowState = vi.hoisted(() => ({ value: 128000 }));
@@ -67,7 +69,7 @@ function seedEvents(): SessionEvent[] {
       activeProfile: 'build',
       permissionMode: 'askBeforeExec',
     },
-    { type: 'user', turnId: 1, content: 'q1' },
+    { type: 'user', turnId: 1, content: text('q1') },
   ];
 }
 
@@ -103,7 +105,7 @@ describe('context memory buffer', () => {
     );
     const messages = await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
 
-    expect(messages.some((m) => m.content === 'r1')).toBe(true);
+    expect(messages.some((m) => textOf(m.content) === 'r1')).toBe(true);
     expect(counting.reads.count).toBe(1);
   });
 
@@ -111,11 +113,11 @@ describe('context memory buffer', () => {
     const counting = makeCountingSession(seedEvents());
     const ctx = await getCtx(counting);
 
-    await Effect.runPromise(ctx.absorb(REF, [{ type: 'user', turnId: 1, content: 'early' }]));
+    await Effect.runPromise(ctx.absorb(REF, [{ type: 'user', turnId: 1, content: text('early') }]));
     const messages = await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
 
     expect(counting.reads.count).toBe(1);
-    expect(messages.some((m) => m.content === 'q1')).toBe(true);
+    expect(messages.some((m) => textOf(m.content) === 'q1')).toBe(true);
   });
 
   it('压缩轮不再额外读盘', async () => {

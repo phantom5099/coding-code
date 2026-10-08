@@ -61,7 +61,7 @@ function makeFixture(opts: FixtureOptions) {
     lines.push({
       type: 'user',
       turnId: turn,
-      content: `q${turn}`,
+      content: [{ type: 'text', text: `q${turn}` }],
     });
     lines.push({
       type: 'assistant',

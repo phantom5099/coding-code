@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Square, ShieldCheck, Shield, FileText } from 'lucide-react';
+import { Send, Square, ShieldCheck, Shield, FileText, Paperclip, X } from 'lucide-react';
 import { useAgentStore } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import {
@@ -16,7 +16,23 @@ import TodoPanel from './TodoPanel';
 import ApprovalPanel from './ApprovalPanel';
 import ProfileIndicator from './ProfileIndicator';
 import PlanPanel from '../shared/PlanPanel';
-import type { PermissionMode } from '@codingcode/sdk';
+import MediaView from '../shared/MediaView';
+import { reachableMimes, attachmentHint, type ContentPart } from '@shared/parts';
+import { MAX_MEDIA_BYTES, type PermissionMode } from '@codingcode/sdk';
+
+/** 附件条上限：单文件字节上限用 sdk 的 `MAX_MEDIA_BYTES`，与服务端闸门同值，前端只做即时提示。 */
+const MAX_ATTACHMENTS = 8;
+
+interface Attachment {
+  id: string;
+  dataUrl: string;
+  mimeType: string;
+  filename: string;
+}
+
+function newId(): string {
+  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 11);
+}
 
 const MODE_LABELS: Record<PermissionMode, string> = {
   askBeforeExec: '执行前询问',
@@ -235,13 +251,22 @@ function InputBox({
   onOpenPlanPanel,
 }: {
   centered?: boolean;
-  sendMessage: (content: string, cwd?: string, skills?: SkillRef[]) => Promise<void>;
+  sendMessage: (parts: ContentPart[], cwd?: string, skills?: SkillRef[]) => Promise<void>;
   abort: () => void;
   onOpenPlanPanel?: () => void;
 }) {
   const [text, setText] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
+  /** 当前模型的输入侧能力位：决定 accept 与附件按钮是否可用 */
+  const caps = useAgentStore((s) => s.models.find((m) => m.id === s.model)?.capabilities);
+  const accept = reachableMimes(caps).join(',');
+  const capsHint = attachmentHint(caps);
+  const attachDisabled = !!(caps && !caps.vision && !caps.audio);
   const isStreaming = useAgentStore((s) => {
     const tid = s.currentThreadId;
     if (!tid) return false;
@@ -351,9 +376,79 @@ function InputBox({
     textareaRef.current?.focus();
   };
 
+  /**
+   * 粘贴、拖入、选文件共用同一条入口：先按当前模型可达格式筛一遍，被拒的
+   * 就地提示、不入附件条。前端判定只是提示，最终准入在服务端（能力位 + 嗅探）。
+   */
+  const addFiles = useCallback(
+    (files: FileList | File[]) => {
+      const reachable = new Set(reachableMimes(caps));
+      const room = MAX_ATTACHMENTS - attachments.length;
+      const rejected: string[] = [];
+      let overflow = 0;
+      for (const f of Array.from(files)) {
+        if (!reachable.has(f.type) || f.size > MAX_MEDIA_BYTES) {
+          rejected.push(f.name || f.type || '未知文件');
+          continue;
+        }
+        if (overflow >= room) {
+          overflow += 1;
+          continue;
+        }
+        overflow += 1;
+        const reader = new FileReader();
+        reader.onload = () =>
+          setAttachments((prev) =>
+            prev.length >= MAX_ATTACHMENTS
+              ? prev
+              : [
+                  ...prev,
+                  {
+                    id: newId(),
+                    dataUrl: String(reader.result),
+                    mimeType: f.type,
+                    filename: f.name,
+                  },
+                ]
+          );
+        reader.readAsDataURL(f);
+      }
+      if (rejected.length > 0) {
+        setNotice(capsHint ?? `已忽略不支持的附件：${rejected.join('、')}`);
+      } else if (overflow > 0) {
+        setNotice(`一轮最多 ${MAX_ATTACHMENTS} 个附件`);
+      } else {
+        setNotice(null);
+      }
+    },
+    [caps, capsHint, attachments.length]
+  );
+
+  const onPaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const files = Array.from(e.clipboardData.items)
+        .filter((it) => it.kind === 'file')
+        .map((it) => it.getAsFile())
+        .filter((f): f is File => !!f);
+      if (files.length === 0) return;
+      e.preventDefault();
+      addFiles(files);
+    },
+    [addFiles]
+  );
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
+    },
+    [addFiles]
+  );
+
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
-    if (!trimmed || isStreaming) return;
+    if ((!trimmed && attachments.length === 0) || isStreaming) return;
     const skills: SkillRef[] = [];
     const seen = new Set<string>();
     for (const m of trimmed.matchAll(/@([a-zA-Z0-9-]+)/g)) {
@@ -365,17 +460,75 @@ function InputBox({
       const path = pickedPaths[name] ?? (hits.length === 1 ? hits[0]!.skillPath : undefined);
       if (path) skills.push({ name, path });
     }
+    const parts: ContentPart[] = attachments.map((a) => ({
+      type: 'media',
+      dataUrl: a.dataUrl,
+      mimeType: a.mimeType,
+      filename: a.filename,
+    }));
+    parts.push({ type: 'text', text: trimmed });
     setText('');
+    setAttachments([]);
+    setNotice(null);
     setPickedPaths({});
     setSkillMenu(null);
-    sendMessage(trimmed, workspace.rootPath || undefined, skills);
-  }, [text, isStreaming, sendMessage, workspace.rootPath, pickedPaths, skillOptions]);
+    sendMessage(parts, workspace.rootPath || undefined, skills);
+  }, [
+    text,
+    attachments,
+    isStreaming,
+    sendMessage,
+    workspace.rootPath,
+    pickedPaths,
+    skillOptions,
+  ]);
 
 
   return (
     <div className={centered ? 'w-full max-w-[740px]' : 'px-5 pb-5 pt-2'}>
-      <div className="rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] hover:border-[var(--border-hover)] focus-within:border-[var(--accent-primary)] transition-colors shadow-xl overflow-hidden">
-        {/* Row 1: textarea + send button side by side */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        className={`rounded-2xl border bg-[var(--bg-card)] transition-colors shadow-xl overflow-hidden ${
+          dragging
+            ? 'border-[var(--accent-primary)]'
+            : 'border-[var(--border-card)] hover:border-[var(--border-hover)] focus-within:border-[var(--accent-primary)]'
+        }`}
+      >
+        {/* Row 0: 附件条 + 提示 */}
+        {(attachments.length > 0 || notice) && (
+          <div className="flex flex-wrap items-center gap-2 px-5 pt-3">
+            {attachments.map((a) => (
+              <div key={a.id} className="relative group/att">
+                <MediaView
+                  compact
+                  cwd={workspace.rootPath}
+                  part={{
+                    type: 'media',
+                    dataUrl: a.dataUrl,
+                    mimeType: a.mimeType,
+                    filename: a.filename,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  aria-label={`移除附件 ${a.filename}`}
+                  title="移除"
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border-strong)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+            {notice && <span className="text-[12px] text-[var(--accent-danger)]">{notice}</span>}
+          </div>
+        )}
+        {/* Row 1: textarea + attach + send button side by side */}
         <div className="flex items-center gap-2 pr-3">
           <textarea
             ref={textareaRef}
@@ -383,6 +536,7 @@ function InputBox({
             onChange={(e) =>
               handleChange(e.target.value, e.target.selectionStart ?? e.target.value.length)
             }
+            onPaste={onPaste}
             onKeyDown={(e) => {
               if (skillMenu && candidates.length > 0) {
                 if (e.key === 'ArrowDown') {
@@ -415,6 +569,35 @@ function InputBox({
             rows={3}
             className="flex-1 bg-transparent px-5 pt-4 pb-3 text-[15px] text-[var(--text-primary)] placeholder-[var(--text-disabled)] resize-none outline-none leading-relaxed disabled:opacity-50"
           />
+          {/* 附件：选文件入口，accept 取当前模型可达格式 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={accept}
+            data-testid="attach-input"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (attachDisabled) {
+                setNotice(capsHint);
+                return;
+              }
+              fileInputRef.current?.click();
+            }}
+            disabled={isStreaming}
+            aria-label="添加图片、音频或 PDF"
+            title={capsHint ?? '添加图片、音频或 PDF'}
+            className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 transition-colors"
+          >
+            <Paperclip size={16} strokeWidth={1.8} />
+          </button>
           {/* Send / Stop — vertically centered to the right of textarea */}
           {isStreaming ? (
             <div className="shrink-0">
@@ -433,7 +616,7 @@ function InputBox({
             <button
               type="button"
               onClick={handleSend}
-              disabled={!text.trim()}
+              disabled={!text.trim() && attachments.length === 0}
               aria-label="发送消息"
               title="发送消息"
               className="w-9 h-9 shrink-0 flex items-center justify-center bg-[var(--btn-send-bg)] disabled:bg-[var(--bg-card)] disabled:text-[var(--text-disabled)] text-[var(--text-inverse)] rounded-full transition-colors"
@@ -566,7 +749,7 @@ function InputBox({
 // ─── AgentWorkspace ────────────────────────────────────────────────────────
 
 interface AgentWorkspaceProps {
-  sendMessage: (content: string, cwd?: string, skills?: SkillRef[]) => Promise<void>;
+  sendMessage: (parts: ContentPart[], cwd?: string, skills?: SkillRef[]) => Promise<void>;
   abort: () => void;
 }
 

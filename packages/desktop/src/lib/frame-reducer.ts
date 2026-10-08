@@ -71,7 +71,7 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
             id: state.assistantMessageId,
             type: 'message',
             role: 'assistant',
-            content: '',
+            parts: [],
             partial: false,
           });
         }
@@ -91,7 +91,7 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
         id: state.assistantMessageId,
         type: 'message',
         role: 'assistant',
-        content: e.text,
+        parts: [{ type: 'text', text: e.text }],
         partial: true,
       });
       return;

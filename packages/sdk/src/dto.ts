@@ -15,8 +15,28 @@ export interface SessionSummary {
   usage?: TokenUsage;
 }
 
+/** 消息内容的落盘形态：文本块或媒体块（媒体只带资产名与元数据，不含字节）。 */
+export type StoredContentPart =
+  | { type: 'text'; text: string }
+  | {
+      type: 'media';
+      asset: string;
+      mimeType: string;
+      bytes: number;
+      filename?: string;
+      width?: number;
+      height?: number;
+      durationSec?: number;
+    };
+
 export type UITurnItem =
-  | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
+  | {
+      id: string;
+      type: 'message';
+      role: 'user' | 'assistant';
+      parts: StoredContentPart[];
+      partial?: boolean;
+    }
   | {
       id: string;
       type: 'tool_call';
@@ -85,6 +105,8 @@ export interface SelectableModel {
   base_url: string;
   api_key_env: string;
   context_window: number;
+  /** 输入侧的能力位：vision 覆盖图片与 PDF，audio 覆盖音频输入 */
+  capabilities: { vision: boolean; audio: boolean };
 }
 
 export interface McpServerConfig {

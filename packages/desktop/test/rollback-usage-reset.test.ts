@@ -184,7 +184,7 @@ describe('useAgentRollback().rollbackCtx - per-thread usage from server', () => 
       useAgentStore.getState().setThreadTurns('thread-1', [
         {
           id: '1',
-          items: [{ id: 'u1', type: 'message', role: 'user', content: 'first prompt' }],
+          items: [{ id: 'u1', type: 'message', role: 'user', parts: [{ type: 'text', text: 'first prompt' }] }],
           status: 'completed',
         } as any,
       ]);

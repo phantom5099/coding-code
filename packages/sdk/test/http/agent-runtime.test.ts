@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { createHttpAgentClient } from '../../src/http/agent-runtime.js';
 import { createRequestHelpers } from '../../src/http/request.js';
 import type { Frame } from '../../src/protocol.js';
+import type { InputPart } from '../../src/contracts.js';
+
+/** 线上输入的纯文本块。 */
+const input = (content: string): InputPart[] => [{ type: 'text', text: content }];
 
 function createSseResponse(lines: unknown[]) {
   const encoder = new TextEncoder();
@@ -58,7 +62,7 @@ describe('createHttpAgentClient.sendMessage', () => {
     const client = createHttpAgentClient('http://localhost:8080', request);
 
     const frames: Frame[] = [];
-    for await (const frame of client.sendMessage('hi', { sessionId: 'sess-123', cwd: '/tmp' })) {
+    for await (const frame of client.sendMessage(input('hi'), { sessionId: 'sess-123', cwd: '/tmp' })) {
       frames.push(frame);
     }
 
@@ -68,7 +72,7 @@ describe('createHttpAgentClient.sendMessage', () => {
       'http://localhost:8080/api/sessions/sess-123/messages',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ input: 'hi', cwd: '/tmp' }),
+        body: JSON.stringify({ input: input('hi'), cwd: '/tmp' }),
       })
     );
 
@@ -87,7 +91,7 @@ describe('createHttpAgentClient.sendMessage', () => {
     const client = createHttpAgentClient('http://localhost:8080', request);
 
     const frames: Frame[] = [];
-    for await (const frame of client.sendMessage('hi', { sessionId: 'sess-123', cwd: '/tmp' })) {
+    for await (const frame of client.sendMessage(input('hi'), { sessionId: 'sess-123', cwd: '/tmp' })) {
       frames.push(frame);
     }
 
@@ -108,7 +112,7 @@ describe('createHttpAgentClient.sendMessage', () => {
     const client = createHttpAgentClient('http://localhost:8080', request);
 
     const frames: Frame[] = [];
-    for await (const frame of client.sendMessage('hi', { cwd: '/tmp' })) {
+    for await (const frame of client.sendMessage(input('hi'), { cwd: '/tmp' })) {
       frames.push(frame);
     }
 
@@ -139,7 +143,7 @@ describe('createHttpAgentClient.sendMessage', () => {
     const client = createHttpAgentClient('http://localhost:8080', request);
 
     const frames: Frame[] = [];
-    for await (const c of client.sendMessage('hi', { sessionId: 's', cwd: '/tmp' })) {
+    for await (const c of client.sendMessage(input('hi'), { sessionId: 's', cwd: '/tmp' })) {
       frames.push(c);
     }
 

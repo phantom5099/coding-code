@@ -1,5 +1,6 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { LLMStreamPart } from '../../src/llm/types.js';
+import { text } from '../helpers/parts.js';
 
 const generateText = vi.fn();
 const streamText = vi.fn();
@@ -34,13 +35,14 @@ function entry(provider: string) {
     base_url: 'https://example.com/v1',
     api_key_env: 'API_KEY',
     context_window: 128000,
+  capabilities: { vision: false, audio: false },
   };
 }
 
 function request(withTools: boolean) {
   return {
     system: 'system',
-    messages: [{ role: 'user', content: 'hello' }],
+    messages: [{ role: 'user', content: text('hello') }],
     tools: withTools
       ? [{ name: 'read_file', description: 'Read file', parameters: { type: 'object' } }]
       : undefined,

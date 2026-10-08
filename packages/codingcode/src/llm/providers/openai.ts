@@ -30,7 +30,7 @@ export class OpenAIProvider implements LLMClient {
         const result = await generateText({
           model: this.model,
           system: req.system,
-          messages: convertMessages(req.messages),
+          messages: convertMessages(req.messages, req.resolveAsset),
           tools: convertTools(req.tools),
           stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
           abortSignal: signal,
@@ -71,7 +71,7 @@ export class OpenAIProvider implements LLMClient {
     const result = streamText({
       model: this.model,
       system: req.system,
-      messages: convertMessages(req.messages),
+      messages: convertMessages(req.messages, req.resolveAsset),
       tools: convertTools(req.tools),
       stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
       abortSignal: signal,

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import type { SessionEvent } from '../../src/session/types.js';
+import { text } from '../helpers/parts.js';
+
+/** 合并后的 parts 拍平成文本，断言里只关心文本内容。 */
+function flat(parts: Array<{ text?: string }>): string {
+  return parts.map((p) => p.text ?? '').join('');
+}
 
 function toMessages(events: SessionEvent[]) {
   const { visible, compactedTurnIds } = filterForContext(events);
@@ -19,7 +25,7 @@ function makeEvents(extra: SessionEvent[] = []): SessionEvent[] {
       activeProfile: 'build',
       permissionMode: 'askBeforeExec',
     },
-    { type: 'user', turnId: 1, content: 'hello' },
+    { type: 'user', turnId: 1, content: text('hello') },
     {
       type: 'assistant',
       turnId: 1,
@@ -29,7 +35,7 @@ function makeEvents(extra: SessionEvent[] = []): SessionEvent[] {
     {
       type: 'user',
       turnId: 2,
-      content: 'run a command',
+      content: text('run a command'),
     },
     {
       type: 'assistant',
@@ -44,7 +50,7 @@ function makeEvents(extra: SessionEvent[] = []): SessionEvent[] {
       toolCallId: 'tc1',
       output: 'output line 1\nline 2',
     },
-    { type: 'user', turnId: 3, content: 'thanks' },
+    { type: 'user', turnId: 3, content: text('thanks') },
     {
       type: 'assistant',
       turnId: 3,
@@ -60,14 +66,14 @@ describe('buildContextMessages', () => {
     const events = makeEvents();
     const messages = toMessages(events);
     expect(messages).toHaveLength(7);
-    expect(messages[0]).toEqual({ role: 'user', content: 'hello' });
-    expect(messages[1]).toEqual({ role: 'assistant', content: 'hi there' });
-    expect(messages[2]).toEqual({ role: 'user', content: 'run a command' });
+    expect(messages[0]).toEqual({ role: 'user', content: text('hello') });
+    expect(messages[1]).toEqual({ role: 'assistant', content: text('hi there') });
+    expect(messages[2]).toEqual({ role: 'user', content: text('run a command') });
     expect(messages[3]?.role).toBe('assistant');
     expect((messages[3] as any).tool_calls).toHaveLength(1);
     expect(messages[4]?.role).toBe('tool');
-    expect(messages[5]).toEqual({ role: 'user', content: 'thanks' });
-    expect(messages[6]).toEqual({ role: 'assistant', content: 'welcome' });
+    expect(messages[5]).toEqual({ role: 'user', content: text('thanks') });
+    expect(messages[6]).toEqual({ role: 'assistant', content: text('welcome') });
   });
 
   it('summary events hide replaced events and emit as system message', () => {
@@ -85,7 +91,7 @@ describe('buildContextMessages', () => {
     expect(toolMessages).toHaveLength(0);
     const summaryMessages = messages.filter((m) => m.role === 'system');
     expect(summaryMessages).toHaveLength(1);
-    expect(summaryMessages[0]?.content).toBe('[compacted]');
+    expect(summaryMessages[0]?.content).toEqual(text('[compacted]'));
   });
 
   it('rollback removes all events from the given turn onwards', () => {
@@ -118,7 +124,7 @@ describe('buildContextMessages', () => {
       {
         type: 'user',
         turnId: 1,
-        content: 'do something',
+        content: text('do something'),
       },
       {
         type: 'assistant',
@@ -129,7 +135,7 @@ describe('buildContextMessages', () => {
     ];
     const messages = toMessages(events);
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toEqual({ role: 'user', content: 'do something' });
+    expect(messages[0]).toEqual({ role: 'user', content: text('do something') });
   });
 
   it('filters assistant with partially resolved tool_calls and their orphaned tool results', () => {
@@ -147,7 +153,7 @@ describe('buildContextMessages', () => {
       {
         type: 'user',
         turnId: 1,
-        content: 'step 1',
+        content: text('step 1'),
       },
       {
         type: 'assistant',
@@ -168,7 +174,7 @@ describe('buildContextMessages', () => {
       {
         type: 'user',
         turnId: 2,
-        content: 'step 2',
+        content: text('step 2'),
       },
       {
         type: 'assistant',
@@ -179,7 +185,7 @@ describe('buildContextMessages', () => {
     ];
     const messages = toMessages(events);
     expect(messages.filter((m) => m.role === 'assistant')).toHaveLength(1);
-    expect((messages.find((m) => m.role === 'assistant') as any).content).toBe('done');
+    expect((messages.find((m) => m.role === 'assistant') as any).content).toEqual(text('done'));
     expect(messages.filter((m) => m.role === 'tool')).toHaveLength(0);
   });
 
@@ -198,7 +204,7 @@ describe('buildContextMessages', () => {
       {
         type: 'user',
         turnId: 1,
-        content: 'do something',
+        content: text('do something'),
       },
       {
         type: 'assistant',
@@ -220,7 +226,7 @@ describe('buildContextMessages', () => {
         endTurnId: 1,
         summaryText: '[compacted]',
       },
-      { type: 'user', turnId: 2, content: 'next' },
+      { type: 'user', turnId: 2, content: text('next') },
       {
         type: 'assistant',
         turnId: 2,
@@ -232,10 +238,10 @@ describe('buildContextMessages', () => {
     const assistantContents = messages
       .filter((m) => m.role === 'assistant')
       .map((m) => (m as any).content);
-    expect(assistantContents).toEqual(['done']);
+    expect(assistantContents).toEqual([text('done')]);
     expect(messages.filter((m) => m.role === 'tool')).toHaveLength(0);
-    expect(messages.filter((m) => m.role === 'system').map((m) => m.content)).toContain(
-      '[compacted]'
+    expect(messages.filter((m) => m.role === 'system').map((m) => m.content)).toContainEqual(
+      text('[compacted]')
     );
   });
 
@@ -254,7 +260,7 @@ describe('buildContextMessages', () => {
       {
         type: 'user',
         turnId: 1,
-        content: 'first',
+        content: text('first'),
       },
       {
         type: 'assistant',
@@ -275,14 +281,14 @@ describe('buildContextMessages', () => {
       {
         type: 'user',
         turnId: 2,
-        content: 'second',
+        content: text('second'),
       },
     ];
     const messages = toMessages(events);
     const userMsgs = messages.filter((m) => m.role === 'user');
     expect(userMsgs).toHaveLength(1);
-    expect((userMsgs[0] as any).content).toContain('first');
-    expect((userMsgs[0] as any).content).toContain('second');
+    expect(flat((userMsgs[0] as any).content)).toContain('first');
+    expect(flat((userMsgs[0] as any).content)).toContain('second');
   });
 
   it('does not merge adjacent tool messages', () => {
@@ -300,7 +306,7 @@ describe('buildContextMessages', () => {
       {
         type: 'user',
         turnId: 1,
-        content: 'do something',
+        content: text('do something'),
       },
       {
         type: 'assistant',
@@ -342,7 +348,7 @@ describe('buildContextMessages', () => {
         activeProfile: 'build',
         permissionMode: 'askBeforeExec',
       },
-      { type: 'user', turnId: 1, content: 'q1' },
+      { type: 'user', turnId: 1, content: text('q1') },
       {
         type: 'assistant',
         turnId: 1,
@@ -359,8 +365,8 @@ describe('buildContextMessages', () => {
     const messages = toMessages(events);
     const assistantMsgs = messages.filter((m) => m.role === 'assistant');
     expect(assistantMsgs).toHaveLength(1);
-    expect((assistantMsgs[0] as any).content).toContain('reply1');
-    expect((assistantMsgs[0] as any).content).toContain('reply2');
+    expect(flat((assistantMsgs[0] as any).content)).toContain('reply1');
+    expect(flat((assistantMsgs[0] as any).content)).toContain('reply2');
   });
 
   it('handles empty events list', () => {

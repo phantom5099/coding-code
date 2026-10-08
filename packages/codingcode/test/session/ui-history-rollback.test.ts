@@ -7,6 +7,7 @@ import { readHistory } from '../../src/session/file-ops.js';
 import { filterForUI } from '../../src/session/session.js';
 import type { SessionEvent } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { text } from '../helpers/parts.js';
 
 const base = useTempProjectBase();
 
@@ -68,9 +69,9 @@ describe('filterForContext', () => {
           activeProfile: 'build',
           permissionMode: 'askBeforeExec',
         },
-        { type: 'user', turnId: 1, content: 'hello' },
+        { type: 'user', turnId: 1, content: text('hello') },
         { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },
-        { type: 'user' as const, turnId: 2, content: 'bye' },
+        { type: 'user' as const, turnId: 2, content: text('bye') },
         { type: 'assistant' as const, turnId: 2, content: 'bye', toolCalls: [] },
         { type: 'rollback' as const, throughTurnId: 1, reason: 'test' },
       ];

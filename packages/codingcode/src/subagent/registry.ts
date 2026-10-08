@@ -5,6 +5,7 @@ import type { EndTransition, FrameBody } from '../sink/types.js';
 import { BYPASS_PERMISSION_MODE, type ProfileName } from '../util/enums.js';
 import { SUBAGENT_RESULT_PREFIX } from '../session/types.js';
 import { estimateTokensForContent } from '../context/tokens.js';
+import { textPart } from '../llm/types.js';
 import { loadConfig } from '../infra/config.js';
 
 import { MailboxService } from '../session/mailbox.js';
@@ -195,7 +196,7 @@ export const SubagentRunRegistryLayer = Layer.scoped(
         }
 
         const abort = new AbortController();
-        const { stream, sessionId } = yield* runner.runSubagent(opts.prompt, {
+        const { stream, sessionId } = yield* runner.runSubagent([textPart(opts.prompt)], {
           cwd: opts.parentCwd,
           signal: abort.signal, // 子代理自己的 signal，与父回合无关
           activeProfile: opts.parentProfile,

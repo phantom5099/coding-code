@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { loadConfig } from '../infra/config.js';
 import { transcriptPathOf } from '../session/paths.js';
 import type { Message } from '../llm/types.js';
+import { textOf, textPart } from '../llm/types.js';
 import type {
   SessionEvent,
   AssistantEvent,
@@ -111,7 +112,7 @@ export function buildContextMessages(
         break;
       case 'assistant': {
         const ev = event as AssistantEvent;
-        const msg: Message = { role: 'assistant', content: event.content };
+        const msg: Message = { role: 'assistant', content: [textPart(event.content)] };
         if (event.toolCalls && event.toolCalls.length > 0) {
           msg.tool_calls = event.toolCalls.map((tc) => ({
             id: tc.id,
@@ -135,17 +136,21 @@ export function buildContextMessages(
         resolvedIds.add(event.toolCallId);
         messages.push({
           role: 'tool',
-          content: output,
+          content: [textPart(output)],
           tool_call_id: event.toolCallId,
           tool_name: event.toolName,
         });
         break;
       }
       case 'summary':
-        messages.push({ role: 'system', name: 'compacted_history', content: event.summaryText });
+        messages.push({
+          role: 'system',
+          name: 'compacted_history',
+          content: [textPart(event.summaryText)],
+        });
         break;
       case 'subagent_result':
-        messages.push({ role: 'user', content: event.content });
+        messages.push({ role: 'user', content: [textPart(event.content)] });
         break;
     }
   }
@@ -180,7 +185,8 @@ export function buildContextMessages(
     if (curr.role === prev.role && curr.role !== 'system') {
       if (curr.role === 'tool') continue;
       if (curr.role === 'assistant' && curr.tool_calls && curr.tool_calls.length > 0) continue;
-      prev.content += '\n\n' + curr.content;
+      // parts 数组本身就是分隔符，providers 侧按 part 逐个送出
+      prev.content = [...prev.content, ...curr.content];
       filtered.splice(i, 1);
     }
   }
@@ -322,7 +328,11 @@ export const ContextLayer = Layer.effect(
         );
         buf.events.push(summaryEvent);
 
-        const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
+        const summaryMsg: Message = {
+          role: 'system',
+          name: 'compacted_history',
+          content: [textPart(summary)],
+        };
         return Math.max(0, totalTokens - estimateMessageTokens(summaryMsg));
       });
 
@@ -361,7 +371,7 @@ export const ContextLayer = Layer.effect(
         const transcriptText = transcript
           .map(
             (m) =>
-              `[${m.role}${(m as any).tool_name ? ':' + (m as any).tool_name : ''}]\n${m.content}`
+              `[${m.role}${(m as any).tool_name ? ':' + (m as any).tool_name : ''}]\n${textOf(m.content)}`
           )
           .join('\n\n');
 
@@ -369,7 +379,11 @@ export const ContextLayer = Layer.effect(
 
         const userMsg: Message = {
           role: 'user',
-          content: `Compact the following conversation transcript into the sections above:\n\n${transcriptText}`,
+          content: [
+            textPart(
+              `Compact the following conversation transcript into the sections above:\n\n${transcriptText}`
+            ),
+          ],
         };
 
         const result = yield* llm

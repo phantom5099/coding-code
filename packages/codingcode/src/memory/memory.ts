@@ -1,6 +1,7 @@
 import { Layer, Effect } from 'effect';
 import { readTranscript } from '../session/file-ops.js';
 import type { SessionEvent } from '../session/types.js';
+import { textOf } from '../llm/types.js';
 import {
   readMemoryFile,
   resolveMemoryPath,
@@ -65,7 +66,7 @@ export const MemoryLayer = Layer.effect(
       for (const event of events) {
         switch (event.type) {
           case 'user':
-            lines.push(`[user] ${event.content}`);
+            lines.push(`[user] ${textOf(event.content)}`);
             break;
           case 'assistant':
             lines.push(`[assistant] ${event.content}`);

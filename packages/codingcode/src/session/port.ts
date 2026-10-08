@@ -16,7 +16,8 @@ import type {
   SessionStoreState,
 } from './types.js';
 import type { UITurn } from './types.js';
-import type { TokenUsage } from '../llm/types.js';
+import type { StoredPart } from './types.js';
+import type { IncomingPart, TokenUsage } from '../llm/types.js';
 import type { ProfileName, PermissionMode } from '../util/enums.js';
 
 export interface SessionShape {
@@ -35,8 +36,22 @@ export interface SessionShape {
   renameSession(state: SessionStoreState, text: string): Effect.Effect<void, AgentError>;
   listSessions(cwd?: string): Effect.Effect<SessionSummary[]>;
   readHistory(state: SessionStoreState): Effect.Effect<SessionEvent[]>;
-  recordUser(state: SessionStoreState, content: string): Effect.Effect<UserEvent, AgentError>;
-  recordSystem(state: SessionStoreState, content: string): Effect.Effect<UserEvent, AgentError>;
+  /** 落盘入口媒体：嗅探 → 校验 → 写盘，返回落盘形态（文本原样通过，顺序保留）。 */
+  materializeInput(
+    state: SessionStoreState,
+    parts: readonly IncomingPart[]
+  ): Effect.Effect<StoredPart[], AgentError>;
+  /** 解析资产为 data URL，进程内按 (assetsDir, asset) 缓存。 */
+  resolveAssets(
+    state: SessionStoreState,
+    assets: readonly string[]
+  ): Effect.Effect<Map<string, string>, AgentError>;
+
+  recordUser(state: SessionStoreState, content: StoredPart[]): Effect.Effect<UserEvent, AgentError>;
+  recordSystem(
+    state: SessionStoreState,
+    content: StoredPart[]
+  ): Effect.Effect<UserEvent, AgentError>;
   recordAssistant(
     state: SessionStoreState,
     content: string,

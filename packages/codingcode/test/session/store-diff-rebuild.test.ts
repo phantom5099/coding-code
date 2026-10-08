@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { SessionEvent } from '../../src/session/types.js';
 import { sessionEventsToTurns } from '../../src/session/session.js';
+import { text } from '../helpers/parts.js';
 
 describe('sessionEventsToTurns', () => {
   it('parses edit_file tool_result without diff (diff is computed on frontend)', () => {
@@ -18,7 +19,7 @@ describe('sessionEventsToTurns', () => {
       {
         type: 'user',
         turnId: 1,
-        content: 'edit file',
+        content: text('edit file'),
       },
       {
         type: 'assistant',
@@ -70,7 +71,7 @@ describe('sessionEventsToTurns', () => {
       {
         type: 'user',
         turnId: 1,
-        content: 'write file',
+        content: text('write file'),
       },
       {
         type: 'assistant',
@@ -120,7 +121,7 @@ describe('sessionEventsToTurns', () => {
       {
         type: 'user',
         turnId: 1,
-        content: 'run command',
+        content: text('run command'),
       },
       {
         type: 'assistant',

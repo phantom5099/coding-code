@@ -5,6 +5,7 @@ import { toHttpServerResponse } from './http-error.js';
 import { json, type Handler } from './handler.js';
 import { addSessionsRoutes } from './routes/sessions.js';
 import { addMessagesRoutes } from './routes/messages.js';
+import { addAssetsRoutes } from './routes/assets.js';
 import { addModelsRoutes } from './routes/models.js';
 import { addApprovalRoutes } from './routes/approval.js';
 import { addSettingsRoutes } from './routes/settings.js';
@@ -24,6 +25,7 @@ export const buildRouter = (): HttpRouter.HttpRouter<any, any> =>
     HttpRouter.get('/api/health', health),
     addSessionsRoutes,
     addMessagesRoutes,
+    addAssetsRoutes,
     addModelsRoutes,
     addApprovalRoutes,
     addSettingsRoutes,

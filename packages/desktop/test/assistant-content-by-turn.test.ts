@@ -1,13 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import type { Item, Turn } from '../shared/types';
+import { textOf, textPart } from '../shared/parts';
 
 function buildAssistantContentByTurnId(turns: Turn[]): Map<string, string> {
   const contentMap = new Map<string, string>();
   for (const turn of turns) {
     const assistantParts: string[] = [];
     for (const item of turn.items) {
-      if (item.type === 'message' && item.role === 'assistant' && item.content) {
-        assistantParts.push(item.content);
+      if (item.type === 'message' && item.role === 'assistant') {
+        const text = textOf(item.parts);
+        if (text) assistantParts.push(text);
       }
     }
     if (assistantParts.length > 0) {
@@ -18,7 +20,7 @@ function buildAssistantContentByTurnId(turns: Turn[]): Map<string, string> {
 }
 
 function makeMsg(role: 'user' | 'assistant', content: string): Item {
-  return { id: 'm-' + content, type: 'message', role, content };
+  return { id: 'm-' + content, type: 'message', role, parts: [textPart(content)] };
 }
 
 function makeToolCall(
@@ -104,7 +106,7 @@ describe('assistantContentByTurnId', () => {
         id: 't1',
         items: [
           makeMsg('user', 'hi'),
-          { id: 'm-empty', type: 'message', role: 'assistant', content: '' },
+          { id: 'm-empty', type: 'message', role: 'assistant', parts: [] },
           makeMsg('assistant', 'actual content'),
         ],
         status: 'completed',
