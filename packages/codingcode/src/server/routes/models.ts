@@ -1,11 +1,9 @@
-import type { Hono } from 'hono';
-import type { ManagedRuntime } from 'effect';
+import * as HttpRouter from '@effect/platform/HttpRouter';
+import { Effect } from 'effect';
 import { activeModelId, listModels } from '../../infra/models.js';
+import { json, type Handler, type Router } from '../handler.js';
 
-type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
+const list: Handler = Effect.sync(() => json({ models: listModels(), activeId: activeModelId() }));
 
-export function registerModelsRoutes(router: Hono, _rt: ManagedRt): void {
-  router.get('/api/models', (c) => {
-    return c.json({ models: listModels(), activeId: activeModelId() });
-  });
-}
+export const addModelsRoutes = (router: Router): Router =>
+  router.pipe(HttpRouter.get('/api/models', list));

@@ -1,74 +1,37 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { Chunk } from 'effect';
+import { buildRouter } from '../../src/server/app.js';
 
-const state = vi.hoisted(() => ({
-  honoInstances: 0,
-  registrations: [] as Array<{ name: string; router: unknown; runtime: unknown }>,
-}));
+/**
+ * 路由表结构。这些约束以前靠「mock 掉各 register* 函数、数 Hono 实例」来间接保证，
+ * 现在路由表本身是个值，可以直接断言。
+ */
+const routes = Chunk.toReadonlyArray(buildRouter().routes);
+const keys = routes.map((route) => `${route.method} ${route.path}`);
 
-vi.mock('hono', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('hono')>();
-  return {
-    ...actual,
-    Hono: class extends actual.Hono {
-      constructor(...args: ConstructorParameters<typeof actual.Hono>) {
-        super(...args);
-        state.honoInstances += 1;
-      }
-    },
-  };
-});
-
-function register(name: string) {
-  return (router: unknown, runtime: unknown) => {
-    state.registrations.push({ name, router, runtime });
-  };
-}
-
-vi.mock('../../src/server/routes/sessions.js', () => ({
-  registerSessionsRoutes: register('sessions'),
-}));
-vi.mock('../../src/server/routes/messages.js', () => ({
-  registerMessagesRoutes: register('messages'),
-}));
-vi.mock('../../src/server/routes/models.js', () => ({
-  registerModelsRoutes: register('models'),
-}));
-vi.mock('../../src/server/routes/approval.js', () => ({
-  registerApprovalRoutes: register('approval'),
-}));
-vi.mock('../../src/server/routes/settings.js', () => ({
-  registerSettingsRoutes: register('settings'),
-}));
-vi.mock('../../src/server/routes/automations.js', () => ({
-  registerAutomationsRoutes: register('automations'),
-}));
-vi.mock('../../src/server/routes/subagents.js', () => ({
-  registerSubagentsRoutes: register('subagents'),
-}));
-
-import { createServer } from '../../src/server/index.js';
-
-describe('server route registration', () => {
-  beforeEach(() => {
-    state.honoInstances = 0;
-    state.registrations.length = 0;
+describe('服务器路由表', () => {
+  it('同一个 METHOD + path 只注册一次', () => {
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('registers every route group on the single server router', async () => {
-    const runtime = {} as never;
-    const app = await createServer(runtime);
+  it('七组路由都挂在同一张表上', () => {
+    const registered = new Set(keys);
+    for (const expected of [
+      'GET /api/health',
+      'GET /api/sessions',
+      'POST /api/sessions/:id/messages',
+      'GET /api/models',
+      'POST /api/sessions/:sessionId/approval/:id',
+      'GET /api/settings/agent/config',
+      'GET /api/automations',
+      'POST /api/sessions/:id/subagents/stop',
+    ]) {
+      expect(registered.has(expected), `缺少路由 ${expected}`).toBe(true);
+    }
+  });
 
-    expect(state.honoInstances).toBe(1);
-    expect(state.registrations.map(({ name }) => name)).toEqual([
-      'sessions',
-      'messages',
-      'models',
-      'approval',
-      'settings',
-      'automations',
-      'subagents',
-    ]);
-    expect(state.registrations.every(({ router }) => router === app)).toBe(true);
-    expect(state.registrations.every(({ runtime: value }) => value === runtime)).toBe(true);
+  // 兜底通配会把「没这条路由」变成「有路由但返回别的东西」，404 就再也发不出来
+  it('没有兜底通配路由', () => {
+    expect(routes.some((route) => route.path === '*')).toBe(false);
   });
 });

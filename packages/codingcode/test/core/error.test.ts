@@ -1,39 +1,25 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { AgentError } from '../../src/core/error.js';
 
-describe('AgentError.httpStatus', () => {
-  it('returns 400 for CONFIG_MISSING', () => {
+// core 只负责「领域错误码 + 消息」，HTTP 状态码的映射在 server 层（见 test/server/http-error.test.ts）
+describe('AgentError', () => {
+  it('带上领域码与可判别 tag', () => {
     const err = AgentError.configMissing('missing');
-    expect(err.httpStatus()).toBe(400);
+    expect(err.code).toBe('CONFIG_MISSING');
+    expect(err._tag).toBe('AgentError');
+    expect(err.name).toBe('AgentError');
+    expect(err.message).toBe('[CONFIG_MISSING] missing');
   });
 
-  it('returns 400 for CONFIG_INVALID', () => {
-    const err = new AgentError('CONFIG_INVALID', 'invalid');
-    expect(err.httpStatus()).toBe(400);
-  });
-
-  it('returns 404 for SESSION_NOT_FOUND', () => {
-    const err = AgentError.sessionNotFound('abc');
-    expect(err.httpStatus()).toBe(404);
-  });
-
-  it('returns 409 for SESSION_WORKSPACE_MISMATCH', () => {
-    const err = AgentError.sessionWorkspaceMismatch('abc', '/foo');
-    expect(err.httpStatus()).toBe(409);
-  });
-
-  it('returns 403 for TOOL_NOT_ALLOWED', () => {
-    const err = AgentError.toolNotAllowed('write_file');
-    expect(err.httpStatus()).toBe(403);
-  });
-
-  it('returns 429 for LLM_RATE_LIMITED', () => {
-    const err = new AgentError('LLM_RATE_LIMITED', 'rate limited');
-    expect(err.httpStatus()).toBe(429);
-  });
-
-  it('returns 500 for unknown codes', () => {
-    const err = new AgentError('LLM_TIMEOUT', 'timeout');
-    expect(err.httpStatus()).toBe(500);
+  it('工厂方法产出对应领域码', () => {
+    expect(AgentError.sessionNotFound('abc').code).toBe('SESSION_NOT_FOUND');
+    expect(AgentError.sessionWorkspaceMismatch('abc', '/foo').code).toBe(
+      'SESSION_WORKSPACE_MISMATCH'
+    );
+    expect(AgentError.toolNotAllowed('write_file').code).toBe('TOOL_NOT_ALLOWED');
+    expect(AgentError.toolExecutionFailed('read_file', new Error('boom')).code).toBe(
+      'TOOL_EXECUTION_FAILED'
+    );
+    expect(new AgentError('LLM_RATE_LIMITED', 'rate limited').code).toBe('LLM_RATE_LIMITED');
   });
 });

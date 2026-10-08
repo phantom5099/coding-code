@@ -1,4 +1,4 @@
-type ErrorCode =
+export type ErrorCode =
   | 'LLM_TIMEOUT'
   | 'LLM_RATE_LIMITED'
   | 'LLM_FAILED'
@@ -18,6 +18,8 @@ type ErrorCode =
   | 'SESSION_IO_ERROR';
 
 export class AgentError extends Error {
+  readonly _tag = 'AgentError';
+
   constructor(
     public readonly code: ErrorCode,
     message: string,
@@ -62,23 +64,5 @@ export class AgentError extends Error {
       undefined,
       { sessionId, expectedCwd }
     );
-  }
-
-  httpStatus(): number {
-    switch (this.code) {
-      case 'CONFIG_MISSING':
-      case 'CONFIG_INVALID':
-        return 400;
-      case 'SESSION_NOT_FOUND':
-        return 404;
-      case 'SESSION_WORKSPACE_MISMATCH':
-        return 409;
-      case 'TOOL_NOT_ALLOWED':
-        return 403;
-      case 'LLM_RATE_LIMITED':
-        return 429;
-      default:
-        return 500;
-    }
   }
 }

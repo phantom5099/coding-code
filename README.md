@@ -158,7 +158,7 @@ for await (const frame of clients.agent.sendMessage('帮我写一个快排', {
 | 运行时 | Node.js (tsx) |
 | DI / 错误追踪 | Effect TS 3.x |
 | LLM SDK | Vercel AI SDK v6 + @ai-sdk/deepseek + @ai-sdk/openai |
-| HTTP 框架 | Hono 4.x |
+| HTTP 框架 | @effect/platform（HttpRouter + NodeHttpServer） |
 | Desktop | Electron 35 + React 19 + Zustand 5 |
 | MCP | @modelcontextprotocol/sdk 1.29.x |
 | 校验 | Zod 4.x |

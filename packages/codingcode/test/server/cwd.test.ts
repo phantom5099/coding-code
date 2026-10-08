@@ -4,6 +4,7 @@ import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { isGlobalCwd, tempCwd, resolveCwd, resolveWorkspaceCwd } from '../../src/server/cwd.js';
 import { AgentError } from '../../src/core/error.js';
+import { statusOf } from '../../src/server/http-error.js';
 
 describe('server/cwd：请求入口的工作区解析', () => {
   it('isGlobalCwd treats missing, empty and "global" as global', () => {
@@ -42,6 +43,6 @@ describe('server/cwd：请求入口的工作区解析', () => {
     }
     expect(caught).toBeInstanceOf(AgentError);
     expect((caught as AgentError).code).toBe('CONFIG_INVALID');
-    expect((caught as AgentError).httpStatus()).toBe(400);
+    expect(statusOf(caught as AgentError)).toBe(400);
   });
 });

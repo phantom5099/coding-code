@@ -1,93 +1,87 @@
-import type { Hono } from 'hono';
-import { Effect, ManagedRuntime } from 'effect';
+import * as HttpRouter from '@effect/platform/HttpRouter';
+import { Effect } from 'effect';
 import { SchedulerService } from '../../scheduler/port.js';
-import { createRunWithLayer, errorBody } from '../util.js';
 import { NotFoundError } from '../http-error.js';
-import type { CreateAutomationInput, UpdateAutomationInput } from '../../scheduler/types.js';
+import { AgentError } from '../../core/error.js';
+import { json, pathParams, readJson, type Handler, type Router } from '../handler.js';
+import type { AutomationSandbox, CreateAutomationInput } from '../../scheduler/types.js';
 
-type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
+type AutomationBody = {
+  name?: string;
+  description?: string;
+  cron?: string;
+  timezone?: string;
+  sandbox?: AutomationSandbox;
+  projectCwd?: string;
+  runOnce?: boolean;
+  enabled?: boolean;
+};
 
-export function registerAutomationsRoutes(router: Hono, rt: ManagedRt): void {
-  const runWithLayer = createRunWithLayer(rt);
+/** PATCH 只能改既有自动化的字段，不接受 projectCwd */
+type AutomationPatchBody = Omit<AutomationBody, 'projectCwd'>;
 
-  router.get('/api/automations', async (c) => {
-    return c.json(
-      await runWithLayer(
-        Effect.gen(function* () {
-          const scheduler = yield* SchedulerService;
-          return scheduler.list();
-        })
+/** 校验必填项后构造 CreateAutomationInput；缺字段返回 null，由调用方落 400。不用 `as` 断言未验证 body。 */
+function toCreateInput(body: AutomationBody): CreateAutomationInput | null {
+  const { name, description, cron, projectCwd } = body;
+  if (!name || !description || !cron || !projectCwd) return null;
+  return { ...body, name, description, cron, projectCwd };
+}
+
+const listAutomations: Handler = Effect.gen(function* () {
+  const scheduler = yield* SchedulerService;
+  return json(scheduler.list());
+});
+
+const createAutomation: Handler = Effect.gen(function* () {
+  const body = yield* readJson<AutomationBody>();
+  const input = toCreateInput(body);
+  if (!input) {
+    return yield* Effect.fail(
+      new AgentError(
+        'CONFIG_MISSING',
+        'Missing required fields: name, description, cron, projectCwd'
       )
     );
+  }
+  const scheduler = yield* SchedulerService;
+  return json(scheduler.add(input), 201);
+});
+
+const patchAutomation: Handler = Effect.gen(function* () {
+  const { id } = yield* pathParams;
+  const body = yield* readJson<AutomationPatchBody>();
+  const scheduler = yield* SchedulerService;
+  const updated = scheduler.update(id ?? '', body);
+  if (!updated) {
+    return yield* Effect.fail(new NotFoundError(`Automation '${id}' not found`));
+  }
+  return json(updated);
+});
+
+const deleteAutomation: Handler = Effect.gen(function* () {
+  const { id } = yield* pathParams;
+  const scheduler = yield* SchedulerService;
+  if (!scheduler.remove(id ?? '')) {
+    return yield* Effect.fail(new NotFoundError(`Automation '${id}' not found`));
+  }
+  return json({ ok: true });
+});
+
+const runAutomation: Handler = Effect.gen(function* () {
+  const { id } = yield* pathParams;
+  const scheduler = yield* SchedulerService;
+  const sessionId = yield* Effect.tryPromise({
+    try: () => scheduler.runOnce(id ?? ''),
+    catch: () => new NotFoundError(`Automation '${id}' not found or execution failed`),
   });
+  return json({ sessionId });
+});
 
-  router.post('/api/automations', async (c) => {
-    const body = (await c.req.json()) as CreateAutomationInput;
-
-    if (!body.name || !body.description || !body.cron || !body.projectCwd) {
-      return c.json(
-        errorBody('CONFIG_MISSING', 'Missing required fields: name, description, cron, projectCwd'),
-        400
-      );
-    }
-
-    const created = await runWithLayer(
-      Effect.gen(function* () {
-        const scheduler = yield* SchedulerService;
-        return scheduler.add(body);
-      })
-    );
-
-    return c.json(created, 201);
-  });
-
-  router.patch('/api/automations/:id', async (c) => {
-    const id = c.req.param('id');
-    const body = (await c.req.json()) as UpdateAutomationInput;
-
-    const updated = await runWithLayer(
-      Effect.gen(function* () {
-        const scheduler = yield* SchedulerService;
-        const result = scheduler.update(id, body);
-        if (!result) {
-          return yield* Effect.fail(new NotFoundError(`Automation '${id}' not found`));
-        }
-        return result;
-      })
-    );
-
-    return c.json(updated);
-  });
-
-  router.delete('/api/automations/:id', async (c) => {
-    const id = c.req.param('id');
-
-    const removed = await runWithLayer(
-      Effect.gen(function* () {
-        const scheduler = yield* SchedulerService;
-        if (!scheduler.remove(id)) {
-          return yield* Effect.fail(new NotFoundError(`Automation '${id}' not found`));
-        }
-        return { ok: true };
-      })
-    );
-
-    return c.json(removed);
-  });
-
-  router.post('/api/automations/:id/run', async (c) => {
-    const id = c.req.param('id');
-
-    const sessionId = await runWithLayer(
-      Effect.gen(function* () {
-        const scheduler = yield* SchedulerService;
-        return yield* Effect.tryPromise({
-          try: () => scheduler.runOnce(id),
-          catch: () => new NotFoundError(`Automation '${id}' not found or execution failed`),
-        });
-      })
-    );
-
-    return c.json({ sessionId });
-  });
-}
+export const addAutomationsRoutes = (router: Router): Router =>
+  router.pipe(
+    HttpRouter.get('/api/automations', listAutomations),
+    HttpRouter.post('/api/automations', createAutomation),
+    HttpRouter.patch('/api/automations/:id', patchAutomation),
+    HttpRouter.del('/api/automations/:id', deleteAutomation),
+    HttpRouter.post('/api/automations/:id/run', runAutomation)
+  );

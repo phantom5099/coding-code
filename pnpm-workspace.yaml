@@ -5,10 +5,7 @@ overrides:
   vite: ^6.4.2
 
 allowBuilds:
+  '@parcel/watcher': false
   electron: true
   esbuild: true
-
-settings:
-  onlyBuiltDependencies:
-    - electron
-    - esbuild
+  msgpackr-extract: false

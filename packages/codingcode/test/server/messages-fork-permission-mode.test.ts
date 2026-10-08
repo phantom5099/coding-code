@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { Hono } from 'hono';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { registerMessagesRoutes } from '../../src/server/routes/messages.js';
-import { registerErrorHandler } from '../../src/server/util.js';
+import { createServer, type ServerApp } from '../../src/server/index.js';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { HookService } from '../../src/hooks/port.js';
@@ -59,7 +57,7 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
   let cwd: string;
   let sessionId: string;
   let rt: ManagedRuntime.ManagedRuntime<any, any>;
-  let app: Hono;
+  let app: ServerApp;
 
   beforeEach(async () => {
     cwd = mkdtempSync(join(tmpdir(), 'codingcode-msg-fork-'));
@@ -84,9 +82,7 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
 
     loadedPermissionModes.length = 0;
 
-    app = new Hono();
-    registerErrorHandler(app);
-    registerMessagesRoutes(app, rt);
+    app = await createServer(rt);
   });
 
   afterEach(async () => {

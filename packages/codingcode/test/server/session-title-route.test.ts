@@ -1,12 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, ManagedRuntime } from 'effect';
-import { Hono } from 'hono';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
-import { registerErrorHandler } from '../../src/server/util.js';
+import { createServer, type ServerApp } from '../../src/server/index.js';
 import { computePaths } from '../../src/session/paths.js';
 import { readSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
@@ -16,15 +14,13 @@ const base = useTempProjectBase();
 describe('PUT /api/sessions/:id/title', () => {
   let cwd: string;
   let rt: ManagedRuntime.ManagedRuntime<any, any>;
-  let app: Hono;
+  let app: ServerApp;
 
   beforeEach(async () => {
     cwd = join(base.dir, 'session-title-route');
     mkdirSync(cwd, { recursive: true });
     rt = ManagedRuntime.make(SessionLayer as any);
-    app = new Hono();
-    registerErrorHandler(app);
-    registerSessionsRoutes(app, rt);
+    app = await createServer(rt);
   });
 
   afterEach(async () => {
