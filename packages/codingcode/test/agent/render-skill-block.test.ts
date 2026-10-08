@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderSkillBlock } from '../../src/agent/prompt.js';
-import type { Skill } from '../../src/contracts/skill.js';
+import type { Skill } from '../../src/skills/types.js';
 
 function skill(name: string, skillPath: string): Skill {
   return { name, description: `${name} description`, skillPath };

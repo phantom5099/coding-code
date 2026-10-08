@@ -1,40 +1,32 @@
-import type { Hono } from 'hono';
-import { Effect, ManagedRuntime } from 'effect';
+import * as HttpRouter from '@effect/platform/HttpRouter';
+import { Effect } from 'effect';
 import { MemoryService } from '../../memory/port.js';
 import { getMemoryConfig } from '../../memory/config.js';
 import { updateMemoryModel } from '../../infra/config.js';
+import { json, readJson, type Handler, type Router } from '../handler.js';
 
-type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
+const readConfig: Handler = Effect.sync(() => {
+  const cfg = getMemoryConfig();
+  return json({ enabled: cfg.enabled, model: cfg.model });
+});
 
-export function registerMemorySettingsRoutes(router: Hono, rt: ManagedRt): void {
-  router.get('/api/settings/memory/config', (c) => {
-    const cfg = getMemoryConfig();
-    return c.json({
-      enabled: cfg.enabled,
-      model: cfg.model,
-    });
-  });
+const setEnabled: Handler = Effect.gen(function* () {
+  const body = yield* readJson<{ enabled: boolean }>();
+  const memory = yield* MemoryService;
+  yield* memory.setMemoryEnabled(body.enabled);
+  const enabled = yield* memory.getMemoryEnabled();
+  return json({ enabled });
+});
 
-  router.post('/api/settings/memory/enabled', async (c) => {
-    const body = (await c.req.json()) as { enabled: boolean };
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const m = yield* MemoryService;
-        yield* m.setMemoryEnabled(body.enabled);
-      })
-    );
-    const enabled = await rt.runPromise(
-      Effect.gen(function* () {
-        const m = yield* MemoryService;
-        return yield* m.getMemoryEnabled();
-      })
-    );
-    return c.json({ enabled });
-  });
+const setModel: Handler = Effect.gen(function* () {
+  const body = yield* readJson<{ model: string }>();
+  updateMemoryModel(body.model);
+  return json({ model: body.model });
+});
 
-  router.post('/api/settings/memory/model', async (c) => {
-    const body = (await c.req.json()) as { model: string };
-    updateMemoryModel(body.model);
-    return c.json({ model: body.model });
-  });
-}
+export const addMemorySettingsRoutes = (router: Router): Router =>
+  router.pipe(
+    HttpRouter.get('/api/settings/memory/config', readConfig),
+    HttpRouter.post('/api/settings/memory/enabled', setEnabled),
+    HttpRouter.post('/api/settings/memory/model', setModel)
+  );

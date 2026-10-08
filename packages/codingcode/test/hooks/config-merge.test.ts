@@ -12,7 +12,7 @@ import {
   setGlobalHookEnabled,
   setProjectHookEnabled,
 } from '../../src/hooks/config.js';
-import type { UserHookConfig } from '../../src/contracts/hooks.js';
+import type { UserHookConfig } from '../../src/hooks/types.js';
 import { useTempHome, setFakeHome } from '../helpers/temp-home.js';
 
 let projectDir: string;
@@ -49,7 +49,10 @@ describe('Hooks config merge', () => {
   });
 
   it('merges global and project by name, project wins', () => {
-    writeGlobalHookConfigs([hook('global-hook', 'global-cmd'), hook('shared-hook', 'global-shared')]);
+    writeGlobalHookConfigs([
+      hook('global-hook', 'global-cmd'),
+      hook('shared-hook', 'global-shared'),
+    ]);
     writeHookConfigs(projectDir, [
       hook('shared-hook', 'project-shared'),
       hook('project-hook', 'project-cmd'),

@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
+import ts from 'typescript';
 
 const SRC = resolve(__dirname, '../../src');
+const HOOK_END_TYPES = join(SRC, 'hooks', 'types.ts');
 
 function listTsFiles(dir: string): string[] {
   const out: string[] = [];
@@ -14,21 +16,53 @@ function listTsFiles(dir: string): string[] {
   return out;
 }
 
-/** 契约里声明的 HookPoint 联合成员 */
-function declaredPoints(): string[] {
-  const src = readFileSync(join(SRC, 'contracts', 'hooks.ts'), 'utf8');
-  const union = src.match(/export type HookPoint =([\s\S]*?);/)![1]!;
-  return [...union.matchAll(/'([^']+)'/g)].map((m) => m[1]!);
+function parse(file: string): ts.SourceFile {
+  return ts.createSourceFile(
+    file,
+    readFileSync(file, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  );
 }
 
-/** 生产代码里真正 emit 的点 */
+/** hooks/types.ts 里声明的 HookPoint 联合成员 */
+function declaredPoints(): string[] {
+  const sf = parse(HOOK_END_TYPES);
+  for (const stmt of sf.statements) {
+    if (
+      ts.isTypeAliasDeclaration(stmt) &&
+      stmt.name.text === 'HookPoint' &&
+      ts.isUnionTypeNode(stmt.type)
+    ) {
+      return stmt.type.types.flatMap((t) =>
+        ts.isLiteralTypeNode(t) && ts.isStringLiteral(t.literal) ? [t.literal.text] : []
+      );
+    }
+  }
+  return [];
+}
+
+/** 生产代码里真正 emit 的点：`hooks.emit('x')` / `hooks.emitDecision('x')` */
 function emittedPoints(): Set<string> {
   const found = new Set<string>();
   for (const file of listTsFiles(SRC)) {
-    const text = readFileSync(file, 'utf8');
-    for (const m of text.matchAll(/hooks\.emit(?:Decision)?\(\s*'([^']+)'/g)) {
-      found.add(m[1]!);
-    }
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node)) {
+        const callee = node.expression;
+        if (
+          ts.isPropertyAccessExpression(callee) &&
+          ts.isIdentifier(callee.expression) &&
+          callee.expression.text === 'hooks' &&
+          (callee.name.text === 'emit' || callee.name.text === 'emitDecision')
+        ) {
+          const arg = node.arguments[0];
+          if (arg && ts.isStringLiteral(arg)) found.add(arg.text);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parse(file));
   }
   return found;
 }
@@ -46,7 +80,7 @@ describe('HookPoint 契约与触发点一致', () => {
     expect(undeclared).toEqual([]);
   });
 
-  it('契约本身非空（防止上面两条正则失配后静默通过）', () => {
+  it('契约本身非空（防止上面两条解析失配后静默通过）', () => {
     expect(declaredPoints().length).toBeGreaterThanOrEqual(12);
     expect(emittedPoints().size).toBeGreaterThanOrEqual(12);
   });

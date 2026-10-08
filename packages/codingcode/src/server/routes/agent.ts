@@ -1,4 +1,5 @@
-import type { Hono } from 'hono';
+import * as HttpRouter from '@effect/platform/HttpRouter';
+import { Effect } from 'effect';
 import {
   loadConfig,
   updateMaxSteps,
@@ -9,56 +10,59 @@ import {
 } from '../../infra/config.js';
 import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
-import { errorBody } from '../util.js';
+import { AgentError } from '../../util/error.js';
+import { json, readJson, type Handler, type Router } from '../handler.js';
+import { ASK_BEFORE_EXEC_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../../util/enums.js';
 
-/** config.yaml 的 agent 段；交互/权限模式非法时回落到 build / default */
 function readAgentConfig() {
   const cfg = loadConfig();
   return {
     maxSteps: cfg.maxSteps,
     maxStopContinuations: cfg.maxStopContinuations,
-    activeProfile: isAgentProfileName(cfg.activeProfile) ? cfg.activeProfile : 'build',
-    permissionMode: isPermissionMode(cfg.permissionMode) ? cfg.permissionMode : 'askBeforeExec',
+    activeProfile: isAgentProfileName(cfg.activeProfile) ? cfg.activeProfile : BUILD_PROFILE_NAME,
+    permissionMode: isPermissionMode(cfg.permissionMode)
+      ? cfg.permissionMode
+      : ASK_BEFORE_EXEC_PERMISSION_MODE,
   };
 }
 
-export function registerAgentSettingsRoutes(router: Hono): void {
-  // ---- Agent config ----
-  router.get('/api/settings/agent/config', (c) => {
-    return c.json(readAgentConfig());
-  });
+const getConfig: Handler = Effect.sync(() => json(readAgentConfig()));
 
-  router.post('/api/settings/agent/config', async (c) => {
-    const body = (await c.req.json()) as {
-      maxSteps?: number;
-      maxStopContinuations?: number;
-      activeProfile?: string;
-      permissionMode?: string;
-    };
-    if (body.activeProfile !== undefined && !isAgentProfileName(body.activeProfile)) {
-      return c.json(
-        errorBody('CONFIG_INVALID', `Invalid activeProfile: ${body.activeProfile}`),
-        400
-      );
-    }
-    if (body.permissionMode !== undefined && !isPermissionMode(body.permissionMode)) {
-      return c.json(
-        errorBody('CONFIG_INVALID', `Invalid permissionMode: ${body.permissionMode}`),
-        400
-      );
-    }
-    if (body.maxSteps !== undefined) updateMaxSteps(body.maxSteps);
-    if (body.maxStopContinuations !== undefined)
-      updateMaxStopContinuations(body.maxStopContinuations);
-    if (body.activeProfile !== undefined) updateActiveProfile(body.activeProfile);
-    if (body.permissionMode !== undefined) updatePermissionMode(body.permissionMode);
-    return c.json(readAgentConfig());
-  });
+const putConfig: Handler = Effect.gen(function* () {
+  const body = yield* readJson<{
+    maxSteps?: number;
+    maxStopContinuations?: number;
+    activeProfile?: string;
+    permissionMode?: string;
+  }>();
 
-  // ---- Context config ----
-  router.post('/api/settings/context/compaction-model', async (c) => {
-    const body = (await c.req.json()) as { compactionModel: string };
-    updateContextCompactionModel(body.compactionModel);
-    return c.json({ compactionModel: body.compactionModel });
-  });
-}
+  if (body.activeProfile !== undefined && !isAgentProfileName(body.activeProfile)) {
+    return yield* Effect.fail(
+      new AgentError('CONFIG_INVALID', `Invalid activeProfile: ${body.activeProfile}`)
+    );
+  }
+  if (body.permissionMode !== undefined && !isPermissionMode(body.permissionMode)) {
+    return yield* Effect.fail(
+      new AgentError('CONFIG_INVALID', `Invalid permissionMode: ${body.permissionMode}`)
+    );
+  }
+
+  if (body.maxSteps !== undefined) updateMaxSteps(body.maxSteps);
+  if (body.maxStopContinuations !== undefined) updateMaxStopContinuations(body.maxStopContinuations);
+  if (body.activeProfile !== undefined) updateActiveProfile(body.activeProfile);
+  if (body.permissionMode !== undefined) updatePermissionMode(body.permissionMode);
+  return json(readAgentConfig());
+});
+
+const setCompactionModel: Handler = Effect.gen(function* () {
+  const body = yield* readJson<{ compactionModel: string }>();
+  updateContextCompactionModel(body.compactionModel);
+  return json({ compactionModel: body.compactionModel });
+});
+
+export const addAgentSettingsRoutes = (router: Router): Router =>
+  router.pipe(
+    HttpRouter.get('/api/settings/agent/config', getConfig),
+    HttpRouter.post('/api/settings/agent/config', putConfig),
+    HttpRouter.post('/api/settings/context/compaction-model', setCompactionModel)
+  );

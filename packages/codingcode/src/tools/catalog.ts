@@ -1,10 +1,8 @@
 import { z } from 'zod';
 import type { Effect } from 'effect';
-import type { ToolDefinition } from './types.js';
-import type { ToolDescription } from '../contracts/types.js';
-import type { ToolExecCtx, ToolLookup } from '../contracts/tool.js';
-import type { McpToolSpec } from '../contracts/mcp.js';
-import type { AgentError } from '../core/error.js';
+import type { ToolDefinition, ToolExecCtx, ToolCatalog } from './types.js';
+import type { McpToolSpec } from '../mcp/types.js';
+import type { AgentError } from '../util/error.js';
 import { ToolRegistry } from './registry.js';
 import { readFileTool } from './domains/fs/read.js';
 import { writeFileTool } from './domains/fs/write.js';
@@ -49,7 +47,7 @@ function specToDefinition(spec: McpToolSpec): ToolDefinition {
 export function createToolCatalog(
   toolNames: readonly string[],
   mcpTools: McpToolSpec[] = []
-): { tools: ToolDescription[]; lookup: ToolLookup } {
+): ToolCatalog {
   const registry = new ToolRegistry();
   for (const name of toolNames) {
     const definition = TOOLS_BY_NAME.get(name);

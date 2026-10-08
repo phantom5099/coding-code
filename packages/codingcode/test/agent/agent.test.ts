@@ -18,7 +18,6 @@ vi.mock('../../src/infra/config.js', () => ({
     maxStopContinuations: 2,
     context: { compactionModel: '' },
     memory: { enabled: false },
-    server: { port: 8080 },
   }),
 }));
 
@@ -34,7 +33,9 @@ function makeCapturingLlm(parts: () => AsyncIterable<any>) {
 
 describe('agent runTurn loop', () => {
   it('should yield text chunks from LLM stream', async () => {
-    const llm = makeCapturingLlm(() => llmStream(pText('Hello'), pText(' '), pText('world'), pEnd()));
+    const llm = makeCapturingLlm(() =>
+      llmStream(pText('Hello'), pText(' '), pText('world'), pEnd())
+    );
     const { events } = await runAgentTurn(
       { llm, state: mockState },
       { sessionId: 'test-sid', cwd: '/tmp' }
@@ -52,9 +53,7 @@ describe('agent runTurn loop', () => {
 
     expect(texts(events)).toHaveLength(0);
     expect(endReason(events)).toBe('error');
-    const end = events.find(
-      (b) => b.family === 'transition' && b.transition.to === 'end'
-    ) as any;
+    const end = events.find((b) => b.family === 'transition' && b.transition.to === 'end') as any;
     expect(end.transition.error.code).toBe('EMPTY_RESPONSE');
   });
 
@@ -122,7 +121,9 @@ describe('agent runTurn loop', () => {
   it('should end with maxSteps and emit a single turn.end hook when maxSteps is exhausted', async () => {
     // LLM always requests a tool call → the loop never reaches a natural stop.
     const llm = {
-      completeStream: vi.fn(() => llmStream(pText('calling tool'), pToolCall('tc1', 'read_file', { path: 'x' }), pEnd())),
+      completeStream: vi.fn(() =>
+        llmStream(pText('calling tool'), pToolCall('tc1', 'read_file', { path: 'x' }), pEnd())
+      ),
       modelInfo: { maxTokens: 1000 },
     } as any;
     const turnEndCalls: any[] = [];

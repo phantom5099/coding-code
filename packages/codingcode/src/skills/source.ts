@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import { parse as parseYaml } from 'yaml';
-import { getGlobalDir, CODINGCODE_DIRNAME } from '../core/path.js';
+import { getGlobalDir, CODINGCODE_DIRNAME } from '../util/path.js';
 
 interface SkillFrontMatter {
   name?: string;

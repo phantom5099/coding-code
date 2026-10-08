@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
 
 interface SearchResult {
@@ -173,7 +173,7 @@ export const webSearchTool: ToolDefinition = {
           const engineResult = yield* Effect.either(
             Effect.tryPromise({
               try: () => engine(query, max_results, controller.signal),
-              catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+              catch: (e) => AgentError.toolExecutionFailed('web_search', e),
             })
           );
 

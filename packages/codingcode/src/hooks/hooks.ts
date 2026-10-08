@@ -3,12 +3,33 @@ import { resolveHookConfigs } from './config.js';
 import { executeHookCommand, executeDecisionHookCommand } from './executor.js';
 import { createLogger } from '../infra/logger.js';
 import { HookService } from './port.js';
-import type { HookPoint, HookDecision } from '../contracts/hooks.js';
+import type { HookPoint, HookDecision, HookCommandOutput } from './types.js';
 import type { ObserverHandler, DecisionHandler, HandlerEntry, ProjectPath } from './types.js';
 
 const logger = createLogger();
 
-export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
+const DECISION_VALUES = new Set(['allow', 'deny', 'ask', 'continue']);
+
+/** 外部进程输出 → 决策语义：只认已知键，其余丢弃。 */
+function toHookDecision(output: HookCommandOutput): HookDecision {
+  const decision =
+    typeof output.decision === 'string' && DECISION_VALUES.has(output.decision)
+      ? (output.decision as HookDecision['decision'])
+      : undefined;
+  return {
+    decision,
+    reason: typeof output.reason === 'string' ? output.reason : undefined,
+    injection: typeof output.injection === 'string' ? output.injection : undefined,
+    modifiedInput:
+      output.modifiedInput && typeof output.modifiedInput === 'object'
+        ? (output.modifiedInput as Record<string, unknown>)
+        : undefined,
+  };
+}
+
+export const HookLayer = Layer.effect(
+  HookService,
+  Effect.gen(function* () {
     const hooksByProject = new Map<ProjectPath, Map<HookPoint, HandlerEntry[]>>();
 
     /** 某个项目在某个 hook 点上生效的 handler，按 priority 升序 */
@@ -25,7 +46,9 @@ export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
           for (const entry of handlersFor(point, projectPath)) {
             if (entry.type !== 'observer') continue;
             yield* (entry.handler as ObserverHandler)(payload).pipe(
-              Effect.catchAll((e) => Effect.sync(() => logger.error(`hook emit error [${point}]:`, e)))
+              Effect.catchAll((e) =>
+                Effect.sync(() => logger.error(`hook emit error [${point}]:`, e))
+              )
             );
           }
         }) as Effect.Effect<void>;
@@ -64,7 +87,8 @@ export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
               }).pipe(Effect.ignore);
             const decisionHandler: DecisionHandler = async (payload) => {
               try {
-                return (await executeDecisionHookCommand(hc, payload)) as HookDecision | null;
+                const output = await executeDecisionHookCommand(hc, payload);
+                return output ? toHookDecision(output) : null;
               } catch (e) {
                 logger.error(`user decision hook ${hookName} error:`, e);
                 return null;
@@ -82,4 +106,5 @@ export const HookLayer = Layer.effect(HookService, Effect.gen(function* () {
           hooksByProject.set(projectPath, projectMap);
         }),
     };
-}));
+  })
+);

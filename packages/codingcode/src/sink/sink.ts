@@ -1,5 +1,5 @@
 import { Effect, Layer, Queue } from 'effect';
-import type { FrameBody } from '../contracts/frame.js';
+import type { FrameBody } from './types.js';
 import { EventSinkService } from './port.js';
 
 export const EventSinkLayer = Layer.effect(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAN_ALLOWED_TOOLS } from '../../src/contracts/permission.js';
+import { PLAN_ALLOWED_TOOLS } from '../../src/approval/tool-policy.js';
 
 describe('PLAN_ALLOWED_TOOLS', () => {
   it('does not expose write tools', () => {

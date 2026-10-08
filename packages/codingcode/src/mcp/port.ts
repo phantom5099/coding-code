@@ -1,6 +1,6 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { McpToolSpec } from '../contracts/mcp.js';
+import type { McpToolSpec } from './types.js';
 
 export interface McpShape {
   syncConnections(projectPath: string): Effect.Effect<void>;

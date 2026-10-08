@@ -22,7 +22,13 @@ import { SchedulerLayer } from './scheduler/scheduler.js';
 
 // base layers
 const InfraLayer = Layer.mergeAll(
-  HookLayer, RulesLayer, SkillLayer, McpLayer, EventSinkLayer, ApprovalWaitLayer, TodoLayer,
+  HookLayer,
+  RulesLayer,
+  SkillLayer,
+  McpLayer,
+  EventSinkLayer,
+  ApprovalWaitLayer,
+  TodoLayer
 );
 
 const ApprovalWithDeps = ApprovalLayer.pipe(
@@ -38,8 +44,15 @@ const MemoryWithDeps = MemoryLayer.pipe(Layer.provide(LlmLayer));
 
 // agent 直接消费的宽服务集合
 const AgentServiceLayers = Layer.mergeAll(
-  InfraLayer, SessionLayer, MailboxLayer, ToolExecutorWithDeps, ApprovalWithDeps,
-  ContextWithDeps, MemoryWithDeps, CheckpointLayer, LlmLayer,
+  InfraLayer,
+  SessionLayer,
+  MailboxLayer,
+  ToolExecutorWithDeps,
+  ApprovalWithDeps,
+  ContextWithDeps,
+  MemoryWithDeps,
+  CheckpointLayer,
+  LlmLayer
 );
 
 // agent with deps
@@ -52,7 +65,6 @@ const SubagentWithDeps = SubagentRunnerLayer.pipe(Layer.provide(AgentWithDeps));
 
 // 运行注册表：要 runner 起子代理、要 mailbox 投递终态、要 sink 发 subagent_event 帧、
 // 要 hooks 在子代理终态时触发 agent.subagent.complete。
-// 不依赖 SessionLayer —— 它不写盘，写盘由父回合循环在 drain 点做。
 const SubagentRunRegistryWithDeps = SubagentRunRegistryLayer.pipe(
   Layer.provide(Layer.mergeAll(SubagentWithDeps, MailboxLayer, EventSinkLayer, HookLayer))
 );
@@ -71,7 +83,7 @@ export const AppLayer = Layer.mergeAll(
   SubagentWithDeps,
   SubagentRunRegistryWithDeps,
   SchedulerLayer,
-  EventSinkLayer,
+  EventSinkLayer
 );
 
 export const createAppRuntime = () => ManagedRuntime.make(AppLayer);

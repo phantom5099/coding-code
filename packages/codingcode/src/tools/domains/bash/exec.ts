@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import { Effect } from 'effect';
 import type { ToolDefinition } from '../../types.js';
 
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 
 export const bashTool: ToolDefinition = {
   name: 'execute_command',

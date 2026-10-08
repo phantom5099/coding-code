@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { AgentError } from '../../src/core/error.js';
+import { AgentError } from '../../src/util/error.js';
 import * as fs from 'fs';
 
 vi.mock('fs', async (importOriginal) => ({

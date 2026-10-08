@@ -1,39 +1,18 @@
-import type { Hono } from 'hono';
-import { Effect, ManagedRuntime } from 'effect';
+import * as HttpRouter from '@effect/platform/HttpRouter';
+import { Effect } from 'effect';
 import { ApprovalWaitService } from '../../approval/wait-port.js';
 import { parseApprovalResponse } from '../../approval/confirmation.js';
-import { errorResponse } from '../util.js';
+import { json, pathParams, readJsonOrEmpty, type Handler, type Router } from '../handler.js';
 
-type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
+const resolve: Handler = Effect.gen(function* () {
+  const { id, sessionId } = yield* pathParams;
+  const body = yield* readJsonOrEmpty<{ response?: string }>();
+  const response = typeof body.response === 'string' ? body.response : '';
 
-export function registerApprovalRoutes(router: Hono, rt: ManagedRt): void {
-  router.post('/api/sessions/:sessionId/approval/:id', async (c) => {
-    const id = c.req.param('id');
-    const sessionId = c.req.param('sessionId');
-    const body = (await c.req.json().catch(() => ({}))) as {
-      response?: string;
-    };
-    const response = typeof body.response === 'string' ? body.response : '';
+  const svc = yield* ApprovalWaitService;
+  const resolved = yield* svc.resolveConfirm(id ?? '', sessionId ?? '', parseApprovalResponse(response));
+  return json({ ok: resolved });
+});
 
-    const result = await rt.runPromise(
-      Effect.gen(function* () {
-        const svc = yield* ApprovalWaitService;
-        return yield* svc.resolveConfirm(id, sessionId, parseApprovalResponse(response));
-      }).pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
-        ),
-        Effect.match({
-          onSuccess: (a) => ({ ok: true as const, value: a }),
-          onFailure: (e) => ({ ok: false as const, error: e }),
-        })
-      )
-    );
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
-
-    return c.json({ ok: result.value });
-  });
-}
+export const addApprovalRoutes = (router: Router): Router =>
+  router.pipe(HttpRouter.post('/api/sessions/:sessionId/approval/:id', resolve));

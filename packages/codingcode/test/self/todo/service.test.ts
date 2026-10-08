@@ -1,7 +1,7 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { TodoService, countByStatus } from '../../../src/todo/port.js';
-import type { TodoItem } from '../../../src/contracts/types.js';
+import type { TodoItem } from '../../../src/todo/types.js';
 import { TodoLayer } from '../../../src/todo/todo.js';
 
 describe('TodoService', () => {

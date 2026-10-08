@@ -9,4 +9,7 @@ export interface ApprovalWaitShape {
   cancelPendingFor(sessionId: string): Effect.Effect<number>;
 }
 
-export class ApprovalWaitService extends Context.Tag('ApprovalWait')<ApprovalWaitService, ApprovalWaitShape>() {}
+export class ApprovalWaitService extends Context.Tag('ApprovalWait')<
+  ApprovalWaitService,
+  ApprovalWaitShape
+>() {}

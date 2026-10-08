@@ -1,16 +1,21 @@
 import { Layer, Effect } from 'effect';
 import { HookService } from '../hooks/port.js';
 import type { HookShape } from '../hooks/port.js';
-import type { ApprovalDecision, PermissionMode } from '../contracts/permission.js';
+import {
+  ASK_BEFORE_EXEC_PERMISSION_MODE,
+  BYPASS_PERMISSION_MODE,
+  PLAN_PROFILE_NAME,
+  type PermissionMode,
+  type ProfileName,
+} from '../util/enums.js';
 import type { PermissionRule, ToolCallRequest } from './types.js';
-import type { ProfileName } from '../contracts/types.js';
-import { PLAN_ALLOWED_TOOLS } from '../contracts/permission.js';
+import { PLAN_ALLOWED_TOOLS } from './tool-policy.js';
 import { createRuleEngine, type RuleEngine } from './rule-engine.js';
 import { userConfirmAsync } from './confirmation.js';
 import { ApprovalWaitService } from './wait-port.js';
 import { EventSinkService } from '../sink/port.js';
 import { ApprovalService } from './port.js';
-import type { ApprovalRequest } from './port.js';
+import type { ApprovalDecision, ApprovalRequest } from './port.js';
 
 const DANGEROUS_TOOL_NAMES = ['execute_command'];
 
@@ -40,7 +45,7 @@ function applyPermissionMode(
   profile: ProfileName | undefined,
   destructiveTools: Set<string>
 ): ApprovalDecision | null {
-  if (profile === 'plan') {
+  if (profile === PLAN_PROFILE_NAME) {
     if (PLAN_ALLOWED_TOOLS.has(tool)) {
       return { type: 'allow', source: 'permission-mode' };
     }
@@ -52,10 +57,10 @@ function applyPermissionMode(
   }
 
   switch (mode) {
-    case 'bypass':
+    case BYPASS_PERMISSION_MODE:
       return { type: 'allow', source: 'permission-mode' };
 
-    case 'askBeforeExec':
+    case ASK_BEFORE_EXEC_PERMISSION_MODE:
       if (!destructiveTools.has(tool)) {
         return { type: 'allow', source: 'permission-mode' };
       }
@@ -114,7 +119,13 @@ export function runPipeline(
       );
       if (modeResult) {
         layers.push(LAYER_NAMES[1]);
-        const final = yield* recordAuditAndReturn(hooks, request, modeResult, layers, opts.projectPath);
+        const final = yield* recordAuditAndReturn(
+          hooks,
+          request,
+          modeResult,
+          layers,
+          opts.projectPath
+        );
         return final;
       }
     }
@@ -141,12 +152,24 @@ export function runPipeline(
             reason: hookResult.reason ?? 'Denied by PreToolUse hook',
             source: 'hook',
           };
-          const final = yield* recordAuditAndReturn(hooks, request, result, layers, opts.projectPath);
+          const final = yield* recordAuditAndReturn(
+            hooks,
+            request,
+            result,
+            layers,
+            opts.projectPath
+          );
           return final;
         }
         if (hookResult.decision === 'allow') {
           const result: ApprovalDecision = { type: 'allow', source: 'hook' };
-          const final = yield* recordAuditAndReturn(hooks, request, result, layers, opts.projectPath);
+          const final = yield* recordAuditAndReturn(
+            hooks,
+            request,
+            result,
+            layers,
+            opts.projectPath
+          );
           return final;
         }
         const nextRequest: ToolCallRequest = { ...request };
@@ -192,7 +215,9 @@ export function runPipeline(
   });
 }
 
-export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* () {
+export const ApprovalLayer = Layer.effect(
+  ApprovalService,
+  Effect.gen(function* () {
     const hooks = yield* HookService;
     const sink = yield* EventSinkService;
     const approvalWait = yield* ApprovalWaitService;
@@ -211,7 +236,7 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
           {
             ruleEngine,
             destructiveTools,
-            permissionMode: request.permissionMode ?? 'askBeforeExec',
+            permissionMode: request.permissionMode ?? ASK_BEFORE_EXEC_PERMISSION_MODE,
             profile: request.profile,
             onAlways: (rule) => ruleEngine.addRule(rule),
             onNever: (rule) => ruleEngine.addRule(rule),
@@ -225,4 +250,5 @@ export const ApprovalLayer = Layer.effect(ApprovalService, Effect.gen(function* 
           Effect.provideService(ApprovalWaitService, approvalWait)
         ),
     };
-}));
+  })
+);

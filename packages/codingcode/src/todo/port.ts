@@ -1,5 +1,5 @@
 import { Context } from 'effect';
-import type { TodoItem } from '../contracts/types.js';
+import type { TodoItem } from './types.js';
 
 export interface TodoCounts {
   pending: number;

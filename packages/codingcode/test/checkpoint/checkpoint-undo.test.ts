@@ -45,4 +45,3 @@ describe('toGitPath preserves original casing for git paths', () => {
     expect(toGitPath(projectPath, gitPath)).toBe('src/Main.ts');
   });
 });
-

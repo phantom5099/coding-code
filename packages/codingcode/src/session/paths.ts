@@ -1,22 +1,17 @@
 import { join } from 'path';
-import { getGlobalDir, normalizePath, encodeProjectPath } from '../core/path.js';
-import {
-  PROJECTS_DIRNAME,
-  SESSIONS_DIRNAME,
-  SUBAGENTS_DIRNAME,
-  TRANSCRIPT_SUFFIX,
-} from '../contracts/paths.js';
+import { normalizePath, encodeProjectPath, projectDataDir } from '../util/path.js';
 
+/** 会话转录在项目数据目录下的布局。 */
+export const SESSIONS_DIRNAME = 'sessions';
+
+const SUBAGENTS_DIRNAME = 'subagents';
+const TRANSCRIPT_SUFFIX = '.jsonl';
 
 export interface SessionPaths {
   sessionId: string;
   cwd: string;
   projectPath: string;
   transcriptPath: string;
-}
-
-export function projectDataDir(cwd: string): string {
-  return join(getGlobalDir(), PROJECTS_DIRNAME, encodeProjectPath(normalizePath(cwd)));
 }
 
 export function projectSessionsDir(cwd: string): string {

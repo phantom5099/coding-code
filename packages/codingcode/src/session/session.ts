@@ -2,12 +2,25 @@ import { Effect, Layer } from 'effect';
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
-import { AgentError } from '../core/error.js';
-import { encodeProjectPath } from '../core/path.js';
+import { AgentError } from '../util/error.js';
+import { encodeProjectPath } from '../util/path.js';
 import { computePaths } from './paths.js';
-import type { SessionMetaEvent, UserEvent, AssistantEvent, ToolResultEvent, SubagentResultEvent, SummaryEvent, RollbackEvent, SessionEvent, SessionStoreState, SessionSummary, CompactEvent, UITurn } from '../contracts/session.js';
-import type { TokenUsage, ProfileName } from '../contracts/types.js';
-import type { PermissionMode } from '../contracts/permission.js';
+import type {
+  SessionMetaEvent,
+  UserEvent,
+  AssistantEvent,
+  ToolResultEvent,
+  SubagentResultEvent,
+  SummaryEvent,
+  RollbackEvent,
+  SessionEvent,
+  CompactEvent,
+} from './types.js';
+import type { SessionStoreState, SessionSummary } from './types.js';
+import type { UITurn } from './types.js';
+import type { TokenUsage } from '../llm/types.js';
+import type { ProfileName, PermissionMode } from '../util/enums.js';
+
 import { SessionService } from './port.js';
 import {
   ensureDirs,
@@ -79,7 +92,7 @@ export function sessionEventsToTurns(events: SessionEvent[]): UITurn[] {
   for (const event of events) {
     if (event.type === 'session_meta') continue;
     if (event.type === 'compact' || event.type === 'rollback') continue;
-    if (event.type === 'subagent_result') continue;   // 结果进模型上下文，不占用户视野
+    if (event.type === 'subagent_result') continue; // 结果进模型上下文，不占用户视野
 
     if (event.type === 'summary') {
       let turn = turnsMap.get(event.endTurnId);
@@ -195,7 +208,11 @@ export const SessionLayer = Layer.effect(
             : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
 
-    const load = (cwd: string, sessionId: string, parentSessionId?: string): Effect.Effect<SessionStoreState, AgentError> =>
+    const load = (
+      cwd: string,
+      sessionId: string,
+      parentSessionId?: string
+    ): Effect.Effect<SessionStoreState, AgentError> =>
       Effect.try({
         try: () => {
           assertResumeWorkspace(cwd, sessionId, parentSessionId);
@@ -469,10 +486,7 @@ export const SessionLayer = Layer.effect(
           catch: (e) =>
             new AgentError('SESSION_IO_ERROR', `Failed to read transcript ${transcriptPath}`, e),
         }),
-      appendEvent: (
-        transcriptPath: string,
-        event: SessionEvent
-      ): Effect.Effect<void, AgentError> =>
+      appendEvent: (transcriptPath: string, event: SessionEvent): Effect.Effect<void, AgentError> =>
         Effect.try({
           try: () => appendLine(transcriptPath, event),
           catch: (e) =>

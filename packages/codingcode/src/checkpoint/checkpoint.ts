@@ -2,7 +2,7 @@ import { Layer, Effect } from 'effect';
 import { resolve } from 'path';
 import { ShadowGit } from './shadow-git.js';
 import { ProjectLock } from './project-lock.js';
-import { normalizePath } from '../core/path.js';
+import { normalizePath } from '../util/path.js';
 import { commitMsg, toGitPath, ProjectCache } from './utils.js';
 import { getCompletedTurnsFor, getTurnRestorePlan, getRollbackToTurnPlan } from './turn-query.js';
 import { emptyRollbackResult, executeRollback } from './rollback-engine.js';
@@ -10,7 +10,9 @@ import { CheckpointService } from './port.js';
 
 // ---- Effect Service ----
 
-export const CheckpointLayer = Layer.effect(CheckpointService, Effect.gen(function* () {
+export const CheckpointLayer = Layer.effect(
+  CheckpointService,
+  Effect.gen(function* () {
     const shadowGitByProject = new ProjectCache<ShadowGit>(10);
     const lockByProject = new ProjectCache<ProjectLock>(10);
 
@@ -180,4 +182,5 @@ export const CheckpointLayer = Layer.effect(CheckpointService, Effect.gen(functi
           return executeRollback(plan, selectedFiles, sg, lockFor(projectPath));
         }),
     };
-}));
+  })
+);

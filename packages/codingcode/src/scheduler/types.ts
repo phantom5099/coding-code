@@ -35,7 +35,3 @@ export interface UpdateAutomationInput {
   enabled?: boolean;
   runOnce?: boolean;
 }
-
-export interface RunAutomationResult {
-  sessionId: string;
-}

@@ -1,15 +1,13 @@
 import { openSync, closeSync, unlinkSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { getGlobalDir, normalizePath, encodeProjectPath } from '../core/path.js';
-import { PROJECTS_DIRNAME } from '../contracts/paths.js';
+import { projectDataDir } from '../util/path.js';
 
 export class ProjectLock {
   private readonly lockPath: string;
   private locked = false;
 
   constructor(projectPath: string) {
-    const encoded = encodeProjectPath(normalizePath(projectPath));
-    this.lockPath = join(getGlobalDir(), PROJECTS_DIRNAME, encoded, 'checkpoint', 'repo.lock');
+    this.lockPath = join(projectDataDir(projectPath), 'checkpoint', 'repo.lock');
   }
 
   lock(): void {

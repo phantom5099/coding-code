@@ -96,7 +96,9 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
   });
 
   it('enabled: false 的 hook 不注册', async () => {
-    writeHooksYaml([{ name: 'off', point: 'tool.execute.before', command: 'cmd-off', enabled: false }]);
+    writeHooksYaml([
+      { name: 'off', point: 'tool.execute.before', command: 'cmd-off', enabled: false },
+    ]);
 
     await runWithLayer(
       Effect.gen(function* () {
@@ -219,9 +221,7 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
   });
 
   it('只在全局层定义的 hook 在项目层没写任何东西时照常生效', async () => {
-    writeGlobalHooksYaml([
-      { name: 'g', point: 'tool.execute.before', command: 'cmd-global' },
-    ]);
+    writeGlobalHooksYaml([{ name: 'g', point: 'tool.execute.before', command: 'cmd-global' }]);
 
     await runWithLayer(
       Effect.gen(function* () {

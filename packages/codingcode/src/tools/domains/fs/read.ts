@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import { Effect } from 'effect';
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
 
 export const readFileTool: ToolDefinition = {
@@ -26,7 +26,7 @@ export const readFileTool: ToolDefinition = {
       const filePath = resolve(ctx?.projectPath ?? process.cwd(), path);
       const content = yield* Effect.tryPromise({
         try: () => readFile(filePath, 'utf-8'),
-        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+        catch: (e) => AgentError.toolExecutionFailed('read_file', e),
       });
       const lines = content.split('\n');
       const start = Math.max(0, offset - 1);

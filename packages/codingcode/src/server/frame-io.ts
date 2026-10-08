@@ -1,4 +1,13 @@
-import type { Frame, FrameBody } from './frame.js';
+import type { FrameBody } from '../sink/types.js';
+
+/** SSE 帧封套：出站帧的唯一序号来源。 */
+export interface Envelope {
+  readonly sessionId: string;
+  readonly turnId: number | null;
+  readonly seq: number;
+}
+
+export type Frame = Envelope & FrameBody;
 
 export interface FrameAssembler {
   stamp(body: FrameBody): Frame;

@@ -13,16 +13,13 @@ import type {
   UpdateAutomationInput,
   UserHookConfig,
 } from './dto.js';
-import type { AvailableProfile, PermissionMode, ProfileName, TokenUsage } from './types.js';
+import type { PermissionMode, ProfileName, TokenUsage } from './types.js';
 import type { Frame } from './protocol.js';
-
-export type AvailableProfiles = AvailableProfile[];
 
 export interface SessionProfileInfo {
   activeProfile: ProfileName;
   permissionMode: PermissionMode;
   cwd: string;
-  available: AvailableProfiles;
 }
 
 export interface SessionPlanFile {

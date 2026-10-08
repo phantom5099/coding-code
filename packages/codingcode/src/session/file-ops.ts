@@ -14,18 +14,22 @@ import {
   renameSync,
 } from 'fs';
 import { join, dirname } from 'path';
-import { getGlobalDir } from '../core/path.js';
-import { PROJECTS_DIRNAME, SESSIONS_DIRNAME } from '../contracts/paths.js';
-import { transcriptPathOf } from './paths.js';
-import type { SessionEvent, SessionMetaEvent, SessionSummary } from '../contracts/session.js';
-import type { TokenUsage } from '../contracts/types.js';
+import { getGlobalDir, projectRootDir } from '../util/path.js';
+import { transcriptPathOf, SESSIONS_DIRNAME } from './paths.js';
+import type { SessionEvent, SessionMetaEvent } from './types.js';
+import type { SessionSummary } from './types.js';
+import type { TokenUsage } from '../llm/types.js';
 
 /** 首行最大读取字节数：会话头远小于此值。 */
 const HEAD_BYTES = 8192;
 /** 尾部扫描初始窗口，命中不到时按 4 倍扩大。 */
 const TAIL_WINDOW_BYTES = 16 * 1024;
 
-export function sessionJsonlPathFromCwd(cwd: string, sessionId: string, parentSessionId?: string): string {
+export function sessionJsonlPathFromCwd(
+  cwd: string,
+  sessionId: string,
+  parentSessionId?: string
+): string {
   return transcriptPathOf(cwd, sessionId, parentSessionId);
 }
 
@@ -99,7 +103,10 @@ function readWindow(transcriptPath: string, start: number, end: number): Session
 }
 
 /** 从尾部按窗口 4 倍扩大读取，直到 visit 判定可返回或已覆盖整个文件。 */
-function scanTail<T>(transcriptPath: string, visit: (events: SessionEvent[]) => T | undefined): T | undefined {
+function scanTail<T>(
+  transcriptPath: string,
+  visit: (events: SessionEvent[]) => T | undefined
+): T | undefined {
   const size = statSync(transcriptPath).size;
   let window = TAIL_WINDOW_BYTES;
   for (;;) {
@@ -144,7 +151,7 @@ export function readLastUsage(transcriptPath: string): TokenUsage | undefined {
 
 export function listSessions(encodedProjectPath?: string): SessionSummary[] {
   const results: SessionSummary[] = [];
-  const projectBase = join(getGlobalDir(), PROJECTS_DIRNAME);
+  const projectBase = projectRootDir();
   const encodedDirs = encodedProjectPath
     ? [encodedProjectPath]
     : existsSync(projectBase)
@@ -160,8 +167,7 @@ export function listSessions(encodedProjectPath?: string): SessionSummary[] {
       let updatedAt = meta.createdAt;
       try {
         updatedAt = statSync(jsonlPath).mtime.toISOString();
-      } catch {
-      }
+      } catch {}
       results.push({ ...meta, updatedAt, usage: readLastUsage(jsonlPath) });
     }
   }

@@ -16,4 +16,3 @@ describe('toGitPath', () => {
     expect(result).toContain('file.ts');
   });
 });
-

@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Layer, Effect } from 'effect';
 import { RulesService } from './port.js';
-import { getGlobalDir } from '../core/path.js';
+import { getGlobalDir } from '../util/path.js';
 
 // ── Paths ──
 
@@ -14,7 +14,9 @@ function getProjectRulesPath(projectPath?: string): string {
   return path.join(projectPath ?? process.cwd(), 'AGENTS.md');
 }
 
-export const RulesLayer = Layer.effect(RulesService, Effect.sync(() => {
+export const RulesLayer = Layer.effect(
+  RulesService,
+  Effect.sync(() => {
     let _globalRules: string | null = null;
     const _projectRulesCache = new Map<string, string>();
     const _allRulesCache = new Map<string, string>();
@@ -68,4 +70,5 @@ export const RulesLayer = Layer.effect(RulesService, Effect.sync(() => {
           _allRulesCache.delete(projectPath);
         }),
     };
-}));
+  })
+);

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { makeState, runAgentTurn, llmStream, pText, pEnd, endReason } from '../helpers/agent-harness.js';
+import {
+  makeState,
+  runAgentTurn,
+  llmStream,
+  pText,
+  pEnd,
+  endReason,
+} from '../helpers/agent-harness.js';
 
 vi.mock('../../src/infra/config.js', () => ({
   loadConfig: () => ({
@@ -15,7 +22,6 @@ vi.mock('../../src/infra/config.js', () => ({
       maxBytes: 16384,
       promptMaxBytes: 8192,
     },
-    server: { port: 8080 },
   }),
 }));
 

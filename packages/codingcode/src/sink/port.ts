@@ -1,6 +1,6 @@
 import { Context } from 'effect';
 import type { Effect, Queue } from 'effect';
-import type { FrameBody } from '../contracts/frame.js';
+import type { FrameBody } from './types.js';
 
 export interface EventSinkShape {
   /** 建队列并挂载为该会话的出站队列；调用者即这条帧流的唯一读者。覆盖式：每次调用都换新队列 */
@@ -11,4 +11,7 @@ export interface EventSinkShape {
   emit(sessionId: string, body: FrameBody): Effect.Effect<void>;
 }
 
-export class EventSinkService extends Context.Tag('EventSink')<EventSinkService, EventSinkShape>() {}
+export class EventSinkService extends Context.Tag('EventSink')<
+  EventSinkService,
+  EventSinkShape
+>() {}

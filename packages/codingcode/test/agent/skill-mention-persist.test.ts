@@ -7,10 +7,10 @@ import { SessionLayer } from '../../src/session/session.js';
 import { SessionService } from '../../src/session/port.js';
 import { SkillLayer } from '../../src/skills/skills.js';
 import { SkillService } from '../../src/skills/port.js';
-import { normalizePath } from '../../src/core/path.js';
+import { normalizePath } from '../../src/util/path.js';
 import { computePaths } from '../../src/session/paths.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import type { UserEvent } from '../../src/contracts/session.js';
+import type { UserEvent } from '../../src/session/types.js';
 import { runAgentTurn, llmStream, pText, pEnd } from '../helpers/agent-harness.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
@@ -60,7 +60,10 @@ describe('agent runTurn with an explicit @ skill', () => {
 
     const { sessionId } = await runAgentTurn(
       {
-        llm: { completeStream: () => llmStream(pText('ok'), pEnd()), modelInfo: { maxTokens: 1000 } },
+        llm: {
+          completeStream: () => llmStream(pText('ok'), pEnd()),
+          modelInfo: { maxTokens: 1000 },
+        },
         sessionLayer: SessionLayer,
         skillLayer: SkillLayer,
       },

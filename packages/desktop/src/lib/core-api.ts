@@ -117,7 +117,6 @@ export type SessionProfileInfo = {
   activeProfile: ProfileName;
   permissionMode: PermissionMode;
   cwd: string;
-  available: Array<{ name: string; description: string }>;
 };
 
 export function getSessionProfile(sessionId: string, cwd: string): Promise<SessionProfileInfo> {

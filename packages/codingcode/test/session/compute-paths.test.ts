@@ -7,7 +7,7 @@ import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { computePaths, projectSessionsDir } from '../../src/session/paths.js';
 import { sessionJsonlPathFromCwd } from '../../src/session/file-ops.js';
-import { normalizePath, encodeProjectPath } from '../../src/core/path.js';
+import { normalizePath, encodeProjectPath } from '../../src/util/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();

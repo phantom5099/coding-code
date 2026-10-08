@@ -3,7 +3,7 @@ import { globby } from 'globby';
 import { readFile } from 'fs/promises';
 import { relative } from 'path';
 import { Effect } from 'effect';
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
 
 export const searchTool: ToolDefinition = {
@@ -37,7 +37,7 @@ export const searchTool: ToolDefinition = {
             ignore: ['node_modules/**', 'dist/**', '.git/**', '*.lockb', '*.lock', '*.min.js'],
             absolute: true,
           }),
-        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+        catch: (e) => AgentError.toolExecutionFailed('search_code', e),
       });
 
       const filesToScan = files.slice(0, 200);
@@ -49,7 +49,7 @@ export const searchTool: ToolDefinition = {
         const contentResult = yield* Effect.either(
           Effect.tryPromise({
             try: () => readFile(file, 'utf-8'),
-            catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+            catch: (e) => AgentError.toolExecutionFailed('search_code', e),
           })
         );
         if (contentResult._tag === 'Left') continue;

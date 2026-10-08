@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
-import type { UITurn, UITurnItem } from '../../src/contracts/session.js';
-import type { TodoItem } from '../../src/contracts/types.js';
+import type { UITurn, UITurnItem } from '../../src/session/types.js';
+import type { TodoItem } from '../../src/todo/types.js';
 
 // 本文件只做编译期类型约束（tsc 执行 @ts-expect-error 校验），不含运行时断言。
 describe('类型收口', () => {

@@ -1,158 +1,74 @@
-import type { Hono } from 'hono';
-import { Effect, ManagedRuntime } from 'effect';
+import * as HttpRouter from '@effect/platform/HttpRouter';
+import { Effect } from 'effect';
 import { SchedulerService } from '../../scheduler/port.js';
-import { errorBody, errorResponse } from '../util.js';
-import { NotFoundError } from '../../contracts/error.js';
-import type { CreateAutomationInput, UpdateAutomationInput } from '../../contracts/automation.js';
+import { NotFoundError } from '../http-error.js';
+import { AgentError } from '../../util/error.js';
+import { json, pathParams, readJson, type Handler, type Router } from '../handler.js';
+import type { CreateAutomationInput, UpdateAutomationInput } from '../../scheduler/types.js';
 
-type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
-
-export function registerAutomationsRoutes(router: Hono, rt: ManagedRt): void {
-  router.get('/api/automations', async (c) => {
-    const result = await rt.runPromise(
-      Effect.gen(function* () {
-        const scheduler = yield* SchedulerService;
-        return scheduler.list();
-      }).pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
-        ),
-        Effect.match({
-          onSuccess: (a) => ({ ok: true as const, value: a }),
-          onFailure: (e) => ({ ok: false as const, error: e }),
-        })
-      )
-    );
-
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
-
-    return c.json(result.value);
-  });
-
-  router.post('/api/automations', async (c) => {
-    const body = (await c.req.json()) as CreateAutomationInput;
-
-    if (!body.name || !body.description || !body.cron || !body.projectCwd) {
-      return c.json(
-        errorBody('CONFIG_MISSING', 'Missing required fields: name, description, cron, projectCwd'),
-        400
-      );
-    }
-
-    const result = await rt.runPromise(
-      Effect.gen(function* () {
-        const scheduler = yield* SchedulerService;
-        return scheduler.add(body);
-      }).pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
-        ),
-        Effect.match({
-          onSuccess: (a) => ({ ok: true as const, value: a }),
-          onFailure: (e) => ({ ok: false as const, error: e }),
-        })
-      )
-    );
-
-    if (!result.ok) {
-      const { status, body: errBody } = errorResponse(result.error);
-      return c.json(errBody, status as any);
-    }
-
-    return c.json(result.value, 201);
-  });
-
-  router.patch('/api/automations/:id', async (c) => {
-    const id = c.req.param('id');
-    const body = (await c.req.json()) as UpdateAutomationInput;
-
-    const result = await rt.runPromise(
-      Effect.gen(function* () {
-        const scheduler = yield* SchedulerService;
-        const updated = scheduler.update(id, body);
-        if (!updated) {
-          return yield* Effect.fail(new NotFoundError(`Automation '${id}' not found`));
-        }
-        return updated;
-      }).pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
-        ),
-        Effect.match({
-          onSuccess: (a) => ({ ok: true as const, value: a }),
-          onFailure: (e) => ({ ok: false as const, error: e }),
-        })
-      )
-    );
-
-    if (!result.ok) {
-      const { status, body: errBody } = errorResponse(result.error);
-      return c.json(errBody, status as any);
-    }
-
-    return c.json(result.value);
-  });
-
-  router.delete('/api/automations/:id', async (c) => {
-    const id = c.req.param('id');
-
-    const result = await rt.runPromise(
-      Effect.gen(function* () {
-        const scheduler = yield* SchedulerService;
-        const removed = scheduler.remove(id);
-        if (!removed) {
-          return yield* Effect.fail(new NotFoundError(`Automation '${id}' not found`));
-        }
-        return { ok: true };
-      }).pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
-        ),
-        Effect.match({
-          onSuccess: (a) => ({ ok: true as const, value: a }),
-          onFailure: (e) => ({ ok: false as const, error: e }),
-        })
-      )
-    );
-
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
-
-    return c.json(result.value);
-  });
-
-  router.post('/api/automations/:id/run', async (c) => {
-    const id = c.req.param('id');
-
-    const result = await rt.runPromise(
-      Effect.gen(function* () {
-        const scheduler = yield* SchedulerService;
-        const sessionId = yield* Effect.tryPromise({
-          try: () => scheduler.runOnce(id),
-          catch: () => new NotFoundError(`Automation '${id}' not found or execution failed`),
-        });
-        return { sessionId };
-      }).pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
-        ),
-        Effect.match({
-          onSuccess: (a) => ({ ok: true as const, value: a }),
-          onFailure: (e) => ({ ok: false as const, error: e }),
-        })
-      )
-    );
-
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
-
-    return c.json(result.value);
-  });
+/** 校验必填项后构造 CreateAutomationInput；缺字段返回 null，由调用方落 400。不用 `as` 断言未验证 body。 */
+function toCreateInput(body: Partial<CreateAutomationInput>): CreateAutomationInput | null {
+  const { name, description, cron, projectCwd } = body;
+  if (!name || !description || !cron || !projectCwd) return null;
+  return { ...body, name, description, cron, projectCwd };
 }
+
+const listAutomations: Handler = Effect.gen(function* () {
+  const scheduler = yield* SchedulerService;
+  return json(scheduler.list());
+});
+
+const createAutomation: Handler = Effect.gen(function* () {
+  const body = yield* readJson<Partial<CreateAutomationInput>>();
+  const input = toCreateInput(body);
+  if (!input) {
+    return yield* Effect.fail(
+      new AgentError(
+        'CONFIG_MISSING',
+        'Missing required fields: name, description, cron, projectCwd'
+      )
+    );
+  }
+  const scheduler = yield* SchedulerService;
+  return json(scheduler.add(input), 201);
+});
+
+const patchAutomation: Handler = Effect.gen(function* () {
+  const { id } = yield* pathParams;
+  // PATCH 只能改既有自动化的字段（UpdateAutomationInput 不含 projectCwd）
+  const body = yield* readJson<UpdateAutomationInput>();
+  const scheduler = yield* SchedulerService;
+  const updated = scheduler.update(id ?? '', body);
+  if (!updated) {
+    return yield* Effect.fail(new NotFoundError(`Automation '${id}' not found`));
+  }
+  return json(updated);
+});
+
+const deleteAutomation: Handler = Effect.gen(function* () {
+  const { id } = yield* pathParams;
+  const scheduler = yield* SchedulerService;
+  if (!scheduler.remove(id ?? '')) {
+    return yield* Effect.fail(new NotFoundError(`Automation '${id}' not found`));
+  }
+  return json({ ok: true });
+});
+
+const runAutomation: Handler = Effect.gen(function* () {
+  const { id } = yield* pathParams;
+  const scheduler = yield* SchedulerService;
+  const sessionId = yield* Effect.tryPromise({
+    try: () => scheduler.runOnce(id ?? ''),
+    catch: () => new NotFoundError(`Automation '${id}' not found or execution failed`),
+  });
+  return json({ sessionId });
+});
+
+export const addAutomationsRoutes = (router: Router): Router =>
+  router.pipe(
+    HttpRouter.get('/api/automations', listAutomations),
+    HttpRouter.post('/api/automations', createAutomation),
+    HttpRouter.patch('/api/automations/:id', patchAutomation),
+    HttpRouter.del('/api/automations/:id', deleteAutomation),
+    HttpRouter.post('/api/automations/:id/run', runAutomation)
+  );

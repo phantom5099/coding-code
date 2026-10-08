@@ -1,34 +1,14 @@
-import type { Hono } from 'hono';
-import { Effect, ManagedRuntime } from 'effect';
+import * as HttpRouter from '@effect/platform/HttpRouter';
+import { Effect } from 'effect';
 import { SubagentRunRegistryService } from '../../subagent/registry.js';
-import { errorResponse } from '../util.js';
+import { json, pathParams, type Handler, type Router } from '../handler.js';
 
-type ManagedRt = ManagedRuntime.ManagedRuntime<any, any>;
+const stopAll: Handler = Effect.gen(function* () {
+  const { id: sessionId } = yield* pathParams;
+  const registry = yield* SubagentRunRegistryService;
+  const stopped = yield* registry.stopAll(sessionId ?? '');
+  return json({ stopped });
+});
 
-export function registerSubagentsRoutes(router: Hono, rt: ManagedRt): void {
-  router.post('/api/sessions/:id/subagents/stop', async (c) => {
-    const sessionId = c.req.param('id');
-
-    const result = await rt.runPromise(
-      Effect.gen(function* () {
-        const registry = yield* SubagentRunRegistryService;
-        return yield* registry.stopAll(sessionId);
-      }).pipe(
-        Effect.catchAllDefect((defect) =>
-          Effect.fail(new Error(`Unexpected error: ${String(defect)}`))
-        ),
-        Effect.match({
-          onSuccess: (stopped) => ({ ok: true as const, value: { stopped } }),
-          onFailure: (e) => ({ ok: false as const, error: e }),
-        })
-      )
-    );
-
-    if (!result.ok) {
-      const { status, body } = errorResponse(result.error);
-      return c.json(body, status as any);
-    }
-
-    return c.json(result.value);
-  });
-}
+export const addSubagentsRoutes = (router: Router): Router =>
+  router.pipe(HttpRouter.post('/api/sessions/:id/subagents/stop', stopAll));

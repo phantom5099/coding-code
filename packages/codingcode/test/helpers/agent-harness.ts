@@ -19,10 +19,9 @@ import { SkillService } from '../../src/skills/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { ToolExecutorService } from '../../src/tools/port.js';
-import type { FrameBody, RuntimeEvent, Transition } from '../../src/contracts/frame.js';
-import type { TokenUsage } from '../../src/contracts/types.js';
-import type { LLMStreamPart } from '../../src/contracts/provider.js';
-import type { SessionStoreState, SessionRef } from '../../src/contracts/session.js';
+import type { FrameBody, RuntimeEvent, Transition } from '../../src/sink/types.js';
+import type { TokenUsage, LLMStreamPart } from '../../src/llm/types.js';
+import type { SessionStoreState, SessionRef } from '../../src/session/types.js';
 
 // ---- LLM 部件构造器 ----
 
@@ -104,7 +103,9 @@ export function endReason(events: readonly FrameBody[]): TransitionOf<'end'>['re
   return endOf(events)?.reason;
 }
 
-export function fatalOf(events: readonly FrameBody[]): { message: string; code: string } | undefined {
+export function fatalOf(
+  events: readonly FrameBody[]
+): { message: string; code: string } | undefined {
   for (const b of events) {
     if (b.family === 'fatal') return b.fatal;
   }
@@ -120,7 +121,11 @@ export function hasCompress(events: readonly FrameBody[]): boolean {
 
 export interface HarnessMocks {
   llm: {
-    completeStream: (params: any, model: string, signal?: AbortSignal) => AsyncIterable<LLMStreamPart>;
+    completeStream: (
+      params: any,
+      model: string,
+      signal?: AbortSignal
+    ) => AsyncIterable<LLMStreamPart>;
     modelInfo: { maxTokens: number };
   };
   state?: Partial<SessionStoreState>;
@@ -213,20 +218,26 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     emit: () => Effect.succeed(undefined),
     emitDecision: () => Effect.succeed(null),
   };
-  const executor =
-    mocks.executor ??
-    ({
-      prepare: (names: readonly string[], mcpTools: any[] = []) => Effect.succeed(createToolCatalog(names, mcpTools)),
-      executeBatch: (calls: any[]) =>
-        Effect.succeed(
-          calls.map((c: any) => ({
-            status: 'ok' as const,
-            id: c.id,
-            name: c.name,
-            output: '',
-          }))
-        ),
-    } as any);
+  const batch =
+    mocks.executor?.executeBatch ??
+    ((calls: any[]) =>
+      Effect.succeed(
+        calls.map((c: any) => ({
+          status: 'ok' as const,
+          id: c.id,
+          name: c.name,
+          output: '',
+        }))
+      ));
+  const executor = {
+    prepare: (names: readonly string[], mcpTools: any[] = []) =>
+      Effect.sync(() => {
+        const { tools, lookup } = createToolCatalog(names, mcpTools);
+        return { tools, lookup };
+      }),
+    executeBatch: (calls: any[], sessionId?: string, opts?: any) =>
+      batch(calls, sessionId, opts),
+  } as any;
 
   const session: Record<string, any> = {
     load: (_cwd: string, sid: string) => Effect.succeed({ ...state, sessionId: sid }),
@@ -257,10 +268,18 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       return {
         getHistory: (ref: SessionRef) =>
           Effect.gen(function* () {
-            const shouldCompact = mocks.contextWillCompact ? yield* Effect.promise(mocks.contextWillCompact) : false;
+            const shouldCompact = mocks.contextWillCompact
+              ? yield* Effect.promise(mocks.contextWillCompact)
+              : false;
             if (shouldCompact) {
-              yield* sink.emit(ref.sessionId, { family: 'transition', transition: { to: 'compress' } });
-              yield* sink.emit(ref.sessionId, { family: 'transition', transition: { to: 'executing' } });
+              yield* sink.emit(ref.sessionId, {
+                family: 'transition',
+                transition: { to: 'compress' },
+              });
+              yield* sink.emit(ref.sessionId, {
+                family: 'transition',
+                transition: { to: 'executing' },
+              });
             }
             return mocks.contextAssemble
               ? yield* Effect.promise(mocks.contextAssemble)
@@ -323,7 +342,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     mcpLayer,
     Layer.succeed(SubagentRunnerService, {} as any),
     // ToolEnvPort：把上面的具体服务适配成 agent 所需的工具执行期注入能力（同 layer.ts）
-    ToolEnvLayer,
+    ToolEnvLayer
   );
   return services;
 }

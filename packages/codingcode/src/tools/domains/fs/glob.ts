@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { globby } from 'globby';
 import { relative, resolve } from 'path';
 import { Effect } from 'effect';
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
 
 export const globTool: ToolDefinition = {
@@ -43,7 +43,7 @@ export const globTool: ToolDefinition = {
             absolute: true,
             onlyFiles: true,
           }),
-        catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', String(e), e),
+        catch: (e) => AgentError.toolExecutionFailed('search_files', e),
       });
 
       const truncated = files.slice(0, max_results);

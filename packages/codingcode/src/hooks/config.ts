@@ -6,15 +6,18 @@ import {
   writeNamedList,
   type NamedListFile,
 } from '../infra/yaml-store.js';
-import { getGlobalDir, CODINGCODE_DIRNAME } from '../core/path.js';
-import type { UserHookConfig } from '../contracts/hooks.js';
+import { getGlobalDir, CODINGCODE_DIRNAME } from '../util/path.js';
+import type { UserHookConfig } from './types.js';
 
 const HOOKS_FILE: NamedListFile = { fileName: 'hooks', key: 'hooks' };
 
 type RawHookConfig = Partial<UserHookConfig> & { name: string };
 
 export function loadHookConfigs(projectRoot: string): UserHookConfig[] {
-  return readNamedList<RawHookConfig>(join(projectRoot, CODINGCODE_DIRNAME), HOOKS_FILE) as UserHookConfig[];
+  return readNamedList<RawHookConfig>(
+    join(projectRoot, CODINGCODE_DIRNAME),
+    HOOKS_FILE
+  ) as UserHookConfig[];
 }
 
 export function writeHookConfigs(projectRoot: string, hooks: UserHookConfig[]): void {

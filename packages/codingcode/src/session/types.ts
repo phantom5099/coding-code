@@ -1,5 +1,5 @@
-import type { ProfileName, TokenUsage, ToolCall } from './types.js';
-import type { PermissionMode } from './permission.js';
+import type { TokenUsage, ToolCall } from '../llm/types.js';
+import type { ProfileName, PermissionMode } from '../util/enums.js';
 
 export interface SessionMetaEvent {
   type: 'session_meta';
@@ -88,6 +88,20 @@ export interface SessionStoreState extends SessionMetaEvent {
   usage: TokenUsage | undefined;
 }
 
+export interface SessionCreateOptions {
+  model: string;
+  title?: string;
+  activeProfile: ProfileName;
+  permissionMode: PermissionMode;
+}
+
+export interface SessionRef {
+  cwd: string;
+  sessionId: string;
+  parentSessionId?: string;
+  currentTurnId: number;
+}
+
 export type UITurnItem =
   | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
   | {
@@ -123,18 +137,4 @@ export interface UITurn {
   id: string;
   items: UITurnItem[];
   status: 'running' | 'completed' | 'error';
-}
-
-export interface SessionCreateOptions {
-  model: string;
-  title?: string;
-  activeProfile: ProfileName;
-  permissionMode: PermissionMode;
-}
-
-export interface SessionRef {
-  cwd: string;
-  sessionId: string;
-  parentSessionId?: string;
-  currentTurnId: number;
 }

@@ -1,6 +1,36 @@
 import type { Effect } from 'effect';
-import type { Message, ToolCall, ToolDescription, TokenUsage } from './types.js';
-import type { AgentError } from '../core/error.js';
+import type { AgentError } from '../util/error.js';
+
+export interface TokenUsage {
+  prompt: number;
+  completion: number;
+  total: number;
+}
+
+export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface Message {
+  role: MessageRole;
+  content: string;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+  tool_name?: string;
+  name?: string;
+  usage?: TokenUsage;
+}
+
+/** 请求里"给模型看的"工具描述。 */
+export interface ToolDescription {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
 
 export interface LLMRequest {
   messages: Message[];
@@ -39,15 +69,4 @@ export interface LLMClient {
   complete(req: LLMRequest, signal?: AbortSignal): Effect.Effect<LLMResponse, AgentError>;
   completeStream(req: LLMRequest, signal?: AbortSignal): AsyncIterable<LLMStreamPart>;
   readonly modelInfo: ModelInfo;
-}
-
-export interface SelectableModel {
-  id: string;
-  provider: string;
-  driver: string;
-  name: string;
-  model: string;
-  base_url: string;
-  api_key_env: string;
-  context_window: number;
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
 import { createToolCatalog } from '../../src/tools/catalog.js';
-import type { McpToolSpec } from '../../src/contracts/mcp.js';
+import type { McpToolSpec } from '../../src/mcp/types.js';
 
 const BUILD_NAMES = [
   'read_file',

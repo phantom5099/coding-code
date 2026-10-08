@@ -23,7 +23,6 @@ vi.mock('../../src/infra/config.js', () => ({
       maxBytes: 16384,
       promptMaxBytes: 8192,
     },
-    server: { port: 8080 },
   }),
 }));
 

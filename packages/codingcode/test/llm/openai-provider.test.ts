@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { LLMStreamPart } from '../../src/contracts/provider.js';
+import type { LLMStreamPart } from '../../src/llm/types.js';
 
 const generateText = vi.fn();
 const streamText = vi.fn();
@@ -106,7 +106,12 @@ describe('OpenAIProvider completeStream', () => {
     streamText.mockReturnValue({
       fullStream: (async function* () {
         yield { type: 'text-delta', text: 'reading' };
-        yield { type: 'tool-call', toolCallId: 'tc-1', toolName: 'read_file', input: { path: 'a.ts' } };
+        yield {
+          type: 'tool-call',
+          toolCallId: 'tc-1',
+          toolName: 'read_file',
+          input: { path: 'a.ts' },
+        };
         yield { type: 'finish', totalUsage: USAGE };
       })(),
     });

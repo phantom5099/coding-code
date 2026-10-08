@@ -1,11 +1,12 @@
 import { Context, Effect, Fiber, Layer, Option, Stream, SubscriptionRef } from 'effect';
-import { AgentError } from '../core/error.js';
-import { isTurnEnd } from '../contracts/frame.js';
-import type { EndTransition, FrameBody } from '../contracts/frame.js';
-import type { ProfileName } from '../contracts/types.js';
+import { AgentError } from '../util/error.js';
+import { isTurnEnd } from '../sink/types.js';
+import type { EndTransition, FrameBody } from '../sink/types.js';
+import { BYPASS_PERMISSION_MODE, type ProfileName } from '../util/enums.js';
+import { SUBAGENT_RESULT_PREFIX } from '../session/types.js';
 import { estimateTokensForContent } from '../context/tokens.js';
 import { loadConfig } from '../infra/config.js';
-import { SUBAGENT_RESULT_PREFIX } from '../contracts/session.js';
+
 import { MailboxService } from '../session/mailbox.js';
 import { EventSinkService } from '../sink/port.js';
 import { HookService } from '../hooks/port.js';
@@ -70,9 +71,10 @@ function truncateToTokens(text: string, budget: number): string {
 }
 
 function renderResult(run: SubagentRun, outcome: { end: EndTransition; content: string }): string {
-  const body = outcome.end.reason === 'done'
-    ? outcome.content
-    : `${outcome.content}\nThe subagent did not finish. Spawn it again if the task is still needed.`;
+  const body =
+    outcome.end.reason === 'done'
+      ? outcome.content
+      : `${outcome.content}\nThe subagent did not finish. Spawn it again if the task is still needed.`;
   return [
     SUBAGENT_RESULT_PREFIX,
     `Task name: ${run.parentSessionId}`,
@@ -83,8 +85,11 @@ function renderResult(run: SubagentRun, outcome: { end: EndTransition; content: 
 }
 
 /** 非 done 的终态统一归一成一条 error 帧，形状仍是帧契约的 end */
-const failedEnd = (message: string): EndTransition =>
-  ({ to: 'end', reason: 'error', error: { message, code: 'SUBAGENT_FAILED' } });
+const failedEnd = (message: string): EndTransition => ({
+  to: 'end',
+  reason: 'error',
+  error: { message, code: 'SUBAGENT_FAILED' },
+});
 
 /** 帧流的唯一读者：攒 text_delta 取最终输出，认 isTurnEnd 拿终态，其余帧丢弃 */
 const consume = (stream: AsyncGenerator<FrameBody, unknown, unknown>) =>
@@ -98,18 +103,21 @@ const consume = (stream: AsyncGenerator<FrameBody, unknown, unknown>) =>
         }
         if (isTurnEnd(body)) {
           const end = body.transition;
-          if (end.reason === 'done') return { end, content: content || '(subagent completed without output)' };
+          if (end.reason === 'done')
+            return { end, content: content || '(subagent completed without output)' };
           if (end.reason === 'error') return { end, content: end.error.message };
-          const message = end.reason === 'maxSteps'
-            ? 'subagent exhausted its step budget before finishing'
-            : 'subagent was aborted';
+          const message =
+            end.reason === 'maxSteps'
+              ? 'subagent exhausted its step budget before finishing'
+              : 'subagent was aborted';
           return { end: failedEnd(message), content: message };
         }
       }
       const message = 'subagent stream ended without a terminal frame';
       return { end: failedEnd(message), content: message };
     },
-    catch: (e) => new AgentError('TOOL_EXECUTION_FAILED', e instanceof Error ? e.message : String(e)),
+    catch: (e) =>
+      new AgentError('TOOL_EXECUTION_FAILED', e instanceof Error ? e.message : String(e)),
   });
 
 export const SubagentRunRegistryLayer = Layer.scoped(
@@ -119,16 +127,19 @@ export const SubagentRunRegistryLayer = Layer.scoped(
     const runner = yield* SubagentRunnerService;
     const sink = yield* EventSinkService;
     const hooks = yield* HookService;
-    const runs = new Map<string, SubagentRun>();   // 键 = 子会话 sessionId；parentSessionId 只是条目上的字段
+    const runs = new Map<string, SubagentRun>(); // 键 = 子会话 sessionId；parentSessionId 只是条目上的字段
 
     /** 帧直投父会话的出站队列：EventSink 的键就是收件人会话，不需要任何回调透传 */
     const emitSubagent = (
-      parentSessionId: string, sessionId: string, agentName: string,
-      status: 'spawned' | 'completed' | 'failed',
-    ) => sink.emit(parentSessionId, {
-      family: 'event',
-      event: { type: 'subagent_event', sessionId, agentName, status },
-    });
+      parentSessionId: string,
+      sessionId: string,
+      agentName: string,
+      status: 'spawned' | 'completed' | 'failed'
+    ) =>
+      sink.emit(parentSessionId, {
+        family: 'event',
+        event: { type: 'subagent_event', sessionId, agentName, status },
+      });
 
     /** 同步读当前值：SubscriptionRef 的 get 随时可读、读不走 */
     const currentStatus = (run: SubagentRun): SubagentRunStatus =>
@@ -146,21 +157,26 @@ export const SubagentRunRegistryLayer = Layer.scoped(
     const drainRun = (run: SubagentRun, stream: AsyncGenerator<FrameBody, unknown, unknown>) =>
       Effect.gen(function* () {
         const settled = yield* Effect.either(consume(stream));
-        const outcome = settled._tag === 'Right'
-          ? settled.right
-          : { end: failedEnd(settled.left.message), content: settled.left.message };
+        const outcome =
+          settled._tag === 'Right'
+            ? settled.right
+            : { end: failedEnd(settled.left.message), content: settled.left.message };
 
-        yield* mailbox.offer(run.parentSessionId, {
-          type: 'subagent_result',
-          sessionId: run.sessionId,
-          agentName: run.agentName,
-          content: renderResult(run, outcome),
-        }).pipe(Effect.ignore);
+        yield* mailbox
+          .offer(run.parentSessionId, {
+            type: 'subagent_result',
+            sessionId: run.sessionId,
+            agentName: run.agentName,
+            content: renderResult(run, outcome),
+          })
+          .pipe(Effect.ignore);
 
         yield* SubscriptionRef.set(run.status, { kind: 'ended', end: outcome.end });
         yield* emitSubagent(
-          run.parentSessionId, run.sessionId, run.agentName,
-          outcome.end.reason === 'done' ? 'completed' : 'failed',
+          run.parentSessionId,
+          run.sessionId,
+          run.agentName,
+          outcome.end.reason === 'done' ? 'completed' : 'failed'
         );
         yield* hooks.emit('agent.subagent.complete', {
           projectPath: run.parentCwd,
@@ -181,9 +197,9 @@ export const SubagentRunRegistryLayer = Layer.scoped(
         const abort = new AbortController();
         const { stream, sessionId } = yield* runner.runSubagent(opts.prompt, {
           cwd: opts.parentCwd,
-          signal: abort.signal,          // 子代理自己的 signal，与父回合无关
+          signal: abort.signal, // 子代理自己的 signal，与父回合无关
           activeProfile: opts.parentProfile,
-          permissionMode: 'bypass',
+          permissionMode: BYPASS_PERMISSION_MODE,
           parentSessionId: opts.parentSessionId,
           agentName: opts.agentName,
           model: opts.model,
@@ -192,8 +208,12 @@ export const SubagentRunRegistryLayer = Layer.scoped(
 
         const status = yield* SubscriptionRef.make<SubagentRunStatus>({ kind: 'running' });
         const run: SubagentRun = {
-          sessionId, parentSessionId: opts.parentSessionId, parentCwd: opts.parentCwd,
-          agentName: opts.agentName, status, abort,
+          sessionId,
+          parentSessionId: opts.parentSessionId,
+          parentCwd: opts.parentCwd,
+          agentName: opts.agentName,
+          status,
+          abort,
         };
         runs.set(sessionId, run);
         yield* emitSubagent(opts.parentSessionId, sessionId, opts.agentName, 'spawned');
@@ -206,14 +226,19 @@ export const SubagentRunRegistryLayer = Layer.scoped(
       Effect.gen(function* () {
         const run = runs.get(sessionId);
         if (!run) {
-          return yield* Effect.fail(new AgentError('TOOL_EXECUTION_FAILED', `Unknown subagent: ${sessionId}`));
+          return yield* Effect.fail(
+            new AgentError('TOOL_EXECUTION_FAILED', `Unknown subagent: ${sessionId}`)
+          );
         }
         // 等状态通道的后续值；changes 的首次发射即当前值 ⇒ 已终态的 run 立即返回
         const settled = run.status.changes.pipe(
-          Stream.filterMap((s) => s.kind === 'ended' ? Option.some(s.end) : Option.none<EndTransition>()),
+          Stream.filterMap((s) =>
+            s.kind === 'ended' ? Option.some(s.end) : Option.none<EndTransition>()
+          ),
           Stream.runHead,
-          Effect.map((opt): WaitOutcome =>
-            Option.isNone(opt) ? 'timeout' : (opt.value.reason === 'done' ? 'completed' : 'failed')
+          Effect.map(
+            (opt): WaitOutcome =>
+              Option.isNone(opt) ? 'timeout' : opt.value.reason === 'done' ? 'completed' : 'failed'
           )
         );
 
@@ -228,7 +253,7 @@ export const SubagentRunRegistryLayer = Layer.scoped(
         let stopped = 0;
         for (const run of runs.values()) {
           if (run.parentSessionId !== parentSessionId) continue;
-          if (run.abort.signal.aborted) continue;        // 已请求过停止，不重复计数
+          if (run.abort.signal.aborted) continue; // 已请求过停止，不重复计数
           if (currentStatus(run).kind !== 'running') continue;
           run.abort.abort();
           stopped++;

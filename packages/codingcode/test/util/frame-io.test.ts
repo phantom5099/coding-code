@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createFrameAssembler } from '../../src/contracts/frame-io.js';
-import type { FrameBody } from '../../src/contracts/frame.js';
+import { createFrameAssembler } from '../../src/server/frame-io.js';
+import type { FrameBody } from '../../src/sink/types.js';
 
 // ---- body builders ----
 

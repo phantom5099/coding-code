@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { mapLlmError } from '../../src/llm/errors.js';
-import { AgentError } from '../../src/core/error.js';
+import { AgentError } from '../../src/util/error.js';
 
 describe('mapLlmError', () => {
   it('should map 413 status to CONTEXT_OVERFLOW', () => {

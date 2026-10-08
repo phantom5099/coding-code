@@ -7,7 +7,7 @@ import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { filterForContext, buildContextMessages } from '../../src/context/context.js';
 import { readHistory } from '../../src/session/file-ops.js';
-import type { SessionMetaEvent, SessionEvent } from '../../src/contracts/session.js';
+import type { SessionMetaEvent, SessionEvent } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { computePaths } from '../../src/session/paths.js';
 

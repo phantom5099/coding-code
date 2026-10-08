@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, ManagedRuntime } from 'effect';
-import { Hono } from 'hono';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
+import { createServer, type ServerApp } from '../../src/server/index.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -13,14 +12,13 @@ const base = useTempProjectBase();
 describe('POST /api/sessions — atomic mode + permissionMode + model', () => {
   let cwd: string;
   let rt: ManagedRuntime.ManagedRuntime<any, any>;
-  let app: Hono;
+  let app: ServerApp;
 
   beforeEach(async () => {
     cwd = join(base.dir, 'create-session-active-profile');
     mkdirSync(cwd, { recursive: true });
     rt = ManagedRuntime.make(SessionLayer as any);
-    app = new Hono();
-    registerSessionsRoutes(app, rt);
+    app = await createServer(rt);
   });
 
   afterEach(async () => {

@@ -1,9 +1,9 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { FrameBody } from '../contracts/frame.js';
-import type { ProfileName } from '../contracts/types.js';
-import type { PermissionMode } from '../contracts/permission.js';
-import type { AgentError } from '../core/error.js';
+import type { FrameBody } from '../sink/types.js';
+import type { ProfileName, PermissionMode } from '../util/enums.js';
+
+import type { AgentError } from '../util/error.js';
 
 export interface RunTurnOptions {
   sessionId?: string;
@@ -37,6 +37,9 @@ export interface ToolEnv {
   provide<R, E, A>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, never>;
 }
 
-export class ToolEnvPort extends Context.Tag('AgentToolEnvPort')<ToolEnvPort, {
-  getToolEnv(): Effect.Effect<ToolEnv>;
-}>() {}
+export class ToolEnvPort extends Context.Tag('AgentToolEnvPort')<
+  ToolEnvPort,
+  {
+    getToolEnv(): Effect.Effect<ToolEnv>;
+  }
+>() {}

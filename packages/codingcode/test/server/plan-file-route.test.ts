@@ -5,8 +5,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { mkdirSync, writeFileSync, utimesSync } from 'fs';
 import { join, resolve } from 'path';
-import { Hono } from 'hono';
-import { registerSessionsRoutes } from '../../src/server/routes/sessions.js';
+import { createServer } from '../../src/server/index.js';
 import { SessionService } from '../../src/session/port.js';
 import { LLMService } from '../../src/llm/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
@@ -18,7 +17,7 @@ import { MemoryService } from '../../src/memory/port.js';
 import { SchedulerService } from '../../src/scheduler/port.js';
 import { ContextService } from '../../src/context/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
-import { encodeProjectPath } from '../../src/core/path.js';
+import { encodeProjectPath } from '../../src/util/path.js';
 import { useTempHome } from '../helpers/temp-home.js';
 import { projectBaseDir } from '../helpers/project-base.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
@@ -151,8 +150,7 @@ beforeEach(() => {
 describe('GET /api/sessions/:id/plan', () => {
   it('returns exists:false with empty content when no .md file is present', async () => {
     const rt = ManagedRuntime.make(TestLayer as any);
-    const app = new Hono();
-    registerSessionsRoutes(app, rt);
+    const app = await createServer(rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -178,8 +176,7 @@ describe('GET /api/sessions/:id/plan', () => {
     utimesSync(newPath, newerDate, newerDate);
 
     const rt = ManagedRuntime.make(TestLayer as any);
-    const app = new Hono();
-    registerSessionsRoutes(app, rt);
+    const app = await createServer(rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -198,8 +195,7 @@ describe('GET /api/sessions/:id/plan', () => {
     writeFileSync(join(plansDir, 'notes.txt'), 'should be ignored', 'utf8');
 
     const rt = ManagedRuntime.make(TestLayer as any);
-    const app = new Hono();
-    registerSessionsRoutes(app, rt);
+    const app = await createServer(rt);
     const res = await app.request('/api/sessions/s-1/plan?cwd=/tmp/test');
     const body = (await res.json()) as { content: string; exists: boolean };
     expect(body.exists).toBe(true);

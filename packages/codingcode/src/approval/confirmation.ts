@@ -20,7 +20,10 @@ export function userConfirmAsync(
     const sink = yield* EventSinkService;
     const id = callId;
 
-    yield* sink.emit(sessionId, { family: 'event', event: { type: 'approval_request', id, tool, args } });
+    yield* sink.emit(sessionId, {
+      family: 'event',
+      event: { type: 'approval_request', id, tool, args },
+    });
 
     return yield* waitSvc.waitForConfirm(id, sessionId);
   });

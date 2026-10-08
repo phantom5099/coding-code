@@ -1,6 +1,10 @@
 import { Context } from 'effect';
 import type { ManagedRuntime } from 'effect';
-import type { Automation, CreateAutomationInput, UpdateAutomationInput } from '../contracts/automation.js';
+import type {
+  Automation,
+  CreateAutomationInput,
+  UpdateAutomationInput,
+} from './types.js';
 
 export interface SchedulerShape {
   setRuntime(rt: ManagedRuntime.ManagedRuntime<any, any>): void;
@@ -13,4 +17,7 @@ export interface SchedulerShape {
   stopAll(): void;
 }
 
-export class SchedulerService extends Context.Tag('Scheduler')<SchedulerService, SchedulerShape>() {}
+export class SchedulerService extends Context.Tag('Scheduler')<
+  SchedulerService,
+  SchedulerShape
+>() {}

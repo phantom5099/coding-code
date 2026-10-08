@@ -21,9 +21,7 @@ const runWithSkill = <A>(f: (skill: SkillSvc) => Effect.Effect<A>): A =>
   );
 
 /** Run multiple operations against the same SkillService instance (shared cache). */
-const runWithSharedSkill = <A>(
-  ...ops: Array<(skill: SkillSvc) => Effect.Effect<unknown>>
-): A[] =>
+const runWithSharedSkill = <A>(...ops: Array<(skill: SkillSvc) => Effect.Effect<unknown>>): A[] =>
   Effect.runSync(
     Effect.gen(function* () {
       const skill = yield* SkillService;
@@ -98,9 +96,7 @@ Test the skill system.
     writeFileSync(join(skillDir, 'scripts', 'run.sh'), 'secret script');
     writeFileSync(join(skillDir, 'assets', 'image.bin'), Buffer.from([0, 1, 2, 3]));
 
-    const skill = runWithSkill((s) => s.getAll(TEST_ROOT)).find(
-      (s) => s.name === 'metadata-only'
-    );
+    const skill = runWithSkill((s) => s.getAll(TEST_ROOT)).find((s) => s.name === 'metadata-only');
 
     expect(skill).toEqual({
       name: 'metadata-only',

@@ -6,8 +6,8 @@ import {
   writeNamedList,
   type NamedListFile,
 } from '../infra/yaml-store.js';
-import { getGlobalDir, CODINGCODE_DIRNAME } from '../core/path.js';
-import type { McpServerConfig } from '../contracts/mcp.js';
+import { getGlobalDir, CODINGCODE_DIRNAME } from '../util/path.js';
+import type { McpServerConfig } from './types.js';
 
 /** mcp 的落盘形状：`<dir>/.codingcode/mcp.yaml` 的 `servers:` */
 const MCP_FILE: NamedListFile = { fileName: 'mcp', key: 'servers' };
@@ -61,5 +61,7 @@ export function setProjectMcpServerEnabled(
   name: string,
   enabled: boolean
 ): void {
-  patchNamed<RawMcpServerConfig>(join(projectRoot, CODINGCODE_DIRNAME), MCP_FILE, name, { enabled });
+  patchNamed<RawMcpServerConfig>(join(projectRoot, CODINGCODE_DIRNAME), MCP_FILE, name, {
+    enabled,
+  });
 }
