@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getGlobalDir } from '../util/path.js';
+import { ASK_BEFORE_EXEC_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../util/enums.js';
 
 export interface ContextConfig {
   compactionModel: string;
@@ -50,8 +51,8 @@ export const DEFAULT_SUBAGENT: SubagentConfig = {
 export const DEFAULT_CONFIG: AppConfig = {
   maxSteps: 200,
   maxStopContinuations: 2,
-  activeProfile: 'build',
-  permissionMode: 'askBeforeExec',
+  activeProfile: BUILD_PROFILE_NAME,
+  permissionMode: ASK_BEFORE_EXEC_PERMISSION_MODE,
   context: DEFAULT_CONTEXT,
   memory: DEFAULT_MEMORY,
   subagent: DEFAULT_SUBAGENT,

@@ -6,6 +6,7 @@ import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
 import { loadConfig } from '../../infra/config.js';
 import { AgentError } from '../../util/error.js';
+import { ASK_BEFORE_EXEC_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../../util/enums.js';
 import {
   frameStream,
   pathParams,
@@ -45,10 +46,12 @@ const sendMessage: Handler = Effect.gen(function* () {
   };
   if (isNew) {
     const cfg = loadConfig();
-    runOpts.activeProfile = isAgentProfileName(cfg.activeProfile) ? cfg.activeProfile : 'build';
+    runOpts.activeProfile = isAgentProfileName(cfg.activeProfile)
+      ? cfg.activeProfile
+      : BUILD_PROFILE_NAME;
     runOpts.permissionMode = isPermissionMode(cfg.permissionMode)
       ? cfg.permissionMode
-      : 'askBeforeExec';
+      : ASK_BEFORE_EXEC_PERMISSION_MODE;
   }
 
   const agent = yield* AgentService;

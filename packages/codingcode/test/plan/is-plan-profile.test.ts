@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isPlanProfile } from '../../src/session/types.js';
+import { isPlanProfile } from '../../src/util/enums.js';
 
 describe('isPlanProfile', () => {
   it('returns true for "plan"', () => {

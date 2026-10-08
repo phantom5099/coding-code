@@ -1,4 +1,4 @@
-import { isPlanProfile, type ProfileName } from '../session/types.js';
+import { isPlanProfile, type ProfileName } from '../util/enums.js';
 
 export const PLAN_TOOL_NAMES: readonly string[] = [
   'read_file',

@@ -2,12 +2,6 @@ export type ProfileName = 'plan' | 'build';
 
 export type PermissionMode = 'askBeforeExec' | 'bypass';
 
-export interface AvailableProfile {
-  name: ProfileName;
-}
-
-export type AvailableProfiles = AvailableProfile[];
-
 export interface TokenUsage {
   prompt: number;
   completion: number;

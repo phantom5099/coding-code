@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { Effect } from 'effect';
 import type { AgentError } from '../util/error.js';
 import type { ToolCall, ToolDescription } from '../llm/types.js';
-import type { ProfileName } from '../session/types.js';
+import type { ProfileName } from '../util/enums.js';
 import type { ToolOutcome } from '../sink/types.js';
 
 export interface ToolDefinition<R = never> {

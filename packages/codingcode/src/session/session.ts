@@ -19,8 +19,7 @@ import type {
 import type { SessionStoreState, SessionSummary } from './types.js';
 import type { UITurn } from './types.js';
 import type { TokenUsage } from '../llm/types.js';
-import type { ProfileName } from './types.js';
-import type { PermissionMode } from './types.js';
+import type { ProfileName, PermissionMode } from '../util/enums.js';
 
 import { SessionService } from './port.js';
 import {

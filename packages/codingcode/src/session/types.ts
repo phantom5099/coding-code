@@ -1,28 +1,5 @@
 import type { TokenUsage, ToolCall } from '../llm/types.js';
-
-export const PLAN_PROFILE_NAME = 'plan' as const;
-export const BUILD_PROFILE_NAME = 'build' as const;
-
-export const PROFILE_NAMES = [PLAN_PROFILE_NAME, BUILD_PROFILE_NAME] as const;
-
-export type ProfileName = (typeof PROFILE_NAMES)[number];
-
-export function isPlanProfile(name: string | null | undefined): boolean {
-  return name === PLAN_PROFILE_NAME;
-}
-
-export interface AvailableProfile {
-  name: ProfileName;
-}
-
-export const AVAILABLE_PROFILES: AvailableProfile[] = [
-  { name: PLAN_PROFILE_NAME },
-  { name: BUILD_PROFILE_NAME },
-];
-
-export const PERMISSION_MODES = ['askBeforeExec', 'bypass'] as const;
-
-export type PermissionMode = (typeof PERMISSION_MODES)[number];
+import type { ProfileName, PermissionMode } from '../util/enums.js';
 
 export interface SessionMetaEvent {
   type: 'session_meta';

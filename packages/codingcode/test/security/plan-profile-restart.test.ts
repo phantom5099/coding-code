@@ -9,7 +9,7 @@ import { HookService } from '../../src/hooks/port.js';
 import { ApprovalService } from '../../src/approval/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
-import type { ProfileName } from '../../src/session/types.js';
+import type { ProfileName } from '../../src/util/enums.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ApprovalLayer } from '../../src/approval/approval.js';
 

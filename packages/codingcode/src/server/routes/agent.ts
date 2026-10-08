@@ -12,14 +12,17 @@ import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
 import { AgentError } from '../../util/error.js';
 import { json, readJson, type Handler, type Router } from '../handler.js';
+import { ASK_BEFORE_EXEC_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../../util/enums.js';
 
 function readAgentConfig() {
   const cfg = loadConfig();
   return {
     maxSteps: cfg.maxSteps,
     maxStopContinuations: cfg.maxStopContinuations,
-    activeProfile: isAgentProfileName(cfg.activeProfile) ? cfg.activeProfile : 'build',
-    permissionMode: isPermissionMode(cfg.permissionMode) ? cfg.permissionMode : 'askBeforeExec',
+    activeProfile: isAgentProfileName(cfg.activeProfile) ? cfg.activeProfile : BUILD_PROFILE_NAME,
+    permissionMode: isPermissionMode(cfg.permissionMode)
+      ? cfg.permissionMode
+      : ASK_BEFORE_EXEC_PERMISSION_MODE,
   };
 }
 

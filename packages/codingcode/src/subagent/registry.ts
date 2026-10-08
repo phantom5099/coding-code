@@ -2,7 +2,7 @@ import { Context, Effect, Fiber, Layer, Option, Stream, SubscriptionRef } from '
 import { AgentError } from '../util/error.js';
 import { isTurnEnd } from '../sink/types.js';
 import type { EndTransition, FrameBody } from '../sink/types.js';
-import type { ProfileName } from '../session/types.js';
+import { BYPASS_PERMISSION_MODE, type ProfileName } from '../util/enums.js';
 import { SUBAGENT_RESULT_PREFIX } from '../session/types.js';
 import { estimateTokensForContent } from '../context/tokens.js';
 import { loadConfig } from '../infra/config.js';
@@ -199,7 +199,7 @@ export const SubagentRunRegistryLayer = Layer.scoped(
           cwd: opts.parentCwd,
           signal: abort.signal, // 子代理自己的 signal，与父回合无关
           activeProfile: opts.parentProfile,
-          permissionMode: 'bypass',
+          permissionMode: BYPASS_PERMISSION_MODE,
           parentSessionId: opts.parentSessionId,
           agentName: opts.agentName,
           model: opts.model,

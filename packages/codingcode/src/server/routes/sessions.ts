@@ -3,8 +3,11 @@ import { Effect } from 'effect';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import type { SessionStoreState } from '../../session/types.js';
-import type { ProfileName } from '../../session/types.js';
-import type { PermissionMode } from '../../session/types.js';
+import {
+  ASK_BEFORE_EXEC_PERMISSION_MODE,
+  type PermissionMode,
+  type ProfileName,
+} from '../../util/enums.js';
 
 import { SessionService } from '../../session/port.js';
 import { computePaths } from '../../session/paths.js';
@@ -15,7 +18,6 @@ import { CheckpointService } from '../../checkpoint/port.js';
 import { activeModelId, setGlobalActive } from '../../infra/models.js';
 import { resolveCwd, resolveWorkspaceCwd } from '../cwd.js';
 import { projectDataDir } from '../../util/path.js';
-import { AVAILABLE_PROFILES } from '../../session/types.js';
 import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
 import { AgentError } from '../../util/error.js';
@@ -155,7 +157,6 @@ const getProfile: Handler = Effect.gen(function* () {
     activeProfile: state.activeProfile,
     permissionMode: state.permissionMode,
     cwd,
-    available: AVAILABLE_PROFILES,
   });
 });
 
@@ -182,7 +183,7 @@ const setProfile: Handler = Effect.gen(function* () {
 const getPermissionMode: Handler = Effect.gen(function* () {
   const { id } = yield* pathParams;
   const { cwd } = yield* query;
-  if (!cwd) return json({ mode: 'askBeforeExec' });
+  if (!cwd) return json({ mode: ASK_BEFORE_EXEC_PERMISSION_MODE });
   const session = yield* SessionService;
   const state = yield* session.load(cwd, id ?? '');
   return json({ mode: state.permissionMode });
@@ -309,7 +310,13 @@ const rollbackState = (
     yield* session.rollbackToTurn(state, throughTurnId, 'user rollback');
     const turns = yield* session.readUITurns(sessionId, cwd);
     const promptEstimate = estimatePromptTokensFrom(yield* session.readHistory(state));
-    return { ok: true, turns, promptEstimate, usage: state.usage, ...(codeResult ? { codeResult } : {}) };
+    return {
+      ok: true,
+      turns,
+      promptEstimate,
+      usage: state.usage,
+      ...(codeResult ? { codeResult } : {}),
+    };
   });
 
 const rollbackContext: Handler = Effect.gen(function* () {

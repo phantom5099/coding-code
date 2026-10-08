@@ -1,9 +1,14 @@
 import { Layer, Effect } from 'effect';
 import { HookService } from '../hooks/port.js';
 import type { HookShape } from '../hooks/port.js';
-import type { PermissionMode } from '../session/types.js';
+import {
+  ASK_BEFORE_EXEC_PERMISSION_MODE,
+  BYPASS_PERMISSION_MODE,
+  PLAN_PROFILE_NAME,
+  type PermissionMode,
+  type ProfileName,
+} from '../util/enums.js';
 import type { PermissionRule, ToolCallRequest } from './types.js';
-import type { ProfileName } from '../session/types.js';
 import { PLAN_ALLOWED_TOOLS } from './tool-policy.js';
 import { createRuleEngine, type RuleEngine } from './rule-engine.js';
 import { userConfirmAsync } from './confirmation.js';
@@ -40,7 +45,7 @@ function applyPermissionMode(
   profile: ProfileName | undefined,
   destructiveTools: Set<string>
 ): ApprovalDecision | null {
-  if (profile === 'plan') {
+  if (profile === PLAN_PROFILE_NAME) {
     if (PLAN_ALLOWED_TOOLS.has(tool)) {
       return { type: 'allow', source: 'permission-mode' };
     }
@@ -52,10 +57,10 @@ function applyPermissionMode(
   }
 
   switch (mode) {
-    case 'bypass':
+    case BYPASS_PERMISSION_MODE:
       return { type: 'allow', source: 'permission-mode' };
 
-    case 'askBeforeExec':
+    case ASK_BEFORE_EXEC_PERMISSION_MODE:
       if (!destructiveTools.has(tool)) {
         return { type: 'allow', source: 'permission-mode' };
       }
@@ -231,7 +236,7 @@ export const ApprovalLayer = Layer.effect(
           {
             ruleEngine,
             destructiveTools,
-            permissionMode: request.permissionMode ?? 'askBeforeExec',
+            permissionMode: request.permissionMode ?? ASK_BEFORE_EXEC_PERMISSION_MODE,
             profile: request.profile,
             onAlways: (rule) => ruleEngine.addRule(rule),
             onNever: (rule) => ruleEngine.addRule(rule),

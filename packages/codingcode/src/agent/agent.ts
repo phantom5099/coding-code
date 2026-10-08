@@ -27,7 +27,7 @@ import type {
 } from '../sink/types.js';
 import { isTurnEnd } from '../sink/types.js';
 import type { SessionRef } from '../session/types.js';
-import type { PermissionMode } from '../session/types.js';
+import type { PermissionMode } from '../util/enums.js';
 import type { ToolCatalog, ToolResult } from '../tools/types.js';
 import type { ToolCall } from '../llm/types.js';
 import { loadConfig } from '../infra/config.js';

@@ -1,4 +1,4 @@
-import { PLAN_PROFILE_NAME, BUILD_PROFILE_NAME, type ProfileName } from '../session/types.js';
+import { PLAN_PROFILE_NAME, BUILD_PROFILE_NAME, type ProfileName } from '../util/enums.js';
 
 export interface AgentProfile {
   name: ProfileName;

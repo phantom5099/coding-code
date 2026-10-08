@@ -51,8 +51,6 @@ export type {
 } from './dto.js';
 
 export type {
-  AvailableProfile,
-  AvailableProfiles,
   PermissionMode,
   ProfileName,
   TodoItem,

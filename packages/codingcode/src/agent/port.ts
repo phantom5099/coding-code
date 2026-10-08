@@ -1,8 +1,7 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { FrameBody } from '../sink/types.js';
-import type { ProfileName } from '../session/types.js';
-import type { PermissionMode } from '../session/types.js';
+import type { ProfileName, PermissionMode } from '../util/enums.js';
 
 import type { AgentError } from '../util/error.js';
 

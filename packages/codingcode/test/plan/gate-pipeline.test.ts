@@ -8,7 +8,7 @@ import { createRuleEngine } from '../../src/approval/rule-engine.js';
 import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { EventSinkService } from '../../src/sink/port.js';
-import type { ProfileName } from '../../src/session/types.js';
+import type { ProfileName } from '../../src/util/enums.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();

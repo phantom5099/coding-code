@@ -1,4 +1,4 @@
-import { PERMISSION_MODES, type PermissionMode } from '../session/types.js';
+import { PERMISSION_MODES, type PermissionMode } from '../util/enums.js';
 
 export function isPermissionMode(value: unknown): value is PermissionMode {
   return typeof value === 'string' && (PERMISSION_MODES as readonly string[]).includes(value);
