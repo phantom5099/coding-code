@@ -3,7 +3,7 @@ import type { Effect } from 'effect';
 import type { ToolDefinition, ToolExecCtx, ToolRunner } from './types.js';
 import type { ToolDescription } from '../llm/types.js';
 import type { McpToolSpec } from '../mcp/types.js';
-import type { AgentError } from '../core/error.js';
+import type { AgentError } from '../util/error.js';
 import { ToolRegistry } from './registry.js';
 import { readFileTool } from './domains/fs/read.js';
 import { writeFileTool } from './domains/fs/write.js';

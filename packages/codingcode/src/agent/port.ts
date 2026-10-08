@@ -4,7 +4,7 @@ import type { FrameBody } from '../sink/types.js';
 import type { ProfileName } from '../session/types.js';
 import type { PermissionMode } from '../session/types.js';
 
-import type { AgentError } from '../core/error.js';
+import type { AgentError } from '../util/error.js';
 
 export interface RunTurnOptions {
   sessionId?: string;

@@ -10,7 +10,7 @@ import {
 } from '../../infra/config.js';
 import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
-import { AgentError } from '../../core/error.js';
+import { AgentError } from '../../util/error.js';
 import { json, readJson, type Handler, type Router } from '../handler.js';
 
 function readAgentConfig() {

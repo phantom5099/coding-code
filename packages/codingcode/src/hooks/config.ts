@@ -6,7 +6,7 @@ import {
   writeNamedList,
   type NamedListFile,
 } from '../infra/yaml-store.js';
-import { getGlobalDir, CODINGCODE_DIRNAME } from '../core/path.js';
+import { getGlobalDir, CODINGCODE_DIRNAME } from '../util/path.js';
 import type { UserHookConfig } from './types.js';
 
 const HOOKS_FILE: NamedListFile = { fileName: 'hooks', key: 'hooks' };

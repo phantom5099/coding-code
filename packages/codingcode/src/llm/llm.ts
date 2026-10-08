@@ -1,5 +1,5 @@
 import { Effect, Layer } from 'effect';
-import { AgentError } from '../core/error.js';
+import { AgentError } from '../util/error.js';
 import type { LLMClient, LLMRequest, LLMResponse, LLMStreamPart } from './types.js';
 import { OpenAIProvider } from './providers/openai.js';
 import { DeepSeekProvider } from './providers/deepseek.js';

@@ -6,7 +6,7 @@ import { tmpdir } from 'os';
 import { randomUUID, createHash } from 'crypto';
 import { CheckpointService } from '../../src/checkpoint/port.js';
 import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
-import { normalizePath } from '../../src/core/path.js';
+import { normalizePath } from '../../src/util/path.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { CheckpointLayer } from '../../src/checkpoint/checkpoint.js';
 

@@ -30,10 +30,7 @@ const baseProfile = {
   activeProfile: 'build' as const,
   permissionMode: 'askBeforeExec' as const,
   cwd: '/tmp',
-  available: [
-    { name: 'plan', description: 'plan agent' },
-    { name: 'build', description: 'build agent' },
-  ],
+  available: [{ name: 'plan' }, { name: 'build' }],
 };
 
 describe('ProfileIndicator (with live session)', () => {

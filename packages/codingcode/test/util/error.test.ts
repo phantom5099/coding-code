@@ -1,7 +1,7 @@
 ﻿import { describe, it, expect } from 'vitest';
-import { AgentError } from '../../src/core/error.js';
+import { AgentError } from '../../src/util/error.js';
 
-// core 只负责「领域错误码 + 消息」，HTTP 状态码的映射在 server 层（见 test/server/http-error.test.ts）
+// util 只负责「领域错误码 + 消息」，HTTP 状态码的映射在 server 层（见 test/server/http-error.test.ts）
 describe('AgentError', () => {
   it('带上领域码与可判别 tag', () => {
     const err = AgentError.configMissing('missing');

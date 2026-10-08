@@ -1,5 +1,5 @@
 import type { Effect } from 'effect';
-import type { AgentError } from '../core/error.js';
+import type { AgentError } from '../util/error.js';
 
 export interface TokenUsage {
   prompt: number;

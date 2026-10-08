@@ -14,11 +14,11 @@ import { estimatePromptTokensFrom } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/port.js';
 import { activeModelId, setGlobalActive } from '../../infra/models.js';
 import { resolveCwd, resolveWorkspaceCwd } from '../cwd.js';
-import { projectDataDir } from '../../core/path.js';
+import { projectDataDir } from '../../util/path.js';
 import { AVAILABLE_PROFILES } from '../../session/types.js';
 import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
-import { AgentError } from '../../core/error.js';
+import { AgentError } from '../../util/error.js';
 import { json, pathParams, query, readJson, type Handler, type Router } from '../handler.js';
 import type { AppError } from '../http-error.js';
 

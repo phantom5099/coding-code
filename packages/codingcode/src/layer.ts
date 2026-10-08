@@ -65,7 +65,6 @@ const SubagentWithDeps = SubagentRunnerLayer.pipe(Layer.provide(AgentWithDeps));
 
 // 运行注册表：要 runner 起子代理、要 mailbox 投递终态、要 sink 发 subagent_event 帧、
 // 要 hooks 在子代理终态时触发 agent.subagent.complete。
-// 不依赖 SessionLayer —— 它不写盘，写盘由父回合循环在 drain 点做。
 const SubagentRunRegistryWithDeps = SubagentRunRegistryLayer.pipe(
   Layer.provide(Layer.mergeAll(SubagentWithDeps, MailboxLayer, EventSinkLayer, HookLayer))
 );

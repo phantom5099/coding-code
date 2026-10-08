@@ -14,7 +14,7 @@ import {
   renameSync,
 } from 'fs';
 import { join, dirname } from 'path';
-import { getGlobalDir, projectRootDir } from '../core/path.js';
+import { getGlobalDir, projectRootDir } from '../util/path.js';
 import { transcriptPathOf, SESSIONS_DIRNAME } from './paths.js';
 import type { SessionEvent, SessionMetaEvent } from './types.js';
 import type { SessionSummary } from './types.js';

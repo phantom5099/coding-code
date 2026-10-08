@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { normalizePath, encodeProjectPath, projectDataDir } from '../core/path.js';
+import { normalizePath, encodeProjectPath, projectDataDir } from '../util/path.js';
 
 /** 会话转录在项目数据目录下的布局。 */
 export const SESSIONS_DIRNAME = 'sessions';

@@ -9,7 +9,6 @@ import type {
 } from './types.js';
 import { readAutomations, writeAutomations } from './store.js';
 import { AgentService } from '../agent/port.js';
-import { AgentError } from '../core/error.js';
 import { activeModelId } from '../infra/models.js';
 import { SchedulerService } from './port.js';
 
@@ -186,7 +185,6 @@ export const SchedulerLayer = Layer.effect(
               return yield* agent.runTurn(auto.description, {
                 cwd: auto.projectCwd,
                 signal: controller.signal,
-                // 自动化没有独立的模型配置，统一用 config.yaml 的活动模型
                 model: activeModelId(),
                 activeProfile: 'build',
                 permissionMode: 'bypass',

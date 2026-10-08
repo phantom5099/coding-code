@@ -5,7 +5,7 @@ import { resolveWorkspaceCwd } from '../cwd.js';
 import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
 import { loadConfig } from '../../infra/config.js';
-import { AgentError } from '../../core/error.js';
+import { AgentError } from '../../util/error.js';
 import {
   frameStream,
   pathParams,
@@ -44,7 +44,6 @@ const sendMessage: Handler = Effect.gen(function* () {
     skills: body.skills,
   };
   if (isNew) {
-    // 新会话的交互/权限模式取自 config.yaml；会话一旦建立就以会话头为准
     const cfg = loadConfig();
     runOpts.activeProfile = isAgentProfileName(cfg.activeProfile) ? cfg.activeProfile : 'build';
     runOpts.permissionMode = isPermissionMode(cfg.permissionMode)

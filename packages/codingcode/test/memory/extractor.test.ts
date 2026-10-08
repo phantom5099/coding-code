@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { extractMemory } from '../../src/memory/extractor.js';
-import { AgentError } from '../../src/core/error.js';
+import { AgentError } from '../../src/util/error.js';
 import type { LLMShape } from '../../src/llm/port.js';
 import type { LLMRequest } from '../../src/llm/types.js';
 

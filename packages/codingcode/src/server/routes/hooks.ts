@@ -2,7 +2,7 @@ import * as HttpRouter from '@effect/platform/HttpRouter';
 import { Effect } from 'effect';
 import { isGlobalCwd, resolveCwd } from '../cwd.js';
 import { AlreadyExistsError, NotFoundError, type AppError } from '../http-error.js';
-import { AgentError } from '../../core/error.js';
+import { AgentError } from '../../util/error.js';
 import { json, pathParams, query, readJson, type Handler, type Router } from '../handler.js';
 import type { HookPoint, UserHookConfig } from '../../hooks/types.js';
 import {

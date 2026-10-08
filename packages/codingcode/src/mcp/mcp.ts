@@ -4,7 +4,7 @@ import { McpClient } from './client.js';
 import { McpService } from './port.js';
 import type { McpServerConfig, McpToolSpec } from './types.js';
 import { createLogger } from '../infra/logger.js';
-import { AgentError } from '../core/error.js';
+import { AgentError } from '../util/error.js';
 
 const logger = createLogger();
 

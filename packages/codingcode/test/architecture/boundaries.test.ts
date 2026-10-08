@@ -81,19 +81,19 @@ const relSdk = (abs: string) => norm(relative(SDK_SRC, abs));
 /** 违规信息用：按所属包给出可读路径 */
 const relPkg = (abs: string) =>
   abs.startsWith(norm(SDK_SRC) + '/') ? `sdk/src/${relSdk(abs)}` : `codingcode/src/${relSrc(abs)}`;
-const isCore = (abs: string) => abs.startsWith(norm(join(SRC, 'core')) + '/');
+const isUtil = (abs: string) => abs.startsWith(norm(join(SRC, 'util')) + '/');
 
 /** 契约文件：每个特性目录的 port.ts（宽 Tag，agent 自持的装配端口也在 agent/port.ts） */
 const CONTRACT_FILES = FILES.filter((f) => f.endsWith('/port.ts'));
 
 describe('R1 契约不得 import 实现', () => {
-  it('port.ts 跨模块引用只有 core/、同目录，或对方的 types.ts（type-only）', () => {
+  it('port.ts 跨模块引用只有 util/、同目录，或对方的 types.ts（type-only）', () => {
     const violations: string[] = [];
     for (const file of CONTRACT_FILES) {
       for (const { spec, typeOnly } of moduleRefsOf(file)) {
         const target = resolveSpec(file, spec);
         if (target === null) continue; // 第三方库
-        if (dirname(target) === dirname(file) || isCore(target)) continue;
+        if (dirname(target) === dirname(file) || isUtil(target)) continue;
         if (!typeOnly) violations.push(`${relPkg(file)} → ${spec} (runtime import)`);
         else if (!target.endsWith('/types')) violations.push(`${relPkg(file)} → ${spec} (非 types.ts)`);
       }
@@ -111,21 +111,21 @@ describe('R2 实现不得依赖消费者模块', () => {
   });
 });
 
-describe('R3 core 零内部依赖', () => {
-  it('core/ 不引用 core/ 之外的任何 src 模块', () => {
+describe('R3 util 零内部依赖', () => {
+  it('util/ 不引用 util/ 之外的任何 src 模块', () => {
     const violations: string[] = [];
-    for (const file of FILES.filter((f) => isCore(f))) {
+    for (const file of FILES.filter((f) => isUtil(f))) {
       for (const { spec } of moduleRefsOf(file)) {
         const target = resolveSpec(file, spec);
         if (target === null) continue; // 第三方 / 其他 workspace 包
-        if (!isCore(target)) violations.push(`${relPkg(file)} → ${spec}`);
+        if (!isUtil(target)) violations.push(`${relPkg(file)} → ${spec}`);
       }
     }
     expect(violations).toEqual([]);
   });
 });
 
-/** core/ 的准入：只放不指向任何功能模块的通用件 */
+/** util/ 的准入：只放不指向任何功能模块的通用件 */
 const NODE_BUILTINS = new Set([
   'os',
   'path',
@@ -140,10 +140,10 @@ const NODE_BUILTINS = new Set([
   'process',
 ]);
 
-describe('core/ 准入：只承载通用件', () => {
-  it('core/ 的 import 只能是 node 内置与同目录相对路径', () => {
+describe('util/ 准入：只承载通用件', () => {
+  it('util/ 的 import 只能是 node 内置与同目录相对路径', () => {
     const violations: string[] = [];
-    for (const file of FILES.filter((f) => isCore(f))) {
+    for (const file of FILES.filter((f) => isUtil(f))) {
       for (const { spec } of moduleRefsOf(file)) {
         if (spec.startsWith('.')) {
           const target = resolveSpec(file, spec)!;

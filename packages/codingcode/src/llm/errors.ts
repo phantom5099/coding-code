@@ -1,4 +1,4 @@
-import { AgentError } from '../core/error.js';
+import { AgentError } from '../util/error.js';
 
 export const LLMErrors = {
   timeout: (timeoutMs: number) => AgentError.llmTimeout(),

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 import { findModel } from '../../../infra/models.js';
 import type { ToolDefinition } from '../../types.js';
 import { HookService } from '../../../hooks/port.js';

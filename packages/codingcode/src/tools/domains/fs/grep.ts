@@ -3,7 +3,7 @@ import { globby } from 'globby';
 import { readFile } from 'fs/promises';
 import { relative } from 'path';
 import { Effect } from 'effect';
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
 
 export const searchTool: ToolDefinition = {

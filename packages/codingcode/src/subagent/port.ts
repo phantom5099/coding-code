@@ -1,8 +1,8 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { FrameBody } from '../sink/types.js';
-import type { AgentError } from '../core/error.js';
-import type { Result } from '../core/result.js';
+import type { AgentError } from '../util/error.js';
+import type { Result } from '../util/result.js';
 
 export interface RunSubagentOptions {
   sessionId?: string;

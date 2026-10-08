@@ -2,8 +2,8 @@ import { Effect, Layer } from 'effect';
 import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
-import { AgentError } from '../core/error.js';
-import { encodeProjectPath } from '../core/path.js';
+import { AgentError } from '../util/error.js';
+import { encodeProjectPath } from '../util/path.js';
 import { computePaths } from './paths.js';
 import type {
   SessionMetaEvent,

@@ -1,6 +1,6 @@
 import * as HttpServerResponse from '@effect/platform/HttpServerResponse';
 import { Match } from 'effect';
-import { AgentError, type ErrorCode } from '../core/error.js';
+import { AgentError, type ErrorCode } from '../util/error.js';
 
 const DOMAIN_STATUS: Record<ErrorCode, number> = {
   LLM_TIMEOUT: 500,

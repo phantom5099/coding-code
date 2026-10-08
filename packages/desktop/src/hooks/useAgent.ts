@@ -561,7 +561,7 @@ export type SessionProfileSnapshot = {
   activeProfile: ProfileName;
   permissionMode: PermissionMode;
   cwd: string;
-  available: Array<{ name: string; description: string }>;
+  available: Array<{ name: string }>;
 };
 
 export type PlanFileSnapshot = {

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { writeFile, mkdir } from 'fs/promises';
 import { dirname, relative, resolve } from 'path';
 import { Effect } from 'effect';
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
 
 export const writeFileTool: ToolDefinition = {

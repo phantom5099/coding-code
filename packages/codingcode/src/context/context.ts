@@ -17,7 +17,7 @@ import { LLMService } from '../llm/port.js';
 import { contextWindowOf } from '../infra/models.js';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
 
-import { AgentError } from '../core/error.js';
+import { AgentError } from '../util/error.js';
 import { ContextService } from './port.js';
 import type { CompressResult } from './port.js';
 import { EventSinkService } from '../sink/port.js';

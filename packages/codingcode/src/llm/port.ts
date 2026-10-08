@@ -1,6 +1,6 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
-import type { AgentError } from '../core/error.js';
+import type { AgentError } from '../util/error.js';
 import type { LLMRequest, LLMResponse, LLMStreamPart } from './types.js';
 
 export interface LLMShape {

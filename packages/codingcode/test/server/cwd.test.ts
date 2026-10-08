@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { isGlobalCwd, tempCwd, resolveCwd, resolveWorkspaceCwd } from '../../src/server/cwd.js';
-import { AgentError } from '../../src/core/error.js';
+import { AgentError } from '../../src/util/error.js';
 import { statusOf } from '../../src/server/http-error.js';
 
 describe('server/cwd：请求入口的工作区解析', () => {

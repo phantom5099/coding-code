@@ -2,7 +2,7 @@ import * as HttpRouter from '@effect/platform/HttpRouter';
 import * as HttpServerRequest from '@effect/platform/HttpServerRequest';
 import * as HttpServerResponse from '@effect/platform/HttpServerResponse';
 import { Effect, Stream } from 'effect';
-import { AgentError } from '../core/error.js';
+import { AgentError } from '../util/error.js';
 import { ApprovalWaitService } from '../approval/wait-port.js';
 import type { FrameBody } from '../sink/types.js';
 import { createFrameAssembler, encodeFrame } from './frame-io.js';

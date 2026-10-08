@@ -2,9 +2,9 @@ import { z } from 'zod';
 import { Effect } from 'effect';
 import { join } from 'path';
 import { writeFileSync, mkdirSync } from 'fs';
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
-import { projectDataDir } from '../../../core/path.js';
+import { projectDataDir } from '../../../util/path.js';
 import { createLogger } from '../../../infra/logger.js';
 
 const logger = createLogger();

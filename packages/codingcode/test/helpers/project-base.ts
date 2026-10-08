@@ -1,6 +1,6 @@
 import { mkdirSync } from 'fs';
 import { beforeEach } from 'vitest';
-import { projectRootDir } from '../../src/core/path.js';
+import { projectRootDir } from '../../src/util/path.js';
 import { useTempHome } from './temp-home.js';
 
 export interface TempProjectBase {

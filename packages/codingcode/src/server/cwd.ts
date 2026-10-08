@@ -1,7 +1,7 @@
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
-import { AgentError } from '../core/error.js';
-import { getGlobalDir } from '../core/path.js';
+import { AgentError } from '../util/error.js';
+import { getGlobalDir } from '../util/path.js';
 
 export function isGlobalCwd(raw: string | undefined): boolean {
   return !raw || raw === '' || raw === 'global';

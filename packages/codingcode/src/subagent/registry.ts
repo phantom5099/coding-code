@@ -1,5 +1,5 @@
 import { Context, Effect, Fiber, Layer, Option, Stream, SubscriptionRef } from 'effect';
-import { AgentError } from '../core/error.js';
+import { AgentError } from '../util/error.js';
 import { isTurnEnd } from '../sink/types.js';
 import type { EndTransition, FrameBody } from '../sink/types.js';
 import type { ProfileName } from '../session/types.js';

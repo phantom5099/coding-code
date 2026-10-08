@@ -4,7 +4,7 @@ import type { Message } from '../llm/types.js';
 import type { SessionRef } from '../session/types.js';
 import type { SessionEvent } from '../session/types.js';
 
-import type { AgentError } from '../core/error.js';
+import type { AgentError } from '../util/error.js';
 
 export interface CompressResult {
   didCompress: boolean;

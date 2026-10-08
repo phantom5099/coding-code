@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { normalizePath } from '../core/path.js';
+import { normalizePath } from '../util/path.js';
 
 export function shortSid(sessionId: string): string {
   return createHash('sha256').update(sessionId).digest('hex').slice(0, 8);

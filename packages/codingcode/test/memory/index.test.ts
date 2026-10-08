@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import { MemoryService, type MemoryShape } from '../../src/memory/port.js';
 import { LLMService } from '../../src/llm/port.js';
 import { MemoryLayer } from '../../src/memory/memory.js';
-import { AgentError } from '../../src/core/error.js';
+import { AgentError } from '../../src/util/error.js';
 
 const tmpDir = path.join(os.tmpdir(), 'memory-index-test');
 const memFile = path.join(tmpDir, '.codingcode', 'memory.md');

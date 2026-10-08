@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { AgentError } from '../core/error.js';
+import { AgentError } from '../util/error.js';
 import { loadConfig, updateActiveModel } from './config.js';
 
 /** 模型清单里一条可被会话选中的模型。 */

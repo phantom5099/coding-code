@@ -8,7 +8,7 @@ import { corsMiddleware, createHttpApp } from './server/app.js';
 import { createAppRuntime } from './layer.js';
 import { ensureUserConfig } from './infra/config.js';
 import { tempCwd } from './server/cwd.js';
-import { AgentError } from './core/error.js';
+import { AgentError } from './util/error.js';
 import { SchedulerService } from './scheduler/port.js';
 
 async function main() {

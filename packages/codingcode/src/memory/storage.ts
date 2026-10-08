@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { CODINGCODE_DIRNAME } from '../core/path.js';
+import { CODINGCODE_DIRNAME } from '../util/path.js';
 
 export function resolveMemoryPath(cwd: string): string {
   return path.join(cwd, CODINGCODE_DIRNAME, 'memory.md');

@@ -13,12 +13,11 @@ export function isPlanProfile(name: string | null | undefined): boolean {
 
 export interface AvailableProfile {
   name: ProfileName;
-  description: string;
 }
 
 export const AVAILABLE_PROFILES: AvailableProfile[] = [
-  { name: PLAN_PROFILE_NAME, description: 'Planning agent' },
-  { name: BUILD_PROFILE_NAME, description: 'Build agent' },
+  { name: PLAN_PROFILE_NAME },
+  { name: BUILD_PROFILE_NAME },
 ];
 
 export const PERMISSION_MODES = ['askBeforeExec', 'bypass'] as const;

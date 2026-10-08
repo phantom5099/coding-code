@@ -1,6 +1,6 @@
 import { Effect, Either, Queue, Stream, Fiber, Layer } from 'effect';
-import { AgentError } from '../core/error.js';
-import { Result } from '../core/result.js';
+import { AgentError } from '../util/error.js';
+import { Result } from '../util/result.js';
 import { AgentService, ToolEnvPort } from './port.js';
 import type { RunTurnOptions, ToolEnv } from './port.js';
 import { ApprovalService, getToolNames } from '../approval/port.js';
@@ -32,7 +32,7 @@ import type { ToolCatalog, ToolResult } from '../tools/types.js';
 import type { ToolCall } from '../llm/types.js';
 import { loadConfig } from '../infra/config.js';
 import { createLogger } from '../infra/logger.js';
-import { normalizePath } from '../core/path.js';
+import { normalizePath } from '../util/path.js';
 import { resolveProfile } from './profile.js';
 import type { AgentProfile } from './profile.js';
 

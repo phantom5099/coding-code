@@ -3,7 +3,7 @@ import { SubagentRunnerService } from './port.js';
 import type { RunSubagentOptions } from './port.js';
 import { AgentService } from '../agent/port.js';
 import type { FrameBody } from '../sink/types.js';
-import type { Result } from '../core/result.js';
+import type { Result } from '../util/result.js';
 
 export const SubagentRunnerLayer = Layer.effect(
   SubagentRunnerService,

@@ -2,7 +2,7 @@ import * as HttpRouter from '@effect/platform/HttpRouter';
 import { Effect } from 'effect';
 import { SchedulerService } from '../../scheduler/port.js';
 import { NotFoundError } from '../http-error.js';
-import { AgentError } from '../../core/error.js';
+import { AgentError } from '../../util/error.js';
 import { json, pathParams, readJson, type Handler, type Router } from '../handler.js';
 import type { AutomationSandbox, CreateAutomationInput } from '../../scheduler/types.js';
 

@@ -15,7 +15,7 @@ vi.mock('child_process', () => ({
 }));
 
 const { bashTool } = await import('../../../../src/tools/domains/bash/exec.js');
-const { AgentError } = await import('../../../../src/core/error.js');
+const { AgentError } = await import('../../../../src/util/error.js');
 
 describe('tools/domains/bash exec error', () => {
   it('fails with AgentError when spawn emits error', async () => {

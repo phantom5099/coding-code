@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { globby } from 'globby';
 import { relative, resolve } from 'path';
 import { Effect } from 'effect';
-import { AgentError } from '../../../core/error.js';
+import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
 
 export const globTool: ToolDefinition = {

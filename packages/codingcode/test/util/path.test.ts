@@ -1,11 +1,11 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { join } from 'path';
 import { homedir, tmpdir } from 'os';
-import { normalizePath, encodeProjectPath, getGlobalDir } from '../../src/core/path.js';
+import { normalizePath, encodeProjectPath, getGlobalDir } from '../../src/util/path.js';
 import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
 import { setFakeHome, restoreHome } from '../helpers/temp-home.js';
 
-describe('core/path：纯格式化函数', () => {
+describe('util/path：纯格式化函数', () => {
   it('normalizePath unifies Windows path variants', () => {
     expect(normalizePath('C:\\Users\\proj')).toBe('c:/Users/proj');
     expect(normalizePath('/c/Users/proj')).toBe('c:/Users/proj');
@@ -36,7 +36,7 @@ describe('core/path：纯格式化函数', () => {
   });
 });
 
-describe('core/path：全局目录', () => {
+describe('util/path：全局目录', () => {
   it('全局目录落在用户目录下', () => {
     expect(getGlobalDir()).toBe(join(homedir(), '.codingcode'));
   });

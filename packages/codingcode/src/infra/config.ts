@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { getGlobalDir } from '../core/path.js';
+import { getGlobalDir } from '../util/path.js';
 
 export interface ContextConfig {
   compactionModel: string;

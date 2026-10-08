@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Layer, Effect } from 'effect';
 import { RulesService } from './port.js';
-import { getGlobalDir } from '../core/path.js';
+import { getGlobalDir } from '../util/path.js';
 
 // ── Paths ──
 

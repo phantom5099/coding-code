@@ -4,7 +4,6 @@ export type PermissionMode = 'askBeforeExec' | 'bypass';
 
 export interface AvailableProfile {
   name: ProfileName;
-  description: string;
 }
 
 export type AvailableProfiles = AvailableProfile[];

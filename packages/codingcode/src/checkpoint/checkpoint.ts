@@ -2,7 +2,7 @@ import { Layer, Effect } from 'effect';
 import { resolve } from 'path';
 import { ShadowGit } from './shadow-git.js';
 import { ProjectLock } from './project-lock.js';
-import { normalizePath } from '../core/path.js';
+import { normalizePath } from '../util/path.js';
 import { commitMsg, toGitPath, ProjectCache } from './utils.js';
 import { getCompletedTurnsFor, getTurnRestorePlan, getRollbackToTurnPlan } from './turn-query.js';
 import { emptyRollbackResult, executeRollback } from './rollback-engine.js';

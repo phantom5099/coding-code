@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { join } from 'path';
 import { mkdirSync } from 'fs';
-import { getGlobalDir } from '../core/path.js';
+import { getGlobalDir } from '../util/path.js';
 
 export type Logger = pino.Logger;
 

@@ -1,6 +1,6 @@
 import { openSync, closeSync, unlinkSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { projectDataDir } from '../core/path.js';
+import { projectDataDir } from '../util/path.js';
 
 export class ProjectLock {
   private readonly lockPath: string;

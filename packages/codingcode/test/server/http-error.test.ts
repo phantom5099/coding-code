@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AgentError, type ErrorCode } from '../../src/core/error.js';
+import { AgentError, type ErrorCode } from '../../src/util/error.js';
 import {
   AlreadyExistsError,
   InvalidInputError,

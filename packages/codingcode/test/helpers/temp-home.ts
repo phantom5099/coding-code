@@ -16,7 +16,7 @@ export interface TempHome {
    * 全局配置目录 = `join(home, '.codingcode')`；未必已存在，写配置的代码会自行创建。
    *
    * 这里刻意写字面量而不引用源码常量：本助手模拟的是「OS 提供的 home 布局」，
-   * 常量若被改错，正需要在这一侧显性同步才能暴露出来（另有 `test/core/path.test.ts` 钉住字面量）。
+   * 常量若被改错，正需要在这一侧显性同步才能暴露出来（另有 `test/util/path.test.ts` 钉住字面量）。
    */
   readonly configDir: string;
 }

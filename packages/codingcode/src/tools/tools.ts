@@ -1,14 +1,25 @@
 import { Layer, Effect } from 'effect';
-import { AgentError } from '../core/error.js';
+import { AgentError } from '../util/error.js';
 import { HookService } from '../hooks/port.js';
 import type { ToolCall } from '../llm/types.js';
-import type { ProfileName } from '../session/types.js';
 import type { McpToolSpec } from '../mcp/types.js';
-import type { ToolCatalog, ToolExecOpts, ToolResult, ToolRunner } from './types.js';
+import type {
+  ToolCatalog,
+  ToolExecCall,
+  ToolExecCtx,
+  ToolExecOpts,
+  ToolResult,
+  ToolRunner,
+} from './types.js';
 import { ToolExecutorService } from './port.js';
 import { createToolCatalog } from './catalog.js';
 
 type Lookup = (name: string) => ToolRunner | undefined;
+
+function toToolCtx(opts: ToolExecCall): ToolExecCtx {
+  const { turnId: _turnId, callId: _callId, ...ctx } = opts;
+  return ctx;
+}
 
 export const ToolExecutorLayer = Layer.effect(
   ToolExecutorService,
@@ -18,15 +29,7 @@ export const ToolExecutorLayer = Layer.effect(
     function execute(
       name: string,
       args: unknown,
-      opts: {
-        signal?: AbortSignal;
-        sessionId?: string;
-        turnId?: number;
-        projectPath?: string;
-        callId?: string;
-        activeProfile?: ProfileName;
-        model: string;
-      },
+      opts: ToolExecCall,
       lookup: Lookup
     ): Effect.Effect<{ output: string }, AgentError> {
       return Effect.gen(function* () {
@@ -49,13 +52,7 @@ export const ToolExecutorLayer = Layer.effect(
         const start = Date.now();
 
         // Execute tool — now returns Effect directly
-        const ctx = {
-          signal: opts.signal,
-          sessionId: opts.sessionId,
-          projectPath: opts.projectPath,
-          activeProfile: opts.activeProfile,
-          model: opts.model,
-        };
+        const ctx = toToolCtx(opts);
 
         let toolEffect = tool.execute(parsedArgs, ctx);
 

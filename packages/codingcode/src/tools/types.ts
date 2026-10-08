@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
-import type { AgentError } from '../core/error.js';
+import type { AgentError } from '../util/error.js';
 import type { ToolCall, ToolDescription } from '../llm/types.js';
 import type { ProfileName } from '../session/types.js';
 import type { ToolOutcome } from '../sink/types.js';
@@ -13,6 +13,7 @@ export interface ToolDefinition<R = never> {
   parameters: z.ZodTypeAny;
   execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, R>;
 }
+
 
 export interface ToolExecCtx {
   signal?: AbortSignal;
@@ -31,13 +32,10 @@ export interface ToolRunner {
   execute(args: unknown, ctx?: ToolExecCtx): Effect.Effect<string, AgentError>;
 }
 
-export interface ToolExecOpts {
-  turnId?: number;
-  projectPath?: string;
-  signal?: AbortSignal;
-  activeProfile?: ProfileName;
-  model: string;
-}
+
+export type ToolExecOpts = Omit<ToolExecCtx, 'sessionId'> & { turnId?: number };
+
+export type ToolExecCall = ToolExecOpts & { sessionId?: string; callId?: string };
 
 export interface ToolCatalog {
   tools: ToolDescription[];

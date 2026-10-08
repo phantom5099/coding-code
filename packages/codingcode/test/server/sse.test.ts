@@ -12,7 +12,7 @@ import { join } from 'path';
 import { createServer, type ServerApp } from '../../src/server/index.js';
 import { AgentService } from '../../src/agent/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import { AgentError } from '../../src/core/error.js';
+import { AgentError } from '../../src/util/error.js';
 import type { FrameBody } from '../../src/sink/types.js';
 
 const TEXT_FRAME: FrameBody = { family: 'event', event: { type: 'text_delta', text: 'hello' } };

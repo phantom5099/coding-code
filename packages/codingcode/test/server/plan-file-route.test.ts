@@ -17,7 +17,7 @@ import { MemoryService } from '../../src/memory/port.js';
 import { SchedulerService } from '../../src/scheduler/port.js';
 import { ContextService } from '../../src/context/port.js';
 import { CheckpointService } from '../../src/checkpoint/port.js';
-import { encodeProjectPath } from '../../src/core/path.js';
+import { encodeProjectPath } from '../../src/util/path.js';
 import { useTempHome } from '../helpers/temp-home.js';
 import { projectBaseDir } from '../helpers/project-base.js';
 import { HookLayer } from '../../src/hooks/hooks.js';
