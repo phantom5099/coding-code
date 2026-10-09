@@ -53,7 +53,7 @@ describe('getHistory integration', () => {
         activeProfile: 'build',
         permissionMode: 'askBeforeExec',
       },
-      { type: 'user', turnId: 1, content: 'q1' },
+      { type: 'user', turnId: 1, content: [{ type: 'text', text: 'q1' }] },
       {
         type: 'assistant',
         turnId: 1,

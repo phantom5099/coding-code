@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { extractMemory } from '../../src/memory/extractor.js';
+import { textOf } from '../../src/llm/types.js';
 import { AgentError } from '../../src/util/error.js';
 import type { LLMShape } from '../../src/llm/port.js';
 import type { LLMRequest } from '../../src/llm/types.js';
@@ -65,9 +66,10 @@ describe('Memory Extractor', () => {
     await extract(mockLlm, '### project\n- 旧信息', '[user] 新对话');
 
     const callArgs = mockLlm.complete.mock.calls[0]?.[0];
-    expect(callArgs?.messages[0]?.content).toContain('已有记忆');
-    expect(callArgs?.messages[0]?.content).toContain('旧信息');
-    expect(callArgs?.messages[0]?.content).toContain('新对话');
+    const prompt = textOf(callArgs?.messages[0]?.content ?? []);
+    expect(prompt).toContain('已有记忆');
+    expect(prompt).toContain('旧信息');
+    expect(prompt).toContain('新对话');
   });
 
   it('keeps instructions in system and transcript data in messages', async () => {
@@ -76,11 +78,12 @@ describe('Memory Extractor', () => {
     await extract(mockLlm, '### project\n- Likes TypeScript', '[user] I use Python');
 
     const callArgs = mockLlm.complete.mock.calls[0]?.[0];
+    const prompt = textOf(callArgs?.messages[0]?.content ?? []);
     expect(callArgs?.system).toContain('规则');
     expect(callArgs?.system).toContain('整份');
     expect(callArgs?.system).not.toContain('I use Python');
-    expect(callArgs?.messages[0]?.content).toContain('I use Python');
-    expect(callArgs?.messages[0]?.content).toContain('Likes TypeScript');
+    expect(prompt).toContain('I use Python');
+    expect(prompt).toContain('Likes TypeScript');
   });
 
   it('passes the target model to the non-streaming channel', async () => {
