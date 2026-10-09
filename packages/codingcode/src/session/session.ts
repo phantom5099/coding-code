@@ -321,10 +321,6 @@ export const SessionLayer = Layer.effect(
               `Too many media attachments in one turn: ${media.length} > ${MAX_MEDIA_PER_TURN}`
             );
           }
-          // 子代理的输入恒为纯文本 prompt
-          if (media.length > 0 && state.parentSessionId) {
-            throw AgentError.invalidInput('Subagent input does not accept media');
-          }
 
           const dir = media.length > 0 ? assetsDirOf(state.cwd) : '';
           const out: StoredPart[] = [];

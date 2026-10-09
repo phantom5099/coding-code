@@ -216,20 +216,25 @@ describe('SessionService.materializeInput', () => {
     }
   });
 
-  it('子会话不接受媒体', async () => {
+  it('子会话媒体与主会话走同一条物化路径', async () => {
     const dir = newDir();
     try {
       const child = await newSession(dir, { parentSessionId: 'parent-1', agentName: 'reviewer' });
-      const res = await either(
+      const png = mediaBytes('png');
+      const parts = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.materializeInput(child, [
-            { type: 'media', bytes: mediaBytes('png') },
-          ]);
+          return yield* svc.materializeInput(child, [{ type: 'media', bytes: png }]);
         })
       );
-      expect(Either.isLeft(res)).toBe(true);
-      if (Either.isLeft(res)) expect((res.left as any).code).toBe('INVALID_INPUT');
+      expect(parts).toHaveLength(1);
+      expect(parts[0]).toMatchObject({
+        type: 'media',
+        mimeType: 'image/png',
+        bytes: png.byteLength,
+      });
+      const assetDir = assetsDirOf(child.cwd);
+      expect(readdirSync(assetDir)).toEqual([assetNameFor(png, 'image/png')]);
     } finally {
       cleanup(dir);
     }
