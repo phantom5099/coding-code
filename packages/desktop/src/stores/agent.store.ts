@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Thread, Turn, Item, TodoItem } from '@shared/types';
+import type { ContentPart } from '@shared/parts';
+import { textOf } from '@shared/parts';
 import type { Automation, PermissionMode, ProfileName } from '@codingcode/sdk';
 import { buildToolDiff } from '../lib/diff-compute';
 import { normalizeCwd } from './storage';
@@ -11,6 +13,15 @@ export interface ModelEntry {
   name: string;
   provider: string;
   context_window: number;
+  /** 输入侧能力位，缺省视为不支持 */
+  capabilities?: { vision: boolean; audio: boolean };
+}
+
+/** partial assistant 帧是纯文本增量：并到最后一个文本块上，没有就新起一块。 */
+function appendText(parts: ContentPart[], text: string): void {
+  const last = parts[parts.length - 1];
+  if (last && last.type === 'text') last.text += text;
+  else parts.push({ type: 'text', text });
 }
 
 interface TodoPanelState {
@@ -352,7 +363,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial) {
             const existing = turn.items.find((i) => i.id === chunk.id);
             if (existing && existing.type === 'message' && existing.role === 'assistant') {
-              existing.content += chunk.content;
+              appendText(existing.parts, textOf(chunk.parts));
               existing.partial = true;
             } else {
               turn.items.push({ ...chunk, partial: true });
@@ -368,7 +379,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
               if (current.type === 'message' && current.role === 'assistant') {
                 turn.items[existing] = {
                   ...chunk,
-                  content: current.content || chunk.content,
+                  parts: current.parts.length > 0 ? current.parts : chunk.parts,
                   partial: false,
                 };
               } else {

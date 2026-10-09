@@ -2,7 +2,8 @@ import { Layer, Effect } from 'effect';
 import { randomUUID } from 'crypto';
 import { loadConfig } from '../infra/config.js';
 import { transcriptPathOf } from '../session/paths.js';
-import type { Message } from '../llm/types.js';
+import type { Message, ResolvedMessage, ResolvedContentPart, ResolvedMediaPart } from '../llm/types.js';
+import { textOf, textPart } from '../llm/types.js';
 import type {
   SessionEvent,
   AssistantEvent,
@@ -111,7 +112,7 @@ export function buildContextMessages(
         break;
       case 'assistant': {
         const ev = event as AssistantEvent;
-        const msg: Message = { role: 'assistant', content: event.content };
+        const msg: Message = { role: 'assistant', content: [textPart(event.content)] };
         if (event.toolCalls && event.toolCalls.length > 0) {
           msg.tool_calls = event.toolCalls.map((tc) => ({
             id: tc.id,
@@ -135,17 +136,21 @@ export function buildContextMessages(
         resolvedIds.add(event.toolCallId);
         messages.push({
           role: 'tool',
-          content: output,
+          content: [textPart(output)],
           tool_call_id: event.toolCallId,
           tool_name: event.toolName,
         });
         break;
       }
       case 'summary':
-        messages.push({ role: 'system', name: 'compacted_history', content: event.summaryText });
+        messages.push({
+          role: 'system',
+          name: 'compacted_history',
+          content: [textPart(event.summaryText)],
+        });
         break;
       case 'subagent_result':
-        messages.push({ role: 'user', content: event.content });
+        messages.push({ role: 'user', content: [textPart(event.content)] });
         break;
     }
   }
@@ -180,7 +185,8 @@ export function buildContextMessages(
     if (curr.role === prev.role && curr.role !== 'system') {
       if (curr.role === 'tool') continue;
       if (curr.role === 'assistant' && curr.tool_calls && curr.tool_calls.length > 0) continue;
-      prev.content += '\n\n' + curr.content;
+      // parts 数组本身就是分隔符，providers 侧按 part 逐个送出
+      prev.content = [...prev.content, ...curr.content];
       filtered.splice(i, 1);
     }
   }
@@ -322,7 +328,11 @@ export const ContextLayer = Layer.effect(
         );
         buf.events.push(summaryEvent);
 
-        const summaryMsg: Message = { role: 'system', name: 'compacted_history', content: summary };
+        const summaryMsg: Message = {
+          role: 'system',
+          name: 'compacted_history',
+          content: [textPart(summary)],
+        };
         return Math.max(0, totalTokens - estimateMessageTokens(summaryMsg));
       });
 
@@ -361,15 +371,20 @@ export const ContextLayer = Layer.effect(
         const transcriptText = transcript
           .map(
             (m) =>
-              `[${m.role}${(m as any).tool_name ? ':' + (m as any).tool_name : ''}]\n${m.content}`
+              `[${m.role}${(m as any).tool_name ? ':' + (m as any).tool_name : ''}]\n${textOf(m.content)}`
           )
           .join('\n\n');
 
         const system = COMPACTION_SYSTEM_PROMPT;
 
-        const userMsg: Message = {
+        // 压缩走纯文本投影
+        const userMsg: ResolvedMessage = {
           role: 'user',
-          content: `Compact the following conversation transcript into the sections above:\n\n${transcriptText}`,
+          content: [
+            textPart(
+              `Compact the following conversation transcript into the sections above:\n\n${transcriptText}`
+            ),
+          ],
         };
 
         const result = yield* llm
@@ -383,7 +398,32 @@ export const ContextLayer = Layer.effect(
       return raw.trim();
     }
 
-    const getHistory = (ref: SessionRef, model: string): Effect.Effect<Message[], AgentError> =>
+    const resolveMediaParts = (
+      msgs: Message[],
+      cwd: string
+    ): Effect.Effect<ResolvedMessage[], AgentError> =>
+      Effect.gen(function* () {
+        const assets = new Set<string>();
+        for (const m of msgs) {
+          for (const p of m.content) if (p.type === 'media') assets.add(p.asset);
+        }
+        if (assets.size === 0) return msgs as ResolvedMessage[];
+
+        const resolved = yield* session.resolveAssets(cwd, [...assets]);
+        return msgs.map((m) => ({
+          ...m,
+          content: m.content.map((p): ResolvedContentPart => {
+            if (p.type === 'text') return p;
+            const dataUrl = resolved.get(p.asset);
+            if (!dataUrl) return { type: 'text', text: `[media missing: ${p.asset}]` };
+            const part: ResolvedMediaPart = { type: 'media', dataUrl, mimeType: p.mimeType };
+            if (p.filename) part.filename = p.filename;
+            return part;
+          }),
+        }));
+      });
+
+    const getHistory = (ref: SessionRef, model: string): Effect.Effect<ResolvedMessage[], AgentError> =>
       Effect.gen(function* () {
         const buf = yield* ensureBuffer(ref);
         const contextWindow = contextWindowOf(model);
@@ -397,7 +437,7 @@ export const ContextLayer = Layer.effect(
             transition: { to: 'executing' },
           });
         }
-        return buildContextMessages(buf.events, buf.compactedTurnIds);
+        return yield* resolveMediaParts(buildContextMessages(buf.events, buf.compactedTurnIds), ref.cwd);
       });
 
     const absorb = (ref: SessionRef, events: readonly SessionEvent[]): Effect.Effect<void> =>

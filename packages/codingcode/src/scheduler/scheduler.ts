@@ -10,6 +10,7 @@ import type {
 import { readAutomations, writeAutomations } from './store.js';
 import { AgentService } from '../agent/port.js';
 import { activeModelId } from '../infra/models.js';
+import { textPart } from '../llm/types.js';
 import { SchedulerService } from './port.js';
 import { BYPASS_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../util/enums.js';
 
@@ -50,7 +51,7 @@ export const SchedulerLayer = Layer.effect(
         const { stream, sessionId } = await _rt.runPromise(
           Effect.gen(function* () {
             const agent = yield* AgentService;
-            return yield* agent.runTurn(auto.description, {
+            return yield* agent.runTurn([textPart(auto.description)], {
               cwd: auto.projectCwd,
               signal: controller.signal,
               // 自动化没有独立的模型配置，统一用 config.yaml 的活动模型
@@ -183,7 +184,7 @@ export const SchedulerLayer = Layer.effect(
           const { stream, sessionId } = await _rt.runPromise(
             Effect.gen(function* () {
               const agent = yield* AgentService;
-              return yield* agent.runTurn(auto.description, {
+              return yield* agent.runTurn([textPart(auto.description)], {
                 cwd: auto.projectCwd,
                 signal: controller.signal,
                 model: activeModelId(),

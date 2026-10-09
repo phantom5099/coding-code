@@ -1,3 +1,7 @@
+import type { ContentPart } from './parts';
+
+export type { ContentPart } from './parts';
+
 export type ItemType =
   | 'message'
   | 'reasoning'
@@ -7,7 +11,7 @@ export type ItemType =
   | 'subagent';
 
 export type Item =
-  | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
+  | { id: string; type: 'message'; role: 'user' | 'assistant'; parts: ContentPart[]; partial?: boolean }
   | { id: string; type: 'reasoning'; content: string; isVisible: boolean }
   | {
       id: string;

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { computeDiff } from '../src/lib/diff-compute';
 import { useAgentStore } from '../src/stores/agent.store';
 import type { Item } from '../shared/types';
+import { textPart } from '../shared/parts';
 
 // ─── diff-compute: large file protection ─────────────────────────────────
 
@@ -163,13 +164,13 @@ describe('global store - applyChunk tool_result uses push', () => {
     useAgentStore.getState().startTurn(threadId, {
       id: 'turn-1',
       items: [
-        { id: 'msg-1', type: 'message', role: 'user', content: 'hi' } as Item,
+        { id: 'msg-1', type: 'message', role: 'user', parts: [textPart('hi')] } as Item,
         { id: 'call-1', type: 'tool_call', name: 'read_file', args: {}, status: 'running' } as Item,
         {
           id: 'msg-2',
           type: 'message',
           role: 'assistant',
-          content: 'done',
+          parts: [textPart('done')],
           partial: false,
         } as Item,
       ],
@@ -205,7 +206,7 @@ describe('global store - applyChunk tool_result uses push', () => {
           id: 'msg-1',
           type: 'message',
           role: 'assistant',
-          content: 'editing',
+          parts: [textPart('editing')],
           partial: true,
         } as Item,
       ],

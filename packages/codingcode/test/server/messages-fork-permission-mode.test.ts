@@ -10,6 +10,7 @@ import { HookService } from '../../src/hooks/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { AgentService } from '../../src/agent/port.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import type { IncomingPart } from '../../src/llm/types.js';
 
 useTempProjectBase();
 
@@ -32,7 +33,7 @@ const mockApprovalWaitService = {
 const loadedPermissionModes: string[] = [];
 
 const mockAgentService = {
-  runTurn: (_input: string, opts: any) =>
+  runTurn: (_input: IncomingPart[], opts: any) =>
     Effect.gen(function* () {
       const session = yield* SessionService;
       const state = yield* session.load(opts.cwd, opts.sessionId);
@@ -94,7 +95,7 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
     const res = await app.request('/api/sessions/' + sessionId + '/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ input: 'hello', cwd, model: 'm' }),
+      body: JSON.stringify({ input: [{ type: 'text', text: 'hello' }], cwd, model: 'm' }),
     });
     expect(res.status).not.toBe(404);
     expect(loadedPermissionModes[0]).toBe('bypass');

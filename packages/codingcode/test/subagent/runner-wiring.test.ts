@@ -23,6 +23,8 @@ import { SessionLayer } from '../../src/session/session.js';
 import { SessionService } from '../../src/session/port.js';
 import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
+import { textPart } from '../../src/llm/types.js';
+import { incomingText } from '../helpers/parts.js';
 import { TodoService } from '../../src/todo/port.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import { encodeProjectPath, normalizePath } from '../../src/util/path.js';
@@ -65,12 +67,14 @@ function readMessages(transcriptPath: string): Message[] {
   return readHistory(transcriptPath).flatMap((e) => {
     if (e.type === 'user') return [{ role: 'user', content: e.content }] as Message[];
     if (e.type === 'assistant')
-      return [{ role: 'assistant', content: e.content, tool_calls: e.toolCalls }] as Message[];
+      return [
+        { role: 'assistant', content: [textPart(e.content)], tool_calls: e.toolCalls },
+      ] as Message[];
     if (e.type === 'tool_result')
       return [
         {
           role: 'tool',
-          content: e.output ?? '',
+          content: [textPart(e.output ?? '')],
           tool_call_id: e.toolCallId,
           tool_name: e.toolName,
         } as Message,
@@ -207,7 +211,7 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
           activeProfile: 'build',
           permissionMode: 'askBeforeExec',
         });
-        const { stream, sessionId } = yield* runner.runSubagent('do the thing', {
+        const { stream, sessionId } = yield* runner.runSubagent(incomingText('do the thing'), {
           cwd,
           activeProfile: 'build',
           parentSessionId: parent.sessionId,

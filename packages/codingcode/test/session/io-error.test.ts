@@ -4,6 +4,7 @@ import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { AgentError } from '../../src/util/error.js';
 import * as fs from 'fs';
+import { text } from '../helpers/parts.js';
 
 vi.mock('fs', async (importOriginal) => ({
   ...(await importOriginal<typeof fs>()),
@@ -31,7 +32,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
     const exit = await Effect.runPromiseExit(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.recordUser(state, 'hello');
+        return yield* svc.recordUser(state, text('hello'));
       }).pipe(Effect.provide(SessionLayer))
     );
 
@@ -89,7 +90,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
 
     const program = Effect.gen(function* () {
       const session = yield* SessionService;
-      return yield* session.recordUser(state, 'hello');
+      return yield* session.recordUser(state, text('hello'));
     }).pipe(Effect.provide(SessionLayer));
 
     const exit = await Effect.runPromiseExit(program);

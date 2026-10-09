@@ -14,6 +14,7 @@ import { AgentService } from '../../src/agent/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
 import { AgentError } from '../../src/util/error.js';
 import type { FrameBody } from '../../src/sink/types.js';
+import type { IncomingPart } from '../../src/llm/types.js';
 
 const TEXT_FRAME: FrameBody = { family: 'event', event: { type: 'text_delta', text: 'hello' } };
 
@@ -23,7 +24,7 @@ let cancelled: string[] = [];
 function makeServer(frames: () => AsyncGenerator<FrameBody, void, unknown>): Promise<ServerApp> {
   const layer = Layer.mergeAll(
     Layer.succeed(AgentService, {
-      runTurn: (_input: string, opts: { sessionId?: string }) =>
+      runTurn: (_input: IncomingPart[], opts: { sessionId?: string }) =>
         Effect.succeed({
           stream: frames(),
           sessionId: opts.sessionId ?? 's1',
@@ -46,7 +47,7 @@ const send = (app: ServerApp, sessionId = 's1') =>
   app.request(`/api/sessions/${sessionId}/messages`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ input: 'hi', cwd, model: 'm' }),
+    body: JSON.stringify({ input: [{ type: 'text', text: 'hi' }], cwd, model: 'm' }),
   });
 
 /** 把 SSE body 拆成逐帧的 JSON。 */

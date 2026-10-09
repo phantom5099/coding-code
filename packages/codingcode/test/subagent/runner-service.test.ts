@@ -1,6 +1,8 @@
 import { expect, it, describe } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
+import type { IncomingPart } from '../../src/llm/types.js';
+import { incomingText } from '../helpers/parts.js';
 
 const SAMPLE_FRAME = {
   family: 'event',
@@ -13,7 +15,7 @@ describe('SubagentRunnerService', () => {
   });
 
   it('should allow creating a Layer with a custom runSubagent implementation', async () => {
-    const mockRunSubagent = (_input: string, _opts: { cwd: string }) =>
+    const mockRunSubagent = (_input: IncomingPart[], _opts: { cwd: string }) =>
       Effect.succeed({
         stream: (async function* () {
           yield SAMPLE_FRAME;
@@ -37,7 +39,7 @@ describe('SubagentRunnerService', () => {
 
   it('should allow runSubagent to be called and produce events', async () => {
     const events: any[] = [];
-    const mockRunSubagent = (_input: string, _opts: { cwd: string }) =>
+    const mockRunSubagent = (_input: IncomingPart[], _opts: { cwd: string }) =>
       Effect.succeed({
         stream: (async function* () {
           yield SAMPLE_FRAME;
@@ -51,7 +53,7 @@ describe('SubagentRunnerService', () => {
       (
         Effect.gen(function* () {
           const runner = yield* SubagentRunnerService;
-          const { stream, sessionId } = yield* runner.runSubagent('go', {
+          const { stream, sessionId } = yield* runner.runSubagent(incomingText('go'), {
             cwd: '/test',
             model: 'm',
           });

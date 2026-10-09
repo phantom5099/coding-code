@@ -9,6 +9,7 @@ import { encodeProjectPath } from '../../src/util/path.js';
 import { computePaths } from '../../src/session/paths.js';
 import { readSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { text } from '../helpers/parts.js';
 
 const base = useTempProjectBase();
 
@@ -80,7 +81,7 @@ describe('load — keeps the persisted model untouched', () => {
         Effect.gen(function* () {
           const svc = yield* SessionService;
           const state = yield* svc.load(dir, sid);
-          yield* svc.recordUser(state, 'first message');
+          yield* svc.recordUser(state, text('first message'));
         })
       );
 
@@ -267,14 +268,14 @@ describe('load restores persisted fields', () => {
         Effect.gen(function* () {
           const svc = yield* SessionService;
           const state = yield* svc.load(dir, sid);
-          yield* svc.recordUser(state, 'first');
+          yield* svc.recordUser(state, text('first'));
         })
       );
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
           const state = yield* svc.load(dir, sid);
-          yield* svc.recordUser(state, 'second');
+          yield* svc.recordUser(state, text('second'));
         })
       );
 
@@ -313,7 +314,7 @@ describe('load restores persisted fields', () => {
         Effect.gen(function* () {
           const svc = yield* SessionService;
           const state = yield* svc.load(dir, sid);
-          yield* svc.recordUser(state, 'hello');
+          yield* svc.recordUser(state, text('hello'));
           yield* svc.recordAssistant(state, 'world', [
             { id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } },
           ]);

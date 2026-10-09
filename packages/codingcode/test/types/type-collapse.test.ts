@@ -12,7 +12,7 @@ describe('类型收口', () => {
 
   it('UITurnItem 覆盖 session 产出的全部变体', () => {
     const items: UITurnItem[] = [
-      { id: 'a', type: 'message', role: 'user', content: 'hi' },
+      { id: 'a', type: 'message', role: 'user', parts: [{ type: 'text', text: 'hi' }] },
       { id: 'b', type: 'tool_call', name: 'read_file', args: {}, status: 'approved' },
       { id: 'c', type: 'tool_result', callId: 'b', name: 'read_file', output: 'ok' },
       { id: 'd', type: 'summary', content: 's', startTurnId: 1, endTurnId: 2 },

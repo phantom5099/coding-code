@@ -1,5 +1,6 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { LLMStreamPart } from '../../src/llm/types.js';
+import { text } from '../helpers/parts.js';
 
 const streamText = vi.fn();
 const stepCountIs = vi.fn((count: number) => ({ count }));
@@ -32,13 +33,14 @@ function entry() {
     base_url: 'https://api.deepseek.com/v1',
     api_key_env: 'DEEPSEEK_API_KEY',
     context_window: 64000,
+  capabilities: { vision: false, audio: false },
   };
 }
 
 function request() {
   return {
     system: 'system',
-    messages: [{ role: 'user', content: 'hello' }],
+    messages: [{ role: 'user', content: text('hello') }],
     tools: undefined,
     maxSteps: 1,
   };

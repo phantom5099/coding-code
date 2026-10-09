@@ -8,6 +8,7 @@ import { createServer, type ServerApp } from '../../src/server/index.js';
 import { computePaths } from '../../src/session/paths.js';
 import { readSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { text } from '../helpers/parts.js';
 
 const base = useTempProjectBase();
 
@@ -73,7 +74,7 @@ describe('PUT /api/sessions/:id/title', () => {
       Effect.gen(function* () {
         const session = yield* SessionService;
         const state = yield* session.load(cwd, sessionId);
-        yield* session.recordUser(state, 'first message');
+        yield* session.recordUser(state, text('first message'));
       })
     );
     expect(await headTitle(sessionId)).toBe('first message');

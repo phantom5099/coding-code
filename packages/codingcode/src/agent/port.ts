@@ -2,6 +2,7 @@ import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { FrameBody } from '../sink/types.js';
 import type { ProfileName, PermissionMode } from '../util/enums.js';
+import type { IncomingPart } from '../llm/types.js';
 
 import type { AgentError } from '../util/error.js';
 
@@ -20,7 +21,7 @@ export interface RunTurnOptions {
 
 export interface AgentShape {
   runTurn(
-    input: string,
+    input: IncomingPart[],
     opts: RunTurnOptions
   ): Effect.Effect<
     {

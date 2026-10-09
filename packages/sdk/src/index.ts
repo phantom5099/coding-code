@@ -11,7 +11,11 @@ import type {
   SettingsClient,
   AutomationClient,
   AgentConfigView,
+  InputPart,
 } from './contracts.js';
+import { MAX_MEDIA_BYTES } from './contracts.js';
+
+export { MAX_MEDIA_BYTES };
 
 export type {
   AgentRuntimeClient,
@@ -20,6 +24,7 @@ export type {
   SettingsClient,
   AutomationClient,
   AgentConfigView,
+  InputPart,
 };
 
 export type {
@@ -44,6 +49,7 @@ export type {
   RunAutomationResult,
   SelectableModel,
   SessionSummary,
+  StoredContentPart,
   UITurn,
   UITurnItem,
   UpdateAutomationInput,

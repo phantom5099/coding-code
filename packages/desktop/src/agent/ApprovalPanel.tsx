@@ -5,6 +5,7 @@ import { useAgentApproval, useAgentCore, useAgentProfile } from '../hooks/useAge
 import ToolCallCard from '../shared/ToolCallCard';
 import PlanDecisionModal from '../shared/PlanDecisionModal';
 import { useWorkspaceStore } from '../stores/workspace.store';
+import { textPart } from '@shared/parts';
 
 interface ApprovalPanelProps {
   threadId: string;
@@ -46,7 +47,10 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
     const sessionId = pendingPlan.sessionId;
     clearPendingPlan(threadId);
     await switchProfile(sessionId, 'build', workspace.rootPath ?? '');
-    await sendMessage('Plan approved. Please start implementing it.', workspace.rootPath ?? '');
+    await sendMessage(
+      [textPart('Plan approved. Please start implementing it.')],
+      workspace.rootPath ?? ''
+    );
   }, [pendingPlan, clearPendingPlan, threadId, switchProfile, sendMessage, workspace.rootPath]);
 
   const handleSubmitOpinion = useCallback(
@@ -54,7 +58,7 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
       if (!pendingPlan) return;
       clearPendingPlan(threadId);
       await sendMessage(
-        `Please revise the plan based on this feedback:\n\n${opinion}`,
+        [textPart(`Please revise the plan based on this feedback:\n\n${opinion}`)],
         workspace.rootPath ?? ''
       );
     },

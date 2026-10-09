@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { textOf, textPart } from '../shared/parts';
 
 function refillFromTurns(
   turns: { id: string; items: any[] }[],
@@ -9,7 +10,7 @@ function refillFromTurns(
   const userMsg = targetTurn?.items.find(
     (i) => i.type === 'message' && (i as any).role === 'user'
   );
-  const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
+  const userContent = userMsg && userMsg.parts ? textOf(userMsg.parts) : '';
   if (userContent) {
     setPendingInput(userContent);
   }
@@ -24,7 +25,12 @@ describe('rollback message refill', () => {
         {
           id: '1',
           items: [
-            { id: 'msg1', type: 'message', role: 'user', content: 'original rolled back prompt' },
+            {
+              id: 'msg1',
+              type: 'message',
+              role: 'user',
+              parts: [textPart('original rolled back prompt')],
+            },
           ],
         },
       ],

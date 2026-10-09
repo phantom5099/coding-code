@@ -5,13 +5,14 @@ import { AgentService } from '../agent/port.js';
 import type { FrameBody } from '../sink/types.js';
 import type { Result } from '../util/result.js';
 import { BYPASS_PERMISSION_MODE } from '../util/enums.js';
+import type { IncomingPart } from '../llm/types.js';
 
 export const SubagentRunnerLayer = Layer.effect(
   SubagentRunnerService,
   Effect.gen(function* () {
     const agent = yield* AgentService;
 
-    const runSubagent = (input: string, opts: RunSubagentOptions) =>
+    const runSubagent = (input: IncomingPart[], opts: RunSubagentOptions) =>
       Effect.gen(function* () {
         const result = yield* agent.runTurn(input, {
           sessionId: opts.sessionId,

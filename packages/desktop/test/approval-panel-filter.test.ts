@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Item, Thread, Turn } from '../shared/types';
+import { textPart } from '../shared/parts';
 
 function extractPendingItems(thread: Thread | undefined): Array<Item & { type: 'tool_call' }> {
   return (
@@ -20,7 +21,7 @@ function makeToolCall(
 }
 
 function makeMsg(role: 'user' | 'assistant', content: string): Item {
-  return { id: 'm-' + content, type: 'message', role, content };
+  return { id: 'm-' + content, type: 'message', role, parts: [textPart(content)] };
 }
 
 describe('extractPendingItems', () => {

@@ -4,6 +4,7 @@ import type { FrameBody } from '../sink/types.js';
 import type { AgentError } from '../util/error.js';
 import type { Result } from '../util/result.js';
 import type { ProfileName, PermissionMode } from '../util/enums.js';
+import type { IncomingPart } from '../llm/types.js';
 
 export interface RunSubagentOptions {
   sessionId?: string;
@@ -19,7 +20,7 @@ export interface RunSubagentOptions {
 
 export interface SubagentRunnerShape {
   runSubagent(
-    input: string,
+    input: IncomingPart[],
     opts: RunSubagentOptions
   ): Effect.Effect<
     {

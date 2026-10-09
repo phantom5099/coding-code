@@ -13,6 +13,7 @@ import { encodeProjectPath } from '../../src/util/path.js';
 import { computePaths } from '../../src/session/paths.js';
 import type { SessionStoreState } from '../../src/session/types.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { text } from '../helpers/parts.js';
 
 const base = useTempProjectBase();
 
@@ -41,7 +42,7 @@ function makeFixture(
     {
       type: 'user',
       turnId: 1,
-      content: 'hello world',
+      content: text('hello world'),
     },
     {
       type: 'assistant',
@@ -53,7 +54,7 @@ function makeFixture(
     {
       type: 'user',
       turnId: 2,
-      content: 'do stuff',
+      content: text('do stuff'),
     },
     {
       type: 'assistant',

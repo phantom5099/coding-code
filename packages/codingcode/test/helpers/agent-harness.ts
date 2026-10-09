@@ -22,6 +22,8 @@ import { ToolExecutorService } from '../../src/tools/port.js';
 import type { FrameBody, RuntimeEvent, Transition } from '../../src/sink/types.js';
 import type { TokenUsage, LLMStreamPart } from '../../src/llm/types.js';
 import type { SessionStoreState, SessionRef } from '../../src/session/types.js';
+import type { IncomingPart } from '../../src/llm/types.js';
+import { incomingText } from './parts.js';
 
 // ---- LLM 部件构造器 ----
 
@@ -146,9 +148,11 @@ export interface HarnessMocks {
   session?: Partial<{
     load: (cwd: string, sid: string) => any;
     create: (cwd: string, opts: any, extra?: any) => any;
-    recordUser: (state: any, content: string) => any;
-    recordSystem: (state: any, content: string) => any;
-    recordAssistant: (state: any, content: string, toolCalls: any[], usage?: any) => any;
+    materializeInput: (state: any, input: any) => any;
+    resolveAssets: (cwd: string, assets: readonly string[]) => any;
+    recordUser: (state: any, content: any) => any;
+    recordSystem: (state: any, content: any) => any;
+    recordAssistant: (state: any, content: any, toolCalls: any[], usage?: any) => any;
     recordToolResult: (state: any, name: string, id: string, output: string) => any;
     setPermissionMode: (cwd: string, sid: string, mode: any) => any;
     setActiveProfile: (cwd: string, sid: string, profile: any) => any;
@@ -200,7 +204,7 @@ export function makeHarnessMocks(overrides: Partial<HarnessMocks> = {}): Harness
 }
 
 export interface RunAgentOptions {
-  input?: string;
+  input?: IncomingPart[];
   sessionId?: string;
   cwd?: string;
   signal?: AbortSignal;
@@ -247,6 +251,21 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
         sessionId: opts.sessionId ?? 'created-sid',
         activeProfile: opts.activeProfile ?? 'build',
       }),
+    materializeInput: (_state: any, input: any[]) =>
+      Effect.succeed(
+        input.map((p: any) =>
+          p.type === 'text'
+            ? { type: 'text' as const, text: p.text }
+            : {
+                type: 'media' as const,
+                asset: 'a'.repeat(32) + '.png',
+                mimeType: p.declaredMimeType ?? 'image/png',
+                bytes: p.bytes?.length ?? 0,
+                ...(p.filename ? { filename: p.filename } : {}),
+              }
+        )
+      ),
+    resolveAssets: () => Effect.succeed(new Map()),
     recordUser: () => Effect.succeed({ turnId: 1 }),
     recordSystem: () => Effect.succeed({}),
     recordAssistant: () => Effect.succeed({}),
@@ -382,7 +401,7 @@ export async function runAgentTurn(
     if (opts.activeProfile) runOpts.activeProfile = opts.activeProfile;
     if (opts.permissionMode) runOpts.permissionMode = opts.permissionMode;
     if (opts.skills) runOpts.skills = opts.skills;
-    return yield* agent.runTurn(opts.input ?? 'test', runOpts);
+    return yield* agent.runTurn(opts.input ?? incomingText('test'), runOpts);
   });
   let runRes: { stream: AsyncGenerator<FrameBody>; sessionId: string };
   try {

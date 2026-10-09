@@ -7,6 +7,7 @@ import { isPermissionMode } from '../../approval/types.js';
 import { loadConfig } from '../../infra/config.js';
 import { AgentError } from '../../util/error.js';
 import { ASK_BEFORE_EXEC_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../../util/enums.js';
+import type { IncomingMedia, IncomingPart } from '../../llm/types.js';
 import {
   frameStream,
   pathParams,
@@ -17,13 +18,59 @@ import {
   type Router,
 } from '../handler.js';
 
+/** 线上内容部件的形状。 */
+type WirePart =
+  | { type: 'text'; text: string }
+  | { type: 'media'; dataUrl: string; filename?: string };
+
 /** POST body 的线上形状：模型是回合的必要输入，缺失即拒绝，不在 agent 层兜底成空串。 */
 type MessageBody = {
-  input: string;
+  input: WirePart[];
   cwd: string;
   model?: string;
   skills?: Array<{ name: string; path: string }>;
 };
+
+const DATA_URL_RE = /^data:([^;,]+);base64,(.*)$/s;
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+export function toIncomingParts(input: unknown): IncomingPart[] {
+  if (!Array.isArray(input)) {
+    throw AgentError.invalidInput('input must be an array of content parts');
+  }
+  const parts: IncomingPart[] = [];
+  for (const raw of input) {
+    if (typeof raw !== 'object' || raw === null) {
+      throw AgentError.invalidInput('input contains a non-object content part');
+    }
+    const p = raw as Record<string, unknown>;
+    if (p.type === 'text') {
+      if (typeof p.text !== 'string') {
+        throw AgentError.invalidInput('text part requires a string "text"');
+      }
+      parts.push({ type: 'text', text: p.text });
+      continue;
+    }
+    if (p.type === 'media') {
+      const dataUrl = typeof p.dataUrl === 'string' ? p.dataUrl : '';
+      const matched = DATA_URL_RE.exec(dataUrl);
+      const payload = matched?.[2] ?? '';
+      if (!matched || !BASE64_RE.test(payload) || payload.length % 4 === 1) {
+        throw AgentError.invalidInput('media part requires a base64 data URL');
+      }
+      const media: IncomingMedia = {
+        type: 'media',
+        bytes: new Uint8Array(Buffer.from(payload, 'base64')),
+        ...(matched[1] ? { declaredMimeType: matched[1] } : {}),
+      };
+      if (typeof p.filename === 'string' && p.filename) media.filename = p.filename;
+      parts.push(media);
+      continue;
+    }
+    throw AgentError.invalidInput(`unknown content part type: ${String(p.type)}`);
+  }
+  return parts;
+}
 
 const sendMessage: Handler = Effect.gen(function* () {
   const { id } = yield* pathParams;
@@ -35,6 +82,11 @@ const sendMessage: Handler = Effect.gen(function* () {
   }
   // 工作区目录必须存在，否则拒绝（不允许带着不存在的路径开回合）
   const cwd = resolveWorkspaceCwd(body.cwd);
+
+  const input = yield* Effect.try({
+    try: () => toIncomingParts(body.input),
+    catch: (e) => (e instanceof AgentError ? e : AgentError.invalidInput(String(e))),
+  });
 
   const sessionId = id ?? '';
   const isNew = sessionId === '_' || !sessionId;
@@ -55,7 +107,7 @@ const sendMessage: Handler = Effect.gen(function* () {
   }
 
   const agent = yield* AgentService;
-  const { stream, sessionId: actualSid } = yield* agent.runTurn(body.input, {
+  const { stream, sessionId: actualSid } = yield* agent.runTurn(input, {
     sessionId: isNew ? undefined : sessionId,
     ...runOpts,
   } as never);

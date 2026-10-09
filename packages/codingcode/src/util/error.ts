@@ -15,7 +15,8 @@ export type ErrorCode =
   | 'AGENT_ABORTED'
   | 'AGENT_LOOP_DETECTED'
   | 'EMPTY_RESPONSE'
-  | 'SESSION_IO_ERROR';
+  | 'SESSION_IO_ERROR'
+  | 'INVALID_INPUT';
 
 export class AgentError extends Error {
   readonly _tag = 'AgentError';
@@ -53,6 +54,9 @@ export class AgentError extends Error {
   }
   static configMissing(msg: string) {
     return new AgentError('CONFIG_MISSING', msg);
+  }
+  static invalidInput(msg: string) {
+    return new AgentError('INVALID_INPUT', msg);
   }
   static sessionNotFound(sessionId: string) {
     return new AgentError('SESSION_NOT_FOUND', `Session "${sessionId}" not found`);

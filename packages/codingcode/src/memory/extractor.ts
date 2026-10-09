@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 import type { LLMShape } from '../llm/port.js';
+import { textPart } from '../llm/types.js';
 
 const SYSTEM_PROMPT = `你是记忆整理器。基于"已有记忆"和"会话记录"，输出整份最新版长期记忆。
 
@@ -35,7 +36,7 @@ ${transcript || '（空）'}`;
   return llm
     .complete(
       {
-        messages: [{ role: 'user', content: userMessage }],
+        messages: [{ role: 'user', content: [textPart(userMessage)] }],
         system: SYSTEM_PROMPT,
       },
       model

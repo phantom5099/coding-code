@@ -113,9 +113,26 @@ export interface SessionClient {
   }): Promise<void>;
 }
 
+/**
+ * 输入内容部件的线上形状：文本或媒体。
+ *
+ * 媒体随 base64 data URL 内联在同一个请求里 —— 新会话的请求 id 是 `_`，
+ * 那一刻还没有 sessionId、资产无处安放。
+ */
+export type InputPart =
+  | { type: 'text'; text: string }
+  | { type: 'media'; dataUrl: string; filename?: string };
+
+/**
+ * 单个媒体附件的字节上限，与服务端准入闸口
+ * `packages/codingcode/src/session/assets.ts` 的 `MAX_MEDIA_BYTES` 同值同义。
+ * 前端只用它做提交前的 UX 早退，最终准入以服务端校验为准。
+ */
+export const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
+
 export interface AgentRuntimeClient {
   sendMessage(
-    input: string,
+    input: InputPart[],
     options: {
       sessionId?: string;
       cwd: string;

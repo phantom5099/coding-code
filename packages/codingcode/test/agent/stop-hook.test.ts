@@ -1,4 +1,5 @@
 import { expect, it, describe, vi } from 'vitest';
+import { textOf } from '../../src/llm/types.js';
 import { Effect } from 'effect';
 import {
   makeState,
@@ -123,7 +124,7 @@ describe('agent runTurn stop hook', () => {
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    const contents = recordSystem.mock.calls.map((c: any) => c[1] as string);
+    const contents = recordSystem.mock.calls.map((c: any) => textOf(c[1]));
     expect(contents.some((c) => c === 'Custom injection message')).toBe(true);
   });
 
@@ -138,7 +139,7 @@ describe('agent runTurn stop hook', () => {
       { sessionId: 'test-sid', cwd: '/tmp' }
     );
 
-    const contents = recordSystem.mock.calls.map((c: any) => c[1] as string);
+    const contents = recordSystem.mock.calls.map((c: any) => textOf(c[1]));
     expect(contents.some((c) => c === '(continue)')).toBe(true);
   });
 });

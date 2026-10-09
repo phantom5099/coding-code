@@ -4,7 +4,19 @@ import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { AgentError } from '../util/error.js';
 import { encodeProjectPath } from '../util/path.js';
-import { computePaths } from './paths.js';
+import { assetsDirOf, assertAssetName, computePaths } from './paths.js';
+import {
+  MAX_MEDIA_BYTES,
+  MAX_MEDIA_PER_TURN,
+  MAX_TEXT_CHARS,
+  assetNameFor,
+  mimeTypeFromAssetName,
+  readAsset,
+  readAudioDurationSec,
+  readImageSize,
+  writeAsset,
+} from './assets.js';
+import { sniffMediaMime } from '../util/media.js';
 import type {
   SessionMetaEvent,
   UserEvent,
@@ -15,10 +27,19 @@ import type {
   RollbackEvent,
   SessionEvent,
   CompactEvent,
+  StoredPart,
+  StoredMediaPart,
 } from './types.js';
 import type { SessionStoreState, SessionSummary } from './types.js';
 import type { UITurn } from './types.js';
-import type { TokenUsage } from '../llm/types.js';
+import {
+  mediaKindOf,
+  textOf,
+  textPart,
+  type IncomingMedia,
+  type IncomingPart,
+  type TokenUsage,
+} from '../llm/types.js';
 import type { ProfileName, PermissionMode } from '../util/enums.js';
 
 import { SessionService } from './port.js';
@@ -122,7 +143,7 @@ export function sessionEventsToTurns(events: SessionEvent[]): UITurn[] {
           id: nextId('user', event.turnId),
           type: 'message',
           role: 'user',
-          content: event.content,
+          parts: event.content,
         });
         break;
       case 'assistant':
@@ -131,7 +152,7 @@ export function sessionEventsToTurns(events: SessionEvent[]): UITurn[] {
             id: nextId('assistant', event.turnId),
             type: 'message',
             role: 'assistant',
-            content: event.content,
+            parts: [textPart(event.content)],
           });
         }
         for (const tc of event.toolCalls ?? []) {
@@ -171,6 +192,8 @@ function readUIHistory(sessionId: string, cwd: string): UITurn[] {
 export const SessionLayer = Layer.effect(
   SessionService,
   Effect.gen(function* () {
+    const assetCache = new Map<string, string>();
+
     const create = (
       cwd: string,
       options: {
@@ -237,7 +260,7 @@ export const SessionLayer = Layer.effect(
 
     const recordUser = (
       state: SessionStoreState,
-      content: string
+      content: StoredPart[]
     ): Effect.Effect<UserEvent, AgentError> =>
       Effect.try({
         try: () => {
@@ -251,7 +274,7 @@ export const SessionLayer = Layer.effect(
           const transcriptPath = pathsFromState(state).transcriptPath;
           appendLine(transcriptPath, event);
           if (!state.title) {
-            const derived = truncateTitle(content);
+            const derived = truncateTitle(textOf(content));
             if (derived) {
               rewriteSessionMeta(transcriptPath, { title: derived });
               state.title = derived;
@@ -267,7 +290,7 @@ export const SessionLayer = Layer.effect(
 
     const recordSystem = (
       state: SessionStoreState,
-      content: string
+      content: StoredPart[]
     ): Effect.Effect<UserEvent, AgentError> =>
       Effect.try({
         try: () => {
@@ -284,6 +307,109 @@ export const SessionLayer = Layer.effect(
           e instanceof AgentError
             ? e
             : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
+
+    const materializeInput = (
+      state: SessionStoreState,
+      parts: readonly IncomingPart[]
+    ): Effect.Effect<StoredPart[], AgentError> =>
+      Effect.try({
+        try: () => {
+          const media = parts.filter((p): p is IncomingMedia => p.type === 'media');
+          if (media.length > MAX_MEDIA_PER_TURN) {
+            throw AgentError.invalidInput(
+              `Too many media attachments in one turn: ${media.length} > ${MAX_MEDIA_PER_TURN}`
+            );
+          }
+
+          const dir = media.length > 0 ? assetsDirOf(state.cwd) : '';
+          const out: StoredPart[] = [];
+          for (const p of parts) {
+            if (p.type === 'text') {
+              if (p.text.length > MAX_TEXT_CHARS) {
+                throw AgentError.invalidInput(
+                  `Input text too long: ${p.text.length} > ${MAX_TEXT_CHARS}`
+                );
+              }
+              out.push({ type: 'text', text: p.text });
+              continue;
+            }
+
+            if (p.bytes.byteLength > MAX_MEDIA_BYTES) {
+              throw AgentError.invalidInput(
+                `Media too large: ${p.bytes.byteLength} > ${MAX_MEDIA_BYTES}`
+              );
+            }
+            const mimeType = sniffMediaMime(p.bytes);
+            if (!mimeType) {
+              throw AgentError.invalidInput('Unsupported media: bytes are not in the whitelist');
+            }
+
+            const asset = assetNameFor(p.bytes, mimeType);
+            writeAsset(dir, asset, p.bytes);
+
+            const kind = mediaKindOf(mimeType);
+            const part: StoredMediaPart = {
+              type: 'media',
+              asset,
+              mimeType,
+              bytes: p.bytes.byteLength,
+            };
+            // PDF 的 filename 必填：驱动在缺省时会生成 part-N.pdf 这种无意义名字
+            if (p.filename) part.filename = p.filename;
+            else if (kind === 'file') part.filename = asset;
+            if (kind === 'image') {
+              const size = readImageSize(p.bytes, mimeType);
+              if (size) {
+                part.width = size.width;
+                part.height = size.height;
+              }
+            } else if (kind === 'audio') {
+              const durationSec = readAudioDurationSec(p.bytes, mimeType);
+              if (durationSec !== null) part.durationSec = durationSec;
+            }
+            out.push(part);
+          }
+          return out;
+        },
+        catch: (e) =>
+          e instanceof AgentError
+            ? e
+            : new AgentError(
+                'SESSION_IO_ERROR',
+                `Failed to store input media: ${String(e)}`,
+                e
+              ),
+      });
+
+    /**
+     * 读盘并转 data URL。内容寻址让缓存永不失效，键为 (assetsDir, asset)。
+     */
+    const resolveAssets = (
+      cwd: string,
+      assets: readonly string[]
+    ): Effect.Effect<Map<string, string>, AgentError> =>
+      Effect.sync(() => {
+        const dir = assetsDirOf(cwd);
+        const resolved = new Map<string, string>();
+        for (const asset of assets) {
+          const cacheKey = `${dir}\u0000${asset}`;
+          const cached = assetCache.get(cacheKey);
+          if (cached !== undefined) {
+            resolved.set(asset, cached);
+            continue;
+          }
+          try {
+            assertAssetName(asset);
+            const bytes = readAsset(dir, asset);
+            const url = `data:${mimeTypeFromAssetName(asset)};base64,${Buffer.from(bytes).toString('base64')}`;
+            assetCache.set(cacheKey, url);
+            resolved.set(asset, url);
+          } catch {
+            /* 资产缺失或不可读：跳过，出网时降级成文本标记 */
+          }
+        }
+        return resolved;
       });
 
     const recordAssistant = (
@@ -472,6 +598,8 @@ export const SessionLayer = Layer.effect(
       listSessions: listSessionsFromCwd,
 
       readHistory: readHistoryFromState,
+      materializeInput,
+      resolveAssets,
       recordUser,
       recordSystem,
       recordAssistant,

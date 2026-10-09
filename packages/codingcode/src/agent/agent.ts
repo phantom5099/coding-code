@@ -29,7 +29,10 @@ import { isTurnEnd } from '../sink/types.js';
 import type { SessionRef } from '../session/types.js';
 import type { PermissionMode } from '../util/enums.js';
 import type { ToolCatalog, ToolResult } from '../tools/types.js';
+import { mediaKindOf, textOf, textPart, type IncomingPart } from '../llm/types.js';
 import type { ToolCall } from '../llm/types.js';
+import { capabilitiesOf } from '../infra/models.js';
+import { sniffMediaMime } from '../util/media.js';
 import { loadConfig } from '../infra/config.js';
 import { createLogger } from '../infra/logger.js';
 import { normalizePath } from '../util/path.js';
@@ -40,6 +43,35 @@ function toolOutcomeOf(result: ToolResult): ToolOutcome {
   return result.status === 'denied'
     ? { status: 'denied', reason: result.reason }
     : { status: result.status, output: result.output };
+}
+
+function assertMediaAllowed(
+  input: readonly IncomingPart[],
+  model: string
+): Effect.Effect<void, AgentError> {
+  return Effect.gen(function* () {
+    let needsVision = false;
+    let needsAudio = false;
+    for (const p of input) {
+      if (p.type !== 'media') continue;
+      const mimeType = sniffMediaMime(p.bytes) ?? p.declaredMimeType ?? '';
+      if (mediaKindOf(mimeType) === 'audio') needsAudio = true;
+      else needsVision = true;
+    }
+    if (!needsVision && !needsAudio) return;
+
+    // capabilitiesOf 是同步查询，抛出的 AgentError 原样进错误通道
+    const caps = yield* Effect.try({
+      try: () => capabilitiesOf(model),
+      catch: (e) => (e instanceof AgentError ? e : AgentError.invalidInput(String(e))),
+    });
+    if (needsVision && !caps.vision) {
+      return yield* Effect.fail(AgentError.invalidInput('model does not accept image or PDF input'));
+    }
+    if (needsAudio && !caps.audio) {
+      return yield* Effect.fail(AgentError.invalidInput('model does not accept audio input'));
+    }
+  });
 }
 
 const logger = createLogger();
@@ -81,7 +113,7 @@ export const AgentLayer = Layer.effect(
           )
       );
 
-    const runTurn = (input: string, opts: RunTurnOptions) =>
+    const runTurn = (input: IncomingPart[], opts: RunTurnOptions) =>
       Effect.gen(function* () {
         const normalizedCwd = normalizePath(opts.cwd);
 
@@ -106,7 +138,7 @@ export const AgentLayer = Layer.effect(
             normalizedCwd,
             {
               model,
-              title: input,
+              title: textOf(input) || 'New session',
               activeProfile: opts.activeProfile,
               permissionMode: opts.permissionMode,
             },
@@ -148,7 +180,9 @@ export const AgentLayer = Layer.effect(
 
         const toolEnv = yield* toolEnvPort.getToolEnv();
 
-        const turnId = (yield* session.recordUser(state, input)).turnId;
+        yield* assertMediaAllowed(input, model);
+        const parts = yield* session.materializeInput(state, input);
+        const turnId = (yield* session.recordUser(state, parts)).turnId;
 
         // 用户显式 @ 的 skill：按 path 回查权威数据，正文拼块后作为同回合的第二条 user 事件
         if (opts.skills?.length) {
@@ -158,7 +192,7 @@ export const AgentLayer = Layer.effect(
             const entries = yield* Effect.forEach(chosen, (s) =>
               skills.readContent(s.skillPath).pipe(Effect.map((body) => ({ skill: s, body })))
             );
-            yield* session.recordSystem(state, renderSkillBlock(entries));
+            yield* session.recordSystem(state, [textPart(renderSkillBlock(entries))]);
           }
         }
 
@@ -347,7 +381,12 @@ export const AgentLayer = Layer.effect(
             Effect.tryPromise({
               try: async () => {
                 for await (const part of llm.completeStream(
-                  { messages: llmMessages, system, tools, maxSteps: 1 },
+                  {
+                    messages: llmMessages,
+                    system,
+                    tools,
+                    maxSteps: 1,
+                  },
                   model,
                   abortSignal
                 )) {
@@ -436,7 +475,7 @@ export const AgentLayer = Layer.effect(
               }
               stopContinuations++;
               const injection = stopDecision.injection ?? '(continue)';
-              const systemEv = yield* session.recordSystem(state, injection);
+              const systemEv = yield* session.recordSystem(state, [textPart(injection)]);
               yield* context.absorb(sessionRef, [systemEv]);
               continue;
             }

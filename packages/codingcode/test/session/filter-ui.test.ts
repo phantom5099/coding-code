@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { SessionEvent } from '../../src/session/types.js';
 import { filterForUI, sessionEventsToTurns } from '../../src/session/session.js';
+import { text } from '../helpers/parts.js';
 
 function makeBaseEvents(extra: SessionEvent[] = []): SessionEvent[] {
   const base: SessionEvent[] = [
@@ -14,11 +15,11 @@ function makeBaseEvents(extra: SessionEvent[] = []): SessionEvent[] {
       activeProfile: 'build',
       permissionMode: 'askBeforeExec',
     },
-    { type: 'user', turnId: 1, content: 'hello' },
+    { type: 'user', turnId: 1, content: text('hello') },
     { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },
-    { type: 'user', turnId: 2, content: 'do stuff' },
+    { type: 'user', turnId: 2, content: text('do stuff') },
     { type: 'assistant', turnId: 2, content: 'ok', toolCalls: [] },
-    { type: 'user', turnId: 3, content: 'done' },
+    { type: 'user', turnId: 3, content: text('done') },
     { type: 'assistant', turnId: 3, content: 'great', toolCalls: [] },
   ];
   return [...base, ...extra];
@@ -133,9 +134,9 @@ describe('sessionEventsToTurns with summary', () => {
         activeProfile: 'build',
         permissionMode: 'askBeforeExec',
       },
-      { type: 'user', turnId: 1, content: 'hello' },
+      { type: 'user', turnId: 1, content: text('hello') },
       { type: 'assistant', turnId: 1, content: 'hi', toolCalls: [] },
-      { type: 'user', turnId: 2, content: 'more' },
+      { type: 'user', turnId: 2, content: text('more') },
       { type: 'assistant', turnId: 2, content: 'ok', toolCalls: [] },
       {
         type: 'summary',

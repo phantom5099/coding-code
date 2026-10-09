@@ -3,6 +3,7 @@ import { useAgentStore } from '../src/stores/agent.store';
 import { useWorkspaceStore } from '../src/stores/workspace.store';
 import { useRollbackStore } from '../src/stores/rollback.store';
 import type { Item, Turn, Project } from '../shared/types';
+import { textOf, textPart } from '../shared/parts';
 
 function freshProject(id: string, rootPath: string): Project {
   const name = rootPath.replace(/\\/g, '/').split('/').pop() || rootPath;
@@ -40,7 +41,7 @@ describe('global store - agent streaming actions', () => {
   }
 
   it('startTurn creates a thread if missing', () => {
-    const turn = makeTurn([{ id: 'u1', type: 'message', role: 'user', content: 'hello' }]);
+    const turn = makeTurn([{ id: 'u1', type: 'message', role: 'user', parts: [textPart('hello')] }]);
     useAgentStore.getState().startTurn(threadId, turn);
 
     const thread = useAgentStore.getState().threads[threadId];
@@ -58,14 +59,14 @@ describe('global store - agent streaming actions', () => {
       id: 'msg-1',
       type: 'message',
       role: 'assistant',
-      content: 'Hello',
+      parts: [textPart('Hello')],
       partial: true,
     };
     const delta2: Item = {
       id: 'msg-1',
       type: 'message',
       role: 'assistant',
-      content: ' world',
+      parts: [textPart(' world')],
       partial: true,
     };
     useAgentStore.getState().applyChunk(threadId, turnId, delta1);
@@ -75,7 +76,7 @@ describe('global store - agent streaming actions', () => {
     const message = items.find((i) => i.id === 'msg-1');
     expect(message).toBeDefined();
     expect((message as any).partial).toBe(true);
-    expect((message as any).content).toBe('Hello world');
+    expect(textOf((message as any).parts)).toBe('Hello world');
     expect(items.filter((i) => i.id === 'msg-1')).toHaveLength(1);
   });
 
@@ -88,14 +89,14 @@ describe('global store - agent streaming actions', () => {
       id: 'msg-1',
       type: 'message',
       role: 'assistant',
-      content: 'Hello ',
+      parts: [textPart('Hello ')],
       partial: true,
     });
     useAgentStore.getState().applyChunk(threadId, turnId, {
       id: 'msg-1',
       type: 'message',
       role: 'assistant',
-      content: 'world',
+      parts: [textPart('world')],
       partial: true,
     });
 
@@ -104,14 +105,14 @@ describe('global store - agent streaming actions', () => {
       id: 'msg-1',
       type: 'message',
       role: 'assistant',
-      content: '',
+      parts: [textPart('')],
       partial: false,
     });
 
     const items = useAgentStore.getState().threads[threadId].turns[0].items;
     const committed = items.find((i) => i.id === 'msg-1');
     expect(committed).toBeDefined();
-    expect((committed as any).content).toBe('Hello world');
+    expect(textOf((committed as any).parts)).toBe('Hello world');
     expect((committed as any).partial).toBe(false);
   });
 
@@ -210,7 +211,7 @@ describe('global store - agent streaming actions', () => {
       id: 'msg-x',
       type: 'message',
       role: 'assistant',
-      content: 'hi',
+      parts: [textPart('hi')],
       partial: true,
     });
 
@@ -218,7 +219,7 @@ describe('global store - agent streaming actions', () => {
 
     const updatedTurn = useAgentStore.getState().threads[threadId].turns[0];
     expect(updatedTurn.status).toBe('completed');
-    expect((updatedTurn.items.find((i) => i.id === 'msg-x') as any).content).toBe('hi');
+    expect(textOf((updatedTurn.items.find((i) => i.id === 'msg-x') as any).parts)).toBe('hi');
     expect((updatedTurn.items.find((i) => i.id === 'msg-x') as any).partial).toBe(false);
   });
 
@@ -231,14 +232,14 @@ describe('global store - agent streaming actions', () => {
       id: 'msg-1',
       type: 'message',
       role: 'assistant',
-      content: 'Hello',
+      parts: [textPart('Hello')],
       partial: true,
     });
     useAgentStore.getState().applyChunk(threadId, turnId, {
       id: 'msg-1',
       type: 'message',
       role: 'assistant',
-      content: ' world',
+      parts: [textPart(' world')],
       partial: true,
     });
 
@@ -247,7 +248,7 @@ describe('global store - agent streaming actions', () => {
     const items = useAgentStore.getState().threads[threadId].turns[0].items;
     const assistantItem = items.find((i) => i.id === 'msg-1');
     expect(assistantItem).toBeDefined();
-    expect((assistantItem as any).content).toBe('Hello world');
+    expect(textOf((assistantItem as any).parts)).toBe('Hello world');
     expect((assistantItem as any).partial).toBe(false);
   });
 
@@ -260,14 +261,14 @@ describe('global store - agent streaming actions', () => {
       id: 'msg-1',
       type: 'message',
       role: 'assistant',
-      content: 'Hello',
+      parts: [textPart('Hello')],
       partial: true,
     });
     useAgentStore.getState().applyChunk(threadId, turnId, {
       id: 'msg-1',
       type: 'message',
       role: 'assistant',
-      content: '',
+      parts: [textPart('')],
       partial: false,
     });
 
@@ -276,7 +277,7 @@ describe('global store - agent streaming actions', () => {
     const items = useAgentStore.getState().threads[threadId].turns[0].items;
     const assistantItem = items.find((i) => i.id === 'msg-1');
     // Content comes from the committed applyChunk (which uses accumulated streaming)
-    expect((assistantItem as any).content).toBe('Hello');
+    expect(textOf((assistantItem as any).parts)).toBe('Hello');
     expect((assistantItem as any).partial).toBe(false);
   });
 
@@ -290,21 +291,21 @@ describe('global store - agent streaming actions', () => {
       id: 'assistant-1',
       type: 'message',
       role: 'assistant',
-      content: 'A',
+      parts: [textPart('A')],
       partial: true,
     });
     useAgentStore.getState().applyChunk(threadB, 'turn-b', {
       id: 'assistant-1',
       type: 'message',
       role: 'assistant',
-      content: 'B',
+      parts: [textPart('B')],
       partial: true,
     });
 
     const itemA = useAgentStore.getState().threads[threadA].turns[0].items[0];
     const itemB = useAgentStore.getState().threads[threadB].turns[0].items[0];
-    expect((itemA as any).content).toBe('A');
-    expect((itemB as any).content).toBe('B');
+    expect(textOf((itemA as any).parts)).toBe('A');
+    expect(textOf((itemB as any).parts)).toBe('B');
   });
 });
 
@@ -329,7 +330,7 @@ describe('global store - loadThreads', () => {
   }
 
   it('preserves in-flight thread with running turn not yet persisted by backend', () => {
-    const turn = makeTurn([{ id: 'u1', type: 'message', role: 'user', content: 'hello' }]);
+    const turn = makeTurn([{ id: 'u1', type: 'message', role: 'user', parts: [textPart('hello')] }]);
     useAgentStore.getState().startTurn(threadId, turn);
 
     // Backend returns empty list (new thread not persisted yet)
@@ -341,7 +342,7 @@ describe('global store - loadThreads', () => {
   });
 
   it('preserves in-memory turns when backend returns thread with empty turns', () => {
-    const turn = makeTurn([{ id: 'u1', type: 'message', role: 'user', content: 'hello' }]);
+    const turn = makeTurn([{ id: 'u1', type: 'message', role: 'user', parts: [textPart('hello')] }]);
     useAgentStore.getState().startTurn(threadId, turn);
     useAgentStore.getState().completeTurn(threadId, turnId, 'completed');
 
@@ -352,7 +353,7 @@ describe('global store - loadThreads', () => {
     const thread = useAgentStore.getState().threads[threadId];
     // In-memory turns are preserved
     expect(thread.turns[0].items).toHaveLength(1);
-    expect((thread.turns[0].items[0] as any).content).toBe('hello');
+    expect(textOf((thread.turns[0].items[0] as any).parts)).toBe('hello');
   });
 
   it('does not preserve completed thread absent from backend list', () => {

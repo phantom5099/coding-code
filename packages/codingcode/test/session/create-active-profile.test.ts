@@ -5,6 +5,7 @@ import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { readSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
+import { text } from '../helpers/parts.js';
 
 useTempProjectBase();
 
@@ -53,7 +54,7 @@ describe('session activeProfile persistence', () => {
         const session = yield* SessionService;
         yield* session.setActiveProfile(state.cwd, state.sessionId, 'plan');
         const reloaded = yield* session.load(state.cwd, state.sessionId);
-        yield* session.recordUser(reloaded, 'hello');
+        yield* session.recordUser(reloaded, text('hello'));
       })
     );
 

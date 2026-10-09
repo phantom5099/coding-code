@@ -6,6 +6,7 @@ import { useRollbackStore } from '../stores/rollback.store';
 import MessageItem from '../shared/MessageItem';
 import UnifiedDiffView from '../shared/UnifiedDiffView';
 import type { Item } from '@shared/types';
+import { textOf } from '@shared/parts';
 import type { CheckpointDiff } from '../lib/core-api';
 import { useAgentApproval, useAgentRollback } from '../hooks/useAgent';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
@@ -216,6 +217,8 @@ function TurnDiffPanel({
 
 export default function MessageStream({ threadId }: MessageStreamProps) {
   const turns = useAgentStore((s) => s.threads[threadId]?.turns ?? []);
+  /** 资产地址按项目定位，气泡里的媒体直接指向服务端的资产路由 */
+  const threadCwd = useAgentStore((s) => s.threads[threadId]?.cwd ?? '');
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
   const upsertThread = useAgentStore((s) => s.upsertThread);
   const { approveTool, rejectTool } = useAgentApproval();
@@ -278,8 +281,9 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
           toolResultByCallId[item.callId] = item as any;
         } else if (item.type === 'tool_call') {
           nameMap[item.id] = item.name;
-        } else if (item.type === 'message' && item.role === 'assistant' && item.content) {
-          assistantParts.push(item.content);
+        } else if (item.type === 'message' && item.role === 'assistant') {
+          const text = textOf(item.parts);
+          if (text) assistantParts.push(text);
         }
       }
       if (assistantParts.length > 0) {
@@ -350,7 +354,8 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
             const userMsg = turn.items.find(
               (i) => i.type === 'message' && (i as any).role === 'user'
             );
-            const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
+            const userContent =
+              userMsg && userMsg.type === 'message' ? textOf(userMsg.parts) : '';
             let newSessionId: string | undefined;
             try {
               newSessionId = await forkThread(threadId, atTurnId);
@@ -558,6 +563,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                     <MessageItem
                       item={entry.item}
                       threadId={threadId}
+                      cwd={threadCwd}
                       onApprove={approveTool}
                       onReject={rejectTool}
                       callIdToToolName={callIdToToolName}

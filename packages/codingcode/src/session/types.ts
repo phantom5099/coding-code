@@ -1,5 +1,22 @@
-import type { TokenUsage, ToolCall } from '../llm/types.js';
+import type { MediaPart, TextPart, TokenUsage, ToolCall } from '../llm/types.js';
 import type { ProfileName, PermissionMode } from '../util/enums.js';
+
+/**
+ * 落盘形态的媒体块：MediaPart 之上附物化时解析出的元数据。
+ *
+ */
+export interface StoredMediaPart extends MediaPart {
+  /** 原始字节数；UI 展示体积、PDF 的 token 估算用 */
+  bytes: number;
+  /** 仅图片：服务端从文件头读出 */
+  width?: number;
+  height?: number;
+  /** 仅音频：服务端从容器头读出，token 估算用 */
+  durationSec?: number;
+}
+
+/** 落盘形态的内容块：转录事件与 UI 转通用。 */
+export type StoredPart = TextPart | StoredMediaPart;
 
 export interface SessionMetaEvent {
   type: 'session_meta';
@@ -17,7 +34,7 @@ export interface SessionMetaEvent {
 export interface UserEvent {
   type: 'user';
   turnId: number;
-  content: string;
+  content: StoredPart[];
   source?: 'user' | 'system';
 }
 
@@ -103,7 +120,13 @@ export interface SessionRef {
 }
 
 export type UITurnItem =
-  | { id: string; type: 'message'; role: 'user' | 'assistant'; content: string; partial?: boolean }
+  | {
+      id: string;
+      type: 'message';
+      role: 'user' | 'assistant';
+      parts: StoredPart[];
+      partial?: boolean;
+    }
   | {
       id: string;
       type: 'tool_call';

@@ -29,6 +29,8 @@ import type {
   CodeRollbackResult,
 } from '../lib/core-api';
 import type { Item, Turn, Project } from '@shared/types';
+import type { ContentPart } from '@shared/parts';
+import { textOf, toWireParts } from '@shared/parts';
 
 function normalizeCwd(p: string): string {
   return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`);
@@ -194,7 +196,7 @@ export function useAgentCore() {
   }, [currentThreadId, setThreadTurns]);
 
   const sendMessage = useCallback(
-    async (content: string, cwd?: string, skills?: Array<{ name: string; path: string }>) => {
+    async (parts: ContentPart[], cwd?: string, skills?: Array<{ name: string; path: string }>) => {
       const effectiveCwd = cwd || workspace.rootPath || '';
 
       let resolvedThreadId = currentThreadId;
@@ -237,9 +239,13 @@ export function useAgentCore() {
       clearPendingPlan(threadId);
 
       let activeTurnId = randomId();
-      const userItem: Item = { id: randomId(), type: 'message', role: 'user', content };
+      const userItem: Item = { id: randomId(), type: 'message', role: 'user', parts };
       const turn: Turn = { id: activeTurnId, items: [userItem], status: 'running' };
-      startTurn(threadId, turn, { cwd: effectiveCwd, title: content.slice(0, 60), model });
+      startTurn(threadId, turn, {
+        cwd: effectiveCwd,
+        title: textOf(parts).slice(0, 60),
+        model,
+      });
 
       const controller = new AbortController();
       registerInflight(threadId, controller);
@@ -266,7 +272,7 @@ export function useAgentCore() {
       };
 
       try {
-        const stream = agentClient.sendMessage(content, {
+        const stream = agentClient.sendMessage(toWireParts(parts), {
           sessionId: threadId,
           cwd: effectiveCwd,
           model,
@@ -449,9 +455,9 @@ export function useAgentRollback() {
         (t) => t.id === String(throughTurnId)
       );
       const userMsg = targetTurn?.items.find(
-        (i) => i.type === 'message' && (i as any).role === 'user'
+        (i) => i.type === 'message' && i.role === 'user'
       );
-      const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
+      const userContent = userMsg && userMsg.type === 'message' ? textOf(userMsg.parts) : '';
       const res = await rollbackContext(threadId, cwd, throughTurnId);
       clearRunningTurns(threadId);
       setThreadTurns(threadId, res.turns as Turn[]);
@@ -486,9 +492,9 @@ export function useAgentRollback() {
         (t) => t.id === String(throughTurnId)
       );
       const userMsg = targetTurn?.items.find(
-        (i) => i.type === 'message' && (i as any).role === 'user'
+        (i) => i.type === 'message' && i.role === 'user'
       );
-      const userContent = userMsg && 'content' in userMsg ? (userMsg as any).content : '';
+      const userContent = userMsg && userMsg.type === 'message' ? textOf(userMsg.parts) : '';
       const res = await rollbackBothToTurn(threadId, cwd, throughTurnId);
       setThreadTurns(threadId, res.turns as Turn[]);
       setThreadUsage(threadId, res.usage ?? { prompt: 0, completion: 0, total: 0 });

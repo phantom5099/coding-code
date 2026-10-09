@@ -1,12 +1,10 @@
 import { jsonSchema, type LanguageModelUsage, type ModelMessage } from 'ai';
-import type { TokenUsage } from '../types.js';
+import { textOf, type ResolvedMessage, type TokenUsage } from '../types.js';
 
-export function convertMessages(
-  messages: Array<{ role: string; content: string; tool_calls?: unknown[]; tool_call_id?: string }>
-): ModelMessage[] {
+export function convertMessages(messages: ResolvedMessage[]): ModelMessage[] {
   return messages.map((m) => {
     if (m.role === 'assistant' && m.tool_calls && Array.isArray(m.tool_calls)) {
-      const content: any[] = [{ type: 'text', text: m.content }];
+      const content: any[] = [{ type: 'text', text: textOf(m.content) }];
       for (const tc of m.tool_calls) {
         content.push({
           type: 'tool-call',
@@ -25,12 +23,32 @@ export function convertMessages(
             type: 'tool-result',
             toolCallId: m.tool_call_id,
             toolName: (m as any).tool_name || '',
-            output: { type: 'text', value: m.content },
+            output: { type: 'text', value: textOf(m.content) },
           },
         ],
       } as unknown as ModelMessage;
     }
-    return { role: m.role as any, content: m.content } as ModelMessage;
+
+    if (m.role === 'user' || m.role === 'system') {
+      const parts: any[] = [];
+      for (const p of m.content) {
+        if (p.type === 'text') {
+          parts.push({ type: 'text', text: p.text });
+          continue;
+        }
+        // 图片、音频、PDF 一律发 file 部件：协议层 user 消息只有 text | file，
+        // 驱动按 mediaType 分派到 image_url / input_audio / file
+        parts.push({
+          type: 'file',
+          data: p.dataUrl,
+          mediaType: p.mimeType,
+          filename: p.filename,
+        });
+      }
+      return { role: m.role, content: parts } as unknown as ModelMessage;
+    }
+
+    return { role: m.role as any, content: textOf(m.content) } as ModelMessage;
   });
 }
 

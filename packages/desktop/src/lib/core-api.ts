@@ -28,7 +28,13 @@ export type { AgentRuntimeClient };
 // ---- Models ----
 
 export function listModels(): Promise<{
-  models: Array<{ id: string; name: string; provider: string; context_window: number }>;
+  models: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    context_window: number;
+    capabilities?: { vision: boolean; audio: boolean };
+  }>;
   activeId: string | null;
 }> {
   return clients.models.listModels();
