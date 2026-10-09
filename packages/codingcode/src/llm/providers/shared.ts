@@ -1,10 +1,7 @@
 import { jsonSchema, type LanguageModelUsage, type ModelMessage } from 'ai';
-import { textOf, type Message, type TokenUsage } from '../types.js';
+import { textOf, type ResolvedMessage, type TokenUsage } from '../types.js';
 
-export function convertMessages(
-  messages: Message[],
-  resolveAsset?: (asset: string) => string | undefined
-): ModelMessage[] {
+export function convertMessages(messages: ResolvedMessage[]): ModelMessage[] {
   return messages.map((m) => {
     if (m.role === 'assistant' && m.tool_calls && Array.isArray(m.tool_calls)) {
       const content: any[] = [{ type: 'text', text: textOf(m.content) }];
@@ -39,17 +36,11 @@ export function convertMessages(
           parts.push({ type: 'text', text: p.text });
           continue;
         }
-        const data = resolveAsset?.(p.asset);
-        if (!data) {
-          // 资产缺失（被手工删除）⇒ 降级成文本标记，不让整个回合失败
-          parts.push({ type: 'text', text: `[media missing: ${p.asset}]` });
-          continue;
-        }
         // 图片、音频、PDF 一律发 file 部件：协议层 user 消息只有 text | file，
         // 驱动按 mediaType 分派到 image_url / input_audio / file
         parts.push({
           type: 'file',
-          data,
+          data: p.dataUrl,
           mediaType: p.mimeType,
           filename: p.filename,
         });

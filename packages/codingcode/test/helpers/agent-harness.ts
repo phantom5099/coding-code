@@ -149,7 +149,7 @@ export interface HarnessMocks {
     load: (cwd: string, sid: string) => any;
     create: (cwd: string, opts: any, extra?: any) => any;
     materializeInput: (state: any, input: any) => any;
-    resolveAssets: (state: any, assets: readonly string[]) => any;
+    resolveAssets: (cwd: string, assets: readonly string[]) => any;
     recordUser: (state: any, content: any) => any;
     recordSystem: (state: any, content: any) => any;
     recordAssistant: (state: any, content: any, toolCalls: any[], usage?: any) => any;

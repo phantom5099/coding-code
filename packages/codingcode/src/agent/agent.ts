@@ -373,15 +373,6 @@ export const AgentLayer = Layer.effect(
 
           const llmMessages = [...history.right];
 
-          const assets = new Set<string>();
-          for (const m of llmMessages) {
-            for (const p of m.content) if (p.type === 'media') assets.add(p.asset);
-          }
-          const resolvedAssets =
-            assets.size > 0
-              ? yield* session.resolveAssets(state, [...assets])
-              : new Map<string, string>();
-
           let content = '';
           const toolCalls: ToolCall[] = [];
           let responded: ResponseMeta = {};
@@ -395,7 +386,6 @@ export const AgentLayer = Layer.effect(
                     system,
                     tools,
                     maxSteps: 1,
-                    resolveAsset: (a) => resolvedAssets.get(a),
                   },
                   model,
                   abortSignal

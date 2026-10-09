@@ -258,7 +258,7 @@ describe('SessionService.resolveAssets', () => {
       const resolved = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.resolveAssets(state, [asset, 'deadbeef'.repeat(4) + '.png']);
+          return yield* svc.resolveAssets(state.cwd, [asset, 'deadbeef'.repeat(4) + '.png']);
         })
       );
 
@@ -284,9 +284,9 @@ describe('SessionService.resolveAssets', () => {
           const parts = yield* svc.materializeInput(state, [{ type: 'media', bytes: png }]);
           const asset = (parts[0] as any).asset as string;
 
-          const first = yield* svc.resolveAssets(state, [asset]);
+          const first = yield* svc.resolveAssets(state.cwd, [asset]);
           unlinkSync(join(assetsDirOf(state.cwd), asset));
-          const second = yield* svc.resolveAssets(state, [asset]);
+          const second = yield* svc.resolveAssets(state.cwd, [asset]);
           return { first: first.get(asset), second: second.get(asset) };
         })
       );

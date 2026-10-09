@@ -386,11 +386,11 @@ export const SessionLayer = Layer.effect(
      * 读盘并转 data URL。内容寻址让缓存永不失效，键为 (assetsDir, asset)。
      */
     const resolveAssets = (
-      state: SessionStoreState,
+      cwd: string,
       assets: readonly string[]
     ): Effect.Effect<Map<string, string>, AgentError> =>
       Effect.sync(() => {
-        const dir = assetsDirOf(state.cwd);
+        const dir = assetsDirOf(cwd);
         const resolved = new Map<string, string>();
         for (const asset of assets) {
           const cacheKey = `${dir}\u0000${asset}`;

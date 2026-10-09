@@ -43,7 +43,7 @@ export interface SessionShape {
   ): Effect.Effect<StoredPart[], AgentError>;
   /** 解析资产为 data URL，进程内按 (assetsDir, asset) 缓存。 */
   resolveAssets(
-    state: SessionStoreState,
+    cwd: string,
     assets: readonly string[]
   ): Effect.Effect<Map<string, string>, AgentError>;
 

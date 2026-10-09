@@ -30,7 +30,7 @@ export class DeepSeekProvider implements LLMClient {
         const result = await generateText({
           model: this.model,
           system: req.system,
-          messages: convertMessages(req.messages, req.resolveAsset),
+          messages: convertMessages(req.messages),
           tools: convertTools(req.tools),
           stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
           abortSignal: signal,
@@ -57,7 +57,7 @@ export class DeepSeekProvider implements LLMClient {
     const result = streamText({
       model: this.model,
       system: req.system,
-      messages: convertMessages(req.messages, req.resolveAsset),
+      messages: convertMessages(req.messages),
       tools: convertTools(req.tools),
       stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
       abortSignal: signal,

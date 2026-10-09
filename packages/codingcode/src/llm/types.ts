@@ -20,10 +20,10 @@ export interface TextPart {
   type: 'text';
   text: string;
 }
-/** 媒体块：出网链路真正消费的形状。落盘元数据（体积 / 宽高 / 时长）归 session 层的 StoredMediaPart。 */
+/** 媒体块的引用形态：装配、估算、压缩共用的轻量形状。落盘元数据（体积 / 宽高 / 时长）归 session 层的 StoredMediaPart。 */
 export interface MediaPart {
   type: 'media';
-  /** 项目 assets 目录下的文件名，内容寻址、不可变；出网前经 resolveAsset 换成 data URL */
+  /** 项目 assets 目录下的文件名，内容寻址、不可变 */
   asset: string;
   /** 服务端嗅探结果，不采信客户端声明；种类也由它判定 */
   mimeType: string;
@@ -31,7 +31,18 @@ export interface MediaPart {
   filename?: string;
 }
 
+/** 媒体块的出网形态：装配层已把 asset 解析成 data URL，驱动层只做序列化。 */
+export interface ResolvedMediaPart {
+  type: 'media';
+  dataUrl: string;
+  mimeType: string;
+  filename?: string;
+}
+
 export type ContentPart = TextPart | MediaPart;
+
+/** 出网内容块：媒体字节已在装配层内联。 */
+export type ResolvedContentPart = TextPart | ResolvedMediaPart;
 
 /** 入口形态：媒体携带原始字节。只出现在请求边界与 agent 入参，落盘即消失。 */
 export interface IncomingMedia {
@@ -67,7 +78,7 @@ const MEDIA_MARKER: Record<MediaKind, string> = {
  *
  * 落盘形态与入口形态都收：入口只在 agent 首帧定标题时用一次。
  */
-export function textOf(parts: readonly (ContentPart | IncomingPart)[]): string {
+export function textOf(parts: readonly (ContentPart | ResolvedContentPart | IncomingPart)[]): string {
   return parts
     .map((p) => {
       if (p.type === 'text') return p.text;
@@ -87,6 +98,11 @@ export interface Message {
   usage?: TokenUsage;
 }
 
+/** 出网消息：交给驱动的完整载荷，媒体字节已由装配层内联，驱动不再需要外部解析。 */
+export interface ResolvedMessage extends Omit<Message, 'content'> {
+  content: ResolvedContentPart[];
+}
+
 /** 请求里"给模型看的"工具描述。 */
 export interface ToolDescription {
   name: string;
@@ -95,13 +111,11 @@ export interface ToolDescription {
 }
 
 export interface LLMRequest {
-  messages: Message[];
+  messages: ResolvedMessage[];
   system?: string;
   tools?: ToolDescription[];
   maxSteps?: number;
   temperature?: number;
-  /** 把落盘资产解析成 data URL；未命中返回 undefined */
-  resolveAsset?: (asset: string) => string | undefined;
 }
 
 export interface LLMResponse {

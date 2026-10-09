@@ -2,7 +2,7 @@ import { Layer, Effect } from 'effect';
 import { randomUUID } from 'crypto';
 import { loadConfig } from '../infra/config.js';
 import { transcriptPathOf } from '../session/paths.js';
-import type { Message } from '../llm/types.js';
+import type { Message, ResolvedMessage, ResolvedContentPart, ResolvedMediaPart } from '../llm/types.js';
 import { textOf, textPart } from '../llm/types.js';
 import type {
   SessionEvent,
@@ -377,7 +377,8 @@ export const ContextLayer = Layer.effect(
 
         const system = COMPACTION_SYSTEM_PROMPT;
 
-        const userMsg: Message = {
+        // 压缩走纯文本投影
+        const userMsg: ResolvedMessage = {
           role: 'user',
           content: [
             textPart(
@@ -397,7 +398,32 @@ export const ContextLayer = Layer.effect(
       return raw.trim();
     }
 
-    const getHistory = (ref: SessionRef, model: string): Effect.Effect<Message[], AgentError> =>
+    const resolveMediaParts = (
+      msgs: Message[],
+      cwd: string
+    ): Effect.Effect<ResolvedMessage[], AgentError> =>
+      Effect.gen(function* () {
+        const assets = new Set<string>();
+        for (const m of msgs) {
+          for (const p of m.content) if (p.type === 'media') assets.add(p.asset);
+        }
+        if (assets.size === 0) return msgs as ResolvedMessage[];
+
+        const resolved = yield* session.resolveAssets(cwd, [...assets]);
+        return msgs.map((m) => ({
+          ...m,
+          content: m.content.map((p): ResolvedContentPart => {
+            if (p.type === 'text') return p;
+            const dataUrl = resolved.get(p.asset);
+            if (!dataUrl) return { type: 'text', text: `[media missing: ${p.asset}]` };
+            const part: ResolvedMediaPart = { type: 'media', dataUrl, mimeType: p.mimeType };
+            if (p.filename) part.filename = p.filename;
+            return part;
+          }),
+        }));
+      });
+
+    const getHistory = (ref: SessionRef, model: string): Effect.Effect<ResolvedMessage[], AgentError> =>
       Effect.gen(function* () {
         const buf = yield* ensureBuffer(ref);
         const contextWindow = contextWindowOf(model);
@@ -411,7 +437,7 @@ export const ContextLayer = Layer.effect(
             transition: { to: 'executing' },
           });
         }
-        return buildContextMessages(buf.events, buf.compactedTurnIds);
+        return yield* resolveMediaParts(buildContextMessages(buf.events, buf.compactedTurnIds), ref.cwd);
       });
 
     const absorb = (ref: SessionRef, events: readonly SessionEvent[]): Effect.Effect<void> =>
