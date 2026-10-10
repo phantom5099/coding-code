@@ -2,11 +2,11 @@
 
 # Coding Code
 
-**手写 ReAct Loop · 零框架依赖 · 多端统一 · 深度可配置**
+**手写 ReAct Loop · 零框架依赖**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/)
 
-终端原生的 AI 编程助手。核心引擎纯手写 ReAct 循环，通过 HTTP 服务化对外暴露，Desktop / SDK 等所有端共享同一份编排逻辑。没有黑盒，所有行为都可定制。
+面向终端的 AI 编程助手。核心引擎纯手写 ReAct 循环，不依赖任何 Agent 框架。没有黑盒，所有行为都可定制。
 
 </div>
 
@@ -15,12 +15,14 @@
 ## 核心特性
 
 - 🔄 **手写 ReAct 循环** — 不依赖外部 Agent 框架，完全可控的 Agent 引擎
-- 🌐 **HTTP 服务化** — Agent 作为独立 HTTP 服务运行，任何端平等接入
-- 🔧 **深度可配置** — 子智能体、工具、提示词、钩子、模型全部可定制
-- 🛡️ **审批流水线** — 六层决策链 + 预设安全规则，开箱即用
+- 🤖 **多子智能体后台委派** — 父智能体通过 `spawn_agent` 派生子会话，立即返回、继续并行工作；`wait_agent` 只在结果阻塞下一步时等待
+- 📬 **会话级 Mailbox** — 子智能体终态异步回注父会话，在回合边界统一吸收，不打断当前推理
+- 🎛️ **完整回合状态机** — 状态轴（running / complete / interrupt / error）与终态原因分离，出生登记、相位转移、幂等终结、级联停止全部显式管理
+- 🛡️ **审批流水线** — 五层决策链，规则引擎 + 权限模式 + 钩子 + 用户确认 + 审计
 - 🧠 **长期记忆** — 跨会话自动提取和加载用户/项目上下文
 - 🔌 **MCP 集成** — 通过 Model Context Protocol 扩展工具能力
-- 📡 **实时流式** — SSE 推送，多端同步响应
+- 🪝 **可插拔钩子** — 12 个钩子点，在工具执行、回合生命周期、子智能体派发等关键节点注入自定义逻辑
+- 🎯 **技能系统** — 可复用的 Markdown 技能包，按需加载
 - 💾 **Checkpoint** — Shadow Git 变更跟踪与一键回滚
 
 ---
@@ -30,7 +32,7 @@
 ### 前置要求
 
 - Node.js >= 18
-- 一个 LLM API Key（支持 DeepSeek、OpenAI、Gemini 等厂商）
+- 一个 LLM API Key
 
 ### 安装与启动
 
@@ -47,7 +49,7 @@ export DEEPSEEK_API_KEY=sk-xxx
 pnpm start
 ```
 
-启动成功后，HTTP server 开始监听并打印 `CODINGCODE_SERVER_READY:<port>`，可用 Desktop 或 SDK 接入。
+启动成功后，HTTP server 开始监听并打印 `CODINGCODE_SERVER_READY:<port>`。
 
 ### SDK 调用示例
 
@@ -71,53 +73,56 @@ for await (const frame of clients.agent.sendMessage('帮我写一个快排', {
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                        客户端层                            │
+│                       客户端层                            │
 │  @codingcode/desktop (Electron)                          │
-│  @codingcode/sdk（AgentClient 契约 + HTTP/SSE 实现）      │
+│  @codingcode/sdk（契约 + HTTP/SSE 实现）                  │
 └──────────────────────────┬───────────────────────────────┘
-                           │ HTTP / SSE（AgentClient 接口）
+                           │ HTTP / SSE
 ┌──────────────────────────┴───────────────────────────────┐
 │                       核心引擎层                           │
 │  @codingcode/core                                         │
 │  ReAct Loop · 工具 · MCP · 上下文 · 记忆 · Checkpoint     │
-│  钩子 · 子智能体 · 技能 · 审批 · 会话 · 调度               │
+│  钩子 · 子智能体 · 技能 · 审批 · 会话 · 回合 · 调度        │
 │  模型清单 · 应用配置 · YAML 存取 · 日志 · 共享类型       │
 └──────────────────────────────────────────────────────────┘
 ```
 
-**设计原则**：Agent 是纯 ReAct 循环，不持有 Session、不感知传输协议。所有端通过统一的 `AgentClient` 接口接入，共享同一份编排逻辑。Effect TS 托管依赖注入，编译期强制处理错误。
+**设计原则**：Agent 是纯 ReAct 循环，不持有 Session、不感知传输协议。核心作为独立 HTTP 服务运行，帧流经 SSE 推送。Effect TS 托管依赖注入，编译期强制处理错误。
 
 ---
 
 ## 配置
 
-所有行为都可配置。核心配置文件：
+用户可配置项：
 
-| 配置文件 | 作用 | 详见 |
-|---------|------|------|
-| `config/models.json` | 模型厂商、模型列表、API 地址 | [→ configuration.md](docs/configuration.md) |
-| `codingcode.yaml` | 应用级配置（并发数、超时等） | [→ configuration.md](docs/configuration.md) |
-| `~/.codingcode/rules.md` + `./AGENTS.md` | 全局 + 项目级规则，注入 system prompt | [→ configuration.md](docs/configuration.md) |
-| `mcp.yaml` (可选) | MCP 服务配置 | [→ mcp.md](docs/mcp.md) |
+| 配置文件 | 位置 | 作用 | 详见 |
+|---------|------|------|------|
+| `config.yaml` | `~/.codingcode/config.yaml` | 应用级配置（步数、权限模式、记忆、子智能体并发等） | [→ configuration.md](docs/configuration.md) |
+| `rules.md` | `~/.codingcode/rules.md` | 全局规则，注入 system prompt | [→ configuration.md](docs/configuration.md) |
+| `AGENTS.md` | `./AGENTS.md` | 项目级规则，注入 system prompt | [→ configuration.md](docs/configuration.md) |
+| `mcp.yaml` | `~/.codingcode/mcp.yaml` + `.codingcode/mcp.yaml` | MCP 服务配置 | [→ mcp.md](docs/mcp.md) |
+| `hooks.yaml` | `~/.codingcode/hooks.yaml` + `.codingcode/hooks.yaml` | 钩子配置 | [→ hooks.md](docs/hooks.md) |
+| `memory.md` | `./.codingcode/memory.md` | 长期记忆（项目级） | [→ memory.md](docs/memory.md) |
 
-快速配置模型（`config/models.json`）：
+应用级配置示例（`~/.codingcode/config.yaml`）：
 
-```json
-{
-  "providers": [{
-    "name": "deepseek",
-    "driver": "deepseek",
-    "base_url": "https://api.deepseek.com",
-    "api_key_env": "DEEPSEEK_API_KEY",
-    "default_model": "deepseek-v4-flash",
-    "models": [
-      { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "context_window": 1048576, "max_output_tokens": 384000 }
-    ]
-  }]
-}
+```yaml
+maxSteps: 200             # Agent 最大步数
+maxStopContinuations: 2   # 最大停止续行次数
+activeProfile: build      # agent 模式
+permissionMode: askBeforeExec   # 权限模式
+
+context:
+  compactionModel: ""     # 压缩用模型，空字符串回退主模型
+
+memory:
+  enabled: false          # 启用长期记忆
+  model: ""               # 记忆提取模型，空字符串回退主模型
+  promptMaxBytes: 8192    # 注入提示的记忆内容最大字节数
+
+subagent:
+  maxBackground: 4        # 单父会话并发子智能体上限
 ```
-
-`driver` 支持 `"deepseek"`（原生 SDK）、`"openai"`（OpenAI 兼容 API）和 `"gemini"`（Google Gemini）。运行时可在客户端中切换模型。
 
 ---
 
@@ -125,28 +130,15 @@ for await (const frame of clients.agent.sendMessage('帮我写一个快排', {
 
 | 功能 | 说明 | 文档 |
 |------|------|------|
-| 🛠️ 工具系统 | 内置文件/命令/网络工具 + 自定义工具注册 + 审批流水线 | [→ tools.md](docs/tools.md) |
+| 🛠️ 工具系统 | 内置文件/命令/网络工具 + 审批流水线 | [→ tools.md](docs/tools.md) |
+| 🤖 子智能体 | 后台派生独立 ReAct 会话，结果经 mailbox 回注 | [→ subagent.md](docs/subagent.md) |
+| 🎛️ 回合状态机 | 会话状态登记、相位转移与生命周期管理 | [→ turn.md](docs/turn.md) |
 | 🧠 长期记忆 | 跨会话自动提取用户偏好、项目上下文，支持手动编辑 | [→ memory.md](docs/memory.md) |
 | 🔌 MCP 集成 | 通过 Model Context Protocol 连接外部工具服务 | [→ mcp.md](docs/mcp.md) |
 | 💾 Checkpoint | Shadow Git 变更跟踪、Diff 视图、一键回滚 | [→ checkpoint.md](docs/checkpoint.md) |
-| 🪝 钩子系统 | 18 个可插拔钩子点，在关键节点注入自定义逻辑 | [→ hooks.md](docs/hooks.md) |
-| 🤖 子智能体 | 独立 ReAct 实例，受限工具集，可并行委派任务 | [→ subagent.md](docs/subagent.md) |
+| 🪝 钩子系统 | 12 个可插拔钩子点，在关键节点注入自定义逻辑 | [→ hooks.md](docs/hooks.md) |
 | 📦 上下文压缩 | 超预算自动压缩，截断/总结两种策略 | [→ context.md](docs/context.md) |
 | 🎯 技能系统 | 可插拔的 Markdown 技能包，扩展 Agent 能力 | [→ skills.md](docs/skills.md) |
-
----
-
-## 工作流
-
-```
-用户输入 → System Prompt（角色 + 规则 + 记忆 + 技能）→ LLM 调用 → ReAct Loop
-  ├── Tool Call → Approval → Execution → Hook
-  ├── Subagent Delegation（可选，并行）
-  └── Context Compression（自动触发）
-→ SSE 流式响应 → 会话持久化 → Checkpoint → Memory 提取
-```
-
-每个环节都可配置，没有黑盒。
 
 ---
 

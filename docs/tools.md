@@ -1,6 +1,6 @@
 # 工具系统
 
-Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本文档介绍内置工具、加载机制、自定义工具开发和沙箱隔离。
+Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本文档介绍内置工具、加载机制、自定义工具开发和审批流水线。
 
 ---
 
@@ -51,7 +51,7 @@ Coding Code 的工具系统是 Agent 与外部世界交互的核心机制。本�
 - **Core 工具**：始终可用，在启动时注册。包括上述所有内置工具。
 - **MCP 工具**：从 MCP 服务自动导入和注册。名称空间化为 `serverName:toolName` 格式，避免不同服务间的工具名冲突。
 
-Agent 在一次运行开始时注册内置工具、项目 MCP 工具和 `spawn_agent` / `wait_agent`。plan 模式通过独立的 `PLAN_PROFILE_ALLOWED_TOOLS` 策略过滤工具。
+Agent 在一次运行开始时按 profile 组装工具目录：`approval/tool-policy.ts` 的 `getToolNames(profile)` 返回该 profile 的工具名单，`build` 为 `BUILD_TOOL_NAMES`，`plan` 为 `PLAN_TOOL_NAMES`（`read_file` / `search_files` / `search_code` / `fetch_url` / `submit_plan`）。随后注册项目 MCP 工具。
 
 ---
 
@@ -81,48 +81,54 @@ interface ToolExecCtx {
 
 ### 工具可见性策略
 
-通过 `ToolVisibilityPolicy` 控制工具的可见性：
+工具可见性由 profile 工具名单控制。`getToolNames(profile)` 给出名单，`ToolRegistry.describe(allowedTools?)` / `get(name, allowedTools?)` 按该名单过滤。名单定义在 `approval/tool-policy.ts`：
 
 ```typescript
-interface ToolVisibilityPolicy {
-  allowedTools?: Set<string>;        // 允许的工具白名单
-  allowedMcpServers?: Set<string>;   // 允许的 MCP 服务白名单
-}
+export const PLAN_TOOL_NAMES: readonly string[] = [
+  'read_file', 'search_files', 'search_code', 'fetch_url', 'submit_plan',
+];
+
+export const BUILD_TOOL_NAMES: readonly string[] = [
+  'read_file', 'write_file', 'edit_file', 'execute_command',
+  'search_code', 'search_files', 'fetch_url', 'web_search',
+  'todo_write', 'spawn_agent', 'wait_agent',
+];
 ```
 
 ---
 
-## 沙箱隔离
+## 审批流水线
 
-所有工具执行经过两层安全保护：
+所有工具执行经过五层审批保护。
 
-### 审批流水线（始终生效）
+### 决策链（始终生效）
 
 五层决策链，按顺序执行，任一层返回 deny/allow 即终止：
 
 | 层级 | 名称 | 逻辑 |
 |------|------|------|
-| 1 | **RuleEngine** | 规则引擎匹配，支持 glob 模式匹配工具名和参数，按优先级排序 |
-| 2 | **PermissionMode** | 权限模式驱动的自动放行：`bypass`（展示名「完全放行」）、`askBeforeExec`（展示名「执行前询问」：非破坏性工具放行，仅 `execute_command` 这类破坏性工具继续下一层）。只读工具不再有无条件的独立白名单层；`plan` Profile 由 `agent/profile.ts` 中的 `planProfileGateHook` 在下一层强制，不在此层处理 |
+| 1 | **RuleEngine** | 规则引擎匹配，支持 glob / regex 匹配工具名和参数，按优先级降序取首个命中 |
+| 2 | **PermissionMode** | 权限模式驱动的自动放行：`bypass`（展示名「完全放行」）全部放行；`askBeforeExec`（展示名「执行前询问」）非破坏性工具放行，仅 `execute_command` 这类破坏性工具继续下一层。plan profile 在此层强制：`PLAN_ALLOWED_TOOLS` 内的工具放行，其余直接 deny（提示用 `submit_plan`） |
 | 3 | **HookPreToolUse** | 钩子决策，可返回 allow/deny/ask/continue，支持 `modifiedInput` 修改参数 |
 | 4 | **UserConfirmation** | 异步用户确认，支持 allow/deny/always/never 四种响应，always/never 会持久化为规则 |
 | 5 | **AuditLog** | 每一层决策后记录审计日志，通过 `tool.approval.post` 钩子发出 |
 
-### 预设安全规则
+### 权限规则
 
-系统内置 9 条默认规则（不可删除）：
+**当前没有内置默认规则**：`createRuleEngine()` 以空集合启动，规则只来自两条途径：
 
-| 规则 | 动作 | 说明 |
-|------|------|------|
-| `rm -rf /` | deny | 禁止递归删除根目录 |
-| `sudo` | deny | 禁止提权执行 |
-| `curl \| sh` | deny | 禁止管道执行远程脚本 |
-| `chmod u+s` | deny | 禁止设置 SUID 位 |
-| `shutdown` | deny | 禁止系统关机 |
-| `/etc/shadow` | deny | 禁止读取影子密码文件 |
-| `/etc/passwd` | deny | 禁止读取系统密码文件 |
-| `.ssh` | ask | 访问 SSH 目录需确认 |
-| `.env` | ask | 访问环境变量文件需确认 |
+- 用户在确认弹窗里选择 `always` / `never` 时，由 `approval.ts` 的 `onAlways` / `onNever` 注册为持久规则（`addRule`）。
+- 钩子（`tool.approval.pre`）返回 `ask` 无法直接落成规则，需经上面的用户确认流程。
+
+规则支持三种动作与两种匹配：
+
+| 字段 | 说明 |
+|------|------|
+| `action` | `deny` / `allow` / `ask` |
+| `toolPattern` | 工具名的 glob 模式 |
+| `argPattern` | 参数（字符串值拼接后）的 glob 模式 |
+| `argRegex` | 参数的 regex 模式（与 `argPattern` 二选一） |
+| `priority` | 数值大的先匹配 |
 
 ### 权限模式
 
@@ -132,7 +138,3 @@ type PermissionMode = 'askBeforeExec' | 'bypass';
 
 - `askBeforeExec`（展示名「执行前询问」）：非破坏性工具自动放行（涵盖只读工具与编辑类工具），破坏性工具（`execute_command`）仍需确认
 - `bypass`（展示名「完全放行」）：全部放行，跳过所有审批（慎用）
-
-### OS 级沙箱（预留）
-
-`packages/codingcode/src/sandbox/` 目前是 stub 实现（`SandboxService` 为空类），尚未集成实际的沙箱运行时。审批流水线已提供基本安全保障，OS 级沙箱将在未来版本中实现。

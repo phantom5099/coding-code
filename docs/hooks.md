@@ -205,7 +205,7 @@ process.stdin.on('end', () => {
 
 ### 让 Agent 继续跑
 
-`agent.turn.stop` 返回 `continue` 且带 `injection` 时，`injection` 会作为 system 消息写入会话并续行（受 `maxStopContinuations` 限制，默认 3）：
+`agent.turn.stop` 返回 `continue` 且带 `injection` 时，`injection` 会作为 system 消息写入会话并续行（受 `maxStopContinuations` 限制，默认 2）：
 
 ```javascript
 process.stdout.write(JSON.stringify({ decision: 'continue', injection: '还没跑测试，继续。' }));

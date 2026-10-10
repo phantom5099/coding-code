@@ -35,9 +35,14 @@ Coding Code 支持可插拔的 Markdown 技能包，扩展 Agent 在特定场景
 
 ## SKILL.md 格式
 
-SKILL.md 使用 YAML front matter 提供发现元数据。正文不会在发现阶段读取：
+SKILL.md 使用 YAML front matter 提供发现元数据（`name`、`description`）。正文不会在发现阶段读取，只存元数据与 `SKILL.md` 的绝对路径：
 
 ```markdown
+---
+name: code-review
+description: Review a diff for security and error-handling issues
+---
+
 # Code Review Skill
 
 You are now performing a code review. Follow these steps:
@@ -53,6 +58,7 @@ You are now performing a code review. Follow these steps:
 - [ ] Error messages are helpful
 ```
 
+没有 front matter 时，`name` 回退为目录名、`description` 为空。
 ---
 
 ## 技能类型

@@ -1,17 +1,5 @@
 /**
  * @vitest-environment jsdom
- *
- * 回归：React「Maximum update depth exceeded」自激更新循环。
- *
- * 根因：zustand selector 里出现 `?? []` / `: []` 这类字面量 fallback 时，
- * 每次 render 都会返回一个【新数组引用】。zustand 默认用 Object.is 比较
- * selector 的返回值，于是每次 render 都判定「值变了」→ 触发订阅更新 →
- * 又 render → 又新引用 …… 形成无限循环。
- *
- * 修法：用 `useShallow` 包住 selector，按【元素引用】浅比较。
- * 本文件从两个层面锁住：
- *   1. 源码层面 —— 相关 selector 确实被 useShallow 包裹（防回退）；
- *   2. 语义层面 —— 空数组 fallback 在浅比较下判为「相等」，不再触发更新。
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';

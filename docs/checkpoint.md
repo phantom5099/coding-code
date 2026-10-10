@@ -1,6 +1,6 @@
 # Checkpoint 系统
 
-Coding Code 记录所有文件变更，支持查看历史和回滚。本文档介绍 Shadow Git、Ledger、Diff 视图和回滚功能。
+Coding Code 记录所有文件变更，支持查看历史和回滚。本文档介绍 Shadow Git、Diff 视图和回滚功能。
 
 ---
 
@@ -8,24 +8,20 @@ Coding Code 记录所有文件变更，支持查看历史和回滚。本文档�
 
 Checkpoint 系统基于 Shadow Git 实现——一个独立于用户 `.git` 的变更日志系统：
 
-- **存储位置**：`~/.codingcode/project/{encodedProjectPath}/checkpoint/repo.git`
 - **隔离机制**：使用 `--git-dir` 和 `--work-tree` 分离，不影响用户仓库
-- **大小上限**：1024 MB
-- **文件锁**：`repo.lock` 防止并发写入
+- **存储位置**：项目的 checkpoint 数据目录下（`projectDataDir` 派生）
+- **大小上限**：`SIZE_CAP_MB = 1024`（超过则不继续跟踪）
+- **文件锁**：项目锁（`project-lock.ts`）防止并发写入
 
 ### 忽略规则
 
-以下目录和文件不会被跟踪：
+以下目录和文件不会被跟踪（写入 shadow repo 的 `exclude`）：
 
-- `node_modules/`、`.venv/`、`dist/`、`build/`
-- `*.log`、`.env`、`.DS_Store`
-
-### 提交格式
-
-Shadow Git 的提交消息格式为：
-
-- `turn-{shortSid}-{turnId}-baseline`：轮次开始前的快照
-- `turn-{shortSid}-{turnId}-final`：轮次结束后的快照
+```
+node_modules/  .venv/  venv/  dist/  build/
+*.log  .env  .env.*  *.tmp  *.temp
+.DS_Store  Thumbs.db
+```
 
 ---
 
@@ -71,51 +67,49 @@ interface CheckpointDiff {
 | `/api/sessions/:id/rollback-context` | POST | `{ cwd, throughTurnId }` | 上下文回退到指定 turn |
 | `/api/sessions/:id/rollback-both-to-turn` | POST | `{ cwd, throughTurnId }` | 代码 + 上下文同时回滚 |
 
-### 撤销回滚
+回滚到指定轮次需要一次预览确认：`rollback-preview` 返回 `RollbackPreviewDiff`，其中列出受影响的 turn 与 diff。
+
+---
+
+## 数据结构
+
+```typescript
+interface CodeRollbackResult {
+  reverted: boolean;
+  throughTurnId: number;
+  affectedTurns: number[];
+  selectedFiles: string[];
+}
+
+interface RollbackPreviewDiff {
+  throughTurnId: number;
+  affectedTurns: number[];
+  diff: string;
+}
+
+interface RestorePlan {
+  throughTurnId: number;
+  affectedTurns: number[];
+  baseline: string;
+}
+```
+
+上下文回退在会话 transcript 中记录为 `RollbackEvent`：
+
+```typescript
+interface RollbackEvent {
+  type: 'rollback';
+  throughTurnId: number;
+  reason: string;
+}
+```
+
+---
+
+## Session Fork
+
+从某个历史 turn 分叉出新会话：
 
 | 路由 | 方法 | Body | 说明 |
 |------|------|------|------|
-| `/api/sessions/:id/undo-code-rollback` | POST | `{ cwd, force?, files? }` | 撤销上次代码回滚 |
-| `/api/sessions/:id/rollback-state` | GET | - | 获取当前回退状态 |
-
----
-
-## Ledger 数据结构
-
-每次回滚操作记录为 `CodeRestoreEntry`：
-
-```typescript
-interface CodeRestoreEntry {
-  id: string;                    // 唯一标识
-  sessionId: string;             // 会话 ID
-  action: 'checkpoint-files' | 'rollback-to-turn';  // 操作类型
-  throughTurnId: number;         // 回退到的轮次
-  affectedTurns: number[];       // 受影响的轮次列表
-  selectedFiles: string[];       // 受影响的文件列表
-  safetyCommit: string;          // 安全提交的 SHA
-  timestamp: string;             // 操作时间
-}
-```
-
-存储位置：`{gitDir}/../last-restore-{shortSid}.json`
-
----
-
-## 回退状态查询
-
-通过 `GET /api/sessions/:id/rollback-state` 获取当前回退状态：
-
-```typescript
-interface RollbackState {
-  context: {
-    active: boolean;
-    currentThroughTurnId: number | null;
-  };
-  code: {
-    canUndoLast: boolean;
-    lastEntry: CodeRestoreEntry | null;
-    revertedFiles: string[];
-    lastEntryId: string | null;
-  };
-}
-```
+| `/api/sessions/:id/fork` | POST | `{ cwd, atTurnId? }` | 复制到指定 turn 为止的会话历史，生成新会话 |

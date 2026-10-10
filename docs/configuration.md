@@ -1,6 +1,6 @@
 # 配置
 
-Coding Code 的核心哲学是所有行为都可配置。本文档详细介绍所有配置文件及其选项。
+Coding Code 的用户可配置项集中在 `~/.codingcode/` 下的 YAML / Markdown 文件。本文档介绍应用级配置、规则配置及其选项。
 
 ---
 
@@ -8,16 +8,16 @@ Coding Code 的核心哲学是所有行为都可配置。本文档详细介绍�
 
 | 配置文件 | 位置 | 作用 | 详见 |
 |---------|------|------|------|
-| `codingcode.yaml` | `~/.codingcode/config.yaml` | 应用级配置 | 本文档 |
-| `models.json` | `config/models.json` | 模型厂商、模型列表、API 地址 | 本文档 |
-| `rules.md` | `~/.codingcode/rules.md` + `./AGENTS.md` | 全局 + 项目级规则 | 本文档 |
+| `config.yaml` | `~/.codingcode/config.yaml` | 应用级配置 | 本文档 |
+| `rules.md` | `~/.codingcode/rules.md` | 全局规则 | 本文档 |
+| `AGENTS.md` | `./AGENTS.md` | 项目级规则 | 本文档 |
 | `mcp.yaml` | `~/.codingcode/mcp.yaml` + `.codingcode/mcp.yaml` | MCP 服务配置 | [→ mcp.md](mcp.md) |
 | `hooks.yaml` | `~/.codingcode/hooks.yaml` + `.codingcode/hooks.yaml` | 钩子配置 | [→ hooks.md](hooks.md) |
 | `memory.md` | `./.codingcode/memory.md` | 长期记忆（项目级） | [→ memory.md](memory.md) |
 
 ---
 
-## codingcode.yaml
+## config.yaml
 
 应用级主配置文件，存放在 `~/.codingcode/config.yaml`。使用 `deepMerge` 合并默认值。
 
@@ -26,8 +26,10 @@ Coding Code 的核心哲学是所有行为都可配置。本文档详细介绍�
 ```yaml
 maxSteps: 200             # Agent 最大步数
 maxStopContinuations: 2   # 最大停止续行次数
+activeProfile: build      # 默认 profile
+permissionMode: askBeforeExec   # 权限模式
 
-# activeModel:            # 可选，覆盖 models.json 中的默认模型
+# activeModel:            # 可选，覆盖模型清单中的默认模型
 #   model: ""             # 模型 ID
 #   apiKeyEnv: ""         # API Key 环境变量名
 
@@ -38,6 +40,9 @@ memory:
   enabled: false          # 启用长期记忆
   model: ""               # 记忆提取模型，空字符串回退主模型
   promptMaxBytes: 8192    # 注入提示的记忆内容最大字节数
+
+subagent:
+  maxBackground: 4        # 单父会话并发子智能体上限
 ```
 
 ### 字段详细说明
@@ -46,75 +51,18 @@ memory:
 |------|--------|------|
 | `maxSteps` | `200` | 单次 Agent 执行的最大步数限制 |
 | `maxStopContinuations` | `2` | Agent 停止后最大续行次数 |
-| `activeModel` | 无（可选） | 覆盖 models.json 中的默认模型，不设置则使用 models.json 配置 |
+| `activeProfile` | `build` | 新会话默认 profile（`build` / `plan`） |
+| `permissionMode` | `askBeforeExec` | 默认权限模式 |
+| `activeModel` | 无（可选） | 覆盖模型清单中的默认模型，不设置则使用清单中的 `default_model` |
 | `context.compactionModel` | `''` | 上下文压缩使用的模型，空字符串回退到主会话 LLM |
 | `memory.enabled` | `false` | 是否启用长期记忆系统 |
 | `memory.model` | `''` | 记忆提取使用的模型，空字符串回退到主模型 |
 | `memory.promptMaxBytes` | `8192` | 注入 system prompt 的记忆内容最大字节数 |
+| `subagent.maxBackground` | `4` | 单个父会话同时运行的子智能体上限 |
 
-> **HTTP 端口不可配置**。服务启动时监听端口 `0`，由操作系统原子地分配一个空闲端口，避免多实例或“先探测再绑定”之间的竞态。实际端口通过 stdout 的 `CODINGCODE_SERVER_READY:<port>` 上报给拉起方（Desktop、SDK 等）。
+> **HTTP 端口不可配置**。服务启动时监听端口 `0`，由操作系统原子地分配一个空闲端口，避免多实例或"先探测再绑定"之间的竞态。实际端口通过 stdout 的 `CODINGCODE_SERVER_READY:<port>` 上报给拉起方。
 
----
-
-## models.json
-
-模型配置文件，存放在 `config/models.json`。定义可用的 LLM 厂商和模型。
-
-### 完整格式
-
-```json
-{
-  "providers": [
-    {
-      "name": "deepseek",
-      "driver": "deepseek",
-      "base_url": "https://api.deepseek.com",
-      "api_key_env": "DEEPSEEK_API_KEY",
-      "default_model": "deepseek-v4-flash",
-      "models": [
-        {
-          "id": "deepseek-v4-flash",
-          "name": "DeepSeek V4 Flash",
-          "context_window": 1048576,
-          "max_output_tokens": 384000,
-          "capabilities": { "vision": "supported", "reasoning": "supported" }
-        }
-      ]
-    },
-    {
-      "name": "openai",
-      "driver": "openai",
-      "base_url": "https://api.openai.com/v1",
-      "api_key_env": "OPENAI_API_KEY",
-      "default_model": "gpt-4o",
-      "models": [
-        {
-          "id": "gpt-4o",
-          "name": "GPT-4o",
-          "context_window": 128000,
-          "max_output_tokens": 16384,
-          "capabilities": { "vision": "supported", "reasoning": "supported" }
-        }
-      ]
-    }
-  ]
-}
-```
-
-### 字段说明
-
-| 字段 | 说明 |
-|------|------|
-| `providers[].name` | 厂商名称，用于切换和引用 |
-| `providers[].driver` | 驱动类型：`"deepseek"` 使用原生 SDK，`"openai"` 使用 OpenAI 兼容 API，`"gemini"` 使用 Google Gemini |
-| `providers[].base_url` | API 基础 URL |
-| `providers[].api_key_env` | 从环境变量读取 API Key 的变量名 |
-| `providers[].default_model` | 该厂商的默认模型 ID |
-| `providers[].models[]` | 可用模型列表，每项包含 `id`、`name`、`context_window`、`max_output_tokens`、`capabilities` |
-
-### 运行时切换
-
-- 通过 API `POST /api/models` 切换
+> **模型清单不是用户配置**。可用的厂商、模型与 API 地址由仓库内置的 `config/models.json` 提供，随代码发布，不通过 `~/.codingcode/` 配置。运行时可在客户端切换当前模型。
 
 ---
 
@@ -148,16 +96,4 @@ memory:
 ## 项目约定
 - 测试文件放在 src/ 同级的 __tests__/ 目录
 - 提交信息格式：type(scope): description
-```
-
----
-
-## 项目级子配置
-
-在 `.codingcode/config.yaml` 中可配置项目级子选项：
-
-```yaml
-# .codingcode/config.yaml
-subagent:
-  enabled: true    # 是否允许子智能体
 ```
