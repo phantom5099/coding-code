@@ -17,6 +17,7 @@ import { AgentLayer } from './agent/agent.js';
 import { ToolEnvLayer } from './agent/tool-env.js';
 import { SubagentRunnerLayer } from './subagent/subagent.js';
 import { SubagentRunRegistryLayer } from './subagent/registry.js';
+import { TurnRegistryLayer } from './turn/registry.js';
 import { MailboxLayer } from './session/mailbox.js';
 import { SchedulerLayer } from './scheduler/scheduler.js';
 
@@ -31,6 +32,9 @@ const InfraLayer = Layer.mergeAll(
   TodoLayer
 );
 
+// 状态帧由 turn 投递 ⇒ turn 要 sink；
+const TurnWithDeps = TurnRegistryLayer.pipe(Layer.provide(EventSinkLayer));
+
 const ApprovalWithDeps = ApprovalLayer.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, EventSinkLayer, ApprovalWaitLayer))
 );
@@ -38,7 +42,7 @@ const ToolExecutorWithDeps = ToolExecutorLayer.pipe(
   Layer.provide(Layer.mergeAll(HookLayer, ApprovalWithDeps))
 );
 const ContextWithDeps = ContextLayer.pipe(
-  Layer.provide(Layer.mergeAll(SessionLayer, LlmLayer, EventSinkLayer))
+  Layer.provide(Layer.mergeAll(SessionLayer, LlmLayer, EventSinkLayer, TurnWithDeps))
 );
 const MemoryWithDeps = MemoryLayer.pipe(Layer.provide(LlmLayer));
 
@@ -52,7 +56,8 @@ const AgentServiceLayers = Layer.mergeAll(
   ContextWithDeps,
   MemoryWithDeps,
   CheckpointLayer,
-  LlmLayer
+  LlmLayer,
+  TurnWithDeps
 );
 
 // agent with deps
@@ -65,8 +70,9 @@ const SubagentWithDeps = SubagentRunnerLayer.pipe(Layer.provide(AgentWithDeps));
 
 // 运行注册表：要 runner 起子代理、要 mailbox 投递终态、要 sink 发 subagent_event 帧、
 // 要 hooks 在子代理终态时触发 agent.subagent.complete。
+// 终态归属已并入状态表（turn 已在 AgentWithDeps 链路里，Layer 按引用去重 ⇒ 全进程一份 records）。
 const SubagentRunRegistryWithDeps = SubagentRunRegistryLayer.pipe(
-  Layer.provide(Layer.mergeAll(SubagentWithDeps, MailboxLayer, EventSinkLayer, HookLayer))
+  Layer.provide(Layer.mergeAll(SubagentWithDeps, MailboxLayer, EventSinkLayer, HookLayer, TurnWithDeps))
 );
 
 export const AppLayer = Layer.mergeAll(
@@ -82,6 +88,7 @@ export const AppLayer = Layer.mergeAll(
   AgentWithDeps,
   SubagentWithDeps,
   SubagentRunRegistryWithDeps,
+  TurnWithDeps,
   SchedulerLayer,
   EventSinkLayer
 );

@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { useAgentStore, type ModelEntry } from '../stores/agent.store';
+import { useAgentStore, type ModelEntry, type QueuedInput } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { useRollbackStore } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
@@ -86,6 +86,8 @@ function registerInflight(threadId: string, controller: AbortController): void {
 
 export function useAgentCore() {
   const lastRootRef = useRef<string | null>(null);
+  /** 回合结束后自动补发的稳定入口（在 flushQueued 定义后赋值） */
+  const sendQueuedInputRef = useRef<((threadId: string) => Promise<void>) | null>(null);
   const startTurn = useAgentStore((s) => s.startTurn);
   const applyChunk = useAgentStore((s) => s.applyChunk);
   const updateTurnId = useAgentStore((s) => s.updateTurnId);
@@ -111,6 +113,9 @@ export function useAgentCore() {
   const setProfile = useAgentStore((s) => s.setProfile);
   const setPermissionMode = useAgentStore((s) => s.setPermissionMode);
   const modelId = useAgentStore((s) => s.model);
+  const queueInput = useAgentStore((s) => s.queueInput);
+  const removeQueuedInput = useAgentStore((s) => s.removeQueuedInput);
+  const markQueueSending = useAgentStore((s) => s.markQueueSending);
 
   // Abort all in-flight streams when the workspace root changes (project switch).
   useEffect(() => {
@@ -195,6 +200,96 @@ export function useAgentCore() {
       });
   }, [currentThreadId, setThreadTurns]);
 
+  /**
+   * 建乐观 Turn + 消费帧流。sendMessage 与 sendQueuedInput 共用；
+   * `preRegistered` 为 sendQueuedInput 已登记的 controller，避免重复登记。
+   */
+  const runTurnStream = useCallback(
+    async (
+      threadId: string,
+      parts: ContentPart[],
+      opts: {
+        cwd: string;
+        model: string;
+        skills?: Array<{ name: string; path: string }>;
+        preRegistered?: AbortController;
+      }
+    ) => {
+      let activeTurnId = randomId();
+      const userItem: Item = { id: randomId(), type: 'message', role: 'user', parts };
+      const turn: Turn = { id: activeTurnId, items: [userItem], status: 'running' };
+      startTurn(threadId, turn, {
+        cwd: opts.cwd,
+        title: textOf(parts).slice(0, 60),
+        model: opts.model,
+      });
+
+      const controller = opts.preRegistered ?? new AbortController();
+      if (!opts.preRegistered) registerInflight(threadId, controller);
+
+      const state = createStreamState(randomId());
+      const fx: StreamEffects = {
+        applyItem: (item) => applyChunk(threadId, activeTurnId, item),
+        applyTodo: (items) => applyTodoUpdate(threadId, items),
+        setUsage: (usage) => {
+          setThreadUsage(threadId, usage);
+          const s = useAgentStore.getState();
+          const model = s.models.find((m) => m.id === s.model);
+          if (model) setContextUsage({ used: usage.prompt, contextWindow: model.context_window });
+        },
+        setCompacted: () => {
+          useAgentStore.getState().clearThreadUsage(threadId);
+        },
+        syncTurnId: (turnId) => {
+          const next = String(turnId);
+          updateTurnId(threadId, activeTurnId, next);
+          activeTurnId = next;
+        },
+        newId: () => randomId(),
+        onInputDelivered: (id) => removeQueuedInput(threadId, id),
+      };
+
+      let failed = false;
+      try {
+        const result = await agentClient.submitInput(toWireParts(parts), {
+          sessionId: threadId,
+          cwd: opts.cwd,
+          model: opts.model,
+          signal: controller.signal,
+          skills: opts.skills,
+        });
+        if (result.kind === 'turn') {
+          for await (const frame of result.stream) {
+            reduceFrame(frame, state, fx);
+          }
+        }
+      } catch (err: any) {
+        failed = true;
+        const msg = err instanceof ApiError ? (err.body?.message ?? err.message) : String(err);
+        applyChunk(threadId, activeTurnId, { id: randomId(), type: 'error', message: msg });
+      } finally {
+        completeTurn(threadId, activeTurnId, failed || state.hasError ? 'error' : 'completed');
+        if (!failed && !state.hasError && state.planTitle !== null) {
+          setPendingPlan(threadId, { sessionId: threadId, title: state.planTitle });
+        }
+        abortAndClear(threadId);
+        // 自动补发：回合结束后按顺序把仍处于 queued 的项逐条发出
+        void sendQueuedInputRef.current?.(threadId);
+      }
+    },
+    [
+      startTurn,
+      applyChunk,
+      applyTodoUpdate,
+      completeTurn,
+      setPendingPlan,
+      updateTurnId,
+      setThreadUsage,
+      setContextUsage,
+      removeQueuedInput,
+    ]
+  );
+
   const sendMessage = useCallback(
     async (parts: ContentPart[], cwd?: string, skills?: Array<{ name: string; path: string }>) => {
       const effectiveCwd = cwd || workspace.rootPath || '';
@@ -235,78 +330,16 @@ export function useAgentCore() {
       }
       const threadId: string = resolvedThreadId;
 
+      // 首次发送的防重：已有在飞流时直接忽略
       if (inflightControllers.has(threadId)) return;
       clearPendingPlan(threadId);
 
-      let activeTurnId = randomId();
-      const userItem: Item = { id: randomId(), type: 'message', role: 'user', parts };
-      const turn: Turn = { id: activeTurnId, items: [userItem], status: 'running' };
-      startTurn(threadId, turn, {
-        cwd: effectiveCwd,
-        title: textOf(parts).slice(0, 60),
-        model,
-      });
-
-      const controller = new AbortController();
-      registerInflight(threadId, controller);
-
-      const state = createStreamState(randomId());
-      const fx: StreamEffects = {
-        applyItem: (item) => applyChunk(threadId, activeTurnId, item),
-        applyTodo: (items) => applyTodoUpdate(threadId, items),
-        setUsage: (usage) => {
-          setThreadUsage(threadId, usage);
-          const s = useAgentStore.getState();
-          const model = s.models.find((m) => m.id === s.model);
-          if (model) setContextUsage({ used: usage.prompt, contextWindow: model.context_window });
-        },
-        setCompacted: () => {
-          useAgentStore.getState().clearThreadUsage(threadId);
-        },
-        syncTurnId: (turnId) => {
-          const next = String(turnId);
-          updateTurnId(threadId, activeTurnId, next);
-          activeTurnId = next;
-        },
-        newId: () => randomId(),
-      };
-
-      try {
-        const stream = agentClient.sendMessage(toWireParts(parts), {
-          sessionId: threadId,
-          cwd: effectiveCwd,
-          model,
-          signal: controller.signal,
-          skills,
-        });
-
-        for await (const frame of stream) {
-          reduceFrame(frame, state, fx);
-        }
-
-        completeTurn(threadId, activeTurnId, state.hasError ? 'error' : 'completed');
-        if (!state.hasError && state.planTitle !== null) {
-          setPendingPlan(threadId, { sessionId: threadId, title: state.planTitle });
-        }
-      } catch (err: any) {
-        const msg = err instanceof ApiError ? (err.body?.message ?? err.message) : String(err);
-        applyChunk(threadId, activeTurnId, { id: randomId(), type: 'error', message: msg });
-        completeTurn(threadId, activeTurnId, 'error');
-      } finally {
-        abortAndClear(threadId);
-      }
+      await runTurnStream(threadId, parts, { cwd: effectiveCwd, model, skills });
     },
     [
-      startTurn,
+      runTurnStream,
       setCurrentThreadWithProfile,
-      applyChunk,
-      applyTodoUpdate,
-      completeTurn,
-      setPendingPlan,
       clearPendingPlan,
-      updateTurnId,
-      setThreadUsage,
-      setContextUsage,
       workspace.rootPath,
       storeProfile,
       storePermissionMode,
@@ -317,13 +350,86 @@ export function useAgentCore() {
     ]
   );
 
+  /**
+   * 队列项投递：命中活跃回合 → 202，等运行中的 SSE 送来 user_input 帧；
+   * 无活跃回合 → 开新回合（自动补发即走此分支）。
+   */
+  const sendQueuedInput = useCallback(
+    async (threadId: string, item: QueuedInput) => {
+      markQueueSending(threadId, item.id);
+      const thread = useAgentStore.getState().threads[threadId];
+      const effectiveCwd = thread?.cwd || workspace.rootPath || '';
+      const model = thread?.model || modelId;
+      const controller = new AbortController();
+      let result;
+      try {
+        result = await agentClient.submitInput(toWireParts(item.parts), {
+          sessionId: threadId,
+          inputId: item.id,
+          cwd: effectiveCwd,
+          model,
+          signal: controller.signal,
+        });
+      } catch (err) {
+        // 提交失败：移除该项并提示
+        removeQueuedInput(threadId, item.id);
+        const msg = err instanceof ApiError ? (err.body?.message ?? err.message) : String(err);
+        const running = useAgentStore
+          .getState()
+          .threads[threadId]?.turns.find((t) => t.status === 'running');
+        if (running) applyChunk(threadId, running.id, { id: randomId(), type: 'error', message: msg });
+        return;
+      }
+      if (result.kind === 'queued') return; // 等运行中的 SSE 送来 user_input 帧
+
+      // 无活跃回合：开新回合；乐观 Turn 用 item.parts
+      removeQueuedInput(threadId, item.id);
+      if (inflightControllers.has(threadId)) return;
+      clearPendingPlan(threadId);
+      registerInflight(threadId, controller);
+      await runTurnStream(threadId, item.parts, {
+        cwd: effectiveCwd,
+        model,
+        skills: undefined,
+        preRegistered: controller,
+      });
+    },
+    [
+      runTurnStream,
+      markQueueSending,
+      removeQueuedInput,
+      applyChunk,
+      clearPendingPlan,
+      workspace.rootPath,
+      modelId,
+    ]
+  );
+
+  /** 回合结束后：按顺序补发仍 queued 的队列项（每项都是一次 sendQueuedInput） */
+  const flushQueued = useCallback(
+    async (threadId: string) => {
+      const pending = (useAgentStore.getState().queuedInputsByThreadId[threadId] ?? []).filter(
+        (q) => q.status === 'queued'
+      );
+      for (const item of pending) {
+        const current = useAgentStore.getState().queuedInputsByThreadId[threadId] ?? [];
+        if (!current.some((q) => q.id === item.id && q.status === 'queued')) continue;
+        await sendQueuedInput(threadId, item);
+      }
+    },
+    [sendQueuedInput]
+  );
+
+  // runTurnStream 的 finally 需要一个稳定引用，避免与 flushQueued 互相依赖
+  sendQueuedInputRef.current = flushQueued;
+
   const abort = useCallback(() => {
     const threadId = currentThreadId;
     if (!threadId) return;
     abortAndClear(threadId);
   }, [currentThreadId]);
 
-  return { sendMessage, abort };
+  return { sendMessage, sendQueuedInput, queueInput, abort };
 }
 
 // ---- useAgentApproval: approveTool + rejectTool ----

@@ -260,11 +260,12 @@ export const SessionLayer = Layer.effect(
 
     const recordUser = (
       state: SessionStoreState,
-      content: StoredPart[]
+      content: StoredPart[],
+      opts?: { steering?: boolean }
     ): Effect.Effect<UserEvent, AgentError> =>
       Effect.try({
         try: () => {
-          state.currentTurnId += 1;
+          if (!opts?.steering) state.currentTurnId += 1;
           const event: UserEvent = {
             type: 'user',
             turnId: state.currentTurnId,
@@ -287,6 +288,11 @@ export const SessionLayer = Layer.effect(
             ? e
             : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
+
+    const recordUserInput = (
+      state: SessionStoreState,
+      content: StoredPart[]
+    ): Effect.Effect<UserEvent, AgentError> => recordUser(state, content, { steering: true });
 
     const recordSystem = (
       state: SessionStoreState,
@@ -601,6 +607,7 @@ export const SessionLayer = Layer.effect(
       materializeInput,
       resolveAssets,
       recordUser,
+      recordUserInput,
       recordSystem,
       recordAssistant,
       recordToolResult,

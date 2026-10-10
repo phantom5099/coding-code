@@ -17,19 +17,16 @@ export interface RunTurnOptions {
   agentName?: string;
   systemPrompt?: string;
   skills?: ReadonlyArray<{ name: string; path: string }>;
+  /** steer 路径下由前端提供，作为 `PendingUserInput.id` 原样透传 */
+  inputId?: string;
 }
 
+export type RunTurnResult =
+  | { kind: 'turn'; stream: AsyncGenerator<FrameBody>; sessionId: string }
+  | { kind: 'queued'; sessionId: string; turnId: number };
+
 export interface AgentShape {
-  runTurn(
-    input: IncomingPart[],
-    opts: RunTurnOptions
-  ): Effect.Effect<
-    {
-      stream: AsyncGenerator<FrameBody>;
-      sessionId: string;
-    },
-    AgentError
-  >;
+  runTurn(input: IncomingPart[], opts: RunTurnOptions): Effect.Effect<RunTurnResult, AgentError>;
 }
 
 export class AgentService extends Context.Tag('AgentService')<AgentService, AgentShape>() {}

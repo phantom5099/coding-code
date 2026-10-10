@@ -1,5 +1,6 @@
 import type { TodoItem } from '../todo/types.js';
 import type { TokenUsage } from '../llm/types.js';
+import type { StoredPart } from '../session/types.js';
 
 export interface FrameError {
   readonly message: string;
@@ -52,6 +53,11 @@ export type RuntimeEvent =
       readonly sessionId: string;
       readonly agentName: string;
       readonly status: 'spawned' | 'completed' | 'failed';
+    }
+  | {
+      readonly type: 'user_input';
+      readonly id: string;
+      readonly parts: readonly StoredPart[];
     };
 
 export interface Fatal {

@@ -12,7 +12,7 @@ import TitleBar from './TitleBar';
 import ErrorBoundary from './shared/ErrorBoundary';
 
 export default function App() {
-  const { sendMessage, abort } = useAgentCore();
+  const { sendMessage, sendQueuedInput, abort } = useAgentCore();
   const theme = useUIStore((s) => s.theme);
   const view = useUIStore((s) => s.view);
   const rootPath = useWorkspaceStore((s) => s.rootPath);
@@ -49,7 +49,7 @@ export default function App() {
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <ProjectStrip />
         <AgentSidebar />
-        <AgentWorkspace sendMessage={sendMessage} abort={abort} />
+        <AgentWorkspace sendMessage={sendMessage} sendQueuedInput={sendQueuedInput} abort={abort} />
       </div>
     );
   }

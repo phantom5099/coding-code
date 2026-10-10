@@ -21,7 +21,7 @@ import { COMPACTION_SYSTEM_PROMPT } from './compaction-prompt.js';
 import { AgentError } from '../util/error.js';
 import { ContextService } from './port.js';
 import type { CompressResult } from './port.js';
-import { EventSinkService } from '../sink/port.js';
+import { TurnRegistryService } from '../turn/port.js';
 
 export function transcriptPathFor(ref: SessionRef): string {
   return transcriptPathOf(ref.cwd, ref.sessionId, ref.parentSessionId);
@@ -211,7 +211,7 @@ export const ContextLayer = Layer.effect(
   Effect.gen(function* () {
     const session = yield* SessionService;
     const llm = yield* LLMService;
-    const sink = yield* EventSinkService;
+    const turn = yield* TurnRegistryService;
 
     // 回合内内存态：键 = sessionId，仅在换回合（turnId 变化）时重建
     const buffers = new Map<string, ContextBuffer>();
@@ -429,13 +429,10 @@ export const ContextLayer = Layer.effect(
         const contextWindow = contextWindowOf(model);
         yield* runMicroCompact(buf, contextWindow);
         if (needsCompaction(buf, contextWindow)) {
-          // 压缩判定与压缩帧都归 context，agent 不参与
-          yield* sink.emit(ref.sessionId, { family: 'transition', transition: { to: 'compress' } });
+          // 压缩判定归 context，压缩相位帧由状态表投递
+          yield* turn.transition(ref.sessionId, { kind: 'compressing' });
           yield* summarizeToFit(buf, contextWindow, model);
-          yield* sink.emit(ref.sessionId, {
-            family: 'transition',
-            transition: { to: 'executing' },
-          });
+          yield* turn.transition(ref.sessionId, { kind: 'running' });
         }
         return yield* resolveMediaParts(buildContextMessages(buf.events, buf.compactedTurnIds), ref.cwd);
       });

@@ -21,6 +21,7 @@ const DOMAIN_STATUS: Record<ErrorCode, number> = {
   EMPTY_RESPONSE: 500,
   SESSION_IO_ERROR: 500,
   INVALID_INPUT: 400,
+  TURN_CONFLICT: 409,
 };
 
 export class NotFoundError extends Error {

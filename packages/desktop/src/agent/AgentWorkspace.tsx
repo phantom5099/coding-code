@@ -1,7 +1,18 @@
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Send, Square, ShieldCheck, Shield, FileText, Paperclip, X } from 'lucide-react';
-import { useAgentStore } from '../stores/agent.store';
+import {
+  Send,
+  Square,
+  ShieldCheck,
+  Shield,
+  FileText,
+  Paperclip,
+  X,
+  GripVertical,
+  Pencil,
+} from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
+import { useAgentStore, type QueuedInput } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import {
   compactSession,
@@ -17,7 +28,7 @@ import ApprovalPanel from './ApprovalPanel';
 import ProfileIndicator from './ProfileIndicator';
 import PlanPanel from '../shared/PlanPanel';
 import MediaView from '../shared/MediaView';
-import { reachableMimes, attachmentHint, type ContentPart } from '@shared/parts';
+import { reachableMimes, attachmentHint, isLocalMedia, textOf, type ContentPart } from '@shared/parts';
 import { MAX_MEDIA_BYTES, type PermissionMode } from '@codingcode/sdk';
 
 /** 附件条上限：单文件字节上限用 sdk 的 `MAX_MEDIA_BYTES`，与服务端闸门同值，前端只做即时提示。 */
@@ -247,11 +258,13 @@ interface SkillRef {
 function InputBox({
   centered,
   sendMessage,
+  sendQueuedInput,
   abort,
   onOpenPlanPanel,
 }: {
   centered?: boolean;
   sendMessage: (parts: ContentPart[], cwd?: string, skills?: SkillRef[]) => Promise<void>;
+  sendQueuedInput: (threadId: string, item: QueuedInput) => Promise<void>;
   abort: () => void;
   onOpenPlanPanel?: () => void;
 }) {
@@ -275,6 +288,17 @@ function InputBox({
   });
   const storePermissionMode = useAgentStore((s) => s.permissionMode);
   const setPermissionMode = useAgentStore((s) => s.setPermissionMode);
+  const queueInput = useAgentStore((s) => s.queueInput);
+  const removeQueuedInput = useAgentStore((s) => s.removeQueuedInput);
+  const reorderQueuedInputs = useAgentStore((s) => s.reorderQueuedInputs);
+  // useShallow：selector 在无队列 / 无会话时会返回新的 `[]` 字面量，
+  // 默认的 Object.is 比较会让每次 render 都判定「值变了」→ 自激更新循环。
+  // 浅比较按元素引用判等，彻底消除「新数组 identity」问题。
+  const queuedInputs = useAgentStore(
+    useShallow((s) =>
+      s.currentThreadId ? (s.queuedInputsByThreadId[s.currentThreadId] ?? []) : []
+    )
+  );
   const workspace = useWorkspaceStore();
   const pendingInput = useAgentStore((s) => s.pendingInput);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
@@ -448,7 +472,7 @@ function InputBox({
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
-    if ((!trimmed && attachments.length === 0) || isStreaming) return;
+    if (!trimmed && attachments.length === 0) return;
     const skills: SkillRef[] = [];
     const seen = new Set<string>();
     for (const m of trimmed.matchAll(/@([a-zA-Z0-9-]+)/g)) {
@@ -472,20 +496,99 @@ function InputBox({
     setNotice(null);
     setPickedPaths({});
     setSkillMenu(null);
+    if (isStreaming) {
+      // 活跃回合：只入前端队列，不发请求（等点击发送或回合结束后补发）
+      const threadId = currentThreadId;
+      if (threadId) queueInput(threadId, parts);
+      return;
+    }
     sendMessage(parts, workspace.rootPath || undefined, skills);
   }, [
     text,
     attachments,
     isStreaming,
+    currentThreadId,
+    queueInput,
     sendMessage,
     workspace.rootPath,
     pickedPaths,
     skillOptions,
   ]);
 
+  /** 编辑队列项：文本回输入框、本地媒体回附件条、该项消失 */
+  const editQueuedInput = useCallback(
+    (item: QueuedInput) => {
+      const threadId = currentThreadId;
+      if (!threadId) return;
+      const restoredAttachments: Attachment[] = [];
+      for (const p of item.parts) {
+        if (p.type === 'text') {
+          setText((prev) => (prev ? `${prev}\n${p.text}` : p.text));
+        } else if (isLocalMedia(p)) {
+          restoredAttachments.push({
+            id: newId(),
+            dataUrl: p.dataUrl,
+            mimeType: p.mimeType,
+            filename: p.filename ?? 'attachment',
+          });
+        }
+      }
+      if (restoredAttachments.length > 0) {
+        setAttachments((prev) => [...prev, ...restoredAttachments]);
+      }
+      removeQueuedInput(threadId, item.id);
+    },
+    [currentThreadId, removeQueuedInput]
+  );
+
 
   return (
     <div className={centered ? 'w-full max-w-[740px]' : 'px-5 pb-5 pt-2'}>
+      {queuedInputs.length > 0 && currentThreadId && (
+        <div className="mb-2 space-y-1.5" data-testid="queued-inputs">
+          {queuedInputs.map((item, index) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-2 rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] px-3 py-2"
+            >
+              <GripVertical size={14} className="shrink-0 text-[var(--text-disabled)]" />
+              <span className="shrink-0 text-[12px] text-[var(--text-muted)]">{index + 1}</span>
+              <span className="flex-1 truncate text-[13px] text-[var(--text-primary)]">
+                {textOf(item.parts) || '（空）'}
+              </span>
+              <button
+                type="button"
+                data-testid={`queue-send-${item.id}`}
+                disabled={item.status === 'sending'}
+                onClick={() => void sendQueuedInput(currentThreadId, item)}
+                aria-label="发送队列项"
+                title="发送"
+                className="w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:bg-[var(--bg-hover)] disabled:opacity-40"
+              >
+                <Send size={13} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                onClick={() => editQueuedInput(item)}
+                aria-label="编辑队列项"
+                title="编辑"
+                className="w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+              >
+                <Pencil size={13} strokeWidth={1.8} />
+              </button>
+              <button
+                type="button"
+                onClick={() => removeQueuedInput(currentThreadId, item.id)}
+                aria-label="删除队列项"
+                title="删除"
+                className="w-6 h-6 shrink-0 flex items-center justify-center rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-danger)] hover:bg-[var(--bg-hover)]"
+              >
+                <X size={13} strokeWidth={1.8} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -565,7 +668,6 @@ function InputBox({
               }
             }}
             placeholder="可向 AI 询问任何事"
-            disabled={isStreaming}
             rows={3}
             className="flex-1 bg-transparent px-5 pt-4 pb-3 text-[15px] text-[var(--text-primary)] placeholder-[var(--text-disabled)] resize-none outline-none leading-relaxed disabled:opacity-50"
           />
@@ -591,7 +693,6 @@ function InputBox({
               }
               fileInputRef.current?.click();
             }}
-            disabled={isStreaming}
             aria-label="添加图片、音频或 PDF"
             title={capsHint ?? '添加图片、音频或 PDF'}
             className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 transition-colors"
@@ -750,10 +851,11 @@ function InputBox({
 
 interface AgentWorkspaceProps {
   sendMessage: (parts: ContentPart[], cwd?: string, skills?: SkillRef[]) => Promise<void>;
+  sendQueuedInput: (threadId: string, item: QueuedInput) => Promise<void>;
   abort: () => void;
 }
 
-export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspaceProps) {
+export default function AgentWorkspace({ sendMessage, sendQueuedInput, abort }: AgentWorkspaceProps) {
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
   const isCompressing = useAgentStore((s) => s.isCompressing);
   const workspace = useWorkspaceStore();
@@ -769,7 +871,7 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
           </span>{' '}
           中构建什么？
         </h2>
-        <InputBox centered sendMessage={sendMessage} abort={abort} />
+        <InputBox centered sendMessage={sendMessage} sendQueuedInput={sendQueuedInput} abort={abort} />
       </div>
     );
   }
@@ -789,6 +891,7 @@ export default function AgentWorkspace({ sendMessage, abort }: AgentWorkspacePro
         <div className="shrink-0">
           <InputBox
             sendMessage={sendMessage}
+            sendQueuedInput={sendQueuedInput}
             abort={abort}
             onOpenPlanPanel={() => setPlanPanelOpen(true)}
           />
