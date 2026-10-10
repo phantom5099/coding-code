@@ -39,6 +39,7 @@ servers:
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `name` | `string` | 必填 | 服务器名称，用于工具命名空间化和白名单引用 |
+| `enabled` | `boolean` | `true` | 开关；`false` 表示禁用，缺省等同启用 |
 | `command` | `string` | - | stdio 传输：可执行命令 |
 | `args` | `string[]` | - | stdio 传输：命令参数 |
 | `env` | `Record<string, string>` | - | stdio 传输：环境变量，支持 `${VAR}` 插值 |
@@ -90,12 +91,13 @@ servers:
 
 ### 连接生命周期
 
-MCP 连接使用 lease 机制管理会话级生命周期：
+MCP 连接按**项目**隔离，由 `syncConnections(projectPath)` 在每个回合开始时对齐：
 
-- 每个会话通过 `addLease` 建立与 MCP 服务器的关联
-- 会话结束时通过 `removeLease` 释放关联
-- 当某个服务器没有任何活跃 lease 时，自动断开连接
-- `autoReconnect: true` 时，断线后自动重连
+- 每个项目持有自己的一份 `client` 映射（`projectPath → serverName → client`）。
+- `syncConnections` 对比配置与现有连接：新增的配置项建立连接，已移除的配置项断开并清理，连接的服务器按配置的 `enabled` 过滤（`enabled: false` 不连接）。
+- 服务器连接失败只记日志，不影响回合继续。
+- `autoReconnect: true` 时，断线后自动重连；`concurrency` 控制对该服务器的最大并发工具调用数（`TSemaphore`，默认 3）。
+- 工具是否可见还受该服务器当前是否被禁用约束（`isDisabledFn` 在调用时实时判断）。
 
 ---
 

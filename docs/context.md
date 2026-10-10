@@ -27,11 +27,11 @@ Coding Code 采用两层压缩策略，在不同阈值下自动触发：
 
 | 配置项 | 值 | 说明 |
 |--------|-----|------|
-| 触发阈值 | `promptEstimate > modelMaxTokens * 0.9` | prompt 估算超过模型最大 token 90% 时触发 |
+| 触发阈值 | `promptEstimate > modelMaxTokens * 0.85` | prompt 估算超过模型最大 token 85% 时触发 |
 | 保留最近 turn | 1 | 保留最近 1 个 turn 不压缩 |
 | 压缩方式 | 调用 LLM 生成摘要 | 整段输出即摘要（全量替换，不做标签抽取） |
 | 增量压缩 | 是 | 找到已有 SummaryEvent，只压缩 `endTurnId` 之后的事件 |
-| 失败追踪 | 连续 3 次失败后停止 | 24 小时 TTL 后重置 |
+| 自动压缩轮次 | 最多 3 轮 | 单次自动压缩最多连续尝试 `MAX_AUTO_COMPACT_PASSES` 轮，直到不再需要压缩或无可释放为止 |
 
 ---
 
@@ -109,15 +109,15 @@ context:
 
 ### 硬编码常量
 
-以下常量当前硬编码在 `context/service.ts` 中：
+以下常量当前硬编码在 `context/context.ts` 中：
 
 | 常量 | 值 | 说明 |
 |------|-----|------|
 | `MICRO_COMPACT_THRESHOLD` | `0.25` | 微压缩触发比例 |
 | `MICRO_COMPACT_MIN_CHARS` | `120` | 微压缩最小字符数 |
-| `COMPACTION_THRESHOLD` | `0.9` | LLM 压缩触发比例 |
+| `COMPACTION_THRESHOLD` | `0.85` | LLM 压缩触发比例 |
 | `KEEP_RECENT_TURNS` | `1` | 保留最近 turn 数 |
-| `REACTIVE_COMPACT_MAX_RETRIES` | `3` | 最大重试次数 |
+| `MAX_AUTO_COMPACT_PASSES` | `3` | 单次自动压缩的最大轮次 |
 
 ---
 

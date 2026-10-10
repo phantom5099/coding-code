@@ -291,9 +291,6 @@ function InputBox({
   const queueInput = useAgentStore((s) => s.queueInput);
   const removeQueuedInput = useAgentStore((s) => s.removeQueuedInput);
   const reorderQueuedInputs = useAgentStore((s) => s.reorderQueuedInputs);
-  // useShallow：selector 在无队列 / 无会话时会返回新的 `[]` 字面量，
-  // 默认的 Object.is 比较会让每次 render 都判定「值变了」→ 自激更新循环。
-  // 浅比较按元素引用判等，彻底消除「新数组 identity」问题。
   const queuedInputs = useAgentStore(
     useShallow((s) =>
       s.currentThreadId ? (s.queuedInputsByThreadId[s.currentThreadId] ?? []) : []
