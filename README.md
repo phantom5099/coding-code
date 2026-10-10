@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/)
 
-面向终端的 AI 编程助手。核心引擎纯手写 ReAct 循环，不依赖任何 Agent 框架。没有黑盒，所有行为都可定制。
+AI 编程助手。核心引擎是手写的 ReAct 循环，不依赖任何 Agent 框架，模块结构自行实现：工具系统（fs / bash / web / 子智能体四个域）、回合状态机与帧投递通道、五层审批流水线、上下文压缩、ShadowGit 检查点、长期记忆与钩子系统
 
 </div>
 
