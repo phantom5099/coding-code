@@ -19,6 +19,8 @@ import { SkillService } from '../../src/skills/port.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { ToolExecutorService } from '../../src/tools/port.js';
+import { TurnRegistryLayer } from '../../src/turn/registry.js';
+import { TurnRegistryService } from '../../src/turn/port.js';
 import type { FrameBody, RuntimeEvent, Transition } from '../../src/sink/types.js';
 import type { TokenUsage, LLMStreamPart } from '../../src/llm/types.js';
 import type { SessionStoreState, SessionRef } from '../../src/session/types.js';
@@ -267,6 +269,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       ),
     resolveAssets: () => Effect.succeed(new Map()),
     recordUser: () => Effect.succeed({ turnId: 1 }),
+    recordUserInput: () => Effect.succeed({ turnId: 1 }),
     recordSystem: () => Effect.succeed({}),
     recordAssistant: () => Effect.succeed({}),
     recordToolResult: () => Effect.succeed({}),
@@ -320,6 +323,9 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     listProjectMcpTools: () => Effect.succeed([]),
   } as any);
 
+  // 状态帧由 turn 投递 ⇒ turn 要 sink；无环：turn → sink
+  const TurnWithDeps = TurnRegistryLayer.pipe(Layer.provide(EventSinkLayer));
+
   const services = Layer.mergeAll(
     mocks.sessionLayer ?? Layer.succeed(SessionService, session as any),
     Layer.succeed(ToolExecutorService, executor as any),
@@ -333,6 +339,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     mocks.skillLayer ?? Layer.succeed(SkillService, skills as any),
     ContextMockLayer,
     EventSinkLayer,
+    TurnWithDeps,
     MailboxLayer,
     Layer.succeed(MemoryService, memory as any),
     Layer.succeed(LLMService, {
@@ -403,9 +410,17 @@ export async function runAgentTurn(
     if (opts.skills) runOpts.skills = opts.skills;
     return yield* agent.runTurn(opts.input ?? incomingText('test'), runOpts);
   });
-  let runRes: { stream: AsyncGenerator<FrameBody>; sessionId: string };
+  let runRes: { kind: 'turn'; stream: AsyncGenerator<FrameBody>; sessionId: string };
   try {
-    runRes = await Effect.runPromise(Effect.provide(program, appLayer) as any);
+    const result = (await Effect.runPromise(
+      Effect.provide(program, appLayer) as any
+    )) as
+      | { kind: 'turn'; stream: AsyncGenerator<FrameBody>; sessionId: string }
+      | { kind: 'queued'; sessionId: string; turnId: number };
+    if (result.kind === 'queued') {
+      throw new Error(`harness: runTurn unexpectedly returned queued (turnId ${result.turnId})`);
+    }
+    runRes = result;
   } catch (err) {
     console.error('HARNESS-RUN-ERROR', err);
     throw err;

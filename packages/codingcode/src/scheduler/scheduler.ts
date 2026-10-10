@@ -48,7 +48,7 @@ export const SchedulerLayer = Layer.effect(
       const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
       try {
-        const { stream, sessionId } = await _rt.runPromise(
+        const turnResult = await _rt.runPromise(
           Effect.gen(function* () {
             const agent = yield* AgentService;
             return yield* agent.runTurn([textPart(auto.description)], {
@@ -61,6 +61,9 @@ export const SchedulerLayer = Layer.effect(
             });
           })
         );
+        // 自动化不开已有会话，不可能命中活跃回合
+        if (turnResult.kind === 'queued') return;
+        const { stream, sessionId } = turnResult;
 
         let lastContent = '';
         for await (const body of stream) {
@@ -181,7 +184,7 @@ export const SchedulerLayer = Layer.effect(
         const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
         try {
-          const { stream, sessionId } = await _rt.runPromise(
+          const turnResult = await _rt.runPromise(
             Effect.gen(function* () {
               const agent = yield* AgentService;
               return yield* agent.runTurn([textPart(auto.description)], {
@@ -193,6 +196,9 @@ export const SchedulerLayer = Layer.effect(
               });
             })
           );
+          // 同上：自动化不开已有会话，queued 不可达
+          if (turnResult.kind === 'queued') return null;
+          const { stream, sessionId } = turnResult;
 
           for await (const body of stream) {
             if (

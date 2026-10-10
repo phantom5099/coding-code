@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useShallow } from 'zustand/react/shallow';
 import { useAgentStore } from '../stores/agent.store';
 import { useRollbackStore } from '../stores/rollback.store';
 import MessageItem from '../shared/MessageItem';
@@ -216,7 +217,11 @@ function TurnDiffPanel({
 }
 
 export default function MessageStream({ threadId }: MessageStreamProps) {
-  const turns = useAgentStore((s) => s.threads[threadId]?.turns ?? []);
+  // useShallow：`?? []` 分支每次 render 都会新建数组，默认 Object.is 比较会
+  // 判为「值变了」→ 流式高频渲染时形成自激更新循环。浅比较按元素引用判等。
+  const turns = useAgentStore(
+    useShallow((s) => s.threads[threadId]?.turns ?? [])
+  );
   /** 资产地址按项目定位，气泡里的媒体直接指向服务端的资产路由 */
   const threadCwd = useAgentStore((s) => s.threads[threadId]?.cwd ?? '');
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);

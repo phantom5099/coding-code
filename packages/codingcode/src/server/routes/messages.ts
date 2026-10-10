@@ -10,6 +10,7 @@ import { ASK_BEFORE_EXEC_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../../util/
 import type { IncomingMedia, IncomingPart } from '../../llm/types.js';
 import {
   frameStream,
+  json,
   pathParams,
   readJsonFrom,
   sseResponse,
@@ -28,6 +29,8 @@ type MessageBody = {
   input: WirePart[];
   cwd: string;
   model?: string;
+  /** 前端队列项 id：命中活跃回合时原样回显在 user_input 帧上 */
+  inputId?: string;
   skills?: Array<{ name: string; path: string }>;
 };
 
@@ -94,6 +97,7 @@ const sendMessage: Handler = Effect.gen(function* () {
     cwd,
     signal: web.signal,
     model: body.model,
+    inputId: body.inputId,
     skills: body.skills,
   };
   if (isNew) {
@@ -107,12 +111,16 @@ const sendMessage: Handler = Effect.gen(function* () {
   }
 
   const agent = yield* AgentService;
-  const { stream, sessionId: actualSid } = yield* agent.runTurn(input, {
+  const result = yield* agent.runTurn(input, {
     sessionId: isNew ? undefined : sessionId,
     ...runOpts,
   } as never);
 
-  return yield* sseResponse(frameStream(stream), { sessionId: actualSid });
+  // 命中活跃回合：输入已进状态表，不开新流，回 202
+  if (result.kind === 'queued') {
+    return json({ queued: true, sessionId: result.sessionId, turnId: result.turnId }, 202);
+  }
+  return yield* sseResponse(frameStream(result.stream), { sessionId: result.sessionId });
 });
 
 export const addMessagesRoutes = (router: Router): Router =>

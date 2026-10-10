@@ -3,6 +3,7 @@ import { SubagentRunnerService } from './port.js';
 import type { RunSubagentOptions } from './port.js';
 import { AgentService } from '../agent/port.js';
 import type { FrameBody } from '../sink/types.js';
+import { AgentError } from '../util/error.js';
 import type { Result } from '../util/result.js';
 import { BYPASS_PERMISSION_MODE } from '../util/enums.js';
 import type { IncomingPart } from '../llm/types.js';
@@ -17,7 +18,6 @@ export const SubagentRunnerLayer = Layer.effect(
         const result = yield* agent.runTurn(input, {
           sessionId: opts.sessionId,
           cwd: opts.cwd,
-          signal: opts.signal,
           activeProfile: opts.activeProfile,
           // 子代理不经审批：调用点未给定时固定 bypass，避免继承父会话的审批链路
           permissionMode: opts.permissionMode ?? BYPASS_PERMISSION_MODE,
@@ -26,6 +26,12 @@ export const SubagentRunnerLayer = Layer.effect(
           agentName: opts.agentName,
           systemPrompt: opts.systemPrompt,
         });
+        // 子代理委派不开新会话也不可能命中活跃回合：queued 分支不可达
+        if (result.kind === 'queued') {
+          return yield* Effect.fail(
+            new AgentError('TURN_CONFLICT', `concurrent turn on subagent session ${result.sessionId}`)
+          );
+        }
         return {
           stream: result.stream as AsyncGenerator<FrameBody, Result<string, any>, unknown>,
           sessionId: result.sessionId,

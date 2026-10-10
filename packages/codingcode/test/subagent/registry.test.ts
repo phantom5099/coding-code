@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer, Queue } from 'effect';
-import {
-  SubagentRunRegistryLayer,
-  SubagentRunRegistryService,
-} from '../../src/subagent/registry.js';
+import { SubagentRunRegistryLayer, SubagentRunRegistryService } from '../../src/subagent/registry.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { MailboxLayer, MailboxService } from '../../src/session/mailbox.js';
 import { EventSinkService } from '../../src/sink/port.js';
 import { HookService } from '../../src/hooks/port.js';
+import { TurnRegistryLayer } from '../../src/turn/registry.js';
+import { TurnRegistryService } from '../../src/turn/port.js';
 import type { FrameBody } from '../../src/sink/types.js';
 
 const spawnOpts = {
@@ -27,7 +26,7 @@ function doneStream(text = 'child-done'): AsyncGenerator<FrameBody> {
   })();
 }
 
-/** 永不结束：用来制造 wait 超时 */
+/** 永不结束：用来制造 hang */
 function hangingStream(): AsyncGenerator<FrameBody> {
   return (async function* () {
     await new Promise((r) => setTimeout(r, 30_000));
@@ -47,15 +46,10 @@ function failStream(): AsyncGenerator<FrameBody> {
 
 function makeHarness(makeStream: () => AsyncGenerator<FrameBody>) {
   const emitted: Array<{ sessionId: string; body: FrameBody }> = [];
-  const signals: AbortSignal[] = [];
-  // 每次 spawn 给一条独立流与递增的 sessionId（配额用例会连续 spawn 多次）
   let n = 0;
   const runner = Layer.succeed(SubagentRunnerService, {
-    runSubagent: (_prompt: string, opts: any) =>
-      Effect.sync(() => {
-        signals.push(opts.signal);
-        return { stream: makeStream(), sessionId: `child-${++n}` };
-      }),
+    runSubagent: (_prompt: string, _opts: any) =>
+      Effect.sync(() => ({ stream: makeStream(), sessionId: `child-${++n}` })),
   } as any);
   const sink = Layer.succeed(EventSinkService, {
     attach: () => Effect.succeed(Effect.runSync(Queue.unbounded<FrameBody>())),
@@ -70,12 +64,12 @@ function makeHarness(makeStream: () => AsyncGenerator<FrameBody>) {
     emitDecision: () => Effect.succeed(null),
     reloadUserHooks: () => Effect.void,
   } as any);
-  // provideMerge：MailboxService 既注入注册表，也保留在输出里供断言使用
-  // （同一次 Layer 构建 ⇒ 同一实例）
+
+  const turn = TurnRegistryLayer.pipe(Layer.provide(sink));
   const layers = SubagentRunRegistryLayer.pipe(
-    Layer.provideMerge(Layer.mergeAll(runner, MailboxLayer, sink, hooks))
+    Layer.provideMerge(Layer.mergeAll(runner, MailboxLayer, sink, hooks, turn))
   );
-  return { emitted, signals, layers };
+  return { emitted, layers };
 }
 
 const run = <T>(layers: Layer.Layer<any>, eff: Effect.Effect<T, any, any>): Promise<T> =>
@@ -146,21 +140,7 @@ describe('subagent run registry', () => {
     expect(statuses).toEqual(['spawned', 'completed']);
   });
 
-  it('wait 对已终态返回 completed（不阻塞）', async () => {
-    const { layers } = makeHarness(doneStream);
-    const outcome = await run(
-      layers,
-      Effect.gen(function* () {
-        const reg = yield* SubagentRunRegistryService;
-        yield* reg.spawn(spawnOpts);
-        yield* Effect.sleep(50);
-        return yield* reg.wait('child-1', 10_000);
-      })
-    );
-    expect(outcome).toBe('completed');
-  });
-
-  it('error 终态：mailbox 正文含失败原因，wait 返回 failed', async () => {
+  it('error 终态：mailbox 正文含失败原因', async () => {
     const { layers } = makeHarness(failStream);
     const result = await run(
       layers,
@@ -169,109 +149,56 @@ describe('subagent run registry', () => {
         const mb = yield* MailboxService;
         yield* reg.spawn(spawnOpts);
         yield* Effect.sleep(50);
-        const items = yield* mb.drain('parent-1');
-        const outcome = yield* reg.wait('child-1', 10_000);
-        return { items, outcome };
+        return yield* mb.drain('parent-1');
       })
     );
-    expect(result.outcome).toBe('failed');
-    expect(result.items[0]!.content).toContain('boom');
-    expect(result.items[0]!.content).toContain('did not finish');
+    expect(result[0]!.content).toContain('boom');
+    expect(result[0]!.content).toContain('did not finish');
   });
 
-  it('wait 超时返回 timeout，且不取消子代理', async () => {
-    const { layers } = makeHarness(hangingStream);
-    const outcome = await run(
-      layers,
-      Effect.gen(function* () {
-        const reg = yield* SubagentRunRegistryService;
-        yield* reg.spawn(spawnOpts);
-        return yield* reg.wait('child-1', 60);
-      })
-    );
-    expect(outcome).toBe('timeout');
-  });
-
-  it('wait 未知 sessionId 报 Unknown subagent', async () => {
-    const { layers } = makeHarness(doneStream);
-    const error = await run(
-      layers,
-      Effect.gen(function* () {
-        const reg = yield* SubagentRunRegistryService;
-        return yield* Effect.either(reg.wait('nope', 60));
-      })
-    );
-    expect(error._tag).toBe('Left');
-    expect(String((error as any).left.message)).toMatch(/Unknown subagent/);
-  });
-
-  it('配额：超过 maxBackground 时拒绝新的 spawn', async () => {
+  it('配额：超过 maxBackground 时拒绝新的 spawn（并发闸走状态表）', async () => {
     const { layers } = makeHarness(hangingStream);
     const result = await run(
       layers,
       Effect.gen(function* () {
         const reg = yield* SubagentRunRegistryService;
+        const turn = yield* TurnRegistryService;
         const outcomes: string[] = [];
-        for (let i = 0; i < 6; i++) {
+        // 并发闸先判、再 spawn、成功后才 claim 占位（与 runTurn 的真实顺序一致）
+        for (let i = 1; i <= 6; i++) {
           const r = yield* Effect.either(reg.spawn(spawnOpts));
           outcomes.push(r._tag);
+          if (r._tag === 'Right') {
+            yield* turn.claim(r.right.sessionId, { turnId: 1, parentSessionId: 'parent-1' });
+          }
         }
         return outcomes;
       })
     );
-    // 默认上限 4：前四个成功，之后失败
-    expect(result.slice(0, 4)).toEqual(['Right', 'Right', 'Right', 'Right']);
-    expect(result.slice(4)).toEqual(['Left', 'Left']);
+    // 默认上限 4：前四个成功，之后被拒
+    expect(result).toEqual(['Right', 'Right', 'Right', 'Right', 'Left', 'Left']);
   });
 
-  it('stopAll 只停仍在跑的，返回停掉的数量；重复调用不重复计数', async () => {
-    const { layers, signals } = makeHarness(hangingStream);
+  it('stopChildren 只停仍在跑的派生会话（句柄由 arm 登记）', async () => {
+    const { layers } = makeHarness(hangingStream);
     const result = await run(
       layers,
       Effect.gen(function* () {
         const reg = yield* SubagentRunRegistryService;
-        yield* reg.spawn(spawnOpts);
-        yield* reg.spawn(spawnOpts);
-        const first = yield* reg.stopAll('parent-1');
-        const second = yield* reg.stopAll('parent-1');
+        const turn = yield* TurnRegistryService;
+        for (let i = 0; i < 2; i++) {
+          const sid = `child-${i + 1}`;
+          yield* turn.claim(sid, { turnId: 1, parentSessionId: 'parent-1' });
+          const stopped: string[] = [];
+          yield* turn.arm(sid, () => stopped.push(sid));
+          yield* reg.spawn(spawnOpts);
+        }
+        const first = yield* turn.stopChildren('parent-1');
+        const second = yield* turn.stopChildren('parent-1');
         return { first, second };
       })
     );
     expect(result.first).toBe(2);
     expect(result.second).toBe(0);
-    expect(signals.every((s) => s.aborted)).toBe(true);
-  });
-
-  it('stopAll 不碰已终态的 run，也不误伤别的父会话', async () => {
-    const { layers } = makeHarness(doneStream);
-    const result = await run(
-      layers,
-      Effect.gen(function* () {
-        const reg = yield* SubagentRunRegistryService;
-        yield* reg.spawn(spawnOpts);
-        yield* reg.spawn({ ...spawnOpts, parentSessionId: 'parent-2' });
-        yield* Effect.sleep(50);
-        return {
-          done: yield* reg.stopAll('parent-1'),
-          other: yield* reg.stopAll('parent-2'),
-        };
-      })
-    );
-    expect(result.done).toBe(0);
-    expect(result.other).toBe(0);
-  });
-
-  it('scope 结束（dispose）时 abort 掉所有仍活着的子代理', async () => {
-    const { layers, signals } = makeHarness(hangingStream);
-    await run(
-      layers,
-      Effect.gen(function* () {
-        const reg = yield* SubagentRunRegistryService;
-        yield* reg.spawn(spawnOpts);
-        yield* reg.spawn(spawnOpts);
-      })
-    );
-    expect(signals).toHaveLength(2);
-    expect(signals.every((s) => s.aborted)).toBe(true);
   });
 });

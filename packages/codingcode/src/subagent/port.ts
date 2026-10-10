@@ -9,7 +9,6 @@ import type { IncomingPart } from '../llm/types.js';
 export interface RunSubagentOptions {
   sessionId?: string;
   cwd: string;
-  signal?: AbortSignal;
   activeProfile?: ProfileName;
   permissionMode?: PermissionMode;
   model: string;

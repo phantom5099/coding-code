@@ -16,7 +16,8 @@ export type ErrorCode =
   | 'AGENT_LOOP_DETECTED'
   | 'EMPTY_RESPONSE'
   | 'SESSION_IO_ERROR'
-  | 'INVALID_INPUT';
+  | 'INVALID_INPUT'
+  | 'TURN_CONFLICT';
 
 export class AgentError extends Error {
   readonly _tag = 'AgentError';

@@ -1,12 +1,13 @@
-import { Effect, Either, Queue, Stream, Fiber, Layer } from 'effect';
+import { Effect, Either, Stream, Fiber, Layer } from 'effect';
 import { AgentError } from '../util/error.js';
 import { Result } from '../util/result.js';
 import { AgentService, ToolEnvPort } from './port.js';
-import type { RunTurnOptions, ToolEnv } from './port.js';
+import type { RunTurnOptions } from './port.js';
 import { ApprovalService, getToolNames } from '../approval/port.js';
 import { CheckpointService } from '../checkpoint/port.js';
 import { ContextService } from '../context/port.js';
 import { EventSinkService } from '../sink/port.js';
+import { TurnRegistryService } from '../turn/port.js';
 import { MailboxService } from '../session/mailbox.js';
 import { HookService } from '../hooks/port.js';
 import { LLMService } from '../llm/port.js';
@@ -19,7 +20,6 @@ import { TodoService } from '../todo/port.js';
 import { ToolExecutorService } from '../tools/port.js';
 import { buildSystemPrompt, renderSkillBlock } from './prompt.js';
 import type {
-  EndTransition,
   FrameBody,
   FrameError,
   ResponseMeta,
@@ -92,6 +92,7 @@ export const AgentLayer = Layer.effect(
     const mcp = yield* McpService;
     const context = yield* ContextService;
     const sink = yield* EventSinkService;
+    const turn = yield* TurnRegistryService;
     const mailbox = yield* MailboxService;
     const memory = yield* MemoryService;
     const llm = yield* LLMService;
@@ -116,6 +117,18 @@ export const AgentLayer = Layer.effect(
     const runTurn = (input: IncomingPart[], opts: RunTurnOptions) =>
       Effect.gen(function* () {
         const normalizedCwd = normalizePath(opts.cwd);
+
+        // 提交判定：命中活跃回合 → 输入进状态表，直接返回，不开回合
+        if (opts.sessionId) {
+          const verdict = yield* turn.submit(opts.sessionId, { id: opts.inputId!, parts: input });
+          if (verdict.kind === 'attached') {
+            return {
+              kind: 'queued' as const,
+              sessionId: opts.sessionId,
+              turnId: verdict.turnId,
+            };
+          }
+        }
 
         yield* rules.evictProjectRules(normalizedCwd);
         yield* hooks.reloadUserHooks(normalizedCwd);
@@ -149,129 +162,128 @@ export const AgentLayer = Layer.effect(
         }
 
         const state = yield* session.load(normalizedCwd, sessionId, parentSessionId);
+        const sid: string = sessionId;
+        const turnId = state.currentTurnId + 1;
 
-        const profileName = opts.activeProfile ?? state.activeProfile;
-        const effectivePerm = opts.permissionMode ?? state.permissionMode;
-        if (opts.permissionMode) {
-          yield* session.setPermissionMode(
-            normalizedCwd,
-            sessionId,
-            opts.permissionMode,
-            parentSessionId
-          );
-        }
-        if (opts.activeProfile) {
-          yield* session.setActiveProfile(
-            normalizedCwd,
-            sessionId,
-            opts.activeProfile,
-            parentSessionId
-          );
+        // 先于任何落盘：409 的 loser 不写 transcript、不建 checkpoint
+        if (
+          !(yield* turn.claim(sid, {
+            turnId,
+            parentSessionId: state.parentSessionId,
+            agentName: state.agentName,
+          }))
+        ) {
+          return yield* Effect.fail(new AgentError('TURN_CONFLICT', 'concurrent turn on session'));
         }
 
-        state.memorySnapshot = yield* memory.loadMemoryForPrompt(state.cwd);
-
-        const profile: AgentProfile | undefined = profileName
-          ? resolveProfile(profileName)
-          : undefined;
-
-        const mcpTools = yield* mcp.listProjectMcpTools(normalizedCwd);
-        const catalog = yield* executor.prepare(getToolNames(profileName), mcpTools);
-
-        const toolEnv = yield* toolEnvPort.getToolEnv();
-
-        yield* assertMediaAllowed(input, model);
-        const parts = yield* session.materializeInput(state, input);
-        const turnId = (yield* session.recordUser(state, parts)).turnId;
-
-        // 用户显式 @ 的 skill：按 path 回查权威数据，正文拼块后作为同回合的第二条 user 事件
-        if (opts.skills?.length) {
-          const all = yield* skills.getAll(state.cwd);
-          const chosen = all.filter((s) => opts.skills!.some((m) => m.path === s.skillPath));
-          if (chosen.length) {
-            const entries = yield* Effect.forEach(chosen, (s) =>
-              skills.readContent(s.skillPath).pipe(Effect.map((body) => ({ skill: s, body })))
-            );
-            yield* session.recordSystem(state, [textPart(renderSkillBlock(entries))]);
+        return yield* Effect.gen(function* () {
+          const profileName = opts.activeProfile ?? state.activeProfile;
+          const effectivePerm = opts.permissionMode ?? state.permissionMode;
+          if (opts.permissionMode) {
+            yield* session.setPermissionMode(normalizedCwd, sid, opts.permissionMode, parentSessionId);
           }
-        }
+          if (opts.activeProfile) {
+            yield* session.setActiveProfile(normalizedCwd, sid, opts.activeProfile, parentSessionId);
+          }
 
-        // checkpoint baseline
-        yield* checkpoint.snapshotBaseline(state.cwd, sessionId, turnId);
+          state.memorySnapshot = yield* memory.loadMemoryForPrompt(state.cwd);
 
-        // get rules text
-        const rulesText = yield* rules.getAllRules(state.cwd);
+          const profile: AgentProfile | undefined = profileName
+            ? resolveProfile(profileName)
+            : undefined;
 
-        // run agent loop：出站队列挂在 sink 上，本回合是它的唯一读者
-        const q = yield* sink.attach(sessionId);
-        const emit = (body: FrameBody) => Effect.runSync(sink.emit(sessionId, body));
-        const stream = runAgentLoop(
-          {
-            state,
-            model,
-            profile,
-            catalog,
-            systemPrompt: opts.systemPrompt,
-            toolEnv,
-            abortSignal: opts.signal,
-            rulesText,
-            sid: sessionId,
-            projectPath: state.cwd,
-            permissionMode: effectivePerm,
-          },
-          { q, emit, onEnd: () => Effect.runSync(sink.detach(sessionId)) }
-        );
+          const mcpTools = yield* mcp.listProjectMcpTools(normalizedCwd);
+          const catalog = yield* executor.prepare(getToolNames(profileName), mcpTools);
 
-        return { stream, sessionId };
-      });
+          const toolEnv = yield* toolEnvPort.getToolEnv();
 
-    function runAgentLoop(
-      opts: {
-        state: any;
-        model: string;
-        profile: AgentProfile | undefined;
-        abortSignal: AbortSignal | undefined;
-        catalog: ToolCatalog;
-        toolEnv: ToolEnv;
-        rulesText: string;
-        sid: string;
-        projectPath: string;
-        permissionMode: PermissionMode;
-        systemPrompt?: string;
-      },
-      out: {
-        q: Queue.Queue<FrameBody>;
-        emit: (body: FrameBody) => void;
-        onEnd: () => void;
-      }
-    ): AsyncGenerator<FrameBody> {
-      const program = agentLoopInternal(opts, out.emit);
+          yield* assertMediaAllowed(input, model);
+          const parts = yield* session.materializeInput(state, input);
+          yield* session.recordUser(state, parts);
 
-      return (async function* () {
-        const fiber = Effect.runFork(opts.toolEnv.provide(program));
-        if (opts.abortSignal) {
-          opts.abortSignal.addEventListener(
-            'abort',
-            () => {
-              Effect.runFork(Fiber.interrupt(fiber));
+          // 用户显式 @ 的 skill：按 path 回查权威数据，正文拼块后作为同回合的第二条 user 事件
+          if (opts.skills?.length) {
+            const all = yield* skills.getAll(state.cwd);
+            const chosen = all.filter((s) => opts.skills!.some((m) => m.path === s.skillPath));
+            if (chosen.length) {
+              const entries = yield* Effect.forEach(chosen, (s) =>
+                skills.readContent(s.skillPath).pipe(Effect.map((body) => ({ skill: s, body })))
+              );
+              yield* session.recordSystem(state, [textPart(renderSkillBlock(entries))]);
+            }
+          }
+
+          // checkpoint baseline
+          yield* checkpoint.snapshotBaseline(state.cwd, sid, turnId);
+
+          const rulesText = yield* rules.getAllRules(state.cwd);
+
+          // 出站队列挂在 sink 上，本回合是它的唯一读者
+          const q = yield* sink.attach(sid);
+          const emit = (body: FrameBody) => Effect.runSync(sink.emit(sid, body));
+
+          // 出生帧须在 attach 之后
+          yield* turn.transition(sid, { kind: 'start' });
+
+          // 回合出生：eager 段的最后一句
+          const program = agentLoopInternal(
+            {
+              state,
+              model,
+              profile,
+              catalog,
+              rulesText,
+              abortSignal: opts.signal,
+              sid,
+              projectPath: state.cwd,
+              permissionMode: effectivePerm,
+              systemPrompt: opts.systemPrompt,
             },
-            { once: true }
+            emit
           );
-          if (opts.abortSignal.aborted) Effect.runFork(Fiber.interrupt(fiber));
-        }
-
-        try {
-          const stream = Stream.fromQueue(out.q).pipe(
-            Stream.takeUntil((body: FrameBody) => isTurnEnd(body))
-          );
-          for await (const body of Stream.toAsyncIterable(stream) as AsyncIterable<FrameBody>) {
-            yield body;
+          const fiber = Effect.runFork(toolEnv.provide(program));
+          if (opts.signal) {
+            opts.signal.addEventListener('abort', () => Effect.runFork(Fiber.interrupt(fiber)), {
+              once: true,
+            });
+            if (opts.signal.aborted) Effect.runFork(Fiber.interrupt(fiber));
           }
-        } finally {
-          out.onEnd();
-        }
-      })();
-    }
+          yield* turn.arm(sid, () => Effect.runFork(Fiber.interrupt(fiber)));
+
+          // 搬帧器：只搬帧，不负责启动回合
+          const stream = (async function* () {
+            try {
+              for await (const body of Stream.toAsyncIterable(
+                Stream.fromQueue(q).pipe(Stream.takeUntil((b: FrameBody) => isTurnEnd(b)))
+              ) as AsyncIterable<FrameBody>) {
+                yield body;
+              }
+            } finally {
+              Effect.runSync(sink.detach(sid));
+            }
+          })();
+
+          return { kind: 'turn' as const, stream, sessionId: sid };
+        }).pipe(
+          // 出生前失败 → 落 error 终态（settle 幂等）
+          Effect.onError((cause) =>
+            turn
+              .transition(sid, {
+                kind: 'fail',
+                error: toFrameError(cause as unknown as AgentError),
+              })
+              .pipe(Effect.ignore)
+          ),
+          Effect.onInterrupt(() =>
+            turn
+              .transition(sid, {
+                kind: 'fail',
+                error: { message: 'turn aborted before start', code: 'AGENT_TERMINATED' },
+              })
+              .pipe(Effect.ignore)
+          )
+        );
+      });
 
     function agentLoopInternal(
       opts: {
@@ -301,15 +313,6 @@ export const AgentLayer = Layer.effect(
       } = opts;
       const { tools, lookup: toolLookup } = catalog;
 
-      let ended = false;
-      let deliveryPhase: 'currentTurn' | 'nextTurn' = 'currentTurn';
-      const offerEnd = (transition: EndTransition) =>
-        Effect.sync(() => {
-          if (ended) return;
-          ended = true;
-          emit({ family: 'transition', transition });
-        });
-
       return Effect.gen(function* () {
         const basePrompt = buildSystemPrompt({
           cwd: projectPath,
@@ -328,8 +331,33 @@ export const AgentLayer = Layer.effect(
 
         let lastResult: Result<string, AgentError> | null = null;
 
+        const sessionRef: SessionRef = {
+          cwd: state.cwd,
+          sessionId: state.sessionId,
+          parentSessionId: state.parentSessionId,
+          currentTurnId: state.currentTurnId,
+        };
+
+        /** 吸收本回合待投递的 steer 输入；返回条数 */
+        const absorbPendingInputs = () =>
+          Effect.gen(function* () {
+            let n = 0;
+            // steer 输入先于子代理结果，否则"用户指令"会排在"子代理汇报"之后
+            for (const ui of yield* turn.drain(sid)) {
+              // 与首输入同一条准入：不合法即抛错，整批输入随该 step 失败
+              yield* assertMediaAllowed(ui.parts, model);
+              const stored = yield* session.materializeInput(state, ui.parts);
+
+              const ev = yield* session.recordUserInput(state, stored);
+              yield* context.absorb(sessionRef, [ev]);
+              emit({ family: 'event', event: { type: 'user_input', id: ui.id, parts: stored } });
+              n++;
+            }
+            return n;
+          });
+
         yield* hooks.emit('agent.turn.start', { sessionId: sid, projectPath });
-        emit({ family: 'transition', transition: { to: 'start', turnId: state.currentTurnId } });
+        // 出生帧已在 eager 段投过，这里不再重复
 
         for (let step = 0; step < maxSteps; step++) {
           yield* hooks.emitDecision('agent.step.before', {
@@ -339,19 +367,12 @@ export const AgentLayer = Layer.effect(
           });
 
           if (step === 0) {
-            emit({ family: 'transition', transition: { to: 'executing' } });
+            yield* turn.transition(sid, { kind: 'running' });
           }
 
-          const sessionRef: SessionRef = {
-            cwd: state.cwd,
-            sessionId: state.sessionId,
-            parentSessionId: state.parentSessionId,
-            currentTurnId: state.currentTurnId,
-          };
+          let drainedCount = yield* absorbPendingInputs();
 
-          const mayDrain = deliveryPhase === 'currentTurn' && step > 0;
-          let drainedCount = 0;
-          if (mayDrain) {
+          if (step > 0) {
             for (const item of yield* mailbox.drain(state.sessionId)) {
               const ev = yield* session.recordSubagentResult(state, item);
               yield* context.absorb(sessionRef, [ev]);
@@ -361,7 +382,10 @@ export const AgentLayer = Layer.effect(
 
           const history = yield* Effect.either(context.getHistory(sessionRef, model));
           if (Either.isLeft(history)) {
-            yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(history.left) });
+            yield* turn.transition(sid, {
+              kind: 'fail',
+              error: toFrameError(history.left),
+            });
             yield* hooks.emit('agent.turn.end', {
               sessionId: sid,
               turnId: state.currentTurnId,
@@ -407,10 +431,6 @@ export const AgentLayer = Layer.effect(
                     });
                   } else {
                     responded = part.usage ? { usage: part.usage } : {};
-                    emit({
-                      family: 'transition',
-                      transition: { to: 'executing', responded },
-                    });
                   }
                 }
               },
@@ -418,7 +438,7 @@ export const AgentLayer = Layer.effect(
             })
           );
           if (Either.isLeft(streamed)) {
-            yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(streamed.left) });
+            yield* turn.transition(sid, { kind: 'fail', error: toFrameError(streamed.left) });
             yield* hooks.emit('agent.turn.end', {
               sessionId: sid,
               turnId: state.currentTurnId,
@@ -428,6 +448,9 @@ export const AgentLayer = Layer.effect(
             return Result.err(streamed.left);
           }
 
+          // 流结束帧（携带 usage）：在流外统一投递
+          yield* turn.transition(sid, { kind: 'running', responded });
+
           if (toolCalls.length === 0) {
             if (content.trim() === '' && !abortSignal?.aborted) {
               const detail =
@@ -436,7 +459,7 @@ export const AgentLayer = Layer.effect(
                 'EMPTY_RESPONSE',
                 `model returned an empty response${detail}`
               );
-              yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(emptyErr) });
+              yield* turn.transition(sid, { kind: 'fail', error: toFrameError(emptyErr) });
               yield* hooks.emit('agent.turn.end', {
                 sessionId: sid,
                 turnId: state.currentTurnId,
@@ -449,7 +472,6 @@ export const AgentLayer = Layer.effect(
 
             const assistantEv = yield* session.recordAssistant(state, content, [], responded.usage);
             yield* context.absorb(sessionRef, [assistantEv]);
-            deliveryPhase = 'nextTurn';
             const stopDecision = yield* hooks.emitDecision('agent.turn.stop', {
               sessionId: sid,
               content,
@@ -463,7 +485,7 @@ export const AgentLayer = Layer.effect(
                   'AGENT_LOOP_DETECTED',
                   'max stop continuations exceeded'
                 );
-                yield* offerEnd({ to: 'end', reason: 'error', error: toFrameError(loopErr) });
+                yield* turn.transition(sid, { kind: 'fail', error: toFrameError(loopErr) });
                 yield* hooks.emit('agent.turn.end', {
                   sessionId: sid,
                   turnId: state.currentTurnId,
@@ -480,7 +502,10 @@ export const AgentLayer = Layer.effect(
               continue;
             }
 
-            yield* offerEnd({ to: 'end', reason: 'done' });
+            // 终稿后有 steer 输入 → 吸收进上下文并续跑，turnId 不变、不重发 start 帧
+            if ((yield* absorbPendingInputs()) > 0) continue;
+
+            yield* turn.transition(sid, { kind: 'complete', reason: 'done' });
             lastResult = Result.ok(content);
             yield* hooks.emit('agent.turn.end', {
               sessionId: sid,
@@ -574,7 +599,7 @@ export const AgentLayer = Layer.effect(
         if (lastResult) return lastResult;
 
         const maxErr = AgentError.maxStepsReached(maxSteps);
-        yield* offerEnd({ to: 'end', reason: 'maxSteps' });
+        yield* turn.transition(sid, { kind: 'complete', reason: 'maxSteps' });
         yield* hooks.emit('agent.turn.end', {
           sessionId: sid,
           turnId: state.currentTurnId,
@@ -586,28 +611,29 @@ export const AgentLayer = Layer.effect(
         Effect.interruptible,
         Effect.onInterrupt(() =>
           Effect.gen(function* () {
-            yield* offerEnd({ to: 'end', reason: 'aborted' });
+            yield* turn.transition(sid, { kind: 'interrupt' });
             yield* hooks
               .emit('agent.turn.end', {
-                sessionId: opts.sid,
-                turnId: opts.state.currentTurnId,
+                sessionId: sid,
+                turnId: state.currentTurnId,
                 status: 'aborted',
-                projectPath: opts.projectPath,
+                projectPath,
               })
               .pipe(Effect.ignore);
           })
         ),
         Effect.ensuring(
           Effect.gen(function* () {
-            yield* offerEnd({
-              to: 'end',
-              reason: 'error',
-              error: { message: 'agent terminated without end frame', code: 'AGENT_TERMINATED' },
-            });
-            yield* checkpoint
-              .snapshotFinal(opts.projectPath, opts.sid, opts.state.currentTurnId)
+            yield* turn
+              .transition(sid, {
+                kind: 'fail',
+                error: { message: 'agent terminated without end frame', code: 'AGENT_TERMINATED' },
+              })
               .pipe(Effect.ignore);
-            yield* flushMemoryInBackground(opts.state.sessionId, opts.model, opts.projectPath);
+            yield* checkpoint
+              .snapshotFinal(state.cwd, sid, state.currentTurnId)
+              .pipe(Effect.ignore);
+            yield* flushMemoryInBackground(state.sessionId, model, state.cwd);
           })
         )
       );

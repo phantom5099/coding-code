@@ -1,4 +1,4 @@
-import { Context, Effect, Fiber, Layer, Option, Stream, SubscriptionRef } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 import { AgentError } from '../util/error.js';
 import { isTurnEnd } from '../sink/types.js';
 import type { EndTransition, FrameBody } from '../sink/types.js';
@@ -11,18 +11,8 @@ import { loadConfig } from '../infra/config.js';
 import { MailboxService } from '../session/mailbox.js';
 import { EventSinkService } from '../sink/port.js';
 import { HookService } from '../hooks/port.js';
+import { TurnRegistryService } from '../turn/port.js';
 import { SubagentRunnerService } from './port.js';
-
-export type SubagentRunStatus =
-  | { readonly kind: 'running' }
-  | { readonly kind: 'ended'; readonly end: EndTransition };
-
-/** wait 只回信号、不回内容 —— 内容已由父回合 drain 时写进父 transcript */
-export type WaitOutcome = 'completed' | 'failed' | 'timeout';
-
-export const SUBAGENT_WAIT_MIN_MS = 10_000;
-export const SUBAGENT_WAIT_DEFAULT_MS = 30_000;
-export const SUBAGENT_WAIT_MAX_MS = 3_600_000;
 
 export interface SpawnOptions {
   prompt: string;
@@ -35,10 +25,9 @@ export interface SpawnOptions {
   systemPrompt?: string;
 }
 
+/** 终态由子会话自己的 finish 写入；本表只负责派发与投递 */
 export interface SubagentRunRegistryShape {
   spawn(opts: SpawnOptions): Effect.Effect<{ sessionId: string; agentName: string }, AgentError>;
-  wait(sessionId: string, timeoutMs: number): Effect.Effect<WaitOutcome, AgentError>;
-  stopAll(parentSessionId: string): Effect.Effect<number>;
 }
 
 export class SubagentRunRegistryService extends Context.Tag('SubagentRunRegistry')<
@@ -51,9 +40,6 @@ interface SubagentRun {
   readonly parentSessionId: string;
   readonly parentCwd: string;
   readonly agentName: string;
-  readonly status: SubscriptionRef.SubscriptionRef<SubagentRunStatus>;
-  readonly abort: AbortController;
-  fiber?: Fiber.Fiber<unknown, never>;
 }
 
 const BODY_TOKEN_BUDGET = 900;
@@ -128,7 +114,10 @@ export const SubagentRunRegistryLayer = Layer.scoped(
     const runner = yield* SubagentRunnerService;
     const sink = yield* EventSinkService;
     const hooks = yield* HookService;
-    const runs = new Map<string, SubagentRun>(); // 键 = 子会话 sessionId；parentSessionId 只是条目上的字段
+    const turn = yield* TurnRegistryService;
+
+    /** 曾派发过子会话的父会话 id，仅用于 layer 终结时请求停止 */
+    const parents = new Set<string>();
 
     /** 帧直投父会话的出站队列：EventSink 的键就是收件人会话，不需要任何回调透传 */
     const emitSubagent = (
@@ -141,18 +130,6 @@ export const SubagentRunRegistryLayer = Layer.scoped(
         family: 'event',
         event: { type: 'subagent_event', sessionId, agentName, status },
       });
-
-    /** 同步读当前值：SubscriptionRef 的 get 随时可读、读不走 */
-    const currentStatus = (run: SubagentRun): SubagentRunStatus =>
-      Effect.runSync(SubscriptionRef.get(run.status));
-
-    const countRunning = (parentSessionId: string): number => {
-      let n = 0;
-      for (const run of runs.values()) {
-        if (run.parentSessionId === parentSessionId && currentStatus(run).kind === 'running') n++;
-      }
-      return n;
-    };
 
     // 只入队，不写盘：写盘由父回合在自己的 drain 点做（父回合循环手里才有 state）
     const drainRun = (run: SubagentRun, stream: AsyncGenerator<FrameBody, unknown, unknown>) =>
@@ -172,7 +149,9 @@ export const SubagentRunRegistryLayer = Layer.scoped(
           })
           .pipe(Effect.ignore);
 
-        yield* SubscriptionRef.set(run.status, { kind: 'ended', end: outcome.end });
+        // 终态由子会话自己的 finish 写入（turn.transition）；这里只补投递信号，
+        // 让 wait 在"结果已进父会话 mailbox"之后才返回
+        yield* turn.markDelivered(run.sessionId);
         yield* emitSubagent(
           run.parentSessionId,
           run.sessionId,
@@ -189,16 +168,15 @@ export const SubagentRunRegistryLayer = Layer.scoped(
 
     const spawn = (opts: SpawnOptions) =>
       Effect.gen(function* () {
-        if (countRunning(opts.parentSessionId) >= loadConfig().subagent.maxBackground) {
+        if ((yield* turn.runningChildren(opts.parentSessionId)) >= loadConfig().subagent.maxBackground) {
           return yield* Effect.fail(
             new AgentError('TOOL_EXECUTION_FAILED', 'Concurrent subagent limit reached')
           );
         }
 
-        const abort = new AbortController();
+        // 子会话的可停性由 runTurn 的 arm 登记的 Fiber.interrupt 承担
         const { stream, sessionId } = yield* runner.runSubagent([textPart(opts.prompt)], {
           cwd: opts.parentCwd,
-          signal: abort.signal, // 子代理自己的 signal，与父回合无关
           activeProfile: opts.parentProfile,
           permissionMode: BYPASS_PERMISSION_MODE,
           parentSessionId: opts.parentSessionId,
@@ -207,71 +185,27 @@ export const SubagentRunRegistryLayer = Layer.scoped(
           systemPrompt: opts.systemPrompt,
         });
 
-        const status = yield* SubscriptionRef.make<SubagentRunStatus>({ kind: 'running' });
         const run: SubagentRun = {
           sessionId,
           parentSessionId: opts.parentSessionId,
           parentCwd: opts.parentCwd,
           agentName: opts.agentName,
-          status,
-          abort,
         };
-        runs.set(sessionId, run);
+        parents.add(opts.parentSessionId);
         yield* emitSubagent(opts.parentSessionId, sessionId, opts.agentName, 'spawned');
 
-        run.fiber = yield* Effect.forkDaemon(drainRun(run, stream));
+        yield* Effect.forkDaemon(drainRun(run, stream));
         return { sessionId, agentName: opts.agentName };
-      });
-
-    const wait = (sessionId: string, timeoutMs: number): Effect.Effect<WaitOutcome, AgentError> =>
-      Effect.gen(function* () {
-        const run = runs.get(sessionId);
-        if (!run) {
-          return yield* Effect.fail(
-            new AgentError('TOOL_EXECUTION_FAILED', `Unknown subagent: ${sessionId}`)
-          );
-        }
-        // 等状态通道的后续值；changes 的首次发射即当前值 ⇒ 已终态的 run 立即返回
-        const settled = run.status.changes.pipe(
-          Stream.filterMap((s) =>
-            s.kind === 'ended' ? Option.some(s.end) : Option.none<EndTransition>()
-          ),
-          Stream.runHead,
-          Effect.map(
-            (opt): WaitOutcome =>
-              Option.isNone(opt) ? 'timeout' : opt.value.reason === 'done' ? 'completed' : 'failed'
-          )
-        );
-
-        return yield* Effect.race(
-          Effect.sleep(timeoutMs).pipe(Effect.as<WaitOutcome>('timeout')),
-          settled
-        );
-      });
-
-    const stopAll = (parentSessionId: string): Effect.Effect<number> =>
-      Effect.sync(() => {
-        let stopped = 0;
-        for (const run of runs.values()) {
-          if (run.parentSessionId !== parentSessionId) continue;
-          if (run.abort.signal.aborted) continue; // 已请求过停止，不重复计数
-          if (currentStatus(run).kind !== 'running') continue;
-          run.abort.abort();
-          stopped++;
-        }
-        return stopped;
       });
 
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
-        for (const run of runs.values()) {
-          run.abort.abort();
-          if (run.fiber) Effect.runFork(Fiber.interrupt(run.fiber));
-        }
-        runs.clear();
+        // 终态归属由 turn 的记录承担；这里只请求停止本层仍在跑的派生会话
+        for (const parentSessionId of parents) void turn.stopChildren(parentSessionId);
+        parents.clear();
       })
     );
 
-    return { spawn, wait, stopAll };
+    return { spawn };
   })
 );

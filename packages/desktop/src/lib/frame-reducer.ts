@@ -28,6 +28,8 @@ export interface StreamEffects {
   setCompacted(): void;
   syncTurnId(turnId: number): void;
   newId(): string;
+  /** steer 输入已被服务端投递（user_input 帧到达）：从队列区移除对应项 */
+  onInputDelivered?(id: string): void;
 }
 
 function toResultItem(outcome: ToolOutcome): { output: string; exitCode: number } {
@@ -124,6 +126,10 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
         agentName: e.agentName,
         status: e.status === 'spawned' ? 'running' : e.status,
       });
+      return;
+    case 'user_input':
+      fx.applyItem({ id: `steer-${e.id}`, type: 'message', role: 'user', parts: [...e.parts] });
+      fx.onInputDelivered?.(e.id);
       return;
     case 'tool_result': {
       if (e.name === 'submit_plan' && e.outcome.status !== 'ok') state.planTitle = null;

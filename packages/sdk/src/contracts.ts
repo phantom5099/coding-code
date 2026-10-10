@@ -131,17 +131,28 @@ export type InputPart =
 export const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
 
 export interface AgentRuntimeClient {
-  sendMessage(
+  /**
+   * 提交一轮输入。
+   *
+   * 命中活跃回合时服务端把输入并入当前回合（202），返回 `{ kind: 'queued' }`；
+   * 否则开新回合并返回 `{ kind: 'turn', stream }`。
+   */
+  submitInput(
     input: InputPart[],
     options: {
       sessionId?: string;
+      /** 前端队列项 id：命中活跃回合时原样回显在 user_input 帧上 */
+      inputId?: string;
       cwd: string;
       model?: string;
       signal?: AbortSignal;
       /** 用户在输入框显式 @ 的 skill，name 供对齐、path 为唯一查找键 */
       skills?: Array<{ name: string; path: string }>;
     }
-  ): AsyncGenerator<Frame>;
+  ): Promise<
+    | { kind: 'turn'; stream: AsyncGenerator<Frame> }
+    | { kind: 'queued'; sessionId: string; turnId: number }
+  >;
 
   sendApprovalResponse(input: {
     sessionId: string;

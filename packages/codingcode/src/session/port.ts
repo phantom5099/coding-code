@@ -48,6 +48,11 @@ export interface SessionShape {
   ): Effect.Effect<Map<string, string>, AgentError>;
 
   recordUser(state: SessionStoreState, content: StoredPart[]): Effect.Effect<UserEvent, AgentError>;
+  /** steer 输入：归属当前回合，不递增 turnId、不改标题 */
+  recordUserInput(
+    state: SessionStoreState,
+    content: StoredPart[]
+  ): Effect.Effect<UserEvent, AgentError>;
   recordSystem(
     state: SessionStoreState,
     content: StoredPart[]

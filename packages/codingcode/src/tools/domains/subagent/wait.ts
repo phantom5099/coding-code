@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import { Effect } from 'effect';
 import type { ToolDefinition } from '../../types.js';
-import {
-  SubagentRunRegistryService,
-  SUBAGENT_WAIT_DEFAULT_MS,
-  SUBAGENT_WAIT_MIN_MS,
-  SUBAGENT_WAIT_MAX_MS,
-} from '../../../subagent/registry.js';
+import { AgentError } from '../../../util/error.js';
+import { TurnRegistryService } from '../../../turn/port.js';
 
-export const waitAgentTool: ToolDefinition<SubagentRunRegistryService> = {
+export const SUBAGENT_WAIT_MIN_MS = 10_000;
+export const SUBAGENT_WAIT_DEFAULT_MS = 30_000;
+export const SUBAGENT_WAIT_MAX_MS = 3_600_000;
+
+export const waitAgentTool: ToolDefinition<TurnRegistryService> = {
   name: 'wait_agent',
   concurrencySafe: true,
   description:
@@ -26,13 +26,18 @@ export const waitAgentTool: ToolDefinition<SubagentRunRegistryService> = {
   }),
   execute: (args, _ctx) =>
     Effect.gen(function* () {
-      const registry = yield* SubagentRunRegistryService;
+      const turn = yield* TurnRegistryService;
       const { sessionId, timeoutMs } = args as { sessionId: string; timeoutMs?: number };
       const clamped = Math.min(
         Math.max(timeoutMs ?? SUBAGENT_WAIT_DEFAULT_MS, SUBAGENT_WAIT_MIN_MS),
         SUBAGENT_WAIT_MAX_MS
       );
-      const outcome = yield* registry.wait(sessionId, clamped);
+      const outcome = yield* turn.wait(sessionId, clamped);
+      if (outcome === undefined) {
+        return yield* Effect.fail(
+          new AgentError('TOOL_EXECUTION_FAILED', `Unknown subagent: ${sessionId}`)
+        );
+      }
       return outcome;
     }),
 };

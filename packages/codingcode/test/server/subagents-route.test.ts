@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { createServer } from '../../src/server/index.js';
-import { SubagentRunRegistryService } from '../../src/subagent/registry.js';
+import { TurnRegistryService } from '../../src/turn/port.js';
 
-async function makeApp(stopAll: (sessionId: string) => Effect.Effect<number>) {
-  const layer = Layer.succeed(SubagentRunRegistryService, { stopAll } as any);
+async function makeApp(stopChildren: (sessionId: string) => Effect.Effect<number>) {
+  const layer = Layer.succeed(TurnRegistryService, { stopChildren } as any);
   return createServer(ManagedRuntime.make(layer));
 }
 
@@ -16,7 +16,7 @@ describe('POST /api/sessions/:id/subagents/stop', () => {
     expect(await res.json()).toEqual({ stopped: 3 });
   });
 
-  it('把路径里的 sessionId 原样透给注册表', async () => {
+  it('把路径里的 sessionId 原样透给回合注册表', async () => {
     const seen: string[] = [];
     const app = await makeApp((sessionId) =>
       Effect.sync(() => {

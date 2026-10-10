@@ -54,15 +54,19 @@ const STREAM: Frame[] = [
   { ...ENVELOPE, seq: 7, family: 'transition', transition: { to: 'end', reason: 'done' } },
 ];
 
-describe('createHttpAgentClient.sendMessage', () => {
+describe('createHttpAgentClient.submitInput', () => {
   it('decodes frame envelopes from the SSE stream', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(createSseResponse(STREAM));
 
     const request = createRequestHelpers('http://localhost:8080');
     const client = createHttpAgentClient('http://localhost:8080', request);
 
+    const result = await client.submitInput(input('hi'), { sessionId: 'sess-123', cwd: '/tmp' });
+    expect(result.kind).toBe('turn');
+    if (result.kind !== 'turn') throw new Error('expected turn');
+
     const frames: Frame[] = [];
-    for await (const frame of client.sendMessage(input('hi'), { sessionId: 'sess-123', cwd: '/tmp' })) {
+    for await (const frame of result.stream) {
       frames.push(frame);
     }
 
@@ -90,8 +94,11 @@ describe('createHttpAgentClient.sendMessage', () => {
     const request = createRequestHelpers('http://localhost:8080');
     const client = createHttpAgentClient('http://localhost:8080', request);
 
+    const result = await client.submitInput(input('hi'), { sessionId: 'sess-123', cwd: '/tmp' });
+    if (result.kind !== 'turn') throw new Error('expected turn');
+
     const frames: Frame[] = [];
-    for await (const frame of client.sendMessage(input('hi'), { sessionId: 'sess-123', cwd: '/tmp' })) {
+    for await (const frame of result.stream) {
       frames.push(frame);
     }
 
@@ -111,8 +118,11 @@ describe('createHttpAgentClient.sendMessage', () => {
     const request = createRequestHelpers('http://localhost:8080');
     const client = createHttpAgentClient('http://localhost:8080', request);
 
+    const result = await client.submitInput(input('hi'), { cwd: '/tmp' });
+    if (result.kind !== 'turn') throw new Error('expected turn');
+
     const frames: Frame[] = [];
-    for await (const frame of client.sendMessage(input('hi'), { cwd: '/tmp' })) {
+    for await (const frame of result.stream) {
       frames.push(frame);
     }
 
@@ -142,8 +152,11 @@ describe('createHttpAgentClient.sendMessage', () => {
     const request = createRequestHelpers('http://localhost:8080');
     const client = createHttpAgentClient('http://localhost:8080', request);
 
+    const result = await client.submitInput(input('hi'), { sessionId: 's', cwd: '/tmp' });
+    if (result.kind !== 'turn') throw new Error('expected turn');
+
     const frames: Frame[] = [];
-    for await (const c of client.sendMessage(input('hi'), { sessionId: 's', cwd: '/tmp' })) {
+    for await (const c of result.stream) {
       frames.push(c);
     }
 

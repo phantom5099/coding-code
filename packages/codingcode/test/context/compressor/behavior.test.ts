@@ -20,6 +20,7 @@ import { estimateTokens } from '../../../src/context/tokens.js';
 import { useTempProjectBase } from '../../helpers/project-base.js';
 import { ContextLayer } from '../../../src/context/context.js';
 import { EventSinkLayer } from '../../../src/sink/sink.js';
+import { TurnRegistryLayer } from '../../../src/turn/registry.js';
 
 // 上下文窗口现在由 catalog 按模型值现取，测试里钉死成一个可控值
 const windowState = vi.hoisted(() => ({ value: 128000 }));
@@ -113,7 +114,12 @@ const FailingLLM = {
 } as any;
 
 function makeTestLayer(llm: unknown) {
-  return Layer.mergeAll(SessionLayer, Layer.succeed(LLMService, llm as any), EventSinkLayer);
+  return Layer.mergeAll(
+    SessionLayer,
+    Layer.succeed(LLMService, llm as any),
+    EventSinkLayer,
+    TurnRegistryLayer.pipe(Layer.provide(EventSinkLayer))
+  );
 }
 
 async function getCtxService(llm: unknown): Promise<ContextShape> {

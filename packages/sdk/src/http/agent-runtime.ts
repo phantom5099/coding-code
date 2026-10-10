@@ -12,11 +12,11 @@ export function createHttpAgentClient(
   const { apiPost } = request;
 
   return {
-    async *sendMessage(input, { sessionId, cwd, model, signal, skills }) {
+    async submitInput(input, { sessionId, inputId, cwd, model, signal, skills }) {
       const path = `/api/sessions/${sessionId || '_'}/messages`;
       const response = await fetch(`${baseUrl}${path}`, {
         method: 'POST',
-        body: JSON.stringify({ input, cwd, model, skills }),
+        body: JSON.stringify({ input, inputId, cwd, model, skills }),
         headers: { 'Content-Type': 'application/json' },
         signal,
       });
@@ -24,14 +24,24 @@ export function createHttpAgentClient(
         throw new ApiError(response.status, path, await parseErrorBody(response));
       }
 
-      for await (const data of parseSseStream(response)) {
-        const decoded = decodeFrame(data);
-        if (!decoded.ok) {
-          console.warn(`[agent-runtime] dropped frame (${decoded.reason})`, decoded.raw);
-          continue;
-        }
-        yield decoded.frame;
+      // 202：输入已并入活跃回合，没有流可读
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('text/event-stream')) {
+        const body = (await response.json()) as { sessionId: string; turnId: number };
+        return { kind: 'queued', sessionId: body.sessionId, turnId: body.turnId };
       }
+
+      const stream = (async function* () {
+        for await (const data of parseSseStream(response)) {
+          const decoded = decodeFrame(data);
+          if (!decoded.ok) {
+            console.warn(`[agent-runtime] dropped frame (${decoded.reason})`, decoded.raw);
+            continue;
+          }
+          yield decoded.frame;
+        }
+      })();
+      return { kind: 'turn', stream };
     },
 
     async sendApprovalResponse({ sessionId, approvalId, response }) {

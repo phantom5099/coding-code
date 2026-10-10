@@ -10,7 +10,7 @@ describe('Desktop: InputBox "查看计划" button', () => {
   const agentWorkspaceSource = sourceContent('agent/AgentWorkspace.tsx');
 
   it('imports FileText from lucide-react', () => {
-    expect(agentWorkspaceSource).toMatch(/FileText.*from\s+['"]lucide-react['"]/);
+    expect(agentWorkspaceSource).toMatch(/FileText[\s\S]*?from\s+['"]lucide-react['"]/);
   });
 
   it('derives planExists from the agent store', () => {

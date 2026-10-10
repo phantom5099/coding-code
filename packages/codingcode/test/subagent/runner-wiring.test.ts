@@ -13,6 +13,7 @@ import { CheckpointService } from '../../src/checkpoint/port.js';
 import { ContextService } from '../../src/context/port.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
 import { MailboxLayer } from '../../src/session/mailbox.js';
+import { TurnRegistryLayer } from '../../src/turn/registry.js';
 import { LLMService } from '../../src/llm/port.js';
 import { AgentError } from '../../src/util/error.js';
 import { MemoryService } from '../../src/memory/port.js';
@@ -126,6 +127,8 @@ const TodoMock = Layer.succeed(TodoService, {
   reset: () => {},
 } as any);
 
+const TurnWithDeps = TurnRegistryLayer.pipe(Layer.provide(EventSinkLayer));
+
 const AgentDeps = Layer.mergeAll(
   SessionLayer,
   Layer.succeed(ToolExecutorService, {
@@ -150,6 +153,7 @@ const AgentDeps = Layer.mergeAll(
     dispose: () => Effect.void,
   } as any),
   EventSinkLayer,
+  TurnWithDeps,
   MailboxLayer,
   Layer.succeed(MemoryService, {
     loadMemoryForPrompt: () => Effect.succeed(''),

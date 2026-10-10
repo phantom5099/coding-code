@@ -13,8 +13,11 @@ import { assetNameFor, writeAsset } from '../../src/session/assets.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { ContextLayer, transcriptPathFor } from '../../src/context/context.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
+import { TurnRegistryLayer } from '../../src/turn/registry.js';
 
 useTempProjectBase();
+
+const TurnWithDeps = TurnRegistryLayer.pipe(Layer.provide(EventSinkLayer));
 
 const TestLayer = Layer.mergeAll(
   SessionLayer,
@@ -22,7 +25,8 @@ const TestLayer = Layer.mergeAll(
     complete: () => Effect.fail(new Error('no llm')),
     completeStream: () => (async function* () {})(),
   } as any),
-  EventSinkLayer
+  EventSinkLayer,
+  TurnWithDeps
 );
 
 const CWD = '/tmp/test';

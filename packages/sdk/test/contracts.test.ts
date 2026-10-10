@@ -34,11 +34,11 @@ type _ForkTurnsIsUITurn = ForkResult['turns'] extends UITurn[] ? true : never;
 type _ContextTurnsIsUITurn = RollbackContextResult['turns'] extends UITurn[] ? true : never;
 
 describe('client contracts', () => {
-  it('http agent 只暴露 sendMessage / sendApprovalResponse / compact', () => {
+  it('http agent 只暴露 submitInput / sendApprovalResponse / compact', () => {
     expect(Object.keys(httpAgent).sort()).toEqual([
       'compact',
       'sendApprovalResponse',
-      'sendMessage',
+      'submitInput',
     ]);
   });
 

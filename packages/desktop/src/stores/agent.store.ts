@@ -24,6 +24,10 @@ function appendText(parts: ContentPart[], text: string): void {
   else parts.push({ type: 'text', text });
 }
 
+function randomId(): string {
+  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 11);
+}
+
 interface TodoPanelState {
   items: TodoItem[];
   hasSeenNonEmptyTodo: boolean;
@@ -33,6 +37,13 @@ interface TodoPanelState {
 export interface PendingPlan {
   sessionId: string;
   title: string;
+}
+
+export interface QueuedInput {
+  id: string;
+  /** 本地形态：本地媒体带 dataUrl，提交时才转线上形状 */
+  parts: ContentPart[];
+  status: 'queued' | 'sending';
 }
 
 export interface StoredProfile {
@@ -54,6 +65,7 @@ interface AgentState {
   todoByThreadId: Record<string, TodoPanelState>;
   pendingInput: string | null;
   pendingPlanByThreadId: Record<string, PendingPlan | null>;
+  queuedInputsByThreadId: Record<string, QueuedInput[]>;
   usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>;
   profileByThreadId: Record<string, StoredProfile>;
   isCompressing: boolean;
@@ -112,6 +124,10 @@ interface AgentActions {
   updateTurnId: (threadId: string, oldTurnId: string, newTurnId: string) => void;
   completeTurn: (threadId: string, turnId: string, status: 'completed' | 'error') => void;
   setPendingInput: (input: string | null) => void;
+  queueInput: (threadId: string, parts: ContentPart[]) => void;
+  removeQueuedInput: (threadId: string, id: string) => void;
+  markQueueSending: (threadId: string, id: string) => void;
+  reorderQueuedInputs: (threadId: string, from: number, to: number) => void;
   clearRunningTurns: (threadId: string) => void;
   applyTodoUpdate: (threadId: string, items: TodoItem[]) => void;
   toggleTodoCollapsed: (threadId: string) => void;
@@ -133,6 +149,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       todoByThreadId: {},
       pendingInput: null,
       pendingPlanByThreadId: {},
+      queuedInputsByThreadId: {},
       usageByThreadId: {},
       profileByThreadId: {},
       isCompressing: false,
@@ -211,6 +228,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           delete s.todoByThreadId[id];
           delete s.pendingPlanByThreadId[id];
           delete s.profileByThreadId[id];
+          delete s.queuedInputsByThreadId[id];
         }),
 
       upsertThread: (thread) =>
@@ -313,6 +331,11 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           for (const id of Object.keys(s.profileByThreadId)) {
             if (!incomingIds.has(id)) {
               delete s.profileByThreadId[id];
+            }
+          }
+          for (const id of Object.keys(s.queuedInputsByThreadId)) {
+            if (!incomingIds.has(id)) {
+              delete s.queuedInputsByThreadId[id];
             }
           }
         });
@@ -469,6 +492,35 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setPendingInput: (input) =>
         set((s) => {
           s.pendingInput = input;
+        }),
+
+      queueInput: (threadId, parts) =>
+        set((s) => {
+          const list = s.queuedInputsByThreadId[threadId] ?? [];
+          list.push({ id: randomId(), parts, status: 'queued' });
+          s.queuedInputsByThreadId[threadId] = list;
+        }),
+
+      removeQueuedInput: (threadId, id) =>
+        set((s) => {
+          const list = s.queuedInputsByThreadId[threadId];
+          if (!list) return;
+          s.queuedInputsByThreadId[threadId] = list.filter((q) => q.id !== id);
+        }),
+
+      markQueueSending: (threadId, id) =>
+        set((s) => {
+          const item = s.queuedInputsByThreadId[threadId]?.find((q) => q.id === id);
+          if (item) item.status = 'sending';
+        }),
+
+      reorderQueuedInputs: (threadId, from, to) =>
+        set((s) => {
+          const list = s.queuedInputsByThreadId[threadId];
+          if (!list) return;
+          if (from < 0 || from >= list.length || to < 0 || to >= list.length || from === to) return;
+          const [moved] = list.splice(from, 1);
+          if (moved) list.splice(to, 0, moved);
         }),
 
       setPendingPlan: (threadId, plan) =>

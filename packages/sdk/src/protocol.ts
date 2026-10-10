@@ -1,4 +1,5 @@
 import type { TodoItem, TokenUsage } from './types.js';
+import type { StoredContentPart } from './dto.js';
 
 export type EndReason = 'done' | 'error' | 'maxSteps' | 'aborted';
 
@@ -58,6 +59,11 @@ export type RuntimeEvent =
       readonly sessionId: string;
       readonly agentName: string;
       readonly status: 'spawned' | 'completed' | 'failed';
+    }
+  | {
+      readonly type: 'user_input';
+      readonly id: string;
+      readonly parts: readonly StoredContentPart[];
     };
 
 export interface Fatal {

@@ -6,6 +6,7 @@ import { ContextLayer } from '../../src/context/context.js';
 import { SessionService } from '../../src/session/port.js';
 import { LLMService } from '../../src/llm/port.js';
 import { EventSinkLayer } from '../../src/sink/sink.js';
+import { TurnRegistryLayer } from '../../src/turn/registry.js';
 import type { SessionEvent } from '../../src/session/types.js';
 import type { SessionRef } from '../../src/session/types.js';
 import { text } from '../helpers/parts.js';
@@ -44,7 +45,16 @@ function makeLayer(counting: ReturnType<typeof makeCountingSession>, summary = S
     complete: () => Effect.succeed({ content: summary }),
     completeStream: () => (async function* () {})(),
   } as any);
-  return ContextLayer.pipe(Layer.provide(Layer.mergeAll(sessionLayer, llmLayer, EventSinkLayer)));
+  return ContextLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        sessionLayer,
+        llmLayer,
+        EventSinkLayer,
+        TurnRegistryLayer.pipe(Layer.provide(EventSinkLayer))
+      )
+    )
+  );
 }
 
 async function getCtx(counting: ReturnType<typeof makeCountingSession>): Promise<ContextShape> {
