@@ -124,7 +124,7 @@ const HookMock = Layer.succeed(HookService, {
 const TodoMock = Layer.succeed(TodoService, {
   read: () => [],
   write: () => {},
-  reset: () => {},
+  dispose: () => Effect.void,
 } as any);
 
 const TurnWithDeps = TurnRegistryLayer.pipe(Layer.provide(EventSinkLayer));

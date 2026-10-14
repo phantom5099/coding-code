@@ -36,6 +36,8 @@ const COMPACTABLE_TOOLS = new Set([
   'fetch_url',
   'write_file',
   'edit_file',
+  'todo_write',
+  'todo_read',
 ]);
 
 const MICRO_COMPACT_THRESHOLD = 0.25;
