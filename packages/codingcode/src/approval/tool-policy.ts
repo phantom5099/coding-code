@@ -4,6 +4,8 @@ export const PLAN_TOOL_NAMES: readonly string[] = [
   'read_file',
   'search_files',
   'search_code',
+  'todo_write',
+  'todo_read',
   'fetch_url',
   'submit_plan',
 ];
@@ -18,6 +20,7 @@ export const BUILD_TOOL_NAMES: readonly string[] = [
   'fetch_url',
   'web_search',
   'todo_write',
+  'todo_read',
   'spawn_agent',
   'wait_agent',
 ];

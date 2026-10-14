@@ -81,9 +81,7 @@ function makeHarness(): Harness {
     write: (sessionId: string, plan: TodoItem[]) => {
       h.todoStore.set(sessionId, plan);
     },
-    reset: () => {
-      h.todoStore.clear();
-    },
+    dispose: () => Effect.sync(() => {}),
   };
 
   const mcp = {
@@ -343,7 +341,7 @@ describe('executeBatch 保序波次调度', () => {
     // todo_write 只写进程内 Map，不触碰工作树 ⇒ 与只读工具同波
     expect(overlaps(intervalFor(h, 'r1'), intervalFor(h, 't1'))).toBe(true);
     expect(results.map((r) => r.id)).toEqual(['r1', 't1']);
-    expect(okOutput(results[1])).toBe('pending=1 in_progress=0 completed=0');
+    expect(okOutput(results[1])).toBe('Current todo list (1 item):\n1. [pending] step one');
     expect(h.todoStore.get('sid-1')?.[0]?.step).toBe('step one');
   });
 
@@ -419,7 +417,7 @@ describe('executeBatch 保序波次调度', () => {
     expect(h.hookPoints.filter((p) => p === 'tool.execute.before')).toHaveLength(1);
   });
 
-  it('12 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
+  it('13 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
     const expected: Record<string, boolean> = {
       read_file: true,
       search_code: true,
@@ -427,6 +425,7 @@ describe('executeBatch 保序波次调度', () => {
       fetch_url: true,
       web_search: true,
       todo_write: true,
+      todo_read: true,
       spawn_agent: true,
       wait_agent: true,
       write_file: false,

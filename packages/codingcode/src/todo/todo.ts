@@ -11,9 +11,10 @@ export const TodoLayer = Layer.effect(
       write: (sessionId: string, plan: TodoItem[]) => {
         store.set(sessionId, plan);
       },
-      reset: () => {
-        store.clear();
-      },
+      dispose: (sessionId: string) =>
+        Effect.sync(() => {
+          store.delete(sessionId);
+        }),
     };
   })
 );

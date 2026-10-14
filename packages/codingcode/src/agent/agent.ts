@@ -16,7 +16,6 @@ import { MemoryService } from '../memory/port.js';
 import { RulesService } from '../rules/port.js';
 import { SessionService } from '../session/port.js';
 import { SkillService } from '../skills/port.js';
-import { TodoService } from '../todo/port.js';
 import { ToolExecutorService } from '../tools/port.js';
 import { buildSystemPrompt, renderSkillBlock } from './prompt.js';
 import type {
@@ -27,6 +26,7 @@ import type {
 } from '../sink/types.js';
 import { isTurnEnd } from '../sink/types.js';
 import type { SessionRef } from '../session/types.js';
+import type { TodoItem } from '../todo/types.js';
 import type { PermissionMode } from '../util/enums.js';
 import type { ToolCatalog, ToolResult } from '../tools/types.js';
 import { mediaKindOf, textOf, textPart, type IncomingPart } from '../llm/types.js';
@@ -97,7 +97,6 @@ export const AgentLayer = Layer.effect(
     const memory = yield* MemoryService;
     const llm = yield* LLMService;
     const rules = yield* RulesService;
-    const todo = yield* TodoService;
     const toolEnvPort = yield* ToolEnvPort;
     const cfg = loadConfig();
     const maxSteps = cfg.maxSteps ?? 250;
@@ -568,18 +567,17 @@ export const AgentLayer = Layer.effect(
           for (const r of approvedResults) resultsById.set(r.id, r);
           for (const r of deniedResults) resultsById.set(r.id, r);
           const allResults = toolCalls.map((tc) => resultsById.get(tc.id));
+          const argsById = new Map(toolCalls.map((tc) => [tc.id, tc.arguments] as const));
 
-          let todoPrinted = false;
           for (const r of allResults) {
             const resultOut = r.status === 'denied' ? '' : r.output;
             const toolEv = yield* session.recordToolResult(state, r.name, r.id, resultOut);
             yield* context.absorb(sessionRef, [toolEv]);
             const outcome = toolOutcomeOf(r);
             const todos =
-              !todoPrinted && r.status === 'ok' && r.name === 'todo_write'
-                ? todo.read(sid)
+              r.status === 'ok' && r.name === 'todo_write'
+                ? (argsById.get(r.id)?.plan as TodoItem[] | undefined)
                 : undefined;
-            if (todos) todoPrinted = true;
             emit({
               family: 'event',
               event: {

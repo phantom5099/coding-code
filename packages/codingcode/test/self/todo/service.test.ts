@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { TodoService, countByStatus } from '../../../src/todo/port.js';
+import { TodoService } from '../../../src/todo/port.js';
 import type { TodoItem } from '../../../src/todo/types.js';
 import { TodoLayer } from '../../../src/todo/todo.js';
 
@@ -67,29 +67,18 @@ describe('TodoService', () => {
     expect(result).toEqual([]);
   });
 
-  it('countByStatus counts correctly', () => {
-    const plan: TodoItem[] = [
-      { step: 'a', status: 'pending' },
-      { step: 'b', status: 'completed' },
-      { step: 'c', status: 'pending' },
-      { step: 'd', status: 'in_progress' },
-    ];
-    expect(countByStatus(plan)).toEqual({ pending: 2, completed: 1, in_progress: 1 });
-  });
-
-  it('reset clears all sessions', async () => {
-    const result = await Effect.runPromise(
+  it('dispose removes only the target session', async () => {
+    const { readA, readB } = await Effect.runPromise(
       Effect.gen(function* () {
         const svc = yield* TodoService;
-        svc.write('agent-x', [{ step: 'x', status: 'pending' }]);
-        expect(svc.read('agent-x')).toHaveLength(1);
-
-        svc.reset();
-
-        return svc.read('agent-x');
+        svc.write('agent-a', [{ step: 'a1', status: 'pending' }]);
+        svc.write('agent-b', [{ step: 'b1', status: 'pending' }]);
+        yield* svc.dispose('agent-a');
+        return { readA: svc.read('agent-a'), readB: svc.read('agent-b') };
       }).pipe(Effect.provide(TodoLayer))
     );
 
-    expect(result).toEqual([]);
+    expect(readA).toEqual([]);
+    expect(readB).toHaveLength(1);
   });
 });

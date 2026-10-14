@@ -4,7 +4,7 @@ import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
 import {
   TodoService,
-  countByStatus,
+  formatTodoPlan,
   TODO_MAX_ITEMS,
   TODO_MAX_STEP_LEN,
 } from '../../../todo/port.js';
@@ -25,7 +25,7 @@ export const todoWriteTool: ToolDefinition<TodoService> = {
   name: 'todo_write',
   concurrencySafe: true,
   description:
-    'Replace the current task list. Use for multi-step work to track plan and progress. Pass the full updated plan; previous list is replaced entirely.',
+    'Replace the current task list. Use for multi-step work to track plan and progress. Pass the full updated plan; previous list is replaced entirely. Returns the full current list after writing — treat it as ground truth for your next update.',
   parameters: todoSchema,
   execute: (args, ctx) =>
     Effect.gen(function* () {
@@ -37,7 +37,6 @@ export const todoWriteTool: ToolDefinition<TodoService> = {
         );
       const { plan } = args as { plan: TodoItem[] };
       todoSvc.write(sessionId, plan);
-      const c = countByStatus(plan);
-      return `pending=${c.pending} in_progress=${c.in_progress} completed=${c.completed}`;
+      return formatTodoPlan(plan);
     }),
 };

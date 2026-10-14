@@ -14,6 +14,7 @@ import { computePaths } from '../../session/paths.js';
 import { ContextService } from '../../context/port.js';
 import { MailboxService } from '../../session/mailbox.js';
 import { TurnRegistryService } from '../../turn/port.js';
+import { TodoService } from '../../todo/port.js';
 import { estimatePromptTokensFrom } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/port.js';
 import { activeModelId, setGlobalActive } from '../../infra/models.js';
@@ -104,12 +105,14 @@ const deleteSession: Handler = Effect.gen(function* () {
   const context = yield* ContextService;
   const mailbox = yield* MailboxService;
   const turn = yield* TurnRegistryService;
+  const todo = yield* TodoService;
   const sessionId = id ?? '';
   // 先请求停止：子代理纤维仍在跑的话，dispose 后它会成为孤儿（还会 mailbox.offer 重建队列）
   yield* turn.stopChildren(sessionId);
   yield* session.deleteSession(sessionId, cwd);
   yield* context.dispose(sessionId);
   yield* mailbox.dispose(sessionId);
+  yield* todo.dispose(sessionId);
   yield* turn.dispose(sessionId);
   return json({ ok: true });
 });

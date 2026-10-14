@@ -20,7 +20,6 @@ import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { TodoService } from '../../src/todo/port.js';
 import { ToolExecutorService } from '../../src/tools/port.js';
 import { TurnRegistryLayer } from '../../src/turn/registry.js';
-import { TurnRegistryService } from '../../src/turn/port.js';
 import type { FrameBody, RuntimeEvent, Transition } from '../../src/sink/types.js';
 import type { TokenUsage, LLMStreamPart } from '../../src/llm/types.js';
 import type { SessionStoreState, SessionRef } from '../../src/session/types.js';
@@ -351,13 +350,16 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       getAllRules: () => Effect.succeed(''),
       evictProjectRules: () => Effect.void,
     } as any),
-    // agent 与 todo_write 工具消费同一个 TodoService
+    // todo_write / todo_read 工具消费同一个 TodoService
     Layer.succeed(TodoService, {
       read: (sid: string) => store.get(sid) ?? [],
       write: (sid: string, items: any[]) => {
         store.set(sid, items);
       },
-      reset: () => store.clear(),
+      dispose: (sid: string) =>
+        Effect.sync(() => {
+          store.delete(sid);
+        }),
     } as any),
     // agent 与 dispatch_agent 工具消费同一个 HookService
     Layer.succeed(HookService, {
