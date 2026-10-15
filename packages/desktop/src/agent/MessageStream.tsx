@@ -3,7 +3,7 @@ import { Copy, Check } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useShallow } from 'zustand/react/shallow';
 import { useAgentStore } from '../stores/agent.store';
-import { useRollbackStore } from '../stores/rollback.store';
+import { useRollbackStore, TURN_SCOPE_REVERTED } from '../stores/rollback.store';
 import MessageItem from '../shared/MessageItem';
 import UnifiedDiffView from '../shared/UnifiedDiffView';
 import type { Item } from '@shared/types';
@@ -22,8 +22,10 @@ interface TurnDiffPanelProps {
   uiTurnId: string;
   isInterrupted?: boolean;
   threadId: string;
-  onRevertFile: (uiTurnId: string, file: string) => void;
-  onRevertTurn: (uiTurnId: string, files: string[]) => void;
+  onRevertFile: (uiTurnId: string, file: string, checkpointTurnId: number) => void;
+  onRevertTurn: (uiTurnId: string, checkpointTurnId: number) => void;
+  onUndoRevertFile: (uiTurnId: string, file: string, checkpointTurnId: number) => void;
+  onUndoRevertTurn: (uiTurnId: string, checkpointTurnId: number) => void;
 }
 
 function getCheckpointKey(
@@ -57,6 +59,8 @@ function TurnDiffPanel({
   threadId,
   onRevertFile,
   onRevertTurn,
+  onUndoRevertFile,
+  onUndoRevertTurn,
 }: TurnDiffPanelProps) {
   const rawCheckpointDiffByTurnId = useRollbackStore((s) => s.checkpointDiffByTurnId);
   const rawTurnCheckpointMapping = useRollbackStore((s) => s.turnCheckpointMapping);
@@ -75,7 +79,7 @@ function TurnDiffPanel({
   const ckKey = getCheckpointKey(threadId, uiTurnId, checkpointDiffs, turnCheckpointMapping);
   const diff = ckKey ? checkpointDiffs[ckKey] : null;
   const revertedFiles = revertedFilesByTurnId[`${threadId}:${uiTurnId}`] ?? [];
-  const isTurnReverted = revertedFiles.includes('__scope_reverted__');
+  const isTurnReverted = revertedFiles.includes(TURN_SCOPE_REVERTED);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
 
   if (!diff || !diff.files || diff.files.length === 0) {
@@ -124,20 +128,21 @@ function TurnDiffPanel({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() =>
-              onRevertTurn(
-                uiTurnId,
-                diff.files.map((f: any) => f.path)
-              )
-            }
-            disabled={isTurnReverted}
+            onClick={() => {
+              if (isTurnReverted) {
+                onUndoRevertTurn(uiTurnId, diff.turnId);
+              } else {
+                onRevertTurn(uiTurnId, diff.turnId);
+              }
+            }}
             className={`text-[12px] px-3 py-1 rounded ${
               isTurnReverted
-                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
+                ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:opacity-80'
                 : 'bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--bg-active)] border border-[var(--border-strong)]'
             }`}
+            title={isTurnReverted ? '恢复到回退前的状态' : undefined}
           >
-            {isTurnReverted ? '已回退本轮修改' : '回退本轮修改'}
+            {isTurnReverted ? '撤销本轮回退' : '回退本轮修改'}
           </button>
         </div>
       </div>
@@ -156,9 +161,6 @@ function TurnDiffPanel({
                   <span className="text-[12px] text-[var(--text-primary)] truncate">
                     {f.path.replace(/\\/g, '/')}
                   </span>
-                  <span className="text-[10px] text-[var(--text-muted)] shrink-0">
-                    {f.source === 'agent' ? 'Agent' : '未知'}
-                  </span>
                   {isReverted && (
                     <span className="text-[10px] text-[var(--accent-danger)] shrink-0">已回退</span>
                   )}
@@ -175,16 +177,20 @@ function TurnDiffPanel({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (!isReverted) onRevertFile(uiTurnId, f.path);
+                      if (isReverted) {
+                        onUndoRevertFile(uiTurnId, f.path, diff.turnId);
+                      } else {
+                        onRevertFile(uiTurnId, f.path, diff.turnId);
+                      }
                     }}
-                    disabled={isReverted}
                     className={`text-[11px] px-2 py-0.5 rounded ${
                       isReverted
-                        ? 'bg-[var(--accent-success)] text-[var(--text-inverse)]'
+                        ? 'bg-[var(--accent-success)] text-[var(--text-inverse)] hover:opacity-80'
                         : 'bg-[var(--bg-hover)] text-[var(--text-muted)] hover:bg-[var(--bg-active)]'
                     }`}
+                    title={isReverted ? '撤销回退该文件' : undefined}
                   >
-                    {isReverted ? '已回退' : '回退'}
+                    {isReverted ? '撤销回退' : '回退'}
                   </button>
                   <svg
                     width="12"
@@ -231,6 +237,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     loadCheckpointDiff,
     revertFile,
     revertFiles,
+    undoRevertFiles,
     previewRollback,
     rollbackCtx,
     rollbackBoth,
@@ -462,17 +469,31 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
   }, [turnStatusKey, threadId, loadCheckpointDiff]);
 
   const handleRevertFile = useCallback(
-    async (_uiTurnId: string, file: string) => {
-      await revertFile(threadId, file);
+    async (_uiTurnId: string, file: string, checkpointTurnId: number) => {
+      await revertFile(threadId, file, checkpointTurnId);
     },
     [threadId, revertFile]
   );
 
   const handleRevertTurn = useCallback(
-    async (_uiTurnId: string, files: string[]) => {
-      await revertFiles(threadId, files);
+    async (_uiTurnId: string, checkpointTurnId: number) => {
+      await revertFiles(threadId, [], checkpointTurnId);
     },
     [threadId, revertFiles]
+  );
+
+  const handleUndoRevertFile = useCallback(
+    async (_uiTurnId: string, file: string, checkpointTurnId: number) => {
+      await undoRevertFiles(threadId, [file], checkpointTurnId);
+    },
+    [threadId, undoRevertFiles]
+  );
+
+  const handleUndoRevertTurn = useCallback(
+    async (_uiTurnId: string, checkpointTurnId: number) => {
+      await undoRevertFiles(threadId, [], checkpointTurnId);
+    },
+    [threadId, undoRevertFiles]
   );
 
   const rollbackModal = showRollbackPanel && (
@@ -615,6 +636,8 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                         threadId={threadId}
                         onRevertFile={handleRevertFile}
                         onRevertTurn={handleRevertTurn}
+                        onUndoRevertFile={handleUndoRevertFile}
+                        onUndoRevertTurn={handleUndoRevertTurn}
                       />
                     </div>
                   )}

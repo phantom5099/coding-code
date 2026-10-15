@@ -136,8 +136,7 @@ const AgentDeps = Layer.mergeAll(
     executeBatch: () => Effect.succeed([]),
   } as any),
   Layer.succeed(CheckpointService, {
-    snapshotBaseline: () => Effect.void,
-    snapshotFinal: () => Effect.void,
+    snapshotBeforeWrite: () => Effect.void,
   } as any),
   Layer.succeed(ApprovalService, {
     evaluate: () => Effect.succeed({ type: 'allow' }),

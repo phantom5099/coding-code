@@ -42,6 +42,8 @@ function specToDefinition(spec: McpToolSpec): ToolDefinition {
     description: `[MCP:${spec.server}] ${spec.description || spec.name}`,
     parameters: z.fromJSONSchema(spec.inputSchema),
     concurrencySafe: spec.readOnlyHint,
+    // MCP 工具一律算写：无法静态判定其副作用，漏打的代价是丢改动
+    mutatesWorkspace: true,
     execute: (args) => spec.execute(args as Record<string, unknown>),
   };
 }
@@ -65,6 +67,7 @@ export function createToolCatalog(
       return {
         name: definition.name,
         concurrencySafe: definition.concurrencySafe ?? false,
+        mutatesWorkspace: definition.mutatesWorkspace ?? false,
         parse: (args: unknown) => definition.parameters.parse(args),
         execute: (args: unknown, ctx?: ToolExecCtx) =>
           definition.execute(args, ctx) as Effect.Effect<string, AgentError>,

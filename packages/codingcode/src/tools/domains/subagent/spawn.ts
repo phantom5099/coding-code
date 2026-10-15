@@ -9,6 +9,8 @@ import { SubagentRunRegistryService } from '../../../subagent/registry.js';
 export const spawnAgentTool: ToolDefinition<HookService | SubagentRunRegistryService> = {
   name: 'spawn_agent',
   concurrencySafe: true,
+  // 子代理共享工作区并异步写入，父回合须有快照兜底
+  mutatesWorkspace: true,
   description:
     'Start a subagent and return its session id immediately. The subagent runs in the same working directory ' +
     'and shares your file system: keep the delegated write set disjoint from your own. Its result is appended ' +

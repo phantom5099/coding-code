@@ -11,9 +11,13 @@ interface RollbackState {
 interface RollbackActions {
   setCheckpointDiff: (threadId: string, turnId: string, diff: CheckpointDiff) => void;
   markFileReverted: (threadId: string, turnId: string, file: string) => void;
+  unmarkFileReverted: (threadId: string, turnId: string, file: string) => void;
   setTurnCheckpointMapping: (threadId: string, checkpointId: number, uiTurnId: string) => void;
   cleanupDeletedThreads: (incomingIds: Set<string>) => void;
 }
+
+/** 整轮回退的哨兵标记：存在于 revertedFilesByTurnId 即表示该轮被整轮回退 */
+export const TURN_SCOPE_REVERTED = '__scope_reverted__';
 
 export const useRollbackStore = create<RollbackState & RollbackActions>()(
   immer((set) => ({
@@ -35,6 +39,19 @@ export const useRollbackStore = create<RollbackState & RollbackActions>()(
         if (!s.revertedFilesByTurnId[key].includes(file)) {
           s.revertedFilesByTurnId[key].push(file);
         }
+      }),
+
+    unmarkFileReverted: (threadId, turnId, file) =>
+      set((s) => {
+        const key = `${threadId}:${turnId}`;
+        const list = s.revertedFilesByTurnId[key];
+        if (!list) return;
+        if (file === TURN_SCOPE_REVERTED) {
+          // 整轮撤销：清掉该轮全部文件标记
+          delete s.revertedFilesByTurnId[key];
+          return;
+        }
+        s.revertedFilesByTurnId[key] = list.filter((f) => f !== file);
       }),
 
     setTurnCheckpointMapping: (threadId, checkpointId, uiTurnId) =>

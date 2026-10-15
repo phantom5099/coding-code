@@ -79,17 +79,18 @@ export interface SessionClient {
     sessionId: string;
     cwd: string;
     files: string[];
+    turnId?: number;
+  }): Promise<CodeRollbackResult>;
+  undoRollback(input: {
+    sessionId: string;
+    cwd: string;
+    files: string[];
   }): Promise<CodeRollbackResult>;
   previewRollbackDiff(input: {
     sessionId: string;
     cwd: string;
     throughTurnId: number;
   }): Promise<RollbackPreviewDiff>;
-  rollbackCodeToTurn(input: {
-    sessionId: string;
-    cwd: string;
-    throughTurnId: number;
-  }): Promise<CodeRollbackResult>;
   rollbackContext(input: {
     sessionId: string;
     cwd: string;

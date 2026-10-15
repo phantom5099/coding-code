@@ -1,5 +1,4 @@
 import type { ShadowGit } from './shadow-git.js';
-import type { ProjectLock } from './project-lock.js';
 import type { CodeRollbackResult, RestorePlan } from './types.js';
 
 export function emptyRollbackResult(turnId: number): CodeRollbackResult {
@@ -14,8 +13,7 @@ export function emptyRollbackResult(turnId: number): CodeRollbackResult {
 export function executeRollback(
   plan: RestorePlan,
   selectedFiles: string[],
-  sg: ShadowGit,
-  lock: ProjectLock
+  sg: ShadowGit
 ): CodeRollbackResult {
   if (selectedFiles.length === 0) {
     return {
@@ -26,17 +24,15 @@ export function executeRollback(
     };
   }
 
-  lock.lock();
-  try {
-    sg.checkoutFiles(plan.baseline, selectedFiles);
+  sg.checkoutFiles(plan.baseline, selectedFiles);
+  // restore 只写工作区：被删的新文件会残留 index 条目（diff 面板会多出 D 行），
+  // 恢复的文件若是 untracked 也不会进 index（diff 面板丢文件）。stageAll 对齐。
+  sg.stageAll();
 
-    return {
-      reverted: true,
-      throughTurnId: plan.throughTurnId,
-      affectedTurns: plan.affectedTurns,
-      selectedFiles,
-    };
-  } finally {
-    lock.unlock();
-  }
+  return {
+    reverted: true,
+    throughTurnId: plan.throughTurnId,
+    affectedTurns: plan.affectedTurns,
+    selectedFiles,
+  };
 }

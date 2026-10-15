@@ -8,6 +8,8 @@ import { AgentError } from '../../../util/error.js';
 export const bashTool: ToolDefinition = {
   name: 'execute_command',
   concurrencySafe: false,
+  // 无法静态判定命令是否改工作区，一律算写
+  mutatesWorkspace: true,
   description:
     'Execute a shell command and return its output. Use for running tests, git, npm, build, and other CLI operations.',
   parameters: z.object({

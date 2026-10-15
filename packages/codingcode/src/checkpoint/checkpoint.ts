@@ -1,21 +1,24 @@
 import { Layer, Effect } from 'effect';
 import { resolve } from 'path';
 import { ShadowGit } from './shadow-git.js';
-import { ProjectLock } from './project-lock.js';
 import { normalizePath } from '../util/path.js';
-import { commitMsg, toGitPath, ProjectCache } from './utils.js';
-import { getCompletedTurnsFor, getTurnRestorePlan, getRollbackToTurnPlan } from './turn-query.js';
+import { commitMsg, rollbackSnapshotMsg, toGitPath, ProjectCache } from './utils.js';
+import {
+  getTurnsWithBaseline,
+  getRollbackToTurnPlan,
+  findLatestRollbackSnapshot,
+  findRollbackSnapshot,
+} from './turn-query.js';
 import { emptyRollbackResult, executeRollback } from './rollback-engine.js';
 import { CheckpointService } from './port.js';
 
 // ---- Effect Service ----
+const shadowGitByProject = new ProjectCache<ShadowGit>(10);
+const baselineTurnBySession = new Map<string, number>();
 
 export const CheckpointLayer = Layer.effect(
   CheckpointService,
   Effect.gen(function* () {
-    const shadowGitByProject = new ProjectCache<ShadowGit>(10);
-    const lockByProject = new ProjectCache<ProjectLock>(10);
-
     function ensure(projectPath: string): ShadowGit {
       const normalized = normalizePath(projectPath);
       return shadowGitByProject.get(normalized, () => {
@@ -25,95 +28,59 @@ export const CheckpointLayer = Layer.effect(
       });
     }
 
-    function lockFor(projectPath: string): ProjectLock {
-      const normalized = normalizePath(projectPath);
-      return lockByProject.get(normalized, () => new ProjectLock(normalized));
+    function latestBaselineTurn(sg: ShadowGit, sessionId: string): number {
+      const turns = getTurnsWithBaseline(sg, sessionId);
+      return turns.length > 0 ? turns[turns.length - 1]! : 0;
     }
 
-    function doSnapshotFinal(sg: ShadowGit, sessionId: string, turnId: number): void {
-      const lock = lockFor(sg.projectPath);
-      lock.lock();
-      try {
-        sg.commit(commitMsg(sessionId, turnId, 'final'));
-      } finally {
-        lock.unlock();
-      }
-    }
-
-    function repairIncompleteTurn(sg: ShadowGit, sessionId: string): void {
-      const completed = getCompletedTurnsFor(sg, sessionId);
-      const candidate = completed.length > 0 ? completed[completed.length - 1]! + 1 : 1;
-      const baseline = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'baseline'));
-      if (!baseline) return;
-      const final = sg.findCommitByMessage(commitMsg(sessionId, candidate, 'final'));
-      if (final) return;
-      doSnapshotFinal(sg, sessionId, candidate);
-    }
-
-    function latestCompletedTurn(sg: ShadowGit, sessionId: string): number {
-      const completed = getCompletedTurnsFor(sg, sessionId);
-      return completed.length > 0 ? completed[completed.length - 1]! : 0;
+    function ensureRollbackSnapshot(
+      sg: ShadowGit,
+      sessionId: string,
+      rollbackTurnId: number
+    ): void {
+      if (findRollbackSnapshot(sg, sessionId, rollbackTurnId)) return;
+      sg.stageAll();
+      if (sg.isTooLargeForSnapshot()) return;
+      sg.commit(rollbackSnapshotMsg(sessionId, rollbackTurnId));
     }
 
     return {
-      snapshotBaseline: (projectPath: string, sessionId: string, turnId: number) =>
+      snapshotBeforeWrite: (projectPath: string, sessionId: string, turnId: number) =>
         Effect.sync(() => {
+          if (baselineTurnBySession.get(sessionId) === turnId) return;
+          baselineTurnBySession.set(sessionId, turnId);
           const sg = ensure(projectPath);
-          repairIncompleteTurn(sg, sessionId);
+          sg.stageAll();
           if (sg.isTooLargeForSnapshot()) return;
-          const lock = lockFor(projectPath);
-          const msg = commitMsg(sessionId, turnId, 'baseline');
-          lock.lock();
-          try {
-            sg.commit(msg);
-          } finally {
-            lock.unlock();
-          }
-        }),
-
-      snapshotFinal: (projectPath: string, sessionId: string, turnId: number) =>
-        Effect.sync(() => {
-          const sg = ensure(projectPath);
-          if (sg.isTooLargeForSnapshot()) return;
-          doSnapshotFinal(sg, sessionId, turnId);
+          sg.commit(commitMsg(sessionId, turnId));
         }),
 
       getCheckpointDiff: (projectPath: string, sessionId: string, turnId?: number) =>
         Effect.sync(() => {
           const sg = ensure(projectPath);
-          repairIncompleteTurn(sg, sessionId);
-          const latestTurnId = turnId ?? latestCompletedTurn(sg, sessionId);
+          sg.stageAll();
+          const latestTurnId = turnId ?? latestBaselineTurn(sg, sessionId);
           if (latestTurnId === 0) {
             return { turnId: 0, files: [] };
           }
 
-          const baseline = sg.findCommitByMessage(commitMsg(sessionId, latestTurnId, 'baseline'));
-          const final = sg.findCommitByMessage(commitMsg(sessionId, latestTurnId, 'final'));
-          if (!baseline || !final) return { turnId: latestTurnId, files: [] };
+          const baseline = sg.findCommitByMessage(commitMsg(sessionId, latestTurnId));
+          if (!baseline) return { turnId: latestTurnId, files: [] };
 
-          const allChanges = sg.diffFiles(baseline, final);
-          const rawAllFiles = allChanges.map((c) => normalizePath(resolve(projectPath, c.file)));
-          const allFiles = [...new Set(rawAllFiles)];
-
-          const files = allFiles.map((f) => {
+          const files = sg.diffNameStatusAgainstWorkspace(baseline).map((c) => {
+            const f = normalizePath(resolve(projectPath, c.file));
             const relPath = toGitPath(projectPath, f);
-            const diffResult = sg.git('diff', baseline, final, '--', relPath);
-            const rawPath = normalizePath(resolve(projectPath, relPath));
+            const diffText = sg.git('diff', baseline, '--', relPath).stdout;
             let insertions = 0;
             let deletions = 0;
-            for (const line of diffResult.stdout.split('\n')) {
+            for (const line of diffText.split('\n')) {
               if (line.startsWith('+') && !line.startsWith('+++')) insertions++;
               else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
             }
             return {
               path: f,
-              status:
-                allChanges.find(
-                  (c) =>
-                    normalizePath(resolve(projectPath, c.file)).toLowerCase() ===
-                    rawPath.toLowerCase()
-                )?.status ?? 'M',
-              diff: diffResult.stdout,
+              status: c.status,
+              diff: diffText,
               insertions,
               deletions,
             };
@@ -130,56 +97,80 @@ export const CheckpointLayer = Layer.effect(
       ) =>
         Effect.sync(() => {
           const sg = ensure(projectPath);
-          const targetTurnId = turnId ?? latestCompletedTurn(sg, sessionId);
+          sg.stageAll();
+          const targetTurnId = turnId ?? latestBaselineTurn(sg, sessionId);
           if (targetTurnId === 0) return emptyRollbackResult(0);
-          const plan = getTurnRestorePlan(sg, sessionId, targetTurnId);
+          const plan = getRollbackToTurnPlan(sg, sessionId, targetTurnId);
           if (!plan) {
             return emptyRollbackResult(targetTurnId);
           }
-          return executeRollback(plan, files, sg, lockFor(projectPath));
+          // files 为空 = 整轮：自动算该 baseline 以来的全部变更文件
+          const selected =
+            files.length > 0
+              ? files
+              : sg
+                  .diffNameStatusAgainstWorkspace(plan.baseline)
+                  .map((c) => resolve(projectPath, c.file));
+          if (selected.length === 0) {
+            return {
+              reverted: true,
+              throughTurnId: targetTurnId,
+              affectedTurns: plan.affectedTurns,
+              selectedFiles: [],
+            };
+          }
+          ensureRollbackSnapshot(sg, sessionId, latestBaselineTurn(sg, sessionId));
+          return executeRollback(plan, selected, sg);
         }),
 
       previewRollbackDiff: (projectPath: string, sessionId: string, throughTurnId: number) =>
         Effect.sync(() => {
           const sg = ensure(projectPath);
+          sg.stageAll();
           const plan = getRollbackToTurnPlan(sg, sessionId, throughTurnId);
           if (!plan) {
             return { throughTurnId, affectedTurns: [], diff: '' };
           }
 
-          const result = sg.git('diff', plan.baseline);
+          const diff = sg.git('diff', plan.baseline).stdout;
           return {
             throughTurnId,
             affectedTurns: plan.affectedTurns,
-            diff: result.stdout,
+            diff,
           };
         }),
 
-      rollbackCodeToTurn: (projectPath: string, sessionId: string, throughTurnId: number) =>
+      undoRollback: (projectPath: string, sessionId: string, files: string[]) =>
         Effect.sync(() => {
           const sg = ensure(projectPath);
-          const plan = getRollbackToTurnPlan(sg, sessionId, throughTurnId);
-          if (!plan) {
-            return emptyRollbackResult(throughTurnId);
+          // 只允许撤销最近一次回退：快照的回退时刻必须就是当前最新轮，
+          // 否则期间开了新轮，撤销会把新轮改动一起冲掉
+          const currentTurnId = latestBaselineTurn(sg, sessionId);
+          if (currentTurnId === 0) return emptyRollbackResult(0);
+          const snapshot = findLatestRollbackSnapshot(sg, sessionId);
+          if (!snapshot || snapshot.rollbackTurnId !== currentTurnId) {
+            return emptyRollbackResult(currentTurnId);
           }
 
-          const diffResult = sg.git('diff', '--name-only', plan.baseline);
-          const selectedFiles = diffResult.stdout
-            .trim()
-            .split('\n')
-            .filter(Boolean)
-            .map((f) => resolve(projectPath, f));
-
-          if (selectedFiles.length === 0) {
-            return {
-              reverted: true,
-              throughTurnId,
-              affectedTurns: plan.affectedTurns,
-              selectedFiles: [],
-            };
+          let selected = files;
+          if (selected.length === 0) {
+            // 未指定文件 = 整轮撤销：范围 = 快照与 baseline 的差异（即那次回退改动过的文件）
+            const baseline = sg.findCommitByMessage(commitMsg(sessionId, currentTurnId));
+            if (!baseline) return emptyRollbackResult(currentTurnId);
+            selected = sg
+              .diffFiles(baseline, snapshot.commit)
+              .map((c) => resolve(projectPath, c.file));
+            if (selected.length === 0) return emptyRollbackResult(currentTurnId);
           }
 
-          return executeRollback(plan, selectedFiles, sg, lockFor(projectPath));
+          sg.checkoutFiles(snapshot.commit, selected);
+          sg.stageAll();
+          return {
+            reverted: true,
+            throughTurnId: currentTurnId,
+            affectedTurns: [],
+            selectedFiles: selected,
+          };
         }),
     };
   })

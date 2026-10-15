@@ -64,9 +64,18 @@ export function createHttpSessionClient(
       );
     },
 
-    async revertCheckpointFiles({ sessionId, cwd, files }) {
+    async revertCheckpointFiles({ sessionId, cwd, files, turnId }) {
+      const segment = turnId != null ? String(turnId) : 'latest';
       const res = await apiPost<{ ok: boolean; result: CodeRollbackResult }>(
-        `/api/sessions/${sessionId}/checkpoints/latest/revert-files`,
+        `/api/sessions/${sessionId}/checkpoints/${segment}/revert-files`,
+        { cwd, files }
+      );
+      return res.result;
+    },
+
+    async undoRollback({ sessionId, cwd, files }) {
+      const res = await apiPost<{ ok: boolean; result: CodeRollbackResult }>(
+        `/api/sessions/${sessionId}/checkpoints/undo-rollback`,
         { cwd, files }
       );
       return res.result;
@@ -76,14 +85,6 @@ export function createHttpSessionClient(
       return apiGet(
         `/api/sessions/${sessionId}/rollback-preview?cwd=${encodeURIComponent(cwd)}&throughTurnId=${throughTurnId}`
       );
-    },
-
-    async rollbackCodeToTurn({ sessionId, cwd, throughTurnId }) {
-      const res = await apiPost<{ ok: boolean; result: CodeRollbackResult }>(
-        `/api/sessions/${sessionId}/rollback-code-to-turn`,
-        { cwd, throughTurnId }
-      );
-      return res.result;
     },
 
     async rollbackContext({ sessionId, cwd, throughTurnId }) {

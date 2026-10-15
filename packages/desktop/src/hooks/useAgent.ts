@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useAgentStore, type ModelEntry, type QueuedInput } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
-import { useRollbackStore } from '../stores/rollback.store';
+import { useRollbackStore, TURN_SCOPE_REVERTED } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import { createStreamState, reduceFrame, type StreamEffects } from '../lib/frame-reducer';
 import type { PermissionMode, ProfileName } from '@codingcode/sdk';
@@ -15,8 +15,8 @@ import {
   sendApprovalResponse,
   getCheckpointDiff,
   revertCheckpointFiles,
+  undoRollback,
   previewRollbackDiff,
-  rollbackCodeToTurn,
   rollbackContext,
   rollbackBothToTurn,
   forkSession,
@@ -476,6 +476,7 @@ export function useAgentRollback() {
   const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
   // Rollback store
   const revertedFilesByTurnId = useRollbackStore((s) => s.revertedFilesByTurnId);
+  const unmarkFileReverted = useRollbackStore((s) => s.unmarkFileReverted);
   const setCheckpointDiff = useRollbackStore((s) => s.setCheckpointDiff);
   const markFileReverted = useRollbackStore((s) => s.markFileReverted);
   const setTurnCheckpointMapping = useRollbackStore((s) => s.setTurnCheckpointMapping);
@@ -499,7 +500,12 @@ export function useAgentRollback() {
         if (thread) {
           const completed = thread.turns.filter((t) => t.status === 'completed');
           const last = completed[completed.length - 1];
-          if (last && last.id !== String(diff.turnId)) {
+          // 只读回合没有 checkpoint，latest 会滞后；仅首次映射，避免把旧回合改动标到新回合
+          if (
+            last &&
+            last.id !== String(diff.turnId) &&
+            !useRollbackStore.getState().turnCheckpointMapping[threadId]?.[diff.turnId]
+          ) {
             setTurnCheckpointMapping(threadId, diff.turnId, last.id);
           }
         }
@@ -510,9 +516,9 @@ export function useAgentRollback() {
   );
 
   const revertFile = useCallback(
-    async (threadId: string, file: string) => {
+    async (threadId: string, file: string, checkpointTurnId?: number) => {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await revertCheckpointFiles(threadId, cwd, [file]);
+      const { result } = await revertCheckpointFiles(threadId, cwd, [file], checkpointTurnId);
       if (result.reverted) {
         markFileReverted(threadId, resolveUITurnId(threadId, result.throughTurnId), file);
       }
@@ -522,18 +528,43 @@ export function useAgentRollback() {
   );
 
   const revertFiles = useCallback(
-    async (threadId: string, files: string[]) => {
+    async (threadId: string, files: string[], checkpointTurnId?: number) => {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await revertCheckpointFiles(threadId, cwd, files);
+      const { result } = await revertCheckpointFiles(threadId, cwd, files, checkpointTurnId);
       if (result.reverted) {
         const uiId = resolveUITurnId(threadId, result.throughTurnId);
         for (const f of result.selectedFiles) {
           markFileReverted(threadId, uiId, f);
         }
+        // 未指定文件 = 整轮：打整轮哨兵，供“回退本轮修改”按钮切换为“撤销本轮回退”
+        if (files.length === 0) {
+          markFileReverted(threadId, uiId, TURN_SCOPE_REVERTED);
+        }
       }
       return result;
     },
     [workspace.rootPath, markFileReverted, resolveUITurnId]
+  );
+
+  // 撤销回退：恢复到回退前存的快照，并清掉“已回退”标记，按钮恢复可点
+  // turnId 只用于定位本地标记，后端按“最近一次回退”自行寻址
+  const undoRevertFiles = useCallback(
+    async (threadId: string, files: string[], checkpointTurnId?: number) => {
+      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
+      const { result } = await undoRollback(threadId, cwd, files);
+      if (result.reverted) {
+        const uiId = resolveUITurnId(threadId, checkpointTurnId ?? result.throughTurnId);
+        for (const f of result.selectedFiles) {
+          unmarkFileReverted(threadId, uiId, f);
+        }
+        // 未指定文件 = 整轮撤销：unmark 哨兵会清掉该轮全部文件标记
+        if (files.length === 0) {
+          unmarkFileReverted(threadId, uiId, TURN_SCOPE_REVERTED);
+        }
+      }
+      return result;
+    },
+    [workspace.rootPath, unmarkFileReverted, resolveUITurnId]
   );
 
   const previewRollback = useCallback(
@@ -547,11 +578,10 @@ export function useAgentRollback() {
 
   const rollbackCode = useCallback(
     async (threadId: string, throughTurnId: number) => {
-      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await rollbackCodeToTurn(threadId, cwd, throughTurnId);
-      return result;
+      // files 为空 = 整轮回退，由后端自动算该轮全部变更文件
+      return revertFiles(threadId, [], throughTurnId);
     },
-    [workspace.rootPath]
+    [revertFiles]
   );
 
   const rollbackCtx = useCallback(
@@ -648,6 +678,7 @@ export function useAgentRollback() {
     loadCheckpointDiff,
     revertFile,
     revertFiles,
+    undoRevertFiles,
     previewRollback,
     rollbackCode,
     rollbackCtx,

@@ -23,9 +23,8 @@ describe('checkpoint turn title removal', () => {
       const checkpoints = (await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBaseline(projectPath, sessionId, 1);
+          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
           writeFileSync(join(projectPath, 'after.txt'), 'after', 'utf8');
-          yield* checkpoint.snapshotFinal(projectPath, sessionId, 1);
           return yield* checkpoint.getCheckpointDiff(projectPath, sessionId);
         }).pipe(Effect.provide(CheckpointLayer) as any)
       )) as { turnId: number; files: Array<{ path: string }> };

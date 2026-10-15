@@ -9,6 +9,8 @@ export interface ToolDefinition<R = never> {
   name: string;
   /** 是否可与同批其它工具并发；省略即 false（fail-closed） */
   concurrencySafe?: boolean;
+  /** 执行后会改动工作区（写文件 / bash / 派生子代理 / MCP）；触发惰性 baseline 快照 */
+  mutatesWorkspace?: boolean;
   description: string;
   parameters: z.ZodTypeAny;
   execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, R>;
@@ -28,13 +30,17 @@ export type ToolResult = { readonly id: string; readonly name: string } & ToolOu
 export interface ToolRunner {
   readonly name: string;
   readonly concurrencySafe: boolean;
+  readonly mutatesWorkspace: boolean;
   parse(args: unknown): unknown;
   execute(args: unknown, ctx?: ToolExecCtx): Effect.Effect<string, AgentError>;
 }
 
 export type ToolLookup = (name: string) => ToolRunner | undefined;
 
-export type ToolExecOpts = Omit<ToolExecCtx, 'sessionId'> & { turnId?: number };
+export type ToolExecOpts = Omit<ToolExecCtx, 'sessionId'> & {
+  turnId?: number;
+  onBeforeMutation?: Effect.Effect<void>;
+};
 
 export type ToolExecCall = ToolExecOpts & { sessionId?: string; callId?: string };
 

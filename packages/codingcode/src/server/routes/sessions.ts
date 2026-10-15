@@ -262,26 +262,44 @@ const turnCheckpointDiff: Handler = Effect.gen(function* () {
   );
 });
 
+// 'latest' 或缺省 = 不带 turnId，由服务端取最近一个有 checkpoint 的回合
+function parseCheckpointTurnId(raw: string | undefined): number | undefined {
+  if (!raw || raw === 'latest') return undefined;
+  const n = parseInt(raw, 10);
+  return isNaN(n) ? undefined : n;
+}
+
 const revertFile: Handler = Effect.gen(function* () {
-  const { id } = yield* pathParams;
+  const { id, turnId: rawTurnId } = yield* pathParams;
   const body = yield* readJson<{ cwd: string; file: string }>();
   const checkpoint = yield* CheckpointService;
-  const result = yield* checkpoint.revertCheckpointFiles(resolveCwd(body.cwd), id ?? '', undefined, [
-    body.file,
-  ]);
+  const result = yield* checkpoint.revertCheckpointFiles(
+    resolveCwd(body.cwd),
+    id ?? '',
+    parseCheckpointTurnId(rawTurnId),
+    [body.file]
+  );
   return json({ ok: true, result });
 });
 
 const revertFiles: Handler = Effect.gen(function* () {
-  const { id } = yield* pathParams;
+  const { id, turnId: rawTurnId } = yield* pathParams;
   const body = yield* readJson<{ cwd: string; files: string[] }>();
   const checkpoint = yield* CheckpointService;
   const result = yield* checkpoint.revertCheckpointFiles(
     resolveCwd(body.cwd),
     id ?? '',
-    undefined,
+    parseCheckpointTurnId(rawTurnId),
     body.files
   );
+  return json({ ok: true, result });
+});
+
+const undoRollback: Handler = Effect.gen(function* () {
+  const { id } = yield* pathParams;
+  const body = yield* readJson<{ cwd: string; files: string[] }>();
+  const checkpoint = yield* CheckpointService;
+  const result = yield* checkpoint.undoRollback(resolveCwd(body.cwd), id ?? '', body.files);
   return json({ ok: true, result });
 });
 
@@ -292,18 +310,6 @@ const rollbackPreview: Handler = Effect.gen(function* () {
   const throughTurnId = parseInt(params.throughTurnId ?? '0', 10);
   const checkpoint = yield* CheckpointService;
   return json(yield* checkpoint.previewRollbackDiff(cwd, id ?? '', throughTurnId));
-});
-
-const rollbackCode: Handler = Effect.gen(function* () {
-  const { id } = yield* pathParams;
-  const body = yield* readJson<{ cwd: string; throughTurnId: number }>();
-  const checkpoint = yield* CheckpointService;
-  const result = yield* checkpoint.rollbackCodeToTurn(
-    resolveCwd(body.cwd),
-    id ?? '',
-    body.throughTurnId
-  );
-  return json({ ok: true, result });
 });
 
 /** 回滚 context（+ 可选代码）后回吐新状态：turns / promptEstimate / usage 都要重算。 */
@@ -340,7 +346,12 @@ const rollbackBoth: Handler = Effect.gen(function* () {
   const cwd = resolveCwd(body.cwd);
   const sessionId = id ?? '';
   const checkpoint = yield* CheckpointService;
-  const codeResult = yield* checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
+  const codeResult = yield* checkpoint.revertCheckpointFiles(
+    cwd,
+    sessionId,
+    body.throughTurnId,
+    []
+  );
   return json(yield* rollbackState(cwd, sessionId, body.throughTurnId, codeResult));
 });
 
@@ -378,10 +389,10 @@ export const addSessionsRoutes = (router: Router): Router => {
     HttpRouter.put('/api/sessions/:id/title', setTitle),
     HttpRouter.get('/api/sessions/:id/checkpoints/latest/diff', latestCheckpointDiff),
     HttpRouter.get('/api/sessions/:id/checkpoints/:turnId/diff', turnCheckpointDiff),
-    HttpRouter.post('/api/sessions/:id/checkpoints/latest/revert-file', revertFile),
-    HttpRouter.post('/api/sessions/:id/checkpoints/latest/revert-files', revertFiles),
+    HttpRouter.post('/api/sessions/:id/checkpoints/:turnId/revert-file', revertFile),
+    HttpRouter.post('/api/sessions/:id/checkpoints/:turnId/revert-files', revertFiles),
+    HttpRouter.post('/api/sessions/:id/checkpoints/undo-rollback', undoRollback),
     HttpRouter.get('/api/sessions/:id/rollback-preview', rollbackPreview),
-    HttpRouter.post('/api/sessions/:id/rollback-code-to-turn', rollbackCode),
     HttpRouter.post('/api/sessions/:id/rollback-context', rollbackContext),
     HttpRouter.post('/api/sessions/:id/rollback-both-to-turn', rollbackBoth),
     HttpRouter.post('/api/sessions/:id/fork', forkSession)
