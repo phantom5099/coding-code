@@ -16,6 +16,9 @@ interface RollbackActions {
   cleanupDeletedThreads: (incomingIds: Set<string>) => void;
 }
 
+/** 整轮回退的哨兵标记：存在于 revertedFilesByTurnId 即表示该轮被整轮回退 */
+export const TURN_SCOPE_REVERTED = '__scope_reverted__';
+
 export const useRollbackStore = create<RollbackState & RollbackActions>()(
   immer((set) => ({
     checkpointDiffByTurnId: {},
@@ -43,7 +46,7 @@ export const useRollbackStore = create<RollbackState & RollbackActions>()(
         const key = `${threadId}:${turnId}`;
         const list = s.revertedFilesByTurnId[key];
         if (!list) return;
-        if (file === '__scope_reverted__') {
+        if (file === TURN_SCOPE_REVERTED) {
           // 整轮撤销：清掉该轮全部文件标记
           delete s.revertedFilesByTurnId[key];
           return;

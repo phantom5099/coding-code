@@ -20,11 +20,6 @@ export interface CheckpointShape {
     sessionId: string,
     throughTurnId: number
   ): Effect.Effect<RollbackPreviewDiff>;
-  rollbackCodeToTurn(
-    projectPath: string,
-    sessionId: string,
-    throughTurnId: number
-  ): Effect.Effect<CodeRollbackResult>;
   undoRollback(
     projectPath: string,
     sessionId: string,

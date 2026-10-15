@@ -91,11 +91,6 @@ export interface SessionClient {
     cwd: string;
     throughTurnId: number;
   }): Promise<RollbackPreviewDiff>;
-  rollbackCodeToTurn(input: {
-    sessionId: string;
-    cwd: string;
-    throughTurnId: number;
-  }): Promise<CodeRollbackResult>;
   rollbackContext(input: {
     sessionId: string;
     cwd: string;

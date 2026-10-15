@@ -5,7 +5,6 @@ import { normalizePath } from '../util/path.js';
 import { commitMsg, rollbackSnapshotMsg, toGitPath, ProjectCache } from './utils.js';
 import {
   getTurnsWithBaseline,
-  getTurnRestorePlan,
   getRollbackToTurnPlan,
   findLatestRollbackSnapshot,
   findRollbackSnapshot,
@@ -101,12 +100,27 @@ export const CheckpointLayer = Layer.effect(
           sg.stageAll();
           const targetTurnId = turnId ?? latestBaselineTurn(sg, sessionId);
           if (targetTurnId === 0) return emptyRollbackResult(0);
-          const plan = getTurnRestorePlan(sg, sessionId, targetTurnId);
+          const plan = getRollbackToTurnPlan(sg, sessionId, targetTurnId);
           if (!plan) {
             return emptyRollbackResult(targetTurnId);
           }
+          // files 为空 = 整轮：自动算该 baseline 以来的全部变更文件
+          const selected =
+            files.length > 0
+              ? files
+              : sg
+                  .diffNameStatusAgainstWorkspace(plan.baseline)
+                  .map((c) => resolve(projectPath, c.file));
+          if (selected.length === 0) {
+            return {
+              reverted: true,
+              throughTurnId: targetTurnId,
+              affectedTurns: plan.affectedTurns,
+              selectedFiles: [],
+            };
+          }
           ensureRollbackSnapshot(sg, sessionId, latestBaselineTurn(sg, sessionId));
-          return executeRollback(plan, files, sg);
+          return executeRollback(plan, selected, sg);
         }),
 
       previewRollbackDiff: (projectPath: string, sessionId: string, throughTurnId: number) =>
@@ -126,55 +140,36 @@ export const CheckpointLayer = Layer.effect(
           };
         }),
 
-      rollbackCodeToTurn: (projectPath: string, sessionId: string, throughTurnId: number) =>
-        Effect.sync(() => {
-          const sg = ensure(projectPath);
-          sg.stageAll();
-          const plan = getRollbackToTurnPlan(sg, sessionId, throughTurnId);
-          if (!plan) {
-            return emptyRollbackResult(throughTurnId);
-          }
-
-          ensureRollbackSnapshot(sg, sessionId, latestBaselineTurn(sg, sessionId));
-
-          const selectedFiles = sg
-            .diffNameStatusAgainstWorkspace(plan.baseline)
-            .map((c) => resolve(projectPath, c.file));
-
-          if (selectedFiles.length === 0) {
-            return {
-              reverted: true,
-              throughTurnId,
-              affectedTurns: plan.affectedTurns,
-              selectedFiles: [],
-            };
-          }
-
-          return executeRollback(plan, selectedFiles, sg);
-        }),
-
       undoRollback: (projectPath: string, sessionId: string, files: string[]) =>
         Effect.sync(() => {
           const sg = ensure(projectPath);
-          if (files.length === 0) return emptyRollbackResult(0);
-
           // 只允许撤销最近一次回退：快照的回退时刻必须就是当前最新轮，
           // 否则期间开了新轮，撤销会把新轮改动一起冲掉
           const currentTurnId = latestBaselineTurn(sg, sessionId);
           if (currentTurnId === 0) return emptyRollbackResult(0);
-
           const snapshot = findLatestRollbackSnapshot(sg, sessionId);
           if (!snapshot || snapshot.rollbackTurnId !== currentTurnId) {
             return emptyRollbackResult(currentTurnId);
           }
 
-          sg.checkoutFiles(snapshot.commit, files);
+          let selected = files;
+          if (selected.length === 0) {
+            // 未指定文件 = 整轮撤销：范围 = 快照与 baseline 的差异（即那次回退改动过的文件）
+            const baseline = sg.findCommitByMessage(commitMsg(sessionId, currentTurnId));
+            if (!baseline) return emptyRollbackResult(currentTurnId);
+            selected = sg
+              .diffFiles(baseline, snapshot.commit)
+              .map((c) => resolve(projectPath, c.file));
+            if (selected.length === 0) return emptyRollbackResult(currentTurnId);
+          }
+
+          sg.checkoutFiles(snapshot.commit, selected);
           sg.stageAll();
           return {
             reverted: true,
             throughTurnId: currentTurnId,
             affectedTurns: [],
-            selectedFiles: files,
+            selectedFiles: selected,
           };
         }),
     };

@@ -312,18 +312,6 @@ const rollbackPreview: Handler = Effect.gen(function* () {
   return json(yield* checkpoint.previewRollbackDiff(cwd, id ?? '', throughTurnId));
 });
 
-const rollbackCode: Handler = Effect.gen(function* () {
-  const { id } = yield* pathParams;
-  const body = yield* readJson<{ cwd: string; throughTurnId: number }>();
-  const checkpoint = yield* CheckpointService;
-  const result = yield* checkpoint.rollbackCodeToTurn(
-    resolveCwd(body.cwd),
-    id ?? '',
-    body.throughTurnId
-  );
-  return json({ ok: true, result });
-});
-
 /** 回滚 context（+ 可选代码）后回吐新状态：turns / promptEstimate / usage 都要重算。 */
 const rollbackState = (
   cwd: string,
@@ -358,7 +346,12 @@ const rollbackBoth: Handler = Effect.gen(function* () {
   const cwd = resolveCwd(body.cwd);
   const sessionId = id ?? '';
   const checkpoint = yield* CheckpointService;
-  const codeResult = yield* checkpoint.rollbackCodeToTurn(cwd, sessionId, body.throughTurnId);
+  const codeResult = yield* checkpoint.revertCheckpointFiles(
+    cwd,
+    sessionId,
+    body.throughTurnId,
+    []
+  );
   return json(yield* rollbackState(cwd, sessionId, body.throughTurnId, codeResult));
 });
 
@@ -400,7 +393,6 @@ export const addSessionsRoutes = (router: Router): Router => {
     HttpRouter.post('/api/sessions/:id/checkpoints/:turnId/revert-files', revertFiles),
     HttpRouter.post('/api/sessions/:id/checkpoints/undo-rollback', undoRollback),
     HttpRouter.get('/api/sessions/:id/rollback-preview', rollbackPreview),
-    HttpRouter.post('/api/sessions/:id/rollback-code-to-turn', rollbackCode),
     HttpRouter.post('/api/sessions/:id/rollback-context', rollbackContext),
     HttpRouter.post('/api/sessions/:id/rollback-both-to-turn', rollbackBoth),
     HttpRouter.post('/api/sessions/:id/fork', forkSession)

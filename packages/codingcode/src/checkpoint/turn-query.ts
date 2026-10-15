@@ -14,20 +14,6 @@ export function getTurnsWithBaseline(sg: ShadowGit, sessionId: string): number[]
   return [...ids].sort((a, b) => a - b);
 }
 
-export function getTurnRestorePlan(
-  sg: ShadowGit,
-  sessionId: string,
-  turnId: number
-): RestorePlan | null {
-  const baseline = sg.findCommitByMessage(commitMsg(sessionId, turnId));
-  if (!baseline) return null;
-  return {
-    throughTurnId: turnId,
-    affectedTurns: [],
-    baseline,
-  };
-}
-
 export function getRollbackToTurnPlan(
   sg: ShadowGit,
   sessionId: string,

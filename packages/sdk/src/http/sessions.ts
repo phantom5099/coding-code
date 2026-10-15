@@ -87,14 +87,6 @@ export function createHttpSessionClient(
       );
     },
 
-    async rollbackCodeToTurn({ sessionId, cwd, throughTurnId }) {
-      const res = await apiPost<{ ok: boolean; result: CodeRollbackResult }>(
-        `/api/sessions/${sessionId}/rollback-code-to-turn`,
-        { cwd, throughTurnId }
-      );
-      return res.result;
-    },
-
     async rollbackContext({ sessionId, cwd, throughTurnId }) {
       return apiPost(`/api/sessions/${sessionId}/rollback-context`, { cwd, throughTurnId });
     },

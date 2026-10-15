@@ -101,13 +101,6 @@ const MockCheckpointLayer = Layer.succeed(CheckpointService, {
       selectedFiles: [],
     }),
   previewRollbackDiff: () => Effect.succeed({ throughTurnId: 0, affectedTurns: [], diff: '' }),
-  rollbackCodeToTurn: () =>
-    Effect.succeed({
-      reverted: false,
-      throughTurnId: 0,
-      affectedTurns: [],
-      selectedFiles: [],
-    }),
 } as any);
 
 const TestLayer = Layer.mergeAll(

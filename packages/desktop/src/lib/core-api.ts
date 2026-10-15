@@ -293,16 +293,6 @@ export function previewRollbackDiff(
   return clients.sessions.previewRollbackDiff({ sessionId, cwd, throughTurnId });
 }
 
-export function rollbackCodeToTurn(
-  sessionId: string,
-  cwd: string,
-  throughTurnId: number
-): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions
-    .rollbackCodeToTurn({ sessionId, cwd, throughTurnId })
-    .then((result) => ({ ok: true, result }));
-}
-
 export function rollbackContext(
   sessionId: string,
   cwd: string,

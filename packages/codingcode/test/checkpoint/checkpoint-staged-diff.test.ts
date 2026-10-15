@@ -64,7 +64,7 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
     }
   }, 60000);
 
-  it('rollbackCodeToTurn 删除新文件并还原已跟踪文件', async () => {
+  it('revertCheckpointFiles 未指定文件时删除新文件并还原已跟踪文件', async () => {
     const { projectPath, sessionId } = setupProject();
     try {
       await Effect.runPromise(
@@ -73,7 +73,7 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
           yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
           writeFileSync(join(projectPath, 'after.txt'), 'after\n', 'utf8');
           writeFileSync(join(projectPath, 'before.txt'), 'before\nmodified\n', 'utf8');
-          return yield* checkpoint.rollbackCodeToTurn(projectPath, sessionId, 1);
+          return yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, []);
         }).pipe(Effect.provide(CheckpointLayer) as any)
       );
 
@@ -137,7 +137,7 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
           const checkpoint = yield* CheckpointService;
           yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
           writeFileSync(join(projectPath, 'after.txt'), 'after\n', 'utf8');
-          yield* checkpoint.rollbackCodeToTurn(projectPath, sessionId, 1);
+          yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, []);
           yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 2);
           return yield* checkpoint.getCheckpointDiff(projectPath, sessionId);
         }).pipe(Effect.provide(CheckpointLayer) as any)
@@ -208,7 +208,7 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
           const checkpoint = yield* CheckpointService;
           yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 2);
           writeFileSync(afterPath, 'v2\n', 'utf8');
-          // 又回退第 1 轮 → 新组合 (当前轮2, 目标轮1) 的快照，内容为 v2
+          // 又回退第 1 轮 → 新快照（回退时刻当前轮2），内容为 v2
           return yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, [afterPath]);
         }).pipe(Effect.provide(CheckpointLayer) as any)
       );
@@ -222,6 +222,34 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
         }).pipe(Effect.provide(CheckpointLayer) as any)
       );
       expect(readFileSync(afterPath, 'utf8')).toBe('v2\n');
+    } finally {
+      rmSync(projectPath, { recursive: true, force: true });
+    }
+  }, 60000);
+
+  it('undoRollback 未指定文件时整轮撤销：恢复全部被回退的文件', async () => {
+    const { projectPath, sessionId } = setupProject();
+    const afterPath = join(projectPath, 'after.txt');
+    const beforePath = join(projectPath, 'before.txt');
+    try {
+      const result = (await Effect.runPromise(
+        Effect.gen(function* () {
+          const checkpoint = yield* CheckpointService;
+          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          writeFileSync(afterPath, 'agent\n', 'utf8');
+          writeFileSync(beforePath, 'before\nagent\n', 'utf8');
+          // 空 files = 整轮回退
+          yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, []);
+          // 空 files = 整轮撤销
+          return yield* checkpoint.undoRollback(projectPath, sessionId, []);
+        }).pipe(Effect.provide(CheckpointLayer) as any)
+      )) as { reverted: boolean; selectedFiles: string[] };
+
+      expect(result.reverted).toBe(true);
+      expect(readFileSync(afterPath, 'utf8')).toBe('agent\n');
+      expect(readFileSync(beforePath, 'utf8')).toBe('before\nagent\n');
+      expect(result.selectedFiles).toContain(afterPath);
+      expect(result.selectedFiles).toContain(beforePath);
     } finally {
       rmSync(projectPath, { recursive: true, force: true });
     }

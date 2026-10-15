@@ -22,7 +22,6 @@ vi.mock('../src/lib/core-api', () => ({
   revertFile: vi.fn(),
   revertFiles: vi.fn(),
   previewRollbackDiff: vi.fn(),
-  rollbackCodeToTurn: vi.fn(),
   forkSession: vi.fn(),
   listModels: vi.fn(),
   switchModel: vi.fn(),

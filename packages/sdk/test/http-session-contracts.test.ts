@@ -59,25 +59,6 @@ describe('http session client 与 contracts 对齐', () => {
     expect(result).toEqual(codeResult);
   });
 
-  it('rollbackCodeToTurn 解包 server 的 { ok, result } 信封', async () => {
-    const codeResult = {
-      reverted: true,
-      throughTurnId: 2,
-      affectedTurns: [2],
-      selectedFiles: [],
-    };
-    stubFetch({ ok: true, result: codeResult });
-    const client = createHttpSessionClient(createRequestHelpers('http://localhost:1'));
-
-    const result = await client.rollbackCodeToTurn({
-      sessionId: 's1',
-      cwd: '/tmp/p',
-      throughTurnId: 2,
-    });
-
-    expect(result).toEqual(codeResult);
-  });
-
   it('getCheckpointDiff 把 turnId 编进路径，缺省用 latest', async () => {
     const calls = stubFetch({ turnId: 0, files: [] });
     const client = createHttpSessionClient(createRequestHelpers('http://localhost:1'));

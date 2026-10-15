@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useAgentStore, type ModelEntry, type QueuedInput } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
-import { useRollbackStore } from '../stores/rollback.store';
+import { useRollbackStore, TURN_SCOPE_REVERTED } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import { createStreamState, reduceFrame, type StreamEffects } from '../lib/frame-reducer';
 import type { PermissionMode, ProfileName } from '@codingcode/sdk';
@@ -17,7 +17,6 @@ import {
   revertCheckpointFiles,
   undoRollback,
   previewRollbackDiff,
-  rollbackCodeToTurn,
   rollbackContext,
   rollbackBothToTurn,
   forkSession,
@@ -537,6 +536,10 @@ export function useAgentRollback() {
         for (const f of result.selectedFiles) {
           markFileReverted(threadId, uiId, f);
         }
+        // 未指定文件 = 整轮：打整轮哨兵，供“回退本轮修改”按钮切换为“撤销本轮回退”
+        if (files.length === 0) {
+          markFileReverted(threadId, uiId, TURN_SCOPE_REVERTED);
+        }
       }
       return result;
     },
@@ -553,6 +556,10 @@ export function useAgentRollback() {
         const uiId = resolveUITurnId(threadId, checkpointTurnId ?? result.throughTurnId);
         for (const f of result.selectedFiles) {
           unmarkFileReverted(threadId, uiId, f);
+        }
+        // 未指定文件 = 整轮撤销：unmark 哨兵会清掉该轮全部文件标记
+        if (files.length === 0) {
+          unmarkFileReverted(threadId, uiId, TURN_SCOPE_REVERTED);
         }
       }
       return result;
@@ -571,11 +578,10 @@ export function useAgentRollback() {
 
   const rollbackCode = useCallback(
     async (threadId: string, throughTurnId: number) => {
-      const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await rollbackCodeToTurn(threadId, cwd, throughTurnId);
-      return result;
+      // files 为空 = 整轮回退，由后端自动算该轮全部变更文件
+      return revertFiles(threadId, [], throughTurnId);
     },
-    [workspace.rootPath]
+    [revertFiles]
   );
 
   const rollbackCtx = useCallback(
