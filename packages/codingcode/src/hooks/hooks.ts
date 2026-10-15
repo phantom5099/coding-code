@@ -1,10 +1,26 @@
 import { Layer, Effect } from 'effect';
-import { resolveHookConfigs } from './config.js';
+import {
+  resolveHookConfigs,
+  loadHookConfigs,
+  writeHookConfigs,
+  loadGlobalHookConfigs,
+  writeGlobalHookConfigs,
+  setGlobalHookEnabled,
+  setProjectHookEnabled,
+} from './config.js';
 import { executeHookCommand, executeDecisionHookCommand } from './executor.js';
 import { createLogger } from '../infra/logger.js';
 import { HookService } from './port.js';
 import type { HookPoint, HookDecision, HookCommandOutput } from './types.js';
-import type { ObserverHandler, DecisionHandler, HandlerEntry, ProjectPath } from './types.js';
+import type {
+  ObserverHandler,
+  DecisionHandler,
+  HandlerEntry,
+  ProjectPath,
+  UserHookConfig,
+  HookConfigEntry,
+  HookConfigOutcome,
+} from './types.js';
 
 const logger = createLogger();
 
@@ -37,6 +53,21 @@ export const HookLayer = Layer.effect(
       const list = projectPath ? hooksByProject.get(projectPath)?.get(point) : undefined;
       if (!list) return [];
       return list.slice().sort((a, b) => a.priority - b.priority);
+    }
+
+    // 配置读写：projectPath 省略 = 全局层
+    function loadFor(projectPath?: string): UserHookConfig[] {
+      return projectPath === undefined ? loadGlobalHookConfigs() : loadHookConfigs(projectPath);
+    }
+
+    function writeFor(projectPath: string | undefined, hooks: UserHookConfig[]): void {
+      if (projectPath === undefined) writeGlobalHookConfigs(hooks);
+      else writeHookConfigs(projectPath, hooks);
+    }
+
+    /** 开关归一：缺省（undefined）等同启用 */
+    function enabledOf(hook: UserHookConfig): UserHookConfig & { enabled: boolean } {
+      return { ...hook, enabled: hook.enabled !== false };
     }
 
     return {
@@ -104,6 +135,85 @@ export const HookLayer = Layer.effect(
             projectMap.set(hc.point, list);
           }
           hooksByProject.set(projectPath, projectMap);
+        }),
+
+      listHooks: (projectPath?: string): Effect.Effect<HookConfigEntry[]> =>
+        Effect.sync(() => {
+          const globalHooks = loadGlobalHookConfigs();
+          // 全局窗口只列全局项，不带 hasProjectOverride
+          if (projectPath === undefined) {
+            return globalHooks.map((h) => ({ ...enabledOf(h), source: 'global' as const }));
+          }
+          const projectHooks = loadHookConfigs(projectPath);
+          const globalNames = new Set(globalHooks.map((h) => h.name));
+          const projectNames = new Set(projectHooks.map((h) => h.name));
+          return resolveHookConfigs(projectPath).map((h) => {
+            const isFromProject = projectNames.has(h.name);
+            const isFromGlobal = globalNames.has(h.name);
+            return {
+              ...enabledOf(h),
+              source: isFromProject ? ('project' as const) : ('global' as const),
+              hasProjectOverride: isFromProject && isFromGlobal,
+            };
+          });
+        }),
+
+      createHook: (
+        projectPath: string | undefined,
+        hook: UserHookConfig
+      ): Effect.Effect<HookConfigOutcome> =>
+        Effect.sync(() => {
+          const hooks = loadFor(projectPath);
+          if (hooks.some((h) => h.name === hook.name)) {
+            return { ok: false, reason: 'already-exists' } as const;
+          }
+          hooks.push(hook);
+          writeFor(projectPath, hooks);
+          return { ok: true } as const;
+        }),
+
+      updateHook: (
+        projectPath: string | undefined,
+        name: string,
+        hook: UserHookConfig
+      ): Effect.Effect<HookConfigOutcome> =>
+        Effect.sync(() => {
+          const hooks = loadFor(projectPath);
+          const idx = hooks.findIndex((h) => h.name === name);
+          if (idx === -1) return { ok: false, reason: 'not-found' } as const;
+          if (hook.name !== name && hooks.some((h) => h.name === hook.name)) {
+            return { ok: false, reason: 'already-exists' } as const;
+          }
+          hooks[idx] = hook;
+          writeFor(projectPath, hooks);
+          return { ok: true } as const;
+        }),
+
+      deleteHook: (
+        projectPath: string | undefined,
+        name: string
+      ): Effect.Effect<HookConfigOutcome> =>
+        Effect.sync(() => {
+          const hooks = loadFor(projectPath);
+          // 语义保持：项目层缺名报 not-found，全局层删除幂等
+          if (projectPath !== undefined && !hooks.some((h) => h.name === name)) {
+            return { ok: false, reason: 'not-found' } as const;
+          }
+          writeFor(
+            projectPath,
+            hooks.filter((h) => h.name !== name)
+          );
+          return { ok: true } as const;
+        }),
+
+      setHookEnabled: (
+        projectPath: string | undefined,
+        name: string,
+        enabled: boolean
+      ): Effect.Effect<void> =>
+        Effect.sync(() => {
+          if (projectPath === undefined) setGlobalHookEnabled(name, enabled);
+          else setProjectHookEnabled(projectPath, name, enabled);
         }),
     };
   })

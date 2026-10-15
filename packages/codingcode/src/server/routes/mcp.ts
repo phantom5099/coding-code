@@ -1,19 +1,11 @@
 import * as HttpRouter from '@effect/platform/HttpRouter';
 import { Effect } from 'effect';
 import { isGlobalCwd, resolveCwd } from '../cwd.js';
-import { AlreadyExistsError, NotFoundError, type AppError } from '../http-error.js';
+import { AlreadyExistsError, NotFoundError } from '../http-error.js';
 import { AgentError } from '../../util/error.js';
 import { json, pathParams, query, readJson, type Handler, type Router } from '../handler.js';
+import { McpService } from '../../mcp/port.js';
 import type { McpServerConfig } from '../../mcp/types.js';
-import {
-  loadMcpConfig,
-  writeMcpConfig,
-  loadGlobalMcpConfig,
-  writeGlobalMcpConfig,
-  resolveMcpConfig,
-  setGlobalMcpServerEnabled,
-  setProjectMcpServerEnabled,
-} from '../../mcp/config.js';
 
 /** 校验必填项后构造领域对象；缺 name 返回 null，由调用方落 400。不用 `as` 把未验证 body 断言成 McpServerConfig。 */
 function toMcpServerConfig(body: Partial<McpServerConfig>): McpServerConfig | null {
@@ -24,73 +16,14 @@ function toMcpServerConfig(body: Partial<McpServerConfig>): McpServerConfig | nu
 
 const MISSING_NAME = 'Missing required field: name';
 
-const mcpCreateServer = (cwd: string, server: McpServerConfig): Effect.Effect<void, AppError> =>
-  Effect.gen(function* () {
-    const servers = loadMcpConfig(cwd);
-    if (servers.some((s) => s.name === server.name)) {
-      return yield* Effect.fail(new AlreadyExistsError(`MCP server '${server.name}' already exists`));
-    }
-    servers.push(server);
-    writeMcpConfig(cwd, servers);
-  });
-
-const mcpUpdateServer = (
-  cwd: string,
-  name: string,
-  server: McpServerConfig
-): Effect.Effect<void, AppError> =>
-  Effect.gen(function* () {
-    const servers = loadMcpConfig(cwd);
-    const idx = servers.findIndex((s) => s.name === name);
-    if (idx === -1) return yield* Effect.fail(new NotFoundError(`MCP server '${name}' not found`));
-    if (server.name !== name && servers.some((s) => s.name === server.name)) {
-      return yield* Effect.fail(new AlreadyExistsError(`MCP server '${server.name}' already exists`));
-    }
-    servers[idx] = server;
-    writeMcpConfig(cwd, servers);
-  });
-
-const mcpDeleteServer = (cwd: string, name: string): Effect.Effect<void, AppError> =>
-  Effect.gen(function* () {
-    const servers = loadMcpConfig(cwd);
-    if (!servers.some((s) => s.name === name)) {
-      return yield* Effect.fail(new NotFoundError(`MCP server '${name}' not found in project config`));
-    }
-    writeMcpConfig(
-      cwd,
-      servers.filter((s) => s.name !== name)
-    );
-  });
+/** `?cwd` 约定 → 模块入参：空 / global 即全局层（undefined） */
+const scopeOf = (rawCwd: string | undefined): string | undefined =>
+  isGlobalCwd(rawCwd) ? undefined : resolveCwd(rawCwd);
 
 const listServers: Handler = Effect.gen(function* () {
   const { cwd: rawCwd } = yield* query;
-  if (isGlobalCwd(rawCwd)) {
-    return json(
-      loadGlobalMcpConfig().map((s) => ({
-        ...s,
-        enabled: s.enabled !== false,
-        source: 'global' as const,
-      }))
-    );
-  }
-
-  const cwd = resolveCwd(rawCwd);
-  const globalServers = loadGlobalMcpConfig();
-  const projectServers = loadMcpConfig(cwd);
-  const globalNames = new Set(globalServers.map((s) => s.name));
-  const projectNames = new Set(projectServers.map((s) => s.name));
-  return json(
-    resolveMcpConfig(cwd).map((s) => {
-      const isFromProject = projectNames.has(s.name);
-      const isFromGlobal = globalNames.has(s.name);
-      return {
-        ...s,
-        enabled: s.enabled !== false,
-        source: isFromProject ? 'project' : 'global',
-        hasProjectOverride: isFromProject && isFromGlobal,
-      };
-    })
-  );
+  const mcp = yield* McpService;
+  return json(yield* mcp.listServers(scopeOf(rawCwd)));
 });
 
 const createServer: Handler = Effect.gen(function* () {
@@ -99,15 +32,10 @@ const createServer: Handler = Effect.gen(function* () {
   const server = toMcpServerConfig(body);
   if (!server) return yield* Effect.fail(new AgentError('CONFIG_MISSING', MISSING_NAME));
 
-  if (isGlobalCwd(rawCwd)) {
-    const servers = loadGlobalMcpConfig();
-    if (servers.some((s) => s.name === server.name)) {
-      return yield* Effect.fail(new AlreadyExistsError(`MCP server '${server.name}' already exists`));
-    }
-    servers.push(server);
-    writeGlobalMcpConfig(servers);
-  } else {
-    yield* mcpCreateServer(resolveCwd(rawCwd), server);
+  const mcp = yield* McpService;
+  const outcome = yield* mcp.createServer(scopeOf(rawCwd), server);
+  if (!outcome.ok) {
+    return yield* Effect.fail(new AlreadyExistsError(`MCP server '${server.name}' already exists`));
   }
   return json({ ok: true });
 });
@@ -120,17 +48,14 @@ const updateServer: Handler = Effect.gen(function* () {
   if (!server) return yield* Effect.fail(new AgentError('CONFIG_MISSING', MISSING_NAME));
 
   const target = name ?? '';
-  if (isGlobalCwd(rawCwd)) {
-    const servers = loadGlobalMcpConfig();
-    const idx = servers.findIndex((s) => s.name === target);
-    if (idx === -1) return yield* Effect.fail(new NotFoundError(`MCP server '${target}' not found`));
-    if (server.name !== target && servers.some((s) => s.name === server.name)) {
-      return yield* Effect.fail(new AlreadyExistsError(`MCP server '${server.name}' already exists`));
-    }
-    servers[idx] = server;
-    writeGlobalMcpConfig(servers);
-  } else {
-    yield* mcpUpdateServer(resolveCwd(rawCwd), target, server);
+  const mcp = yield* McpService;
+  const outcome = yield* mcp.updateServer(scopeOf(rawCwd), target, server);
+  if (!outcome.ok) {
+    return yield* Effect.fail(
+      outcome.reason === 'already-exists'
+        ? new AlreadyExistsError(`MCP server '${server.name}' already exists`)
+        : new NotFoundError(`MCP server '${target}' not found`)
+    );
   }
   return json({ ok: true });
 });
@@ -139,25 +64,24 @@ const deleteServer: Handler = Effect.gen(function* () {
   const { name } = yield* pathParams;
   const { cwd: rawCwd } = yield* query;
   const target = name ?? '';
-  if (isGlobalCwd(rawCwd)) {
-    writeGlobalMcpConfig(loadGlobalMcpConfig().filter((s) => s.name !== target));
-  } else {
-    yield* mcpDeleteServer(resolveCwd(rawCwd), target);
+
+  const mcp = yield* McpService;
+  const outcome = yield* mcp.deleteServer(scopeOf(rawCwd), target);
+  if (!outcome.ok) {
+    return yield* Effect.fail(
+      new NotFoundError(`MCP server '${target}' not found in project config`)
+    );
   }
   return json({ ok: true });
 });
 
-// 开关就是配置里的 enabled 字段：改开关 = 写回对应层的 mcp.yaml
 const setServerEnabled: Handler = Effect.gen(function* () {
   const { name } = yield* pathParams;
   const { cwd: rawCwd } = yield* query;
   const body = yield* readJson<{ enabled: boolean }>();
-  const target = name ?? '';
-  if (isGlobalCwd(rawCwd)) {
-    setGlobalMcpServerEnabled(target, body.enabled);
-  } else {
-    setProjectMcpServerEnabled(resolveCwd(rawCwd), target, body.enabled);
-  }
+
+  const mcp = yield* McpService;
+  yield* mcp.setServerEnabled(scopeOf(rawCwd), name ?? '', body.enabled);
   return json({ ok: true });
 });
 

@@ -21,6 +21,19 @@ export interface McpServerConfig {
   autoReconnect?: boolean;
 }
 
+/** 配置写操作的结果：只表达成败与原因，HTTP 语义由调用方翻译 */
+export type McpConfigOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'not-found' | 'already-exists' };
+
+/** 列表项：配置 + 归一后的 enabled 与来源标注 */
+export interface McpServerEntry extends McpServerConfig {
+  enabled: boolean;
+  source: 'global' | 'project';
+  /** 仅项目层返回；全局层不带该键 */
+  hasProjectOverride?: boolean;
+}
+
 /** MCP 远端工具的纯数据描述：zod schema 与 SDK client 等机制形状由实现层持有 */
 export interface McpToolSpec {
   server: string;

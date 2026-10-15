@@ -37,6 +37,19 @@ export interface UserHookConfig {
   enabled?: boolean;
 }
 
+/** 配置写操作的结果：只表达成败与原因，HTTP 语义由调用方翻译 */
+export type HookConfigOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'not-found' | 'already-exists' };
+
+/** 列表项：配置 + 归一后的 enabled 与来源标注 */
+export interface HookConfigEntry extends UserHookConfig {
+  enabled: boolean;
+  source: 'global' | 'project';
+  /** 仅项目层返回；全局层不带该键 */
+  hasProjectOverride?: boolean;
+}
+
 /** 观察者：只被通知，返回值被忽略 */
 export type ObserverHandler = (payload: Record<string, unknown>) => Effect.Effect<void, never, any>;
 
