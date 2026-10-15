@@ -25,7 +25,7 @@ const mockEventSink = {
   emit: () => Effect.void,
 };
 
-const HookTestLayer = Layer.succeed(HookService, mockHookService);
+const HookTestLayer = Layer.succeed(HookService, mockHookService as any);
 const WaitTestLayer = Layer.succeed(ApprovalWaitService, mockApprovalWaitService);
 const SinkTestLayer = Layer.succeed(EventSinkService, mockEventSink as any);
 const TestLayer = Layer.mergeAll(HookTestLayer, WaitTestLayer, SinkTestLayer);

@@ -1,8 +1,16 @@
 import { Effect, Layer } from 'effect';
-import { resolveMcpConfig } from './config.js';
+import {
+  resolveMcpConfig,
+  loadMcpConfig,
+  writeMcpConfig,
+  loadGlobalMcpConfig,
+  writeGlobalMcpConfig,
+  setGlobalMcpServerEnabled,
+  setProjectMcpServerEnabled,
+} from './config.js';
 import { McpClient } from './client.js';
 import { McpService } from './port.js';
-import type { McpServerConfig, McpToolSpec } from './types.js';
+import type { McpServerConfig, McpToolSpec, McpServerEntry, McpConfigOutcome } from './types.js';
 import { createLogger } from '../infra/logger.js';
 import { AgentError } from '../util/error.js';
 
@@ -95,6 +103,21 @@ export const McpLayer = Layer.effect(
       });
     }
 
+    // 配置读写：projectPath 省略 = 全局层
+    function loadFor(projectPath?: string): McpServerConfig[] {
+      return projectPath === undefined ? loadGlobalMcpConfig() : loadMcpConfig(projectPath);
+    }
+
+    function writeFor(projectPath: string | undefined, servers: McpServerConfig[]): void {
+      if (projectPath === undefined) writeGlobalMcpConfig(servers);
+      else writeMcpConfig(projectPath, servers);
+    }
+
+    /** 开关归一：缺省（undefined）等同启用 */
+    function enabledOf(server: McpServerConfig): McpServerConfig & { enabled: boolean } {
+      return { ...server, enabled: server.enabled !== false };
+    }
+
     return {
       syncConnections: (projectPath: string): Effect.Effect<void> =>
         Effect.gen(function* () {
@@ -136,6 +159,85 @@ export const McpLayer = Layer.effect(
             }
           }
           return specs;
+        }),
+
+      listServers: (projectPath?: string): Effect.Effect<McpServerEntry[]> =>
+        Effect.sync(() => {
+          const globalServers = loadGlobalMcpConfig();
+          // 全局窗口只列全局项，不带 hasProjectOverride
+          if (projectPath === undefined) {
+            return globalServers.map((s) => ({ ...enabledOf(s), source: 'global' as const }));
+          }
+          const projectServers = loadMcpConfig(projectPath);
+          const globalNames = new Set(globalServers.map((s) => s.name));
+          const projectNames = new Set(projectServers.map((s) => s.name));
+          return resolveMcpConfig(projectPath).map((s) => {
+            const isFromProject = projectNames.has(s.name);
+            const isFromGlobal = globalNames.has(s.name);
+            return {
+              ...enabledOf(s),
+              source: isFromProject ? ('project' as const) : ('global' as const),
+              hasProjectOverride: isFromProject && isFromGlobal,
+            };
+          });
+        }),
+
+      createServer: (
+        projectPath: string | undefined,
+        server: McpServerConfig
+      ): Effect.Effect<McpConfigOutcome> =>
+        Effect.sync(() => {
+          const servers = loadFor(projectPath);
+          if (servers.some((s) => s.name === server.name)) {
+            return { ok: false, reason: 'already-exists' } as const;
+          }
+          servers.push(server);
+          writeFor(projectPath, servers);
+          return { ok: true } as const;
+        }),
+
+      updateServer: (
+        projectPath: string | undefined,
+        name: string,
+        server: McpServerConfig
+      ): Effect.Effect<McpConfigOutcome> =>
+        Effect.sync(() => {
+          const servers = loadFor(projectPath);
+          const idx = servers.findIndex((s) => s.name === name);
+          if (idx === -1) return { ok: false, reason: 'not-found' } as const;
+          if (server.name !== name && servers.some((s) => s.name === server.name)) {
+            return { ok: false, reason: 'already-exists' } as const;
+          }
+          servers[idx] = server;
+          writeFor(projectPath, servers);
+          return { ok: true } as const;
+        }),
+
+      deleteServer: (
+        projectPath: string | undefined,
+        name: string
+      ): Effect.Effect<McpConfigOutcome> =>
+        Effect.sync(() => {
+          const servers = loadFor(projectPath);
+          // 语义保持：项目层缺名报 not-found，全局层删除幂等
+          if (projectPath !== undefined && !servers.some((s) => s.name === name)) {
+            return { ok: false, reason: 'not-found' } as const;
+          }
+          writeFor(
+            projectPath,
+            servers.filter((s) => s.name !== name)
+          );
+          return { ok: true } as const;
+        }),
+
+      setServerEnabled: (
+        projectPath: string | undefined,
+        name: string,
+        enabled: boolean
+      ): Effect.Effect<void> =>
+        Effect.sync(() => {
+          if (projectPath === undefined) setGlobalMcpServerEnabled(name, enabled);
+          else setProjectMcpServerEnabled(projectPath, name, enabled);
         }),
     };
   })

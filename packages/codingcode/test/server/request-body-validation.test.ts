@@ -11,19 +11,21 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { createServer, type ServerApp } from '../../src/server/index.js';
+import { HookLayer } from '../../src/hooks/hooks.js';
+import { McpLayer } from '../../src/mcp/mcp.js';
 import { useTempHome } from '../helpers/temp-home.js';
 
 // 全局层落在临时 home，避免写坏开发机的 ~/.codingcode
 useTempHome('codingcode-test-body-');
 
 let projectDir: string;
-// 校验失败在任何 Effect 之前就返回，故运行时可以是空壳 —— 只有走到「校验通过」的
-// 分支才会去 context 里取 SchedulerService。
+// 校验失败在任何 Effect 之前就返回，故 400 用例不需要任何服务；跑通写路径只需要
+// hooks / mcp 两个无依赖的层。
 let app: ServerApp;
 
 beforeEach(async () => {
   projectDir = mkdtempSync(join(tmpdir(), 'codingcode-test-body-project-'));
-  app = await createServer(ManagedRuntime.make(Layer.empty as any));
+  app = await createServer(ManagedRuntime.make(Layer.mergeAll(HookLayer, McpLayer)));
 });
 
 afterEach(() => {
