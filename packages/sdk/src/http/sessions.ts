@@ -64,9 +64,19 @@ export function createHttpSessionClient(
       );
     },
 
-    async revertCheckpointFiles({ sessionId, cwd, files }) {
+    async revertCheckpointFiles({ sessionId, cwd, files, turnId }) {
+      const segment = turnId != null ? String(turnId) : 'latest';
       const res = await apiPost<{ ok: boolean; result: CodeRollbackResult }>(
-        `/api/sessions/${sessionId}/checkpoints/latest/revert-files`,
+        `/api/sessions/${sessionId}/checkpoints/${segment}/revert-files`,
+        { cwd, files }
+      );
+      return res.result;
+    },
+
+    async undoRollback({ sessionId, cwd, files, turnId }) {
+      const segment = turnId != null ? String(turnId) : 'latest';
+      const res = await apiPost<{ ok: boolean; result: CodeRollbackResult }>(
+        `/api/sessions/${sessionId}/checkpoints/${segment}/undo-rollback`,
         { cwd, files }
       );
       return res.result;

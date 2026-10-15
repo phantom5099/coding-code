@@ -212,9 +212,6 @@ export const AgentLayer = Layer.effect(
             }
           }
 
-          // checkpoint baseline
-          yield* checkpoint.snapshotBaseline(state.cwd, sid, turnId);
-
           const rulesText = yield* rules.getAllRules(state.cwd);
 
           // 出站队列挂在 sink 上，本回合是它的唯一读者
@@ -558,6 +555,11 @@ export const AgentLayer = Layer.effect(
                     signal: abortSignal,
                     activeProfile: profile?.name,
                     model,
+                    onBeforeMutation: checkpoint.snapshotBeforeWrite(
+                      state.cwd,
+                      sid,
+                      state.currentTurnId
+                    ),
                   },
                   toolLookup
                 )
@@ -590,9 +592,6 @@ export const AgentLayer = Layer.effect(
             });
           }
         }
-
-        yield* checkpoint.snapshotFinal(projectPath, state.sessionId, state.currentTurnId);
-        yield* flushMemoryInBackground(state.sessionId, model, state.cwd);
 
         if (lastResult) return lastResult;
 
@@ -627,9 +626,6 @@ export const AgentLayer = Layer.effect(
                 kind: 'fail',
                 error: { message: 'agent terminated without end frame', code: 'AGENT_TERMINATED' },
               })
-              .pipe(Effect.ignore);
-            yield* checkpoint
-              .snapshotFinal(state.cwd, sid, state.currentTurnId)
               .pipe(Effect.ignore);
             yield* flushMemoryInBackground(state.sessionId, model, state.cwd);
           })

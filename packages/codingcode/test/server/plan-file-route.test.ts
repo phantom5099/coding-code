@@ -100,8 +100,7 @@ const MockContextLayer = Layer.succeed(ContextService, {
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, {
   _tag: 'Checkpoint' as const,
-  snapshotBaseline: () => Effect.void,
-  snapshotFinal: () => Effect.void,
+  snapshotBeforeWrite: () => Effect.void,
   getCheckpointDiff: () => Effect.succeed({ turnId: 0, files: [] }),
   revertCheckpointFiles: () =>
     Effect.succeed({

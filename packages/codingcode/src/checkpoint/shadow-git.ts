@@ -2,6 +2,7 @@ import { spawnSync } from 'child_process';
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { normalizePath, projectDataDir } from '../util/path.js';
+import { toGitPath } from './utils.js';
 
 const NULL_DEVICE = process.platform === 'win32' ? 'NUL' : '/dev/null';
 
@@ -55,12 +56,16 @@ export class ShadowGit {
     this.run('config', 'user.email', 'checkpoint@agent.local');
   }
 
+  stageAll(): void {
+    const result = this.run('add', '-A');
+    if (result.status !== 0) {
+      throw new Error(`ShadowGit add failed: ${result.stderr}`);
+    }
+  }
+
   commit(message: string): string {
     this.init();
-    const addResult = this.run('add', '-A');
-    if (addResult.status !== 0) {
-      throw new Error(`ShadowGit add failed: ${addResult.stderr}`);
-    }
+    this.stageAll();
     const result = this.run('commit', '--allow-empty', '-m', message);
     if (result.status !== 0) throw new Error(`ShadowGit commit failed: ${result.stderr}`);
     const match = result.stdout.trim().match(/^\[[\w-]+ ([a-f0-9]+)\]/);
@@ -72,9 +77,8 @@ export class ShadowGit {
 
   checkoutFiles(commit: string, files: string[]): void {
     if (files.length === 0) return;
-    // restore --source handles both existing files (restores content) and
-    // non-existing files at baseline (deletes them) — unlike checkout which errors
-    const result = this.run('restore', '--source', commit, '--', ...files);
+    const pathspecs = files.map((f) => toGitPath(this.projectPath, f));
+    const result = this.run('restore', '--source', commit, '--', ...pathspecs);
     if (result.status !== 0) {
       throw new Error(`ShadowGit restore failed: ${result.stderr}`);
     }
@@ -84,14 +88,12 @@ export class ShadowGit {
   diffFiles(commitA: string, commitB: string): Array<{ status: string; file: string }> {
     const result = this.run('diff', '--name-status', commitA, commitB);
     if (result.status !== 0 || !result.stdout.trim()) return [];
-    return result.stdout
-      .trim()
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => {
-        const [status = '', ...rest] = line.split('\t');
-        return { status, file: rest.join('\t') };
-      });
+    return this.parseNameStatus(result.stdout);
+  }
+
+  diffNameStatusAgainstWorkspace(baseline: string): Array<{ status: string; file: string }> {
+    const result = this.run('diff', '--name-status', baseline);
+    return result.status === 0 ? this.parseNameStatus(result.stdout) : [];
   }
 
   findCommitByMessage(pattern: string): string | null {
@@ -100,20 +102,16 @@ export class ShadowGit {
     return hash || null;
   }
 
-  /** Show file content from a commit. Returns null if file doesn't exist in that commit. */
-  showFile(commit: string, file: string): string | null {
-    const result = this.run('show', `${commit}:${file}`);
-    if (result.status !== 0) return null;
-    return result.stdout;
-  }
-
   /** Public git command wrapper — used by CheckpointService for diagnostics. */
   git(...args: string[]): { stdout: string; stderr: string; status: number | null } {
     return this.run(...args);
   }
 
   isTooLargeForSnapshot(): boolean {
-    const result = this.run('ls-files', '-m', '-o', '--exclude-standard');
+    const hasHead = this.run('rev-parse', '--verify', 'HEAD').status === 0;
+    const result = hasHead
+      ? this.run('diff', '--cached', '--name-only', 'HEAD')
+      : this.run('ls-files');
     const files = result.stdout.trim().split('\n').filter(Boolean);
     let totalBytes = 0;
     for (const f of files) {
@@ -128,6 +126,17 @@ export class ShadowGit {
   }
 
   // ---- Private ----
+  private parseNameStatus(stdout: string): Array<{ status: string; file: string }> {
+    return stdout
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [status = '', ...rest] = line.split('\t');
+        return { status, file: rest.join('\t') };
+      });
+  }
+
   private run(...args: string[]): { stdout: string; stderr: string; status: number | null } {
     const result = spawnSync(
       'git',

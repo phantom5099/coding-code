@@ -183,7 +183,14 @@ export const ToolExecutorLayer = Layer.effect(
 
         const waveResults = yield* Effect.forEach(
           splitWaves(toolCalls, lookup),
-          (wave) => Effect.forEach(wave, runTool, { concurrency: 'unbounded' }),
+          (wave) =>
+            Effect.gen(function* () {
+              // 写类工具独占 wave 且 wave 间串行，故此处等价于"首次写之前"且无竞态
+              if (opts.onBeforeMutation && wave.some((tc) => lookup(tc.name)?.mutatesWorkspace)) {
+                yield* opts.onBeforeMutation;
+              }
+              return yield* Effect.forEach(wave, runTool, { concurrency: 'unbounded' });
+            }),
           { concurrency: 1 }
         );
 

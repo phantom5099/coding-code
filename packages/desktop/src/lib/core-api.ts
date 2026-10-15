@@ -261,12 +261,29 @@ export function getCheckpointDiff(
 export function revertCheckpointFiles(
   sessionId: string,
   cwd: string,
-  files: string[]
+  files: string[],
+  turnId?: number
 ): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions.revertCheckpointFiles({ sessionId, cwd, files }).then((result) => ({
-    ok: true,
-    result,
-  }));
+  return clients.sessions
+    .revertCheckpointFiles({ sessionId, cwd, files, turnId })
+    .then((result) => ({
+      ok: true,
+      result,
+    }));
+}
+
+export function undoRollback(
+  sessionId: string,
+  cwd: string,
+  files: string[],
+  turnId?: number
+): Promise<{ ok: boolean; result: CodeRollbackResult }> {
+  return clients.sessions
+    .undoRollback({ sessionId, cwd, files, turnId })
+    .then((result) => ({
+      ok: true,
+      result,
+    }));
 }
 
 export function previewRollbackDiff(

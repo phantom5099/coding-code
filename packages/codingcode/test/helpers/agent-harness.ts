@@ -329,8 +329,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     mocks.sessionLayer ?? Layer.succeed(SessionService, session as any),
     Layer.succeed(ToolExecutorService, executor as any),
     Layer.succeed(CheckpointService, {
-      snapshotBaseline: () => Effect.void,
-      snapshotFinal: () => Effect.void,
+      snapshotBeforeWrite: () => Effect.void,
     } as any),
     Layer.succeed(ApprovalService, {
       evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),

@@ -3,8 +3,7 @@ import type { Effect } from 'effect';
 import type { CheckpointDiff, CodeRollbackResult, RollbackPreviewDiff } from './types.js';
 
 export interface CheckpointShape {
-  snapshotBaseline(projectPath: string, sessionId: string, turnId: number): Effect.Effect<void>;
-  snapshotFinal(projectPath: string, sessionId: string, turnId: number): Effect.Effect<void>;
+  snapshotBeforeWrite(projectPath: string, sessionId: string, turnId: number): Effect.Effect<void>;
   getCheckpointDiff(
     projectPath: string,
     sessionId: string,
@@ -25,6 +24,12 @@ export interface CheckpointShape {
     projectPath: string,
     sessionId: string,
     throughTurnId: number
+  ): Effect.Effect<CodeRollbackResult>;
+  undoRollback(
+    projectPath: string,
+    sessionId: string,
+    turnId: number | undefined,
+    files: string[]
   ): Effect.Effect<CodeRollbackResult>;
 }
 
