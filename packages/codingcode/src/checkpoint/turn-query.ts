@@ -47,16 +47,16 @@ export function getRollbackToTurnPlan(
   };
 }
 
+/** 该会话全局 rollbackTurnId 最大的快照 = 最近一次回退前的状态 */
 export function findLatestRollbackSnapshot(
   sg: ShadowGit,
-  sessionId: string,
-  baselineTurnId: number
+  sessionId: string
 ): { rollbackTurnId: number; commit: string } | null {
   // 不用 --grep：git 默认 BRE 正则，[0-9]+ 的 + 是字面量，永远匹配不到。
   // 与 getTurnsWithBaseline 同构：--format 全量拉取，JS 侧 ERE 匹配。
   const short = shortSid(sessionId);
   const result = sg.git('log', '--all', '--format=%H %s');
-  const re = new RegExp(`^([a-f0-9]+) turn-${short}-(\\d+)-pre-${baselineTurnId}$`);
+  const re = new RegExp(`^([a-f0-9]+) turn-${short}-(\\d+)-pre-rollback$`);
   let best: { rollbackTurnId: number; commit: string } | null = null;
   for (const line of result.stdout.trim().split('\n').filter(Boolean)) {
     const m = line.match(re);
@@ -69,12 +69,11 @@ export function findLatestRollbackSnapshot(
   return best;
 }
 
-/** 供 ensure 幂等寻址：某个 (当前轮, 目标轮) 组合的快照是否已存在 */
+/** 供 ensure 幂等寻址：当前轮的快照是否已存在 */
 export function findRollbackSnapshot(
   sg: ShadowGit,
   sessionId: string,
-  rollbackTurnId: number,
-  baselineTurnId: number
+  rollbackTurnId: number
 ): string | null {
-  return sg.findCommitByMessage(rollbackSnapshotMsg(sessionId, rollbackTurnId, baselineTurnId));
+  return sg.findCommitByMessage(rollbackSnapshotMsg(sessionId, rollbackTurnId));
 }

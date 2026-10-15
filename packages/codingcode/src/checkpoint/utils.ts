@@ -11,12 +11,8 @@ export function commitMsg(sessionId: string, turnId: number): string {
   return `turn-${shortSid(sessionId)}-${turnId}-baseline`;
 }
 
-export function rollbackSnapshotMsg(
-  sessionId: string,
-  rollbackTurnId: number,
-  baselineTurnId: number
-): string {
-  return `turn-${shortSid(sessionId)}-${rollbackTurnId}-pre-${baselineTurnId}`;
+export function rollbackSnapshotMsg(sessionId: string, rollbackTurnId: number): string {
+  return `turn-${shortSid(sessionId)}-${rollbackTurnId}-pre-rollback`;
 }
 
 export function toGitPath(projectPath: string, file: string): string {

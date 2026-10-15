@@ -275,11 +275,10 @@ export function revertCheckpointFiles(
 export function undoRollback(
   sessionId: string,
   cwd: string,
-  files: string[],
-  turnId?: number
+  files: string[]
 ): Promise<{ ok: boolean; result: CodeRollbackResult }> {
   return clients.sessions
-    .undoRollback({ sessionId, cwd, files, turnId })
+    .undoRollback({ sessionId, cwd, files })
     .then((result) => ({
       ok: true,
       result,

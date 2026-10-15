@@ -28,7 +28,6 @@ export interface CheckpointShape {
   undoRollback(
     projectPath: string,
     sessionId: string,
-    turnId: number | undefined,
     files: string[]
   ): Effect.Effect<CodeRollbackResult>;
 }

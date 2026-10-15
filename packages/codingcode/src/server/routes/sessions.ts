@@ -296,15 +296,10 @@ const revertFiles: Handler = Effect.gen(function* () {
 });
 
 const undoRollback: Handler = Effect.gen(function* () {
-  const { id, turnId: rawTurnId } = yield* pathParams;
+  const { id } = yield* pathParams;
   const body = yield* readJson<{ cwd: string; files: string[] }>();
   const checkpoint = yield* CheckpointService;
-  const result = yield* checkpoint.undoRollback(
-    resolveCwd(body.cwd),
-    id ?? '',
-    parseCheckpointTurnId(rawTurnId),
-    body.files
-  );
+  const result = yield* checkpoint.undoRollback(resolveCwd(body.cwd), id ?? '', body.files);
   return json({ ok: true, result });
 });
 
@@ -403,7 +398,7 @@ export const addSessionsRoutes = (router: Router): Router => {
     HttpRouter.get('/api/sessions/:id/checkpoints/:turnId/diff', turnCheckpointDiff),
     HttpRouter.post('/api/sessions/:id/checkpoints/:turnId/revert-file', revertFile),
     HttpRouter.post('/api/sessions/:id/checkpoints/:turnId/revert-files', revertFiles),
-    HttpRouter.post('/api/sessions/:id/checkpoints/:turnId/undo-rollback', undoRollback),
+    HttpRouter.post('/api/sessions/:id/checkpoints/undo-rollback', undoRollback),
     HttpRouter.get('/api/sessions/:id/rollback-preview', rollbackPreview),
     HttpRouter.post('/api/sessions/:id/rollback-code-to-turn', rollbackCode),
     HttpRouter.post('/api/sessions/:id/rollback-context', rollbackContext),

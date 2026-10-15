@@ -73,10 +73,9 @@ export function createHttpSessionClient(
       return res.result;
     },
 
-    async undoRollback({ sessionId, cwd, files, turnId }) {
-      const segment = turnId != null ? String(turnId) : 'latest';
+    async undoRollback({ sessionId, cwd, files }) {
       const res = await apiPost<{ ok: boolean; result: CodeRollbackResult }>(
-        `/api/sessions/${sessionId}/checkpoints/${segment}/undo-rollback`,
+        `/api/sessions/${sessionId}/checkpoints/undo-rollback`,
         { cwd, files }
       );
       return res.result;

@@ -544,12 +544,13 @@ export function useAgentRollback() {
   );
 
   // 撤销回退：恢复到回退前存的快照，并清掉“已回退”标记，按钮恢复可点
+  // turnId 只用于定位本地标记，后端按“最近一次回退”自行寻址
   const undoRevertFiles = useCallback(
     async (threadId: string, files: string[], checkpointTurnId?: number) => {
       const cwd = useAgentStore.getState().threads[threadId]?.cwd ?? workspace.rootPath;
-      const { result } = await undoRollback(threadId, cwd, files, checkpointTurnId);
+      const { result } = await undoRollback(threadId, cwd, files);
       if (result.reverted) {
-        const uiId = resolveUITurnId(threadId, result.throughTurnId);
+        const uiId = resolveUITurnId(threadId, checkpointTurnId ?? result.throughTurnId);
         for (const f of result.selectedFiles) {
           unmarkFileReverted(threadId, uiId, f);
         }

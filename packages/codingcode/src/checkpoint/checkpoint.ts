@@ -37,13 +37,12 @@ export const CheckpointLayer = Layer.effect(
     function ensureRollbackSnapshot(
       sg: ShadowGit,
       sessionId: string,
-      rollbackTurnId: number,
-      baselineTurnId: number
+      rollbackTurnId: number
     ): void {
-      if (findRollbackSnapshot(sg, sessionId, rollbackTurnId, baselineTurnId)) return;
+      if (findRollbackSnapshot(sg, sessionId, rollbackTurnId)) return;
       sg.stageAll();
       if (sg.isTooLargeForSnapshot()) return;
-      sg.commit(rollbackSnapshotMsg(sessionId, rollbackTurnId, baselineTurnId));
+      sg.commit(rollbackSnapshotMsg(sessionId, rollbackTurnId));
     }
 
     return {
@@ -106,7 +105,7 @@ export const CheckpointLayer = Layer.effect(
           if (!plan) {
             return emptyRollbackResult(targetTurnId);
           }
-          ensureRollbackSnapshot(sg, sessionId, latestBaselineTurn(sg, sessionId), targetTurnId);
+          ensureRollbackSnapshot(sg, sessionId, latestBaselineTurn(sg, sessionId));
           return executeRollback(plan, files, sg);
         }),
 
@@ -136,7 +135,7 @@ export const CheckpointLayer = Layer.effect(
             return emptyRollbackResult(throughTurnId);
           }
 
-          ensureRollbackSnapshot(sg, sessionId, latestBaselineTurn(sg, sessionId), throughTurnId);
+          ensureRollbackSnapshot(sg, sessionId, latestBaselineTurn(sg, sessionId));
 
           const selectedFiles = sg
             .diffNameStatusAgainstWorkspace(plan.baseline)
@@ -154,31 +153,27 @@ export const CheckpointLayer = Layer.effect(
           return executeRollback(plan, selectedFiles, sg);
         }),
 
-      undoRollback: (
-        projectPath: string,
-        sessionId: string,
-        turnId: number | undefined,
-        files: string[]
-      ) =>
+      undoRollback: (projectPath: string, sessionId: string, files: string[]) =>
         Effect.sync(() => {
           const sg = ensure(projectPath);
-          const targetTurnId = turnId ?? latestBaselineTurn(sg, sessionId);
-          if (targetTurnId === 0) return emptyRollbackResult(0);
-          if (files.length === 0) return emptyRollbackResult(targetTurnId);
+          if (files.length === 0) return emptyRollbackResult(0);
 
-          // 恢复到“最近一次回退该 baseline 之前”的快照
-          const snapshot = findLatestRollbackSnapshot(sg, sessionId, targetTurnId);
-          const plan = getTurnRestorePlan(sg, sessionId, targetTurnId);
-          if (!snapshot || !plan) {
-            return emptyRollbackResult(targetTurnId);
+          // 只允许撤销最近一次回退：快照的回退时刻必须就是当前最新轮，
+          // 否则期间开了新轮，撤销会把新轮改动一起冲掉
+          const currentTurnId = latestBaselineTurn(sg, sessionId);
+          if (currentTurnId === 0) return emptyRollbackResult(0);
+
+          const snapshot = findLatestRollbackSnapshot(sg, sessionId);
+          if (!snapshot || snapshot.rollbackTurnId !== currentTurnId) {
+            return emptyRollbackResult(currentTurnId);
           }
 
           sg.checkoutFiles(snapshot.commit, files);
           sg.stageAll();
           return {
             reverted: true,
-            throughTurnId: targetTurnId,
-            affectedTurns: plan.affectedTurns,
+            throughTurnId: currentTurnId,
+            affectedTurns: [],
             selectedFiles: files,
           };
         }),

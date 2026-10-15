@@ -85,7 +85,6 @@ export interface SessionClient {
     sessionId: string;
     cwd: string;
     files: string[];
-    turnId?: number;
   }): Promise<CodeRollbackResult>;
   previewRollbackDiff(input: {
     sessionId: string;
