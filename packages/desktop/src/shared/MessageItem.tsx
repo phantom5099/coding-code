@@ -296,6 +296,17 @@ const MessageItem = memo(function MessageItem({
     );
   }
 
+  if (item.type === 'ask_user') {
+    return (
+      <div className="mb-1 flex items-center gap-1.5 text-[13px] pl-8">
+        <span className="text-[var(--text-primary)]">{item.question}</span>
+        <span className="text-[var(--text-muted)]">
+          {item.status === 'waiting' ? '等待回答' : '已回答'}
+        </span>
+      </div>
+    );
+  }
+
   if (item.type === 'error') {
     return (
       <div className="mb-1.5 px-4 py-3 pl-8 rounded-lg bg-[var(--accent-danger-bg)] border border-[var(--accent-danger-border)] text-[var(--accent-danger)] text-[14px] leading-relaxed">

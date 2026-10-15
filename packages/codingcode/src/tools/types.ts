@@ -20,6 +20,8 @@ export interface ToolDefinition<R = never> {
 export interface ToolExecCtx {
   signal?: AbortSignal;
   sessionId?: string;
+  /** 本次调用的 tool_call id（由 execSingle 以 tc.id 注入）；ask_user 用作等待键 */
+  callId?: string;
   projectPath?: string;
   activeProfile?: ProfileName;
   model: string;
@@ -37,7 +39,7 @@ export interface ToolRunner {
 
 export type ToolLookup = (name: string) => ToolRunner | undefined;
 
-export type ToolExecOpts = Omit<ToolExecCtx, 'sessionId'> & {
+export type ToolExecOpts = Omit<ToolExecCtx, 'sessionId' | 'callId'> & {
   turnId?: number;
   onBeforeMutation?: Effect.Effect<void>;
 };

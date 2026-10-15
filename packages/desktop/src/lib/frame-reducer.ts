@@ -30,6 +30,8 @@ export interface StreamEffects {
   newId(): string;
   /** steer 输入已被服务端投递（user_input 帧到达）：从队列区移除对应项 */
   onInputDelivered?(id: string): void;
+  /** ask_user 已有结果（回答或未回答）：把对应问题条目置为已答 */
+  markAskAnswered?(callId: string): void;
 }
 
 function toResultItem(outcome: ToolOutcome): { output: string; exitCode: number } {
@@ -118,6 +120,17 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
         status: 'pending',
       });
       return;
+    case 'ask_user':
+      fx.applyItem({
+        id: `ask:${e.id}`,
+        type: 'ask_user',
+        callId: e.id,
+        question: e.question,
+        questiontype: e.questiontype,
+        options: [...(e.options ?? [])],
+        status: 'waiting',
+      });
+      return;
     case 'subagent_event':
       fx.applyItem({
         id: `subagent:${e.sessionId}`,
@@ -133,6 +146,7 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
       return;
     case 'tool_result': {
       if (e.name === 'submit_plan' && e.outcome.status !== 'ok') state.planTitle = null;
+      if (e.name === 'ask_user') fx.markAskAnswered?.(e.id);
       if (e.outcome.status === 'denied') {
         fx.applyItem({ id: e.id, type: 'tool_call', name: e.name, args: {}, status: 'rejected' });
       }

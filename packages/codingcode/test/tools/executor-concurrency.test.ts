@@ -417,7 +417,7 @@ describe('executeBatch 保序波次调度', () => {
     expect(h.hookPoints.filter((p) => p === 'tool.execute.before')).toHaveLength(1);
   });
 
-  it('13 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
+  it('14 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
     const expected: Record<string, boolean> = {
       read_file: true,
       search_code: true,
@@ -426,6 +426,7 @@ describe('executeBatch 保序波次调度', () => {
       web_search: true,
       todo_write: true,
       todo_read: true,
+      ask_user: true,
       spawn_agent: true,
       wait_agent: true,
       write_file: false,

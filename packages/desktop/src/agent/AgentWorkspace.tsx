@@ -25,6 +25,7 @@ import {
 import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
 import ApprovalPanel from './ApprovalPanel';
+import AskUserPanel from './AskUserPanel';
 import ProfileIndicator from './ProfileIndicator';
 import PlanPanel from '../shared/PlanPanel';
 import MediaView from '../shared/MediaView';
@@ -878,6 +879,7 @@ export default function AgentWorkspace({ sendMessage, sendQueuedInput, abort }: 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <MessageStream key={currentThreadId} threadId={currentThreadId} />
         <ApprovalPanel threadId={currentThreadId} />
+        <AskUserPanel threadId={currentThreadId} />
         <TodoPanel threadId={currentThreadId} />
         {isCompressing && (
           <div className="shrink-0 px-5 py-1.5 bg-[var(--bg-card)] border-t border-[var(--border-card)] flex items-center gap-2 text-[13px] text-[var(--text-tertiary)]">

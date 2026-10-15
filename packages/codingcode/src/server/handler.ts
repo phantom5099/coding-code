@@ -4,6 +4,7 @@ import * as HttpServerResponse from '@effect/platform/HttpServerResponse';
 import { Effect, Stream } from 'effect';
 import { AgentError } from '../util/error.js';
 import { ApprovalWaitService } from '../approval/wait-port.js';
+import { AskWaitService } from '../askuser/port.js';
 import type { FrameBody } from '../sink/types.js';
 import { createFrameAssembler, encodeFrame } from './frame-io.js';
 import { errorCodeOf, isAppError, type AppError } from './http-error.js';
@@ -80,9 +81,10 @@ export const readJsonFrom = <T>(web: Request): Effect.Effect<T, AgentError> =>
 export const sseResponse = (
   frames: Stream.Stream<FrameBody, never>,
   opts: { sessionId: string; onDone?: () => void }
-): Effect.Effect<HttpServerResponse.HttpServerResponse, never, ApprovalWaitService> =>
+): Effect.Effect<HttpServerResponse.HttpServerResponse, never, ApprovalWaitService | AskWaitService> =>
   Effect.gen(function* () {
     const wait = yield* ApprovalWaitService;
+    const askWait = yield* AskWaitService;
     const assembler = createFrameAssembler({ sessionId: opts.sessionId });
     const encoder = new TextEncoder();
     const body = frames.pipe(
@@ -90,6 +92,7 @@ export const sseResponse = (
       Stream.ensuring(
         Effect.sync(() => {
           Effect.runSync(wait.cancelPendingFor(opts.sessionId));
+          Effect.runSync(askWait.cancelPendingFor(opts.sessionId));
           opts.onDone?.();
         })
       )

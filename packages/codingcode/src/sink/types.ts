@@ -49,6 +49,13 @@ export type RuntimeEvent =
       readonly args: Readonly<Record<string, unknown>>;
     }
   | {
+      readonly type: 'ask_user';
+      readonly id: string;
+      readonly question: string;
+      readonly questiontype: 'single' | 'multiple' | 'text';
+      readonly options?: readonly string[];
+    }
+  | {
       readonly type: 'subagent_event';
       readonly sessionId: string;
       readonly agentName: string;

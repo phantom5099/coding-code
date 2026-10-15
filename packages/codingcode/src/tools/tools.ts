@@ -18,7 +18,7 @@ import { createToolCatalog } from './catalog.js';
 type Lookup = (name: string) => ToolRunner | undefined;
 
 function toToolCtx(opts: ToolExecCall): ToolExecCtx {
-  const { turnId: _turnId, callId: _callId, ...ctx } = opts;
+  const { turnId: _turnId, ...ctx } = opts;
   return ctx;
 }
 
