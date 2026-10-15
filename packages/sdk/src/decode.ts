@@ -16,6 +16,7 @@ const EVENTS = new Set([
   'tool_call',
   'tool_result',
   'approval_request',
+  'ask_user',
   'subagent_event',
   'user_input',
 ]);
@@ -100,6 +101,14 @@ export function decodeFrame(raw: unknown): DecodeResult {
       }
     }
     if (e.type === 'approval_request' && typeof e.tool !== 'string') {
+      return { ok: false, reason: 'shape', raw };
+    }
+    if (
+      e.type === 'ask_user' &&
+      (typeof e.id !== 'string' ||
+        typeof e.question !== 'string' ||
+        (e.questiontype !== 'single' && e.questiontype !== 'multiple' && e.questiontype !== 'text'))
+    ) {
       return { ok: false, reason: 'shape', raw };
     }
     if (e.type === 'subagent_event') {

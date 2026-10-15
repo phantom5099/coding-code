@@ -35,13 +35,21 @@ describe('工具执行参数的形状收口', () => {
     void bad;
   });
 
+  it('callId 不进 ToolExecOpts —— 它由 execSingle 按 tc.id 注入', () => {
+    // @ts-expect-error callId 由 execSingle 注入，不放进批次选项
+    const bad: ToolExecOpts = { model: 'm', callId: 'c-1' };
+    void bad;
+  });
+
   it('编排私有字段不外泄到工具可见的 ctx', () => {
     // @ts-expect-error turnId 只进 hook payload，不属于 ToolExecCtx
     const badTurn: ToolExecCtx = { model: 'm', turnId: 1 };
     void badTurn;
-    // @ts-expect-error callId 只进 hook payload，不属于 ToolExecCtx
-    const badCall: ToolExecCtx = { model: 'm', callId: 'c-1' };
-    void badCall;
+  });
+
+  it('callId 随 ctx 透传给工具（ask_user 等待键）', () => {
+    const ctx: ToolExecCtx = { model: 'm', callId: 'c-1' };
+    void ctx;
   });
 
   it('ToolExecCall = ToolExecOpts + 批次级 sessionId / callId', () => {

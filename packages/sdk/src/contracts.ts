@@ -160,6 +160,13 @@ export interface AgentRuntimeClient {
     approvalId: string;
     response: string;
   }): Promise<void>;
+  /** 用户回答 ask_user 提问；options 为所选选项字母（如 ['A','C']），custom 为「其他」填空 */
+  sendAskUserAnswer(input: {
+    sessionId: string;
+    askId: string;
+    options?: string[];
+    custom?: string;
+  }): Promise<void>;
   /** model 为空时用全局默认模型压缩 */
   compact(input: { sessionId: string; cwd: string; model?: string }): Promise<CompressResult>;
 }

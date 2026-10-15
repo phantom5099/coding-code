@@ -8,7 +8,8 @@ export type ItemType =
   | 'tool_call'
   | 'tool_result'
   | 'error'
-  | 'subagent';
+  | 'subagent'
+  | 'ask_user';
 
 export type Item =
   | { id: string; type: 'message'; role: 'user' | 'assistant'; parts: ContentPart[]; partial?: boolean }
@@ -40,6 +41,16 @@ export type Item =
       sessionId: string;
       agentName: string;
       status: 'running' | 'completed' | 'failed';
+    }
+  /** ask_user 提问条目：id = `ask:<tool call id>`，等待用户作答 */
+  | {
+      id: string;
+      type: 'ask_user';
+      callId: string;
+      question: string;
+      questiontype: 'single' | 'multiple' | 'text';
+      options: string[];
+      status: 'waiting' | 'answered';
     };
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed';

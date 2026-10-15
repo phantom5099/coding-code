@@ -70,24 +70,26 @@ describe('工具执行上下文投影', () => {
     // 精确断言键集合：既防漏抄，也防多塞
     expect(Object.keys(captured!).sort()).toEqual([
       'activeProfile',
+      'callId',
       'model',
       'projectPath',
       'sessionId',
       'signal',
     ]);
     expect(captured!.sessionId).toBe('sess-1');
+    expect(captured!.callId).toBe('c1');
     expect(captured!.projectPath).toBe('/proj');
     expect(captured!.activeProfile).toBe('plan');
     expect(captured!.model).toBe('m-1');
     expect(captured!.signal).toBe(signal);
   });
 
-  it('编排私有字段一个不漏：turnId / callId 到不了工具', async () => {
+  it('turnId 到不了工具，callId 以 tc.id 透传', async () => {
     await runProbe({ turnId: 7, projectPath: '/proj', model: 'm-1' }, 'sess-1');
 
     expect(captured).toBeDefined();
     expect('turnId' in captured!).toBe(false);
-    expect('callId' in captured!).toBe(false);
+    expect(captured!.callId).toBe('c1');
   });
 
   it('sessionId 缺省时不伪造该字段', async () => {

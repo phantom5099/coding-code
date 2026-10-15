@@ -9,6 +9,7 @@ import { ApprovalLayer } from './approval/approval.js';
 import { ApprovalWaitLayer } from './approval/wait.js';
 import { EventSinkLayer } from './sink/sink.js';
 import { TodoLayer } from './todo/todo.js';
+import { AskWaitLayer } from './askuser/wait.js';
 import { SessionLayer } from './session/session.js';
 import { ToolExecutorLayer } from './tools/tools.js';
 import { ContextLayer } from './context/context.js';
@@ -29,6 +30,7 @@ const InfraLayer = Layer.mergeAll(
   McpLayer,
   EventSinkLayer,
   ApprovalWaitLayer,
+  AskWaitLayer,
   TodoLayer
 );
 

@@ -14,6 +14,7 @@ import { webFetchTool } from './domains/web/fetch.js';
 import { webSearchTool } from './domains/web/search.js';
 import { todoWriteTool } from './domains/self/todo-write.js';
 import { todoReadTool } from './domains/self/todo-read.js';
+import { askUserTool } from './domains/self/ask-user.js';
 import { spawnAgentTool } from './domains/subagent/spawn.js';
 import { waitAgentTool } from './domains/subagent/wait.js';
 import { submitPlanTool } from './domains/subagent/submit-plan.js';
@@ -29,6 +30,7 @@ const ALL_TOOLS: ToolDefinition<any>[] = [
   webSearchTool,
   todoWriteTool,
   todoReadTool,
+  askUserTool,
   spawnAgentTool,
   waitAgentTool,
   submitPlanTool,

@@ -48,6 +48,13 @@ export function createHttpAgentClient(
       await apiPost(`/api/sessions/${sessionId}/approval/${approvalId}`, { response });
     },
 
+    async sendAskUserAnswer({ sessionId, askId, options, custom }) {
+      await apiPost(`/api/sessions/${sessionId}/askuser/${askId}`, {
+        options: options ?? [],
+        custom: custom ?? '',
+      });
+    },
+
     compact({ sessionId, cwd, model }) {
       return apiPost(`/api/sessions/${sessionId}/compact`, { cwd, model });
     },

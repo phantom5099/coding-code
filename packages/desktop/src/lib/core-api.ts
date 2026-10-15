@@ -108,6 +108,15 @@ export function sendApprovalResponse(
   return clients.agent.sendApprovalResponse({ sessionId, approvalId: callId, response });
 }
 
+/** 用户回答 ask_user 提问（threadId 即 sessionId） */
+export function sendAskUserAnswer(
+  sessionId: string,
+  callId: string,
+  answer: { options?: string[]; custom?: string }
+): Promise<void> {
+  return clients.agent.sendAskUserAnswer({ sessionId, askId: callId, ...answer });
+}
+
 // ---- Plan file ----
 
 export function getSessionPlan(
@@ -277,12 +286,10 @@ export function undoRollback(
   cwd: string,
   files: string[]
 ): Promise<{ ok: boolean; result: CodeRollbackResult }> {
-  return clients.sessions
-    .undoRollback({ sessionId, cwd, files })
-    .then((result) => ({
-      ok: true,
-      result,
-    }));
+  return clients.sessions.undoRollback({ sessionId, cwd, files }).then((result) => ({
+    ok: true,
+    result,
+  }));
 }
 
 export function previewRollbackDiff(

@@ -113,6 +113,8 @@ interface AgentActions {
     callId: string,
     status: 'pending' | 'approved' | 'rejected' | 'running'
   ) => void;
+  /** ask_user 已有结果：把 `ask:<callId>` 问题条目置为已答 */
+  markAskAnswered: (threadId: string, callId: string) => void;
   setPendingPlan: (threadId: string, plan: PendingPlan | null) => void;
   clearPendingPlan: (threadId: string) => void;
   startTurn: (
@@ -352,6 +354,22 @@ export const useAgentStore = create<AgentState & AgentActions>()(
               const existing = turn.items[idx] as Item & { type: 'tool_call' };
               turn.items[idx] = { ...existing, status };
               break;
+            }
+          }
+        }),
+
+      markAskAnswered: (threadId, callId) =>
+        set((s) => {
+          const thread = s.threads[threadId];
+          if (!thread) return;
+          for (const turn of thread.turns) {
+            const idx = turn.items.findIndex(
+              (i) => i.id === `ask:${callId}` && i.type === 'ask_user'
+            );
+            if (idx >= 0) {
+              const existing = turn.items[idx] as Item & { type: 'ask_user' };
+              turn.items[idx] = { ...existing, status: 'answered' };
+              return;
             }
           }
         }),

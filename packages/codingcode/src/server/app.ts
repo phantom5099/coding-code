@@ -8,6 +8,7 @@ import { addMessagesRoutes } from './routes/messages.js';
 import { addAssetsRoutes } from './routes/assets.js';
 import { addModelsRoutes } from './routes/models.js';
 import { addApprovalRoutes } from './routes/approval.js';
+import { addAskUserRoutes } from './routes/askuser.js';
 import { addSettingsRoutes } from './routes/settings.js';
 import { addAutomationsRoutes } from './routes/automations.js';
 import { addSubagentsRoutes } from './routes/subagents.js';
@@ -28,6 +29,7 @@ export const buildRouter = (): HttpRouter.HttpRouter<any, any> =>
     addAssetsRoutes,
     addModelsRoutes,
     addApprovalRoutes,
+    addAskUserRoutes,
     addSettingsRoutes,
     addAutomationsRoutes,
     addSubagentsRoutes

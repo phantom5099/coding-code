@@ -247,6 +247,7 @@ export function useAgentCore() {
         },
         newId: () => randomId(),
         onInputDelivered: (id) => removeQueuedInput(threadId, id),
+        markAskAnswered: (callId) => useAgentStore.getState().markAskAnswered(threadId, callId),
       };
 
       let failed = false;

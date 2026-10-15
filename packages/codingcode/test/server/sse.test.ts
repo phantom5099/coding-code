@@ -12,6 +12,7 @@ import { join } from 'path';
 import { createServer, type ServerApp } from '../../src/server/index.js';
 import { AgentService } from '../../src/agent/port.js';
 import { ApprovalWaitService } from '../../src/approval/wait-port.js';
+import { AskWaitService } from '../../src/askuser/port.js';
 import { AgentError } from '../../src/util/error.js';
 import type { FrameBody } from '../../src/sink/types.js';
 import type { IncomingPart } from '../../src/llm/types.js';
@@ -20,6 +21,7 @@ const TEXT_FRAME: FrameBody = { family: 'event', event: { type: 'text_delta', te
 
 let cwd: string;
 let cancelled: string[] = [];
+let askCancelled: string[] = [];
 
 function makeServer(frames: () => AsyncGenerator<FrameBody, void, unknown>): Promise<ServerApp> {
   const layer = Layer.mergeAll(
@@ -38,6 +40,16 @@ function makeServer(frames: () => AsyncGenerator<FrameBody, void, unknown>): Pro
         }),
       resolveConfirm: () => Effect.succeed(false),
       waitForConfirm: () => Effect.dieMessage('not implemented'),
+    } as any),
+    Layer.succeed(AskWaitService, {
+      cancelPendingFor: (sessionId: string) =>
+        Effect.sync(() => {
+          askCancelled.push(sessionId);
+          return 0;
+        }),
+      resolveAsk: () => Effect.succeed(false),
+      waitForAsk: () => Effect.dieMessage('not implemented'),
+      forget: () => Effect.succeed(false),
     } as any)
   );
   return createServer(ManagedRuntime.make(layer));
@@ -60,6 +72,7 @@ const decode = (body: string) =>
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), 'codingcode-sse-'));
   cancelled = [];
+  askCancelled = [];
 });
 
 afterEach(() => {
@@ -103,6 +116,7 @@ describe('SSE /api/sessions/:id/messages', () => {
   });
 
   it('领域错误（AgentError）带出自己的 code —— 不是笼统的 INTERNAL_ERROR', async () => {
+    // eslint-disable-next-line require-yield -- 抛错流正是本用例要覆盖的形状
     const app = await makeServer(async function* () {
       throw new AgentError('SESSION_CORRUPTED', 'nope');
     });
@@ -111,10 +125,10 @@ describe('SSE /api/sessions/:id/messages', () => {
     expect(frames[0].fatal.code).toBe('SESSION_CORRUPTED');
   });
 
-  it('流结束时取消该会话的挂起审批', async () => {
-    // eslint-disable-next-line require-yield -- 空流正是本用例要覆盖的形状
+  it('流结束时取消该会话的挂起审批与待答问题', async () => {
     const app = await makeServer(async function* () {});
     await (await send(app, 'sess-9')).text();
     expect(cancelled).toEqual(['sess-9']);
+    expect(askCancelled).toEqual(['sess-9']);
   });
 });
