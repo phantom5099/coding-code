@@ -2,7 +2,12 @@ import { Layer, Effect } from 'effect';
 import { randomUUID } from 'crypto';
 import { loadConfig } from '../infra/config.js';
 import { transcriptPathOf } from '../session/paths.js';
-import type { Message, ResolvedMessage, ResolvedContentPart, ResolvedMediaPart } from '../llm/types.js';
+import type {
+  Message,
+  ResolvedMessage,
+  ResolvedContentPart,
+  ResolvedMediaPart,
+} from '../llm/types.js';
 import { textOf, textPart } from '../llm/types.js';
 import type {
   SessionEvent,
@@ -152,6 +157,9 @@ export function buildContextMessages(
         });
         break;
       case 'subagent_result':
+        messages.push({ role: 'user', content: [textPart(event.content)] });
+        break;
+      case 'subagent_message':
         messages.push({ role: 'user', content: [textPart(event.content)] });
         break;
     }
@@ -425,7 +433,10 @@ export const ContextLayer = Layer.effect(
         }));
       });
 
-    const getHistory = (ref: SessionRef, model: string): Effect.Effect<ResolvedMessage[], AgentError> =>
+    const getHistory = (
+      ref: SessionRef,
+      model: string
+    ): Effect.Effect<ResolvedMessage[], AgentError> =>
       Effect.gen(function* () {
         const buf = yield* ensureBuffer(ref);
         const contextWindow = contextWindowOf(model);
@@ -436,7 +447,10 @@ export const ContextLayer = Layer.effect(
           yield* summarizeToFit(buf, contextWindow, model);
           yield* turn.transition(ref.sessionId, { kind: 'running' });
         }
-        return yield* resolveMediaParts(buildContextMessages(buf.events, buf.compactedTurnIds), ref.cwd);
+        return yield* resolveMediaParts(
+          buildContextMessages(buf.events, buf.compactedTurnIds),
+          ref.cwd
+        );
       });
 
     const absorb = (ref: SessionRef, events: readonly SessionEvent[]): Effect.Effect<void> =>

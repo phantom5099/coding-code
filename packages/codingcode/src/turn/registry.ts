@@ -19,6 +19,8 @@ interface TurnRecord {
   /** 派生关系，子代理并发闸与 stopChildren 按它过滤 */
   parentSessionId?: string;
   agentName?: string;
+  /** 子智能体用途描述，随 meta 进入记录供 listChildren 投影 */
+  description?: string;
   /** 回合级 steer 槽；被 drain 取空 */
   pendingUserInputs: PendingUserInput[];
   /** 终态信号，由 settle 完成 */
@@ -83,16 +85,26 @@ export const TurnRegistryLayer = Layer.effect(
             yield* frame(sessionId, { to: 'compress' });
             return;
           case 'complete':
-            yield* settle(sessionId, 'complete', { kind: cmd.reason }, {
-              to: 'end',
-              reason: cmd.reason,
-            });
+            yield* settle(
+              sessionId,
+              'complete',
+              { kind: cmd.reason },
+              {
+                to: 'end',
+                reason: cmd.reason,
+              }
+            );
             return;
           case 'interrupt':
-            yield* settle(sessionId, 'interrupt', { kind: 'aborted' }, {
-              to: 'end',
-              reason: 'aborted',
-            });
+            yield* settle(
+              sessionId,
+              'interrupt',
+              { kind: 'aborted' },
+              {
+                to: 'end',
+                reason: 'aborted',
+              }
+            );
             return;
           case 'fail':
             yield* settle(
@@ -120,6 +132,7 @@ export const TurnRegistryLayer = Layer.effect(
             state: 'running',
             parentSessionId: c.parentSessionId,
             agentName: c.agentName,
+            description: c.description,
             pendingUserInputs: [],
             ended: yield* Deferred.make<void>(),
             delivered: yield* Deferred.make<void>(),
@@ -194,6 +207,30 @@ export const TurnRegistryLayer = Layer.effect(
           }
           return stopped;
         }),
+
+      // 与 stopChildren 同一组守卫条件，目标维度从「整批」收窄到「单点」
+      interrupt: (sessionId) =>
+        Effect.sync(() => {
+          const rec = records.get(sessionId);
+          if (!rec) return 'not-found' as const;
+          if (rec.state !== 'running' || !rec.stop || rec.stopping) return 'not-running' as const;
+          rec.stopping = true;
+          rec.stop();
+          return 'stopped' as const;
+        }),
+
+      listChildren: (parentSessionId) =>
+        Effect.sync(() =>
+          [...records.entries()]
+            .filter(([, rec]) => rec.parentSessionId === parentSessionId)
+            .map(([sessionId, rec]) => ({
+              sessionId,
+              ...(rec.agentName ? { agentName: rec.agentName } : {}),
+              ...(rec.description ? { description: rec.description } : {}),
+              state: rec.state,
+              turnId: rec.turnId,
+            }))
+        ),
 
       dispose: (sessionId) =>
         Effect.sync(() => {

@@ -5,16 +5,13 @@ import type {
   AssistantEvent,
   RollbackEvent,
   SessionEvent,
+  SubagentMessageEvent,
   SubagentResultEvent,
   SummaryEvent,
   ToolResultEvent,
   UserEvent,
 } from './types.js';
-import type {
-  SessionCreateOptions,
-  SessionSummary,
-  SessionStoreState,
-} from './types.js';
+import type { SessionCreateOptions, SessionSummary, SessionStoreState } from './types.js';
 import type { UITurn } from './types.js';
 import type { StoredPart } from './types.js';
 import type { IncomingPart, TokenUsage } from '../llm/types.js';
@@ -24,7 +21,12 @@ export interface SessionShape {
   create(
     cwd: string,
     options: SessionCreateOptions,
-    opts?: { parentSessionId?: string; agentName?: string }
+    opts?: {
+      parentSessionId?: string;
+      agentName?: string;
+      description?: string;
+      systemPrompt?: string;
+    }
   ): Effect.Effect<SessionStoreState, AgentError>;
   load(
     cwd: string,
@@ -73,6 +75,10 @@ export interface SessionShape {
     state: SessionStoreState,
     result: { sessionId: string; agentName: string; content: string }
   ): Effect.Effect<SubagentResultEvent, AgentError>;
+  recordSubagentMessage(
+    state: SessionStoreState,
+    message: { sessionId: string; agentName: string; content: string }
+  ): Effect.Effect<SubagentMessageEvent, AgentError>;
   appendSummary(
     state: SessionStoreState,
     summaryText: string,

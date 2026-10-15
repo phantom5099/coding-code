@@ -12,9 +12,14 @@ export interface RunSubagentOptions {
   activeProfile?: ProfileName;
   permissionMode?: PermissionMode;
   model: string;
+  /** 首次派发时的自定义 system prompt；续跑（传 sessionId）时忽略，改由会话头回读 */
   systemPrompt?: string;
   parentSessionId?: string;
   agentName?: string;
+  /** 子智能体用途描述；首次派发时写入 meta，续跑不传（meta 已有） */
+  description?: string;
+  /** 祖先会话 id，由近及远；透传到 runTurn 的回合状态与工具上下文 */
+  parentChain?: readonly string[];
 }
 
 export interface SubagentRunnerShape {

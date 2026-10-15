@@ -15,6 +15,10 @@ export interface RunTurnOptions {
   activeProfile?: ProfileName;
   parentSessionId?: string;
   agentName?: string;
+  /** 子智能体用途描述；仅新建会话时写入 meta */
+  description?: string;
+  /** 祖先会话 id，由近及远；缺省即顶层主智能体（[]） */
+  parentChain?: readonly string[];
   systemPrompt?: string;
   skills?: ReadonlyArray<{ name: string; path: string }>;
   /** steer 路径下由前端提供，作为 `PendingUserInput.id` 原样透传 */

@@ -29,6 +29,10 @@ export interface SessionMetaEvent {
   permissionMode: PermissionMode;
   parentSessionId?: string;
   agentName?: string;
+  /** 子智能体用途描述；首次派发时给出，供 list_agents 展示 */
+  description?: string;
+  /** 子会话自定义 system prompt 中间段；仅子会话写入，续跑时回读，缺省回落 profile */
+  systemPrompt?: string;
 }
 
 export interface UserEvent {
@@ -84,6 +88,15 @@ export interface SubagentResultEvent {
   content: string;
 }
 
+export const SUBAGENT_MESSAGE_PREFIX = 'Message Type: INTER_AGENT_MESSAGE';
+
+export interface SubagentMessageEvent {
+  type: 'subagent_message';
+  sessionId: string;
+  agentName: string;
+  content: string;
+}
+
 export type SessionEvent =
   | SessionMetaEvent
   | UserEvent
@@ -92,7 +105,8 @@ export type SessionEvent =
   | SummaryEvent
   | RollbackEvent
   | CompactEvent
-  | SubagentResultEvent;
+  | SubagentResultEvent
+  | SubagentMessageEvent;
 
 export interface SessionSummary extends SessionMetaEvent {
   updatedAt: string;

@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer, Queue } from 'effect';
-import { SubagentRunRegistryLayer, SubagentRunRegistryService } from '../../src/subagent/registry.js';
+import {
+  SubagentRunRegistryLayer,
+  SubagentRunRegistryService,
+} from '../../src/subagent/registry.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { MailboxLayer, MailboxService } from '../../src/session/mailbox.js';
 import { EventSinkService } from '../../src/sink/port.js';
@@ -74,6 +77,40 @@ function makeHarness(makeStream: () => AsyncGenerator<FrameBody>) {
 
 const run = <T>(layers: Layer.Layer<any>, eff: Effect.Effect<T, any, any>): Promise<T> =>
   Effect.runPromise(eff.pipe(Effect.provide(layers)) as unknown as Effect.Effect<T, never, never>);
+
+/** 以 aborted 终态收尾（中断路径） */
+function abortedStream(): AsyncGenerator<FrameBody> {
+  return (async function* () {
+    yield { family: 'event', event: { type: 'text_delta', text: 'partial work' } } as FrameBody;
+    yield { family: 'transition', transition: { to: 'end', reason: 'aborted' } } as FrameBody;
+  })();
+}
+
+/** 捕获 runner 收到的 opts，用于断言透传链路 */
+function makeCaptureHarness() {
+  const captured: any[] = [];
+  const runner = Layer.succeed(SubagentRunnerService, {
+    runSubagent: (_prompt: any, opts: any) => {
+      captured.push(opts);
+      return Effect.sync(() => ({ stream: doneStream(), sessionId: 'child-1' }));
+    },
+  } as any);
+  const sink = Layer.succeed(EventSinkService, {
+    attach: () => Effect.succeed(Effect.runSync(Queue.unbounded<FrameBody>())),
+    detach: () => Effect.void,
+    emit: () => Effect.void,
+  } as any);
+  const hooks = Layer.succeed(HookService, {
+    emit: () => Effect.void,
+    emitDecision: () => Effect.succeed(null),
+    reloadUserHooks: () => Effect.void,
+  } as any);
+  const turn = TurnRegistryLayer.pipe(Layer.provide(sink));
+  const layers = SubagentRunRegistryLayer.pipe(
+    Layer.provideMerge(Layer.mergeAll(runner, MailboxLayer, sink, hooks, turn))
+  );
+  return { captured, layers };
+}
 
 describe('subagent run registry', () => {
   it('spawn 立即返回句柄，不等子代理结束', async () => {
@@ -200,5 +237,74 @@ describe('subagent run registry', () => {
     );
     expect(result.first).toBe(2);
     expect(result.second).toBe(0);
+  });
+
+  it('resumeSessionId / parentChain / description 原样透传给 runner', async () => {
+    const { layers, captured } = makeCaptureHarness();
+    await run(
+      layers,
+      Effect.gen(function* () {
+        const reg = yield* SubagentRunRegistryService;
+        yield* reg.spawn({
+          ...spawnOpts,
+          resumeSessionId: 'child-9',
+          parentChain: ['parent-1', 'root-1'],
+          description: 'reads code',
+        });
+      })
+    );
+
+    expect(captured[0].sessionId).toBe('child-9');
+    expect(captured[0].parentChain).toEqual(['parent-1', 'root-1']);
+    expect(captured[0].description).toBe('reads code');
+  });
+
+  it('首次派发不传三个新字段时，runner 收到 undefined（现状路径不变）', async () => {
+    const { layers, captured } = makeCaptureHarness();
+    await run(
+      layers,
+      Effect.gen(function* () {
+        const reg = yield* SubagentRunRegistryService;
+        yield* reg.spawn(spawnOpts);
+      })
+    );
+
+    expect(captured[0].sessionId).toBeUndefined();
+    expect(captured[0].parentChain).toBeUndefined();
+    expect(captured[0].description).toBeUndefined();
+  });
+
+  it('aborted 终态：回注文案引导用 resume_agent 续跑，而非重新 spawn', async () => {
+    const { layers } = makeHarness(abortedStream);
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const reg = yield* SubagentRunRegistryService;
+        const mb = yield* MailboxService;
+        yield* reg.spawn(spawnOpts);
+        yield* Effect.sleep(50);
+        return yield* mb.drain('parent-1');
+      })
+    );
+    expect(result[0]!.content).toContain('partial work');
+    expect(result[0]!.content).toContain('Resume it with resume_agent');
+    expect(result[0]!.content).not.toContain('Spawn it again');
+  });
+
+  it('done 终态：正文无任何失败尾注', async () => {
+    const { layers } = makeHarness(() => doneStream('all good'));
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const reg = yield* SubagentRunRegistryService;
+        const mb = yield* MailboxService;
+        yield* reg.spawn(spawnOpts);
+        yield* Effect.sleep(50);
+        return yield* mb.drain('parent-1');
+      })
+    );
+    expect(result[0]!.content).toContain('all good');
+    expect(result[0]!.content).not.toContain('did not finish');
+    expect(result[0]!.content).not.toContain('Resume it with resume_agent');
   });
 });

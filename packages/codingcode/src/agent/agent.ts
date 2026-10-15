@@ -18,12 +18,7 @@ import { SessionService } from '../session/port.js';
 import { SkillService } from '../skills/port.js';
 import { ToolExecutorService } from '../tools/port.js';
 import { buildSystemPrompt, renderSkillBlock } from './prompt.js';
-import type {
-  FrameBody,
-  FrameError,
-  ResponseMeta,
-  ToolOutcome,
-} from '../sink/types.js';
+import type { FrameBody, FrameError, ResponseMeta, ToolOutcome } from '../sink/types.js';
 import { isTurnEnd } from '../sink/types.js';
 import type { SessionRef } from '../session/types.js';
 import type { TodoItem } from '../todo/types.js';
@@ -66,7 +61,9 @@ function assertMediaAllowed(
       catch: (e) => (e instanceof AgentError ? e : AgentError.invalidInput(String(e))),
     });
     if (needsVision && !caps.vision) {
-      return yield* Effect.fail(AgentError.invalidInput('model does not accept image or PDF input'));
+      return yield* Effect.fail(
+        AgentError.invalidInput('model does not accept image or PDF input')
+      );
     }
     if (needsAudio && !caps.audio) {
       return yield* Effect.fail(AgentError.invalidInput('model does not accept audio input'));
@@ -154,7 +151,12 @@ export const AgentLayer = Layer.effect(
               activeProfile: opts.activeProfile,
               permissionMode: opts.permissionMode,
             },
-            { parentSessionId, agentName: opts.agentName }
+            {
+              parentSessionId,
+              agentName: opts.agentName,
+              description: opts.description,
+              systemPrompt: opts.systemPrompt,
+            }
           );
           sessionId = created.sessionId;
           parentSessionId = created.parentSessionId;
@@ -170,6 +172,7 @@ export const AgentLayer = Layer.effect(
             turnId,
             parentSessionId: state.parentSessionId,
             agentName: state.agentName,
+            description: state.description,
           }))
         ) {
           return yield* Effect.fail(new AgentError('TURN_CONFLICT', 'concurrent turn on session'));
@@ -179,10 +182,20 @@ export const AgentLayer = Layer.effect(
           const profileName = opts.activeProfile ?? state.activeProfile;
           const effectivePerm = opts.permissionMode ?? state.permissionMode;
           if (opts.permissionMode) {
-            yield* session.setPermissionMode(normalizedCwd, sid, opts.permissionMode, parentSessionId);
+            yield* session.setPermissionMode(
+              normalizedCwd,
+              sid,
+              opts.permissionMode,
+              parentSessionId
+            );
           }
           if (opts.activeProfile) {
-            yield* session.setActiveProfile(normalizedCwd, sid, opts.activeProfile, parentSessionId);
+            yield* session.setActiveProfile(
+              normalizedCwd,
+              sid,
+              opts.activeProfile,
+              parentSessionId
+            );
           }
 
           state.memorySnapshot = yield* memory.loadMemoryForPrompt(state.cwd);
@@ -233,6 +246,7 @@ export const AgentLayer = Layer.effect(
               sid,
               projectPath: state.cwd,
               permissionMode: effectivePerm,
+              parentChain: opts.parentChain ?? [],
               systemPrompt: opts.systemPrompt,
             },
             emit
@@ -292,6 +306,7 @@ export const AgentLayer = Layer.effect(
         sid: string;
         projectPath: string;
         permissionMode: PermissionMode;
+        parentChain: readonly string[];
         systemPrompt?: string;
       },
       emit: (body: FrameBody) => void
@@ -306,6 +321,7 @@ export const AgentLayer = Layer.effect(
         sid,
         projectPath,
         permissionMode,
+        parentChain,
       } = opts;
       const { tools, lookup: toolLookup } = catalog;
 
@@ -370,7 +386,10 @@ export const AgentLayer = Layer.effect(
 
           if (step > 0) {
             for (const item of yield* mailbox.drain(state.sessionId)) {
-              const ev = yield* session.recordSubagentResult(state, item);
+              const ev =
+                item.type === 'subagent_message'
+                  ? yield* session.recordSubagentMessage(state, item)
+                  : yield* session.recordSubagentResult(state, item);
               yield* context.absorb(sessionRef, [ev]);
               drainedCount++;
             }
@@ -555,6 +574,8 @@ export const AgentLayer = Layer.effect(
                     signal: abortSignal,
                     activeProfile: profile?.name,
                     model,
+                    parentChain,
+                    agentName: state.agentName,
                     onBeforeMutation: checkpoint.snapshotBeforeWrite(
                       state.cwd,
                       sid,

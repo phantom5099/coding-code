@@ -1,6 +1,7 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type {
+  ChildTurnSummary,
   PendingUserInput,
   SubmitOutcome,
   TurnClaim,
@@ -34,6 +35,10 @@ export interface TurnRegistryShape {
   runningChildren(parentSessionId: string): Effect.Effect<number>;
   /** 停掉该父会话下所有派生会话 */
   stopChildren(parentSessionId: string): Effect.Effect<number>;
+  /** 中断该会话运行中的回合；not-found = 无记录，not-running = 已终态或已在停止中 */
+  interrupt(sessionId: string): Effect.Effect<'stopped' | 'not-running' | 'not-found'>;
+  /** 该父会话名下的回合记录（running + 尚未被回收的终态条目） */
+  listChildren(parentSessionId: string): Effect.Effect<ReadonlyArray<ChildTurnSummary>>;
   /** 会话删除时清空（含派生条目） */
   dispose(sessionId: string): Effect.Effect<void>;
 }

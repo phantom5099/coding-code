@@ -23,6 +23,12 @@ export interface SpawnOptions {
   /** 已由调用方解析过的模型 id（含清单校验与父模型回退） */
   model: string;
   systemPrompt?: string;
+  /** 续跑：复用既有子会话与其历史上下文；缺省即新建会话 */
+  resumeSessionId?: string;
+  /** 首次派发的用途描述；续跑不传（meta 已有） */
+  description?: string;
+  /** 祖先会话 id，由近及远；子会话回合的工具上下文由此而来 */
+  parentChain?: readonly string[];
 }
 
 /** 终态由子会话自己的 finish 写入；本表只负责派发与投递 */
@@ -58,10 +64,13 @@ function truncateToTokens(text: string, budget: number): string {
 }
 
 function renderResult(run: SubagentRun, outcome: { end: EndTransition; content: string }): string {
-  const body =
+  const tail =
     outcome.end.reason === 'done'
-      ? outcome.content
-      : `${outcome.content}\nThe subagent did not finish. Spawn it again if the task is still needed.`;
+      ? ''
+      : outcome.end.reason === 'aborted'
+        ? '\nThe subagent was interrupted. Resume it with resume_agent if the task is still needed.'
+        : '\nThe subagent did not finish. Spawn it again if the task is still needed.';
+  const body = `${outcome.content}${tail}`;
   return [
     SUBAGENT_RESULT_PREFIX,
     `Task name: ${run.parentSessionId}`,
@@ -93,11 +102,13 @@ const consume = (stream: AsyncGenerator<FrameBody, unknown, unknown>) =>
           if (end.reason === 'done')
             return { end, content: content || '(subagent completed without output)' };
           if (end.reason === 'error') return { end, content: end.error.message };
-          const message =
-            end.reason === 'maxSteps'
-              ? 'subagent exhausted its step budget before finishing'
-              : 'subagent was aborted';
-          return { end: failedEnd(message), content: message };
+          if (end.reason === 'maxSteps') {
+            const message = 'subagent exhausted its step budget before finishing';
+            return { end: failedEnd(message), content: message };
+          }
+          // aborted：保留原始 end transition，让中断与一般失败在 renderResult 里仍可区分
+          const message = content || 'subagent was aborted';
+          return { end, content: message };
         }
       }
       const message = 'subagent stream ended without a terminal frame';
@@ -168,7 +179,9 @@ export const SubagentRunRegistryLayer = Layer.scoped(
 
     const spawn = (opts: SpawnOptions) =>
       Effect.gen(function* () {
-        if ((yield* turn.runningChildren(opts.parentSessionId)) >= loadConfig().subagent.maxBackground) {
+        if (
+          (yield* turn.runningChildren(opts.parentSessionId)) >= loadConfig().subagent.maxBackground
+        ) {
           return yield* Effect.fail(
             new AgentError('TOOL_EXECUTION_FAILED', 'Concurrent subagent limit reached')
           );
@@ -176,11 +189,14 @@ export const SubagentRunRegistryLayer = Layer.scoped(
 
         // 子会话的可停性由 runTurn 的 arm 登记的 Fiber.interrupt 承担
         const { stream, sessionId } = yield* runner.runSubagent([textPart(opts.prompt)], {
+          sessionId: opts.resumeSessionId, // 续跑：复用既有子会话与历史上下文
           cwd: opts.parentCwd,
           activeProfile: opts.parentProfile,
           permissionMode: BYPASS_PERMISSION_MODE,
           parentSessionId: opts.parentSessionId,
           agentName: opts.agentName,
+          description: opts.description,
+          parentChain: opts.parentChain,
           model: opts.model,
           systemPrompt: opts.systemPrompt,
         });

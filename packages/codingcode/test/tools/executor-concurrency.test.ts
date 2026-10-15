@@ -139,12 +139,17 @@ function runBatch(
     // 只把内置名交给 catalog（去重）；MCP 工具名（含 `:`）由 spec 侧注册
     const builtinNames = [...new Set(calls.map((c) => c.name).filter((n) => TOOLS_BY_NAME.has(n)))];
     const catalog = yield* exec.prepare(builtinNames, mcpSpecs);
-    return yield* exec.executeBatch(calls, ctx.sessionId, {
-      projectPath: ctx.projectPath,
-      signal: ctx.signal,
-      activeProfile: ctx.activeProfile,
-      model: ctx.model,
-    }, catalog.lookup);
+    return yield* exec.executeBatch(
+      calls,
+      ctx.sessionId,
+      {
+        projectPath: ctx.projectPath,
+        signal: ctx.signal,
+        activeProfile: ctx.activeProfile,
+        model: ctx.model,
+      },
+      catalog.lookup
+    );
   });
   return Effect.runPromise(
     program.pipe(Effect.provide(ToolExecutorLayer), Effect.provide(h.layers))
@@ -348,7 +353,7 @@ describe('executeBatch 保序波次调度', () => {
   it('[spawn_agent, write_file] 零重叠：并发安全的 spawn 自成一波，写入独占一波，先后由声明顺序决定', async () => {
     const results = await runBatch(
       [
-        tc('d1', 'spawn_agent', { agentName: 'build', prompt: 'go' }),
+        tc('d1', 'spawn_agent', { agentName: 'build', description: 'delegate', prompt: 'go' }),
         tc('w1', 'write_file', { path: 'z.txt', content: 'z' }),
       ],
       { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
@@ -367,7 +372,7 @@ describe('executeBatch 保序波次调度', () => {
     const reversed = await runBatch(
       [
         tc('w2', 'write_file', { path: 'z2.txt', content: 'z' }),
-        tc('d2', 'spawn_agent', { agentName: 'build', prompt: 'go' }),
+        tc('d2', 'spawn_agent', { agentName: 'build', description: 'delegate', prompt: 'go' }),
       ],
       { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
       h
@@ -417,7 +422,7 @@ describe('executeBatch 保序波次调度', () => {
     expect(h.hookPoints.filter((p) => p === 'tool.execute.before')).toHaveLength(1);
   });
 
-  it('14 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
+  it('18 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
     const expected: Record<string, boolean> = {
       read_file: true,
       search_code: true,
@@ -429,6 +434,10 @@ describe('executeBatch 保序波次调度', () => {
       ask_user: true,
       spawn_agent: true,
       wait_agent: true,
+      resume_agent: true,
+      send_message: true,
+      list_agents: true,
+      interrupt_agent: false,
       write_file: false,
       edit_file: false,
       execute_command: false,
