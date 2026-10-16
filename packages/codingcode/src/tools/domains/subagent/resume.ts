@@ -45,9 +45,13 @@ export const resumeAgentTool: ToolDefinition<HookService | SubagentRunRegistrySe
         );
       }
 
-      // 寻址：目标必须是直接子会话 —— 路径由当前会话 id 单跳算出；
+      // 寻址：目标必须是直接子会话 —— 路径由「当前会话 + 祖先链」算出，
+      // 转录统一挂在链末位（顶层主会话）的 subagents/ 下；
       // 根会话 / 兄弟会话的 id 拼出的路径必然不存在，一并按未知拒绝
-      const meta = readSessionMeta(transcriptPathOf(projectPath, sessionId, ctx.sessionId));
+      const childChain = [ctx.sessionId, ...(ctx.parentChain ?? [])];
+      const meta = readSessionMeta(
+        transcriptPathOf(projectPath, sessionId, ctx.sessionId, childChain)
+      );
       if (!meta || meta.parentSessionId !== ctx.sessionId) {
         return yield* Effect.fail(
           new AgentError('INVALID_INPUT', `Unknown subagent: ${sessionId}`)

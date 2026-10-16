@@ -29,7 +29,7 @@ import type { CompressResult } from './port.js';
 import { TurnRegistryService } from '../turn/port.js';
 
 export function transcriptPathFor(ref: SessionRef): string {
-  return transcriptPathOf(ref.cwd, ref.sessionId, ref.parentSessionId);
+  return transcriptPathOf(ref.cwd, ref.sessionId, ref.parentSessionId, ref.parentChain);
 }
 
 const COMPACTABLE_TOOLS = new Set([

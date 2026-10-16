@@ -7,8 +7,8 @@ import { AgentError } from '../util/error.js';
 import type { Result } from '../util/result.js';
 import { BYPASS_PERMISSION_MODE } from '../util/enums.js';
 import type { IncomingPart } from '../llm/types.js';
-import { transcriptPathOf } from '../session/paths.js';
 import { readSessionMeta } from '../session/file-ops.js';
+import { transcriptPathOf } from '../session/paths.js';
 
 export const SubagentRunnerLayer = Layer.effect(
   SubagentRunnerService,
@@ -19,7 +19,7 @@ export const SubagentRunnerLayer = Layer.effect(
     const resolveSystemPrompt = (opts: RunSubagentOptions): string | undefined => {
       if (!opts.sessionId) return opts.systemPrompt;
       const meta = readSessionMeta(
-        transcriptPathOf(opts.cwd, opts.sessionId, opts.parentSessionId)
+        transcriptPathOf(opts.cwd, opts.sessionId, opts.parentSessionId, opts.parentChain)
       );
       return meta?.systemPrompt;
     };

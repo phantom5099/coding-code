@@ -200,7 +200,19 @@ describe('subagent lifecycle integration (real agent + runner + registry)', () =
     parentChain: ['parent-1', 'root-1'],
   };
 
+  // 新布局：不论派发多深，子会话转录一律挂在顶层主会话（链末位）的 subagents/ 下
   const childTranscriptPath = (childId: string) =>
+    join(
+      projectBaseDir(),
+      encodeProjectPath(normalizePath(cwd)),
+      'sessions',
+      'root-1',
+      'subagents',
+      `${childId}.jsonl`
+    );
+
+  // 旧布局（链未落盘前的孙代会话位置）：新代码不应再往这里写
+  const legacyChildTranscriptPath = (childId: string) =>
     join(
       projectBaseDir(),
       encodeProjectPath(normalizePath(cwd)),
@@ -236,6 +248,10 @@ describe('subagent lifecycle integration (real agent + runner + registry)', () =
     expect(meta.description).toBe('probes the ctx');
     expect(meta.agentName).toBe('worker');
     expect(meta.parentSessionId).toBe('parent-1');
+    // 链随会话头落盘：续跑与路径定位都不必依赖调用方重述
+    expect(meta.parentChain).toEqual(['parent-1', 'root-1']);
+    // 统一布局：直接父会话名下不再出现子目录
+    expect(existsSync(legacyChildTranscriptPath(result.handle.sessionId))).toBe(false);
   });
 
   it('中断运行中的子智能体：wait 返回 failed，父 mailbox 收到续跑引导文案', async () => {

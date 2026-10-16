@@ -153,6 +153,7 @@ export const AgentLayer = Layer.effect(
             },
             {
               parentSessionId,
+              parentChain: opts.parentChain,
               agentName: opts.agentName,
               description: opts.description,
               systemPrompt: opts.systemPrompt,
@@ -162,7 +163,12 @@ export const AgentLayer = Layer.effect(
           parentSessionId = created.parentSessionId;
         }
 
-        const state = yield* session.load(normalizedCwd, sessionId, parentSessionId);
+        const state = yield* session.load(
+          normalizedCwd,
+          sessionId,
+          parentSessionId,
+          opts.parentChain
+        );
         const sid: string = sessionId;
         const turnId = state.currentTurnId + 1;
 
@@ -186,7 +192,8 @@ export const AgentLayer = Layer.effect(
               normalizedCwd,
               sid,
               opts.permissionMode,
-              parentSessionId
+              parentSessionId,
+              opts.parentChain
             );
           }
           if (opts.activeProfile) {
@@ -194,7 +201,8 @@ export const AgentLayer = Layer.effect(
               normalizedCwd,
               sid,
               opts.activeProfile,
-              parentSessionId
+              parentSessionId,
+              opts.parentChain
             );
           }
 
@@ -347,6 +355,7 @@ export const AgentLayer = Layer.effect(
           cwd: state.cwd,
           sessionId: state.sessionId,
           parentSessionId: state.parentSessionId,
+          parentChain: state.parentChain,
           currentTurnId: state.currentTurnId,
         };
 

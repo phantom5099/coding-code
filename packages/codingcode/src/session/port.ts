@@ -23,6 +23,7 @@ export interface SessionShape {
     options: SessionCreateOptions,
     opts?: {
       parentSessionId?: string;
+      parentChain?: readonly string[];
       agentName?: string;
       description?: string;
       systemPrompt?: string;
@@ -31,7 +32,8 @@ export interface SessionShape {
   load(
     cwd: string,
     sessionId: string,
-    parentSessionId?: string
+    parentSessionId?: string,
+    parentChain?: readonly string[]
   ): Effect.Effect<SessionStoreState, AgentError>;
   deleteSession(sessionId: string, cwd: string): Effect.Effect<void, AgentError>;
   forkSession(state: SessionStoreState, atTurnId: number): Effect.Effect<string, AgentError>;
@@ -97,19 +99,22 @@ export interface SessionShape {
     cwd: string,
     sessionId: string,
     mode: PermissionMode,
-    parentSessionId?: string
+    parentSessionId?: string,
+    parentChain?: readonly string[]
   ): Effect.Effect<void, AgentError>;
   setActiveProfile(
     cwd: string,
     sessionId: string,
     profile: ProfileName,
-    parentSessionId?: string
+    parentSessionId?: string,
+    parentChain?: readonly string[]
   ): Effect.Effect<void, AgentError>;
   setModel(
     cwd: string,
     sessionId: string,
     model: string,
-    parentSessionId?: string
+    parentSessionId?: string,
+    parentChain?: readonly string[]
   ): Effect.Effect<void, AgentError>;
 }
 

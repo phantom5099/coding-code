@@ -59,12 +59,7 @@ import {
 } from './file-ops.js';
 
 function pathsFromState(state: SessionStoreState) {
-  return computePaths(state.cwd, state.sessionId, state.parentSessionId);
-}
-
-function assertResumeWorkspace(cwd: string, sessionId: string, parentSessionId?: string): void {
-  const expectedPath = sessionJsonlPathFromCwd(cwd, sessionId, parentSessionId);
-  if (!existsSync(expectedPath)) throw AgentError.sessionNotFound(sessionId);
+  return computePaths(state.cwd, state.sessionId, state.parentSessionId, state.parentChain);
 }
 
 // --- UI history (moved from ui-history.ts) ---
@@ -206,6 +201,7 @@ export const SessionLayer = Layer.effect(
       },
       opts?: {
         parentSessionId?: string;
+        parentChain?: readonly string[];
         agentName?: string;
         description?: string;
         systemPrompt?: string;
@@ -213,7 +209,7 @@ export const SessionLayer = Layer.effect(
     ): Effect.Effect<SessionStoreState, AgentError> =>
       Effect.try({
         try: () => {
-          const paths = computePaths(cwd, randomUUID(), opts?.parentSessionId);
+          const paths = computePaths(cwd, randomUUID(), opts?.parentSessionId, opts?.parentChain);
           ensureDirs(paths.transcriptPath);
 
           const meta: SessionMetaEvent = {
@@ -226,6 +222,10 @@ export const SessionLayer = Layer.effect(
             activeProfile: options.activeProfile,
             permissionMode: options.permissionMode,
             ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
+            // 链随子会话落盘：续跑与路径定位都不必再依赖调用方重述
+            ...(opts?.parentSessionId &&
+              opts.parentChain &&
+              opts.parentChain.length > 0 && { parentChain: [...opts.parentChain] }),
             ...(opts?.agentName && { agentName: opts.agentName }),
             ...(opts?.description && { description: opts.description }),
             // systemPrompt 只随子会话落盘：主会话（无 parentSessionId）即使传入也不写
@@ -244,12 +244,13 @@ export const SessionLayer = Layer.effect(
     const load = (
       cwd: string,
       sessionId: string,
-      parentSessionId?: string
+      parentSessionId?: string,
+      parentChain?: readonly string[]
     ): Effect.Effect<SessionStoreState, AgentError> =>
       Effect.try({
         try: () => {
-          assertResumeWorkspace(cwd, sessionId, parentSessionId);
-          const paths = computePaths(cwd, sessionId, parentSessionId);
+          const paths = computePaths(cwd, sessionId, parentSessionId, parentChain);
+          if (!existsSync(paths.transcriptPath)) throw AgentError.sessionNotFound(sessionId);
           ensureDirs(paths.transcriptPath);
 
           const meta = readSessionMeta(paths.transcriptPath);
@@ -590,10 +591,11 @@ export const SessionLayer = Layer.effect(
       cwd: string,
       sessionId: string,
       mode: PermissionMode,
-      parentSessionId?: string
+      parentSessionId?: string,
+      parentChain?: readonly string[]
     ): Effect.Effect<void, AgentError> =>
       Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId, parentSessionId);
+        const paths = computePaths(cwd, sessionId, parentSessionId, parentChain);
         rewriteSessionMeta(paths.transcriptPath, { permissionMode: mode });
       });
 
@@ -601,10 +603,11 @@ export const SessionLayer = Layer.effect(
       cwd: string,
       sessionId: string,
       profile: ProfileName,
-      parentSessionId?: string
+      parentSessionId?: string,
+      parentChain?: readonly string[]
     ): Effect.Effect<void, AgentError> =>
       Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId, parentSessionId);
+        const paths = computePaths(cwd, sessionId, parentSessionId, parentChain);
         rewriteSessionMeta(paths.transcriptPath, { activeProfile: profile });
       });
 
@@ -613,10 +616,11 @@ export const SessionLayer = Layer.effect(
       cwd: string,
       sessionId: string,
       model: string,
-      parentSessionId?: string
+      parentSessionId?: string,
+      parentChain?: readonly string[]
     ): Effect.Effect<void, AgentError> =>
       Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId, parentSessionId);
+        const paths = computePaths(cwd, sessionId, parentSessionId, parentChain);
         rewriteSessionMeta(paths.transcriptPath, { model });
       });
 

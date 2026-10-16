@@ -30,12 +30,14 @@ export const sendMessageTool: ToolDefinition<MailboxService> = {
           new AgentError('CONFIG_MISSING', 'send_message requires the sender session id')
         );
       }
-
-      // 收件人限定：链条上任意祖先（成员资格即校验，零磁盘访问），
-      // 或直接子会话（路径由当前会话 id 单跳算出后查存在性）；兄弟、陌生 id 一律拒绝
+      // TODO:后续修改格式，让同一根会话下的所有子智能体都能互相访问
       const chain = ctx?.parentChain ?? [];
       const isAncestor = chain.includes(sessionId);
-      if (!isAncestor && !existsSync(transcriptPathOf(projectPath, sessionId, selfSessionId))) {
+      const childChain = [selfSessionId, ...chain];
+      if (
+        !isAncestor &&
+        !existsSync(transcriptPathOf(projectPath, sessionId, selfSessionId, childChain))
+      ) {
         return yield* Effect.fail(
           new AgentError('INVALID_INPUT', `Unknown recipient: ${sessionId}`)
         );

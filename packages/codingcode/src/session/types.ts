@@ -29,6 +29,11 @@ export interface SessionMetaEvent {
   permissionMode: PermissionMode;
   parentSessionId?: string;
   agentName?: string;
+  /**
+   * 本会话的祖先链，由近及远，末位是顶层主会话；完整链路 = [sessionId, ...parentChain]。
+   * 仅子会话写入。子智能体转录统一挂在链末位的 subagents/ 下，故链同时是路径定位依据。
+   */
+  parentChain?: string[];
   /** 子智能体用途描述；首次派发时给出，供 list_agents 展示 */
   description?: string;
   /** 子会话自定义 system prompt 中间段；仅子会话写入，续跑时回读，缺省回落 profile */
@@ -130,6 +135,8 @@ export interface SessionRef {
   cwd: string;
   sessionId: string;
   parentSessionId?: string;
+  /** 本会话的祖先链，由近及远；转录定位用，见 session/paths.ts */
+  parentChain?: readonly string[];
   currentTurnId: number;
 }
 

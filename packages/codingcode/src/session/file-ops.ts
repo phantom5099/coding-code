@@ -15,7 +15,7 @@ import {
 } from 'fs';
 import { join, dirname } from 'path';
 import { getGlobalDir, projectRootDir } from '../util/path.js';
-import { transcriptPathOf, SESSIONS_DIRNAME } from './paths.js';
+import { transcriptPathOf, projectSessionsDir, SESSIONS_DIRNAME } from './paths.js';
 import type { SessionEvent, SessionMetaEvent } from './types.js';
 import type { SessionSummary } from './types.js';
 import type { TokenUsage } from '../llm/types.js';
@@ -28,9 +28,10 @@ const TAIL_WINDOW_BYTES = 16 * 1024;
 export function sessionJsonlPathFromCwd(
   cwd: string,
   sessionId: string,
-  parentSessionId?: string
+  parentSessionId?: string,
+  parentChain?: readonly string[]
 ): string {
-  return transcriptPathOf(cwd, sessionId, parentSessionId);
+  return transcriptPathOf(cwd, sessionId, parentSessionId, parentChain);
 }
 
 export function ensureDirs(transcriptPath: string): void {
@@ -192,14 +193,13 @@ export function readTranscript(cwd: string, sessionId: string): SessionEvent[] {
 }
 
 export function deleteSession(sessionId: string, cwd: string): void {
-  const dir = dirname(sessionJsonlPathFromCwd(cwd, sessionId));
-  if (!dir) return;
-  const jsonlPath = join(dir, `${sessionId}.jsonl`);
-  const subagentDir = join(dir, sessionId);
+  const sessionsDir = projectSessionsDir(cwd);
+  const jsonlPath = join(sessionsDir, `${sessionId}.jsonl`);
+  const ownSubagentDir = join(sessionsDir, sessionId);
   try {
     if (existsSync(jsonlPath)) unlinkSync(jsonlPath);
   } catch {}
   try {
-    if (existsSync(subagentDir)) rmSync(subagentDir, { recursive: true, force: true });
+    if (existsSync(ownSubagentDir)) rmSync(ownSubagentDir, { recursive: true, force: true });
   } catch {}
 }

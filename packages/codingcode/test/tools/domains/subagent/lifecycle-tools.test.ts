@@ -38,11 +38,20 @@ function codeOf<T>(r: Either.Either<T, { code?: string }>): string {
   return r._tag === 'Left' ? (r.left.code ?? '(no code)') : 'ok';
 }
 
-/** 在磁盘上真实建出一个会话（子会话落在 sessions/<parent>/subagents/） */
+/**
+ * 在磁盘上真实建出一个会话。
+ * parentChain 是该会话自己的祖先链（由近及远），决定转录落点：
+ * 有链 → sessions/<链末位>/subagents/；无链 → sessions/<直接父>/subagents/。
+ */
 function createSession(
   cwd: string,
   parentSessionId: string | undefined,
-  overrides: { model?: string; agentName?: string; description?: string } = {}
+  overrides: {
+    model?: string;
+    agentName?: string;
+    description?: string;
+    parentChain?: string[];
+  } = {}
 ): Promise<SessionStoreState> {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -56,6 +65,7 @@ function createSession(
         },
         {
           ...(parentSessionId ? { parentSessionId } : {}),
+          ...(overrides.parentChain ? { parentChain: overrides.parentChain } : {}),
           ...(overrides.agentName ? { agentName: overrides.agentName } : {}),
           ...(overrides.description ? { description: overrides.description } : {}),
         }
@@ -174,7 +184,11 @@ describe('resume_agent', () => {
 
   it('祖先链跨两代仍然完整：深层子智能体续跑时链条前置当前会话', async () => {
     const cwd = freshCwd();
-    const child = await createSession(cwd, PARENT);
+    // 该会话由 PARENT 派发，PARENT 自身链条为 [mid-1, root-1]，
+    // 故它的转录挂在链末位 root-1 名下
+    const child = await createSession(cwd, PARENT, {
+      parentChain: [PARENT, 'mid-1', 'root-1'],
+    });
     const { calls, layer } = registryLayer();
 
     await runTool(
@@ -270,7 +284,8 @@ describe('send_message', () => {
 
   it('子智能体发出：归属行为「（agentname）智能体（id：…）」格式', async () => {
     const cwd = freshCwd();
-    const child = await createSession(cwd, PARENT);
+    // 发送方 PARENT 自身链条为 [root-1]，它派发的子会话转录挂在 root-1 名下
+    const child = await createSession(cwd, PARENT, { parentChain: [PARENT, 'root-1'] });
     const { r, items } = await deliver(
       cwd,
       { sessionId: child.sessionId, message: 'status?' },
