@@ -39,4 +39,15 @@ export interface TurnClaim {
   readonly turnId: number;
   readonly parentSessionId?: string;
   readonly agentName?: string;
+  /** 子智能体用途描述；list_agents 的投影来源 */
+  readonly description?: string;
+}
+
+/** listChildren 的条目投影：该父会话名下回合记录的身份与状态 */
+export interface ChildTurnSummary {
+  readonly sessionId: string;
+  readonly agentName?: string;
+  readonly description?: string;
+  readonly state: TurnState;
+  readonly turnId: number;
 }

@@ -5,16 +5,13 @@ import type {
   AssistantEvent,
   RollbackEvent,
   SessionEvent,
+  SubagentMessageEvent,
   SubagentResultEvent,
   SummaryEvent,
   ToolResultEvent,
   UserEvent,
 } from './types.js';
-import type {
-  SessionCreateOptions,
-  SessionSummary,
-  SessionStoreState,
-} from './types.js';
+import type { SessionCreateOptions, SessionSummary, SessionStoreState } from './types.js';
 import type { UITurn } from './types.js';
 import type { StoredPart } from './types.js';
 import type { IncomingPart, TokenUsage } from '../llm/types.js';
@@ -24,12 +21,19 @@ export interface SessionShape {
   create(
     cwd: string,
     options: SessionCreateOptions,
-    opts?: { parentSessionId?: string; agentName?: string }
+    opts?: {
+      parentSessionId?: string;
+      parentChain?: readonly string[];
+      agentName?: string;
+      description?: string;
+      systemPrompt?: string;
+    }
   ): Effect.Effect<SessionStoreState, AgentError>;
   load(
     cwd: string,
     sessionId: string,
-    parentSessionId?: string
+    parentSessionId?: string,
+    parentChain?: readonly string[]
   ): Effect.Effect<SessionStoreState, AgentError>;
   deleteSession(sessionId: string, cwd: string): Effect.Effect<void, AgentError>;
   forkSession(state: SessionStoreState, atTurnId: number): Effect.Effect<string, AgentError>;
@@ -73,6 +77,10 @@ export interface SessionShape {
     state: SessionStoreState,
     result: { sessionId: string; agentName: string; content: string }
   ): Effect.Effect<SubagentResultEvent, AgentError>;
+  recordSubagentMessage(
+    state: SessionStoreState,
+    message: { sessionId: string; agentName: string; content: string }
+  ): Effect.Effect<SubagentMessageEvent, AgentError>;
   appendSummary(
     state: SessionStoreState,
     summaryText: string,
@@ -91,19 +99,22 @@ export interface SessionShape {
     cwd: string,
     sessionId: string,
     mode: PermissionMode,
-    parentSessionId?: string
+    parentSessionId?: string,
+    parentChain?: readonly string[]
   ): Effect.Effect<void, AgentError>;
   setActiveProfile(
     cwd: string,
     sessionId: string,
     profile: ProfileName,
-    parentSessionId?: string
+    parentSessionId?: string,
+    parentChain?: readonly string[]
   ): Effect.Effect<void, AgentError>;
   setModel(
     cwd: string,
     sessionId: string,
     model: string,
-    parentSessionId?: string
+    parentSessionId?: string,
+    parentChain?: readonly string[]
   ): Effect.Effect<void, AgentError>;
 }
 

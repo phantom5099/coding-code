@@ -16,10 +16,15 @@ export interface ToolDefinition<R = never> {
   execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, R>;
 }
 
-
 export interface ToolExecCtx {
   signal?: AbortSignal;
   sessionId?: string;
+  /** 祖先会话 id，由近及远：[直接父, 祖父, ..., 根]；缺省即顶层主智能体（[]）
+   *  —— 主智能体判定 = 数组为空；直接父 = parentChain[0]；
+   *  任意祖先的 transcript 路径按「链条下一跳即其父」算出 */
+  parentChain?: readonly string[];
+  /** 本回合所属智能体的昵称；顶层主智能体缺省 */
+  agentName?: string;
   /** 本次调用的 tool_call id（由 execSingle 以 tc.id 注入）；ask_user 用作等待键 */
   callId?: string;
   projectPath?: string;

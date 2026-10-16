@@ -9,6 +9,13 @@ const item = (sessionId: string, content = 'x') => ({
   content,
 });
 
+const message = (sessionId: string, content = 'hi') => ({
+  type: 'subagent_message' as const,
+  sessionId,
+  agentName: 'build',
+  content,
+});
+
 const run = <T>(eff: Effect.Effect<T, any, any>): Promise<T> =>
   Effect.runPromise(
     eff.pipe(Effect.provide(MailboxLayer)) as unknown as Effect.Effect<T, never, never>
@@ -62,5 +69,18 @@ describe('session mailbox', () => {
       })
     );
     expect(result).toEqual([]);
+  });
+
+  it('subagent_message 与终态结果同队列，按投递顺序原样取回', async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const mb = yield* MailboxService;
+        yield* mb.offer('s1', item('child-1', 'done'));
+        yield* mb.offer('s1', message('mid-1', 'ping'));
+        return yield* mb.drain('s1');
+      })
+    );
+    expect(result.map((i) => i.type)).toEqual(['subagent_result', 'subagent_message']);
+    expect(result[1]).toMatchObject({ sessionId: 'mid-1', agentName: 'build', content: 'ping' });
   });
 });

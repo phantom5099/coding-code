@@ -141,7 +141,9 @@ describe('turn registry', () => {
       })
     );
     expect(result.kind).toBe('attached');
-    const tos = framesFor('s1').map((f) => (f.family === 'transition' ? f.transition.to : f.family));
+    const tos = framesFor('s1').map((f) =>
+      f.family === 'transition' ? f.transition.to : f.family
+    );
     expect(tos).toEqual(['start', 'executing', 'compress']);
   });
 
@@ -276,5 +278,190 @@ describe('turn registry', () => {
     );
     expect(result.parent).toBeUndefined();
     expect(result.child).toBeUndefined();
+  });
+});
+
+describe('turn registry — interrupt', () => {
+  it('running 且已 arm → stopped，stop 句柄被调用，重复 interrupt → not-running', async () => {
+    const { layers } = makeHarness();
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const t = yield* TurnRegistryService;
+        const stopped: string[] = [];
+        yield* t.claim('c1', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.arm('c1', () => stopped.push('c1'));
+        const first = yield* t.interrupt('c1');
+        const second = yield* t.interrupt('c1');
+        return { first, second, stopped };
+      })
+    );
+    expect(result.first).toBe('stopped');
+    expect(result.stopped).toEqual(['c1']);
+    // stopping 已置位 ⇒ 第二次不再重复停
+    expect(result.second).toBe('not-running');
+  });
+
+  it('stop 句柄触发状态机后，中断的记录以终态收尾（wait 立即返回）', async () => {
+    const { layers, framesFor } = makeHarness();
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const t = yield* TurnRegistryService;
+        yield* t.claim('c1', { turnId: 1, parentSessionId: 'p1' });
+        // 真实装配里 stop 会 Fiber.interrupt 该回合，回合的 onInterrupt 投 interrupt 转移
+        yield* t.arm('c1', () => {
+          Effect.runSync(t.transition('c1', { kind: 'interrupt' }));
+        });
+        const outcome = yield* t.interrupt('c1');
+        yield* t.markDelivered('c1');
+        return { outcome, wait: yield* t.wait('c1', 100) };
+      })
+    );
+    expect(result.outcome).toBe('stopped');
+    expect(result.wait).toBe('failed');
+    const ends = framesFor('c1').filter(
+      (f) => f.family === 'transition' && f.transition.to === 'end'
+    );
+    expect(ends).toHaveLength(1);
+    expect((ends[0] as any).transition.reason).toBe('aborted');
+  });
+
+  it('已终态 → not-running；未知 id → not-found', async () => {
+    const { layers } = makeHarness();
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const t = yield* TurnRegistryService;
+        yield* t.claim('done', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.transition('done', { kind: 'complete', reason: 'done' });
+        return {
+          terminal: yield* t.interrupt('done'),
+          unknown: yield* t.interrupt('nope'),
+        };
+      })
+    );
+    expect(result.terminal).toBe('not-running');
+    expect(result.unknown).toBe('not-found');
+  });
+
+  it('running 但未 arm → not-running（不谎报已停）', async () => {
+    const { layers } = makeHarness();
+    const outcome = await run(
+      layers,
+      Effect.gen(function* () {
+        const t = yield* TurnRegistryService;
+        yield* t.claim('c1', { turnId: 1, parentSessionId: 'p1' });
+        return yield* t.interrupt('c1');
+      })
+    );
+    expect(outcome).toBe('not-running');
+  });
+
+  it('只停目标会话，兄弟会话不受影响', async () => {
+    const { layers } = makeHarness();
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const t = yield* TurnRegistryService;
+        const stopped: string[] = [];
+        yield* t.claim('c1', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim('c2', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.arm('c1', () => stopped.push('c1'));
+        yield* t.arm('c2', () => stopped.push('c2'));
+        const outcome = yield* t.interrupt('c1');
+        return { outcome, stopped, remaining: yield* t.runningChildren('p1') };
+      })
+    );
+    expect(result.outcome).toBe('stopped');
+    expect(result.stopped).toEqual(['c1']);
+    expect(result.remaining).toBe(2);
+  });
+});
+
+describe('turn registry — listChildren', () => {
+  it('只含指定父会话的记录，running 与终态条目都在', async () => {
+    const { layers } = makeHarness();
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const t = yield* TurnRegistryService;
+        yield* t.claim('live', {
+          turnId: 1,
+          parentSessionId: 'p1',
+          agentName: 'worker',
+          description: 'writes docs',
+        });
+        yield* t.claim('done', {
+          turnId: 2,
+          parentSessionId: 'p1',
+          agentName: 'scout',
+          description: 'reads code',
+        });
+        yield* t.transition('done', { kind: 'complete', reason: 'done' });
+        yield* t.claim('other', { turnId: 1, parentSessionId: 'p2' });
+        return yield* t.listChildren('p1');
+      })
+    );
+
+    expect(result.map((c) => c.sessionId).sort()).toEqual(['done', 'live']);
+    expect(result).toEqual(
+      expect.arrayContaining([
+        {
+          sessionId: 'live',
+          agentName: 'worker',
+          description: 'writes docs',
+          state: 'running',
+          turnId: 1,
+        },
+        {
+          sessionId: 'done',
+          agentName: 'scout',
+          description: 'reads code',
+          state: 'complete',
+          turnId: 2,
+        },
+      ])
+    );
+  });
+
+  it('无身份字段的记录不伪造键；未知父会话返回空数组', async () => {
+    const { layers } = makeHarness();
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const t = yield* TurnRegistryService;
+        yield* t.claim('bare', { turnId: 1, parentSessionId: 'p1' });
+        return {
+          listed: yield* t.listChildren('p1'),
+          unknown: yield* t.listChildren('nobody'),
+        };
+      })
+    );
+    expect(result.listed).toEqual([{ sessionId: 'bare', state: 'running', turnId: 1 }]);
+    expect(result.unknown).toEqual([]);
+  });
+
+  it('父回合 settle 回收终态子记录后，列表只剩仍在跑的', async () => {
+    const { layers } = makeHarness();
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const t = yield* TurnRegistryService;
+        yield* t.claim('parent', { turnId: 1 });
+        yield* t.claim('done', { turnId: 1, parentSessionId: 'parent' });
+        yield* t.transition('done', { kind: 'complete', reason: 'done' });
+        yield* t.claim('live', { turnId: 1, parentSessionId: 'parent' });
+        const before = yield* t.listChildren('parent');
+        yield* t.transition('parent', { kind: 'complete', reason: 'done' });
+        const after = yield* t.listChildren('parent');
+        return {
+          before: before.map((c) => c.sessionId).sort(),
+          after: after.map((c) => c.sessionId),
+        };
+      })
+    );
+    expect(result.before).toEqual(['done', 'live']);
+    expect(result.after).toEqual(['live']);
   });
 });

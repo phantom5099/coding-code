@@ -25,6 +25,10 @@ export const BUILD_TOOL_NAMES: readonly string[] = [
   'ask_user',
   'spawn_agent',
   'wait_agent',
+  'resume_agent',
+  'send_message',
+  'interrupt_agent',
+  'list_agents',
 ];
 
 export const PLAN_ALLOWED_TOOLS: ReadonlySet<string> = new Set(PLAN_TOOL_NAMES);

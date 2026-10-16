@@ -1,8 +1,8 @@
 import { Chunk, Context, Effect, Layer, Queue } from 'effect';
-import type { SubagentResultEvent } from './types.js';
+import type { SubagentMessageEvent, SubagentResultEvent } from './types.js';
 
-/** 入站暂存条目。当前唯一生产者是子代理终态 —— 不预留其它变体 */
-export type MailboxItem = SubagentResultEvent;
+/** 入站暂存条目：子代理终态结果，或其它智能体主动投递的来信 */
+export type MailboxItem = SubagentResultEvent | SubagentMessageEvent;
 
 export interface MailboxShape {
   /** 投递；该会话还没有队列时自动建 */

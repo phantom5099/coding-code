@@ -34,7 +34,7 @@ import { transcriptPathFor } from '../../src/context/context.js';
 import { projectBaseDir } from '../helpers/project-base.js';
 import type { SessionMetaEvent } from '../../src/session/types.js';
 import type { SessionRef } from '../../src/session/types.js';
-import type { Message, LLMRequest } from '../../src/llm/types.js';
+import type { Message, ResolvedMessage, LLMRequest } from '../../src/llm/types.js';
 
 import type { FrameBody } from '../../src/sink/types.js';
 
@@ -43,7 +43,7 @@ const PARENT_MODEL = 'parent-model';
 
 /** 记录每次推理请求：system 是那次回合真正用的系统提示词，model 是本次请求的模型值 */
 interface Recorder {
-  calls: Array<{ system: string; model: string }>;
+  calls: Array<{ system: string; model: string; messages: ReadonlyArray<ResolvedMessage> }>;
 }
 
 const rec: Recorder = { calls: [] };
@@ -58,7 +58,7 @@ const LLMMock = Layer.succeed(LLMService, {
       if (target !== CHILD_MODEL) {
         throw new AgentError('CONFIG_INVALID', `Model "${target}" not found in models.json`);
       }
-      rec.calls.push({ system: req.system ?? '', model: target });
+      rec.calls.push({ system: req.system ?? '', model: target, messages: req.messages ?? [] });
       yield { type: 'text' as const, text: CHILD_ANSWER };
       yield { type: 'end' as const };
     })(),
@@ -204,7 +204,12 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
   });
 
   /** Create a parent session, then run one subagent turn under it. */
-  function spawnChild(opts: { model?: string; systemPrompt?: string; agentName?: string }) {
+  function spawnChild(opts: {
+    model?: string;
+    systemPrompt?: string;
+    agentName?: string;
+    description?: string;
+  }) {
     return run(
       Effect.gen(function* () {
         const session = yield* SessionService;
@@ -219,6 +224,7 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
           activeProfile: 'build',
           parentSessionId: parent.sessionId,
           agentName: opts.agentName ?? 'reviewer',
+          ...(opts.description ? { description: opts.description } : {}),
           model: opts.model ?? CHILD_MODEL,
           ...(opts.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
         });
@@ -230,6 +236,25 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
 
   function pathsFor(childId: string, parentId: string) {
     return computePaths(normalizePath(cwd), childId, parentId);
+  }
+
+  /** 续跑既有子会话：不传 systemPrompt，由 runner 从会话头回读 */
+  function resumeChild(childId: string, parentId: string, text = 'continue') {
+    return run(
+      Effect.gen(function* () {
+        const runner = yield* SubagentRunnerService;
+        const { stream, sessionId } = yield* runner.runSubagent(incomingText(text), {
+          sessionId: childId,
+          cwd,
+          activeProfile: 'build',
+          parentSessionId: parentId,
+          agentName: 'reviewer',
+          model: CHILD_MODEL,
+        });
+        const content = yield* drainStream(stream);
+        return { sessionId, content };
+      })
+    );
   }
 
   it('writes the child transcript under sessions/<parent>/subagents/ and reloads it with the parent id', async () => {
@@ -305,5 +330,53 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
     const customIdx = system.indexOf('CUSTOM-MIDDLE-MARKER');
     expect(customIdx).toBeGreaterThan(envIdx);
     expect(customIdx).toBeLessThan(notesIdx);
+  });
+
+  it('resume: reuses the same session, replays its history and reloads systemPrompt from the head', async () => {
+    const { parentId, childId } = await spawnChild({ systemPrompt: 'CUSTOM-MIDDLE-MARKER' });
+    expect(rec.calls.at(-1)!.system).toContain('CUSTOM-MIDDLE-MARKER');
+
+    const resumed = await resumeChild(childId, parentId, 'keep going');
+
+    expect(resumed.sessionId).toBe(childId);
+    const last = rec.calls.at(-1)!;
+    // 首轮内容仍在上下文里（重建历史而非新建会话）
+    expect(last.messages.some((m) => JSON.stringify(m.content).includes('do the thing'))).toBe(
+      true
+    );
+    // 模型没传 systemPrompt，中间段仍来自会话头
+    expect(last.system).toContain('CUSTOM-MIDDLE-MARKER');
+
+    const types = readHistory(pathsFor(childId, parentId).transcriptPath).map((e) => e.type);
+    expect(types.filter((t) => t === 'user')).toHaveLength(2);
+  });
+
+  it('resume without a stored systemPrompt does not inject one', async () => {
+    const { parentId, childId } = await spawnChild({});
+    const resumed = await resumeChild(childId, parentId);
+
+    expect(resumed.sessionId).toBe(childId);
+    const last = rec.calls.at(-1)!;
+    expect(last.system).not.toContain('CUSTOM-MIDDLE-MARKER');
+    // 回落 profile 默认段
+    expect(last.system).toContain('How you work');
+  });
+
+  it('records the purpose description in the child session head on first dispatch', async () => {
+    const { parentId, childId } = await spawnChild({
+      agentName: 'reviewer',
+      description: 'reviews the diff',
+    });
+    const meta = readHistory(pathsFor(childId, parentId).transcriptPath)[0] as SessionMetaEvent;
+    expect(meta.agentName).toBe('reviewer');
+    expect(meta.description).toBe('reviews the diff');
+  });
+
+  it('resume keeps the description already stored in the head', async () => {
+    const { parentId, childId } = await spawnChild({ description: 'reviews the diff' });
+    await resumeChild(childId, parentId);
+
+    const meta = readHistory(pathsFor(childId, parentId).transcriptPath)[0] as SessionMetaEvent;
+    expect(meta.description).toBe('reviews the diff');
   });
 });

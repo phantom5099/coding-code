@@ -23,6 +23,7 @@ import type {
   AssistantEvent,
   ToolResultEvent,
   SubagentResultEvent,
+  SubagentMessageEvent,
   SummaryEvent,
   RollbackEvent,
   SessionEvent,
@@ -58,12 +59,7 @@ import {
 } from './file-ops.js';
 
 function pathsFromState(state: SessionStoreState) {
-  return computePaths(state.cwd, state.sessionId, state.parentSessionId);
-}
-
-function assertResumeWorkspace(cwd: string, sessionId: string, parentSessionId?: string): void {
-  const expectedPath = sessionJsonlPathFromCwd(cwd, sessionId, parentSessionId);
-  if (!existsSync(expectedPath)) throw AgentError.sessionNotFound(sessionId);
+  return computePaths(state.cwd, state.sessionId, state.parentSessionId, state.parentChain);
 }
 
 // --- UI history (moved from ui-history.ts) ---
@@ -114,6 +110,7 @@ export function sessionEventsToTurns(events: SessionEvent[]): UITurn[] {
     if (event.type === 'session_meta') continue;
     if (event.type === 'compact' || event.type === 'rollback') continue;
     if (event.type === 'subagent_result') continue; // 结果进模型上下文，不占用户视野
+    if (event.type === 'subagent_message') continue; // 智能体来信同理，不外泄到用户视野
 
     if (event.type === 'summary') {
       let turn = turnsMap.get(event.endTurnId);
@@ -202,11 +199,17 @@ export const SessionLayer = Layer.effect(
         activeProfile: ProfileName;
         permissionMode: PermissionMode;
       },
-      opts?: { parentSessionId?: string; agentName?: string }
+      opts?: {
+        parentSessionId?: string;
+        parentChain?: readonly string[];
+        agentName?: string;
+        description?: string;
+        systemPrompt?: string;
+      }
     ): Effect.Effect<SessionStoreState, AgentError> =>
       Effect.try({
         try: () => {
-          const paths = computePaths(cwd, randomUUID(), opts?.parentSessionId);
+          const paths = computePaths(cwd, randomUUID(), opts?.parentSessionId, opts?.parentChain);
           ensureDirs(paths.transcriptPath);
 
           const meta: SessionMetaEvent = {
@@ -219,7 +222,14 @@ export const SessionLayer = Layer.effect(
             activeProfile: options.activeProfile,
             permissionMode: options.permissionMode,
             ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
+            // 链随子会话落盘：续跑与路径定位都不必再依赖调用方重述
+            ...(opts?.parentSessionId &&
+              opts.parentChain &&
+              opts.parentChain.length > 0 && { parentChain: [...opts.parentChain] }),
             ...(opts?.agentName && { agentName: opts.agentName }),
+            ...(opts?.description && { description: opts.description }),
+            // systemPrompt 只随子会话落盘：主会话（无 parentSessionId）即使传入也不写
+            ...(opts?.parentSessionId && opts.systemPrompt && { systemPrompt: opts.systemPrompt }),
           };
           appendLine(paths.transcriptPath, meta);
 
@@ -234,12 +244,13 @@ export const SessionLayer = Layer.effect(
     const load = (
       cwd: string,
       sessionId: string,
-      parentSessionId?: string
+      parentSessionId?: string,
+      parentChain?: readonly string[]
     ): Effect.Effect<SessionStoreState, AgentError> =>
       Effect.try({
         try: () => {
-          assertResumeWorkspace(cwd, sessionId, parentSessionId);
-          const paths = computePaths(cwd, sessionId, parentSessionId);
+          const paths = computePaths(cwd, sessionId, parentSessionId, parentChain);
+          if (!existsSync(paths.transcriptPath)) throw AgentError.sessionNotFound(sessionId);
           ensureDirs(paths.transcriptPath);
 
           const meta = readSessionMeta(paths.transcriptPath);
@@ -381,11 +392,7 @@ export const SessionLayer = Layer.effect(
         catch: (e) =>
           e instanceof AgentError
             ? e
-            : new AgentError(
-                'SESSION_IO_ERROR',
-                `Failed to store input media: ${String(e)}`,
-                e
-              ),
+            : new AgentError('SESSION_IO_ERROR', `Failed to store input media: ${String(e)}`, e),
       });
 
     /**
@@ -492,6 +499,28 @@ export const SessionLayer = Layer.effect(
             : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
 
+    // 与 recordSubagentResult 同构：另一个智能体主动投递的来信，落盘后由收件人回合吸收
+    const recordSubagentMessage = (
+      state: SessionStoreState,
+      message: { sessionId: string; agentName: string; content: string }
+    ): Effect.Effect<SubagentMessageEvent, AgentError> =>
+      Effect.try({
+        try: () => {
+          const event: SubagentMessageEvent = {
+            type: 'subagent_message',
+            sessionId: message.sessionId,
+            agentName: message.agentName,
+            content: message.content,
+          };
+          appendLine(pathsFromState(state).transcriptPath, event);
+          return event;
+        },
+        catch: (e) =>
+          e instanceof AgentError
+            ? e
+            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
+      });
+
     const appendSummary = (
       state: SessionStoreState,
       summaryText: string,
@@ -562,10 +591,11 @@ export const SessionLayer = Layer.effect(
       cwd: string,
       sessionId: string,
       mode: PermissionMode,
-      parentSessionId?: string
+      parentSessionId?: string,
+      parentChain?: readonly string[]
     ): Effect.Effect<void, AgentError> =>
       Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId, parentSessionId);
+        const paths = computePaths(cwd, sessionId, parentSessionId, parentChain);
         rewriteSessionMeta(paths.transcriptPath, { permissionMode: mode });
       });
 
@@ -573,10 +603,11 @@ export const SessionLayer = Layer.effect(
       cwd: string,
       sessionId: string,
       profile: ProfileName,
-      parentSessionId?: string
+      parentSessionId?: string,
+      parentChain?: readonly string[]
     ): Effect.Effect<void, AgentError> =>
       Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId, parentSessionId);
+        const paths = computePaths(cwd, sessionId, parentSessionId, parentChain);
         rewriteSessionMeta(paths.transcriptPath, { activeProfile: profile });
       });
 
@@ -585,10 +616,11 @@ export const SessionLayer = Layer.effect(
       cwd: string,
       sessionId: string,
       model: string,
-      parentSessionId?: string
+      parentSessionId?: string,
+      parentChain?: readonly string[]
     ): Effect.Effect<void, AgentError> =>
       Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId, parentSessionId);
+        const paths = computePaths(cwd, sessionId, parentSessionId, parentChain);
         rewriteSessionMeta(paths.transcriptPath, { model });
       });
 
@@ -612,6 +644,7 @@ export const SessionLayer = Layer.effect(
       recordAssistant,
       recordToolResult,
       recordSubagentResult,
+      recordSubagentMessage,
       appendSummary,
       rollbackToTurn,
 

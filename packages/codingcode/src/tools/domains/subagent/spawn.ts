@@ -20,6 +20,12 @@ export const spawnAgentTool: ToolDefinition<HookService | SubagentRunRegistrySer
       .string()
       .min(1)
       .describe('short nickname for the subagent; used for identification and display'),
+    description: z
+      .string()
+      .min(1)
+      .describe(
+        'one-line purpose of the subagent; list_agents shows it so the main agent knows what each subagent does'
+      ),
     prompt: z.string().min(1).describe('task description for the subagent'),
     model: z
       .string()
@@ -38,8 +44,9 @@ export const spawnAgentTool: ToolDefinition<HookService | SubagentRunRegistrySer
     Effect.gen(function* () {
       const hooks = yield* HookService;
       const registry = yield* SubagentRunRegistryService;
-      const { agentName, prompt, model, systemPrompt } = args as {
+      const { agentName, description, prompt, model, systemPrompt } = args as {
         agentName: string;
+        description: string;
         prompt: string;
         model?: string;
         systemPrompt?: string;
@@ -74,11 +81,14 @@ export const spawnAgentTool: ToolDefinition<HookService | SubagentRunRegistrySer
       const handle = yield* registry.spawn({
         prompt,
         agentName,
+        description,
         model: effectiveModel,
         systemPrompt,
         parentSessionId: ctx.sessionId,
         parentCwd: projectPath,
         parentProfile: ctx.activeProfile,
+        // 祖先链在内存里顺传：子会话回合的工具上下文由此建立，孙代自动继承全链
+        parentChain: [ctx.sessionId, ...(ctx.parentChain ?? [])],
       });
 
       yield* hooks.emit('agent.subagent.spawn.after', {

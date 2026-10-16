@@ -18,6 +18,10 @@ import { askUserTool } from './domains/self/ask-user.js';
 import { spawnAgentTool } from './domains/subagent/spawn.js';
 import { waitAgentTool } from './domains/subagent/wait.js';
 import { submitPlanTool } from './domains/subagent/submit-plan.js';
+import { resumeAgentTool } from './domains/subagent/resume.js';
+import { sendMessageTool } from './domains/subagent/message.js';
+import { interruptAgentTool } from './domains/subagent/interrupt.js';
+import { listAgentsTool } from './domains/subagent/list.js';
 
 const ALL_TOOLS: ToolDefinition<any>[] = [
   readFileTool,
@@ -34,6 +38,10 @@ const ALL_TOOLS: ToolDefinition<any>[] = [
   spawnAgentTool,
   waitAgentTool,
   submitPlanTool,
+  resumeAgentTool,
+  sendMessageTool,
+  interruptAgentTool,
+  listAgentsTool,
 ];
 
 const TOOLS_BY_NAME = new Map(ALL_TOOLS.map((tool) => [tool.name, tool]));
