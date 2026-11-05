@@ -130,6 +130,26 @@ describe('context memory buffer', () => {
     expect(messages.some((m) => textOf(m.content) === 'q1')).toBe(true);
   });
 
+  it('跨回合 drain 到已写盘的结果：按 uuid 判重，不重复注入', async () => {
+    const event: SessionEvent = {
+      type: 'subagent_result',
+      uuid: 'sr-1',
+      sessionId: 'child-1',
+      agentName: 'build',
+      content: 'Message Type: FINAL_ANSWER\nTask name: parent-1\nSender: child-1\nPayload:\nhi',
+    };
+    const counting = makeCountingSession([...seedEvents(), event]);
+    const ctx = await getCtx(counting);
+    // 上一回合投递、本回合才被 drain 到：事件早已随读盘进了 buffer
+    const ref: SessionRef = { ...REF, currentTurnId: 2 };
+
+    await Effect.runPromise(ctx.getHistory(ref, 'test-model'));
+    await Effect.runPromise(ctx.absorb(ref, [event]));
+    const messages = await Effect.runPromise(ctx.getHistory(ref, 'test-model'));
+
+    expect(messages.filter((m) => textOf(m.content).includes('FINAL_ANSWER'))).toHaveLength(1);
+  });
+
   it('压缩轮不再额外读盘', async () => {
     windowState.value = 1000;
     try {

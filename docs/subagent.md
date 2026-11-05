@@ -63,10 +63,12 @@
 
 ## 结果回注与 Mailbox
 
-子智能体结果**不通过回调透传**，而是走**会话级 Mailbox**（`session/mailbox.ts`）：
+子智能体结果**不通过回调透传**，而是走 **「先写父转录、再入队列」**：
 
-- Mailbox 是一个全局单例的易失入站队列，按收件人 `sessionId` 分区；子代理终态进的是**父会话**的队列（嵌套委派下 B 的终态进 `mailbox[A]`）。
-- `SubagentRunRegistry.drainRun` 消费完子帧流后，把结果渲染成一条 `subagent_result` 条目 `offer` 给父会话。
+- `SubagentRunRegistry.drainRun` 消费完子帧流后，把结果组装成一条带 `uuid` 的 `subagent_result` 事件，**先** `session.appendEvent` 追加到父会话自己的转录，**再** `mailbox.offer` 通知父会话。
+- 顺序不可颠倒：先入队后落盘会在「已 absorb 但未落盘」的崩溃窗口里丢结果；先落盘后入队最坏只丢「通知」，事实仍在盘上，换回合重建上下文时会读回。
+- Mailbox（`session/mailbox.ts`）因此只是**本回合的唤醒通道**：全局单例、按收件人 `sessionId` 分区、进程退出即清空都不影响结果可达性。嵌套委派下 B 的终态进 `mailbox[A]`。
+- 父会话自己的转录位置由 `SpawnOptions.parentChain` 推出（链首位即父，其余是父的祖先），见 `subagent/registry.ts` 的 `parentTranscriptOf`：顶层父落在 `sessions/<parent>.jsonl`，嵌套父落在链末位的 `subagents/` 下。
 - 条目内容 `renderResult()` 组装为：
 
 ```
@@ -81,8 +83,10 @@ Payload:
 
 ### 渲染与终态来源
 
-- **终态由子会话自己写**：子回合的 `finish` 通过 `turn.transition` 落终态；父侧只负责派发与投递。
-- **投递信号**：`drainRun` 回注 mailbox 后调用 `turn.markDelivered(childSessionId)`，用于唤醒 `wait_agent`。
+- **终态由子会话自己写**：子回合的 `finish` 通过 `turn.transition` 落终态；父侧只负责派发、落盘与投递。
+- **投递信号**：`drainRun` 落盘并 `offer` 之后调用 `turn.markDelivered(childSessionId)`，用于唤醒 `wait_agent`。
+
+`send_message` 的来信走同一条契约：先追加到收件人转录（只追加到已存在的转录，避免为已删除的祖先建幽灵文件），再 `offer` 给对方 mailbox。
 
 ---
 
@@ -97,7 +101,9 @@ Payload:
   3. 调 LLM、执行工具
 ```
 
-顺序上 steer（用户中途输入）优先于子代理汇报，避免"用户指令"排在"子代理汇报"之后。每条 mailbox 条目都经 `session.recordSubagentResult` 落盘为 `subagent_result` 事件，再 `context.absorb` 进入上下文。首轮（`step === 0`）不 drain mailbox——此时子代理刚派发，尚无结果。
+顺序上 steer（用户中途输入）优先于子代理汇报，避免"用户指令"排在"子代理汇报"之后。drain 到的条目**已经在盘上**，父回合只做 `context.absorb`，不再重复写盘。
+
+跨回合才被 drain 到的条目（父回合提前结束、结果等到下一回合才被取走）不会重复注入：`absorb` 按事件 `uuid` 判重，读盘时已进上下文的事件直接被跳过。首轮（`step === 0`）不 drain mailbox——此时子代理刚派发，尚无结果。
 
 ---
 
@@ -120,7 +126,7 @@ Payload:
 
 - **不要在不需要结果时等待**：子智能体最终输出会自动追加到父会话，`wait_agent` 不用于取文本。
 - **只在结果阻塞下一步时等**：且给一个宽松的超时，不要用短超时轮询。
-- **等待到"已投递"为止**：委派记录的 wait 会先等终态（`ended`），再等结果进入父会话 mailbox（`delivered`），所以返回 `completed` 时结果已可被父回合 drain 到。
+- **等待到"已投递"为止**：委派记录的 wait 会先等终态（`ended`），再等结果写进父转录并进入父会话 mailbox（`delivered`），所以返回 `completed` 时结果已可被父回合 drain 到——即使父回合不再 drain，下一回合重建上下文也能读到。
 
 ---
 

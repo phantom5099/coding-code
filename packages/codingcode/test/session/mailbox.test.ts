@@ -1,16 +1,20 @@
 import { describe, it, expect } from 'vitest';
+import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
 import { MailboxLayer, MailboxService } from '../../src/session/mailbox.js';
+import type { SubagentMessageEvent, SubagentResultEvent } from '../../src/session/types.js';
 
-const item = (sessionId: string, content = 'x') => ({
-  type: 'subagent_result' as const,
+const item = (sessionId: string, content = 'x'): SubagentResultEvent => ({
+  type: 'subagent_result',
+  uuid: randomUUID(),
   sessionId,
   agentName: 'build',
   content,
 });
 
-const message = (sessionId: string, content = 'hi') => ({
-  type: 'subagent_message' as const,
+const message = (sessionId: string, content = 'hi'): SubagentMessageEvent => ({
+  type: 'subagent_message',
+  uuid: randomUUID(),
   sessionId,
   agentName: 'build',
   content,

@@ -88,6 +88,8 @@ export const SUBAGENT_RESULT_PREFIX = 'Message Type: FINAL_ANSWER';
 
 export interface SubagentResultEvent {
   type: 'subagent_result';
+  /** 事件身份：投递点已落盘，上下文重建后又 drain 到同一条时按它去重 */
+  uuid: string;
   sessionId: string;
   agentName: string;
   content: string;
@@ -97,6 +99,8 @@ export const SUBAGENT_MESSAGE_PREFIX = 'Message Type: INTER_AGENT_MESSAGE';
 
 export interface SubagentMessageEvent {
   type: 'subagent_message';
+  /** 同 subagent_result：投递即落盘，重建后按它去重 */
+  uuid: string;
   sessionId: string;
   agentName: string;
   content: string;

@@ -6,6 +6,8 @@ import {
 } from '../../src/subagent/registry.js';
 import { SubagentRunnerService } from '../../src/subagent/port.js';
 import { MailboxLayer, MailboxService } from '../../src/session/mailbox.js';
+import { SessionService } from '../../src/session/port.js';
+import type { SessionEvent } from '../../src/session/types.js';
 import { EventSinkService } from '../../src/sink/port.js';
 import { HookService } from '../../src/hooks/port.js';
 import { TurnRegistryLayer } from '../../src/turn/registry.js';
@@ -19,7 +21,17 @@ const spawnOpts = {
   parentCwd: '/tmp',
   parentProfile: 'build' as const,
   model: 'test-model',
+  parentChain: ['parent-1'],
 };
+
+/** 只关心 appendEvent 的 (path, event)：投递点必须先把结果写进父转录 */
+const sessionLayer = (appended: Array<{ path: string; event: SessionEvent }>) =>
+  Layer.succeed(SessionService, {
+    appendEvent: (path: string, event: SessionEvent) =>
+      Effect.sync(() => {
+        appended.push({ path, event });
+      }),
+  } as any);
 
 /** 立刻发一条 text_delta 与终态 */
 function doneStream(text = 'child-done'): AsyncGenerator<FrameBody> {
@@ -49,6 +61,7 @@ function failStream(): AsyncGenerator<FrameBody> {
 
 function makeHarness(makeStream: () => AsyncGenerator<FrameBody>) {
   const emitted: Array<{ sessionId: string; body: FrameBody }> = [];
+  const appended: Array<{ path: string; event: SessionEvent }> = [];
   let n = 0;
   const runner = Layer.succeed(SubagentRunnerService, {
     runSubagent: (_prompt: string, _opts: any) =>
@@ -70,9 +83,11 @@ function makeHarness(makeStream: () => AsyncGenerator<FrameBody>) {
 
   const turn = TurnRegistryLayer.pipe(Layer.provide(sink));
   const layers = SubagentRunRegistryLayer.pipe(
-    Layer.provideMerge(Layer.mergeAll(runner, MailboxLayer, sink, hooks, turn))
+    Layer.provideMerge(
+      Layer.mergeAll(runner, MailboxLayer, sink, hooks, turn, sessionLayer(appended))
+    )
   );
-  return { emitted, layers };
+  return { emitted, appended, layers };
 }
 
 const run = <T>(layers: Layer.Layer<any>, eff: Effect.Effect<T, any, any>): Promise<T> =>
@@ -107,7 +122,7 @@ function makeCaptureHarness() {
   } as any);
   const turn = TurnRegistryLayer.pipe(Layer.provide(sink));
   const layers = SubagentRunRegistryLayer.pipe(
-    Layer.provideMerge(Layer.mergeAll(runner, MailboxLayer, sink, hooks, turn))
+    Layer.provideMerge(Layer.mergeAll(runner, MailboxLayer, sink, hooks, turn, sessionLayer([])))
   );
   return { captured, layers };
 }
@@ -175,6 +190,43 @@ describe('subagent run registry', () => {
       .map((e) => (e.body.family === 'event' ? (e.body.event as any).status : undefined))
       .filter(Boolean);
     expect(statuses).toEqual(['spawned', 'completed']);
+  });
+
+  it('结果在投递点就写进父转录，且盘上那条与队列里那条是同一份', async () => {
+    const { layers, appended } = makeHarness(() => doneStream('persisted'));
+    const result = await run(
+      layers,
+      Effect.gen(function* () {
+        const reg = yield* SubagentRunRegistryService;
+        const mb = yield* MailboxService;
+        yield* reg.spawn(spawnOpts);
+        yield* Effect.sleep(50);
+        return yield* mb.drain('parent-1');
+      })
+    );
+
+    expect(appended).toHaveLength(1);
+    // 顶层父会话：转录就是 sessions/<parent>.jsonl
+    expect(appended[0]!.path.replaceAll('\\', '/')).toContain('sessions/parent-1.jsonl');
+    // 同一份事件：落盘一次、吸收一次，不需要额外去重键
+    expect(appended[0]!.event).toBe(result[0]);
+  });
+
+  it('嵌套父会话：结果写进它自己挂在链末位下的转录', async () => {
+    const { layers, appended } = makeHarness(() => doneStream('nested'));
+    await run(
+      layers,
+      Effect.gen(function* () {
+        const reg = yield* SubagentRunRegistryService;
+        yield* reg.spawn({ ...spawnOpts, parentChain: ['parent-1', 'mid-1', 'root-1'] });
+        yield* Effect.sleep(50);
+      })
+    );
+
+    expect(appended).toHaveLength(1);
+    expect(appended[0]!.path.replaceAll('\\', '/')).toContain(
+      'sessions/root-1/subagents/parent-1.jsonl'
+    );
   });
 
   it('error 终态：mailbox 正文含失败原因', async () => {
@@ -259,7 +311,7 @@ describe('subagent run registry', () => {
     expect(captured[0].description).toBe('reads code');
   });
 
-  it('首次派发不传三个新字段时，runner 收到 undefined（现状路径不变）', async () => {
+  it('首次派发不传续跑字段时，runner 收到 undefined（现状路径不变）', async () => {
     const { layers, captured } = makeCaptureHarness();
     await run(
       layers,
@@ -270,7 +322,6 @@ describe('subagent run registry', () => {
     );
 
     expect(captured[0].sessionId).toBeUndefined();
-    expect(captured[0].parentChain).toBeUndefined();
     expect(captured[0].description).toBeUndefined();
   });
 

@@ -1,7 +1,7 @@
 import { Chunk, Context, Effect, Layer, Queue } from 'effect';
 import type { SubagentMessageEvent, SubagentResultEvent } from './types.js';
 
-/** 入站暂存条目：子代理终态结果，或其它智能体主动投递的来信 */
+/** 入站暂存条目：子代理终态结果，或其它智能体主动投递的来信；都是**已落盘**的事件 */
 export type MailboxItem = SubagentResultEvent | SubagentMessageEvent;
 
 export interface MailboxShape {
@@ -16,7 +16,8 @@ export interface MailboxShape {
 export class MailboxService extends Context.Tag('Mailbox')<MailboxService, MailboxShape>() {}
 
 /**
- * 会话的易失入站队列，与 transcript（持久出站）对称：同一把键 sessionId。
+ * 会话的入站通知队列：条目在 offer 之前已写进收件人转录，队列只负责「本回合叫醒收件人」。
+ * 因此队列易失不丢事实 —— 进程退出或收件人回合提前结束，重建上下文仍会从盘上读到。
  * 全局单例，内部按收件人分区 —— 嵌套委派下 B 的终态进 mailbox[A]。
  */
 export const MailboxLayer = Layer.scoped(

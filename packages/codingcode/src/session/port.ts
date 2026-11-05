@@ -5,8 +5,6 @@ import type {
   AssistantEvent,
   RollbackEvent,
   SessionEvent,
-  SubagentMessageEvent,
-  SubagentResultEvent,
   SummaryEvent,
   ToolResultEvent,
   UserEvent,
@@ -73,14 +71,6 @@ export interface SessionShape {
     toolCallId: string,
     output: string
   ): Effect.Effect<ToolResultEvent, AgentError>;
-  recordSubagentResult(
-    state: SessionStoreState,
-    result: { sessionId: string; agentName: string; content: string }
-  ): Effect.Effect<SubagentResultEvent, AgentError>;
-  recordSubagentMessage(
-    state: SessionStoreState,
-    message: { sessionId: string; agentName: string; content: string }
-  ): Effect.Effect<SubagentMessageEvent, AgentError>;
   appendSummary(
     state: SessionStoreState,
     summaryText: string,
