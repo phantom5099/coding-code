@@ -68,7 +68,7 @@
 - `SubagentRunRegistry.drainRun` 消费完子帧流后，把结果组装成一条带 `uuid` 的 `subagent_result` 事件，**先** `session.appendEvent` 追加到父会话自己的转录，**再** `mailbox.offer` 通知父会话。
 - 顺序不可颠倒：先入队后落盘会在「已 absorb 但未落盘」的崩溃窗口里丢结果；先落盘后入队最坏只丢「通知」，事实仍在盘上，换回合重建上下文时会读回。
 - Mailbox（`session/mailbox.ts`）因此只是**本回合的唤醒通道**：全局单例、按收件人 `sessionId` 分区、进程退出即清空都不影响结果可达性。嵌套委派下 B 的终态进 `mailbox[A]`。
-- 父会话自己的转录位置由 `SpawnOptions.parentChain` 推出（链首位即父，其余是父的祖先），见 `subagent/registry.ts` 的 `parentTranscriptOf`：顶层父落在 `sessions/<parent>.jsonl`，嵌套父落在链末位的 `subagents/` 下。
+- 父会话自己的转录位置由 `SpawnOptions.parentChain` 推出（链首位即父，其余是父的祖先），见 `subagent/registry.ts` 的 `parentTranscriptOf`。**子代理之间不逐层嵌套**：转录目录一律由链末位（顶层会话）定位，所以父本身是子智能体时与它的父平级——顶层父落在 `sessions/<parent>.jsonl`，其余落在 `sessions/<顶层会话>/subagents/<parent>.jsonl`。
 - 条目内容 `renderResult()` 组装为：
 
 ```

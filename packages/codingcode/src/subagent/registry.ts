@@ -58,8 +58,10 @@ interface SubagentRun {
 }
 
 /**
- * 父会话自己的转录位置。链首位就是父，故父的「父 id」与祖链都是本链去掉首位：
- * 顶层父（链长 1）⇒ `sessions/<parent>.jsonl`，嵌套父 ⇒ 挂在链末位的 subagents/ 下。
+ * 父会话自己的转录位置。链首位就是父，故父的「父 id」与祖链都是本链去掉首位。
+ * 转录目录由链末位（顶层会话）定位，子代理之间不逐层嵌套，所以父本身是子智能体时
+ * 与它的父平级：顶层父（链长 1）⇒ `sessions/<parent>.jsonl`，
+ * 否则 ⇒ `sessions/<链末位>/subagents/<parent>.jsonl`。
  */
 const parentTranscriptOf = (opts: SpawnOptions): string =>
   transcriptPathOf(
