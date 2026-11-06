@@ -302,14 +302,28 @@ describe('send_message', () => {
     );
   });
 
-  it('链条上任意祖先都可投递（祖父 / 根），免文件校验', async () => {
+  it('链条上的祖先：按链推出各自转录位置并落盘', async () => {
     const cwd = freshCwd();
-    const context = ctx(cwd, { sessionId: 'grandchild-1', parentChain: ['mid-1', 'root-1'] });
+    const root = await createSession(cwd, undefined);
+    const mid = await createSession(cwd, root.sessionId, { parentChain: [root.sessionId] });
+    const context = ctx(cwd, {
+      sessionId: 'grandchild-1',
+      parentChain: [mid.sessionId, root.sessionId],
+    });
 
-    for (const target of ['mid-1', 'root-1']) {
-      const { r, items } = await deliver(cwd, { sessionId: target, message: 'hi' }, context);
-      expect(codeOf(r), target).toBe('ok');
-      expect(items[0]!.sessionId).toBe('grandchild-1');
+    const targets = [
+      {
+        id: mid.sessionId,
+        path: computePaths(cwd, mid.sessionId, root.sessionId, [root.sessionId]).transcriptPath,
+      },
+      { id: root.sessionId, path: computePaths(cwd, root.sessionId).transcriptPath },
+    ];
+
+    for (const { id, path } of targets) {
+      const { r, items } = await deliver(cwd, { sessionId: id, message: 'hi' }, context);
+      expect(codeOf(r), id).toBe('ok');
+      const events = readHistory(path);
+      expect(events[events.length - 1], id).toEqual(items[0]);
     }
   });
 

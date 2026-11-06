@@ -48,8 +48,8 @@ export const sendMessageTool: ToolDefinition<MailboxService | SessionService> = 
             )
           : transcriptPathOf(projectPath, sessionId, selfSessionId, [selfSessionId, ...chain]);
 
-      const known = existsSync(recipientPath);
-      if (ancestorAt < 0 && !known) {
+      // 没有转录就收不下可持久化的消息，祖先也不例外
+      if (!existsSync(recipientPath)) {
         return yield* Effect.fail(
           new AgentError('INVALID_INPUT', `Unknown recipient: ${sessionId}`)
         );
@@ -68,9 +68,8 @@ export const sendMessageTool: ToolDefinition<MailboxService | SessionService> = 
         content: `${SUBAGENT_MESSAGE_PREFIX}\n${from}\n${message}`,
       };
 
-      // 与子代理结果同一条契约：先落盘再入队，收件人不在线也不会丢。
-      // 只追加到已存在的转录 —— 祖先链可能指向已删除的会话，不新建幽灵转录
-      if (known) yield* session.appendEvent(recipientPath, event).pipe(Effect.ignore);
+      // 与子代理结果同一条契约：先落盘再入队，收件人不在线也不会丢
+      yield* session.appendEvent(recipientPath, event).pipe(Effect.ignore);
       yield* mailbox.offer(sessionId, event);
 
       return `delivered to ${sessionId}`;
