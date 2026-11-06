@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
 import { computePaths } from '../../src/session/paths.js';
-import { readSessionMeta, readHistory } from '../../src/session/file-ops.js';
+import { readSessionMeta } from '../../src/session/file-ops.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase('codingcode-test-subagent-meta-');
@@ -72,40 +72,5 @@ describe('subagent identity persisted in the session head', () => {
     );
     expect(meta?.description).toBeUndefined();
     expect(meta?.systemPrompt).toBeUndefined();
-  });
-});
-
-describe('recordSubagentMessage', () => {
-  it('落盘一条 subagent_message 事件，形状正确且不推进 turnId', async () => {
-    const cwd = '/tmp/test-subagent-message';
-    const result = await run(
-      Effect.gen(function* () {
-        const svc = yield* SessionService;
-        const state = yield* svc.create(cwd, childOpts);
-        const before = state.currentTurnId;
-        const event = yield* svc.recordSubagentMessage(state, {
-          sessionId: 'child-1',
-          agentName: 'build',
-          content: 'Message Type: INTER_AGENT_MESSAGE\nfrom root\nhi',
-        });
-        return { before, after: state.currentTurnId, event, state };
-      })
-    );
-
-    expect(result.event).toEqual({
-      type: 'subagent_message',
-      sessionId: 'child-1',
-      agentName: 'build',
-      content: 'Message Type: INTER_AGENT_MESSAGE\nfrom root\nhi',
-    });
-    // 消息不占回合：编号不变
-    expect(result.after).toBe(result.before);
-
-    const events = readHistory(
-      computePaths(result.state.cwd, result.state.sessionId).transcriptPath
-    );
-    const last = events[events.length - 1]!;
-    expect(last.type).toBe('subagent_message');
-    expect('turnId' in last).toBe(false);
   });
 });

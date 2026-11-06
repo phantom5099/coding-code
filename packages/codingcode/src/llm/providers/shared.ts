@@ -29,7 +29,11 @@ export function convertMessages(messages: ResolvedMessage[]): ModelMessage[] {
       } as unknown as ModelMessage;
     }
 
-    if (m.role === 'user' || m.role === 'system') {
+    if (m.role === 'system') {
+      return { role: 'system', content: textOf(m.content) };
+    }
+
+    if (m.role === 'user') {
       const parts: any[] = [];
       for (const p of m.content) {
         if (p.type === 'text') {

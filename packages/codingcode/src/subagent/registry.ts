@@ -1,14 +1,18 @@
 import { Context, Effect, Layer } from 'effect';
+import { randomUUID } from 'crypto';
 import { AgentError } from '../util/error.js';
 import { isTurnEnd } from '../sink/types.js';
 import type { EndTransition, FrameBody } from '../sink/types.js';
 import { BYPASS_PERMISSION_MODE, type ProfileName } from '../util/enums.js';
 import { SUBAGENT_RESULT_PREFIX } from '../session/types.js';
+import type { SubagentResultEvent } from '../session/types.js';
+import { transcriptPathOf } from '../session/paths.js';
 import { estimateTokensForContent } from '../context/tokens.js';
 import { textPart } from '../llm/types.js';
 import { loadConfig } from '../infra/config.js';
 
 import { MailboxService } from '../session/mailbox.js';
+import { SessionService } from '../session/port.js';
 import { EventSinkService } from '../sink/port.js';
 import { HookService } from '../hooks/port.js';
 import { TurnRegistryService } from '../turn/port.js';
@@ -27,11 +31,14 @@ export interface SpawnOptions {
   resumeSessionId?: string;
   /** 首次派发的用途描述；续跑不传（meta 已有） */
   description?: string;
-  /** 祖先会话 id，由近及远；子会话回合的工具上下文由此而来 */
-  parentChain?: readonly string[];
+  /**
+   * 祖先会话 id，由近及远，首位即 `parentSessionId`；子会话回合的工具上下文由此而来，
+   * 父会话自己的转录位置也由其余位推出（见 parentTranscriptOf）
+   */
+  parentChain: readonly string[];
 }
 
-/** 终态由子会话自己的 finish 写入；本表只负责派发与投递 */
+/** 终态由子会话自己的 finish 写入；本表只负责派发、落盘与投递 */
 export interface SubagentRunRegistryShape {
   spawn(opts: SpawnOptions): Effect.Effect<{ sessionId: string; agentName: string }, AgentError>;
 }
@@ -46,7 +53,23 @@ interface SubagentRun {
   readonly parentSessionId: string;
   readonly parentCwd: string;
   readonly agentName: string;
+  /** 父会话自己的转录：结果在投递点就写进这里，不等父回合 drain */
+  readonly parentTranscriptPath: string;
 }
+
+/**
+ * 父会话自己的转录位置。链首位就是父，故父的「父 id」与祖链都是本链去掉首位。
+ * 转录目录由链末位（顶层会话）定位，子代理之间不逐层嵌套，所以父本身是子智能体时
+ * 与它的父平级：顶层父（链长 1）⇒ `sessions/<parent>.jsonl`，
+ * 否则 ⇒ `sessions/<链末位>/subagents/<parent>.jsonl`。
+ */
+const parentTranscriptOf = (opts: SpawnOptions): string =>
+  transcriptPathOf(
+    opts.parentCwd,
+    opts.parentSessionId,
+    opts.parentChain[1],
+    opts.parentChain.slice(1)
+  );
 
 const BODY_TOKEN_BUDGET = 900;
 
@@ -123,6 +146,7 @@ export const SubagentRunRegistryLayer = Layer.scoped(
   Effect.gen(function* () {
     const mailbox = yield* MailboxService;
     const runner = yield* SubagentRunnerService;
+    const session = yield* SessionService;
     const sink = yield* EventSinkService;
     const hooks = yield* HookService;
     const turn = yield* TurnRegistryService;
@@ -142,7 +166,8 @@ export const SubagentRunRegistryLayer = Layer.scoped(
         event: { type: 'subagent_event', sessionId, agentName, status },
       });
 
-    // 只入队，不写盘：写盘由父回合在自己的 drain 点做（父回合循环手里才有 state）
+    // 先落盘再入队：盘是事实源，队列只是本回合的唤醒通道。
+    // 父回合提前结束、进程退出都不会丢结果 —— 换回合重建上下文时从父转录读回。
     const drainRun = (run: SubagentRun, stream: AsyncGenerator<FrameBody, unknown, unknown>) =>
       Effect.gen(function* () {
         const settled = yield* Effect.either(consume(stream));
@@ -151,17 +176,20 @@ export const SubagentRunRegistryLayer = Layer.scoped(
             ? settled.right
             : { end: failedEnd(settled.left.message), content: settled.left.message };
 
-        yield* mailbox
-          .offer(run.parentSessionId, {
-            type: 'subagent_result',
-            sessionId: run.sessionId,
-            agentName: run.agentName,
-            content: renderResult(run, outcome),
-          })
-          .pipe(Effect.ignore);
+        const event: SubagentResultEvent = {
+          type: 'subagent_result',
+          uuid: randomUUID(),
+          sessionId: run.sessionId,
+          agentName: run.agentName,
+          content: renderResult(run, outcome),
+        };
+
+        // 落盘失败仍投递：退化成本回合可见、崩溃不可恢复，不影响父回合继续
+        yield* session.appendEvent(run.parentTranscriptPath, event).pipe(Effect.ignore);
+        yield* mailbox.offer(run.parentSessionId, event).pipe(Effect.ignore);
 
         // 终态由子会话自己的 finish 写入（turn.transition）；这里只补投递信号，
-        // 让 wait 在"结果已进父会话 mailbox"之后才返回
+        // 让 wait 在"结果已落盘且已进父会话 mailbox"之后才返回
         yield* turn.markDelivered(run.sessionId);
         yield* emitSubagent(
           run.parentSessionId,
@@ -206,6 +234,7 @@ export const SubagentRunRegistryLayer = Layer.scoped(
           parentSessionId: opts.parentSessionId,
           parentCwd: opts.parentCwd,
           agentName: opts.agentName,
+          parentTranscriptPath: parentTranscriptOf(opts),
         };
         parents.add(opts.parentSessionId);
         yield* emitSubagent(opts.parentSessionId, sessionId, opts.agentName, 'spawned');

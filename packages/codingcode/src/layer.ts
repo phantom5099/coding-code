@@ -70,11 +70,20 @@ const AgentWithDeps = AgentLayer.pipe(
 // subagent runner (depends on agent)
 const SubagentWithDeps = SubagentRunnerLayer.pipe(Layer.provide(AgentWithDeps));
 
-// 运行注册表：要 runner 起子代理、要 mailbox 投递终态、要 sink 发 subagent_event 帧、
-// 要 hooks 在子代理终态时触发 agent.subagent.complete。
+// 运行注册表：要 runner 起子代理、要 session 把终态写进父转录、要 mailbox 投递终态、
+// 要 sink 发 subagent_event 帧、要 hooks 在子代理终态时触发 agent.subagent.complete。
 // 终态归属已并入状态表（turn 已在 AgentWithDeps 链路里，Layer 按引用去重 ⇒ 全进程一份 records）。
 const SubagentRunRegistryWithDeps = SubagentRunRegistryLayer.pipe(
-  Layer.provide(Layer.mergeAll(SubagentWithDeps, MailboxLayer, EventSinkLayer, HookLayer, TurnWithDeps))
+  Layer.provide(
+    Layer.mergeAll(
+      SubagentWithDeps,
+      SessionLayer,
+      MailboxLayer,
+      EventSinkLayer,
+      HookLayer,
+      TurnWithDeps
+    )
+  )
 );
 
 export const AppLayer = Layer.mergeAll(

@@ -91,7 +91,7 @@ describe('convertMessages', () => {
 
   it('system 消息按 parts 映射', () => {
     expect(convertMessages([{ role: 'system', content: [t('rules')] }])).toEqual([
-      { role: 'system', content: [{ type: 'text', text: 'rules' }] },
+      { role: 'system', content: 'rules' },
     ]);
   });
 });

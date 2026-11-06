@@ -453,12 +453,23 @@ export const ContextLayer = Layer.effect(
         );
       });
 
+    /** 投递点已落盘，跨回合才 drain 到的条目其事件早被重建时的读盘读进来了 */
+    const isBuffered = (buf: ContextBuffer, ev: SessionEvent): boolean => {
+      const uuid = (ev as { uuid?: string }).uuid;
+      return (
+        typeof uuid === 'string' && buf.events.some((e) => (e as { uuid?: string }).uuid === uuid)
+      );
+    };
+
     const absorb = (ref: SessionRef, events: readonly SessionEvent[]): Effect.Effect<void> =>
       Effect.sync(() => {
         const buf = buffers.get(ref.sessionId);
         // 未建（事件已在盘上，重建时会读到）或已换回合 ⇒ no-op
         if (!buf || buf.turnId !== ref.currentTurnId) return;
-        for (const ev of events) if (passesContextFilter(ev)) buf.events.push(ev);
+        for (const ev of events) {
+          if (!passesContextFilter(ev) || isBuffered(buf, ev)) continue;
+          buf.events.push(ev);
+        }
       });
 
     const compact = (

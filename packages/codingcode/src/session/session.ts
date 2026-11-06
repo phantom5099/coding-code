@@ -22,8 +22,6 @@ import type {
   UserEvent,
   AssistantEvent,
   ToolResultEvent,
-  SubagentResultEvent,
-  SubagentMessageEvent,
   SummaryEvent,
   RollbackEvent,
   SessionEvent,
@@ -476,51 +474,6 @@ export const SessionLayer = Layer.effect(
             : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
       });
 
-    // 由父回合循环在 drain 点调用：终态先入 mailbox，到这里才落盘。
-    // 不写 state.usage —— 子代理的用量不算进父会话。
-    const recordSubagentResult = (
-      state: SessionStoreState,
-      result: { sessionId: string; agentName: string; content: string }
-    ): Effect.Effect<SubagentResultEvent, AgentError> =>
-      Effect.try({
-        try: () => {
-          const event: SubagentResultEvent = {
-            type: 'subagent_result',
-            sessionId: result.sessionId,
-            agentName: result.agentName,
-            content: result.content,
-          };
-          appendLine(pathsFromState(state).transcriptPath, event);
-          return event;
-        },
-        catch: (e) =>
-          e instanceof AgentError
-            ? e
-            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
-      });
-
-    // 与 recordSubagentResult 同构：另一个智能体主动投递的来信，落盘后由收件人回合吸收
-    const recordSubagentMessage = (
-      state: SessionStoreState,
-      message: { sessionId: string; agentName: string; content: string }
-    ): Effect.Effect<SubagentMessageEvent, AgentError> =>
-      Effect.try({
-        try: () => {
-          const event: SubagentMessageEvent = {
-            type: 'subagent_message',
-            sessionId: message.sessionId,
-            agentName: message.agentName,
-            content: message.content,
-          };
-          appendLine(pathsFromState(state).transcriptPath, event);
-          return event;
-        },
-        catch: (e) =>
-          e instanceof AgentError
-            ? e
-            : new AgentError('SESSION_IO_ERROR', `Session write failed: ${String(e)}`, e),
-      });
-
     const appendSummary = (
       state: SessionStoreState,
       summaryText: string,
@@ -643,8 +596,6 @@ export const SessionLayer = Layer.effect(
       recordSystem,
       recordAssistant,
       recordToolResult,
-      recordSubagentResult,
-      recordSubagentMessage,
       appendSummary,
       rollbackToTurn,
 

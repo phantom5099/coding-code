@@ -7,6 +7,8 @@ import { HookService } from '../../../../src/hooks/port.js';
 import { TurnRegistryService } from '../../../../src/turn/port.js';
 import { SubagentRunRegistryService } from '../../../../src/subagent/registry.js';
 import { SUBAGENT_MESSAGE_PREFIX } from '../../../../src/session/types.js';
+import { computePaths } from '../../../../src/session/paths.js';
+import { readHistory } from '../../../../src/session/file-ops.js';
 import { resumeAgentTool } from '../../../../src/tools/domains/subagent/resume.js';
 import { sendMessageTool } from '../../../../src/tools/domains/subagent/message.js';
 import { interruptAgentTool } from '../../../../src/tools/domains/subagent/interrupt.js';
@@ -260,7 +262,9 @@ describe('resume_agent', () => {
 describe('send_message', () => {
   const deliver = (cwd: string, args: any, context: ToolExecCtx) => {
     const { items, layer } = mailboxLayer();
-    return attempt(sendMessageTool.execute(args, context), layer).then((r) => ({ r, items }));
+    return attempt(sendMessageTool.execute(args, context), Layer.merge(layer, SessionLayer)).then(
+      (r) => ({ r, items })
+    );
   };
 
   it('主智能体发出：归属行为「当前主智能体」格式（链条为空）', async () => {
@@ -298,22 +302,48 @@ describe('send_message', () => {
     );
   });
 
-  it('链条上任意祖先都可投递（祖父 / 根），免文件校验', async () => {
+  it('链条上的祖先：按链推出各自转录位置并落盘', async () => {
     const cwd = freshCwd();
-    const context = ctx(cwd, { sessionId: 'grandchild-1', parentChain: ['mid-1', 'root-1'] });
+    const root = await createSession(cwd, undefined);
+    const mid = await createSession(cwd, root.sessionId, { parentChain: [root.sessionId] });
+    const context = ctx(cwd, {
+      sessionId: 'grandchild-1',
+      parentChain: [mid.sessionId, root.sessionId],
+    });
 
-    for (const target of ['mid-1', 'root-1']) {
-      const { r, items } = await deliver(cwd, { sessionId: target, message: 'hi' }, context);
-      expect(codeOf(r), target).toBe('ok');
-      expect(items[0]!.sessionId).toBe('grandchild-1');
+    const targets = [
+      {
+        id: mid.sessionId,
+        path: computePaths(cwd, mid.sessionId, root.sessionId, [root.sessionId]).transcriptPath,
+      },
+      { id: root.sessionId, path: computePaths(cwd, root.sessionId).transcriptPath },
+    ];
+
+    for (const { id, path } of targets) {
+      const { r, items } = await deliver(cwd, { sessionId: id, message: 'hi' }, context);
+      expect(codeOf(r), id).toBe('ok');
+      const events = readHistory(path);
+      expect(events[events.length - 1], id).toEqual(items[0]);
     }
   });
 
-  it('直接子会话：路径存在即投递', async () => {
+  it('直接子会话：路径存在即投递，且来信先落进收件人转录', async () => {
     const cwd = freshCwd();
     const child = await createSession(cwd, PARENT);
-    const { r } = await deliver(cwd, { sessionId: child.sessionId, message: 'hi' }, ctx(cwd));
+    const { r, items } = await deliver(
+      cwd,
+      { sessionId: child.sessionId, message: 'hi' },
+      ctx(cwd)
+    );
     expect(codeOf(r)).toBe('ok');
+
+    // 收件人此刻不在线：消息已经在盘上，下次重建上下文就能读到
+    const events = readHistory(
+      computePaths(cwd, child.sessionId, child.parentSessionId).transcriptPath
+    );
+    const last = events[events.length - 1]!;
+    expect(last.type).toBe('subagent_message');
+    expect(last).toEqual(items[0]);
   });
 
   it('兄弟会话 / 其它父会话的子会话 / 陌生 id 一律拒绝', async () => {

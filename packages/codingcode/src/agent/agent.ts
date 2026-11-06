@@ -394,13 +394,11 @@ export const AgentLayer = Layer.effect(
           let drainedCount = yield* absorbPendingInputs();
 
           if (step > 0) {
-            for (const item of yield* mailbox.drain(state.sessionId)) {
-              const ev =
-                item.type === 'subagent_message'
-                  ? yield* session.recordSubagentMessage(state, item)
-                  : yield* session.recordSubagentResult(state, item);
-              yield* context.absorb(sessionRef, [ev]);
-              drainedCount++;
+            // 条目在投递点已写进本会话转录，这里只把它们并进本回合上下文
+            const items = yield* mailbox.drain(state.sessionId);
+            if (items.length > 0) {
+              yield* context.absorb(sessionRef, items);
+              drainedCount += items.length;
             }
           }
 
