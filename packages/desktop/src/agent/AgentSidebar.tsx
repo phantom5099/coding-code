@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, Zap, Settings } from 'lucide-react';
+import { ChevronDown, FolderOpen, Plus, Settings, Trash2 } from 'lucide-react';
 import { useUIStore } from '../stores/ui.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { useAgentStore } from '../stores/agent.store';
@@ -26,9 +26,12 @@ export default function AgentSidebar() {
   const workspace = useWorkspaceStore();
   const setView = useUIStore((s) => s.setView);
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
+  const switchProject = useWorkspaceStore((s) => s.switchProject);
+  const addProject = useWorkspaceStore((s) => s.addProject);
   const { deleteThread } = useAgentRollback();
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
 
-  // Subscribe to raw threads, derive list with useMemo for stable reference
   const rawThreads = useAgentStore((s) => s.threads);
   const threadList = useMemo(() => {
     const normalizedRoot = normalizeCwd(rootPath);
@@ -38,152 +41,120 @@ export default function AgentSidebar() {
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }, [rawThreads, rootPath]);
 
-  const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
+  const currentProject = workspace.projects.find((p) => p.id === workspace.currentProjectId);
+  const projectName = currentProject?.name || workspace.name || '项目';
 
-  const handleDelete = (threadId: string) => {
-    void deleteThread(threadId);
+  const handleAddProject = async () => {
+    const folder = await window.electronAPI?.openFolderDialog?.();
+    if (!folder) return;
+    const name = folder.replace(/\\/g, '/').split('/').pop() || folder;
+    const project = { id: crypto.randomUUID(), name, rootPath: folder };
+    addProject(project);
+    switchProject(project.id);
+    setProjectMenuOpen(false);
   };
 
-  // Find current project name
-  const currentProject = workspace.projects.find((p) => p.id === workspace.currentProjectId);
-  const projectName = currentProject?.name || workspace.name;
-
-  if (sidebarCollapsed) {
-    return null;
-  }
+  if (sidebarCollapsed) return null;
 
   return (
-    <div className="flex flex-col shrink-0 bg-[var(--bg-sidebar)] border-r border-[var(--border-default)] w-64 select-none">
-      {/* 顶部栏：项目名 + 项目级设置按钮 */}
-      <div className="flex items-center justify-between px-2 pt-2">
-        <span className="text-[13px] font-semibold text-[var(--text-tertiary)] truncate ml-2">
-          {projectName || '项目'}
-        </span>
-        <button
-          type="button"
-          onClick={() => setView('project-settings')}
-          title="项目设置"
-          className="w-7 h-7 flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors"
-        >
-          <Settings size={16} strokeWidth={1.5} />
-        </button>
-      </div>
-
-      {/* 新对话 */}
-      <div className="px-4 pt-2 pb-2">
+    <aside className="cc-agent-sidebar-shell flex w-[296px] shrink-0 flex-col border-r border-[var(--border-default)] bg-[var(--bg-sidebar)] select-none">
+      <div className="cc-sidebar-header px-4 pb-3 pt-4">
+        <div className="relative flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setProjectMenuOpen((open) => !open)}
+            className="cc-project-switcher flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-2 text-left hover:bg-[var(--bg-hover)]"
+            aria-expanded={projectMenuOpen}
+          >
+            <span className="cc-project-mark"><FolderOpen size={15} strokeWidth={1.8} /></span>
+            <span className="truncate text-[15px] font-semibold text-[var(--text-title)]">{projectName}</span>
+            <ChevronDown size={15} className="ml-auto shrink-0 text-[var(--text-muted)]" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('project-settings')}
+            title="项目设置"
+            className="cc-sidebar-icon-button"
+          >
+            <Settings size={16} strokeWidth={1.6} />
+          </button>
+          {projectMenuOpen && (
+            <div className="cc-project-menu absolute left-0 right-0 top-full z-50 mt-2 rounded-xl border border-[var(--border-card)] bg-[var(--bg-card)] p-1.5 shadow-2xl">
+              <div className="px-2.5 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">工作区</div>
+              {workspace.projects.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => {
+                    switchProject(project.id);
+                    setProjectMenuOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] ${
+                    project.id === workspace.currentProjectId
+                      ? 'bg-[var(--bg-selected)] text-[var(--text-primary)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                  }`}
+                >
+                  <FolderOpen size={14} />
+                  <span className="truncate">{project.name}</span>
+                </button>
+              ))}
+              <button type="button" onClick={handleAddProject} className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]">
+                <Plus size={14} /> 添加工作区
+              </button>
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setCurrentThread(null)}
-          className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-[14px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors border border-[var(--border-card)] hover:border-[var(--border-hover)]"
+          className="cc-new-chat-button mt-3 flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-[14px] font-medium text-[var(--text-primary)]"
         >
-          <Plus size={16} strokeWidth={1.5} />
+          <Plus size={17} strokeWidth={1.8} />
           <span>新对话</span>
         </button>
       </div>
 
-      {/* 功能导航 */}
-      <nav className="px-2 pt-1 pb-3 space-y-0.5">
-        <NavItem icon={<Search size={16} strokeWidth={1.5} />} label="搜索" shortcut="Ctrl+G" />
-        <NavItem
-          icon={<Zap size={16} strokeWidth={1.5} />}
-          label="自动化"
-          onClick={() => setView('automation')}
-        />
-      </nav>
-
-      <div className="mx-3 border-t border-[var(--border-default)]" />
-
-      {/* 会话列表 */}
-      <div className="flex-1 overflow-y-auto py-3 min-h-0">
-        <div className="px-3 pb-1.5">
-          <span className="text-[11px] font-semibold text-[var(--text-disabled)] uppercase tracking-wider">
-            会话
-          </span>
-        </div>
-        {threadList.slice(0, 15).map((t) => (
+      <div className="mx-4 border-t border-[var(--border-divider)]" />
+      <div
+        className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-3 ${
+          threadList.length === 0 ? 'items-center justify-center' : ''
+        }`}
+      >
+        {threadList.slice(0, 20).map((t) => (
           <button
             type="button"
             key={t.id}
             onClick={() => setCurrentThread(t.id)}
             onMouseEnter={() => setHoveredThreadId(t.id)}
             onMouseLeave={() => setHoveredThreadId(null)}
-            className={`w-full text-left px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors ${
-              currentThreadId === t.id
-                ? 'bg-[var(--bg-selected)] text-[var(--text-primary)]'
-                : 'text-[var(--text-tertiary)] hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-secondary)]'
+            className={`cc-thread-row group flex w-full items-center gap-2 rounded-xl px-2.5 py-2.5 text-left ${
+              currentThreadId === t.id ? 'cc-thread-row-active' : ''
             }`}
           >
-            <span className="flex-1 text-[14px] truncate">{t.title || '未命名对话'}</span>
+            <span className="cc-thread-dot" />
+            <span className="min-w-0 flex-1 truncate text-[13px]">{t.title || '未命名对话'}</span>
             {hoveredThreadId === t.id ? (
               <button
                 type="button"
+                role="button"
+                tabIndex={0}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDelete(t.id);
+                  void deleteThread(t.id);
                 }}
-                className="shrink-0 p-0.5 text-[var(--text-placeholder)] hover:text-red-400 transition-colors"
+                className="cc-thread-delete text-[var(--text-muted)] hover:text-[var(--accent-danger)]"
                 title="删除对话"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 6h18" />
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                  <line x1="10" y1="11" x2="10" y2="17" />
-                  <line x1="14" y1="11" x2="14" y2="17" />
-                </svg>
+                <Trash2 size={14} strokeWidth={1.7} />
               </button>
             ) : (
-              <span className="text-[12px] text-[var(--text-disabled)] shrink-0">
-                {relativeTime(t.updatedAt)}
-              </span>
+              <span className="shrink-0 text-[11px] text-[var(--text-disabled)]">{relativeTime(t.updatedAt)}</span>
             )}
           </button>
         ))}
-        {threadList.length > 15 && (
-          <button
-            type="button"
-            className="w-full text-left px-4 py-1.5 text-[12px] text-[var(--text-disabled)] hover:text-[var(--text-placeholder)] transition-colors"
-          >
-            +{threadList.length - 15} 条更多
-          </button>
-        )}
-        {threadList.length === 0 && (
-          <div className="px-3 py-4 text-[13px] text-[var(--text-disabled)]">暂无对话</div>
-        )}
+        {threadList.length === 0 && <div className="px-2.5 py-5 text-center text-[13px] text-[var(--text-disabled)]">暂无对话</div>}
       </div>
-    </div>
-  );
-}
-
-function NavItem({
-  icon,
-  label,
-  shortcut,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  shortcut?: string;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full flex items-center gap-2.5 px-4 py-2 rounded-lg text-[14px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-base)] transition-colors"
-    >
-      <span className="w-4 flex items-center justify-center shrink-0">{icon}</span>
-      <span className="flex-1 text-left">{label}</span>
-      {shortcut && <span className="text-[11px] text-[var(--text-disabled)]">{shortcut}</span>}
-    </button>
+    </aside>
   );
 }

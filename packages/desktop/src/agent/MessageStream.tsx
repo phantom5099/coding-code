@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useAgentStore } from '../stores/agent.store';
 import { useRollbackStore, TURN_SCOPE_REVERTED } from '../stores/rollback.store';
 import MessageItem from '../shared/MessageItem';
+import ToolCallGroup, { type ToolCallEntry } from '../shared/ToolCallGroup';
 import UnifiedDiffView from '../shared/UnifiedDiffView';
 import type { Item } from '@shared/types';
 import { textOf } from '@shared/parts';
@@ -22,6 +23,7 @@ interface TurnDiffPanelProps {
   uiTurnId: string;
   isInterrupted?: boolean;
   threadId: string;
+  cwd: string;
   onRevertFile: (uiTurnId: string, file: string, checkpointTurnId: number) => void;
   onRevertTurn: (uiTurnId: string, checkpointTurnId: number) => void;
   onUndoRevertFile: (uiTurnId: string, file: string, checkpointTurnId: number) => void;
@@ -57,6 +59,7 @@ function TurnDiffPanel({
   uiTurnId,
   isInterrupted,
   threadId,
+  cwd,
   onRevertFile,
   onRevertTurn,
   onUndoRevertFile,
@@ -81,6 +84,15 @@ function TurnDiffPanel({
   const revertedFiles = revertedFilesByTurnId[`${threadId}:${uiTurnId}`] ?? [];
   const isTurnReverted = revertedFiles.includes(TURN_SCOPE_REVERTED);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
+
+  const displayPath = (filePath: string) => {
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    const normalizedCwd = cwd.replace(/\\/g, '/').replace(/\/$/, '');
+    const prefix = `${normalizedCwd.toLowerCase()}/`;
+    return normalizedCwd && normalizedPath.toLowerCase().startsWith(prefix)
+      ? normalizedPath.slice(normalizedCwd.length + 1)
+      : normalizedPath;
+  };
 
   if (!diff || !diff.files || diff.files.length === 0) {
     return null;
@@ -159,7 +171,7 @@ function TurnDiffPanel({
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <span className="text-[12px] text-[var(--text-primary)] truncate">
-                    {f.path.replace(/\\/g, '/')}
+                    {displayPath(f.path)}
                   </span>
                   {isReverted && (
                     <span className="text-[10px] text-[var(--accent-danger)] shrink-0">已回退</span>
@@ -192,21 +204,6 @@ function TurnDiffPanel({
                   >
                     {isReverted ? '撤销回退' : '回退'}
                   </button>
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  >
-                    <path
-                      d="M3 4.5L6 7.5L9 4.5"
-                      stroke="var(--text-muted)"
-                      strokeWidth="1.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
                 </div>
               </div>
               {isExpanded && (
@@ -260,7 +257,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       turns
         .map(
           (t) =>
-            `${t.id}:${t.status}:${t.items.length}:${t.items.map((i) => `${i.type}:${i.id}`).join(',')}`
+            `${t.id}:${t.status}:${t.items.length}:${t.items.map((i) => `${i.type}:${i.id}:${i.type === 'tool_call' ? i.status : ''}`).join(',')}`
         )
         .join('|'),
     [turns]
@@ -274,8 +271,10 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
     assistantContentByTurnId,
   } = useMemo(() => {
     const entries: Array<{
-      item: Item;
+      item?: Item;
+      toolCalls?: ToolCallEntry[];
       turnId: string;
+      turnIds: string[];
       toolResult?: Item & { type: 'tool_result' };
       key: string;
     }> = [];
@@ -302,20 +301,37 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
         contentMap.set(turn.id, assistantParts.join('\n\n'));
       }
     }
-    for (const turn of turns) {
-      for (const item of turn.items) {
-        if (item.type === 'tool_result') continue;
-        if (item.type === 'tool_call') {
-          entries.push({
-            item,
-            turnId: turn.id,
-            toolResult: toolResultByCallId[item.id],
-            key: item.id,
-          });
-        } else {
-          entries.push({ item, turnId: turn.id, key: item.id });
+    const visibleItems = turns.flatMap((turn) =>
+      turn.items
+        .filter((item) => item.type !== 'tool_result')
+        .map((item) => ({ item, turnId: turn.id }))
+    );
+
+    for (let index = 0; index < visibleItems.length; index += 1) {
+      const current = visibleItems[index]!;
+      if (current.item.type === 'tool_call') {
+        const toolCalls: ToolCallEntry[] = [];
+        const turnIds: string[] = [];
+        while (index < visibleItems.length && visibleItems[index]?.item.type === 'tool_call') {
+          const next = visibleItems[index]!;
+          const toolCall = next.item as Item & { type: 'tool_call' };
+          toolCalls.push({ item: toolCall, toolResult: toolResultByCallId[toolCall.id] });
+          if (!turnIds.includes(next.turnId)) turnIds.push(next.turnId);
+          index += 1;
         }
-        countMap.set(turn.id, (countMap.get(turn.id) ?? 0) + 1);
+        index -= 1;
+        entries.push({
+          toolCalls,
+          turnId: turnIds[turnIds.length - 1]!,
+          turnIds,
+          key: `tool-group:${turnIds[0]}:${toolCalls[0]!.item.id}`,
+        });
+        for (const turnId of turnIds) {
+          countMap.set(turnId, (countMap.get(turnId) ?? 0) + 1);
+        }
+      } else {
+        entries.push({ item: current.item, turnId: current.turnId, turnIds: [current.turnId], key: current.item.id });
+        countMap.set(current.turnId, (countMap.get(current.turnId) ?? 0) + 1);
       }
     }
 
@@ -337,10 +353,14 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
         onForkFromHere?: () => void;
       }
     >();
-    let idx = 0;
+    const lastEntryByTurnId = new Map<string, number>();
+    renderEntries.forEach((entry, index) => {
+      for (const turnId of entry.turnIds) lastEntryByTurnId.set(turnId, index);
+    });
     for (const turn of turns) {
-      const turnEntryCount = entryCountByTurnId.get(turn.id) ?? 0;
-      idx += turnEntryCount - 1;
+      const idx = lastEntryByTurnId.get(turn.id);
+      if (idx === undefined) continue;
+
       if (turn.status === 'completed' || turn.status === 'error') {
         endIndices.add(idx);
         const turnNum = parseInt(turn.id, 10);
@@ -400,12 +420,11 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
           },
         });
       }
-      idx++;
     }
     return { turnEndIndices: endIndices, turnRollbackCallbacks: rollbackCbs };
   }, [
     turnsStructureKey,
-    entryCountByTurnId,
+    renderEntries,
     threadId,
     previewRollback,
     forkThread,
@@ -568,7 +587,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
               if (!entry) return null;
               const isLastInTurn = turnEndIndices.has(virtualRow.index);
               const cbs = turnRollbackCallbacks.get(entry.turnId);
-              const isUserMsg = entry.item.type === 'message' && entry.item.role === 'user';
+              const isUserMsg = entry.item?.type === 'message' && entry.item.role === 'user';
               const turn = turnById.get(entry.turnId);
               const isInterrupted = turn?.status === 'error';
 
@@ -586,17 +605,21 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                   }}
                 >
                   <div className="px-10 py-1">
-                    <MessageItem
-                      item={entry.item}
-                      threadId={threadId}
-                      cwd={threadCwd}
-                      onApprove={approveTool}
-                      onReject={rejectTool}
-                      callIdToToolName={callIdToToolName}
-                      onRollbackHere={isUserMsg && cbs ? cbs.onRollbackHere : undefined}
-                      onForkFromHere={isUserMsg && cbs ? cbs.onForkFromHere : undefined}
-                      toolResult={entry.toolResult}
-                    />
+                    {entry.toolCalls ? (
+                      <ToolCallGroup entries={entry.toolCalls} />
+                    ) : entry.item ? (
+                      <MessageItem
+                        item={entry.item}
+                        threadId={threadId}
+                        cwd={threadCwd}
+                        onApprove={approveTool}
+                        onReject={rejectTool}
+                        callIdToToolName={callIdToToolName}
+                        onRollbackHere={isUserMsg && cbs ? cbs.onRollbackHere : undefined}
+                        onForkFromHere={isUserMsg && cbs ? cbs.onForkFromHere : undefined}
+                        toolResult={entry.toolResult}
+                      />
+                    ) : null}
                   </div>
                   {isLastInTurn &&
                     (() => {
@@ -629,11 +652,12 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                       );
                     })()}
                   {isLastInTurn && (
-                    <div className="px-6 pb-2">
+                    <div className="cc-turn-diff-wrap pb-2">
                       <TurnDiffPanel
                         uiTurnId={entry.turnId}
                         isInterrupted={isInterrupted}
                         threadId={threadId}
+                        cwd={threadCwd}
                         onRevertFile={handleRevertFile}
                         onRevertTurn={handleRevertTurn}
                         onUndoRevertFile={handleUndoRevertFile}

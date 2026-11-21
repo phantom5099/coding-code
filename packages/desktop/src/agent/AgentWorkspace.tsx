@@ -541,7 +541,7 @@ function InputBox({
 
 
   return (
-    <div className={centered ? 'w-full max-w-[740px]' : 'px-5 pb-5 pt-2'}>
+    <div className={centered ? 'cc-input-box-shell w-full max-w-[740px]' : 'cc-input-box-shell'}>
       {queuedInputs.length > 0 && currentThreadId && (
         <div className="mb-2 space-y-1.5" data-testid="queued-inputs">
           {queuedInputs.map((item, index) => (
@@ -666,7 +666,7 @@ function InputBox({
               }
             }}
             placeholder="可向 AI 询问任何事"
-            rows={3}
+            rows={1}
             className="flex-1 bg-transparent px-5 pt-4 pb-3 text-[15px] text-[var(--text-primary)] placeholder-[var(--text-disabled)] resize-none outline-none leading-relaxed disabled:opacity-50"
           />
           {/* 附件：选文件入口，accept 取当前模型可达格式 */}
@@ -861,7 +861,7 @@ export default function AgentWorkspace({ sendMessage, sendQueuedInput, abort }: 
 
   if (!currentThreadId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-[var(--bg-panel)] overflow-hidden px-6">
+      <div className="cc-agent-workspace-shell cc-empty-workspace flex-1 flex flex-col items-center justify-center gap-6 bg-[var(--bg-base)] overflow-hidden px-6">
         <h2 className="text-[22px] font-medium text-[var(--text-primary)] tracking-tight">
           在{' '}
           <span className="text-[var(--accent-primary)] font-semibold">
@@ -875,8 +875,8 @@ export default function AgentWorkspace({ sendMessage, sendQueuedInput, abort }: 
   }
 
   return (
-    <div className="flex-1 flex flex-row overflow-hidden bg-[var(--bg-panel)] min-w-0">
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+    <div className="cc-agent-workspace-shell flex-1 flex flex-row overflow-hidden bg-[var(--bg-panel)] min-w-0">
+      <div className="cc-chat-surface flex-1 flex flex-col overflow-hidden min-w-0">
         <MessageStream key={currentThreadId} threadId={currentThreadId} />
         <ApprovalPanel threadId={currentThreadId} />
         <AskUserPanel threadId={currentThreadId} />

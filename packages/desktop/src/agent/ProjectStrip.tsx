@@ -1,251 +1,50 @@
-import { useState, useMemo } from 'react';
-import { Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, Settings, Clock3 } from 'lucide-react';
 import { useUIStore } from '../stores/ui.store';
-import { useWorkspaceStore } from '../stores/workspace.store';
-import { useAgentStore } from '../stores/agent.store';
-import { useAgentRollback } from '../hooks/useAgent';
-import type { Project, Thread } from '@shared/types';
-
-function normalizeCwd(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^([A-Z]):/, (_, l: string) => `${l.toLowerCase()}:`);
-}
-
-const PROJECT_COLORS = [
-  'bg-blue-600',
-  'bg-emerald-600',
-  'bg-violet-600',
-  'bg-amber-600',
-  'bg-rose-600',
-  'bg-cyan-600',
-  'bg-fuchsia-600',
-  'bg-lime-600',
-];
-
-function colorForId(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
-  return PROJECT_COLORS[Math.abs(hash) % PROJECT_COLORS.length]!;
-}
-
-function relativeTime(ts: number): string {
-  const diff = Date.now() - ts;
-  if (diff < 60000) return '刚刚';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
-  const days = Math.floor(diff / 86400000);
-  if (days < 7) return `${days}天`;
-  return `${Math.floor(days / 7)}周`;
-}
-
-interface SessionListPopupProps {
-  project: Project;
-  threads: Thread[];
-  currentThreadId: string | null;
-  onSelectThread: (id: string) => void;
-  onDeleteThread: (threadId: string) => void;
-}
-
-function SessionListPopup({
-  project,
-  threads,
-  currentThreadId,
-  onSelectThread,
-  onDeleteThread,
-}: SessionListPopupProps) {
-  const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  return (
-    <div className="absolute left-full top-0 ml-1 w-60 bg-[var(--bg-card)] border border-[var(--border-card)] rounded-lg shadow-2xl z-50">
-      <div className="px-3 py-2 border-b border-[var(--border-card)]">
-        <span className="text-[12px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-          {project.name}
-        </span>
-      </div>
-      <div className="max-h-80 overflow-y-auto py-1">
-        {sorted.slice(0, 12).map((t) => (
-          <button
-            type="button"
-            key={t.id}
-            onClick={() => onSelectThread(t.id)}
-            onMouseEnter={() => setHoveredId(t.id)}
-            onMouseLeave={() => setHoveredId(null)}
-            className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
-              currentThreadId === t.id
-                ? 'bg-[var(--bg-selected)] text-[var(--accent-primary)]'
-                : 'text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <span className="flex-1 text-[13px] truncate">{t.title || '未命名对话'}</span>
-            {hoveredId === t.id ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteThread(t.id);
-                }}
-                className="shrink-0 p-0.5 text-[var(--text-placeholder)] hover:text-red-400 transition-colors"
-                title="删除对话"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 6h18" />
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                  <line x1="10" y1="11" x2="10" y2="17" />
-                  <line x1="14" y1="11" x2="14" y2="17" />
-                </svg>
-              </button>
-            ) : (
-              <span className="text-[11px] text-[var(--text-disabled)] shrink-0">
-                {relativeTime(t.updatedAt)}
-              </span>
-            )}
-          </button>
-        ))}
-        {sorted.length === 0 && (
-          <div className="px-3 py-3 text-[13px] text-[var(--text-disabled)]">暂无对话</div>
-        )}
-        {sorted.length > 12 && (
-          <div className="px-3 py-1 text-[12px] text-[var(--text-disabled)]">
-            +{sorted.length - 12} 条更多
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default function ProjectStrip() {
-  const projects = useWorkspaceStore((s) => s.projects);
-  const currentProjectId = useWorkspaceStore((s) => s.currentProjectId);
-  const rawThreads = useAgentStore((s) => s.threads);
-  const threadMetadata = useMemo(() => {
-    return Object.values(rawThreads).map((t) => ({
-      id: t.id,
-      title: t.title,
-      cwd: t.cwd,
-      updatedAt: t.updatedAt,
-    }));
-  }, [rawThreads]);
-  const currentThreadId = useAgentStore((s) => s.currentThreadId);
+  const view = useUIStore((s) => s.view);
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
-  const switchProject = useWorkspaceStore((s) => s.switchProject);
-  const addProject = useWorkspaceStore((s) => s.addProject);
-  const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
   const setView = useUIStore((s) => s.setView);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const { deleteThread } = useAgentRollback();
 
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-
-  const handleDelete = (threadId: string) => {
-    void deleteThread(threadId);
-  };
-
-  const handleSelectProject = (id: string) => {
-    switchProject(id);
-  };
-
-  const handleAddProject = async () => {
-    const folder = await window.electronAPI?.openFolderDialog?.();
-    if (!folder) return;
-    const name = folder.replace(/\\/g, '/').split('/').pop() || folder;
-    const project: Project = { id: crypto.randomUUID(), name, rootPath: folder };
-    addProject(project);
-    switchProject(project.id);
-  };
-
-  const getThreadsForProject = (rootPath: string): Thread[] => {
-    const normalizedRoot = normalizeCwd(rootPath);
-    return threadMetadata.filter((t) => {
-      const tcwd = normalizeCwd(t.cwd);
-      return tcwd.startsWith(normalizedRoot);
-    }) as Thread[];
+  const handleNavigation = (target: 'agent' | 'automation') => {
+    if (view === target) {
+      toggleSidebar();
+      return;
+    }
+    setView(target);
   };
 
   return (
-    <div className="flex flex-col items-center w-12 shrink-0 bg-[var(--bg-panel)] border-r border-[var(--border-default)] pt-3 pb-2 gap-4 select-none">
-      {projects.map((p) => {
-        const isActive = p.id === currentProjectId;
-        const colorClass = colorForId(p.id);
-        return (
-          <div
-            key={p.id}
-            className="relative"
-            onMouseEnter={() => (sidebarCollapsed ? setHoveredId(p.id) : null)}
-            onMouseLeave={() => setHoveredId(null)}
-          >
-            <button
-              type="button"
-              onClick={() => handleSelectProject(p.id)}
-              title={p.name}
-              className={`w-9 h-9 rounded-lg flex items-center justify-center text-[15px] font-semibold text-[var(--text-white)] transition-all shrink-0
-                ${colorClass} ${isActive ? 'ring-2 ring-white/60 ring-offset-1 ring-offset-[var(--bg-panel)]' : 'opacity-70 hover:opacity-100'}`}
-            >
-              {p.name.charAt(0).toUpperCase()}
-            </button>
-            {sidebarCollapsed && hoveredId === p.id && (
-              <SessionListPopup
-                project={p}
-                threads={getThreadsForProject(p.rootPath)}
-                currentThreadId={currentThreadId}
-                onSelectThread={(tid) => {
-                  setCurrentThread(tid);
-                  setHoveredId(null);
-                }}
-                onDeleteThread={handleDelete}
-              />
-            )}
-          </div>
-        );
-      })}
-
-      {/* Divider before add button */}
-      {projects.length > 0 && <div className="w-6 border-t border-[var(--border-card)] my-1" />}
-
+    <nav className="cc-project-strip-shell flex w-[56px] shrink-0 flex-col items-center border-r border-[var(--border-default)] px-1 pb-3 pt-3 select-none">
       <button
         type="button"
-        onClick={handleAddProject}
-        title="添加项目"
-        className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-lg shrink-0"
+        title={view === 'agent' ? (sidebarCollapsed ? '展开主页侧栏' : '收起主页侧栏') : '主页'}
+        onClick={() => handleNavigation('agent')}
+        className={`cc-rail-button ${view === 'agent' ? 'cc-rail-button-active' : ''}`}
+        aria-label={view === 'agent' ? (sidebarCollapsed ? '展开主页侧栏' : '收起主页侧栏') : '主页'}
       >
-        +
+        <Home size={18} strokeWidth={1.8} />
       </button>
-
-      {/* Spacer to push settings and collapse to bottom */}
+      <button
+        type="button"
+        title={view === 'automation' ? (sidebarCollapsed ? '展开自动化侧栏' : '收起自动化侧栏') : '自动化'}
+        onClick={() => handleNavigation('automation')}
+        className={`cc-rail-button ${view === 'automation' ? 'cc-rail-button-active' : ''}`}
+        aria-label={view === 'automation' ? (sidebarCollapsed ? '展开自动化侧栏' : '收起自动化侧栏') : '自动化'}
+      >
+        <Clock3 size={18} strokeWidth={1.7} />
+      </button>
       <div className="flex-1" />
-
-      {/* Global settings button */}
       <button
         type="button"
-        onClick={() => setView('global-settings')}
         title="全局设置"
-        className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors shrink-0"
+        onClick={() => setView('global-settings')}
+        className={`cc-rail-button ${view === 'global-settings' ? 'cc-rail-button-active' : ''}`}
+        aria-label="全局设置"
       >
-        <Settings size={18} strokeWidth={1.5} />
+        <Settings size={18} strokeWidth={1.6} />
       </button>
-
-      {/* Collapse/expand sidebar button */}
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-        className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-placeholder)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors shrink-0"
-      >
-        {sidebarCollapsed ? (
-          <ChevronRight size={16} strokeWidth={1.5} />
-        ) : (
-          <ChevronLeft size={16} strokeWidth={1.5} />
-        )}
-      </button>
-    </div>
+    </nav>
   );
 }

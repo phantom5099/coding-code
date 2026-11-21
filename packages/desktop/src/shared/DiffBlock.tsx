@@ -10,7 +10,7 @@ export default function DiffBlock({ diff }: DiffBlockProps) {
   const lines = parsed.flatMap((f) => f.hunks.flatMap((h) => h.lines));
 
   return (
-    <div className="rounded-md overflow-hidden border border-[var(--border-strong)]">
+    <div className="cc-diff-block rounded-md overflow-hidden border border-[var(--border-strong)]">
       <pre className="text-[12px] leading-[1.5] font-mono overflow-x-auto">
         {lines.map((line, idx) => {
           const { type, text } = line;

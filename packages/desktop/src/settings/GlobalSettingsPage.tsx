@@ -1,6 +1,6 @@
-import { ArrowLeft } from 'lucide-react';
-import { useUIStore } from '../stores/ui.store';
 import { useState } from 'react';
+
+import { useUIStore } from '../stores/ui.store';
 import McpPanel from './McpPanel';
 import HooksPanel from './HooksPanel';
 import SkillPanel from './SkillPanel';
@@ -23,22 +23,14 @@ const THEMES = [
 ];
 
 export default function GlobalSettingsPage() {
-  const setView = useUIStore((s) => s.setView);
   const [section, setSection] = useState<Section>('theme');
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-[var(--bg-panel)] text-[var(--text-primary)] pl-3">
+    <div className="cc-settings-shell flex flex-col flex-1 min-h-0 bg-[var(--bg-panel)] text-[var(--text-primary)]">
       {/* Header */}
-      <div className="flex items-center gap-4 px-6 py-4 border-b border-[var(--border-default)] shrink-0">
-        <button
-          type="button"
-          onClick={() => setView('agent')}
-          className="text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition-colors"
-        >
-          <ArrowLeft size={20} strokeWidth={1.5} />
-        </button>
+      <div className="flex items-center px-6 py-4 border-b border-[var(--border-default)] shrink-0">
         <span className="text-[16px] font-medium text-[var(--text-title)]">全局设置</span>
       </div>
 

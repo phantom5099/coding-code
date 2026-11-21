@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { parseUnifiedDiff } from '../lib/diff-parser';
 
 interface UnifiedDiffViewProps {
@@ -53,26 +53,9 @@ function DiffLineView({
 }
 
 function DiffFileView({ file }: { file: import('../lib/diff-parser').ParsedDiffFile }) {
-  const [collapsed, setCollapsed] = useState(false);
-
   return (
     <div className="mb-2 last:mb-0">
-      {/* File header */}
-      <button
-        type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-[var(--bg-code)] hover:bg-[var(--bg-hover)] text-[12px] text-[var(--text-primary)] rounded-t border-b border-[var(--border-card)] text-left"
-      >
-        <span
-          className={`transition-transform text-[10px] text-[var(--text-muted)] ${collapsed ? '' : 'rotate-90'}`}
-        >
-          ▶
-        </span>
-        <span className="font-mono">{file.fileName}</span>
-      </button>
-
-      {!collapsed && (
-        <div className="border border-[var(--border-card)] rounded-b overflow-hidden">
+      <div className="border border-[var(--border-card)] rounded overflow-hidden">
           {file.hunks.length === 0 && (
             <div className="px-3 py-2 text-[12px] text-[var(--text-muted)]">无差异</div>
           )}
@@ -97,8 +80,7 @@ function DiffFileView({ file }: { file: import('../lib/diff-parser').ParsedDiffF
               ))}
             </div>
           ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
