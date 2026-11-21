@@ -93,8 +93,8 @@ const MessageItem = memo(function MessageItem({
     if (isUser) {
       const mediaParts = parts.filter((p) => p.type === 'media');
       return (
-        <div className="flex flex-col items-end mb-4 mt-4 group">
-          <div className="relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[var(--border-card)] text-[var(--text-title)] text-[15px] leading-relaxed break-words">
+        <div className="cc-message-user flex flex-col items-end mb-4 mt-4 group">
+          <div className="cc-user-bubble relative max-w-[78%] px-4 py-3 rounded-2xl rounded-br-sm bg-[var(--border-card)] text-[var(--text-title)] text-[15px] leading-relaxed break-words">
             <div className="flex flex-col items-end gap-2">
               {mediaParts.map((p, i) => (
                 <MediaView key={`m${i}`} part={p} cwd={cwd} />
@@ -199,7 +199,7 @@ const MessageItem = memo(function MessageItem({
     }
 
     return (
-      <div className="flex flex-col items-start mb-1 pl-8 group">
+      <div className="cc-message-assistant flex flex-col items-start mb-1 pl-8 group">
         {text && (
           <div className="max-w-[80%] text-[15px] text-[var(--text-primary)] leading-relaxed">
             <MarkdownRenderer content={text} />
@@ -214,7 +214,7 @@ const MessageItem = memo(function MessageItem({
 
   if (item.type === 'reasoning') {
     return (
-      <div className="mb-1.5 pl-8">
+      <div className="cc-event-row cc-reasoning-event mb-1.5 pl-8">
         <button
           type="button"
           onClick={() => setReasoningOpen((v) => !v)}
@@ -242,7 +242,7 @@ const MessageItem = memo(function MessageItem({
       const cmd = typeof a.command === 'string' ? a.command : '';
       const label = path || cmd || item.name;
       return (
-        <div className="mb-1 flex items-center gap-1.5 text-[13px] text-[var(--text-tertiary)] pl-8">
+        <div className="cc-event-row cc-tool-event mb-1 flex items-center gap-1.5 text-[13px] text-[var(--text-tertiary)] pl-8">
           <span className="font-mono text-[var(--text-primary)]">{label}</span>
           <span className="text-[var(--text-muted)]">等待审批</span>
         </div>
@@ -255,7 +255,7 @@ const MessageItem = memo(function MessageItem({
 
     const isRejected = item.status === 'rejected';
     return (
-      <div className="mb-1 flex items-center gap-1.5 text-[13px] pl-8">
+      <div className="cc-event-row cc-tool-event mb-1 flex items-center gap-1.5 text-[13px] pl-8">
         <span
           className={`font-mono ${isRejected ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}
         >
@@ -287,7 +287,7 @@ const MessageItem = memo(function MessageItem({
     return (
       <div
         data-testid={`subagent-${item.sessionId}`}
-        className="mb-1 flex items-center gap-1.5 text-[13px] pl-8"
+        className="cc-event-row cc-tool-event mb-1 flex items-center gap-1.5 text-[13px] pl-8"
       >
         <span className="text-[var(--text-muted)]">子代理</span>
         <span className="font-mono text-[var(--text-primary)]">{item.agentName}</span>
@@ -298,7 +298,7 @@ const MessageItem = memo(function MessageItem({
 
   if (item.type === 'ask_user') {
     return (
-      <div className="mb-1 flex items-center gap-1.5 text-[13px] pl-8">
+      <div className="cc-event-row cc-tool-event mb-1 flex items-center gap-1.5 text-[13px] pl-8">
         <span className="text-[var(--text-primary)]">{item.question}</span>
         <span className="text-[var(--text-muted)]">
           {item.status === 'waiting' ? '等待回答' : '已回答'}
@@ -309,7 +309,7 @@ const MessageItem = memo(function MessageItem({
 
   if (item.type === 'error') {
     return (
-      <div className="mb-1.5 px-4 py-3 pl-8 rounded-lg bg-[var(--accent-danger-bg)] border border-[var(--accent-danger-border)] text-[var(--accent-danger)] text-[14px] leading-relaxed">
+      <div className="cc-event-row cc-error-event mb-1.5 px-4 py-3 pl-8 rounded-lg bg-[var(--accent-danger-bg)] border border-[var(--accent-danger-border)] text-[var(--accent-danger)] text-[14px] leading-relaxed">
         {item.message}
       </div>
     );

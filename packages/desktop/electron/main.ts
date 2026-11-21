@@ -19,14 +19,15 @@ function createWindow(apiPort: number): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
-    backgroundColor: '#1e1e1e',
+    backgroundColor: '#0d1015',
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 12, y: 12 },
     ...(process.platform === 'win32'
       ? {
           titleBarOverlay: {
-            color: '#1a1a1a',
-            symbolColor: '#858585',
+            color: '#0d101500',
+            symbolColor: '#8996a6',
+            height: 36,
           },
         }
       : {}),
@@ -80,9 +81,9 @@ app.whenReady().then(async () => {
 
   // Theme sync: update window background and title bar overlay
   const themeColors = {
-    dark: { bg: '#1e1e1e', overlay: '#1a1a1a', symbol: '#858585' },
-    light: { bg: '#ffffff', overlay: '#f5f5f5', symbol: '#666666' },
-    paper: { bg: '#f5f0e8', overlay: '#ede8de', symbol: '#7a7872' },
+    dark: { bg: '#0d1015', overlay: '#0d101500', symbol: '#8996a6' },
+    light: { bg: '#f3f6f8', overlay: '#f3f6f800', symbol: '#687580' },
+    paper: { bg: '#f5f0e8', overlay: '#f5f0e800', symbol: '#7a7872' },
   };
 
   ipcMain.on('theme:change', (_e, theme: string) => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Plus, Play, Trash2, Power, Clock, FolderOpen } from 'lucide-react';
+import { Clock3, FolderOpen, Play, Plus, Power, Trash2, Pencil } from 'lucide-react';
 import { useAgentStore } from '../stores/agent.store';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { useUIStore } from '../stores/ui.store';
@@ -12,16 +12,16 @@ import {
 import { AutomationForm } from './AutomationForm';
 
 export function AutomationPanel() {
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const automations = useAgentStore((s) => s.automations);
   const setAutomations = useAgentStore((s) => s.setAutomations);
   const workspace = useWorkspaceStore();
-  const setView = useUIStore((s) => s.setView);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadAutomations();
+    void loadAutomations();
   }, []);
 
   async function loadAutomations() {
@@ -75,12 +75,8 @@ export function AutomationPanel() {
     if (day !== '*' && month !== '*') {
       return `${month}月${day}日 ${hour}:${min.padStart(2, '0')}`;
     }
-    if (hour.startsWith('*/')) {
-      return `每 ${hour.slice(2)} 小时`;
-    }
-    if (min.startsWith('*/')) {
-      return `每 ${min.slice(2)} 分钟`;
-    }
+    if (hour.startsWith('*/')) return `每 ${hour.slice(2)} 小时`;
+    if (min.startsWith('*/')) return `每 ${min.slice(2)} 分钟`;
     return `每天 ${hour}:${min.padStart(2, '0')}`;
   }
 
@@ -91,157 +87,103 @@ export function AutomationPanel() {
     const isToday = d.toDateString() === now.toDateString();
     const time = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     if (isToday) return time;
-    return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) + ' ' + time;
+    return `${d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })} ${time}`;
   }
 
+  const openNewForm = () => {
+    setEditingId(null);
+    setShowForm(true);
+  };
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-[var(--bg-panel)] text-[var(--text-primary)] pl-3">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-default)] shrink-0">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => setView('agent')}
-            className="text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition-colors"
-          >
-            <ArrowLeft size={20} strokeWidth={1.5} />
-          </button>
-          <span className="text-[16px] font-medium text-[var(--text-title)]">自动化任务</span>
-        </div>
-        <button
-          onClick={() => {
-            setEditingId(null);
-            setShowForm(true);
-          }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] bg-[var(--accent-primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
-        >
-          <Plus size={14} />
-          新建
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {automations.length === 0 ? (
-          <div className="text-center text-[var(--text-disabled)] py-12">
-            <Clock size={40} className="mx-auto mb-3 opacity-50" />
-            <p className="text-[14px]">暂无自动化任务</p>
-            <p className="text-[12px] mt-1">点击"新建"创建定时任务</p>
+    <div className="cc-automation-layout flex min-w-0 flex-1 overflow-hidden bg-[var(--bg-base)]">
+      {!sidebarCollapsed && (
+        <aside className="cc-automation-sidebar flex w-[272px] shrink-0 flex-col border-r border-[var(--border-default)] bg-[var(--bg-sidebar)]">
+          <div className="cc-automation-sidebar-header px-5 pb-4 pt-5">
+            <div className="flex items-center justify-between">
+              <h1 className="text-[18px] font-semibold tracking-[-0.02em] text-[var(--text-title)]">自动化</h1>
+            </div>
+            <button type="button" onClick={openNewForm} className="cc-automation-new-button mt-5 flex w-full items-center gap-2 rounded-xl px-3.5 py-2.5 text-[14px] font-medium">
+              <Plus size={17} strokeWidth={1.8} />
+              <span>新建任务</span>
+            </button>
           </div>
-        ) : (
-          <div className="space-y-3">
+          <div className="mx-5 border-t border-[var(--border-divider)]" />
+          <div className="flex items-center justify-between px-5 py-4 text-[12px] text-[var(--text-muted)]">
+            <span>计划任务</span>
+            <span>{automations.length}</span>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
             {automations.map((auto) => (
-              <div
-                key={auto.id}
-                className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-card)] p-4 hover:border-[var(--border-hover)] transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-[14px] text-[var(--text-title)] truncate">
-                        {auto.name}
-                      </span>
-                      <span
-                        className={`text-[11px] px-1.5 py-0.5 rounded-full ${
-                          auto.enabled
-                            ? 'bg-green-500/10 text-green-500'
-                            : 'bg-[var(--bg-base)] text-[var(--text-disabled)]'
-                        }`}
-                      >
-                        {auto.enabled ? '启用' : '禁用'}
-                      </span>
-                      {auto.runOnce && (
-                        <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500">
-                          单次
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[12px] text-[var(--text-muted)] mt-1">
-                      {formatCronHuman(auto.cron)} · {auto.timezone}
-                    </div>
-                    <p className="text-[12px] text-[var(--text-secondary)] mt-1.5 truncate">
-                      {auto.description}
-                    </p>
-                    <div className="flex items-center gap-4 mt-2 text-[11px] text-[var(--text-disabled)]">
-                      <span className="flex items-center gap-1">
-                        <FolderOpen size={12} />
-                        {auto.projectCwd.split(/[/\\]/).pop() || auto.projectCwd}
-                      </span>
-                      <span>上次: {formatTime(auto.lastRunAt)}</span>
-                    </div>
-                  </div>
+              <button key={auto.id} type="button" onClick={() => { setEditingId(auto.id); setShowForm(true); }} className="cc-automation-sidebar-row flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left">
+                <Clock3 size={15} className={auto.enabled ? 'text-[var(--accent-primary)]' : 'text-[var(--text-disabled)]'} />
+                <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text-secondary)]">{auto.name}</span>
+                <span className={`h-1.5 w-1.5 rounded-full ${auto.enabled ? 'bg-[var(--accent-success)]' : 'bg-[var(--text-disabled)]'}`} />
+              </button>
+            ))}
+            {automations.length === 0 && <div className="px-3 py-2 text-[13px] text-[var(--text-disabled)]">暂无计划任务</div>}
+          </div>
+        </aside>
+      )}
 
-                  <div className="flex items-center gap-0.5 ml-3">
-                    <button
-                      onClick={() => handleToggle(auto.id, !auto.enabled)}
-                      className={`p-2 rounded-lg hover:bg-[var(--bg-hover)] transition-colors ${
-                        auto.enabled
-                          ? 'text-[var(--accent-primary)]'
-                          : 'text-[var(--text-disabled)]'
-                      }`}
-                      title={auto.enabled ? '禁用' : '启用'}
-                    >
-                      <Power size={15} />
-                    </button>
-                    <button
-                      onClick={() => handleRunOnce(auto.id)}
-                      disabled={loading}
-                      className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-colors disabled:opacity-50"
-                      title="立即执行"
-                    >
-                      <Play size={15} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingId(auto.id);
-                        setShowForm(true);
-                      }}
-                      className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-colors"
-                      title="编辑"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                        <path d="m15 5 4 4" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleDelete(auto.id)}
-                      className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-disabled)] hover:text-red-500 transition-colors"
-                      title="删除"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+      <main className="cc-automation-main min-w-0 flex-1 overflow-y-auto">
+        <div className="cc-automation-main-header flex items-center justify-between border-b border-[var(--border-default)] px-8 py-5">
+          <div>
+            <div className="text-[13px] text-[var(--text-muted)]">自动化</div>
+            <h2 className="mt-1 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text-title)]">计划任务</h2>
+          </div>
+          <button type="button" onClick={openNewForm} className="cc-automation-header-action flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium">
+            <Plus size={15} /> 新建
+          </button>
+        </div>
+
+        <div className="cc-automation-main-content p-8">
+          {automations.length === 0 ? (
+            <div className="cc-automation-empty flex min-h-[420px] flex-col items-center justify-center text-center">
+              <div className="cc-automation-empty-icon flex h-14 w-14 items-center justify-center rounded-2xl">
+                <Clock3 size={30} strokeWidth={1.5} />
+              </div>
+              <h3 className="mt-5 text-[18px] font-medium text-[var(--text-title)]">暂无自动化任务</h3>
+              <p className="mt-2 max-w-[360px] text-[13px] leading-6 text-[var(--text-muted)]">创建一个计划任务，让 Coding Code 在指定时间自动执行工作。</p>
+            </div>
+          ) : (
+            <div className="mx-auto max-w-[900px] space-y-3">
+              {automations.map((auto) => (
+                <div key={auto.id} className="cc-automation-card rounded-2xl border p-5">
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-[15px] font-medium text-[var(--text-title)]">{auto.name}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] ${auto.enabled ? 'cc-automation-status-on' : 'cc-automation-status-off'}`}>{auto.enabled ? '启用' : '禁用'}</span>
+                        {auto.runOnce && <span className="cc-automation-status-on rounded-full px-2 py-0.5 text-[11px]">单次</span>}
+                      </div>
+                      <div className="mt-2 text-[13px] text-[var(--text-secondary)]">{formatCronHuman(auto.cron)} · {auto.timezone}</div>
+                      <p className="mt-2 truncate text-[13px] text-[var(--text-muted)]">{auto.description}</p>
+                      <div className="mt-3 flex items-center gap-4 text-[12px] text-[var(--text-disabled)]">
+                        <span className="flex items-center gap-1.5"><FolderOpen size={13} />{auto.projectCwd.split(/[/\\]/).pop() || auto.projectCwd}</span>
+                        <span>上次执行 {formatTime(auto.lastRunAt)}</span>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button type="button" onClick={() => handleToggle(auto.id, !auto.enabled)} className="cc-automation-icon-button" title={auto.enabled ? '禁用' : '启用'}><Power size={15} /></button>
+                      <button type="button" onClick={() => handleRunOnce(auto.id)} disabled={loading} className="cc-automation-icon-button disabled:opacity-50" title="立即执行"><Play size={15} /></button>
+                      <button type="button" onClick={() => { setEditingId(auto.id); setShowForm(true); }} className="cc-automation-icon-button" title="编辑"><Pencil size={15} /></button>
+                      <button type="button" onClick={() => handleDelete(auto.id)} className="cc-automation-icon-button cc-automation-delete" title="删除"><Trash2 size={15} /></button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
 
       {showForm && (
         <AutomationForm
           automationId={editingId}
           initialProjectCwd={workspace.rootPath}
-          onClose={() => {
-            setShowForm(false);
-            setEditingId(null);
-          }}
-          onSaved={() => {
-            setShowForm(false);
-            setEditingId(null);
-            loadAutomations();
-          }}
+          onClose={() => { setShowForm(false); setEditingId(null); }}
+          onSaved={() => { setShowForm(false); setEditingId(null); void loadAutomations(); }}
         />
       )}
     </div>

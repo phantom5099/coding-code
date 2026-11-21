@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 import { useAgentCore } from './hooks/useAgent';
 import { useUIStore } from './stores/ui.store';
 import { useWorkspaceStore } from './stores/workspace.store';
+import { AutomationPanel } from './agent/AutomationPanel';
 import ProjectStrip from './agent/ProjectStrip';
 import AgentSidebar from './agent/AgentSidebar';
 import AgentWorkspace from './agent/AgentWorkspace';
-import { AutomationPanel } from './agent/AutomationPanel';
 import GlobalSettingsPage from './settings/GlobalSettingsPage';
 import ProjectSettingsPage from './settings/ProjectSettingsPage';
 import TitleBar from './TitleBar';
@@ -17,14 +17,12 @@ export default function App() {
   const view = useUIStore((s) => s.view);
   const rootPath = useWorkspaceStore((s) => s.rootPath);
 
-  // Sync workspace cwd to main process for git polling
   useEffect(() => {
     if (rootPath) {
       window.electronAPI?.setWorkspaceCwd?.(rootPath);
     }
   }, [rootPath]);
 
-  // Sync theme to document and main process
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.electronAPI?.setTheme?.(theme);
@@ -37,28 +35,30 @@ export default function App() {
     };
   }, []);
 
-  let content;
+  let page;
   if (view === 'global-settings') {
-    content = <GlobalSettingsPage />;
+    page = <GlobalSettingsPage />;
   } else if (view === 'project-settings') {
-    content = <ProjectSettingsPage />;
+    page = <ProjectSettingsPage />;
   } else if (view === 'automation') {
-    content = <AutomationPanel />;
+    page = <AutomationPanel />;
   } else {
-    content = (
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <ProjectStrip />
+    page = (
+      <>
         <AgentSidebar />
         <AgentWorkspace sendMessage={sendMessage} sendQueuedInput={sendQueuedInput} abort={abort} />
-      </div>
+      </>
     );
   }
 
   return (
     <ErrorBoundary>
-      <div className="h-screen flex flex-col bg-[var(--bg-base)] text-[var(--text-primary)] overflow-hidden">
+      <div className="cc-app-root h-screen flex flex-col overflow-hidden bg-[var(--bg-base)] text-[var(--text-primary)]">
         <TitleBar />
-        <div className="flex flex-1 flex-col overflow-hidden">{content}</div>
+        <div className="cc-app-content flex min-h-0 flex-1 overflow-hidden">
+          <ProjectStrip />
+          <main className="cc-page-container flex min-w-0 flex-1 overflow-hidden">{page}</main>
+        </div>
       </div>
     </ErrorBoundary>
   );

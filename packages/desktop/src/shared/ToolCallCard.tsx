@@ -24,7 +24,7 @@ export default function ToolCallCard({ item, threadId, onApprove, onReject }: To
 
   return (
     <div
-      className={`my-2 rounded border ${isRejected ? 'border-[var(--border-strong)] opacity-50' : 'border-[var(--border-card)]'} bg-[var(--bg-card)] overflow-hidden`}
+      className={`cc-tool-call-card my-2 rounded border ${isRejected ? 'border-[var(--border-strong)] opacity-50' : 'border-[var(--border-card)]'} bg-[var(--bg-card)] overflow-hidden`}
     >
       <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-code-header)]">
         {hasArgs ? (

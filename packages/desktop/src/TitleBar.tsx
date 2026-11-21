@@ -3,7 +3,7 @@ export default function TitleBar() {
 
   return (
     <div
-      className="shrink-0 flex items-center px-3 bg-[var(--bg-card)] select-none"
+      className="cc-titlebar shrink-0 flex items-center px-3 select-none"
       style={
         {
           height: 'env(titlebar-area-height, 36px)',
@@ -11,7 +11,7 @@ export default function TitleBar() {
         } as React.CSSProperties
       }
     >
-      <span className="text-[var(--text-tertiary)] text-xs font-medium">Coding Code</span>
+      <span className="text-xs font-medium">Coding Code</span>
     </div>
   );
 }

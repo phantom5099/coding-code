@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, FilePenLine, FileText, Folder, Globe, Search, Terminal, Wrench } from 'lucide-react';
 import type { Item } from '@shared/types';
 import { buildToolDiff } from '../lib/diff-compute';
 import CodeBlock from './CodeBlock';
@@ -23,6 +23,25 @@ function getCommand(args: object): string | null {
 function getSearchQuery(args: object): string | null {
   const a = args as Record<string, unknown>;
   return typeof a.query === 'string' ? a.query : typeof a.regex === 'string' ? a.regex : null;
+}
+
+function formatToolArgs(args: object): string {
+  try {
+    const text = JSON.stringify(args);
+    return text && text !== '{}' ? text : '';
+  } catch {
+    return '';
+  }
+}
+
+function toolIcon(name: string) {
+  if (name === 'read_file') return FileText;
+  if (name === 'write_file' || name === 'edit_file') return FilePenLine;
+  if (name === 'list_dir') return Folder;
+  if (name === 'search_files' || name === 'grep_search') return Search;
+  if (name === 'shell' || name === 'bash' || name === 'execute_command') return Terminal;
+  if (name.includes('url') || name.includes('web') || name.includes('fetch')) return Globe;
+  return Wrench;
 }
 
 export function buildToolSummaryTitle(
@@ -105,7 +124,9 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
   }, [toolResult, toolCall, isFileTool]);
 
   const effectiveResult = computedResult ?? toolResult;
-  const { title, isError, isRejected } = buildToolSummaryTitle(toolCall, effectiveResult);
+  const { isError, isRejected } = buildToolSummaryTitle(toolCall, effectiveResult);
+  const argsSummary = formatToolArgs(toolCall.args);
+  const ToolIcon = toolIcon(toolCall.name);
 
   const titleColor = isRejected
     ? 'text-[var(--text-muted)] line-through'
@@ -116,18 +137,15 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
   const hasContent = !!(effectiveResult?.diff || effectiveResult?.output);
 
   return (
-    <div className="pb-1.5 pl-8">
+    <div className="cc-tool-summary pb-1.5">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[var(--border-card)] hover:bg-[var(--border-hover)] transition-colors text-[13px]"
       >
-        {open ? (
-          <ChevronDown className={`w-3.5 h-3.5 ${titleColor}`} />
-        ) : (
-          <ChevronRight className={`w-3.5 h-3.5 ${titleColor}`} />
-        )}
-        <span className={`font-mono ${titleColor}`}>{title}</span>
+        <ToolIcon size={14} strokeWidth={1.7} className={`shrink-0 ${titleColor}`} />
+        <span className={`font-mono shrink-0 ${titleColor}`}>{toolCall.name}</span>
+        {argsSummary && <span className="cc-tool-args" title={argsSummary}>{argsSummary}</span>}
         {isFileTool &&
           effectiveResult &&
           (effectiveResult.insertions || effectiveResult.deletions) && (
@@ -136,6 +154,13 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
               {effectiveResult.deletions ? ` -${effectiveResult.deletions}` : ''}
             </span>
           )}
+        <span className="ml-auto shrink-0">
+          {open ? (
+            <ChevronDown className={`w-3.5 h-3.5 ${titleColor}`} />
+          ) : (
+            <ChevronRight className={`w-3.5 h-3.5 ${titleColor}`} />
+          )}
+        </span>
       </button>
       {open && hasContent && (
         <div className="pt-1.5">
