@@ -3,6 +3,8 @@ import type { Item, TodoItem } from '@shared/types';
 
 export interface StreamState {
   assistantMessageId: string;
+  reasoningItemId: string | null;
+  reasoningText: string;
   roundHasText: boolean;
   hasError: boolean;
   planTitle: string | null;
@@ -12,6 +14,8 @@ export interface StreamState {
 export function createStreamState(assistantMessageId: string): StreamState {
   return {
     assistantMessageId,
+    reasoningItemId: null,
+    reasoningText: '',
     roundHasText: false,
     hasError: false,
     planTitle: null,
@@ -70,6 +74,15 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
     }
     if (t.to === 'executing') {
       if (t.responded) {
+        if (state.reasoningItemId && state.reasoningText) {
+          fx.applyItem({
+            id: state.reasoningItemId,
+            type: 'reasoning',
+            content: state.reasoningText,
+            isVisible: true,
+            partial: false,
+          });
+        }
         if (state.roundHasText) {
           fx.applyItem({
             id: state.assistantMessageId,
@@ -80,6 +93,8 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
           });
         }
         state.roundHasText = false;
+        state.reasoningItemId = null;
+        state.reasoningText = '';
         state.assistantMessageId = fx.newId();
         if (t.responded.usage) fx.setUsage(t.responded.usage);
       }
@@ -89,6 +104,18 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
 
   const e = frame.event;
   switch (e.type) {
+    case 'reasoning_delta': {
+      state.reasoningItemId ??= `reasoning:${state.assistantMessageId}`;
+      state.reasoningText += e.text;
+      fx.applyItem({
+        id: state.reasoningItemId,
+        type: 'reasoning',
+        content: state.reasoningText,
+        isVisible: true,
+        partial: true,
+      });
+      return;
+    }
     case 'text_delta':
       state.roundHasText = true;
       fx.applyItem({

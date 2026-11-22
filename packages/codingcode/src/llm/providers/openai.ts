@@ -8,6 +8,16 @@ import type { SelectableModel } from '../../infra/models.js';
 
 import { convertMessages, convertTools, toTokenUsage } from './shared.js';
 
+function reasoningOptions(req: LLMRequest, entry: SelectableModel): Record<string, any> | undefined {
+  const capability = entry.capabilities.reasoning;
+  if (entry.provider !== 'openai' || !capability?.supported) return undefined;
+  const level = req.reasoning?.level ?? capability.defaultLevel;
+  const options: Record<string, unknown> = {};
+  if (level) options.reasoningEffort = level;
+  if (entry.protocol === 'openai-responses') options.reasoningSummary = 'auto';
+  return Object.keys(options).length > 0 ? { openai: options } : undefined;
+}
+
 export class OpenAIProvider implements LLMClient {
   constructor(
     private model: LanguageModelV3,
@@ -32,12 +42,21 @@ export class OpenAIProvider implements LLMClient {
           system: req.system,
           messages: convertMessages(req.messages),
           tools: convertTools(req.tools),
+          providerOptions: reasoningOptions(req, this.entry),
           stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
           abortSignal: signal,
         });
 
         return {
           content: result.text,
+          reasoning:
+            typeof result.reasoning === 'string' && result.reasoning
+              ? {
+                  displayText: result.reasoning,
+                  provider: this.entry.provider,
+                  replayData: { kind: 'full_text', value: result.reasoning },
+                }
+              : undefined,
           toolCalls:
             result.toolCalls.length > 0
               ? result.toolCalls.map((tc) => ({
@@ -54,6 +73,7 @@ export class OpenAIProvider implements LLMClient {
   }
 
   completeStream(req: LLMRequest, signal?: AbortSignal): AsyncIterable<LLMStreamPart> {
+    const providerName = this.entry.provider;
     if (this.entry.provider === 'sansen' && req.tools && req.tools.length > 0) {
       const complete = this.complete(req, signal);
       return (async function* () {
@@ -73,6 +93,7 @@ export class OpenAIProvider implements LLMClient {
       system: req.system,
       messages: convertMessages(req.messages),
       tools: convertTools(req.tools),
+      providerOptions: reasoningOptions(req, this.entry),
       stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
       abortSignal: signal,
     });
@@ -80,6 +101,9 @@ export class OpenAIProvider implements LLMClient {
     return (async function* () {
       for await (const part of result.fullStream) {
         switch (part.type) {
+          case 'reasoning-delta':
+            yield { type: 'reasoning', text: part.text, provider: providerName };
+            break;
           case 'text-delta':
             yield { type: 'text', text: part.text };
             break;

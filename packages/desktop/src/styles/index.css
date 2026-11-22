@@ -305,8 +305,8 @@ body,
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 14px;
-  height: 14px;
+  width: 7px !important;
+  height: 7px !important;
 }
 
 ::-webkit-scrollbar-track {
@@ -315,13 +315,30 @@ body,
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 7px;
-  border: 3px solid var(--bg-scrollbar);
+  border-radius: 4px;
+  border: 2px solid var(--bg-scrollbar);
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
+}
+
+.markdown-body .md-table-wrapper,
+.markdown-body pre,
+.cc-diff-block > pre,
+.cc-turn-diff-wrap .overflow-x-auto,
+.cc-tool-expanded-details {
+  scrollbar-width: auto;
+}
+
+.markdown-body .md-table-wrapper::-webkit-scrollbar,
+.markdown-body pre::-webkit-scrollbar,
+.cc-diff-block > pre::-webkit-scrollbar,
+.cc-turn-diff-wrap .overflow-x-auto::-webkit-scrollbar,
+.cc-tool-expanded-details::-webkit-scrollbar {
+  width: 7px !important;
+  height: 7px !important;
 }
 
 /* ===== Markdown 渲染样式 ===== */

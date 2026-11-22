@@ -3,15 +3,24 @@ import { textOf, type ResolvedMessage, type TokenUsage } from '../types.js';
 
 export function convertMessages(messages: ResolvedMessage[]): ModelMessage[] {
   return messages.map((m) => {
-    if (m.role === 'assistant' && m.tool_calls && Array.isArray(m.tool_calls)) {
-      const content: any[] = [{ type: 'text', text: textOf(m.content) }];
-      for (const tc of m.tool_calls) {
+    if (m.role === 'assistant') {
+      const content: any[] = [];
+      if (m.reasoning?.displayText) {
         content.push({
-          type: 'tool-call',
-          toolCallId: (tc as any).id ?? 'unknown',
-          toolName: (tc as any).name ?? 'unknown',
-          input: (tc as any).arguments ?? {},
+          type: 'reasoning',
+          text: m.reasoning.replayData?.value ?? m.reasoning.displayText,
         });
+      }
+      content.push({ type: 'text', text: textOf(m.content) });
+      if (m.tool_calls && Array.isArray(m.tool_calls)) {
+        for (const tc of m.tool_calls) {
+          content.push({
+            type: 'tool-call',
+            toolCallId: (tc as any).id ?? 'unknown',
+            toolName: (tc as any).name ?? 'unknown',
+            input: (tc as any).arguments ?? {},
+          });
+        }
       }
       return { role: 'assistant', content } as ModelMessage;
     }
@@ -72,9 +81,11 @@ export function convertTools(
 
 /** SDK v6 的 inputTokens 已含 cached，此处不做减法：prompt 同时充当上下文占用 */
 export function toTokenUsage(u: LanguageModelUsage): TokenUsage {
+  const reasoningTokens = u.outputTokenDetails?.reasoningTokens ?? u.reasoningTokens;
   return {
     prompt: u.inputTokens ?? 0,
     completion: u.outputTokens ?? 0,
     total: u.totalTokens ?? 0,
+    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
   };
 }

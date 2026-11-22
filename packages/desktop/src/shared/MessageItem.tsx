@@ -1,6 +1,6 @@
 import { useState, useRef, useLayoutEffect, useEffect, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, Check } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Copy, Brain } from 'lucide-react';
 import type { Item } from '@shared/types';
 import { textOf } from '@shared/parts';
 import ToolCallCard from './ToolCallCard';
@@ -37,7 +37,10 @@ const MessageItem = memo(function MessageItem({
   onForkFromHere,
   toolResult,
 }: MessageItemProps) {
-  const [reasoningOpen, setReasoningOpen] = useState(false);
+  const [reasoningOpen, setReasoningOpen] = useState(
+    item.type === 'reasoning' && item.partial === true
+  );
+  const reasoningPartial = item.type === 'reasoning' ? item.partial : undefined;
   const [resultOpen, setResultOpen] = useState(false);
   const [rollbackMenuOpen, setRollbackMenuOpen] = useState(false);
   const rollbackBtnRef = useRef<HTMLButtonElement>(null);
@@ -48,6 +51,11 @@ const MessageItem = memo(function MessageItem({
     placement: 'up' | 'down';
   } | null>(null);
   const { copiedId, copy } = useCopyToClipboard();
+
+  useEffect(() => {
+    if (item.type !== 'reasoning') return;
+    setReasoningOpen(item.partial === true);
+  }, [item.type, reasoningPartial]);
 
   const isCopied = copiedId === `msg-${item.id}`;
 
@@ -214,20 +222,27 @@ const MessageItem = memo(function MessageItem({
 
   if (item.type === 'reasoning') {
     return (
-      <div className="cc-event-row cc-reasoning-event mb-1.5 pl-8">
+      <div className="cc-tool-summary cc-reasoning-event mb-1.5 pl-8 pr-8">
         <button
           type="button"
           onClick={() => setReasoningOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-tertiary)] transition-colors"
+          className="flex w-full items-center gap-2 rounded-md bg-[var(--border-card)] px-2.5 py-1 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--border-hover)]"
         >
-          <span className={`transition-transform text-[10px] ${reasoningOpen ? 'rotate-90' : ''}`}>
-            ▶
+          <Brain size={14} strokeWidth={1.7} className="shrink-0 text-[var(--accent-primary)]" />
+          <span className="shrink-0 text-[var(--text-primary)]">
+            {item.partial ? '思考中' : '已完成思考'}
           </span>
-          思考过程
+          {reasoningOpen ? (
+            <ChevronDown className="ml-auto h-3.5 w-3.5 text-[var(--text-muted)]" />
+          ) : (
+            <ChevronRight className="ml-auto h-3.5 w-3.5 text-[var(--text-muted)]" />
+          )}
         </button>
         {reasoningOpen && (
-          <div className="mt-2 pl-3 border-l-2 border-[var(--border-card)] text-[13px] text-[var(--text-tertiary)] whitespace-pre-wrap leading-relaxed">
+          <div className="cc-tool-expanded-details pt-1.5">
+            <div className="rounded-md bg-[var(--bg-code-header)] px-3 py-2 text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-wrap">
             {item.content}
+            </div>
           </div>
         )}
       </div>

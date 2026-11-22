@@ -63,7 +63,8 @@ export interface SessionShape {
     state: SessionStoreState,
     content: string,
     toolCalls: AssistantEvent['toolCalls'],
-    usage?: TokenUsage
+    usage?: TokenUsage,
+    reasoning?: AssistantEvent['reasoning']
   ): Effect.Effect<AssistantEvent, AgentError>;
   recordToolResult(
     state: SessionStoreState,

@@ -142,6 +142,14 @@ export function sessionEventsToTurns(events: SessionEvent[]): UITurn[] {
         });
         break;
       case 'assistant':
+        if (event.reasoning?.displayText) {
+          turn.items.push({
+            id: nextId('reasoning', event.turnId),
+            type: 'reasoning',
+            content: event.reasoning.displayText,
+            isVisible: true,
+          });
+        }
         if (event.content) {
           turn.items.push({
             id: nextId('assistant', event.turnId),
@@ -427,7 +435,8 @@ export const SessionLayer = Layer.effect(
       state: SessionStoreState,
       content: string,
       toolCalls: AssistantEvent['toolCalls'],
-      usage?: TokenUsage
+      usage?: TokenUsage,
+      reasoning?: AssistantEvent['reasoning']
     ): Effect.Effect<AssistantEvent, AgentError> =>
       Effect.try({
         try: () => {
@@ -435,6 +444,7 @@ export const SessionLayer = Layer.effect(
             type: 'assistant',
             turnId: state.currentTurnId,
             content,
+            reasoning,
             toolCalls,
             usage,
           };

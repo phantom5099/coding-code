@@ -37,7 +37,7 @@ function DiffLineView({
 
   return (
     <div
-      className={`flex font-mono text-[12px] leading-[1.6] ${bgColor} border-l-[3px] ${borderColor}`}
+      className={`flex min-w-max font-mono text-[12px] leading-[1.6] ${bgColor} border-l-[3px] ${borderColor}`}
     >
       <div className="w-10 shrink-0 text-right pr-2 text-[var(--diff-line-num)] select-none tabular-nums">
         {oldLineNum ?? ''}
@@ -45,7 +45,7 @@ function DiffLineView({
       <div className="w-10 shrink-0 text-right pr-2 text-[var(--diff-line-num)] select-none tabular-nums border-r border-[var(--diff-line-num-border)]">
         {newLineNum ?? ''}
       </div>
-      <div className={`flex-1 pl-3 whitespace-pre ${textColor} overflow-x-auto`}>
+      <div className={`shrink-0 pl-3 whitespace-pre ${textColor}`}>
         {text || '\u00A0'}
       </div>
     </div>
@@ -93,10 +93,12 @@ export default function UnifiedDiffView({ diff }: UnifiedDiffViewProps) {
   }
 
   return (
-    <div className="w-full">
-      {parsed.map((file) => (
-        <DiffFileView key={file.fileName} file={file} />
-      ))}
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-max">
+        {parsed.map((file) => (
+          <DiffFileView key={file.fileName} file={file} />
+        ))}
+      </div>
     </div>
   );
 }

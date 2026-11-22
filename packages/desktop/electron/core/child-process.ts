@@ -1,4 +1,5 @@
 import { spawn, ChildProcess } from 'child_process';
+import { existsSync } from 'fs';
 import { resolve, join } from 'path';
 import { app } from 'electron';
 
@@ -39,7 +40,9 @@ export async function startBackend(): Promise<number> {
 
     if (isDev()) {
       // 开发模式：tsx 运行 TypeScript 源码
-      const tsxPath = resolve(root, 'node_modules/.bin/tsx.cmd');
+      const packageTsxPath = resolve(app.getAppPath(), 'node_modules/.bin/tsx.cmd');
+      const rootTsxPath = resolve(root, 'node_modules/.bin/tsx.cmd');
+      const tsxPath = existsSync(packageTsxPath) ? packageTsxPath : rootTsxPath;
       const cmd = `"${tsxPath}" "${entry}" serve`;
       child = spawn(cmd, [], {
         cwd: root,
