@@ -8,25 +8,16 @@ export interface ToolCallEntry {
   toolResult?: Item & { type: 'tool_result' };
 }
 
-function pendingLabel(item: ToolCallEntry['item']): string {
-  const args = item.args as Record<string, unknown>;
-  const path = typeof args.path === 'string' ? args.path : typeof args.file_path === 'string' ? args.file_path : '';
-  const command = typeof args.command === 'string' ? args.command : '';
-  return path || command || item.name;
-}
-
 function statusLabel(entries: ToolCallEntry[]): string {
   if (entries.some(({ item }) => item.status === 'running')) return '执行中';
   if (entries.some(({ item }) => item.status === 'pending')) return '等待审批';
-  if (entries.some(({ item }) => item.status === 'rejected')) return '有操作被拒绝';
   return '已完成';
 }
 
 export default function ToolCallGroup({ entries }: { entries: ToolCallEntry[] }) {
   const [open, setOpen] = useState(false);
+  if (entries.length === 1) return <ToolSummary toolCall={entries[0]!.item} toolResult={entries[0]!.toolResult} />;
   const status = statusLabel(entries);
-  const hasFailure = entries.some(({ toolResult }) => toolResult?.exitCode !== undefined && toolResult.exitCode !== 0);
-
   return (
     <div className="cc-tool-group">
       <button
@@ -38,7 +29,6 @@ export default function ToolCallGroup({ entries }: { entries: ToolCallEntry[] })
         <Wrench size={14} strokeWidth={1.7} />
         <span>{status}</span>
         <span className="cc-tool-group-count">{entries.length} 项操作</span>
-        {hasFailure && <span className="cc-tool-group-error">有失败</span>}
         <span className="ml-auto shrink-0">
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </span>
@@ -50,14 +40,7 @@ export default function ToolCallGroup({ entries }: { entries: ToolCallEntry[] })
               {toolResult ? (
                 <ToolSummary toolCall={item} toolResult={toolResult} />
               ) : (
-                <div className="cc-tool-group-pending">
-                  <span className="cc-tool-group-dot" />
-                  <span className="font-mono">{item.name}</span>
-                  <span className="cc-tool-args">{pendingLabel(item) === item.name ? '' : pendingLabel(item)}</span>
-                  <span className="cc-tool-group-muted">
-                    {item.status === 'pending' ? '等待审批' : item.status === 'running' ? '执行中' : '已拒绝'}
-                  </span>
-                </div>
+                <ToolSummary toolCall={item} />
               )}
             </div>
           ))}

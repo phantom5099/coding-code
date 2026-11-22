@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import CodeBlock from './CodeBlock';
+import { Terminal } from 'lucide-react';
 
 interface ToolCallItem {
   id: string;
@@ -14,44 +14,46 @@ interface ToolCallCardProps {
   threadId: string;
   onApprove: (threadId: string, callId: string) => void;
   onReject: (threadId: string, callId: string) => void;
+  compact?: boolean;
 }
 
-export default function ToolCallCard({ item, threadId, onApprove, onReject }: ToolCallCardProps) {
-  const [argsOpen, setArgsOpen] = useState(false);
+export default function ToolCallCard({ item, threadId, onApprove, onReject, compact = false }: ToolCallCardProps) {
+  const [argsOpen, setArgsOpen] = useState(true);
   const argsJson = JSON.stringify(item.args, null, 2);
   const isRejected = item.status === 'rejected';
   const hasArgs = argsJson !== '{}';
 
   return (
     <div
-      className={`cc-tool-call-card my-2 rounded border ${isRejected ? 'border-[var(--border-strong)] opacity-50' : 'border-[var(--border-card)]'} bg-[var(--bg-card)] overflow-hidden`}
+      className={`cc-tool-call-card ${compact ? 'my-1' : 'my-2'} rounded border ${isRejected ? 'border-[var(--border-strong)] opacity-50' : 'border-[var(--border-card)]'} bg-[var(--bg-card)] overflow-hidden`}
     >
-      <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-code-header)]">
+      <div className="cc-approval-header px-3 py-2 bg-[var(--bg-code-header)]">
         {hasArgs ? (
           <button
             type="button"
             onClick={() => setArgsOpen((v) => !v)}
-            className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
+            className="cc-approval-tool hover:opacity-80 transition-opacity"
           >
+            <Terminal size={14} strokeWidth={1.7} className="shrink-0 text-[var(--text-muted)]" />
             <span
-              className={`transition-transform text-[10px] text-[var(--text-muted)] ${argsOpen ? 'rotate-90' : ''}`}
-            >
-              ▶
-            </span>
-            <span
-              className={`font-mono text-sm font-medium ${isRejected ? 'line-through text-[var(--text-muted)]' : 'text-[var(--syntax-function)]'}`}
+              className={`font-mono shrink-0 text-sm font-medium ${isRejected ? 'line-through text-[var(--text-muted)]' : 'text-[var(--syntax-function)]'}`}
             >
               {item.name}
             </span>
           </button>
         ) : (
           <span
-            className={`font-mono text-sm font-medium ${isRejected ? 'line-through text-[var(--text-muted)]' : 'text-[var(--syntax-function)]'}`}
+            className={`cc-approval-tool-name font-mono text-sm font-medium ${isRejected ? 'line-through text-[var(--text-muted)]' : 'text-[var(--syntax-function)]'}`}
           >
             {item.name}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-1">
+        {hasArgs && (
+          <span className="cc-approval-args-preview" title={argsJson}>
+            {JSON.stringify(item.args)}
+          </span>
+        )}
+        <div className="cc-approval-actions flex items-center gap-1">
           {item.status === 'pending' && (
             <>
               <button
@@ -84,8 +86,10 @@ export default function ToolCallCard({ item, threadId, onApprove, onReject }: To
         </div>
       </div>
       {hasArgs && argsOpen && (
-        <div className="px-3 pb-2 pt-1">
-          <CodeBlock code={argsJson} language="json" />
+        <div className="cc-approval-args-body px-3 pb-2 pt-1">
+          <pre className="m-0 whitespace-pre-wrap break-all text-left font-mono text-[12px] leading-relaxed text-[var(--text-secondary)]">
+            {argsJson}
+          </pre>
         </div>
       )}
     </div>

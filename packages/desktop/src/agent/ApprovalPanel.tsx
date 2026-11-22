@@ -6,12 +6,15 @@ import ToolCallCard from '../shared/ToolCallCard';
 import PlanDecisionModal from '../shared/PlanDecisionModal';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { textPart } from '@shared/parts';
+import { Square } from 'lucide-react';
 
 interface ApprovalPanelProps {
   threadId: string;
+  inline?: boolean;
+  onStop?: () => void;
 }
 
-export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
+export default function ApprovalPanel({ threadId, inline = false, onStop }: ApprovalPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { approveTool, rejectTool } = useAgentApproval();
   const { sendMessage } = useAgentCore();
@@ -82,6 +85,42 @@ export default function ApprovalPanel({ threadId }: ApprovalPanelProps) {
   }
 
   if (pendingItems.length === 0) return null;
+
+  if (inline) {
+    return (
+      <div className="cc-inline-approval shrink-0 rounded-2xl border border-[var(--border-card)] bg-[var(--bg-card)] overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-card)]">
+          <span className="text-[13px] font-medium text-[var(--text-primary)]">需要确认的操作</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] text-[var(--text-muted)]">{pendingItems.length} 项</span>
+            {onStop && (
+              <button
+                type="button"
+                onClick={onStop}
+                aria-label="停止生成"
+                title="停止生成"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--border-hover)] text-[var(--text-primary)] hover:bg-[var(--border-strong)]"
+              >
+                <Square size={12} fill="currentColor" />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="max-h-44 overflow-y-auto px-2 py-1">
+          {pendingItems.map((item) => (
+            <ToolCallCard
+              key={item.id}
+              item={item}
+              threadId={threadId}
+              onApprove={approveTool}
+              onReject={rejectTool}
+              compact
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (collapsed) {
     return (

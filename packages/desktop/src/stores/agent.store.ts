@@ -439,7 +439,11 @@ export const useAgentStore = create<AgentState & AgentActions>()(
               if (existingItem.status === 'pending' && chunk.status === 'running') {
                 return;
               }
-              turn.items[existing] = chunk;
+              turn.items[existing] = {
+                ...chunk,
+                args: Object.keys(chunk.args ?? {}).length > 0 ? chunk.args :
+                  existingItem.type === 'tool_call' ? existingItem.args : chunk.args,
+              };
             } else {
               turn.items.push(chunk);
             }
@@ -453,7 +457,9 @@ export const useAgentStore = create<AgentState & AgentActions>()(
             );
             if (callIdx >= 0) {
               const callItem = turn.items[callIdx] as any;
-              callItem.status = 'approved';
+              if (callItem.status !== 'rejected') {
+                callItem.status = 'approved';
+              }
               targetChunk = buildToolDiff(chunk, callItem) as any;
               turn.items.push(targetChunk);
               return;
@@ -465,7 +471,9 @@ export const useAgentStore = create<AgentState & AgentActions>()(
               );
               if (otherCallIdx >= 0) {
                 const callItem = t.items[otherCallIdx] as any;
-                callItem.status = 'approved';
+                if (callItem.status !== 'rejected') {
+                  callItem.status = 'approved';
+                }
                 targetChunk = buildToolDiff(chunk, callItem) as any;
                 t.items.push(targetChunk);
                 return;

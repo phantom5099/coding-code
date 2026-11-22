@@ -924,6 +924,69 @@ select {
   background: var(--accent-danger-bg);
 }
 
+.cc-rejected-event {
+  color: var(--accent-danger);
+  background: color-mix(in srgb, var(--accent-danger-bg) 72%, var(--bg-panel));
+  border-color: color-mix(in srgb, var(--accent-danger) 40%, var(--border-card));
+}
+
+.cc-inline-approval .cc-tool-call-card {
+  background: transparent;
+  border-color: var(--border-card);
+}
+
+.cc-approval-args-preview {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 24px), transparent 100%);
+}
+
+.cc-approval-header {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+.cc-approval-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: max-content;
+  padding: 0;
+  text-align: left;
+}
+
+.cc-approval-tool-name {
+  white-space: nowrap;
+}
+
+.cc-tool-call-card .cc-approval-actions {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-width: max-content;
+}
+
+.cc-tool-call-card .cc-approval-actions button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.cc-approval-args-body {
+  max-height: 50vh;
+  overflow: auto;
+  border-top: 1px solid var(--border-card);
+}
+
 .cc-chat-surface .mt-2.rounded-lg.bg-\[var\(--bg-card\)\] {
   border-radius: 12px;
   border-color: var(--border-card);
@@ -995,7 +1058,73 @@ select {
 }
 
 .cc-tool-summary .cc-tool-args {
-  max-width: min(52vw, 440px);
+  flex: 1 1 auto;
+  max-width: none;
+  text-align: left;
+  margin-left: 0;
+}
+
+.cc-tool-status {
+  flex: 0 0 64px;
+  width: 64px;
+  margin-left: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cc-tool-summary-row {
+  display: flex;
+  width: 100%;
+}
+
+.cc-tool-summary-row .cc-tool-args {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 2px;
+  text-align: left;
+}
+
+.cc-tool-disclosure {
+  flex: 0 0 16px;
+  width: 16px;
+  margin-left: 8px;
+}
+
+.cc-tool-summary-row > * {
+  min-width: 0;
+}
+
+.cc-tool-summary-row .cc-tool-args {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 24px), transparent 100%);
+}
+
+.cc-tool-expanded-details {
+  max-height: 50vh;
+  overflow: auto;
+  margin-left: 22px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-card);
+}
+
+.cc-tool-expanded-args {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  color: var(--text-secondary);
+  background: var(--bg-code);
+  border: 1px solid var(--border-card);
+  border-radius: 6px;
+  font: 12px/1.5 var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  white-space: pre-wrap;
+  text-align: left;
 }
 
 .cc-tool-group-count,
@@ -1025,11 +1154,42 @@ select {
   font-size: 12px;
 }
 
+.cc-tool-group-rejected .cc-tool-group-pending {
+  color: var(--accent-danger);
+}
+
+.cc-tool-group-rejected .cc-tool-group-muted {
+  color: color-mix(in srgb, var(--accent-danger) 72%, var(--text-muted));
+  font-size: 11px;
+}
+
+.cc-tool-group-rejected .cc-tool-group-pending {
+  gap: 8px;
+}
+
+.cc-rejected-args {
+  flex: 1 1 auto;
+  min-width: 0;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 24px), transparent 100%);
+}
+
+.cc-tool-args {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--text-muted) 70%, transparent);
+  font-size: 11px;
+}
+
 .cc-tool-group-dot {
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: var(--accent-primary);
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 24px), transparent 100%);
 }
 
 .cc-tool-summary > button,

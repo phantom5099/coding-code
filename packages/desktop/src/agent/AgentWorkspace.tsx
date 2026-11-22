@@ -855,6 +855,13 @@ interface AgentWorkspaceProps {
 
 export default function AgentWorkspace({ sendMessage, sendQueuedInput, abort }: AgentWorkspaceProps) {
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
+  const hasPendingApproval = useAgentStore((s) =>
+    currentThreadId
+      ? s.threads[currentThreadId]?.turns.some((turn) =>
+          turn.items.some((item) => item.type === 'tool_call' && item.status === 'pending')
+        ) ?? false
+      : false
+  );
   const isCompressing = useAgentStore((s) => s.isCompressing);
   const workspace = useWorkspaceStore();
   const [planPanelOpen, setPlanPanelOpen] = useState(false);
@@ -878,7 +885,6 @@ export default function AgentWorkspace({ sendMessage, sendQueuedInput, abort }: 
     <div className="cc-agent-workspace-shell flex-1 flex flex-row overflow-hidden bg-[var(--bg-panel)] min-w-0">
       <div className="cc-chat-surface flex-1 flex flex-col overflow-hidden min-w-0">
         <MessageStream key={currentThreadId} threadId={currentThreadId} />
-        <ApprovalPanel threadId={currentThreadId} />
         <AskUserPanel threadId={currentThreadId} />
         <TodoPanel threadId={currentThreadId} />
         {isCompressing && (
@@ -887,14 +893,18 @@ export default function AgentWorkspace({ sendMessage, sendQueuedInput, abort }: 
             <span>正在压缩上下文...</span>
           </div>
         )}
-        <div className="shrink-0">
-          <InputBox
-            sendMessage={sendMessage}
-            sendQueuedInput={sendQueuedInput}
-            abort={abort}
-            onOpenPlanPanel={() => setPlanPanelOpen(true)}
-          />
-        </div>
+        {hasPendingApproval && currentThreadId ? (
+          <ApprovalPanel threadId={currentThreadId} inline onStop={abort} />
+        ) : (
+          <div className="shrink-0">
+            <InputBox
+              sendMessage={sendMessage}
+              sendQueuedInput={sendQueuedInput}
+              abort={abort}
+              onOpenPlanPanel={() => setPlanPanelOpen(true)}
+            />
+          </div>
+        )}
       </div>
       {planPanelOpen && (
         <PlanPanel
