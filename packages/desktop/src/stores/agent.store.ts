@@ -145,6 +145,7 @@ export interface StoredProfile {
 interface AgentState {
   currentThreadId: string | null;
   threads: Record<string, Thread>;
+  threadListVersion: number;
   profile: ProfileName;
   permissionMode: PermissionMode;
   model: string;
@@ -232,6 +233,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
   immer((set) => ({
       currentThreadId: null,
       threads: {},
+      threadListVersion: 0,
       profile: 'build',
       permissionMode: 'askBeforeExec',
       model: '',
@@ -316,6 +318,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       removeThread: (id) =>
         set((s) => {
           delete s.threads[id];
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
           delete s.usageByThreadId[id];
           delete s.todoByThreadId[id];
           delete s.pendingPlanByThreadId[id];
@@ -326,6 +329,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       upsertThread: (thread) =>
         set((s) => {
           s.threads[thread.id] = thread;
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
         }),
 
       setThreadTurns: (threadId, turns) =>
@@ -339,7 +343,10 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setThreadCwd: (threadId, cwd) =>
         set((s) => {
           const thread = s.threads[threadId];
-          if (thread) thread.cwd = cwd;
+          if (thread) {
+            thread.cwd = cwd;
+            s.threadListVersion = (s.threadListVersion ?? 0) + 1;
+          }
         }),
 
       setProfile: (profile) =>
@@ -410,6 +417,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
             }
           }
           s.threads = next;
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
           for (const id of Object.keys(s.usageByThreadId)) {
             if (!incomingIds.has(id)) {
               delete s.usageByThreadId[id];
@@ -482,6 +490,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
             thread.turns.push(turn);
             thread.updatedAt = Date.now();
           }
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
         }),
 
       applyChunk: (threadId, turnId, chunk) =>
@@ -516,6 +525,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           if (!turn) return;
           turn.status = status;
           thread.updatedAt = Date.now();
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
           for (const item of turn.items) {
             if (item.type === 'message' && item.role === 'assistant') {
               item.partial = false;
