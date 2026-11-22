@@ -148,7 +148,7 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
       if (e.name === 'submit_plan' && e.outcome.status !== 'ok') state.planTitle = null;
       if (e.name === 'ask_user') fx.markAskAnswered?.(e.id);
       if (e.outcome.status === 'denied') {
-        fx.applyItem({ id: e.id, type: 'tool_call', name: e.name, args: {}, status: 'rejected' });
+        fx.applyItem({ id: e.id, type: 'tool_call', name: e.name, args: (e as any).args ?? {}, status: 'rejected' });
       }
       const { output, exitCode } = toResultItem(e.outcome);
       fx.applyItem({ id: fx.newId(), type: 'tool_result', callId: e.id, name: e.name, output, exitCode });

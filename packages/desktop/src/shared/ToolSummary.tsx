@@ -34,7 +34,7 @@ function formatToolArgs(args: object): string {
   }
 }
 
-function toolIcon(name: string) {
+export function toolIcon(name: string) {
   if (name === 'read_file') return FileText;
   if (name === 'write_file' || name === 'edit_file') return FilePenLine;
   if (name === 'list_dir') return Folder;
@@ -126,22 +126,31 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
   const effectiveResult = computedResult ?? toolResult;
   const { isError, isRejected } = buildToolSummaryTitle(toolCall, effectiveResult);
   const argsSummary = formatToolArgs(toolCall.args);
+  const argsFull = JSON.stringify(toolCall.args, null, 2);
   const ToolIcon = toolIcon(toolCall.name);
+  const statusLabel = isRejected
+    ? '已拒绝'
+    : toolCall.status === 'pending'
+      ? '等待审批'
+      : toolCall.status === 'running'
+        ? '执行中'
+        : '已执行';
 
   const titleColor = isRejected
-    ? 'text-[var(--text-muted)] line-through'
+    ? 'text-[var(--accent-danger)]'
     : isError
       ? 'text-[var(--accent-danger)]'
       : 'text-[var(--syntax-function)]';
 
-  const hasContent = !!(effectiveResult?.diff || effectiveResult?.output);
+  const hasContent = !isRejected && !!(effectiveResult?.diff || effectiveResult?.output);
+  const displayResult = isRejected ? undefined : effectiveResult;
 
   return (
     <div className="cc-tool-summary pb-1.5">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[var(--border-card)] hover:bg-[var(--border-hover)] transition-colors text-[13px]"
+        className="cc-tool-summary-row flex items-center gap-2 px-2.5 py-1 rounded-md bg-[var(--border-card)] hover:bg-[var(--border-hover)] transition-colors text-[13px]"
       >
         <ToolIcon size={14} strokeWidth={1.7} className={`shrink-0 ${titleColor}`} />
         <span className={`font-mono shrink-0 ${titleColor}`}>{toolCall.name}</span>
@@ -154,7 +163,8 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
               {effectiveResult.deletions ? ` -${effectiveResult.deletions}` : ''}
             </span>
           )}
-        <span className="ml-auto shrink-0">
+        <span className={`cc-tool-status ${isRejected ? 'text-[var(--accent-danger)]' : ''}`}>{statusLabel}</span>
+        <span className="cc-tool-disclosure shrink-0">
           {open ? (
             <ChevronDown className={`w-3.5 h-3.5 ${titleColor}`} />
           ) : (
@@ -162,12 +172,13 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
           )}
         </span>
       </button>
-      {open && hasContent && (
-        <div className="pt-1.5">
-          {isFileTool && effectiveResult?.diff ? (
-            <DiffBlock diff={effectiveResult.diff} />
-          ) : effectiveResult?.output ? (
-            <CodeBlock code={effectiveResult.output.slice(0, 4000)} />
+      {open && (
+        <div className="cc-tool-expanded-details pt-1.5">
+          <pre className="cc-tool-expanded-args">{argsFull}</pre>
+          {isFileTool && displayResult?.diff ? (
+            <DiffBlock diff={displayResult.diff} />
+          ) : displayResult?.output ? (
+            <CodeBlock code={displayResult.output.slice(0, 4000)} />
           ) : null}
         </div>
       )}

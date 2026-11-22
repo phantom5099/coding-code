@@ -235,40 +235,7 @@ const MessageItem = memo(function MessageItem({
   }
 
   if (item.type === 'tool_call') {
-    if (item.status === 'pending') {
-      const a = item.args as Record<string, unknown>;
-      const path =
-        typeof a.path === 'string' ? a.path : typeof a.file_path === 'string' ? a.file_path : '';
-      const cmd = typeof a.command === 'string' ? a.command : '';
-      const label = path || cmd || item.name;
-      return (
-        <div className="cc-event-row cc-tool-event mb-1 flex items-center gap-1.5 text-[13px] text-[var(--text-tertiary)] pl-8">
-          <span className="font-mono text-[var(--text-primary)]">{label}</span>
-          <span className="text-[var(--text-muted)]">等待审批</span>
-        </div>
-      );
-    }
-
-    if (toolResult) {
-      return <ToolSummary toolCall={item} toolResult={toolResult} />;
-    }
-
-    const isRejected = item.status === 'rejected';
-    return (
-      <div className="cc-event-row cc-tool-event mb-1 flex items-center gap-1.5 text-[13px] pl-8">
-        <span
-          className={`font-mono ${isRejected ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-primary)]'}`}
-        >
-          {item.name}
-        </span>
-        {item.status === 'running' && (
-          <span className="text-[var(--accent-primary)] flex items-center gap-1">
-            <span className="inline-block animate-spin">⟳</span> 执行中
-          </span>
-        )}
-        {isRejected && <span className="text-[var(--text-muted)]">✗ 已拒绝</span>}
-      </div>
-    );
+    return <ToolSummary toolCall={item} toolResult={toolResult} />;
   }
 
   if (item.type === 'tool_result') {
