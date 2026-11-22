@@ -210,7 +210,7 @@ const MessageItem = memo(function MessageItem({
       <div className="cc-message-assistant flex flex-col items-start mb-1 pl-8 group">
         {text && (
           <div className="max-w-[80%] text-[15px] text-[var(--text-primary)] leading-relaxed">
-            <MarkdownRenderer content={text} />
+            <MarkdownRenderer content={text} partial={item.partial === true} />
             {item.partial && (
               <span className="inline-block w-1.5 h-[1.1em] bg-[var(--accent-primary)] animate-pulse ml-0.5 align-middle" />
             )}

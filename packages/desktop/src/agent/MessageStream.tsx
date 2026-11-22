@@ -19,6 +19,51 @@ interface MessageStreamProps {
 
 const EMPTY_MAPPING: Record<number, string> = {};
 
+interface MessageEntryProps {
+  threadId: string;
+  turnId: string;
+  item: Item;
+  cwd: string;
+  onApprove: (threadId: string, callId: string) => void;
+  onReject: (threadId: string, callId: string) => void;
+  callIdToToolName: Record<string, string>;
+  onRollbackHere?: () => void;
+  onForkFromHere?: () => void;
+  toolResult?: Item & { type: 'tool_result' };
+}
+
+function StreamingMessageEntry({
+  threadId,
+  turnId,
+  item,
+  cwd,
+  onApprove,
+  onReject,
+  callIdToToolName,
+  onRollbackHere,
+  onForkFromHere,
+  toolResult,
+}: MessageEntryProps) {
+  const currentItem = useAgentStore((state) => {
+    const turn = state.threads[threadId]?.turns.find((candidate) => candidate.id === turnId);
+    return turn?.items.find((candidate) => candidate.id === item.id) ?? item;
+  });
+
+  return (
+    <MessageItem
+      item={currentItem}
+      threadId={threadId}
+      cwd={cwd}
+      onApprove={onApprove}
+      onReject={onReject}
+      callIdToToolName={callIdToToolName}
+      onRollbackHere={onRollbackHere}
+      onForkFromHere={onForkFromHere}
+      toolResult={toolResult}
+    />
+  );
+}
+
 interface TurnDiffPanelProps {
   uiTurnId: string;
   isInterrupted?: boolean;
@@ -258,15 +303,7 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
         .map(
           (t) =>
             `${t.id}:${t.status}:${t.items.length}:${t.items
-              .map((i) => {
-                const contentSize =
-                  i.type === 'reasoning'
-                    ? i.content.length
-                    : i.type === 'message'
-                      ? textOf(i.parts).length
-                      : '';
-                return `${i.type}:${i.id}:${i.type === 'tool_call' ? i.status : ''}:${contentSize}`;
-              })
+              .map((i) => `${i.type}:${i.id}:${i.type === 'tool_call' ? i.status : ''}`)
               .join(',')}`
         )
         .join('|'),
@@ -618,17 +655,30 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
                     {entry.toolCalls ? (
                       <ToolCallGroup entries={entry.toolCalls} />
                     ) : entry.item ? (
-                      <MessageItem
-                        item={entry.item}
-                        threadId={threadId}
-                        cwd={threadCwd}
-                        onApprove={approveTool}
-                        onReject={rejectTool}
-                        callIdToToolName={callIdToToolName}
-                        onRollbackHere={isUserMsg && cbs ? cbs.onRollbackHere : undefined}
-                        onForkFromHere={isUserMsg && cbs ? cbs.onForkFromHere : undefined}
-                        toolResult={entry.toolResult}
-                      />
+                      (() => {
+                        const isStreamingItem =
+                          (entry.item.type === 'message' &&
+                            entry.item.role === 'assistant' &&
+                            entry.item.partial === true) ||
+                          (entry.item.type === 'reasoning' && entry.item.partial === true);
+                        const props = {
+                          turnId: entry.turnId,
+                          item: entry.item,
+                          threadId,
+                          cwd: threadCwd,
+                          onApprove: approveTool,
+                          onReject: rejectTool,
+                          callIdToToolName,
+                          onRollbackHere: isUserMsg && cbs ? cbs.onRollbackHere : undefined,
+                          onForkFromHere: isUserMsg && cbs ? cbs.onForkFromHere : undefined,
+                          toolResult: entry.toolResult,
+                        };
+                        return isStreamingItem ? (
+                          <StreamingMessageEntry {...props} />
+                        ) : (
+                          <MessageItem {...props} />
+                        );
+                      })()
                     ) : null}
                   </div>
                   {isLastInTurn &&

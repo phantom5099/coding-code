@@ -4,12 +4,16 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import CodeBlock from './CodeBlock';
 
+const REMARK_PLUGINS = [remarkGfm];
+const REHYPE_PLUGINS = [rehypeRaw];
+
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  partial?: boolean;
 }
 
-export default function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+export default function MarkdownRenderer({ content, className, partial = false }: MarkdownRendererProps) {
   const components = useMemo(
     () => ({
       code(props: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) {
@@ -72,13 +76,17 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
 
   return (
     <div className={`markdown-body ${className || ''}`}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw]}
-        components={components}
-      >
-        {content}
-      </ReactMarkdown>
+      {partial ? (
+        <div className="whitespace-pre-wrap break-words">{content}</div>
+      ) : (
+        <ReactMarkdown
+          remarkPlugins={REMARK_PLUGINS}
+          rehypePlugins={REHYPE_PLUGINS}
+          components={components}
+        >
+          {content}
+        </ReactMarkdown>
+      )}
     </div>
   );
 }

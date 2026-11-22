@@ -90,6 +90,7 @@ export function useAgentCore() {
   const sendQueuedInputRef = useRef<((threadId: string) => Promise<void>) | null>(null);
   const startTurn = useAgentStore((s) => s.startTurn);
   const applyChunk = useAgentStore((s) => s.applyChunk);
+  const applyChunks = useAgentStore((s) => s.applyChunks);
   const updateTurnId = useAgentStore((s) => s.updateTurnId);
   const completeTurn = useAgentStore((s) => s.completeTurn);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
@@ -228,8 +229,33 @@ export function useAgentCore() {
       if (!opts.preRegistered) registerInflight(threadId, controller);
 
       const state = createStreamState(randomId());
+      const pendingChunks: Array<{ turnId: string; chunk: Item }> = [];
+      let flushScheduled = false;
+
+      const flushPending = () => {
+        flushScheduled = false;
+        if (pendingChunks.length === 0) return;
+        const updates = pendingChunks.splice(0, pendingChunks.length);
+        applyChunks(threadId, updates);
+      };
+
+      const scheduleFlush = () => {
+        if (flushScheduled) return;
+        flushScheduled = true;
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(flushPending);
+        } else {
+          setTimeout(flushPending, 16);
+        }
+      };
+
+      const enqueueItem = (item: Item) => {
+        pendingChunks.push({ turnId: activeTurnId, chunk: item });
+        scheduleFlush();
+      };
+
       const fx: StreamEffects = {
-        applyItem: (item) => applyChunk(threadId, activeTurnId, item),
+        applyItem: enqueueItem,
         applyTodo: (items) => applyTodoUpdate(threadId, items),
         setUsage: (usage) => {
           setThreadUsage(threadId, usage);
@@ -241,6 +267,7 @@ export function useAgentCore() {
           useAgentStore.getState().clearThreadUsage(threadId);
         },
         syncTurnId: (turnId) => {
+          flushPending();
           const next = String(turnId);
           updateTurnId(threadId, activeTurnId, next);
           activeTurnId = next;
@@ -267,8 +294,10 @@ export function useAgentCore() {
       } catch (err: any) {
         failed = true;
         const msg = err instanceof ApiError ? (err.body?.message ?? err.message) : String(err);
+        flushPending();
         applyChunk(threadId, activeTurnId, { id: randomId(), type: 'error', message: msg });
       } finally {
+        flushPending();
         completeTurn(threadId, activeTurnId, failed || state.hasError ? 'error' : 'completed');
         if (!failed && !state.hasError && state.planTitle !== null) {
           setPendingPlan(threadId, { sessionId: threadId, title: state.planTitle });
@@ -281,6 +310,7 @@ export function useAgentCore() {
     [
       startTurn,
       applyChunk,
+      applyChunks,
       applyTodoUpdate,
       completeTurn,
       setPendingPlan,

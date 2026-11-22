@@ -116,6 +116,42 @@ describe('global store - agent streaming actions', () => {
     expect((committed as any).partial).toBe(false);
   });
 
+  it('applyChunks applies a stream batch with one store notification', () => {
+    useAgentStore.getState().startTurn(threadId, makeTurn([]));
+    let notifications = 0;
+    const unsubscribe = useAgentStore.subscribe(() => {
+      notifications += 1;
+    });
+
+    useAgentStore.getState().applyChunks(threadId, [
+      {
+        turnId,
+        chunk: {
+          id: 'msg-batch',
+          type: 'message',
+          role: 'assistant',
+          parts: [textPart('Hello ')],
+          partial: true,
+        },
+      },
+      {
+        turnId,
+        chunk: {
+          id: 'msg-batch',
+          type: 'message',
+          role: 'assistant',
+          parts: [textPart('world')],
+          partial: true,
+        },
+      },
+    ]);
+    unsubscribe();
+
+    const message = useAgentStore.getState().threads[threadId].turns[0].items[0];
+    expect(notifications).toBe(1);
+    expect(message && message.type === 'message' ? textOf(message.parts) : '').toBe('Hello world');
+  });
+
   it('applyChunk upserts tool_call by id', () => {
     const turn = makeTurn([]);
     useAgentStore.getState().startTurn(threadId, turn);

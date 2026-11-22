@@ -35,6 +35,14 @@ describe('MarkdownRenderer', () => {
     expect(html).toContain('hello world');
   });
 
+  it('keeps partial content as plain text', () => {
+    const html = render(
+      createElement(MarkdownRenderer, { content: '**still streaming**', partial: true })
+    );
+    expect(html).toContain('**still streaming**');
+    expect(html).not.toContain('md-strong');
+  });
+
   it('renders inline code', () => {
     const html = render(createElement(MarkdownRenderer, { content: 'use `npm install`' }));
     expect(html).toContain('md-inline-code');
