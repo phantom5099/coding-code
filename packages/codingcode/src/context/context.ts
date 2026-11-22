@@ -206,8 +206,7 @@ export function buildContextMessages(
           prev.reasoning = {
             ...prev.reasoning,
             displayText: `${prev.reasoning.displayText}\n${curr.reasoning.displayText}`,
-            ...(prev.reasoning.replayData?.kind === 'full_text' &&
-            curr.reasoning.replayData?.kind === 'full_text'
+            ...(prev.reasoning.replayData && curr.reasoning.replayData
               ? {
                   replayData: {
                     kind: 'full_text' as const,

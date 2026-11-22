@@ -6,9 +6,10 @@ export function convertMessages(messages: ResolvedMessage[]): ModelMessage[] {
     if (m.role === 'assistant') {
       const content: any[] = [];
       if (m.reasoning?.displayText) {
-        content.push({ type: 'reasoning', text: m.reasoning.replayData?.kind === 'full_text'
-          ? m.reasoning.replayData.value
-          : m.reasoning.displayText });
+        content.push({
+          type: 'reasoning',
+          text: m.reasoning.replayData?.value ?? m.reasoning.displayText,
+        });
       }
       content.push({ type: 'text', text: textOf(m.content) });
       if (m.tool_calls && Array.isArray(m.tool_calls)) {

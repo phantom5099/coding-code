@@ -136,9 +136,7 @@ export interface ReasoningOptions {
 }
 
 export type ReasoningReplayData =
-  | { kind: 'full_text'; value: string }
-  | { kind: 'opaque_signature'; value: string }
-  | { kind: 'encrypted_content'; value: string };
+  { kind: 'full_text'; value: string };
 
 export interface ReasoningData {
   displayText: string;
