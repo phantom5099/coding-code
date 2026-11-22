@@ -146,7 +146,7 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
   const displayResult = isRejected ? undefined : effectiveResult;
 
   return (
-    <div className="cc-tool-summary pb-1.5">
+    <div className="cc-tool-summary pb-1.5 pl-8 pr-4">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

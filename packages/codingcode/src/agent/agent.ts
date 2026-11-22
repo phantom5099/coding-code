@@ -420,6 +420,8 @@ export const AgentLayer = Layer.effect(
           const llmMessages = [...history.right];
 
           let content = '';
+          let reasoningText = '';
+          let reasoningProvider = '';
           const toolCalls: ToolCall[] = [];
           let responded: ResponseMeta = {};
 
@@ -437,7 +439,11 @@ export const AgentLayer = Layer.effect(
                   abortSignal
                 )) {
                   if (abortSignal?.aborted) break;
-                  if (part.type === 'text') {
+                  if (part.type === 'reasoning') {
+                    reasoningText += part.text;
+                    reasoningProvider = part.provider;
+                    emit({ family: 'event', event: { type: 'reasoning_delta', text: part.text } });
+                  } else if (part.type === 'text') {
                     content += part.text;
                     emit({ family: 'event', event: { type: 'text_delta', text: part.text } });
                   } else if (part.type === 'tool_call') {
@@ -473,6 +479,17 @@ export const AgentLayer = Layer.effect(
           // 流结束帧（携带 usage）：在流外统一投递
           yield* turn.transition(sid, { kind: 'running', responded });
 
+          const reasoning = reasoningText
+            ? {
+                displayText: reasoningText,
+                provider: reasoningProvider || 'unknown',
+                replayData: { kind: 'full_text' as const, value: reasoningText },
+                ...(responded.usage?.reasoningTokens !== undefined
+                  ? { reasoningTokens: responded.usage.reasoningTokens }
+                  : {}),
+              }
+            : undefined;
+
           if (toolCalls.length === 0) {
             if (content.trim() === '' && !abortSignal?.aborted) {
               const detail =
@@ -492,7 +509,13 @@ export const AgentLayer = Layer.effect(
               return Result.err(emptyErr);
             }
 
-            const assistantEv = yield* session.recordAssistant(state, content, [], responded.usage);
+            const assistantEv = yield* session.recordAssistant(
+              state,
+              content,
+              [],
+              responded.usage,
+              reasoning
+            );
             yield* context.absorb(sessionRef, [assistantEv]);
             const stopDecision = yield* hooks.emitDecision('agent.turn.stop', {
               sessionId: sid,
@@ -542,7 +565,8 @@ export const AgentLayer = Layer.effect(
             state,
             content,
             toolCalls,
-            responded.usage
+            responded.usage,
+            reasoning
           );
           yield* context.absorb(sessionRef, [assistantToolEv]);
 

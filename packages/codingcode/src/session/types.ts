@@ -1,4 +1,4 @@
-import type { MediaPart, TextPart, TokenUsage, ToolCall } from '../llm/types.js';
+import type { MediaPart, ReasoningData, TextPart, TokenUsage, ToolCall } from '../llm/types.js';
 import type { ProfileName, PermissionMode } from '../util/enums.js';
 
 /**
@@ -51,6 +51,7 @@ export interface AssistantEvent {
   type: 'assistant';
   turnId: number;
   content: string;
+  reasoning?: ReasoningData;
   toolCalls: ToolCall[];
   usage?: TokenUsage;
 }
@@ -178,7 +179,7 @@ export type UITurnItem =
       startTurnId: number;
       endTurnId: number;
     }
-  | { id: string; type: 'reasoning'; content: string; isVisible: boolean }
+  | { id: string; type: 'reasoning'; content: string; isVisible: boolean; partial?: boolean }
   | { id: string; type: 'error'; message: string; code?: string };
 
 export interface UITurn {

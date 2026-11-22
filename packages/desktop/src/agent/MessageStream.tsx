@@ -257,7 +257,17 @@ export default function MessageStream({ threadId }: MessageStreamProps) {
       turns
         .map(
           (t) =>
-            `${t.id}:${t.status}:${t.items.length}:${t.items.map((i) => `${i.type}:${i.id}:${i.type === 'tool_call' ? i.status : ''}`).join(',')}`
+            `${t.id}:${t.status}:${t.items.length}:${t.items
+              .map((i) => {
+                const contentSize =
+                  i.type === 'reasoning'
+                    ? i.content.length
+                    : i.type === 'message'
+                      ? textOf(i.parts).length
+                      : '';
+                return `${i.type}:${i.id}:${i.type === 'tool_call' ? i.status : ''}:${contentSize}`;
+              })
+              .join(',')}`
         )
         .join('|'),
     [turns]

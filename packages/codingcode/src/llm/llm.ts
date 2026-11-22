@@ -49,7 +49,11 @@ function clientFor(entry: SelectableModel): Effect.Effect<LLMClient, AgentError>
           baseURL: entry.base_url,
           apiKey,
         });
-        return new OpenAIProvider(provider.chat(entry.model), entry);
+        const model =
+          entry.protocol === 'openai-responses'
+            ? provider.responses(entry.model)
+            : provider.chat(entry.model);
+        return new OpenAIProvider(model, entry);
       }
       case 'deepseek': {
         const { createDeepSeek } = yield* Effect.tryPromise({

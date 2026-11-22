@@ -5,6 +5,7 @@ export interface TokenUsage {
   prompt: number;
   completion: number;
   total: number;
+  reasoningTokens?: number;
 }
 
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
@@ -91,6 +92,7 @@ export function textOf(parts: readonly (ContentPart | ResolvedContentPart | Inco
 export interface Message {
   role: MessageRole;
   content: ContentPart[];
+  reasoning?: ReasoningData;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
   tool_name?: string;
@@ -116,16 +118,42 @@ export interface LLMRequest {
   tools?: ToolDescription[];
   maxSteps?: number;
   temperature?: number;
+  reasoning?: ReasoningOptions;
 }
 
 export interface LLMResponse {
   content: string;
   toolCalls?: ToolCall[];
+  reasoning?: ReasoningData;
   usage?: TokenUsage;
+}
+
+export type ReasoningMode = 'auto' | 'enabled' | 'disabled';
+
+export interface ReasoningOptions {
+  mode?: ReasoningMode;
+  level?: string;
+}
+
+export type ReasoningReplayData =
+  | { kind: 'full_text'; value: string }
+  | { kind: 'opaque_signature'; value: string }
+  | { kind: 'encrypted_content'; value: string };
+
+export interface ReasoningData {
+  displayText: string;
+  provider: string;
+  replayData?: ReasoningReplayData;
+  reasoningTokens?: number;
 }
 
 /** 一次 LLM 调用的流式部件：内容与终结边界 */
 export type LLMStreamPart =
+  | {
+      readonly type: 'reasoning';
+      readonly text: string;
+      readonly provider: string;
+    }
   | { readonly type: 'text'; readonly text: string }
   | {
       readonly type: 'tool_call';

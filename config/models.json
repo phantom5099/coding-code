@@ -3,6 +3,7 @@
     {
       "name": "openai",
       "driver": "openai",
+      "protocol": "openai-responses",
       "base_url": "https://api.openai.com/v1",
       "api_key_env": "OPENAI_API_KEY",
       "default_model": "gpt-5.5",
@@ -86,6 +87,7 @@
     {
       "name": "gemini",
       "driver": "gemini",
+      "protocol": "gemini",
       "base_url": "https://generativelanguage.googleapis.com/v1beta",
       "api_key_env": "GEMINI_API_KEY",
       "default_model": "gemini-3.1-pro-preview",
@@ -143,6 +145,7 @@
     {
       "name": "deepseek",
       "driver": "deepseek",
+      "protocol": "deepseek-chat",
       "base_url": "https://api.deepseek.com",
       "api_key_env": "DEEPSEEK_API_KEY",
       "default_model": "deepseek-v4-pro",
@@ -180,6 +183,7 @@
     {
       "name": "kimi",
       "driver": "openai",
+      "protocol": "openai-chat",
       "base_url": "https://api.moonshot.cn/v1",
       "api_key_env": "KIMI_API_KEY",
       "default_model": "kimi-k2.6",
@@ -211,6 +215,7 @@
     {
       "name": "qwen",
       "driver": "openai",
+      "protocol": "openai-chat",
       "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "api_key_env": "QWEN_API_KEY",
       "default_model": "qwen3.6-plus",
@@ -253,6 +258,7 @@
     {
       "name": "glm",
       "driver": "openai",
+      "protocol": "openai-chat",
       "base_url": "https://api.z.ai/api/paas/v4",
       "api_key_env": "GLM_API_KEY",
       "default_model": "glm-5.1",
@@ -284,6 +290,7 @@
     {
       "name": "mimo",
       "driver": "openai",
+      "protocol": "openai-chat",
       "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
       "api_key_env": "MIMO_API_KEY",
       "default_model": "mimo-v2.5-pro",
@@ -315,6 +322,7 @@
     {
       "name": "minimax",
       "driver": "openai",
+      "protocol": "openai-chat",
       "base_url": "https://api.minimax.chat/v1/text/chatcompletion_v2",
       "api_key_env": "MINIMAX_API_KEY",
       "default_model": "MiniMax-M2.7",
@@ -336,6 +344,7 @@
     {
       "name": "sansen",
       "driver": "openai",
+      "protocol": "openai-chat",
       "base_url": "https://token.sensenova.cn/v1",
       "api_key_env": "SANSE_API_KEY",
       "default_model": "deepseek-v4-flash",

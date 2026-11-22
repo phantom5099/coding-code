@@ -119,7 +119,11 @@ export function buildContextMessages(
         break;
       case 'assistant': {
         const ev = event as AssistantEvent;
-        const msg: Message = { role: 'assistant', content: [textPart(event.content)] };
+        const msg: Message = {
+          role: 'assistant',
+          content: [textPart(event.content)],
+          reasoning: ev.reasoning,
+        };
         if (event.toolCalls && event.toolCalls.length > 0) {
           msg.tool_calls = event.toolCalls.map((tc) => ({
             id: tc.id,
@@ -197,6 +201,25 @@ export function buildContextMessages(
       if (curr.role === 'assistant' && curr.tool_calls && curr.tool_calls.length > 0) continue;
       // parts 数组本身就是分隔符，providers 侧按 part 逐个送出
       prev.content = [...prev.content, ...curr.content];
+      if (curr.role === 'assistant' && curr.reasoning) {
+        if (prev.reasoning) {
+          prev.reasoning = {
+            ...prev.reasoning,
+            displayText: `${prev.reasoning.displayText}\n${curr.reasoning.displayText}`,
+            ...(prev.reasoning.replayData?.kind === 'full_text' &&
+            curr.reasoning.replayData?.kind === 'full_text'
+              ? {
+                  replayData: {
+                    kind: 'full_text' as const,
+                    value: `${prev.reasoning.replayData.value}\n${curr.reasoning.replayData.value}`,
+                  },
+                }
+              : {}),
+          };
+        } else {
+          prev.reasoning = curr.reasoning;
+        }
+      }
       filtered.splice(i, 1);
     }
   }

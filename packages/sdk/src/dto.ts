@@ -63,7 +63,7 @@ export type UITurnItem =
       startTurnId: number;
       endTurnId: number;
     }
-  | { id: string; type: 'reasoning'; content: string; isVisible: boolean }
+  | { id: string; type: 'reasoning'; content: string; isVisible: boolean; partial?: boolean }
   | { id: string; type: 'error'; message: string; code?: string };
 
 export interface UITurn {
@@ -103,10 +103,20 @@ export interface SelectableModel {
   name: string;
   model: string;
   base_url: string;
+  protocol?: string;
   api_key_env: string;
   context_window: number;
   /** 输入侧的能力位：vision 覆盖图片与 PDF，audio 覆盖音频输入 */
-  capabilities: { vision: boolean; audio: boolean };
+  capabilities: {
+    vision: boolean;
+    audio: boolean;
+    reasoning?: {
+      supported: boolean;
+      mode: 'optional' | 'always';
+      levels: string[];
+      defaultLevel?: string;
+    };
+  };
 }
 
 export interface McpServerConfig {

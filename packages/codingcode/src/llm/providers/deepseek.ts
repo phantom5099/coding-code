@@ -8,6 +8,20 @@ import type { SelectableModel } from '../../infra/models.js';
 
 import { convertMessages, convertTools, toTokenUsage } from './shared.js';
 
+function reasoningOptions(req: LLMRequest, entry: SelectableModel): Record<string, any> | undefined {
+  const capability = entry.capabilities.reasoning;
+  if (!capability?.supported) return undefined;
+  const mode = req.reasoning?.mode;
+  const level = req.reasoning?.level ?? capability.defaultLevel;
+  const thinkingType = mode === 'disabled' ? 'disabled' : mode === 'auto' ? 'adaptive' : 'enabled';
+  return {
+    deepseek: {
+      thinking: { type: thinkingType },
+      ...(level ? { reasoningEffort: level } : {}),
+    },
+  };
+}
+
 export class DeepSeekProvider implements LLMClient {
   constructor(
     private model: LanguageModelV3,
@@ -32,12 +46,21 @@ export class DeepSeekProvider implements LLMClient {
           system: req.system,
           messages: convertMessages(req.messages),
           tools: convertTools(req.tools),
+          providerOptions: reasoningOptions(req, this.entry),
           stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
           abortSignal: signal,
         });
 
         return {
           content: result.text,
+          reasoning:
+            typeof result.reasoning === 'string' && result.reasoning
+              ? {
+                  displayText: result.reasoning,
+                  provider: this.entry.provider,
+                  replayData: { kind: 'full_text', value: result.reasoning },
+                }
+              : undefined,
           toolCalls:
             result.toolCalls.length > 0
               ? result.toolCalls.map((tc) => ({
@@ -54,11 +77,13 @@ export class DeepSeekProvider implements LLMClient {
   }
 
   completeStream(req: LLMRequest, signal?: AbortSignal): AsyncIterable<LLMStreamPart> {
+    const providerName = this.entry.provider;
     const result = streamText({
       model: this.model,
       system: req.system,
       messages: convertMessages(req.messages),
       tools: convertTools(req.tools),
+      providerOptions: reasoningOptions(req, this.entry),
       stopWhen: req.maxSteps ? stepCountIs(req.maxSteps) : undefined,
       abortSignal: signal,
     });
@@ -66,6 +91,9 @@ export class DeepSeekProvider implements LLMClient {
     return (async function* () {
       for await (const part of result.fullStream) {
         switch (part.type) {
+          case 'reasoning-delta':
+            yield { type: 'reasoning', text: part.text, provider: providerName };
+            break;
           case 'text-delta':
             yield { type: 'text', text: part.text };
             break;

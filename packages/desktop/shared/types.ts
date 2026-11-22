@@ -13,7 +13,7 @@ export type ItemType =
 
 export type Item =
   | { id: string; type: 'message'; role: 'user' | 'assistant'; parts: ContentPart[]; partial?: boolean }
-  | { id: string; type: 'reasoning'; content: string; isVisible: boolean }
+  | { id: string; type: 'reasoning'; content: string; isVisible: boolean; partial?: boolean }
   | {
       id: string;
       type: 'tool_call';

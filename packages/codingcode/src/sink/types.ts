@@ -27,6 +27,7 @@ export type ToolOutcome =
   | { readonly status: 'denied'; readonly reason: string };
 
 export type RuntimeEvent =
+  | { readonly type: 'reasoning_delta'; readonly text: string }
   | { readonly type: 'text_delta'; readonly text: string }
   | {
       readonly type: 'tool_call';

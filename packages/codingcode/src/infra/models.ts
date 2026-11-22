@@ -7,12 +7,24 @@ import { loadConfig, updateActiveModel } from './config.js';
 export interface ModelCapabilitiesEntry {
   vision?: 'supported' | 'unsupported';
   audio?: 'supported' | 'unsupported';
+  reasoning?: 'supported' | 'unsupported';
+  thinking_levels?: string[];
+  default_thinking_level?: string;
+  thinking_force_enabled?: boolean;
+}
+
+export interface ModelReasoningCapability {
+  supported: boolean;
+  mode: 'optional' | 'always';
+  levels: string[];
+  defaultLevel?: string;
 }
 
 /** 准入要看的能力位。 */
 export interface ModelCapabilities {
   vision: boolean;
   audio: boolean;
+  reasoning?: ModelReasoningCapability;
 }
 
 /** 模型清单里一条可被会话选中的模型。 */
@@ -24,6 +36,7 @@ export interface SelectableModel {
   model: string;
   base_url: string;
   api_key_env: string;
+  protocol?: string;
   context_window: number;
   capabilities: ModelCapabilities;
 }
@@ -41,6 +54,7 @@ export interface ProviderEntry {
   base_url: string;
   api_key_env: string;
   default_model: string;
+  protocol?: string;
   models: ModelDescriptor[];
 }
 
@@ -83,10 +97,25 @@ export function flattenModels(cat: ProviderCatalog): SelectableModel[] {
         model: m.id,
         base_url: p.base_url,
         api_key_env: p.api_key_env,
+        protocol:
+          p.protocol ??
+          (p.name === 'openai'
+            ? 'openai-responses'
+            : p.name === 'deepseek'
+              ? 'deepseek-chat'
+              : 'openai-chat'),
         context_window: m.context_window ?? DEFAULT_CONTEXT_WINDOW,
         capabilities: {
           vision: m.capabilities?.vision === 'supported',
           audio: m.capabilities?.audio === 'supported',
+          reasoning: {
+            supported: m.capabilities?.reasoning === 'supported',
+            mode: m.capabilities?.thinking_force_enabled ? 'always' : 'optional',
+            levels: [...(m.capabilities?.thinking_levels ?? [])],
+            ...(m.capabilities?.default_thinking_level
+              ? { defaultLevel: m.capabilities.default_thinking_level }
+              : {}),
+          },
         },
       });
     }

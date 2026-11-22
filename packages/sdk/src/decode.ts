@@ -12,6 +12,7 @@ export type DecodeResult =
 
 const TRANSITIONS = new Set(['start', 'executing', 'compress', 'end']);
 const EVENTS = new Set([
+  'reasoning_delta',
   'text_delta',
   'tool_call',
   'tool_result',
@@ -83,7 +84,7 @@ export function decodeFrame(raw: unknown): DecodeResult {
     if (!isRecord(e) || typeof e.type !== 'string' || !EVENTS.has(e.type)) {
       return { ok: false, reason: 'unknown-event', raw };
     }
-    if (e.type === 'text_delta' && typeof e.text !== 'string') {
+    if ((e.type === 'reasoning_delta' || e.type === 'text_delta') && typeof e.text !== 'string') {
       return { ok: false, reason: 'shape', raw };
     }
     if (
