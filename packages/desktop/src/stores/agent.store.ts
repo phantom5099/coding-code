@@ -24,6 +24,95 @@ function appendText(parts: ContentPart[], text: string): void {
   else parts.push({ type: 'text', text });
 }
 
+function applyChunkToThread(thread: Thread, turnId: string, chunk: Item): void {
+  const turn = thread.turns.find((t) => t.id === turnId);
+  if (!turn) return;
+
+  if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial) {
+    const existing = turn.items.find((i) => i.id === chunk.id);
+    if (existing && existing.type === 'message' && existing.role === 'assistant') {
+      appendText(existing.parts, textOf(chunk.parts));
+      existing.partial = true;
+    } else {
+      turn.items.push({ ...chunk, partial: true });
+    }
+    return;
+  }
+
+  if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial === false) {
+    const existing = turn.items.findIndex((i) => i.id === chunk.id);
+    if (existing >= 0) {
+      const current = turn.items[existing];
+      if (!current) return;
+      if (current.type === 'message' && current.role === 'assistant') {
+        turn.items[existing] = {
+          ...chunk,
+          parts: current.parts.length > 0 ? current.parts : chunk.parts,
+          partial: false,
+        };
+      } else {
+        turn.items[existing] = { ...chunk, partial: false };
+      }
+    } else {
+      turn.items.push({ ...chunk, partial: false });
+    }
+    return;
+  }
+
+  if (chunk.type === 'tool_call') {
+    const existing = turn.items.findIndex((i) => i.id === chunk.id);
+    if (existing >= 0) {
+      const existingItem = turn.items[existing] as Item & { status?: string };
+      if (existingItem.status === 'pending' && chunk.status === 'running') return;
+      turn.items[existing] = {
+        ...chunk,
+        args:
+          Object.keys(chunk.args ?? {}).length > 0
+            ? chunk.args
+            : existingItem.type === 'tool_call'
+              ? existingItem.args
+              : chunk.args,
+      };
+    } else {
+      turn.items.push(chunk);
+    }
+    return;
+  }
+
+  if (chunk.type === 'tool_result') {
+    let targetChunk = chunk;
+    const callIdx = turn.items.findIndex(
+      (i) => i.type === 'tool_call' && i.id === chunk.callId
+    );
+    if (callIdx >= 0) {
+      const callItem = turn.items[callIdx] as any;
+      if (callItem.status !== 'rejected') callItem.status = 'approved';
+      targetChunk = buildToolDiff(chunk, callItem) as any;
+      turn.items.push(targetChunk);
+      return;
+    }
+    for (const otherTurn of thread.turns) {
+      if (otherTurn === turn) continue;
+      const otherCallIdx = otherTurn.items.findIndex(
+        (i) => i.type === 'tool_call' && i.id === chunk.callId
+      );
+      if (otherCallIdx >= 0) {
+        const callItem = otherTurn.items[otherCallIdx] as any;
+        if (callItem.status !== 'rejected') callItem.status = 'approved';
+        targetChunk = buildToolDiff(chunk, callItem) as any;
+        otherTurn.items.push(targetChunk);
+        return;
+      }
+    }
+    turn.items.push(targetChunk);
+    return;
+  }
+
+  const existing = turn.items.findIndex((i) => i.id === chunk.id);
+  if (existing >= 0) turn.items[existing] = chunk;
+  else turn.items.push(chunk);
+}
+
 function randomId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 11);
 }
@@ -56,6 +145,7 @@ export interface StoredProfile {
 interface AgentState {
   currentThreadId: string | null;
   threads: Record<string, Thread>;
+  threadListVersion: number;
   profile: ProfileName;
   permissionMode: PermissionMode;
   model: string;
@@ -123,6 +213,7 @@ interface AgentActions {
     meta?: { cwd?: string; title?: string; model?: string }
   ) => void;
   applyChunk: (threadId: string, turnId: string, chunk: Item) => void;
+  applyChunks: (threadId: string, updates: Array<{ turnId: string; chunk: Item }>) => void;
   updateTurnId: (threadId: string, oldTurnId: string, newTurnId: string) => void;
   completeTurn: (threadId: string, turnId: string, status: 'completed' | 'error') => void;
   setPendingInput: (input: string | null) => void;
@@ -142,6 +233,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
   immer((set) => ({
       currentThreadId: null,
       threads: {},
+      threadListVersion: 0,
       profile: 'build',
       permissionMode: 'askBeforeExec',
       model: '',
@@ -226,6 +318,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       removeThread: (id) =>
         set((s) => {
           delete s.threads[id];
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
           delete s.usageByThreadId[id];
           delete s.todoByThreadId[id];
           delete s.pendingPlanByThreadId[id];
@@ -236,6 +329,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       upsertThread: (thread) =>
         set((s) => {
           s.threads[thread.id] = thread;
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
         }),
 
       setThreadTurns: (threadId, turns) =>
@@ -249,7 +343,10 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setThreadCwd: (threadId, cwd) =>
         set((s) => {
           const thread = s.threads[threadId];
-          if (thread) thread.cwd = cwd;
+          if (thread) {
+            thread.cwd = cwd;
+            s.threadListVersion = (s.threadListVersion ?? 0) + 1;
+          }
         }),
 
       setProfile: (profile) =>
@@ -320,6 +417,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
             }
           }
           s.threads = next;
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
           for (const id of Object.keys(s.usageByThreadId)) {
             if (!incomingIds.has(id)) {
               delete s.usageByThreadId[id];
@@ -392,102 +490,21 @@ export const useAgentStore = create<AgentState & AgentActions>()(
             thread.turns.push(turn);
             thread.updatedAt = Date.now();
           }
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
         }),
 
       applyChunk: (threadId, turnId, chunk) =>
         set((s) => {
           const thread = s.threads[threadId];
+          if (thread) applyChunkToThread(thread, turnId, chunk);
+        }),
+
+      applyChunks: (threadId, updates) =>
+        set((s) => {
+          const thread = s.threads[threadId];
           if (!thread) return;
-          const turn = thread.turns.find((t) => t.id === turnId);
-          if (!turn) return;
-
-          if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial) {
-            const existing = turn.items.find((i) => i.id === chunk.id);
-            if (existing && existing.type === 'message' && existing.role === 'assistant') {
-              appendText(existing.parts, textOf(chunk.parts));
-              existing.partial = true;
-            } else {
-              turn.items.push({ ...chunk, partial: true });
-            }
-            return;
-          }
-
-          if (chunk.type === 'message' && chunk.role === 'assistant' && chunk.partial === false) {
-            const existing = turn.items.findIndex((i) => i.id === chunk.id);
-            if (existing >= 0) {
-              const current = turn.items[existing];
-              if (!current) return;
-              if (current.type === 'message' && current.role === 'assistant') {
-                turn.items[existing] = {
-                  ...chunk,
-                  parts: current.parts.length > 0 ? current.parts : chunk.parts,
-                  partial: false,
-                };
-              } else {
-                turn.items[existing] = { ...chunk, partial: false };
-              }
-            } else {
-              turn.items.push({ ...chunk, partial: false });
-            }
-            return;
-          }
-
-          if (chunk.type === 'tool_call') {
-            const existing = turn.items.findIndex((i) => i.id === chunk.id);
-            if (existing >= 0) {
-              const existingItem = turn.items[existing] as Item & { status?: string };
-              if (existingItem.status === 'pending' && chunk.status === 'running') {
-                return;
-              }
-              turn.items[existing] = {
-                ...chunk,
-                args: Object.keys(chunk.args ?? {}).length > 0 ? chunk.args :
-                  existingItem.type === 'tool_call' ? existingItem.args : chunk.args,
-              };
-            } else {
-              turn.items.push(chunk);
-            }
-            return;
-          }
-
-          if (chunk.type === 'tool_result') {
-            let targetChunk = chunk;
-            const callIdx = turn.items.findIndex(
-              (i) => i.type === 'tool_call' && i.id === chunk.callId
-            );
-            if (callIdx >= 0) {
-              const callItem = turn.items[callIdx] as any;
-              if (callItem.status !== 'rejected') {
-                callItem.status = 'approved';
-              }
-              targetChunk = buildToolDiff(chunk, callItem) as any;
-              turn.items.push(targetChunk);
-              return;
-            }
-            for (const t of thread.turns) {
-              if (t === turn) continue;
-              const otherCallIdx = t.items.findIndex(
-                (i) => i.type === 'tool_call' && i.id === chunk.callId
-              );
-              if (otherCallIdx >= 0) {
-                const callItem = t.items[otherCallIdx] as any;
-                if (callItem.status !== 'rejected') {
-                  callItem.status = 'approved';
-                }
-                targetChunk = buildToolDiff(chunk, callItem) as any;
-                t.items.push(targetChunk);
-                return;
-              }
-            }
-            turn.items.push(targetChunk);
-            return;
-          }
-
-          const existing = turn.items.findIndex((i) => i.id === chunk.id);
-          if (existing >= 0) {
-            turn.items[existing] = chunk;
-          } else {
-            turn.items.push(chunk);
+          for (const update of updates) {
+            applyChunkToThread(thread, update.turnId, update.chunk);
           }
         }),
 
@@ -508,6 +525,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           if (!turn) return;
           turn.status = status;
           thread.updatedAt = Date.now();
+          s.threadListVersion = (s.threadListVersion ?? 0) + 1;
           for (const item of turn.items) {
             if (item.type === 'message' && item.role === 'assistant') {
               item.partial = false;

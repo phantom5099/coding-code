@@ -32,14 +32,14 @@ export default function AgentSidebar() {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
 
-  const rawThreads = useAgentStore((s) => s.threads);
+  const threadListVersion = useAgentStore((s) => s.threadListVersion);
   const threadList = useMemo(() => {
     const normalizedRoot = normalizeCwd(rootPath);
-    return Object.values(rawThreads)
+    return Object.values(useAgentStore.getState().threads)
       .filter((t) => normalizeCwd(t.cwd).startsWith(normalizedRoot))
       .map((t) => ({ id: t.id, title: t.title, cwd: t.cwd, updatedAt: t.updatedAt }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [rawThreads, rootPath]);
+  }, [threadListVersion, rootPath]);
 
   const currentProject = workspace.projects.find((p) => p.id === workspace.currentProjectId);
   const projectName = currentProject?.name || workspace.name || '项目';

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { ChevronDown, ChevronRight, Wrench } from 'lucide-react';
 import type { Item } from '@shared/types';
 import ToolSummary from './ToolSummary';
@@ -14,7 +14,7 @@ function statusLabel(entries: ToolCallEntry[]): string {
   return '已完成';
 }
 
-export default function ToolCallGroup({ entries }: { entries: ToolCallEntry[] }) {
+const ToolCallGroup = memo(function ToolCallGroup({ entries }: { entries: ToolCallEntry[] }) {
   const [open, setOpen] = useState(false);
   if (entries.length === 1) return <ToolSummary toolCall={entries[0]!.item} toolResult={entries[0]!.toolResult} />;
   const status = statusLabel(entries);
@@ -48,4 +48,6 @@ export default function ToolCallGroup({ entries }: { entries: ToolCallEntry[] })
       )}
     </div>
   );
-}
+});
+
+export default ToolCallGroup;

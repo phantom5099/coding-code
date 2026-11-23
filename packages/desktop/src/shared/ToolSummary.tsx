@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { memo, useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown, FilePenLine, FileText, Folder, Globe, Search, Terminal, Wrench } from 'lucide-react';
 import type { Item } from '@shared/types';
 import { buildToolDiff } from '../lib/diff-compute';
@@ -113,7 +113,7 @@ export function buildToolSummaryTitle(
   };
 }
 
-export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) {
+const ToolSummary = memo(function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) {
   const [open, setOpen] = useState(false);
   const isFileTool = toolCall.name === 'write_file' || toolCall.name === 'edit_file';
 
@@ -184,4 +184,6 @@ export default function ToolSummary({ toolCall, toolResult }: ToolSummaryProps) 
       )}
     </div>
   );
-}
+});
+
+export default ToolSummary;
