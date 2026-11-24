@@ -1,44 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { createToolCatalog } from '../../src/tools/catalog.js';
+import { createToolCatalog, TOOLS_BY_NAME } from '../../src/tools/catalog.js';
 import type { McpToolSpec } from '../../src/mcp/types.js';
 
-const BUILD_NAMES = [
-  'read_file',
-  'write_file',
-  'edit_file',
-  'execute_command',
-  'search_code',
-  'search_files',
-  'fetch_url',
-  'web_search',
-  'todo_write',
-  'spawn_agent',
-  'wait_agent',
-];
-
 describe('createToolCatalog', () => {
-  it('assembles tools by name in the order given', () => {
-    const { tools } = createToolCatalog(BUILD_NAMES);
-    expect(tools.map((t) => t.name)).toEqual(BUILD_NAMES);
-  });
-
-  it('excludes tools not present in the name list', () => {
-    const { tools } = createToolCatalog(['read_file', 'submit_plan']);
-    const names = tools.map((t) => t.name);
-    expect(names).toEqual(['read_file', 'submit_plan']);
-    expect(names).not.toContain('write_file');
-    expect(names).not.toContain('execute_command');
-  });
-
-  it('throws on an unknown tool name', () => {
-    expect(() => createToolCatalog(['nope'])).toThrow(/Unknown tool/);
+  it('assembles the complete built-in catalog', () => {
+    const { tools } = createToolCatalog();
+    expect(tools.map((t) => t.name)).toEqual([...TOOLS_BY_NAME.keys()]);
   });
 
   it('lookup resolves registered tools by name only', () => {
-    const { lookup } = createToolCatalog(BUILD_NAMES);
+    const { lookup } = createToolCatalog();
     expect(lookup('write_file')?.name).toBe('write_file');
-    expect(lookup('submit_plan')).toBeUndefined();
+    expect(lookup('unknown_tool')).toBeUndefined();
   });
 
   it('merges dynamic MCP tools into the catalog', () => {
@@ -50,8 +24,8 @@ describe('createToolCatalog', () => {
       readOnlyHint: false,
       execute: () => Effect.succeed('ok'),
     };
-    const { tools, lookup } = createToolCatalog(['read_file'], [spec]);
-    expect(tools.map((t) => t.name)).toEqual(['read_file', 'srv:thing']);
+    const { tools, lookup } = createToolCatalog([spec]);
+    expect(tools.map((t) => t.name)).toEqual([...TOOLS_BY_NAME.keys(), 'srv:thing']);
     expect(lookup('srv:thing')?.name).toBe('srv:thing');
   });
 
@@ -68,13 +42,13 @@ describe('createToolCatalog', () => {
       readOnlyHint: false,
       execute: () => Effect.succeed('ok'),
     };
-    const { lookup } = createToolCatalog([], [spec]);
+    const { lookup } = createToolCatalog([spec]);
     const tool = lookup('srv:thing')!;
     expect(() => tool.parse({})).toThrow();
     expect(tool.parse({ text: 'hello' })).toEqual({ text: 'hello' });
   });
 
-  it('forwards MCP spec execute into the tool runner', async () => {
+  it('rejects direct MCP execution without a sandbox policy', async () => {
     const spec: McpToolSpec = {
       server: 'srv',
       name: 'thing',
@@ -83,9 +57,41 @@ describe('createToolCatalog', () => {
       readOnlyHint: false,
       execute: (args) => Effect.succeed(`called:${String(args.n)}`),
     };
-    const { lookup } = createToolCatalog([], [spec]);
+    const { lookup } = createToolCatalog([spec]);
     const tool = lookup('srv:thing')!;
-    const out = await Effect.runPromise(tool.execute({ n: 1 }) as Effect.Effect<string, never>);
+    await expect(
+      Effect.runPromise(tool.execute({ n: 1 }, { model: 'test-model' }) as Effect.Effect<string, never>)
+    ).rejects.toThrow(/SANDBOX_POLICY_DENIED/);
+  });
+
+  it('forwards MCP execution when a sandbox policy is supplied', async () => {
+    const spec: McpToolSpec = {
+      server: 'srv',
+      name: 'thing',
+      description: '',
+      inputSchema: {},
+      readOnlyHint: false,
+      execute: (args) => Effect.succeed(`called:${String(args.n)}`),
+    };
+    const { lookup } = createToolCatalog([spec]);
+    const tool = lookup('srv:thing')!;
+    const out = await Effect.runPromise(
+      tool.execute(
+        { n: 1 },
+        {
+          model: 'test-model',
+          sandboxPolicy: {
+            mode: 'unrestricted',
+            workspaceRoot: process.cwd(),
+            additionalWritableRoots: [],
+            network: { mode: 'unrestricted', hosts: [], ports: [] },
+            sessionId: 'test-session',
+            enforcement: 'disabled',
+            fingerprint: 'test',
+          },
+        }
+      ) as Effect.Effect<string, never>
+    );
     expect(out).toBe('called:1');
   });
 });

@@ -5,6 +5,7 @@ import { relative } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
+import { resolveFileTarget } from '../../../sandbox/file-boundary.js';
 
 export const searchTool: ToolDefinition = {
   name: 'search_code',
@@ -28,7 +29,19 @@ export const searchTool: ToolDefinition = {
   execute: (args, ctx) =>
     Effect.gen(function* () {
       const { pattern, glob, max_results } = args as any;
-      const base = ctx?.projectPath ?? process.cwd();
+      if (!ctx?.projectPath || !ctx.sandboxPolicy) {
+        return yield* Effect.fail(
+          new AgentError('SANDBOX_PATH_DENIED', 'search_code requires a sandbox project path')
+        );
+      }
+      const base = ctx.projectPath;
+      yield* Effect.tryPromise({
+        try: () => resolveFileTarget(ctx.sandboxPolicy!, '.', 'read'),
+        catch: (error) =>
+          error instanceof AgentError
+            ? error
+            : AgentError.toolExecutionFailed('search_code', error),
+      });
       const files = yield* Effect.tryPromise({
         try: () =>
           globby(glob, {
@@ -40,7 +53,21 @@ export const searchTool: ToolDefinition = {
         catch: (e) => AgentError.toolExecutionFailed('search_code', e),
       });
 
-      const filesToScan = files.slice(0, 200);
+      const safeFiles = yield* Effect.tryPromise({
+        try: async () => {
+          const checked: string[] = [];
+          for (const file of files) {
+            try {
+              checked.push(await resolveFileTarget(ctx.sandboxPolicy!, file, 'read'));
+            } catch {
+              // A glob result outside the sandbox is omitted.
+            }
+          }
+          return checked;
+        },
+        catch: (e) => AgentError.toolExecutionFailed('search_code', e),
+      });
+      const filesToScan = safeFiles.slice(0, 200);
       const results: string[] = [];
       const regex = new RegExp(pattern, 'gi');
 

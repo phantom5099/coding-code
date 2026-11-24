@@ -17,6 +17,7 @@ import { listModels } from '../../../../src/infra/models.js';
 import type { SessionStoreState } from '../../../../src/session/types.js';
 import type { ToolExecCtx } from '../../../../src/tools/types.js';
 import { useTempProjectBase } from '../../../helpers/project-base.js';
+import { testSandboxPolicy } from '../../../helpers/sandbox.js';
 
 useTempProjectBase('codingcode-test-lifecycle-tools-');
 
@@ -62,7 +63,6 @@ function createSession(
         cwd,
         {
           model: overrides.model ?? CHILD_MODEL,
-          activeProfile: 'build',
           permissionMode: 'askBeforeExec',
         },
         {
@@ -81,7 +81,7 @@ function ctx(cwd: string, over: Partial<ToolExecCtx> = {}): ToolExecCtx {
     sessionId: PARENT,
     parentChain: [],
     projectPath: cwd,
-    activeProfile: 'build',
+    sandboxPolicy: testSandboxPolicy(cwd),
     model: 'parent-model',
     ...over,
   } as ToolExecCtx;
@@ -247,13 +247,13 @@ describe('resume_agent', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('缺会话身份 → CONFIG_MISSING', async () => {
+  it('缺少 sandbox 身份 → SANDBOX_POLICY_DENIED', async () => {
     const { layer } = registryLayer();
     const code = await attempt(
       resumeAgentTool.execute({ sessionId: 'x', prompt: 'go' }, { model: 'm' } as any),
       Layer.merge(hooksLayer(), layer)
     ).then(codeOf);
-    expect(code).toBe('CONFIG_MISSING');
+    expect(code).toBe('SANDBOX_POLICY_DENIED');
   });
 });
 
@@ -358,11 +358,11 @@ describe('send_message', () => {
     }
   });
 
-  it('缺发送方会话 id → CONFIG_MISSING', async () => {
+  it('缺少 sandbox 身份 → SANDBOX_POLICY_DENIED', async () => {
     const { r } = await deliver(freshCwd(), { sessionId: 'x', message: 'hi' }, {
       model: 'm',
     } as any);
-    expect(codeOf(r)).toBe('CONFIG_MISSING');
+    expect(codeOf(r)).toBe('SANDBOX_POLICY_DENIED');
   });
 });
 

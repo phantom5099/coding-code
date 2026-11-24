@@ -5,6 +5,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import { bashTool } from '../../../../src/tools/domains/bash/exec.js';
+import { testSandboxPolicy } from '../../../helpers/sandbox.js';
 
 describe('tools/domains/bash projectPath isolation', () => {
   let globalDir: string;
@@ -36,14 +37,10 @@ describe('tools/domains/bash projectPath isolation', () => {
     }
   });
 
-  const ctx = (cwd: string) => ({ projectPath: cwd, model: 'test-model' });
+  const ctx = (cwd: string) => ({ projectPath: cwd, model: 'test-model', sandboxPolicy: testSandboxPolicy(cwd) });
 
   it('executes command in ctx.projectPath when cwd arg is absent', async () => {
-    // On Windows, use PowerShell to write a file in the current directory
-    const isWin = process.platform === 'win32';
-    const cmd = isWin
-      ? `powershell -Command "'hello' | Out-File -Encoding utf8 test-bash.txt"`
-      : `echo hello > test-bash.txt`;
+    const cmd = 'echo hello > test-bash.txt';
 
     await Effect.runPromise(bashTool.execute({ command: cmd, timeout_ms: 10000 }, ctx(projectDir)));
 
@@ -54,14 +51,11 @@ describe('tools/domains/bash projectPath isolation', () => {
   }, 15000);
 
   it('falls back to process.cwd() when ctx.projectPath is absent and cwd arg is absent', async () => {
-    const isWin = process.platform === 'win32';
-    const cmd = isWin
-      ? `powershell -Command "'fallback' | Out-File -Encoding utf8 test-fallback.txt"`
-      : `echo fallback > test-fallback.txt`;
+    const cmd = 'echo fallback > test-fallback.txt';
 
     try {
       await Effect.runPromise(
-        bashTool.execute({ command: cmd, timeout_ms: 10000 }, undefined) as any
+        bashTool.execute({ command: cmd, timeout_ms: 10000 }, { projectPath: process.cwd(), model: 'test-model', sandboxPolicy: testSandboxPolicy(process.cwd()) }) as any
       );
 
       const cwd = process.cwd();
@@ -80,10 +74,7 @@ describe('tools/domains/bash projectPath isolation', () => {
     const otherDir = join(tmpdir(), `other-${randomUUID().slice(0, 8)}`);
     mkdirSync(otherDir, { recursive: true });
     try {
-      const isWin = process.platform === 'win32';
-      const cmd = isWin
-        ? `powershell -Command "'other' | Out-File -Encoding utf8 test-other.txt"`
-        : `echo other > test-other.txt`;
+      const cmd = 'echo other > test-other.txt';
 
       await Effect.runPromise(
         bashTool.execute({ command: cmd, cwd: otherDir, timeout_ms: 10000 }, ctx(projectDir))

@@ -1,6 +1,8 @@
 import type { TodoItem, TokenUsage } from './types.js';
 import type { StoredContentPart } from './dto.js';
 
+export type ApprovalAction = 'file' | 'exec' | 'network' | 'mcp' | 'subagent' | 'sandbox' | 'other';
+
 export type EndReason = 'done' | 'error' | 'maxSteps' | 'aborted';
 
 export interface FrameError {
@@ -53,6 +55,7 @@ export type RuntimeEvent =
       readonly type: 'approval_request';
       readonly id: string;
       readonly tool: string;
+      readonly action: ApprovalAction;
       readonly args: Readonly<Record<string, unknown>>;
     }
   | {

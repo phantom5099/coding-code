@@ -28,7 +28,7 @@ function makeFixture(sessionId: string, slug: string) {
       createdAt: new Date().toISOString(),
       model: 'test',
       title: 'fixture',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     },
     { type: 'user', turnId: 1, content: 'first' },
@@ -74,7 +74,7 @@ function makeState(sessionId: string, cwd: string, title: string, currentTurnId:
     createdAt: new Date().toISOString(),
     model: 'test',
     title,
-    activeProfile: 'build' as const,
+
     permissionMode: 'askBeforeExec' as const,
     currentTurnId,
     usage: undefined,
@@ -278,7 +278,7 @@ describe('forkSession', () => {
         createdAt: new Date().toISOString(),
         model: 'test',
         title: 'uuid-fixture',
-        activeProfile: 'build',
+
         permissionMode: 'askBeforeExec',
       },
       { type: 'user', turnId: 1, content: 'q1' },

@@ -29,9 +29,9 @@ export const SubagentRunnerLayer = Layer.effect(
         const result = yield* agent.runTurn(input, {
           sessionId: opts.sessionId,
           cwd: opts.cwd,
-          activeProfile: opts.activeProfile,
           // 子代理不经审批：调用点未给定时固定 bypass，避免继承父会话的审批链路
           permissionMode: opts.permissionMode ?? BYPASS_PERMISSION_MODE,
+          sandboxPolicy: opts.sandboxPolicy,
           model: opts.model,
           parentSessionId: opts.parentSessionId,
           agentName: opts.agentName,

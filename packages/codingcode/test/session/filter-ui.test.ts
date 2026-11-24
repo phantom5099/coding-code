@@ -12,7 +12,7 @@ function makeBaseEvents(extra: SessionEvent[] = []): SessionEvent[] {
       createdAt: new Date().toISOString(),
       model: 'deepseek-chat',
       title: '',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     },
     { type: 'user', turnId: 1, content: text('hello') },
@@ -131,7 +131,7 @@ describe('sessionEventsToTurns with summary', () => {
         createdAt: new Date().toISOString(),
         model: 'deepseek-chat',
         title: '',
-        activeProfile: 'build',
+
         permissionMode: 'askBeforeExec',
       },
       { type: 'user', turnId: 1, content: text('hello') },

@@ -1,4 +1,4 @@
-import type { EndReason, Frame, FrameError, ToolOutcome } from './protocol.js';
+import type { ApprovalAction, EndReason, Frame, FrameError, ToolOutcome } from './protocol.js';
 
 export type DecodeFailureReason =
   | 'shape'
@@ -23,6 +23,14 @@ const EVENTS = new Set([
 ]);
 const END_REASONS = new Set<EndReason>(['done', 'error', 'maxSteps', 'aborted']);
 const OUTCOMES = new Set(['ok', 'error', 'denied']);
+const APPROVAL_ACTIONS = new Set<ApprovalAction>([
+  'file',
+  'exec',
+  'network',
+  'mcp',
+  'subagent',
+  'other',
+]);
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -101,7 +109,12 @@ export function decodeFrame(raw: unknown): DecodeResult {
         return { ok: false, reason: 'shape', raw };
       }
     }
-    if (e.type === 'approval_request' && typeof e.tool !== 'string') {
+    if (
+      e.type === 'approval_request' &&
+      (typeof e.tool !== 'string' ||
+        typeof e.action !== 'string' ||
+        !APPROVAL_ACTIONS.has(e.action as ApprovalAction))
+    ) {
       return { ok: false, reason: 'shape', raw };
     }
     if (
@@ -113,7 +126,11 @@ export function decodeFrame(raw: unknown): DecodeResult {
       return { ok: false, reason: 'shape', raw };
     }
     if (e.type === 'subagent_event') {
-      if (typeof e.sessionId !== 'string' || typeof e.agentName !== 'string' || typeof e.status !== 'string') {
+      if (
+        typeof e.sessionId !== 'string' ||
+        typeof e.agentName !== 'string' ||
+        typeof e.status !== 'string'
+      ) {
         return { ok: false, reason: 'shape', raw };
       }
     }

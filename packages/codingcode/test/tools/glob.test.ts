@@ -4,8 +4,10 @@ import { globTool } from '../../src/tools/domains/fs/glob.js';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { resolve, join } from 'path';
 import { tmpdir } from 'os';
+import { testSandboxPolicy } from '../helpers/sandbox.js';
 
 const testDir = join(tmpdir(), 'coding-agent-glob-test-' + Date.now());
+const ctx = { projectPath: tmpdir(), model: 'test-model', sandboxPolicy: testSandboxPolicy(tmpdir()) };
 
 async function setup() {
   await mkdir(testDir, { recursive: true });
@@ -33,7 +35,7 @@ describe('globTool', () => {
           pattern: '*.ts',
           path: testDir,
           max_results: 50,
-        })
+        }, ctx)
       );
       expect(result).toContain('a.ts');
       expect(result).toContain('b.ts');
@@ -53,7 +55,7 @@ describe('globTool', () => {
           pattern: '**/*.ts',
           path: testDir,
           max_results: 50,
-        }) as any
+        }, ctx) as any
       );
       expect(result).toContain('e.ts');
     } finally {
@@ -69,7 +71,7 @@ describe('globTool', () => {
           pattern: '*.ts',
           path: testDir,
           max_results: 1,
-        }) as any
+        }, ctx) as any
       );
       expect(result).toContain('showing first 1');
     } finally {
@@ -85,7 +87,7 @@ describe('globTool', () => {
           pattern: '*.py',
           path: testDir,
           max_results: 50,
-        })
+        }, ctx)
       );
       expect(result).toContain('No files matching');
     } finally {
@@ -99,7 +101,7 @@ describe('globTool', () => {
         pattern: '*.ts',
         path: '/nonexistent/path/xyz123',
         max_results: 50,
-      }) as any
+      }, ctx) as any
     );
     // Should not throw 鈥?globby returns empty array for nonexistent dirs
     expect(typeof result).toBe('string');

@@ -139,7 +139,12 @@ const AgentDeps = Layer.mergeAll(
     snapshotBeforeWrite: () => Effect.void,
   } as any),
   Layer.succeed(ApprovalService, {
-    evaluate: () => Effect.succeed({ type: 'allow' }),
+    evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
+    evaluateBatch: (requests: readonly unknown[]) =>
+      Effect.succeed(requests.map(() => ({ type: 'allow' as const, source: 'test' }))),
+    evaluateEscalation: () => Effect.succeed({ type: 'allow', source: 'test' }),
+    evaluateEscalationBatch: (requests: readonly unknown[]) =>
+      Effect.succeed(requests.map(() => ({ type: 'allow' as const, source: 'test' }))),
   } as any),
   Layer.succeed(SkillService, {
     getAll: () => Effect.succeed([]),
@@ -216,12 +221,12 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
         const runner = yield* SubagentRunnerService;
         const parent = yield* session.create(cwd, {
           model: PARENT_MODEL,
-          activeProfile: 'build',
+
           permissionMode: 'askBeforeExec',
         });
         const { stream, sessionId } = yield* runner.runSubagent(incomingText('do the thing'), {
           cwd,
-          activeProfile: 'build',
+
           parentSessionId: parent.sessionId,
           agentName: opts.agentName ?? 'reviewer',
           ...(opts.description ? { description: opts.description } : {}),
@@ -246,7 +251,7 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
         const { stream, sessionId } = yield* runner.runSubagent(incomingText(text), {
           sessionId: childId,
           cwd,
-          activeProfile: 'build',
+
           parentSessionId: parentId,
           agentName: 'reviewer',
           model: CHILD_MODEL,

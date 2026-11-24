@@ -11,8 +11,8 @@ import { SubagentRunRegistryService } from '../../../subagent/registry.js';
 export const resumeAgentTool: ToolDefinition<HookService | SubagentRunRegistryService> = {
   name: 'resume_agent',
   concurrencySafe: true,
+  approval: { action: 'subagent', requiresConfirmation: true },
   // 续跑的子代理共享工作区并异步写入，父回合须有快照兜底
-  mutatesWorkspace: true,
   description:
     'Continue a previously spawned subagent by session id. The subagent keeps its full prior ' +
     'context. Use this after interrupt_agent, or to hand a finished subagent a follow-up task ' +
@@ -34,13 +34,18 @@ export const resumeAgentTool: ToolDefinition<HookService | SubagentRunRegistrySe
         prompt: string;
         model?: string;
       };
-      const projectPath = ctx?.projectPath || process.cwd();
+      if (!ctx?.projectPath || !ctx.sandboxPolicy) {
+        return yield* Effect.fail(
+          new AgentError('SANDBOX_POLICY_DENIED', 'resume_agent requires a sandbox policy')
+        );
+      }
+      const projectPath = ctx.projectPath;
 
-      if (!ctx?.activeProfile || !ctx?.sessionId) {
+      if (!ctx?.sessionId) {
         return yield* Effect.fail(
           new AgentError(
             'CONFIG_MISSING',
-            'resume_agent requires the parent session id and profile'
+            'resume_agent requires the parent session id'
           )
         );
       }
@@ -86,7 +91,8 @@ export const resumeAgentTool: ToolDefinition<HookService | SubagentRunRegistrySe
           model: effectiveModel,
           parentSessionId: ctx.sessionId,
           parentCwd: projectPath,
-          parentProfile: ctx.activeProfile,
+          parentPermissionMode: ctx.permissionMode ?? 'askBeforeExec',
+        parentPolicy: ctx.sandboxPolicy,
           // 续跑：复用既有子会话与历史上下文；systemPrompt 由 runner 从会话头回读
           resumeSessionId: sessionId,
           parentChain: [ctx.sessionId, ...(ctx.parentChain ?? [])],

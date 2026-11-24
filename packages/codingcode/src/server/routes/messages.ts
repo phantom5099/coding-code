@@ -2,11 +2,10 @@ import * as HttpRouter from '@effect/platform/HttpRouter';
 import { Effect } from 'effect';
 import { AgentService } from '../../agent/port.js';
 import { resolveWorkspaceCwd } from '../cwd.js';
-import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
 import { loadConfig } from '../../infra/config.js';
 import { AgentError } from '../../util/error.js';
-import { ASK_BEFORE_EXEC_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../../util/enums.js';
+import { ASK_BEFORE_EXEC_PERMISSION_MODE } from '../../util/enums.js';
 import type { IncomingMedia, IncomingPart } from '../../llm/types.js';
 import {
   frameStream,
@@ -102,9 +101,6 @@ const sendMessage: Handler = Effect.gen(function* () {
   };
   if (isNew) {
     const cfg = loadConfig();
-    runOpts.activeProfile = isAgentProfileName(cfg.activeProfile)
-      ? cfg.activeProfile
-      : BUILD_PROFILE_NAME;
     runOpts.permissionMode = isPermissionMode(cfg.permissionMode)
       ? cfg.permissionMode
       : ASK_BEFORE_EXEC_PERMISSION_MODE;

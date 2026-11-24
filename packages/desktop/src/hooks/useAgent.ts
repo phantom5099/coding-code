@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '../stores/workspace.store';
 import { useRollbackStore, TURN_SCOPE_REVERTED } from '../stores/rollback.store';
 import { agentClient } from '../lib/core-api';
 import { createStreamState, reduceFrame, type StreamEffects } from '../lib/frame-reducer';
-import type { PermissionMode, ProfileName } from '@codingcode/sdk';
+import type { PermissionMode } from '@codingcode/sdk';
 import { ApiError } from '../lib/api';
 import {
   listModels,
@@ -20,9 +20,6 @@ import {
   rollbackContext,
   rollbackBothToTurn,
   forkSession,
-  getSessionProfile,
-  setSessionProfile,
-  getSessionPlan,
   getAgentConfig as fetchAgentConfig,
 } from '../lib/core-api';
 import type {
@@ -94,8 +91,6 @@ export function useAgentCore() {
   const updateTurnId = useAgentStore((s) => s.updateTurnId);
   const completeTurn = useAgentStore((s) => s.completeTurn);
   const setPendingInput = useAgentStore((s) => s.setPendingInput);
-  const setPendingPlan = useAgentStore((s) => s.setPendingPlan);
-  const clearPendingPlan = useAgentStore((s) => s.clearPendingPlan);
   const clearRunningTurns = useAgentStore((s) => s.clearRunningTurns);
   const applyTodoUpdate = useAgentStore((s) => s.applyTodoUpdate);
   const setCurrentThread = useAgentStore((s) => s.setCurrentThread);
@@ -109,9 +104,7 @@ export function useAgentCore() {
   const setThreadUsage = useAgentStore((s) => s.setThreadUsage);
   const workspace = useWorkspaceStore();
   const currentThreadId = useAgentStore((s) => s.currentThreadId);
-  const storeProfile = useAgentStore((s) => s.profile);
   const storePermissionMode = useAgentStore((s) => s.permissionMode);
-  const setProfile = useAgentStore((s) => s.setProfile);
   const setPermissionMode = useAgentStore((s) => s.setPermissionMode);
   const modelId = useAgentStore((s) => s.model);
   const queueInput = useAgentStore((s) => s.queueInput);
@@ -130,13 +123,12 @@ export function useAgentCore() {
   useEffect(() => {
     fetchAgentConfig()
       .then((cfg) => {
-        setProfile(cfg.activeProfile);
         setPermissionMode(cfg.permissionMode);
       })
       .catch((e) => {
         console.error('Failed to load agent config:', e);
       });
-  }, [setProfile, setPermissionMode]);
+  }, [setPermissionMode]);
 
   // Load sessions, models, and projects on mount
   useEffect(() => {
@@ -299,9 +291,6 @@ export function useAgentCore() {
       } finally {
         flushPending();
         completeTurn(threadId, activeTurnId, failed || state.hasError ? 'error' : 'completed');
-        if (!failed && !state.hasError && state.planTitle !== null) {
-          setPendingPlan(threadId, { sessionId: threadId, title: state.planTitle });
-        }
         abortAndClear(threadId);
         // 自动补发：回合结束后按顺序把仍处于 queued 的项逐条发出
         void sendQueuedInputRef.current?.(threadId);
@@ -313,7 +302,6 @@ export function useAgentCore() {
       applyChunks,
       applyTodoUpdate,
       completeTurn,
-      setPendingPlan,
       updateTurnId,
       setThreadUsage,
       setContextUsage,
@@ -328,9 +316,7 @@ export function useAgentCore() {
       let resolvedThreadId = currentThreadId;
       let model = modelId;
       if (!resolvedThreadId) {
-        const activeProfile: ProfileName = storeProfile;
-        const permissionMode: PermissionMode =
-          activeProfile === 'plan' ? 'askBeforeExec' : storePermissionMode;
+        const permissionMode: PermissionMode = storePermissionMode;
         // 新会话用全局配置的模型：以服务端的 activeId 为准，顺带刷新模型列表
         try {
           const data = await listModels();
@@ -347,13 +333,11 @@ export function useAgentCore() {
           throw new Error('No model selected. Please select a model first.');
         }
         const data = await createServerSession(effectiveCwd, {
-          activeProfile,
           permissionMode,
           model,
         });
         resolvedThreadId = data.sessionId;
         setCurrentThreadWithProfile(resolvedThreadId, {
-          activeProfile,
           permissionMode,
           model,
           optimistic: true,
@@ -363,16 +347,13 @@ export function useAgentCore() {
 
       // 首次发送的防重：已有在飞流时直接忽略
       if (inflightControllers.has(threadId)) return;
-      clearPendingPlan(threadId);
 
       await runTurnStream(threadId, parts, { cwd: effectiveCwd, model, skills });
     },
     [
       runTurnStream,
       setCurrentThreadWithProfile,
-      clearPendingPlan,
       workspace.rootPath,
-      storeProfile,
       storePermissionMode,
       modelId,
       currentThreadId,
@@ -416,7 +397,6 @@ export function useAgentCore() {
       // 无活跃回合：开新回合；乐观 Turn 用 item.parts
       removeQueuedInput(threadId, item.id);
       if (inflightControllers.has(threadId)) return;
-      clearPendingPlan(threadId);
       registerInflight(threadId, controller);
       await runTurnStream(threadId, item.parts, {
         cwd: effectiveCwd,
@@ -430,7 +410,6 @@ export function useAgentCore() {
       markQueueSending,
       removeQueuedInput,
       applyChunk,
-      clearPendingPlan,
       workspace.rootPath,
       modelId,
     ]
@@ -727,55 +706,4 @@ export function useAgent() {
   const approval = useAgentApproval();
   const rollback = useAgentRollback();
   return { ...core, ...approval, ...rollback };
-}
-
-// ---- useAgentProfile: plan/build profile switching + plan file access ----
-
-export type SessionProfileSnapshot = {
-  activeProfile: ProfileName;
-  permissionMode: PermissionMode;
-  cwd: string;
-};
-
-export type PlanFileSnapshot = {
-  content: string;
-  path: string;
-  directory: string;
-  exists: boolean;
-};
-
-/**
- * Hook for interacting with the plan/build profile of a single session, plus
- * reading the persisted plan file. Each call returns a fresh API to the
- * server — caching is done in the caller via useEffect / useState.
- */
-export function useAgentProfile() {
-  const workspace = useWorkspaceStore();
-
-  const fetchProfile = useCallback(
-    async (sessionId: string, cwd?: string): Promise<SessionProfileSnapshot> => {
-      return getSessionProfile(sessionId, cwd ?? workspace.rootPath ?? '');
-    },
-    [workspace.rootPath]
-  );
-
-  const switchProfile = useCallback(
-    async (
-      sessionId: string,
-      activeProfile: ProfileName,
-      cwd?: string
-    ): Promise<{ activeProfile: ProfileName; permissionMode: PermissionMode }> => {
-      return setSessionProfile(sessionId, cwd ?? workspace.rootPath ?? '', activeProfile);
-    },
-    [workspace.rootPath]
-  );
-
-  const fetchPlan = useCallback(
-    async (sessionId: string, cwd?: string): Promise<PlanFileSnapshot> => {
-      return getSessionPlan(sessionId, cwd ?? workspace.rootPath ?? '');
-    },
-    [workspace.rootPath]
-  );
-
-  return { fetchProfile, switchProfile, fetchPlan };
 }

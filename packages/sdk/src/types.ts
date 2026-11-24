@@ -1,6 +1,4 @@
-export type ProfileName = 'plan' | 'build';
-
-export type PermissionMode = 'askBeforeExec' | 'bypass';
+export type PermissionMode = 'askBeforeExec' | 'bypass' | 'unrestricted';
 
 export interface TokenUsage {
   prompt: number;

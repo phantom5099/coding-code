@@ -13,7 +13,7 @@ import type { SessionCreateOptions, SessionSummary, SessionStoreState } from './
 import type { UITurn } from './types.js';
 import type { StoredPart } from './types.js';
 import type { IncomingPart, TokenUsage } from '../llm/types.js';
-import type { ProfileName, PermissionMode } from '../util/enums.js';
+import type { PermissionMode } from '../util/enums.js';
 
 export interface SessionShape {
   create(
@@ -90,13 +90,6 @@ export interface SessionShape {
     cwd: string,
     sessionId: string,
     mode: PermissionMode,
-    parentSessionId?: string,
-    parentChain?: readonly string[]
-  ): Effect.Effect<void, AgentError>;
-  setActiveProfile(
-    cwd: string,
-    sessionId: string,
-    profile: ProfileName,
     parentSessionId?: string,
     parentChain?: readonly string[]
   ): Effect.Effect<void, AgentError>;

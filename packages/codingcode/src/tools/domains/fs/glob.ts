@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { globby } from 'globby';
-import { relative, resolve } from 'path';
+import { relative } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
+import { resolveFileTarget } from '../../../sandbox/file-boundary.js';
 
 export const globTool: ToolDefinition = {
   name: 'search_files',
@@ -31,8 +32,19 @@ export const globTool: ToolDefinition = {
         path: string;
         max_results: number;
       };
-      const base = ctx?.projectPath ?? process.cwd();
-      const basePath = resolve(base, path);
+      if (!ctx?.projectPath || !ctx.sandboxPolicy) {
+        return yield* Effect.fail(
+          new AgentError('SANDBOX_PATH_DENIED', 'search_files requires a sandbox project path')
+        );
+      }
+      const base = ctx.projectPath;
+      const basePath = yield* Effect.tryPromise({
+        try: () => resolveFileTarget(ctx.sandboxPolicy!, path, 'read'),
+        catch: (error) =>
+          error instanceof AgentError
+            ? error
+            : AgentError.toolExecutionFailed('search_files', error),
+      });
 
       const files = yield* Effect.tryPromise({
         try: () =>
@@ -46,15 +58,29 @@ export const globTool: ToolDefinition = {
         catch: (e) => AgentError.toolExecutionFailed('search_files', e),
       });
 
-      const truncated = files.slice(0, max_results);
+      const safeFiles = yield* Effect.tryPromise({
+        try: async () => {
+          const checked: string[] = [];
+          for (const file of files) {
+            try {
+              checked.push(await resolveFileTarget(ctx.sandboxPolicy!, file, 'read'));
+            } catch {
+              // A glob result outside the sandbox is omitted.
+            }
+          }
+          return checked;
+        },
+        catch: (e) => AgentError.toolExecutionFailed('search_files', e),
+      });
+      const truncated = safeFiles.slice(0, max_results);
       const lines = truncated.map((f) => relative(base, f));
 
-      if (files.length === 0) {
+      if (safeFiles.length === 0) {
         return `No files matching "${pattern}" in ${relative(base, basePath) || '.'}`;
       }
 
-      let out = `Found ${files.length} file(s) matching "${pattern}"`;
-      if (files.length > max_results) {
+      let out = `Found ${safeFiles.length} file(s) matching "${pattern}"`;
+      if (safeFiles.length > max_results) {
         out += ` (showing first ${max_results})`;
       }
       return out + '\n' + lines.join('\n');

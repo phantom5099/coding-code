@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import type { Effect } from 'effect';
+import { Effect } from 'effect';
 import type { ToolDefinition, ToolExecCtx, ToolCatalog } from './types.js';
+import type { ToolApprovalMetadata } from './types.js';
 import type { McpToolSpec } from '../mcp/types.js';
-import type { AgentError } from '../util/error.js';
+import { AgentError } from '../util/error.js';
 import { ToolRegistry } from './registry.js';
 import { readFileTool } from './domains/fs/read.js';
 import { writeFileTool } from './domains/fs/write.js';
@@ -17,7 +18,6 @@ import { todoReadTool } from './domains/self/todo-read.js';
 import { askUserTool } from './domains/self/ask-user.js';
 import { spawnAgentTool } from './domains/subagent/spawn.js';
 import { waitAgentTool } from './domains/subagent/wait.js';
-import { submitPlanTool } from './domains/subagent/submit-plan.js';
 import { resumeAgentTool } from './domains/subagent/resume.js';
 import { sendMessageTool } from './domains/subagent/message.js';
 import { interruptAgentTool } from './domains/subagent/interrupt.js';
@@ -37,7 +37,6 @@ const ALL_TOOLS: ToolDefinition<any>[] = [
   askUserTool,
   spawnAgentTool,
   waitAgentTool,
-  submitPlanTool,
   resumeAgentTool,
   sendMessageTool,
   interruptAgentTool,
@@ -52,22 +51,33 @@ function specToDefinition(spec: McpToolSpec): ToolDefinition {
     description: `[MCP:${spec.server}] ${spec.description || spec.name}`,
     parameters: z.fromJSONSchema(spec.inputSchema),
     concurrencySafe: spec.readOnlyHint,
-    // MCP 工具一律算写：无法静态判定其副作用，漏打的代价是丢改动
-    mutatesWorkspace: true,
-    execute: (args) => spec.execute(args as Record<string, unknown>),
+    approval: { action: 'mcp', requiresConfirmation: true },
+    execute: (args, ctx) => {
+      if (!ctx?.sandboxPolicy) {
+        return Effect.fail(
+          new AgentError('SANDBOX_POLICY_DENIED', 'MCP tool requires a sandbox policy')
+        );
+      }
+      if (
+        ctx.sandboxPolicy.mode !== 'danger-full-access' &&
+        ctx.sandboxPolicy.mode !== 'unrestricted' &&
+        !spec.readOnlyHint
+      ) {
+        return Effect.fail(
+          new AgentError(
+            'SANDBOX_POLICY_DENIED',
+            'MCP tool is not read-only under the current sandbox'
+          )
+        );
+      }
+      return spec.execute(args as Record<string, unknown>);
+    },
   };
 }
 
-export function createToolCatalog(
-  toolNames: readonly string[],
-  mcpTools: McpToolSpec[] = []
-): ToolCatalog {
+export function createToolCatalog(mcpTools: McpToolSpec[] = []): ToolCatalog {
   const registry = new ToolRegistry();
-  for (const name of toolNames) {
-    const definition = TOOLS_BY_NAME.get(name);
-    if (!definition) throw new Error(`Unknown tool: ${name}`);
-    registry.register(definition);
-  }
+  registry.register(...TOOLS_BY_NAME.values());
   registry.register(...mcpTools.map(specToDefinition));
   return {
     tools: registry.describe(),
@@ -77,7 +87,8 @@ export function createToolCatalog(
       return {
         name: definition.name,
         concurrencySafe: definition.concurrencySafe ?? false,
-        mutatesWorkspace: definition.mutatesWorkspace ?? false,
+        approval: definition.approval ?? { action: 'other' },
+        describeOperation: definition.describeOperation ?? (() => definition.approval ?? { action: 'other' }),
         parse: (args: unknown) => definition.parameters.parse(args),
         execute: (args: unknown, ctx?: ToolExecCtx) =>
           definition.execute(args, ctx) as Effect.Effect<string, AgentError>,

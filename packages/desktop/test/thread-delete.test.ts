@@ -112,12 +112,6 @@ describe('useAgentRollback().deleteThread', () => {
           updatedAt: 0,
         };
         s.usageByThreadId['thread-1'] = { prompt: 1, completion: 1, total: 2 };
-        s.profileByThreadId['thread-1'] = {
-          activeProfile: 'build',
-          permissionMode: 'askBeforeExec',
-          fetchedAt: 0,
-          optimistic: false,
-        };
       });
     });
     const { result } = renderHook(() => useAgentRollback());
@@ -128,7 +122,6 @@ describe('useAgentRollback().deleteThread', () => {
     const state = useAgentStore.getState();
     expect(state.threads['thread-1']).toBeUndefined();
     expect(state.usageByThreadId['thread-1']).toBeUndefined();
-    expect(state.profileByThreadId['thread-1']).toBeUndefined();
   });
 
   it('does not call listSessions when rootPath is empty', async () => {

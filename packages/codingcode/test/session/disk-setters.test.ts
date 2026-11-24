@@ -4,8 +4,6 @@ import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { SessionService } from '../../src/session/port.js';
 import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/session/paths.js';
-import { readSessionMeta } from '../../src/session/file-ops.js';
 import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { RulesService } from '../../src/rules/port.js';
@@ -56,7 +54,6 @@ describe('SessionService disk setter/getter consistency', () => {
         const session = yield* SessionService;
         return yield* session.create(cwd, {
           model: 'm',
-          activeProfile: 'build',
           permissionMode: 'askBeforeExec',
         });
       })
@@ -84,74 +81,4 @@ describe('SessionService disk setter/getter consistency', () => {
     expect(state.permissionMode).toBe('bypass');
   });
 
-  it('setActiveProfile persists to loaded state', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        yield* session.setActiveProfile(cwd, sessionId, 'plan');
-      })
-    );
-    const state = await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        return yield* session.load(cwd, sessionId);
-      })
-    );
-    expect(state.activeProfile).toBe('plan');
-  });
-
-  it('setActiveProfile to plan leaves permissionMode untouched', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        yield* session.setActiveProfile(cwd, sessionId, 'plan');
-      })
-    );
-    const state = await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        return yield* session.load(cwd, sessionId);
-      })
-    );
-    expect(state.activeProfile).toBe('plan');
-    expect(state.permissionMode).toBe('askBeforeExec');
-  });
-
-  it('setActiveProfile to build leaves permissionMode untouched', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        yield* session.setActiveProfile(cwd, sessionId, 'plan');
-        yield* session.setActiveProfile(cwd, sessionId, 'build');
-      })
-    );
-    const state = await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        return yield* session.load(cwd, sessionId);
-      })
-    );
-    expect(state.activeProfile).toBe('build');
-    expect(state.permissionMode).toBe('askBeforeExec');
-  });
-
-  it('setActiveProfile is durable across reload (session head on disk)', async () => {
-    await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        yield* session.setActiveProfile(cwd, sessionId, 'plan');
-      })
-    );
-    const state = await rt.runPromise(
-      Effect.gen(function* () {
-        const session = yield* SessionService;
-        return yield* session.load(cwd, sessionId);
-      })
-    );
-    const meta = readSessionMeta(
-      computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
-    );
-    expect(meta?.activeProfile).toBe('plan');
-    expect(meta).not.toHaveProperty('mode');
-  });
 });

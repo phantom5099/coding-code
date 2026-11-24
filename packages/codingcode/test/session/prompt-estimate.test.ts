@@ -36,7 +36,7 @@ function makeFixture(
       createdAt: new Date().toISOString(),
       model: 'test-model',
       title: 'fixture',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     },
     {
@@ -88,7 +88,7 @@ function makeState(
     createdAt: new Date().toISOString(),
     model: 'test-model',
     title: 'fixture',
-    activeProfile: 'build',
+
     permissionMode: 'askBeforeExec',
     currentTurnId: 2,
     memorySnapshot: '',
@@ -160,7 +160,7 @@ describe('SessionService create sets model', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'my-test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })

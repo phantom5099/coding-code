@@ -3,6 +3,8 @@ import type { Effect } from 'effect';
 import type { CheckpointDiff, CodeRollbackResult, RollbackPreviewDiff } from './types.js';
 
 export interface CheckpointShape {
+  ensureBaseline(projectPath: string, sessionId: string, turnId: number): Effect.Effect<void>;
+  /** @deprecated use ensureBaseline */
   snapshotBeforeWrite(projectPath: string, sessionId: string, turnId: number): Effect.Effect<void>;
   getCheckpointDiff(
     projectPath: string,

@@ -33,7 +33,7 @@ const create = (dir: string) =>
     const svc = yield* SessionService;
     return yield* svc.create(dir, {
       model: 'test-model',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     });
   });

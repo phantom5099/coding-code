@@ -12,7 +12,7 @@ import { AgentService } from '../agent/port.js';
 import { activeModelId } from '../infra/models.js';
 import { textPart } from '../llm/types.js';
 import { SchedulerService } from './port.js';
-import { BYPASS_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../util/enums.js';
+import { BYPASS_PERMISSION_MODE } from '../util/enums.js';
 
 const logger = createLogger();
 
@@ -56,8 +56,8 @@ export const SchedulerLayer = Layer.effect(
               signal: controller.signal,
               // 自动化没有独立的模型配置，统一用 config.yaml 的活动模型
               model: activeModelId(),
-              activeProfile: BUILD_PROFILE_NAME,
               permissionMode: BYPASS_PERMISSION_MODE,
+              sandboxMode: auto.sandbox === 'readonly' ? 'read-only' : 'workspace-write',
             });
           })
         );
@@ -191,8 +191,8 @@ export const SchedulerLayer = Layer.effect(
                 cwd: auto.projectCwd,
                 signal: controller.signal,
                 model: activeModelId(),
-                activeProfile: BUILD_PROFILE_NAME,
                 permissionMode: BYPASS_PERMISSION_MODE,
+                sandboxMode: auto.sandbox === 'readonly' ? 'read-only' : 'workspace-write',
               });
             })
           );

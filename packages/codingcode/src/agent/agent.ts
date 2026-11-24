@@ -3,7 +3,7 @@ import { AgentError } from '../util/error.js';
 import { Result } from '../util/result.js';
 import { AgentService, ToolEnvPort } from './port.js';
 import type { RunTurnOptions } from './port.js';
-import { ApprovalService, getToolNames } from '../approval/port.js';
+import { ApprovalService } from '../approval/port.js';
 import { CheckpointService } from '../checkpoint/port.js';
 import { ContextService } from '../context/port.js';
 import { EventSinkService } from '../sink/port.js';
@@ -17,12 +17,13 @@ import { RulesService } from '../rules/port.js';
 import { SessionService } from '../session/port.js';
 import { SkillService } from '../skills/port.js';
 import { ToolExecutorService } from '../tools/port.js';
-import { buildSystemPrompt, renderSkillBlock } from './prompt.js';
+import { BUILD_PROMPT, buildSystemPrompt, renderSkillBlock } from './prompt.js';
 import type { FrameBody, FrameError, ResponseMeta, ToolOutcome } from '../sink/types.js';
 import { isTurnEnd } from '../sink/types.js';
 import type { SessionRef } from '../session/types.js';
 import type { TodoItem } from '../todo/types.js';
 import type { PermissionMode } from '../util/enums.js';
+import type { SandboxMode, SandboxPolicy } from '../sandbox/types.js';
 import type { ToolCatalog, ToolResult } from '../tools/types.js';
 import { mediaKindOf, textOf, textPart, type IncomingPart } from '../llm/types.js';
 import type { ToolCall } from '../llm/types.js';
@@ -31,8 +32,6 @@ import { sniffMediaMime } from '../util/media.js';
 import { loadConfig } from '../infra/config.js';
 import { createLogger } from '../infra/logger.js';
 import { normalizePath } from '../util/path.js';
-import { resolveProfile } from './profile.js';
-import type { AgentProfile } from './profile.js';
 
 function toolOutcomeOf(result: ToolResult): ToolOutcome {
   return result.status === 'denied'
@@ -135,11 +134,11 @@ export const AgentLayer = Layer.effect(
         let parentSessionId = opts.parentSessionId;
         const model = opts.model;
         if (!sessionId) {
-          if (!opts.activeProfile || !opts.permissionMode) {
+          if (!opts.permissionMode) {
             return yield* Effect.fail(
               new AgentError(
                 'CONFIG_MISSING',
-                'new session requires activeProfile and permissionMode'
+                'new session requires permissionMode'
               )
             );
           }
@@ -148,7 +147,6 @@ export const AgentLayer = Layer.effect(
             {
               model,
               title: textOf(input) || 'New session',
-              activeProfile: opts.activeProfile,
               permissionMode: opts.permissionMode,
             },
             {
@@ -185,7 +183,6 @@ export const AgentLayer = Layer.effect(
         }
 
         return yield* Effect.gen(function* () {
-          const profileName = opts.activeProfile ?? state.activeProfile;
           const effectivePerm = opts.permissionMode ?? state.permissionMode;
           if (opts.permissionMode) {
             yield* session.setPermissionMode(
@@ -196,24 +193,10 @@ export const AgentLayer = Layer.effect(
               opts.parentChain
             );
           }
-          if (opts.activeProfile) {
-            yield* session.setActiveProfile(
-              normalizedCwd,
-              sid,
-              opts.activeProfile,
-              parentSessionId,
-              opts.parentChain
-            );
-          }
-
           state.memorySnapshot = yield* memory.loadMemoryForPrompt(state.cwd);
 
-          const profile: AgentProfile | undefined = profileName
-            ? resolveProfile(profileName)
-            : undefined;
-
           const mcpTools = yield* mcp.listProjectMcpTools(normalizedCwd);
-          const catalog = yield* executor.prepare(getToolNames(profileName), mcpTools);
+          const catalog = yield* executor.prepare(mcpTools);
 
           const toolEnv = yield* toolEnvPort.getToolEnv();
 
@@ -247,13 +230,14 @@ export const AgentLayer = Layer.effect(
             {
               state,
               model,
-              profile,
               catalog,
               rulesText,
               abortSignal: opts.signal,
               sid,
               projectPath: state.cwd,
               permissionMode: effectivePerm,
+              sandboxMode: opts.sandboxMode,
+              sandboxPolicy: opts.sandboxPolicy,
               parentChain: opts.parentChain ?? [],
               systemPrompt: opts.systemPrompt,
             },
@@ -307,13 +291,14 @@ export const AgentLayer = Layer.effect(
       opts: {
         state: any;
         model: string;
-        profile: AgentProfile | undefined;
         abortSignal: AbortSignal | undefined;
         catalog: ToolCatalog;
         rulesText: string;
         sid: string;
         projectPath: string;
         permissionMode: PermissionMode;
+        sandboxMode?: SandboxMode;
+        sandboxPolicy?: SandboxPolicy;
         parentChain: readonly string[];
         systemPrompt?: string;
       },
@@ -322,7 +307,6 @@ export const AgentLayer = Layer.effect(
       const {
         state,
         model,
-        profile,
         abortSignal,
         catalog,
         rulesText,
@@ -339,7 +323,7 @@ export const AgentLayer = Layer.effect(
           platform: process.platform,
           shell: process.env.SHELL || process.env.ComSpec || 'bash',
           rules: rulesText,
-          profileSystemPrompt: opts.systemPrompt ?? profile?.systemPrompt,
+          customSystemPrompt: opts.systemPrompt ?? BUILD_PROMPT,
         });
 
         const memoryBlock = state.memorySnapshot;
@@ -570,51 +554,84 @@ export const AgentLayer = Layer.effect(
           );
           yield* context.absorb(sessionRef, [assistantToolEv]);
 
-          const approvedCalls: any[] = [];
-          const deniedResults: any[] = [];
-          for (const tc of toolCalls) {
-            const decision = yield* approval.evaluate({
-              tool: tc.name,
-              input: tc.arguments ?? {},
-              callId: tc.id,
+          const preparedBatch = yield* executor.prepareBatch(
+            toolCalls,
+            state.sessionId,
+            {
+              turnId: state.currentTurnId,
+              projectPath,
+              signal: abortSignal,
+              permissionMode,
+              sandboxMode: opts.sandboxMode,
+              parentPolicy: opts.sandboxPolicy,
+              model,
+              parentChain,
+              agentName: state.agentName,
+            },
+            toolLookup
+          );
+          const escalationDecisions = yield* approval.evaluateEscalationBatch(
+            preparedBatch.escalations.map(({ request }) => request)
+          );
+          const escalatedCalls = preparedBatch.escalations
+            .filter((_, index) => escalationDecisions[index]?.type === 'allow')
+            .map(({ prepared }) => prepared);
+          const decisions = yield* approval.evaluateBatch(
+            preparedBatch.prepared.map((prepared) => ({
+              tool: prepared.call.name,
+              input: prepared.parsedArgs as Record<string, unknown>,
+              prepared,
+              callId: prepared.call.id,
               sessionId: state.sessionId,
               projectPath,
               permissionMode,
-              profile: profile?.name,
-            });
-            if (decision.type === 'deny') {
-              deniedResults.push({
-                status: 'denied',
-                id: tc.id,
-                name: tc.name,
-                reason: decision.reason,
-              });
-            } else {
-              approvedCalls.push(tc);
-            }
+            }))
+          );
+          const approvedCalls = [
+            ...preparedBatch.prepared.filter((_, index) => decisions[index]?.type === 'allow'),
+            ...escalatedCalls,
+          ];
+          const deniedResults: ToolResult[] = [
+            ...preparedBatch.denied,
+            ...preparedBatch.prepared.flatMap((prepared, index) => {
+              const decision = decisions[index];
+              return decision?.type === 'deny'
+                ? [{ status: 'denied' as const, id: prepared.call.id, name: prepared.call.name, reason: decision.reason }]
+                : [];
+            }),
+            ...preparedBatch.escalations.flatMap(({ prepared }, index) => {
+              const decision = escalationDecisions[index];
+              return decision?.type === 'deny'
+                ? [{
+                    status: 'denied' as const,
+                    id: prepared.call.id,
+                    name: prepared.call.name,
+                    reason: decision.reason,
+                  }]
+                : [];
+            }),
+          ];
+
+          if (
+            approvedCalls.length > 0 &&
+            !state.parentSessionId
+          ) {
+            yield* checkpoint.ensureBaseline(state.cwd, sid, state.currentTurnId);
           }
 
           const approvedResults =
             approvedCalls.length > 0
-              ? yield* executor.executeBatch(
-                  approvedCalls,
-                  state.sessionId,
-                  {
-                    turnId: state.currentTurnId,
-                    projectPath,
-                    signal: abortSignal,
-                    activeProfile: profile?.name,
-                    model,
-                    parentChain,
-                    agentName: state.agentName,
-                    onBeforeMutation: checkpoint.snapshotBeforeWrite(
-                      state.cwd,
-                      sid,
-                      state.currentTurnId
-                    ),
-                  },
-                  toolLookup
-                )
+              ? yield* executor.executeBatch(approvedCalls, state.sessionId, {
+                  turnId: state.currentTurnId,
+                  projectPath,
+                  signal: abortSignal,
+                  permissionMode,
+                  sandboxMode: opts.sandboxMode,
+                  parentPolicy: opts.sandboxPolicy,
+                  model,
+                  parentChain,
+                  agentName: state.agentName,
+                })
               : [];
 
           const resultsById = new Map<string, any>();

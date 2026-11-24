@@ -34,7 +34,7 @@ describe('load — keeps the persisted model untouched', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'gpt-4o',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -70,7 +70,7 @@ describe('load — keeps the persisted model untouched', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'claude-3-5-sonnet',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -142,7 +142,7 @@ describe('load — keeps the persisted model untouched', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'gpt-4o',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -179,7 +179,7 @@ describe('create — generates sessionId internally', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -204,7 +204,7 @@ describe('create — generates sessionId internally', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'my-special-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -230,7 +230,7 @@ describe('create — generates sessionId internally', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -257,7 +257,7 @@ describe('load restores persisted fields', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -303,7 +303,7 @@ describe('load restores persisted fields', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })

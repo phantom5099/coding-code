@@ -138,6 +138,12 @@ export interface HarnessMocks {
   };
   executor?: {
     executeBatch: (calls: any[], sessionId?: string, opts?: any) => Effect.Effect<any[]>;
+    prepareBatch?: (
+      calls: readonly any[],
+      sessionId: string | undefined,
+      opts: any,
+      lookup: any
+    ) => Effect.Effect<any>;
   };
   todo?: Map<string, Array<{ step: string; status: string }>>;
   memorySnapshot?: string;
@@ -172,7 +178,7 @@ export function makeState(partial: Partial<SessionStoreState> = {}): SessionStor
     createdAt: new Date().toISOString(),
     model: 'test-model',
     title: 'test',
-    activeProfile: 'build',
+
     permissionMode: 'askBeforeExec',
     currentTurnId: 1,
     memorySnapshot: '',
@@ -209,7 +215,6 @@ export interface RunAgentOptions {
   sessionId?: string;
   cwd?: string;
   signal?: AbortSignal;
-  activeProfile?: 'plan' | 'build';
   permissionMode?: string;
   model?: string;
   /** 随请求下发的显式 @ skill；缺省时 agent 不应产生任何 skill 提示块。 */
@@ -234,14 +239,56 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
           output: '',
         }))
       ));
+  const testSandboxPolicy = (projectPath: string, sessionId: string) => ({
+    mode: 'unrestricted' as const,
+    workspaceRoot: projectPath,
+    additionalWritableRoots: [],
+    network: { mode: 'unrestricted' as const, hosts: [], ports: [] },
+    sessionId,
+    enforcement: 'disabled' as const,
+    fingerprint: 'test',
+  });
   const executor = {
-    prepare: (names: readonly string[], mcpTools: any[] = []) =>
+    prepare: (mcpTools: any[] = []) =>
       Effect.sync(() => {
-        const { tools, lookup } = createToolCatalog(names, mcpTools);
+        const { tools, lookup } = createToolCatalog(mcpTools);
         return { tools, lookup };
       }),
+    prepareBatch:
+      mocks.executor?.prepareBatch ??
+      ((calls: readonly any[], sessionId: string | undefined, opts: any, lookup: any) =>
+        Effect.sync(() => {
+          const prepared: any[] = [];
+          for (const call of calls) {
+            const runner = lookup(call.name) ?? {
+              name: call.name,
+              concurrencySafe: true,
+              approval: { action: 'other' },
+              describeOperation: () => ({ action: 'other' }),
+              parse: (args: unknown) => args ?? {},
+            };
+            const parsedArgs = runner.parse(call.arguments ?? {});
+            prepared.push({
+              call,
+              runner,
+              parsedArgs,
+              argsHash: 'test',
+              operation: runner.describeOperation(parsedArgs),
+              sandboxPolicy: testSandboxPolicy(opts.projectPath, sessionId ?? 'test'),
+            });
+          }
+          return { prepared, denied: [], escalations: [] };
+        })),
     executeBatch: (calls: any[], sessionId?: string, opts?: any) =>
-      batch(calls, sessionId, opts),
+      batch(
+        calls.map((call) =>
+          'call' in call
+            ? { ...call.call, arguments: call.parsedArgs }
+            : call
+        ),
+        sessionId,
+        opts
+      ),
   } as any;
 
   const session: Record<string, any> = {
@@ -250,7 +297,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       Effect.succeed({
         ...state,
         sessionId: opts.sessionId ?? 'created-sid',
-        activeProfile: opts.activeProfile ?? 'build',
+
       }),
     materializeInput: (_state: any, input: any[]) =>
       Effect.succeed(
@@ -330,9 +377,15 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     Layer.succeed(ToolExecutorService, executor as any),
     Layer.succeed(CheckpointService, {
       snapshotBeforeWrite: () => Effect.void,
+      ensureBaseline: () => Effect.void,
     } as any),
     Layer.succeed(ApprovalService, {
       evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
+      evaluateBatch: (requests: readonly unknown[]) =>
+        Effect.succeed(requests.map(() => ({ type: 'allow' as const, source: 'test' }))),
+      evaluateEscalation: () => Effect.succeed({ type: 'allow', source: 'test' }),
+      evaluateEscalationBatch: (requests: readonly unknown[]) =>
+        Effect.succeed(requests.map(() => ({ type: 'allow' as const, source: 'test' }))),
     } as any),
     mocks.skillLayer ?? Layer.succeed(SkillService, skills as any),
     ContextMockLayer,
@@ -406,7 +459,6 @@ export async function runAgentTurn(
     const runOpts: any = { cwd: opts.cwd ?? '/tmp', model: opts.model ?? 'test-model' };
     if (opts.sessionId) runOpts.sessionId = opts.sessionId;
     if (opts.signal) runOpts.signal = opts.signal;
-    if (opts.activeProfile) runOpts.activeProfile = opts.activeProfile;
     if (opts.permissionMode) runOpts.permissionMode = opts.permissionMode;
     if (opts.skills) runOpts.skills = opts.skills;
     return yield* agent.runTurn(opts.input ?? incomingText('test'), runOpts);

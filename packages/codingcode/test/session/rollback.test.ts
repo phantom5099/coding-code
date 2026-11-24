@@ -21,7 +21,7 @@ function makeFixture(sessionId: string, slug: string) {
       createdAt: new Date().toISOString(),
       model: 'test-model',
       title: 'fixture',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     },
     { type: 'user', turnId: 1, content: 'hello' },

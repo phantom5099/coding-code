@@ -41,7 +41,7 @@ describe('title persistence — backfilled from the first user message', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -62,7 +62,7 @@ describe('title persistence — backfilled from the first user message', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -90,7 +90,7 @@ describe('title persistence — backfilled from the first user message', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -118,7 +118,7 @@ describe('title persistence — backfilled from the first user message', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -154,7 +154,7 @@ describe('title persistence — backfilled from the first user message', () => {
           return yield* svc.create(dir, {
             model: 'test-model',
             title: 'explicit title',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })
@@ -182,7 +182,7 @@ describe('title persistence — backfilled from the first user message', () => {
           const svc = yield* SessionService;
           return yield* svc.create(dir, {
             model: 'test-model',
-            activeProfile: 'build',
+
             permissionMode: 'askBeforeExec',
           });
         })

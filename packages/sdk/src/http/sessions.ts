@@ -9,8 +9,8 @@ export function createHttpSessionClient(
   const { apiGet, apiPost, apiPut, apiDelete } = request;
 
   return {
-    async createSession({ cwd, activeProfile, permissionMode, model }) {
-      return apiPost('/api/sessions', { cwd, activeProfile, permissionMode, model });
+    async createSession({ cwd, permissionMode, model }) {
+      return apiPost('/api/sessions', { cwd, permissionMode, model });
     },
 
     async resumeSession({ sessionId, cwd }) {
@@ -30,14 +30,6 @@ export function createHttpSessionClient(
       await apiDelete(`/api/sessions/${sessionId}?cwd=${encodeURIComponent(cwd)}`);
     },
 
-    async getSessionProfile({ sessionId, cwd }) {
-      return apiGet(`/api/sessions/${sessionId}/profile?cwd=${encodeURIComponent(cwd)}`);
-    },
-
-    async setSessionProfile({ sessionId, cwd, activeProfile }) {
-      return apiPost(`/api/sessions/${sessionId}/profile`, { cwd, activeProfile });
-    },
-
     async getSessionPermissionMode({ sessionId, cwd }) {
       const data = await apiGet<{ mode: PermissionMode }>(
         `/api/sessions/${sessionId}/permission-mode?cwd=${encodeURIComponent(cwd)}`
@@ -51,10 +43,6 @@ export function createHttpSessionClient(
 
     async renameSession({ sessionId, cwd, title }) {
       await apiPut(`/api/sessions/${sessionId}/title`, { cwd, title });
-    },
-
-    async getSessionPlan({ sessionId, cwd }) {
-      return apiGet(`/api/sessions/${sessionId}/plan?cwd=${encodeURIComponent(cwd)}`);
     },
 
     async getCheckpointDiff({ sessionId, cwd, turnId }) {

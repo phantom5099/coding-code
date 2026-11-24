@@ -128,7 +128,6 @@ function runBatch(
     projectPath: string;
     sessionId?: string;
     signal?: AbortSignal;
-    activeProfile?: 'plan' | 'build';
     model: string;
   },
   h: Harness,
@@ -136,16 +135,14 @@ function runBatch(
 ): Promise<ToolResult[]> {
   const program = Effect.gen(function* () {
     const exec = yield* ToolExecutorService;
-    // 只把内置名交给 catalog（去重）；MCP 工具名（含 `:`）由 spec 侧注册
-    const builtinNames = [...new Set(calls.map((c) => c.name).filter((n) => TOOLS_BY_NAME.has(n)))];
-    const catalog = yield* exec.prepare(builtinNames, mcpSpecs);
+    const catalog = yield* exec.prepare(mcpSpecs);
     return yield* exec.executeBatch(
       calls,
       ctx.sessionId,
       {
         projectPath: ctx.projectPath,
         signal: ctx.signal,
-        activeProfile: ctx.activeProfile,
+
         model: ctx.model,
       },
       catalog.lookup
@@ -356,7 +353,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('d1', 'spawn_agent', { agentName: 'build', description: 'delegate', prompt: 'go' }),
         tc('w1', 'write_file', { path: 'z.txt', content: 'z' }),
       ],
-      { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
+      { projectPath: dir, sessionId: 'sid-1', model: 'm' },
       h
     );
 
@@ -374,7 +371,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('w2', 'write_file', { path: 'z2.txt', content: 'z' }),
         tc('d2', 'spawn_agent', { agentName: 'build', description: 'delegate', prompt: 'go' }),
       ],
-      { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
+      { projectPath: dir, sessionId: 'sid-1', model: 'm' },
       h
     );
     expect(reversed.map((r) => r.id)).toEqual(['w2', 'd2']);
@@ -422,7 +419,7 @@ describe('executeBatch 保序波次调度', () => {
     expect(h.hookPoints.filter((p) => p === 'tool.execute.before')).toHaveLength(1);
   });
 
-  it('18 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
+  it('内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
     const expected: Record<string, boolean> = {
       read_file: true,
       search_code: true,
@@ -441,10 +438,9 @@ describe('executeBatch 保序波次调度', () => {
       write_file: false,
       edit_file: false,
       execute_command: false,
-      submit_plan: false,
     };
 
-    const { lookup } = createToolCatalog(Object.keys(expected));
+    const { lookup } = createToolCatalog();
     for (const [name, safe] of Object.entries(expected)) {
       expect(lookup(name)?.concurrencySafe, name).toBe(safe);
     }

@@ -14,6 +14,8 @@ export interface ToolCallRequest {
 
 export type RuleAction = 'deny' | 'allow' | 'ask';
 
+export type ApprovalAction = 'file' | 'exec' | 'network' | 'mcp' | 'subagent' | 'sandbox' | 'other';
+
 export interface PermissionRule {
   id: string;
   action: RuleAction;

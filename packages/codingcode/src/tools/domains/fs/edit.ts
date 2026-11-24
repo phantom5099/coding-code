@@ -1,14 +1,19 @@
 import { z } from 'zod';
 import { readFile, writeFile } from 'fs/promises';
-import { resolve } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
+import { resolveFileTarget } from '../../../sandbox/file-boundary.js';
 
 export const editFileTool: ToolDefinition = {
   name: 'edit_file',
   concurrencySafe: false,
-  mutatesWorkspace: true,
+  approval: { action: 'file', requiresConfirmation: true },
+  describeOperation: (args) => ({
+    action: 'file',
+    requiresConfirmation: true,
+    workspace: { paths: [String((args as { path?: unknown }).path ?? '')], write: true },
+  }),
   description:
     'Perform exact string replacement in a file. Provide the exact text to replace (old_string) and the new text (new_string). If old_string is not unique in the file, the edit will fail — narrow the match to make it unique.',
   parameters: z.object({
@@ -26,7 +31,16 @@ export const editFileTool: ToolDefinition = {
         old_string: string;
         new_string: string;
       };
-      const filePath = resolve(ctx?.projectPath ?? process.cwd(), path);
+      if (!ctx?.projectPath || !ctx.sandboxPolicy) {
+        return yield* Effect.fail(
+          new AgentError('SANDBOX_PATH_DENIED', 'edit_file requires a sandbox project path')
+        );
+      }
+      const filePath = yield* Effect.tryPromise({
+        try: () => resolveFileTarget(ctx.sandboxPolicy!, path, 'write'),
+        catch: (error) =>
+          error instanceof AgentError ? error : AgentError.toolExecutionFailed('edit_file', error),
+      });
       const content = yield* Effect.tryPromise({
         try: () => readFile(filePath, 'utf-8'),
         catch: (e) => AgentError.toolExecutionFailed('edit_file', e),

@@ -42,7 +42,7 @@ async function newSession(
       const svc = yield* SessionService;
       return yield* svc.create(
         dir,
-        { model: 'test-model', activeProfile: 'build', permissionMode: 'askBeforeExec' },
+        { model: 'test-model', permissionMode: 'askBeforeExec' },
         opts
       );
     })
@@ -278,7 +278,7 @@ describe('SessionService.resolveAssets', () => {
           const svc = yield* SessionService;
           const state = yield* svc.create(
             dir,
-            { model: 'test-model', activeProfile: 'build', permissionMode: 'askBeforeExec' }
+            { model: 'test-model', permissionMode: 'askBeforeExec' }
           );
           const png = mediaBytes('png');
           const parts = yield* svc.materializeInput(state, [{ type: 'media', bytes: png }]);

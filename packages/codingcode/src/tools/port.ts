@@ -1,19 +1,37 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
+import type { AgentError } from '../util/error.js';
 import type { McpToolSpec } from '../mcp/types.js';
 import type { ToolCall } from '../llm/types.js';
-import type { ToolCatalog, ToolExecOpts, ToolLookup, ToolResult } from './types.js';
+import type {
+  ParsedToolCall,
+  PreparedToolBatch,
+  PreparedToolCall,
+  ToolCatalog,
+  ToolExecOpts,
+  ToolLookup,
+  ToolResult,
+} from './types.js';
 
 export interface ToolExecutorShape {
-  /** 按工具名 + 调用方提供的 MCP 工具装配出本轮可用的工具集 */
-  prepare(toolNames: readonly string[], mcpTools?: McpToolSpec[]): Effect.Effect<ToolCatalog>;
+  /** 装配完整的内置工具集，并合并调用方提供的 MCP 工具 */
+  prepare(mcpTools?: McpToolSpec[]): Effect.Effect<ToolCatalog>;
 
-  executeBatch(
-    toolCalls: ToolCall[],
+  parseCall(toolCall: ToolCall, toolLookup: ToolLookup): Effect.Effect<ParsedToolCall, AgentError>;
+
+  prepareBatch(
+    toolCalls: readonly ToolCall[],
     sessionId: string | undefined,
     opts: ToolExecOpts,
     toolLookup: ToolLookup
-  ): Effect.Effect<ToolResult[]>;
+  ): Effect.Effect<PreparedToolBatch>;
+
+  executeBatch(
+    toolCalls: readonly (PreparedToolCall | ToolCall)[],
+    sessionId: string | undefined,
+    opts: ToolExecOpts,
+    toolLookup?: ToolLookup
+  ): Effect.Effect<ToolResult[], AgentError>;
 }
 
 export class ToolExecutorService extends Context.Tag('ToolExecutor')<

@@ -1,12 +1,9 @@
 import * as HttpRouter from '@effect/platform/HttpRouter';
 import { Effect } from 'effect';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { join } from 'path';
 import type { SessionStoreState } from '../../session/types.js';
 import {
   ASK_BEFORE_EXEC_PERMISSION_MODE,
   type PermissionMode,
-  type ProfileName,
 } from '../../util/enums.js';
 
 import { SessionService } from '../../session/port.js';
@@ -19,8 +16,6 @@ import { estimatePromptTokensFrom } from '../../context/context.js';
 import { CheckpointService } from '../../checkpoint/port.js';
 import { activeModelId, setGlobalActive } from '../../infra/models.js';
 import { resolveCwd, resolveWorkspaceCwd } from '../cwd.js';
-import { projectDataDir } from '../../util/path.js';
-import { isAgentProfileName } from '../../agent/profile.js';
 import { isPermissionMode } from '../../approval/types.js';
 import { AgentError } from '../../util/error.js';
 import { json, pathParams, query, readJson, type Handler, type Router } from '../handler.js';
@@ -37,16 +32,10 @@ const listSessions: Handler = Effect.gen(function* () {
 const createSession: Handler = Effect.gen(function* () {
   const body = yield* readJson<{
     cwd: string;
-    activeProfile: ProfileName;
     permissionMode: PermissionMode;
     model: string;
   }>();
 
-  if (!isAgentProfileName(body.activeProfile)) {
-    return yield* Effect.fail(
-      new AgentError('CONFIG_INVALID', `Invalid activeProfile: ${body.activeProfile}`)
-    );
-  }
   if (!isPermissionMode(body.permissionMode)) {
     return yield* Effect.fail(
       new AgentError('CONFIG_INVALID', `Invalid permissionMode: ${body.permissionMode}`)
@@ -61,7 +50,6 @@ const createSession: Handler = Effect.gen(function* () {
   const session = yield* SessionService;
   const state = (yield* session.create(cwd, {
     model: body.model,
-    activeProfile: body.activeProfile,
     permissionMode: body.permissionMode,
   })) as SessionStoreState;
   return json({ sessionId: state.sessionId });
@@ -123,70 +111,6 @@ const sessionHistory: Handler = Effect.gen(function* () {
   if (!cwd) return yield* Effect.fail(new AgentError('CONFIG_MISSING', 'cwd required'));
   const session = yield* SessionService;
   return json(yield* session.readUITurns(id ?? '', cwd));
-});
-
-// ---- Plan file: read the current plan document for a session ----
-
-const readLatestPlan = (planDir: string): { path: string; content: string } | null => {
-  if (!existsSync(planDir)) return null;
-  let latest: { path: string; mtime: number } | null = null;
-  for (const name of readdirSync(planDir)) {
-    if (!name.endsWith('.md')) continue;
-    const full = join(planDir, name);
-    const mtime = statSync(full).mtimeMs;
-    if (latest === null || mtime > latest.mtime) {
-      latest = { path: full, mtime };
-    }
-  }
-  return latest === null ? null : { path: latest.path, content: readFileSync(latest.path, 'utf8') };
-};
-
-const readPlan: Handler = Effect.gen(function* () {
-  const { cwd: rawCwd } = yield* query;
-  const planDir = projectDataDir(resolveCwd(rawCwd));
-  const missing = json({ content: '', path: '', directory: planDir, exists: false });
-
-  const latest = yield* Effect.try({
-    try: () => readLatestPlan(planDir),
-    catch: (e) => new AgentError('SESSION_IO_ERROR', `Failed to read plan: ${String(e)}`),
-  });
-
-  if (latest === null) return missing;
-  return json({ content: latest.content, path: latest.path, directory: planDir, exists: true });
-});
-
-// ---- Agent profile switching ----
-
-const getProfile: Handler = Effect.gen(function* () {
-  const { id } = yield* pathParams;
-  const cwd = resolveCwd((yield* query).cwd);
-  const session = yield* SessionService;
-  const state = yield* session.load(cwd, id ?? '');
-  return json({
-    activeProfile: state.activeProfile,
-    permissionMode: state.permissionMode,
-    cwd,
-  });
-});
-
-const setProfile: Handler = Effect.gen(function* () {
-  const { id } = yield* pathParams;
-  const body = yield* readJson<{ cwd?: string; activeProfile: ProfileName }>();
-  const cwd = resolveCwd(body.cwd);
-  const activeProfile = body.activeProfile;
-  if (!isAgentProfileName(activeProfile)) {
-    return yield* Effect.fail(
-      new AgentError('CONFIG_INVALID', `Invalid activeProfile: ${activeProfile}`)
-    );
-  }
-
-  const session = yield* SessionService;
-  yield* session.setActiveProfile(cwd, id ?? '', activeProfile);
-  const state = yield* session.load(cwd, id ?? '');
-  return json({
-    activeProfile: state.activeProfile,
-    permissionMode: state.permissionMode,
-  });
 });
 
 const getPermissionMode: Handler = Effect.gen(function* () {
@@ -377,9 +301,6 @@ export const addSessionsRoutes = (router: Router): Router => {
     HttpRouter.post('/api/sessions/:id/compact', compactSession),
     HttpRouter.del('/api/sessions/:id', deleteSession),
     HttpRouter.get('/api/sessions/:id/history', sessionHistory),
-    HttpRouter.get('/api/sessions/:id/plan', readPlan),
-    HttpRouter.get('/api/sessions/:id/profile', getProfile),
-    HttpRouter.post('/api/sessions/:id/profile', setProfile),
     HttpRouter.get('/api/sessions/:id/permission-mode', getPermissionMode),
     HttpRouter.put('/api/sessions/:id/permission-mode', setPermissionMode)
   );

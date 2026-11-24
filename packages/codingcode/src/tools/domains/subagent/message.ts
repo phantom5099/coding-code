@@ -26,7 +26,12 @@ export const sendMessageTool: ToolDefinition<MailboxService | SessionService> = 
       const mailbox = yield* MailboxService;
       const session = yield* SessionService;
       const { sessionId, message } = args as { sessionId: string; message: string };
-      const projectPath = ctx?.projectPath || process.cwd();
+      if (!ctx?.projectPath || !ctx.sandboxPolicy) {
+        return yield* Effect.fail(
+          new AgentError('SANDBOX_POLICY_DENIED', 'send_message requires a sandbox policy')
+        );
+      }
+      const projectPath = ctx.projectPath;
       const selfSessionId = ctx?.sessionId;
 
       if (!selfSessionId) {

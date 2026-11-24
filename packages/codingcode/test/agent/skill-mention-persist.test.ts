@@ -72,7 +72,7 @@ describe('agent runTurn with an explicit @ skill', () => {
       {
         cwd: projectDir,
         input,
-        activeProfile: 'build',
+
         permissionMode: 'askBeforeExec',
         skills: [{ name: SKILL_NAME, path: skillPath }],
       }

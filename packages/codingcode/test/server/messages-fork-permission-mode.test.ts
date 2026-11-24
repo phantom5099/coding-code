@@ -68,7 +68,7 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
         const session = yield* SessionService;
         return yield* session.create(cwd, {
           model: 'm',
-          activeProfile: 'build',
+
           permissionMode: 'askBeforeExec',
         });
       })

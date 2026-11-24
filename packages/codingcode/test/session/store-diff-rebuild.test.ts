@@ -13,7 +13,7 @@ describe('sessionEventsToTurns', () => {
         createdAt: new Date().toISOString(),
         model: 'deepseek-chat',
         title: '',
-        activeProfile: 'build',
+
         permissionMode: 'askBeforeExec',
       },
       {
@@ -65,7 +65,7 @@ describe('sessionEventsToTurns', () => {
         createdAt: new Date().toISOString(),
         model: 'deepseek-chat',
         title: '',
-        activeProfile: 'build',
+
         permissionMode: 'askBeforeExec',
       },
       {
@@ -115,7 +115,7 @@ describe('sessionEventsToTurns', () => {
         createdAt: new Date().toISOString(),
         model: 'deepseek-chat',
         title: '',
-        activeProfile: 'build',
+
         permissionMode: 'askBeforeExec',
       },
       {

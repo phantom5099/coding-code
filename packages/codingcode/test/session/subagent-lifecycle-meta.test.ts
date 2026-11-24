@@ -16,7 +16,7 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 
 const childOpts = {
   model: 'gpt-4o',
-  activeProfile: 'build' as const,
+
   permissionMode: 'askBeforeExec' as const,
 };
 

@@ -39,7 +39,7 @@ function hooksStub() {
 function runProbe(opts: ToolExecOpts, sessionId: string | undefined): Promise<void> {
   const program = Effect.gen(function* () {
     const exec = yield* ToolExecutorService;
-    const catalog = yield* exec.prepare([PROBE]);
+    const catalog = yield* exec.prepare();
     yield* exec.executeBatch(
       [{ id: 'c1', name: PROBE, arguments: {} }],
       sessionId,
@@ -64,22 +64,21 @@ describe('工具执行上下文投影', () => {
 
   it('可见字段一个不少：sessionId 由位置参数并入，其余从 opts 流过', async () => {
     const signal = new AbortController().signal;
-    await runProbe({ turnId: 7, projectPath: '/proj', signal, activeProfile: 'plan', model: 'm-1' }, 'sess-1');
+    await runProbe({ turnId: 7, projectPath: '/proj', signal, model: 'm-1' }, 'sess-1');
 
     expect(captured).toBeDefined();
     // 精确断言键集合：既防漏抄，也防多塞
     expect(Object.keys(captured!).sort()).toEqual([
-      'activeProfile',
       'callId',
       'model',
       'projectPath',
+      'sandboxPolicy',
       'sessionId',
       'signal',
     ]);
     expect(captured!.sessionId).toBe('sess-1');
     expect(captured!.callId).toBe('c1');
     expect(captured!.projectPath).toBe('/proj');
-    expect(captured!.activeProfile).toBe('plan');
     expect(captured!.model).toBe('m-1');
     expect(captured!.signal).toBe(signal);
   });
