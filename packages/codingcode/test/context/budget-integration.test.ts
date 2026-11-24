@@ -54,7 +54,6 @@ describe('getHistory integration', () => {
         createdAt: new Date().toISOString(),
         model: 'test-model',
         title: 'fixture',
-        activeProfile: 'build',
         permissionMode: 'askBeforeExec',
       },
       { type: 'user', turnId: 1, content: [{ type: 'text', text: 'q1' }] },

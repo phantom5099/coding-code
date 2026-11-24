@@ -76,7 +76,7 @@ function seedEvents(): SessionEvent[] {
       createdAt: new Date().toISOString(),
       model: 'test-model',
       title: 't',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     },
     { type: 'user', turnId: 1, content: text('q1') },

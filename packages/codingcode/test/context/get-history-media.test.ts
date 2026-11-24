@@ -54,7 +54,7 @@ function writeTranscript(ref: SessionRef, asset: string, onDisk: boolean): strin
       createdAt: new Date().toISOString(),
       model: 'test-model',
       title: 'media-fixture',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     },
     {

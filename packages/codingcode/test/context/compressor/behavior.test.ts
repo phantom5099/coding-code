@@ -52,7 +52,7 @@ function makeFixture(opts: FixtureOptions) {
       createdAt: new Date().toISOString(),
       model: 'test-model',
       title: 'fixture',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     },
   ];

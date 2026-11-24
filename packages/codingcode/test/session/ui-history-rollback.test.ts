@@ -24,7 +24,7 @@ function makeFixture(sessionId: string, slug: string, extraEvents?: object[]) {
       createdAt: new Date().toISOString(),
       model: 'test-model',
       title: 'fixture',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     },
     { type: 'user', turnId: 1, content: 'hello' },
@@ -66,7 +66,7 @@ describe('filterForContext', () => {
           createdAt: new Date().toISOString(),
           model: 'test-model',
           title: 'test',
-          activeProfile: 'build',
+
           permissionMode: 'askBeforeExec',
         },
         { type: 'user', turnId: 1, content: text('hello') },
@@ -115,7 +115,7 @@ describe('readUIHistory with visibility filtering', () => {
           createdAt: new Date().toISOString(),
           model: 'test-model',
           title: 'test',
-          activeProfile: 'build',
+
           permissionMode: 'askBeforeExec',
         },
         { type: 'user', turnId: 1, content: 'hello' },

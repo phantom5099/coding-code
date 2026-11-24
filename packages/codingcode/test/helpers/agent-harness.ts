@@ -178,7 +178,7 @@ export function makeState(partial: Partial<SessionStoreState> = {}): SessionStor
     createdAt: new Date().toISOString(),
     model: 'test-model',
     title: 'test',
-    activeProfile: 'build',
+
     permissionMode: 'askBeforeExec',
     currentTurnId: 1,
     memorySnapshot: '',
@@ -215,7 +215,6 @@ export interface RunAgentOptions {
   sessionId?: string;
   cwd?: string;
   signal?: AbortSignal;
-  activeProfile?: 'plan' | 'build';
   permissionMode?: string;
   model?: string;
   /** 随请求下发的显式 @ skill；缺省时 agent 不应产生任何 skill 提示块。 */
@@ -298,7 +297,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
       Effect.succeed({
         ...state,
         sessionId: opts.sessionId ?? 'created-sid',
-        activeProfile: opts.activeProfile ?? 'build',
+
       }),
     materializeInput: (_state: any, input: any[]) =>
       Effect.succeed(
@@ -460,7 +459,6 @@ export async function runAgentTurn(
     const runOpts: any = { cwd: opts.cwd ?? '/tmp', model: opts.model ?? 'test-model' };
     if (opts.sessionId) runOpts.sessionId = opts.sessionId;
     if (opts.signal) runOpts.signal = opts.signal;
-    if (opts.activeProfile) runOpts.activeProfile = opts.activeProfile;
     if (opts.permissionMode) runOpts.permissionMode = opts.permissionMode;
     if (opts.skills) runOpts.skills = opts.skills;
     return yield* agent.runTurn(opts.input ?? incomingText('test'), runOpts);

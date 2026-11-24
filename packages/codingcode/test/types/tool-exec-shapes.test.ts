@@ -13,7 +13,7 @@ describe('工具执行参数的形状收口', () => {
       turnId: 3,
       projectPath: '/p',
       signal: new AbortController().signal,
-      activeProfile: 'plan',
+
       model: 'm',
     };
     void opts;

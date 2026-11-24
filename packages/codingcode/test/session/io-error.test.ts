@@ -22,7 +22,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       createdAt: new Date().toISOString(),
       model: 'test',
       title: 'io-err-s',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
       currentTurnId: 1,
       usage: undefined,
@@ -52,7 +52,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       createdAt: new Date().toISOString(),
       model: 'test',
       title: 'io-err-a',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
       currentTurnId: 1,
       usage: undefined,
@@ -81,7 +81,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
       createdAt: new Date().toISOString(),
       model: 'test',
       title: 'io-err-e',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
       currentTurnId: 1,
       usage: undefined,

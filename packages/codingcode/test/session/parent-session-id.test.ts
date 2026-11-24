@@ -21,7 +21,7 @@ describe('parentSessionId in session head', () => {
         const svc = yield* SessionService;
         return yield* svc.create(
           cwd,
-          { model: 'gpt-4o', activeProfile: 'build', permissionMode: 'askBeforeExec' },
+          { model: 'gpt-4o', permissionMode: 'askBeforeExec' },
           { parentSessionId: parentId }
         );
       })

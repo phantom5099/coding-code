@@ -38,7 +38,7 @@ function makeFixture(
       createdAt: new Date().toISOString(),
       model: 'test-model',
       title: 'fixture',
-      activeProfile: 'build',
+
       permissionMode: 'askBeforeExec',
     },
   ];
@@ -72,7 +72,7 @@ function buildState(
     createdAt: new Date().toISOString(),
     model: 'test-model',
     title: 'fixture',
-    activeProfile: 'build',
+
     permissionMode: 'askBeforeExec',
     currentTurnId,
     memorySnapshot: '',

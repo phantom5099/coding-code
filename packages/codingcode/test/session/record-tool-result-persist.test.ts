@@ -18,7 +18,7 @@ describe('recordToolResult', () => {
         const svc = yield* SessionService;
         return yield* svc.create('/tmp/persist-test', {
           model: 'test-model',
-          activeProfile: 'build',
+
           permissionMode: 'askBeforeExec',
         });
       })
@@ -51,7 +51,7 @@ describe('recordToolResult', () => {
         const svc = yield* SessionService;
         return yield* svc.create('/tmp/persist-test-small', {
           model: 'test-model',
-          activeProfile: 'build',
+
           permissionMode: 'askBeforeExec',
         });
       })

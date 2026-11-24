@@ -34,7 +34,7 @@ describe('PUT /api/sessions/:id/title', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         cwd,
-        activeProfile: 'build',
+
         permissionMode: 'askBeforeExec',
         model: 'gpt-4',
       }),

@@ -22,7 +22,7 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 
 const createOpts = {
   model: 'test-model',
-  activeProfile: 'build' as const,
+
   permissionMode: 'askBeforeExec' as const,
 };
 

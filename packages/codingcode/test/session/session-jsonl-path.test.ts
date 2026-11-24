@@ -23,7 +23,7 @@ describe('sessionJsonlPathFromCwd', () => {
         const svc = yield* SessionService;
         return yield* svc.create(cwd, {
           model: 'test-model',
-          activeProfile: 'build',
+
           permissionMode: 'askBeforeExec',
         });
       })
@@ -50,7 +50,7 @@ describe('sessionJsonlPathFromCwd', () => {
         const svc = yield* SessionService;
         return yield* svc.create(cwd, {
           model: 'test-model',
-          activeProfile: 'build',
+
           permissionMode: 'askBeforeExec',
         });
       })

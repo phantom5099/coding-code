@@ -128,7 +128,6 @@ function runBatch(
     projectPath: string;
     sessionId?: string;
     signal?: AbortSignal;
-    activeProfile?: 'plan' | 'build';
     model: string;
   },
   h: Harness,
@@ -143,7 +142,7 @@ function runBatch(
       {
         projectPath: ctx.projectPath,
         signal: ctx.signal,
-        activeProfile: ctx.activeProfile,
+
         model: ctx.model,
       },
       catalog.lookup
@@ -354,7 +353,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('d1', 'spawn_agent', { agentName: 'build', description: 'delegate', prompt: 'go' }),
         tc('w1', 'write_file', { path: 'z.txt', content: 'z' }),
       ],
-      { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
+      { projectPath: dir, sessionId: 'sid-1', model: 'm' },
       h
     );
 
@@ -372,7 +371,7 @@ describe('executeBatch 保序波次调度', () => {
         tc('w2', 'write_file', { path: 'z2.txt', content: 'z' }),
         tc('d2', 'spawn_agent', { agentName: 'build', description: 'delegate', prompt: 'go' }),
       ],
-      { projectPath: dir, sessionId: 'sid-1', activeProfile: 'build', model: 'm' },
+      { projectPath: dir, sessionId: 'sid-1', model: 'm' },
       h
     );
     expect(reversed.map((r) => r.id)).toEqual(['w2', 'd2']);
