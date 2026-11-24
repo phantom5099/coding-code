@@ -5,6 +5,9 @@ import {
   parseBingHtml,
   parseBaiduHtml,
 } from '../../src/tools/domains/web/search.js';
+import { testSandboxPolicy } from '../helpers/sandbox.js';
+
+const ctx = { projectPath: process.cwd(), model: 'test-model', sandboxPolicy: testSandboxPolicy(process.cwd()) };
 
 describe('webSearchTool', () => {
   it('should have correct tool name and schema', () => {
@@ -32,7 +35,7 @@ describe('webSearchTool', () => {
 
   it('should execute search and return results', async () => {
     const result = (await Effect.runPromise(
-      webSearchTool.execute({ query: 'TypeScript programming', max_results: 3 }) as any
+      webSearchTool.execute({ query: 'TypeScript programming', max_results: 3 }, ctx) as any
     )) as string;
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
@@ -42,7 +45,7 @@ describe('webSearchTool', () => {
 
   it('should support Chinese query', async () => {
     const result = (await Effect.runPromise(
-      webSearchTool.execute({ query: '自主AI agent平台', max_results: 3 })
+      webSearchTool.execute({ query: '自主AI agent平台', max_results: 3 }, ctx)
     )) as string;
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);

@@ -1,5 +1,5 @@
 import type { MediaPart, ReasoningData, TextPart, TokenUsage, ToolCall } from '../llm/types.js';
-import type { ProfileName, PermissionMode } from '../util/enums.js';
+import type { PermissionMode } from '../util/enums.js';
 
 /**
  * 落盘形态的媒体块：MediaPart 之上附物化时解析出的元数据。
@@ -25,7 +25,6 @@ export interface SessionMetaEvent {
   createdAt: string;
   model: string;
   title: string;
-  activeProfile: ProfileName;
   permissionMode: PermissionMode;
   parentSessionId?: string;
   agentName?: string;
@@ -36,7 +35,7 @@ export interface SessionMetaEvent {
   parentChain?: string[];
   /** 子智能体用途描述；首次派发时给出，供 list_agents 展示 */
   description?: string;
-  /** 子会话自定义 system prompt 中间段；仅子会话写入，续跑时回读，缺省回落 profile */
+  /** 子会话自定义 system prompt 中间段；仅子会话写入，续跑时回读 */
   systemPrompt?: string;
 }
 
@@ -132,7 +131,6 @@ export interface SessionStoreState extends SessionMetaEvent {
 export interface SessionCreateOptions {
   model: string;
   title?: string;
-  activeProfile: ProfileName;
   permissionMode: PermissionMode;
 }
 

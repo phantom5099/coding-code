@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Effect } from 'effect';
 import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
+import { assertNetworkTarget } from '../../../sandbox/network.js';
 
 interface SearchResult {
   title: string;
@@ -145,6 +146,7 @@ export function parseBaiduHtml(html: string, maxResults: number): SearchResult[]
 export const webSearchTool: ToolDefinition = {
   name: 'web_search',
   concurrencySafe: true,
+  approval: { action: 'network', requiresConfirmation: true, network: { hosts: ['cn.bing.com', 'www.baidu.com'], ports: [80, 443] } },
   description:
     'Search the web and return results with titles, URLs, and snippets. Use this when you need up-to-date information or to find documentation, references, or answers beyond your knowledge cutoff.',
   parameters: z.object({
@@ -157,9 +159,22 @@ export const webSearchTool: ToolDefinition = {
       .default(8)
       .describe('Maximum number of results to return'),
   }),
-  execute: (args) =>
+  execute: (args, ctx) =>
     Effect.gen(function* () {
       const { query, max_results } = args as { query: string; max_results: number };
+      if (!ctx?.sandboxPolicy) {
+        return yield* Effect.fail(
+          new AgentError('SANDBOX_NETWORK_DENIED', 'web_search requires a sandbox policy')
+        );
+      }
+      yield* Effect.try({
+        try: () => {
+          assertNetworkTarget(ctx.sandboxPolicy!, 'https://cn.bing.com/');
+          assertNetworkTarget(ctx.sandboxPolicy!, 'https://www.baidu.com/');
+        },
+        catch: (e) =>
+          e instanceof AgentError ? e : AgentError.toolExecutionFailed('web_search', e),
+      });
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15_000);

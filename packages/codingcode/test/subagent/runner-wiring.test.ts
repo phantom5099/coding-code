@@ -139,7 +139,12 @@ const AgentDeps = Layer.mergeAll(
     snapshotBeforeWrite: () => Effect.void,
   } as any),
   Layer.succeed(ApprovalService, {
-    evaluate: () => Effect.succeed({ type: 'allow' }),
+    evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
+    evaluateBatch: (requests: readonly unknown[]) =>
+      Effect.succeed(requests.map(() => ({ type: 'allow' as const, source: 'test' }))),
+    evaluateEscalation: () => Effect.succeed({ type: 'allow', source: 'test' }),
+    evaluateEscalationBatch: (requests: readonly unknown[]) =>
+      Effect.succeed(requests.map(() => ({ type: 'allow' as const, source: 'test' }))),
   } as any),
   Layer.succeed(SkillService, {
     getAll: () => Effect.succeed([]),

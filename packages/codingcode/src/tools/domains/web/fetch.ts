@@ -2,10 +2,21 @@ import { z } from 'zod';
 import { Effect } from 'effect';
 import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
+import { assertNetworkTarget } from '../../../sandbox/network.js';
 
 export const webFetchTool: ToolDefinition = {
   name: 'fetch_url',
   concurrencySafe: true,
+  approval: { action: 'network', requiresConfirmation: true },
+  describeOperation: (args) => {
+    const url = typeof (args as { url?: unknown }).url === 'string' ? (args as { url: string }).url : '';
+    try {
+      const parsed = new URL(url);
+      return { action: 'network', requiresConfirmation: true, network: { hosts: [parsed.hostname], ports: [parsed.port ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80] } };
+    } catch {
+      return { action: 'network', requiresConfirmation: true, dangerous: ['network_unrestricted'] };
+    }
+  },
   description: 'Fetch content from a URL and return its text. Supports GET requests only.',
   parameters: z.object({
     url: z.string().url().describe('The URL to fetch (must be a valid absolute URL)'),
@@ -17,9 +28,19 @@ export const webFetchTool: ToolDefinition = {
       .default(100_000)
       .describe('Maximum characters to return (default 100k, max 500k)'),
   }),
-  execute: (args) =>
+  execute: (args, ctx) =>
     Effect.gen(function* () {
       const { url, max_length } = args as any;
+      if (!ctx?.sandboxPolicy) {
+        return yield* Effect.fail(
+          new AgentError('SANDBOX_NETWORK_DENIED', 'fetch_url requires a sandbox policy')
+        );
+      }
+      yield* Effect.try({
+        try: () => assertNetworkTarget(ctx.sandboxPolicy!, url),
+        catch: (e) =>
+          e instanceof AgentError ? e : AgentError.toolExecutionFailed('fetch_url', e),
+      });
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15_000);
 
@@ -35,6 +56,12 @@ export const webFetchTool: ToolDefinition = {
               redirect: 'follow',
             }),
           catch: (e) => AgentError.toolExecutionFailed('fetch_url', e),
+        });
+
+        yield* Effect.try({
+          try: () => assertNetworkTarget(ctx.sandboxPolicy!, response.url),
+          catch: (e) =>
+            e instanceof AgentError ? e : AgentError.toolExecutionFailed('fetch_url', e),
         });
 
         if (!response.ok) {
@@ -62,9 +89,11 @@ export const webFetchTool: ToolDefinition = {
         ].join('\n');
       }).pipe(
         Effect.catchAll((e: AgentError) =>
-          Effect.succeed(
-            `Error fetching ${url}: ${e.cause instanceof Error ? e.cause.message : String(e.cause ?? e.message)}`
-          )
+          e.code.startsWith('SANDBOX_')
+            ? Effect.fail(e)
+            : Effect.succeed(
+                `Error fetching ${url}: ${e.cause instanceof Error ? e.cause.message : String(e.cause ?? e.message)}`
+              )
         )
       );
 

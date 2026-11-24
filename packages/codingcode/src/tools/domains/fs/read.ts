@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { readFile } from 'fs/promises';
-import { resolve } from 'path';
 import { Effect } from 'effect';
 import { AgentError } from '../../../util/error.js';
 import type { ToolDefinition } from '../../types.js';
+import { resolveFileTarget } from '../../../sandbox/file-boundary.js';
 
 export const readFileTool: ToolDefinition = {
   name: 'read_file',
@@ -23,7 +23,16 @@ export const readFileTool: ToolDefinition = {
   execute: (args, ctx) =>
     Effect.gen(function* () {
       const { path, offset, limit } = args as any;
-      const filePath = resolve(ctx?.projectPath ?? process.cwd(), path);
+      if (!ctx?.projectPath || !ctx.sandboxPolicy) {
+        return yield* Effect.fail(
+          new AgentError('SANDBOX_PATH_DENIED', 'read_file requires a sandbox project path')
+        );
+      }
+      const filePath = yield* Effect.tryPromise({
+        try: () => resolveFileTarget(ctx.sandboxPolicy!, path, 'read'),
+        catch: (error) =>
+          error instanceof AgentError ? error : AgentError.toolExecutionFailed('read_file', error),
+      });
       const content = yield* Effect.tryPromise({
         try: () => readFile(filePath, 'utf-8'),
         catch: (e) => AgentError.toolExecutionFailed('read_file', e),

@@ -39,7 +39,7 @@ import {
   type IncomingPart,
   type TokenUsage,
 } from '../llm/types.js';
-import type { ProfileName, PermissionMode } from '../util/enums.js';
+import type { PermissionMode } from '../util/enums.js';
 
 import { SessionService } from './port.js';
 import {
@@ -202,7 +202,6 @@ export const SessionLayer = Layer.effect(
       options: {
         model: string;
         title?: string;
-        activeProfile: ProfileName;
         permissionMode: PermissionMode;
       },
       opts?: {
@@ -225,7 +224,6 @@ export const SessionLayer = Layer.effect(
             createdAt: new Date().toISOString(),
             model: options.model,
             title: options.title ? truncateTitle(options.title) : '',
-            activeProfile: options.activeProfile,
             permissionMode: options.permissionMode,
             ...(opts?.parentSessionId && { parentSessionId: opts.parentSessionId }),
             // 链随子会话落盘：续跑与路径定位都不必再依赖调用方重述
@@ -562,18 +560,6 @@ export const SessionLayer = Layer.effect(
         rewriteSessionMeta(paths.transcriptPath, { permissionMode: mode });
       });
 
-    const setActiveProfile = (
-      cwd: string,
-      sessionId: string,
-      profile: ProfileName,
-      parentSessionId?: string,
-      parentChain?: readonly string[]
-    ): Effect.Effect<void, AgentError> =>
-      Effect.sync(() => {
-        const paths = computePaths(cwd, sessionId, parentSessionId, parentChain);
-        rewriteSessionMeta(paths.transcriptPath, { activeProfile: profile });
-      });
-
     // 会话级切模型：只写会话首行，不碰 config.yaml
     const setModel = (
       cwd: string,
@@ -626,7 +612,6 @@ export const SessionLayer = Layer.effect(
         Effect.sync(() => readUIHistory(sessionId, cwd)),
 
       setPermissionMode: setPermissionModeByAddress,
-      setActiveProfile,
       setModel,
     };
   })

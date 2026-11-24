@@ -3,7 +3,8 @@ import { randomUUID } from 'crypto';
 import { AgentError } from '../util/error.js';
 import { isTurnEnd } from '../sink/types.js';
 import type { EndTransition, FrameBody } from '../sink/types.js';
-import { BYPASS_PERMISSION_MODE, type ProfileName } from '../util/enums.js';
+import type { PermissionMode } from '../util/enums.js';
+import type { SandboxPolicy } from '../sandbox/types.js';
 import { SUBAGENT_RESULT_PREFIX } from '../session/types.js';
 import type { SubagentResultEvent } from '../session/types.js';
 import { transcriptPathOf } from '../session/paths.js';
@@ -23,7 +24,8 @@ export interface SpawnOptions {
   agentName: string;
   parentSessionId: string;
   parentCwd: string;
-  parentProfile: ProfileName;
+  parentPermissionMode?: PermissionMode;
+  parentPolicy?: SandboxPolicy;
   /** 已由调用方解析过的模型 id（含清单校验与父模型回退） */
   model: string;
   systemPrompt?: string;
@@ -219,8 +221,8 @@ export const SubagentRunRegistryLayer = Layer.scoped(
         const { stream, sessionId } = yield* runner.runSubagent([textPart(opts.prompt)], {
           sessionId: opts.resumeSessionId, // 续跑：复用既有子会话与历史上下文
           cwd: opts.parentCwd,
-          activeProfile: opts.parentProfile,
-          permissionMode: BYPASS_PERMISSION_MODE,
+          permissionMode: opts.parentPermissionMode ?? 'askBeforeExec',
+          sandboxPolicy: opts.parentPolicy,
           parentSessionId: opts.parentSessionId,
           agentName: opts.agentName,
           description: opts.description,

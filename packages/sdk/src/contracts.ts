@@ -13,21 +13,8 @@ import type {
   UpdateAutomationInput,
   UserHookConfig,
 } from './dto.js';
-import type { PermissionMode, ProfileName, TokenUsage } from './types.js';
+import type { PermissionMode, TokenUsage } from './types.js';
 import type { Frame } from './protocol.js';
-
-export interface SessionProfileInfo {
-  activeProfile: ProfileName;
-  permissionMode: PermissionMode;
-  cwd: string;
-}
-
-export interface SessionPlanFile {
-  content: string;
-  path: string;
-  directory: string;
-  exists: boolean;
-}
 
 export interface RollbackContextResult {
   turns: UITurn[];
@@ -46,7 +33,6 @@ export interface ForkResult {
 export interface SessionClient {
   createSession(input: {
     cwd: string;
-    activeProfile: ProfileName;
     permissionMode: PermissionMode;
     model: string;
   }): Promise<{ sessionId: string }>;
@@ -54,12 +40,6 @@ export interface SessionClient {
   listSessions(input: { cwd: string }): Promise<SessionSummary[]>;
   getSessionHistory(input: { sessionId: string; cwd: string }): Promise<UITurn[]>;
   deleteSession(input: { sessionId: string; cwd: string }): Promise<void>;
-  getSessionProfile(input: { sessionId: string; cwd: string }): Promise<SessionProfileInfo>;
-  setSessionProfile(input: {
-    sessionId: string;
-    cwd: string;
-    activeProfile: ProfileName;
-  }): Promise<{ activeProfile: ProfileName; permissionMode: PermissionMode }>;
   getSessionPermissionMode(input: { sessionId: string; cwd: string }): Promise<PermissionMode>;
   setSessionPermissionMode(input: {
     sessionId: string;
@@ -67,7 +47,6 @@ export interface SessionClient {
     mode: PermissionMode;
   }): Promise<void>;
   renameSession(input: { sessionId: string; cwd: string; title: string }): Promise<void>;
-  getSessionPlan(input: { sessionId: string; cwd: string }): Promise<SessionPlanFile>;
   stopAllSubagents(input: { sessionId: string }): Promise<{ stopped: number }>;
 
   getCheckpointDiff(input: {
@@ -181,11 +160,10 @@ export interface ModelClient {
   listModels(): Promise<{ models: SelectableModel[]; activeId: string }>;
 }
 
-/** config.yaml 的 agent 配置投影。activeProfile / permissionMode 只在会话尚未创建时生效。 */
+/** config.yaml 的 agent 配置投影。 */
 export interface AgentConfigView {
   maxSteps: number;
   maxStopContinuations: number;
-  activeProfile: ProfileName;
   permissionMode: PermissionMode;
 }
 
@@ -198,7 +176,6 @@ export interface SettingsClient {
   setAgentConfig(patch: {
     maxSteps?: number;
     maxStopContinuations?: number;
-    activeProfile?: ProfileName;
     permissionMode?: PermissionMode;
   }): Promise<AgentConfigView>;
   setCompactionModel(compactionModel: string): Promise<{ compactionModel: string }>;

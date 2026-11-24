@@ -28,8 +28,6 @@ export type {
 };
 
 export type {
-  SessionProfileInfo,
-  SessionPlanFile,
   RollbackContextResult,
   RollbackBothResult,
   ForkResult,
@@ -56,16 +54,11 @@ export type {
   UserHookConfig,
 } from './dto.js';
 
-export type {
-  PermissionMode,
-  ProfileName,
-  TodoItem,
-  TodoStatus,
-  TokenUsage,
-} from './types.js';
+export type { PermissionMode, TodoItem, TodoStatus, TokenUsage } from './types.js';
 
 export type {
   Envelope,
+  ApprovalAction,
   Frame,
   FrameBody,
   FrameError,

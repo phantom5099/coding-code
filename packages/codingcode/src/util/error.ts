@@ -17,7 +17,11 @@ export type ErrorCode =
   | 'EMPTY_RESPONSE'
   | 'SESSION_IO_ERROR'
   | 'INVALID_INPUT'
-  | 'TURN_CONFLICT';
+  | 'TURN_CONFLICT'
+  | 'SANDBOX_UNAVAILABLE'
+  | 'SANDBOX_PATH_DENIED'
+  | 'SANDBOX_NETWORK_DENIED'
+  | 'SANDBOX_POLICY_DENIED';
 
 export class AgentError extends Error {
   readonly _tag = 'AgentError';

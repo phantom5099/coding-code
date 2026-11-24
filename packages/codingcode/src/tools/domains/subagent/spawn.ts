@@ -9,8 +9,8 @@ import { SubagentRunRegistryService } from '../../../subagent/registry.js';
 export const spawnAgentTool: ToolDefinition<HookService | SubagentRunRegistryService> = {
   name: 'spawn_agent',
   concurrencySafe: true,
+  approval: { action: 'subagent', requiresConfirmation: true },
   // 子代理共享工作区并异步写入，父回合须有快照兜底
-  mutatesWorkspace: true,
   description:
     'Start a subagent and return its session id immediately. The subagent runs in the same working directory ' +
     'and shares your file system: keep the delegated write set disjoint from your own. Its result is appended ' +
@@ -51,11 +51,16 @@ export const spawnAgentTool: ToolDefinition<HookService | SubagentRunRegistrySer
         model?: string;
         systemPrompt?: string;
       };
-      const projectPath = ctx?.projectPath || process.cwd();
-
-      if (!ctx?.activeProfile || !ctx?.sessionId) {
+      if (!ctx?.projectPath || !ctx.sandboxPolicy) {
         return yield* Effect.fail(
-          new AgentError('CONFIG_MISSING', 'spawn_agent requires the parent session id and profile')
+          new AgentError('SANDBOX_POLICY_DENIED', 'spawn_agent requires a sandbox policy')
+        );
+      }
+      const projectPath = ctx.projectPath;
+
+      if (!ctx?.sessionId) {
+        return yield* Effect.fail(
+          new AgentError('CONFIG_MISSING', 'spawn_agent requires the parent session id')
         );
       }
 
@@ -86,7 +91,8 @@ export const spawnAgentTool: ToolDefinition<HookService | SubagentRunRegistrySer
         systemPrompt,
         parentSessionId: ctx.sessionId,
         parentCwd: projectPath,
-        parentProfile: ctx.activeProfile,
+        parentPermissionMode: ctx.permissionMode ?? 'askBeforeExec',
+        parentPolicy: ctx.sandboxPolicy,
         // 祖先链在内存里顺传：子会话回合的工具上下文由此建立，孙代自动继承全链
         parentChain: [ctx.sessionId, ...(ctx.parentChain ?? [])],
       });

@@ -2,15 +2,40 @@ import { z } from 'zod';
 import { Effect } from 'effect';
 import type { AgentError } from '../util/error.js';
 import type { ToolDescription } from '../llm/types.js';
-import type { ProfileName } from '../util/enums.js';
+import type { PermissionMode } from '../util/enums.js';
 import type { ToolOutcome } from '../sink/types.js';
+import type {
+  DangerousOperation,
+  SandboxEscalationRequest,
+  SandboxMode,
+  SandboxPolicy,
+} from '../sandbox/types.js';
+
+export type ToolApprovalAction =
+  | 'file'
+  | 'exec'
+  | 'network'
+  | 'mcp'
+  | 'subagent'
+  | 'sandbox'
+  | 'other';
+
+export interface ToolApprovalMetadata {
+  readonly action: ToolApprovalAction;
+  readonly requiresConfirmation?: boolean;
+  readonly dangerous?: readonly DangerousOperation[];
+  readonly network?: { readonly hosts: readonly string[]; readonly ports: readonly number[] };
+  readonly workspace?: { readonly paths: readonly string[]; readonly write: boolean };
+}
 
 export interface ToolDefinition<R = never> {
   name: string;
   /** 是否可与同批其它工具并发；省略即 false（fail-closed） */
   concurrencySafe?: boolean;
-  /** 执行后会改动工作区（写文件 / bash / 派生子代理 / MCP）；触发惰性 baseline 快照 */
-  mutatesWorkspace?: boolean;
+  /** 工具固有的审批动作描述，不由工具名推断。 */
+  approval?: ToolApprovalMetadata;
+  /** 解析参数后的动态危险操作描述。 */
+  describeOperation?: (args: unknown) => ToolApprovalMetadata;
   description: string;
   parameters: z.ZodTypeAny;
   execute: (args: unknown, ctx?: ToolExecCtx) => Effect.Effect<string, AgentError, R>;
@@ -28,7 +53,10 @@ export interface ToolExecCtx {
   /** 本次调用的 tool_call id（由 execSingle 以 tc.id 注入）；ask_user 用作等待键 */
   callId?: string;
   projectPath?: string;
-  activeProfile?: ProfileName;
+  sandboxPolicy?: SandboxPolicy;
+  permissionMode?: PermissionMode;
+  sandboxMode?: SandboxMode;
+  parentPolicy?: SandboxPolicy;
   model: string;
 }
 
@@ -37,7 +65,8 @@ export type ToolResult = { readonly id: string; readonly name: string } & ToolOu
 export interface ToolRunner {
   readonly name: string;
   readonly concurrencySafe: boolean;
-  readonly mutatesWorkspace: boolean;
+  readonly approval: ToolApprovalMetadata;
+  readonly describeOperation: (args: unknown) => ToolApprovalMetadata;
   parse(args: unknown): unknown;
   execute(args: unknown, ctx?: ToolExecCtx): Effect.Effect<string, AgentError>;
 }
@@ -46,7 +75,6 @@ export type ToolLookup = (name: string) => ToolRunner | undefined;
 
 export type ToolExecOpts = Omit<ToolExecCtx, 'sessionId' | 'callId'> & {
   turnId?: number;
-  onBeforeMutation?: Effect.Effect<void>;
 };
 
 export type ToolExecCall = ToolExecOpts & { sessionId?: string; callId?: string };
@@ -54,4 +82,27 @@ export type ToolExecCall = ToolExecOpts & { sessionId?: string; callId?: string 
 export interface ToolCatalog {
   tools: ToolDescription[];
   lookup: ToolLookup;
+}
+
+export interface ParsedToolCall {
+  readonly call: import('../llm/types.js').ToolCall;
+  readonly runner: ToolRunner;
+  readonly parsedArgs: unknown;
+  readonly argsHash: string;
+  readonly operation: ToolApprovalMetadata;
+}
+
+export interface PreparedToolCall extends ParsedToolCall {
+  readonly sandboxPolicy: SandboxPolicy;
+}
+
+export interface PreparedToolEscalation {
+  readonly prepared: PreparedToolCall;
+  readonly request: SandboxEscalationRequest;
+}
+
+export interface PreparedToolBatch {
+  readonly prepared: PreparedToolCall[];
+  readonly denied: ToolResult[];
+  readonly escalations: PreparedToolEscalation[];
 }

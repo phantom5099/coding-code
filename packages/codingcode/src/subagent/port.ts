@@ -3,14 +3,15 @@ import type { Effect } from 'effect';
 import type { FrameBody } from '../sink/types.js';
 import type { AgentError } from '../util/error.js';
 import type { Result } from '../util/result.js';
-import type { ProfileName, PermissionMode } from '../util/enums.js';
+import type { PermissionMode } from '../util/enums.js';
+import type { SandboxPolicy } from '../sandbox/types.js';
 import type { IncomingPart } from '../llm/types.js';
 
 export interface RunSubagentOptions {
   sessionId?: string;
   cwd: string;
-  activeProfile?: ProfileName;
   permissionMode?: PermissionMode;
+  sandboxPolicy?: SandboxPolicy;
   model: string;
   /** 首次派发时的自定义 system prompt；续跑（传 sessionId）时忽略，改由会话头回读 */
   systemPrompt?: string;

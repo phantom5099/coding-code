@@ -4,8 +4,10 @@ import { editFileTool } from '../../src/tools/domains/fs/edit.js';
 import { writeFile, readFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { testSandboxPolicy } from '../helpers/sandbox.js';
 
 const testFile = join(tmpdir(), 'coding-agent-edit-test-' + Date.now() + '.txt');
+const ctx = { projectPath: tmpdir(), model: 'test-model', sandboxPolicy: testSandboxPolicy(tmpdir()) };
 
 const initialContent = `line one
 line two
@@ -28,7 +30,7 @@ describe('editFileTool', () => {
         path: testFile,
         old_string: 'line three',
         new_string: 'line THREE',
-      }) as any
+      }, ctx) as any
     );
     expect(result).toContain('1 replacement made');
     const content = await readFile(testFile, 'utf-8');
@@ -42,7 +44,7 @@ describe('editFileTool', () => {
         path: testFile,
         old_string: 'line one',
         new_string: 'LINE ONE',
-      }) as any
+      }, ctx) as any
     );
     expect(result).toContain('1 replacement made');
     const content = await readFile(testFile, 'utf-8');
@@ -55,7 +57,7 @@ describe('editFileTool', () => {
         path: testFile,
         old_string: 'line four',
         new_string: 'LINE FOUR',
-      }) as any
+      }, ctx) as any
     );
     expect(result).toContain('1 replacement made');
     const content = await readFile(testFile, 'utf-8');
@@ -68,7 +70,7 @@ describe('editFileTool', () => {
         path: testFile,
         old_string: 'line two',
         new_string: 'LINE TWO',
-      }) as any
+      }, ctx) as any
     );
     expect(result).toContain('Error');
     expect(result).toContain('appears 2 times');
@@ -80,7 +82,7 @@ describe('editFileTool', () => {
         path: testFile,
         old_string: 'nonexistent text',
         new_string: 'replacement',
-      })
+      }, ctx)
     );
     expect(result).toContain('Error');
     expect(result).toContain('not found');
@@ -93,7 +95,7 @@ describe('editFileTool', () => {
         path: testFile,
         old_string: 'line one\nline two',
         new_string: 'LINE ONE\nLINE TWO',
-      })
+      }, ctx)
     );
     expect(result).toContain('1 replacement made');
     const content = await readFile(testFile, 'utf-8');

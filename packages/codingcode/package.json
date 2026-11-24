@@ -10,7 +10,6 @@
     ".": "./src/layer.ts",
     "./server": "./src/server/index.ts",
     "./approval/types": "./src/approval/types.ts",
-    "./agent/profile": "./src/agent/profile.ts",
     "./sink/types": "./src/sink/types.ts",
     "./llm/types": "./src/llm/types.ts",
     "./todo/types": "./src/todo/types.ts",

@@ -1,6 +1,7 @@
 import type { TodoItem } from '../todo/types.js';
 import type { TokenUsage } from '../llm/types.js';
 import type { StoredPart } from '../session/types.js';
+import type { ApprovalAction } from '../approval/types.js';
 
 export interface FrameError {
   readonly message: string;
@@ -47,6 +48,7 @@ export type RuntimeEvent =
       readonly type: 'approval_request';
       readonly id: string;
       readonly tool: string;
+      readonly action: ApprovalAction;
       readonly args: Readonly<Record<string, unknown>>;
     }
   | {

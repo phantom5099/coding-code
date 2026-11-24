@@ -69,7 +69,7 @@ export function readSessionMeta(transcriptPath: string): SessionMetaEvent | null
   }
 }
 
-/** 原子重写首行（身份字段变更：标题 / 模型 / 权限模式 / profile）。 */
+/** 原子重写首行（身份字段变更：标题 / 模型 / 权限模式）。 */
 export function rewriteSessionMeta(transcriptPath: string, patch: Partial<SessionMetaEvent>): void {
   const raw = readFileSync(transcriptPath, 'utf8');
   const newlineAt = raw.indexOf('\n');

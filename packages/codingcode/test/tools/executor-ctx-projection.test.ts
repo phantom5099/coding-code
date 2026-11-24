@@ -39,7 +39,7 @@ function hooksStub() {
 function runProbe(opts: ToolExecOpts, sessionId: string | undefined): Promise<void> {
   const program = Effect.gen(function* () {
     const exec = yield* ToolExecutorService;
-    const catalog = yield* exec.prepare([PROBE]);
+    const catalog = yield* exec.prepare();
     yield* exec.executeBatch(
       [{ id: 'c1', name: PROBE, arguments: {} }],
       sessionId,
@@ -73,6 +73,7 @@ describe('工具执行上下文投影', () => {
       'callId',
       'model',
       'projectPath',
+      'sandboxPolicy',
       'sessionId',
       'signal',
     ]);

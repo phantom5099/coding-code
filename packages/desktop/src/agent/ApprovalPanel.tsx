@@ -1,11 +1,8 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import type { Item } from '@shared/types';
 import { useAgentStore } from '../stores/agent.store';
-import { useAgentApproval, useAgentCore, useAgentProfile } from '../hooks/useAgent';
+import { useAgentApproval } from '../hooks/useAgent';
 import ToolCallCard from '../shared/ToolCallCard';
-import PlanDecisionModal from '../shared/PlanDecisionModal';
-import { useWorkspaceStore } from '../stores/workspace.store';
-import { textPart } from '@shared/parts';
 import { Square } from 'lucide-react';
 
 interface ApprovalPanelProps {
@@ -17,12 +14,6 @@ interface ApprovalPanelProps {
 export default function ApprovalPanel({ threadId, inline = false, onStop }: ApprovalPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { approveTool, rejectTool } = useAgentApproval();
-  const { sendMessage } = useAgentCore();
-  const { switchProfile } = useAgentProfile();
-  const workspace = useWorkspaceStore();
-
-  const pendingPlan = useAgentStore((s) => s.pendingPlanByThreadId[threadId] ?? null);
-  const clearPendingPlan = useAgentStore((s) => s.clearPendingPlan);
 
   const pendingKey = useAgentStore((s) => {
     const thread = s.threads[threadId];
@@ -44,45 +35,6 @@ export default function ApprovalPanel({ threadId, inline = false, onStop }: Appr
       )
     );
   }, [pendingKey, threadId]);
-
-  const handleImplement = useCallback(async () => {
-    if (!pendingPlan) return;
-    const sessionId = pendingPlan.sessionId;
-    clearPendingPlan(threadId);
-    await switchProfile(sessionId, 'build', workspace.rootPath ?? '');
-    await sendMessage(
-      [textPart('Plan approved. Please start implementing it.')],
-      workspace.rootPath ?? ''
-    );
-  }, [pendingPlan, clearPendingPlan, threadId, switchProfile, sendMessage, workspace.rootPath]);
-
-  const handleSubmitOpinion = useCallback(
-    async (opinion: string) => {
-      if (!pendingPlan) return;
-      clearPendingPlan(threadId);
-      await sendMessage(
-        [textPart(`Please revise the plan based on this feedback:\n\n${opinion}`)],
-        workspace.rootPath ?? ''
-      );
-    },
-    [pendingPlan, clearPendingPlan, threadId, sendMessage, workspace.rootPath]
-  );
-
-  const handleCancel = useCallback(() => {
-    clearPendingPlan(threadId);
-  }, [clearPendingPlan, threadId]);
-
-  if (pendingPlan) {
-    return (
-      <PlanDecisionModal
-        title={pendingPlan.title}
-        sessionId={pendingPlan.sessionId}
-        onImplement={() => void handleImplement()}
-        onSubmitOpinion={(op) => void handleSubmitOpinion(op)}
-        onCancel={() => void handleCancel()}
-      />
-    );
-  }
 
   if (pendingItems.length === 0) return null;
 

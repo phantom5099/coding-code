@@ -1,7 +1,9 @@
 import { Context } from 'effect';
 import type { Effect } from 'effect';
 import type { FrameBody } from '../sink/types.js';
-import type { ProfileName, PermissionMode } from '../util/enums.js';
+import type { PermissionMode } from '../util/enums.js';
+import type { SandboxMode } from '../sandbox/types.js';
+import type { SandboxPolicy } from '../sandbox/types.js';
 import type { IncomingPart } from '../llm/types.js';
 
 import type { AgentError } from '../util/error.js';
@@ -11,8 +13,9 @@ export interface RunTurnOptions {
   cwd: string;
   signal?: AbortSignal;
   permissionMode?: PermissionMode;
+  sandboxMode?: SandboxMode;
+  sandboxPolicy?: SandboxPolicy;
   model: string;
-  activeProfile?: ProfileName;
   parentSessionId?: string;
   agentName?: string;
   /** 子智能体用途描述；仅新建会话时写入 meta */

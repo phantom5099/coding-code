@@ -1,25 +1,56 @@
 import { Layer, Effect } from 'effect';
+import { createHash } from 'node:crypto';
 import { AgentError } from '../util/error.js';
 import { HookService } from '../hooks/port.js';
 import type { ToolCall } from '../llm/types.js';
 import type { McpToolSpec } from '../mcp/types.js';
 import type {
+  ParsedToolCall,
+  PreparedToolBatch,
+  PreparedToolCall,
   ToolCatalog,
   ToolExecCall,
   ToolExecCtx,
   ToolExecOpts,
   ToolLookup,
   ToolResult,
-  ToolRunner,
 } from './types.js';
+import { resolveSandboxPolicy } from '../sandbox/policy.js';
+import type { SandboxPolicy } from '../sandbox/types.js';
 import { ToolExecutorService } from './port.js';
 import { createToolCatalog } from './catalog.js';
-
-type Lookup = (name: string) => ToolRunner | undefined;
 
 function toToolCtx(opts: ToolExecCall): ToolExecCtx {
   const { turnId: _turnId, ...ctx } = opts;
   return ctx;
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  return `{${Object.keys(value as Record<string, unknown>)
+    .sort()
+    .map(
+      (key) => `${JSON.stringify(key)}:${stableSerialize((value as Record<string, unknown>)[key])}`
+    )
+    .join(',')}}`;
+}
+
+function argsHash(value: unknown): string {
+  return createHash('sha256').update(stableSerialize(value)).digest('hex');
+}
+
+function compatibilityPolicy(projectPath: string | undefined, sessionId: string | undefined): SandboxPolicy {
+  if (!projectPath) throw new AgentError('SANDBOX_PATH_DENIED', 'projectPath is required for tool execution');
+  return {
+    mode: 'unrestricted',
+    workspaceRoot: projectPath,
+    additionalWritableRoots: [],
+    network: { mode: 'unrestricted', hosts: [], ports: [] },
+    sessionId: sessionId ?? 'compatibility',
+    enforcement: 'disabled',
+    fingerprint: 'compatibility',
+  };
 }
 
 export const ToolExecutorLayer = Layer.effect(
@@ -27,35 +58,106 @@ export const ToolExecutorLayer = Layer.effect(
   Effect.gen(function* () {
     const hooks = yield* HookService;
 
-    function execute(
-      name: string,
-      args: unknown,
-      opts: ToolExecCall,
-      lookup: Lookup
+    function parseCall(
+      toolCall: ToolCall,
+      toolLookup: ToolLookup
+    ): Effect.Effect<ParsedToolCall, AgentError> {
+      return Effect.gen(function* () {
+        const runner = toolLookup(toolCall.name);
+        if (!runner) return yield* Effect.fail(AgentError.toolNotFound(toolCall.name));
+        const parsedArgs = yield* Effect.try({
+          try: () => runner.parse(toolCall.arguments ?? {}),
+          catch: (error) => AgentError.toolExecutionFailed(toolCall.name, error),
+        });
+        return {
+          call: toolCall,
+          runner,
+          parsedArgs,
+          argsHash: argsHash(parsedArgs),
+          operation: runner.describeOperation(parsedArgs),
+        };
+      });
+    }
+
+    function prepareBatch(
+      toolCalls: readonly ToolCall[],
+      sessionId: string | undefined,
+      opts: ToolExecOpts,
+      toolLookup: ToolLookup
+    ): Effect.Effect<PreparedToolBatch> {
+      return Effect.gen(function* () {
+        const prepared: PreparedToolCall[] = [];
+        const denied: ToolResult[] = [];
+        const escalations: PreparedToolBatch['escalations'] = [];
+        if (!opts.projectPath) {
+          return {
+            prepared,
+            denied: toolCalls.map((call) => ({
+              status: 'denied' as const,
+              id: call.id,
+              name: call.name,
+              reason: 'projectPath is required for sandboxed execution',
+            })),
+            escalations,
+          };
+        }
+        for (const call of toolCalls) {
+          const parsed = yield* Effect.either(parseCall(call, toolLookup));
+          if (parsed._tag === 'Left') {
+            denied.push({ status: 'denied', id: call.id, name: call.name, reason: parsed.left.message });
+            continue;
+          }
+          const resolution = resolveSandboxPolicy({
+            projectPath: opts.projectPath,
+            sessionId: sessionId ?? '',
+            permissionMode: opts.permissionMode ?? 'askBeforeExec',
+            requestedMode: opts.sandboxMode,
+            parentPolicy: opts.parentPolicy,
+            operation: parsed.right.operation,
+            parsedArgs: parsed.right.parsedArgs,
+            callId: call.id,
+            toolName: call.name,
+            argsHash: parsed.right.argsHash,
+          });
+          if (resolution.kind === 'deny') {
+            denied.push({ status: 'denied', id: call.id, name: call.name, reason: resolution.reason });
+            continue;
+          }
+          if (resolution.kind === 'escalation') {
+            escalations.push({
+              prepared: { ...parsed.right, sandboxPolicy: resolution.policy },
+              request: resolution.request,
+            });
+            continue;
+          }
+          prepared.push({ ...parsed.right, sandboxPolicy: resolution.policy });
+        }
+        return { prepared, denied, escalations };
+      });
+    }
+
+    function executePrepared(
+      prepared: PreparedToolCall,
+      opts: ToolExecCall
     ): Effect.Effect<{ output: string }, AgentError> {
       return Effect.gen(function* () {
-        const tool = lookup(name);
-        if (!tool) return yield* Effect.fail(AgentError.toolNotFound(name));
-
-        const finalArgs = args as Record<string, unknown>;
-
-        const callId = opts.callId;
+        const { call, runner, parsedArgs } = prepared;
+        const finalArgs = parsedArgs as Record<string, unknown>;
         yield* hooks.emit('tool.execute.before', {
-          toolName: name,
+          toolName: call.name,
           args: finalArgs,
           sessionId: opts.sessionId,
           turnId: opts.turnId,
           projectPath: opts.projectPath,
-          callId,
+          callId: call.id,
         });
 
-        const parsedArgs = yield* Effect.sync(() => tool.parse(finalArgs));
         const start = Date.now();
-
-        // Execute tool — now returns Effect directly
-        const ctx = toToolCtx(opts);
-
-        let toolEffect = tool.execute(parsedArgs, ctx);
+        const ctx: ToolExecCtx = {
+          ...toToolCtx(opts),
+          sandboxPolicy: prepared.sandboxPolicy,
+        };
+        let toolEffect = runner.execute(parsedArgs, ctx);
 
         if (opts.signal) {
           if (opts.signal.aborted) {
@@ -73,24 +175,22 @@ export const ToolExecutorLayer = Layer.effect(
         }
 
         const result = yield* toolEffect;
-
         yield* hooks.emit('tool.execute.after', {
-          toolName: name,
+          toolName: call.name,
           args: finalArgs,
           result,
           durationMs: Date.now() - start,
           sessionId: opts.sessionId,
           turnId: opts.turnId,
           projectPath: opts.projectPath,
-          callId,
+          callId: call.id,
         });
-
         return { output: result };
       }).pipe(
         Effect.tapError((error) =>
           hooks.emit('tool.execute.error', {
-            toolName: name,
-            args: args as Record<string, unknown>,
+            toolName: prepared.call.name,
+            args: prepared.parsedArgs as Record<string, unknown>,
             error,
             projectPath: opts.projectPath,
           })
@@ -98,63 +198,65 @@ export const ToolExecutorLayer = Layer.effect(
       );
     }
 
-    function execSingle(
-      tc: ToolCall,
+    function executePreparedCall(
+      prepared: PreparedToolCall,
       sessionId: string | undefined,
-      opts: ToolExecOpts,
-      lookup: Lookup
+      opts: ToolExecOpts
     ): Effect.Effect<ToolResult> {
-      return execute(tc.name, tc.arguments ?? {}, { sessionId, callId: tc.id, ...opts }, lookup).pipe(
+      return executePrepared(prepared, { sessionId, callId: prepared.call.id, ...opts }).pipe(
         Effect.matchEffect({
-          onSuccess: (result: any): Effect.Effect<ToolResult> =>
+          onSuccess: (result): Effect.Effect<ToolResult> =>
             Effect.succeed({
-              status: 'ok' as const,
-              id: tc.id,
-              name: tc.name,
+              status: 'ok',
+              id: prepared.call.id,
+              name: prepared.call.name,
               output: result.output,
             }),
-          onFailure: (err): Effect.Effect<ToolResult> => {
-            if (err instanceof AgentError && err.code === 'TOOL_NOT_ALLOWED') {
+          onFailure: (error): Effect.Effect<ToolResult> => {
+            if (
+              error instanceof AgentError &&
+              (error.code === 'TOOL_NOT_ALLOWED' || error.code.startsWith('SANDBOX_'))
+            ) {
               return Effect.succeed({
-                status: 'denied' as const,
-                id: tc.id,
-                name: tc.name,
-                reason: err.message,
+                status: 'denied',
+                id: prepared.call.id,
+                name: prepared.call.name,
+                reason: error.message,
               });
             }
-            const code = err instanceof AgentError ? err.code : 'TOOL_EXECUTION_FAILED';
-            const msg = err instanceof AgentError ? err.message : String(err);
+            const code = error instanceof AgentError ? error.code : 'TOOL_EXECUTION_FAILED';
+            const message = error instanceof AgentError ? error.message : String(error);
             return Effect.succeed({
-              status: 'error' as const,
-              id: tc.id,
-              name: tc.name,
-              output: `[Error: ${code}] ${msg}`,
+              status: 'error',
+              id: prepared.call.id,
+              name: prepared.call.name,
+              output: `[Error: ${code}] ${message}`,
             });
           },
         }),
         Effect.catchAllDefect((defect) =>
           Effect.succeed({
             status: 'error' as const,
-            id: tc.id,
-            name: tc.name,
+            id: prepared.call.id,
+            name: prepared.call.name,
             output: `[Unexpected] ${String(defect)}`,
           })
         )
       );
     }
 
-    function splitWaves(toolCalls: ToolCall[], lookup: Lookup): ToolCall[][] {
-      const waves: ToolCall[][] = [];
-      let current: ToolCall[] | undefined;
-      for (const tc of toolCalls) {
-        if (lookup(tc.name)?.concurrencySafe) {
+    function splitWaves(toolCalls: readonly PreparedToolCall[]): PreparedToolCall[][] {
+      const waves: PreparedToolCall[][] = [];
+      let current: PreparedToolCall[] | undefined;
+      for (const prepared of toolCalls) {
+        if (prepared.runner.concurrencySafe) {
           if (!current) {
             current = [];
             waves.push(current);
           }
-          current.push(tc);
+          current.push(prepared);
         } else {
-          waves.push([tc]);
+          waves.push([prepared]);
           current = undefined;
         }
       }
@@ -162,51 +264,55 @@ export const ToolExecutorLayer = Layer.effect(
     }
 
     function executeBatch(
-      toolCalls: ToolCall[],
+      toolCalls: readonly (PreparedToolCall | ToolCall)[],
       sessionId: string | undefined,
       opts: ToolExecOpts,
-      toolLookup: ToolLookup
-    ): Effect.Effect<ToolResult[]> {
-      const lookup: Lookup = toolLookup;
+      toolLookup?: ToolLookup
+    ): Effect.Effect<ToolResult[], AgentError> {
       return Effect.gen(function* () {
-        const runTool = (tc: ToolCall): Effect.Effect<ToolResult> =>
+        const preparedCalls: PreparedToolCall[] = [];
+        for (const call of toolCalls) {
+          if ('runner' in call) {
+            preparedCalls.push(call);
+            continue;
+          }
+          if (!toolLookup) {
+            return yield* Effect.fail(AgentError.toolNotFound(call.name));
+          }
+          const parsed = yield* parseCall(call, toolLookup);
+          preparedCalls.push({
+            ...parsed,
+            sandboxPolicy: compatibilityPolicy(opts.projectPath, sessionId),
+          });
+        }
+        const runTool = (prepared: PreparedToolCall): Effect.Effect<ToolResult> =>
           Effect.suspend(() =>
             opts.signal?.aborted
               ? Effect.succeed({
-                  status: 'denied' as const,
-                  id: tc.id,
-                  name: tc.name,
+                  status: 'denied',
+                  id: prepared.call.id,
+                  name: prepared.call.name,
                   reason: 'aborted',
                 })
-              : execSingle(tc, sessionId, opts, lookup)
+              : executePreparedCall(prepared, sessionId, opts)
           );
 
         const waveResults = yield* Effect.forEach(
-          splitWaves(toolCalls, lookup),
-          (wave) =>
-            Effect.gen(function* () {
-              // 写类工具独占 wave 且 wave 间串行，故此处等价于"首次写之前"且无竞态
-              if (opts.onBeforeMutation && wave.some((tc) => lookup(tc.name)?.mutatesWorkspace)) {
-                yield* opts.onBeforeMutation;
-              }
-              return yield* Effect.forEach(wave, runTool, { concurrency: 'unbounded' });
-            }),
+          splitWaves(preparedCalls),
+          (wave) => Effect.forEach(wave, runTool, { concurrency: 'unbounded' }),
           { concurrency: 1 }
         );
 
         const byId = new Map<string, ToolResult>();
-        for (const wave of waveResults) for (const r of wave) byId.set(r.id, r);
-        return toolCalls.map((tc) => byId.get(tc.id)!);
+        for (const wave of waveResults) for (const result of wave) byId.set(result.id, result);
+        return preparedCalls.map((prepared) => byId.get(prepared.call.id)!);
       });
     }
 
-    function prepare(
-      toolNames: readonly string[],
-      mcpTools: McpToolSpec[] = []
-    ): Effect.Effect<ToolCatalog> {
-      return Effect.sync(() => createToolCatalog(toolNames, mcpTools));
+    function prepare(mcpTools: McpToolSpec[] = []): Effect.Effect<ToolCatalog> {
+      return Effect.sync(() => createToolCatalog(mcpTools));
     }
 
-    return { prepare, executeBatch };
+    return { prepare, parseCall, prepareBatch, executeBatch };
   })
 );

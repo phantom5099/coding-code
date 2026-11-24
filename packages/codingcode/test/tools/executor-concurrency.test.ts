@@ -136,9 +136,7 @@ function runBatch(
 ): Promise<ToolResult[]> {
   const program = Effect.gen(function* () {
     const exec = yield* ToolExecutorService;
-    // 只把内置名交给 catalog（去重）；MCP 工具名（含 `:`）由 spec 侧注册
-    const builtinNames = [...new Set(calls.map((c) => c.name).filter((n) => TOOLS_BY_NAME.has(n)))];
-    const catalog = yield* exec.prepare(builtinNames, mcpSpecs);
+    const catalog = yield* exec.prepare(mcpSpecs);
     return yield* exec.executeBatch(
       calls,
       ctx.sessionId,
@@ -422,7 +420,7 @@ describe('executeBatch 保序波次调度', () => {
     expect(h.hookPoints.filter((p) => p === 'tool.execute.before')).toHaveLength(1);
   });
 
-  it('18 个内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
+  it('内置工具的 concurrencySafe 与分类表逐项一致，且无未覆盖工具', () => {
     const expected: Record<string, boolean> = {
       read_file: true,
       search_code: true,
@@ -441,10 +439,9 @@ describe('executeBatch 保序波次调度', () => {
       write_file: false,
       edit_file: false,
       execute_command: false,
-      submit_plan: false,
     };
 
-    const { lookup } = createToolCatalog(Object.keys(expected));
+    const { lookup } = createToolCatalog();
     for (const [name, safe] of Object.entries(expected)) {
       expect(lookup(name)?.concurrencySafe, name).toBe(safe);
     }

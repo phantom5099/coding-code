@@ -1,4 +1,4 @@
-import type { PermissionMode, ProfileName, TokenUsage } from './types.js';
+import type { PermissionMode, TokenUsage } from './types.js';
 
 export interface SessionSummary {
   type: 'session_meta';
@@ -7,7 +7,6 @@ export interface SessionSummary {
   createdAt: string;
   model: string;
   title: string;
-  activeProfile: ProfileName;
   permissionMode: PermissionMode;
   parentSessionId?: string;
   agentName?: string;

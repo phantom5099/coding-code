@@ -30,7 +30,6 @@ import { SessionLayer } from '../../src/session/session.js';
 import { HookService } from '../../src/hooks/port.js';
 import { McpService } from '../../src/mcp/port.js';
 import { TodoService } from '../../src/todo/port.js';
-import { BUILD_TOOL_NAMES } from '../../src/approval/tool-policy.js';
 import { readHistory } from '../../src/session/file-ops.js';
 import { encodeProjectPath, normalizePath } from '../../src/util/path.js';
 import { transcriptPathFor } from '../../src/context/context.js';
@@ -55,12 +54,9 @@ const probeTool: ToolDefinition = {
   },
 };
 
-// 探针必须进 build profile 的工具白名单，否则 catalog 装配即抛错
-const buildNamesMutable = BUILD_TOOL_NAMES as unknown as string[];
-buildNamesMutable.push(PROBE);
+TOOLS_BY_NAME.set(PROBE, probeTool);
 afterAll(() => {
-  const idx = buildNamesMutable.indexOf(PROBE);
-  if (idx >= 0) buildNamesMutable.splice(idx, 1);
+  TOOLS_BY_NAME.delete(PROBE);
 });
 
 // ---- LLM 脚本：按模型排队，逐次取一段响应；'hang' 表示永不收尾 ----
@@ -104,7 +100,14 @@ const Deps = Layer.mergeAll(
   SessionLayer,
   ToolExecutorLayer.pipe(Layer.provide(HookMock)),
   Layer.succeed(CheckpointService, { snapshotBeforeWrite: () => Effect.void } as any),
-  Layer.succeed(ApprovalService, { evaluate: () => Effect.succeed({ type: 'allow' }) } as any),
+  Layer.succeed(ApprovalService, {
+    evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
+    evaluateBatch: (requests: readonly unknown[]) =>
+      Effect.succeed(requests.map(() => ({ type: 'allow' as const, source: 'test' }))),
+    evaluateEscalation: () => Effect.succeed({ type: 'allow', source: 'test' }),
+    evaluateEscalationBatch: (requests: readonly unknown[]) =>
+      Effect.succeed(requests.map(() => ({ type: 'allow' as const, source: 'test' }))),
+  } as any),
   Layer.succeed(SkillService, {
     getAll: () => Effect.succeed([]),
     readContent: () => Effect.succeed(''),

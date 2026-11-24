@@ -10,7 +10,6 @@ import {
   type McpServerConfig,
   type McpServerEntry,
   type PermissionMode,
-  type ProfileName,
   type RollbackPreviewDiff,
   type RunAutomationResult,
   type TokenUsage,
@@ -66,7 +65,7 @@ export function listSessions(cwd?: string): Promise<any[]> {
 
 export function createSession(
   cwd: string,
-  params: { activeProfile: ProfileName; permissionMode: PermissionMode; model: string }
+  params: { permissionMode: PermissionMode; model: string }
 ): Promise<{ sessionId: string }> {
   return clients.sessions.createSession({ cwd, ...params });
 }
@@ -117,35 +116,6 @@ export function sendAskUserAnswer(
   return clients.agent.sendAskUserAnswer({ sessionId, askId: callId, ...answer });
 }
 
-// ---- Plan file ----
-
-export function getSessionPlan(
-  sessionId: string,
-  cwd: string
-): Promise<{ content: string; path: string; directory: string; exists: boolean }> {
-  return clients.sessions.getSessionPlan({ sessionId, cwd });
-}
-
-// ---- Agent profile switching ----
-
-export type SessionProfileInfo = {
-  activeProfile: ProfileName;
-  permissionMode: PermissionMode;
-  cwd: string;
-};
-
-export function getSessionProfile(sessionId: string, cwd: string): Promise<SessionProfileInfo> {
-  return clients.sessions.getSessionProfile({ sessionId, cwd });
-}
-
-export function setSessionProfile(
-  sessionId: string,
-  cwd: string,
-  activeProfile: ProfileName
-): Promise<{ activeProfile: ProfileName; permissionMode: PermissionMode }> {
-  return clients.sessions.setSessionProfile({ sessionId, cwd, activeProfile });
-}
-
 // ---- Settings: Memory ----
 
 export function getMemoryConfig(): Promise<{
@@ -172,7 +142,6 @@ export function getAgentConfig(): Promise<AgentConfigView> {
 export function setAgentConfig(partial: {
   maxSteps?: number;
   maxStopContinuations?: number;
-  activeProfile?: ProfileName;
   permissionMode?: PermissionMode;
 }): Promise<AgentConfigView> {
   return clients.settings.setAgentConfig(partial);

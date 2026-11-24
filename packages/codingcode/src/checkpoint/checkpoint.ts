@@ -14,7 +14,6 @@ import { CheckpointService } from './port.js';
 
 // ---- Effect Service ----
 const shadowGitByProject = new ProjectCache<ShadowGit>(10);
-const baselineTurnBySession = new Map<string, number>();
 
 export const CheckpointLayer = Layer.effect(
   CheckpointService,
@@ -44,16 +43,19 @@ export const CheckpointLayer = Layer.effect(
       sg.commit(rollbackSnapshotMsg(sessionId, rollbackTurnId));
     }
 
+    const ensureBaseline = (projectPath: string, sessionId: string, turnId: number) =>
+      Effect.sync(() => {
+        const sg = ensure(projectPath);
+        if (sg.findCommitByMessage(commitMsg(sessionId, turnId))) return;
+        sg.stageAll();
+        const hasHead = sg.git('rev-parse', '--verify', 'HEAD').status === 0;
+        const hasChanges = !hasHead || sg.git('diff', '--cached', '--quiet', 'HEAD').status !== 0;
+        if (hasChanges && !sg.isTooLargeForSnapshot()) sg.commit(commitMsg(sessionId, turnId));
+      });
+
     return {
-      snapshotBeforeWrite: (projectPath: string, sessionId: string, turnId: number) =>
-        Effect.sync(() => {
-          if (baselineTurnBySession.get(sessionId) === turnId) return;
-          baselineTurnBySession.set(sessionId, turnId);
-          const sg = ensure(projectPath);
-          sg.stageAll();
-          if (sg.isTooLargeForSnapshot()) return;
-          sg.commit(commitMsg(sessionId, turnId));
-        }),
+      ensureBaseline,
+      snapshotBeforeWrite: ensureBaseline,
 
       getCheckpointDiff: (projectPath: string, sessionId: string, turnId?: number) =>
         Effect.sync(() => {

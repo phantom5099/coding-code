@@ -5,7 +5,6 @@ import {
   Square,
   ShieldCheck,
   Shield,
-  FileText,
   Paperclip,
   X,
   GripVertical,
@@ -26,8 +25,6 @@ import MessageStream from './MessageStream';
 import TodoPanel from './TodoPanel';
 import ApprovalPanel from './ApprovalPanel';
 import AskUserPanel from './AskUserPanel';
-import ProfileIndicator from './ProfileIndicator';
-import PlanPanel from '../shared/PlanPanel';
 import MediaView from '../shared/MediaView';
 import { reachableMimes, attachmentHint, isLocalMedia, textOf, type ContentPart } from '@shared/parts';
 import { MAX_MEDIA_BYTES, type PermissionMode } from '@codingcode/sdk';
@@ -48,17 +45,20 @@ function newId(): string {
 
 const MODE_LABELS: Record<PermissionMode, string> = {
   askBeforeExec: '执行前询问',
-  bypass: '完全放行',
+  bypass: '跳过审批',
+  unrestricted: '无限制执行',
 };
 
 const MODE_NEXT: Record<PermissionMode, PermissionMode> = {
   askBeforeExec: 'bypass',
-  bypass: 'askBeforeExec',
+  bypass: 'unrestricted',
+  unrestricted: 'askBeforeExec',
 };
 
 const MODE_ICONS: Record<PermissionMode, React.ReactNode> = {
   askBeforeExec: <ShieldCheck size={14} strokeWidth={1.5} />,
   bypass: <Shield size={14} strokeWidth={1.5} />,
+  unrestricted: <Shield size={14} strokeWidth={1.5} />,
 };
 
 // ─── ContextIndicator ──────────────────────────────────────────────────────
@@ -261,13 +261,11 @@ function InputBox({
   sendMessage,
   sendQueuedInput,
   abort,
-  onOpenPlanPanel,
 }: {
   centered?: boolean;
   sendMessage: (parts: ContentPart[], cwd?: string, skills?: SkillRef[]) => Promise<void>;
   sendQueuedInput: (threadId: string, item: QueuedInput) => Promise<void>;
   abort: () => void;
-  onOpenPlanPanel?: () => void;
 }) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -348,21 +346,7 @@ function InputBox({
   }, [currentThreadId, abort]);
 
   // 有会话时显示该会话真实的权限模式；还没有会话时显示 config.yaml 里的值
-  const sessionPermissionMode = useAgentStore((s) =>
-    s.currentThreadId ? (s.profileByThreadId[s.currentThreadId]?.permissionMode ?? null) : null
-  );
-  const permissionMode: PermissionMode = sessionPermissionMode ?? storePermissionMode;
-
-  const isPlanProfile = useAgentStore((s) => {
-    if (!s.currentThreadId) {
-      return s.profile === 'plan';
-    }
-    return s.profileByThreadId[s.currentThreadId]?.activeProfile === 'plan';
-  });
-  const planExists = useAgentStore((s) => {
-    if (!s.currentThreadId) return false;
-    return s.pendingPlanByThreadId[s.currentThreadId] != null;
-  });
+  const permissionMode: PermissionMode = storePermissionMode;
 
   // Consume pendingInput when it's set
   useEffect(() => {
@@ -791,51 +775,32 @@ function InputBox({
           )}
         {/* Row 2: toolbar */}
         <div className="flex items-center gap-2 px-3 pb-3 pt-0">
-          {!isPlanProfile && (
-            <button
-              type="button"
-              onClick={() => {
-                const next = MODE_NEXT[permissionMode];
-                if (currentThreadId) {
-                  const entry = useAgentStore.getState().profileByThreadId[currentThreadId];
-                  useAgentStore.getState().setProfileForThread(currentThreadId, {
-                    activeProfile: entry?.activeProfile ?? 'build',
-                    permissionMode: next,
+          <button
+            type="button"
+            onClick={() => {
+              const next = MODE_NEXT[permissionMode];
+              if (currentThreadId) {
+                setSessionPermissionMode(currentThreadId, workspace.rootPath || '', next).catch(
+                  (e) => {
+                    console.error('Failed to sync permission mode:', e);
+                  }
+                );
+                setPermissionMode(next);
+              } else {
+                setAgentConfig({ permissionMode: next })
+                  .then((cfg) => setPermissionMode(cfg.permissionMode))
+                  .catch((e) => {
+                    console.error('Failed to save default permission mode:', e);
                   });
-                  setSessionPermissionMode(currentThreadId, workspace.rootPath || '', next).catch(
-                    (e) => {
-                      console.error('Failed to sync permission mode:', e);
-                    }
-                  );
-                } else {
-                  setAgentConfig({ permissionMode: next })
-                    .then((cfg) => setPermissionMode(cfg.permissionMode))
-                    .catch((e) => {
-                      console.error('Failed to save default permission mode:', e);
-                    });
-                }
-              }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
-            >
-              <span className="text-[var(--accent-primary)]">{MODE_ICONS[permissionMode]}</span>
-              <span>{MODE_LABELS[permissionMode]}</span>
-              <span className="text-[var(--text-disabled)] text-[10px]">▾</span>
-            </button>
-          )}
+              }
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
+          >
+            <span className="text-[var(--accent-primary)]">{MODE_ICONS[permissionMode]}</span>
+            <span>{MODE_LABELS[permissionMode]}</span>
+            <span className="text-[var(--text-disabled)] text-[10px]">▾</span>
+          </button>
           <div className="ml-auto flex items-center gap-2">
-            {planExists && onOpenPlanPanel && (
-              <button
-                type="button"
-                onClick={onOpenPlanPanel}
-                data-testid="view-plan-button"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[13px] text-[var(--text-placeholder)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] rounded-lg transition-colors"
-                title="查看当前 plan 详情"
-              >
-                <FileText size={14} strokeWidth={1.5} />
-                <span>查看计划</span>
-              </button>
-            )}
-            <ProfileIndicator sessionId={currentThreadId} cwd={workspace.rootPath} />
             {currentThreadId && <ContextIndicator threadId={currentThreadId} />}
             <ModelSelector />
           </div>
@@ -864,7 +829,6 @@ export default function AgentWorkspace({ sendMessage, sendQueuedInput, abort }: 
   );
   const isCompressing = useAgentStore((s) => s.isCompressing);
   const workspace = useWorkspaceStore();
-  const [planPanelOpen, setPlanPanelOpen] = useState(false);
 
   if (!currentThreadId) {
     return (
@@ -901,18 +865,10 @@ export default function AgentWorkspace({ sendMessage, sendQueuedInput, abort }: 
               sendMessage={sendMessage}
               sendQueuedInput={sendQueuedInput}
               abort={abort}
-              onOpenPlanPanel={() => setPlanPanelOpen(true)}
             />
           </div>
         )}
       </div>
-      {planPanelOpen && (
-        <PlanPanel
-          sessionId={currentThreadId}
-          cwd={workspace.rootPath}
-          onClose={() => setPlanPanelOpen(false)}
-        />
-      )}
     </div>
   );
 }

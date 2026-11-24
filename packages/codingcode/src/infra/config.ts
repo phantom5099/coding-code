@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getGlobalDir } from '../util/path.js';
-import { ASK_BEFORE_EXEC_PERMISSION_MODE, BUILD_PROFILE_NAME } from '../util/enums.js';
+import { ASK_BEFORE_EXEC_PERMISSION_MODE } from '../util/enums.js';
 
 export interface ContextConfig {
   compactionModel: string;
@@ -27,7 +27,6 @@ export interface AppConfig {
   maxSteps: number;
   maxStopContinuations: number;
   activeModel?: ActiveModelConfig;
-  activeProfile: string;
   permissionMode: string;
   context: ContextConfig;
   memory: MemoryConfig;
@@ -51,7 +50,6 @@ export const DEFAULT_SUBAGENT: SubagentConfig = {
 export const DEFAULT_CONFIG: AppConfig = {
   maxSteps: 200,
   maxStopContinuations: 2,
-  activeProfile: BUILD_PROFILE_NAME,
   permissionMode: ASK_BEFORE_EXEC_PERMISSION_MODE,
   context: DEFAULT_CONTEXT,
   memory: DEFAULT_MEMORY,
@@ -91,13 +89,6 @@ export function updateActiveModel(model: string, apiKeyEnv: string, configPath?:
   const p = configPath ?? getUserConfigPath();
   const existing = readExistingConfig(p);
   existing.activeModel = { model, apiKeyEnv };
-  writeConfig(p, existing);
-}
-
-export function updateActiveProfile(activeProfile: string, configPath?: string): void {
-  const p = configPath ?? getUserConfigPath();
-  const existing = readExistingConfig(p);
-  existing.activeProfile = activeProfile;
   writeConfig(p, existing);
 }
 

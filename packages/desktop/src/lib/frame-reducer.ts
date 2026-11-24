@@ -7,7 +7,6 @@ export interface StreamState {
   reasoningText: string;
   roundHasText: boolean;
   hasError: boolean;
-  planTitle: string | null;
   turnIdSynced: boolean;
 }
 
@@ -18,7 +17,6 @@ export function createStreamState(assistantMessageId: string): StreamState {
     reasoningText: '',
     roundHasText: false,
     hasError: false,
-    planTitle: null,
     turnIdSynced: false,
   };
 }
@@ -127,9 +125,6 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
       });
       return;
     case 'tool_call':
-      if (e.name === 'submit_plan') {
-        state.planTitle = String((e.args as Record<string, unknown>).title ?? '');
-      }
       fx.applyItem({
         id: e.id,
         type: 'tool_call',
@@ -172,7 +167,6 @@ export function reduceFrame(frame: Frame, state: StreamState, fx: StreamEffects)
       fx.onInputDelivered?.(e.id);
       return;
     case 'tool_result': {
-      if (e.name === 'submit_plan' && e.outcome.status !== 'ok') state.planTitle = null;
       if (e.name === 'ask_user') fx.markAskAnswered?.(e.id);
       if (e.outcome.status === 'denied') {
         fx.applyItem({ id: e.id, type: 'tool_call', name: e.name, args: (e as any).args ?? {}, status: 'rejected' });

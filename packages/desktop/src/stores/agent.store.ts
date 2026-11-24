@@ -3,7 +3,7 @@ import { immer } from 'zustand/middleware/immer';
 import type { Thread, Turn, Item, TodoItem } from '@shared/types';
 import type { ContentPart } from '@shared/parts';
 import { textOf } from '@shared/parts';
-import type { Automation, PermissionMode, ProfileName } from '@codingcode/sdk';
+import type { Automation, PermissionMode } from '@codingcode/sdk';
 import { buildToolDiff } from '../lib/diff-compute';
 import { normalizeCwd } from './storage';
 import { useRollbackStore } from './rollback.store';
@@ -123,11 +123,6 @@ interface TodoPanelState {
   collapsed: boolean;
 }
 
-export interface PendingPlan {
-  sessionId: string;
-  title: string;
-}
-
 export interface QueuedInput {
   id: string;
   /** 本地形态：本地媒体带 dataUrl，提交时才转线上形状 */
@@ -135,18 +130,10 @@ export interface QueuedInput {
   status: 'queued' | 'sending';
 }
 
-export interface StoredProfile {
-  activeProfile: ProfileName;
-  permissionMode: PermissionMode;
-  fetchedAt: number;
-  optimistic: boolean;
-}
-
 interface AgentState {
   currentThreadId: string | null;
   threads: Record<string, Thread>;
   threadListVersion: number;
-  profile: ProfileName;
   permissionMode: PermissionMode;
   model: string;
   activeModel: string;
@@ -154,10 +141,8 @@ interface AgentState {
   contextUsage: { used: number; contextWindow: number } | null;
   todoByThreadId: Record<string, TodoPanelState>;
   pendingInput: string | null;
-  pendingPlanByThreadId: Record<string, PendingPlan | null>;
   queuedInputsByThreadId: Record<string, QueuedInput[]>;
   usageByThreadId: Record<string, { prompt: number; completion: number; total: number }>;
-  profileByThreadId: Record<string, StoredProfile>;
   isCompressing: boolean;
   automations: Automation[];
 }
@@ -167,25 +152,15 @@ interface AgentActions {
   setCurrentThreadWithProfile: (
     id: string,
     info: {
-      activeProfile: ProfileName;
       permissionMode: PermissionMode;
       model?: string;
       optimistic?: boolean;
     }
   ) => void;
-  setProfileForThread: (
-    id: string,
-    info: { activeProfile: ProfileName; permissionMode: PermissionMode; requestedAt?: number }
-  ) => void;
-  setOptimisticProfileForThread: (
-    id: string,
-    info: { activeProfile: ProfileName; permissionMode: PermissionMode }
-  ) => void;
   removeThread: (id: string) => void;
   upsertThread: (thread: Thread) => void;
   setThreadTurns: (threadId: string, turns: Turn[]) => void;
   setThreadCwd: (threadId: string, cwd: string) => void;
-  setProfile: (profile: ProfileName) => void;
   setPermissionMode: (mode: PermissionMode) => void;
   setModel: (model: string) => void;
   setActiveModel: (model: string) => void;
@@ -205,8 +180,6 @@ interface AgentActions {
   ) => void;
   /** ask_user 已有结果：把 `ask:<callId>` 问题条目置为已答 */
   markAskAnswered: (threadId: string, callId: string) => void;
-  setPendingPlan: (threadId: string, plan: PendingPlan | null) => void;
-  clearPendingPlan: (threadId: string) => void;
   startTurn: (
     threadId: string,
     turn: Turn,
@@ -234,7 +207,6 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       currentThreadId: null,
       threads: {},
       threadListVersion: 0,
-      profile: 'build',
       permissionMode: 'askBeforeExec',
       model: '',
       activeModel: '',
@@ -242,10 +214,8 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       contextUsage: null,
       todoByThreadId: {},
       pendingInput: null,
-      pendingPlanByThreadId: {},
       queuedInputsByThreadId: {},
       usageByThreadId: {},
-      profileByThreadId: {},
       isCompressing: false,
       automations: [],
 
@@ -269,12 +239,7 @@ export const useAgentStore = create<AgentState & AgentActions>()(
       setCurrentThreadWithProfile: (id, info) =>
         set((s) => {
           s.currentThreadId = id;
-          s.profileByThreadId[id] = {
-            activeProfile: info.activeProfile,
-            permissionMode: info.permissionMode,
-            fetchedAt: Date.now(),
-            optimistic: info.optimistic ?? false,
-          };
+          s.permissionMode = info.permissionMode;
           s.model = info.model ?? s.threads[id]?.model ?? s.activeModel;
           if (id) {
             const usage = s.usageByThreadId[id];
@@ -289,40 +254,12 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           }
         }),
 
-      setProfileForThread: (id, info) =>
-        set((s) => {
-          const current = s.profileByThreadId[id];
-          if (current && info.requestedAt !== undefined && current.fetchedAt > info.requestedAt) {
-            return;
-          }
-          s.profileByThreadId[id] = {
-            activeProfile: info.activeProfile,
-            permissionMode: info.permissionMode,
-            fetchedAt: Date.now(),
-            optimistic: false,
-          };
-        }),
-
-      setOptimisticProfileForThread: (id, info) =>
-        set((s) => {
-          const current = s.profileByThreadId[id];
-          if (current && !current.optimistic) return;
-          s.profileByThreadId[id] = {
-            activeProfile: info.activeProfile,
-            permissionMode: info.permissionMode,
-            fetchedAt: 0,
-            optimistic: true,
-          };
-        }),
-
       removeThread: (id) =>
         set((s) => {
           delete s.threads[id];
           s.threadListVersion = (s.threadListVersion ?? 0) + 1;
           delete s.usageByThreadId[id];
           delete s.todoByThreadId[id];
-          delete s.pendingPlanByThreadId[id];
-          delete s.profileByThreadId[id];
           delete s.queuedInputsByThreadId[id];
         }),
 
@@ -347,11 +284,6 @@ export const useAgentStore = create<AgentState & AgentActions>()(
             thread.cwd = cwd;
             s.threadListVersion = (s.threadListVersion ?? 0) + 1;
           }
-        }),
-
-      setProfile: (profile) =>
-        set((s) => {
-          s.profile = profile;
         }),
 
       setPermissionMode: (mode) =>
@@ -426,11 +358,6 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           for (const id of Object.keys(s.todoByThreadId)) {
             if (!incomingIds.has(id)) {
               delete s.todoByThreadId[id];
-            }
-          }
-          for (const id of Object.keys(s.profileByThreadId)) {
-            if (!incomingIds.has(id)) {
-              delete s.profileByThreadId[id];
             }
           }
           for (const id of Object.keys(s.queuedInputsByThreadId)) {
@@ -565,20 +492,6 @@ export const useAgentStore = create<AgentState & AgentActions>()(
           if (from < 0 || from >= list.length || to < 0 || to >= list.length || from === to) return;
           const [moved] = list.splice(from, 1);
           if (moved) list.splice(to, 0, moved);
-        }),
-
-      setPendingPlan: (threadId, plan) =>
-        set((s) => {
-          if (plan === null) {
-            delete s.pendingPlanByThreadId[threadId];
-          } else {
-            s.pendingPlanByThreadId[threadId] = plan;
-          }
-        }),
-
-      clearPendingPlan: (threadId) =>
-        set((s) => {
-          delete s.pendingPlanByThreadId[threadId];
         }),
 
       clearRunningTurns: (threadId) =>

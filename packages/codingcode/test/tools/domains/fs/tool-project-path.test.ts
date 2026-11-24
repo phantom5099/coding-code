@@ -9,6 +9,7 @@ import { writeFileTool } from '../../../../src/tools/domains/fs/write.js';
 import { editFileTool } from '../../../../src/tools/domains/fs/edit.js';
 import { searchTool } from '../../../../src/tools/domains/fs/grep.js';
 import { globTool } from '../../../../src/tools/domains/fs/glob.js';
+import { testSandboxPolicy } from '../../../helpers/sandbox.js';
 
 describe('tools/domains/fs projectPath isolation', () => {
   let globalDir: string;
@@ -40,7 +41,7 @@ describe('tools/domains/fs projectPath isolation', () => {
     }
   });
 
-  const ctx = (cwd: string) => ({ projectPath: cwd, model: 'test-model' });
+  const ctx = (cwd: string) => ({ projectPath: cwd, model: 'test-model', sandboxPolicy: testSandboxPolicy(cwd) });
 
   it('read_file uses ctx.projectPath over workspaceCwd', async () => {
     writeFileSync(join(projectDir, 'a.txt'), 'hello', 'utf8');
@@ -99,7 +100,10 @@ describe('tools/domains/fs projectPath isolation', () => {
     writeFileSync(join(cwd, 'h-test.txt'), 'fallback', 'utf8');
     try {
       const result = await Effect.runPromise(
-        readFileTool.execute({ path: 'h-test.txt', offset: 1, limit: 200 }, undefined)
+        readFileTool.execute(
+          { path: 'h-test.txt', offset: 1, limit: 200 },
+          { projectPath: cwd, model: 'test-model', sandboxPolicy: testSandboxPolicy(cwd) }
+        )
       );
       expect(result).toContain('fallback');
     } finally {
