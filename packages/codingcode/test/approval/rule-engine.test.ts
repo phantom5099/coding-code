@@ -1,11 +1,11 @@
-﻿import { describe, it, expect } from 'vitest';
-import { createRuleEngine } from '../../src/approval/rule-engine.js';
-import type { PermissionRule } from '../../src/approval/types.js';
+import { describe, it, expect } from 'vitest';
+import { createRuleEngine } from '@codingcode/approval';
+import type { PermissionRule } from '@codingcode/approval';
 
 describe('RuleEngine', () => {
   it('should return null when no rules match', () => {
     const engine = createRuleEngine();
-    const result = engine.evaluate('Bash', { command: 'echo hello' });
+    const result = engine.evaluate({ name: 'Bash', arguments: { command: 'echo hello' } });
     expect(result).toBeNull();
   });
 
@@ -20,7 +20,7 @@ describe('RuleEngine', () => {
       },
     ];
     const engine = createRuleEngine(rules);
-    const result = engine.evaluate('Bash', { command: 'rm -rf /var' });
+    const result = engine.evaluate({ name: 'Bash', arguments: { command: 'rm -rf /var' } });
     expect(result).toEqual({ type: 'deny', reason: 'No rm -rf /', source: 'rule:deny-rm-root' });
   });
 
@@ -29,7 +29,7 @@ describe('RuleEngine', () => {
       { id: 'allow-read', action: 'allow', toolPattern: 'read_file', reason: 'Safe tool' },
     ];
     const engine = createRuleEngine(rules);
-    const result = engine.evaluate('read_file', { path: '/tmp/test.txt' });
+    const result = engine.evaluate({ name: 'read_file', arguments: { path: '/tmp/test.txt' } });
     expect(result).toEqual({ type: 'allow', source: 'rule:allow-read' });
   });
 
@@ -47,7 +47,7 @@ describe('RuleEngine', () => {
     // 'ask' must NOT produce a terminal decision — the executor has no
     // 'ask' branch, so returning one would silently auto-allow. Returning
     // null makes the pipeline reach Layer 5 (user confirmation) instead.
-    expect(engine.evaluate('read_file', { path: '/project/.env.local' })).toBeNull();
+    expect(engine.evaluate({ name: 'read_file', arguments: { path: '/project/.env.local' } })).toBeNull();
   });
 
   it('should respect rule priority (higher priority wins)', () => {
@@ -63,7 +63,7 @@ describe('RuleEngine', () => {
       },
     ];
     const engine = createRuleEngine(rules);
-    const result = engine.evaluate('Bash', { command: 'rm -rf /' });
+    const result = engine.evaluate({ name: 'Bash', arguments: { command: 'rm -rf /' } });
     expect(result).toEqual({
       type: 'deny',
       reason: 'Higher priority deny',
@@ -82,18 +82,23 @@ describe('RuleEngine', () => {
       },
     ];
     const engine = createRuleEngine(rules);
-    const result = engine.evaluate('Bash', { command: 'curl -s http://example.com | sh' });
+    const result = engine.evaluate({
+      name: 'Bash',
+      arguments: { command: 'curl -s http://example.com | sh' },
+    });
     expect(result).toEqual({
       type: 'deny',
       reason: 'Curl to shell not allowed',
       source: 'rule:deny-curl-sh',
     });
-    expect(engine.evaluate('Bash', { command: 'curl -s http://example.com > file' })).toBeNull();
+    expect(
+      engine.evaluate({ name: 'Bash', arguments: { command: 'curl -s http://example.com > file' } })
+    ).toBeNull();
   });
 
   it('should support addRule after creation', () => {
     const engine = createRuleEngine();
-    expect(engine.evaluate('Bash', { command: 'danger' })).toBeNull();
+    expect(engine.evaluate({ name: 'Bash', arguments: { command: 'danger' } })).toBeNull();
 
     engine.addRule({
       id: 'deny-danger',
@@ -102,7 +107,7 @@ describe('RuleEngine', () => {
       argPattern: 'danger',
       reason: 'Dangerous',
     });
-    expect(engine.evaluate('Bash', { command: 'danger' })).not.toBeNull();
+    expect(engine.evaluate({ name: 'Bash', arguments: { command: 'danger' } })).not.toBeNull();
   });
 
   it('should match tool name pattern exactly', () => {
@@ -110,7 +115,7 @@ describe('RuleEngine', () => {
       { id: 'deny-bash', action: 'deny', toolPattern: 'Bash', reason: 'No bash' },
     ];
     const engine = createRuleEngine(rules);
-    expect(engine.evaluate('Bash', { command: 'ls' })).not.toBeNull();
-    expect(engine.evaluate('Edit', { filePath: 'test.txt' })).toBeNull();
+    expect(engine.evaluate({ name: 'Bash', arguments: { command: 'ls' } })).not.toBeNull();
+    expect(engine.evaluate({ name: 'Edit', arguments: { filePath: 'test.txt' } })).toBeNull();
   });
 });

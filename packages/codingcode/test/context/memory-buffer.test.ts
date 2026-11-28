@@ -1,22 +1,27 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { ContextService } from '../../src/context/port.js';
-import type { ContextShape } from '../../src/context/port.js';
-import { ContextLayer } from '../../src/context/context.js';
-import { SessionService } from '../../src/session/port.js';
-import { LLMService } from '../../src/llm/port.js';
-import { EventSinkLayer } from '../../src/sink/sink.js';
-import { TurnRegistryLayer } from '../../src/turn/registry.js';
-import type { SessionEvent } from '../../src/session/types.js';
-import type { SessionRef } from '../../src/session/types.js';
+import { ContextService } from '@codingcode/context';
+import type { ContextShape } from '@codingcode/context';
+import { ContextLayer } from '@codingcode/context';
+import { SessionService } from '@codingcode/session';
+import { LLMService } from '@codingcode/model';
+import { EventSinkLayer } from '@codingcode/sink';
+import { TurnRegistryLayer } from '@codingcode/turn';
+import type { SessionEvent } from '@codingcode/session';
+import type { SessionRef } from '@codingcode/session';
 import { text } from '../helpers/parts.js';
-import { textOf } from '../../src/llm/types.js';
+import { textOf } from '@codingcode/model';
 
 // 上下文窗口钉死成可控值（与其余 context 用例一致）
 const windowState = vi.hoisted(() => ({ value: 128000 }));
-vi.mock('../../src/infra/models.js', () => ({
+vi.mock('@codingcode/model', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+
   contextWindowOf: () => windowState.value,
-}));
+  };
+});
 
 const SUMMARY =
   '## Compacted History\n\n### Goal\nx\n\n### Instructions\ny\n\n### Discoveries\nz\n\n### Accomplished\nw\n\n### Relevant Files\nf';
@@ -31,7 +36,7 @@ function makeCountingSession(seed: SessionEvent[]) {
         reads.count++;
         return [...seed, ...appended];
       }),
-    appendEvent: (_path: string, ev: SessionEvent) =>
+    appendEvent: (_locator: unknown, ev: SessionEvent) =>
       Effect.sync(() => {
         appended.push(ev);
       }),
@@ -89,7 +94,7 @@ describe('context memory buffer', () => {
     const ctx = await getCtx(counting);
 
     for (let i = 0; i < 3; i++) {
-      await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
+      await Effect.runPromise(ctx.getHistory({ session: REF, model: 'test-model' }));
     }
 
     expect(counting.reads.count).toBe(1);
@@ -99,8 +104,8 @@ describe('context memory buffer', () => {
     const counting = makeCountingSession(seedEvents());
     const ctx = await getCtx(counting);
 
-    await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
-    await Effect.runPromise(ctx.getHistory({ ...REF, currentTurnId: 2 }, 'test-model'));
+    await Effect.runPromise(ctx.getHistory({ session: REF, model: 'test-model' }));
+    await Effect.runPromise(ctx.getHistory({ session: { ...REF, currentTurnId: 2 }, model: 'test-model' }));
 
     expect(counting.reads.count).toBe(2);
   });
@@ -109,11 +114,11 @@ describe('context memory buffer', () => {
     const counting = makeCountingSession(seedEvents());
     const ctx = await getCtx(counting);
 
-    await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
+    await Effect.runPromise(ctx.getHistory({ session: REF, model: 'test-model' }));
     await Effect.runPromise(
       ctx.absorb(REF, [{ type: 'assistant', turnId: 1, content: 'r1', toolCalls: [] }])
     );
-    const messages = await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
+    const messages = await Effect.runPromise(ctx.getHistory({ session: REF, model: 'test-model' }));
 
     expect(messages.some((m) => textOf(m.content) === 'r1')).toBe(true);
     expect(counting.reads.count).toBe(1);
@@ -124,7 +129,7 @@ describe('context memory buffer', () => {
     const ctx = await getCtx(counting);
 
     await Effect.runPromise(ctx.absorb(REF, [{ type: 'user', turnId: 1, content: text('early') }]));
-    const messages = await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
+    const messages = await Effect.runPromise(ctx.getHistory({ session: REF, model: 'test-model' }));
 
     expect(counting.reads.count).toBe(1);
     expect(messages.some((m) => textOf(m.content) === 'q1')).toBe(true);
@@ -143,9 +148,9 @@ describe('context memory buffer', () => {
     // 上一回合投递、本回合才被 drain 到：事件早已随读盘进了 buffer
     const ref: SessionRef = { ...REF, currentTurnId: 2 };
 
-    await Effect.runPromise(ctx.getHistory(ref, 'test-model'));
+    await Effect.runPromise(ctx.getHistory({ session: ref, model: 'test-model' }));
     await Effect.runPromise(ctx.absorb(ref, [event]));
-    const messages = await Effect.runPromise(ctx.getHistory(ref, 'test-model'));
+    const messages = await Effect.runPromise(ctx.getHistory({ session: ref, model: 'test-model' }));
 
     expect(messages.filter((m) => textOf(m.content).includes('FINAL_ANSWER'))).toHaveLength(1);
   });
@@ -167,7 +172,7 @@ describe('context memory buffer', () => {
       const ctx = await getCtx(counting);
 
       const messages = await Effect.runPromise(
-        ctx.getHistory({ ...REF, currentTurnId: 3 }, 'test-model')
+        ctx.getHistory({ session: { ...REF, currentTurnId: 3 }, model: 'test-model' })
       );
 
       expect(messages.some((m) => m.name === 'compacted_history')).toBe(true);
@@ -181,9 +186,9 @@ describe('context memory buffer', () => {
     const counting = makeCountingSession(seedEvents());
     const ctx = await getCtx(counting);
 
-    await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
+    await Effect.runPromise(ctx.getHistory({ session: REF, model: 'test-model' }));
     await Effect.runPromise(ctx.dispose(REF.sessionId));
-    await Effect.runPromise(ctx.getHistory(REF, 'test-model'));
+    await Effect.runPromise(ctx.getHistory({ session: REF, model: 'test-model' }));
 
     expect(counting.reads.count).toBe(2);
   });

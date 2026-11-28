@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, ManagedRuntime } from 'effect';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { createServer, type ServerApp } from '../../src/server/index.js';
-import { computePaths } from '../../src/session/paths.js';
-import { readSessionMeta } from '../../src/session/file-ops.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { createServer, type ServerApp } from '@codingcode/http';
+import { computePaths } from '@codingcode/session';
+import { readSessionMeta } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { text } from '../helpers/parts.js';
 
@@ -47,8 +47,8 @@ describe('PUT /api/sessions/:id/title', () => {
     return rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const state = yield* session.load(cwd, sessionId);
-        const paths = computePaths(state.cwd, state.sessionId, state.parentSessionId);
+        const state = yield* session.load({ cwd, sessionId });
+        const paths = computePaths(state);
         return readSessionMeta(paths.transcriptPath)?.title;
       }) as any
     );
@@ -73,7 +73,7 @@ describe('PUT /api/sessions/:id/title', () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const state = yield* session.load(cwd, sessionId);
+        const state = yield* session.load({ cwd, sessionId });
         yield* session.recordUser(state, text('first message'));
       })
     );

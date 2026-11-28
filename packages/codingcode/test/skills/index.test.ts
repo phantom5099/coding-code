@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Context, Effect, Layer } from 'effect';
-import { SkillService } from '../../src/skills/port.js';
-import { SkillLayer } from '../../src/skills/skills.js';
+import { SkillService } from '@codingcode/skill';
+import { SkillLayer } from '@codingcode/skill';
+import { projectConfigScope } from '@codingcode/util';
 
 const TEST_ROOT = process.cwd();
 const TEST_CODINGCODE_DIR = join(TEST_ROOT, '.codingcode');
@@ -70,7 +71,7 @@ Test the skill system.
   });
 
   it('should load skills from .codingcode/skills/ on demand', () => {
-    const skills = runWithSkill((s) => s.getAll(TEST_ROOT));
+    const skills = runWithSkill((s) => s.getAll(projectConfigScope(TEST_ROOT)));
     expect(skills.length).toBeGreaterThanOrEqual(1);
     const basic = skills.find((s) => s.name === 'test-basic');
     expect(basic).toBeDefined();
@@ -80,6 +81,7 @@ Test the skill system.
       name: 'test-basic',
       description: 'A basic test skill for unit testing',
       skillPath: join(TEST_CODINGCODE_DIR, 'skills', 'test-basic', 'SKILL.md'),
+      source: 'project',
     });
   });
 
@@ -96,18 +98,21 @@ Test the skill system.
     writeFileSync(join(skillDir, 'scripts', 'run.sh'), 'secret script');
     writeFileSync(join(skillDir, 'assets', 'image.bin'), Buffer.from([0, 1, 2, 3]));
 
-    const skill = runWithSkill((s) => s.getAll(TEST_ROOT)).find((s) => s.name === 'metadata-only');
+    const skill = runWithSkill((s) => s.getAll(projectConfigScope(TEST_ROOT))).find(
+      (s) => s.name === 'metadata-only'
+    );
 
     expect(skill).toEqual({
       name: 'metadata-only',
       description: 'Metadata only',
       skillPath: join(skillDir, 'SKILL.md'),
+      source: 'project',
     });
   });
 
   it('should cache skills per session (added files not visible without new session)', () => {
     const [before, after] = runWithSharedSkill(
-      (s) => s.getAll(TEST_ROOT),
+      (s) => s.getAll(projectConfigScope(TEST_ROOT)),
       (s) => {
         // Add a new skill file after the first read
         const dir = join(TEST_CODINGCODE_DIR, 'skills', 'dynamic-skill');
@@ -121,7 +126,7 @@ description: "Added at runtime"
 Dynamic skill body.
 `
         );
-        return s.getAll(TEST_ROOT);
+        return s.getAll(projectConfigScope(TEST_ROOT));
       }
     );
 
@@ -129,7 +134,9 @@ Dynamic skill body.
   });
 
   it('readContent returns the SKILL.md text verbatim, front matter included', () => {
-    const basic = runWithSkill((s) => s.getAll(TEST_ROOT)).find((s) => s.name === 'test-basic')!;
+    const basic = runWithSkill((s) => s.getAll(projectConfigScope(TEST_ROOT))).find(
+      (s) => s.name === 'test-basic'
+    )!;
 
     const body = runWithSkill((s) => s.readContent(basic.skillPath));
 

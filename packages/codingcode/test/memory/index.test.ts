@@ -1,12 +1,12 @@
-﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer } from 'effect';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { MemoryService, type MemoryShape } from '../../src/memory/port.js';
-import { LLMService } from '../../src/llm/port.js';
-import { MemoryLayer } from '../../src/memory/memory.js';
-import { AgentError } from '../../src/util/error.js';
+import { MemoryService, type MemoryShape } from '@codingcode/memory';
+import { LLMService } from '@codingcode/model';
+import { MemoryLayer } from '@codingcode/memory';
+import { AgentError } from '@codingcode/util';
 
 const tmpDir = path.join(os.tmpdir(), 'memory-index-test');
 const memFile = path.join(tmpDir, '.codingcode', 'memory.md');
@@ -34,7 +34,8 @@ function writeMemory(content: string) {
   fs.writeFileSync(memFile, content);
 }
 
-vi.mock('../../src/memory/config.js', () => ({
+// mock 物理模块：memory 包内部走相对导入，必须拦在子路径上才能传导到实现
+vi.mock('@codingcode/memory/config', () => ({
   getMemoryConfig: vi.fn(() => ({
     enabled: false,
     model: '',
@@ -44,7 +45,7 @@ vi.mock('../../src/memory/config.js', () => ({
 
 // setMemoryEnabled persists via the infra config store, which writes the real
 // ~/.codingcode/config.yaml. Stub the writer so the suite never touches user config.
-vi.mock('../../src/infra/config.js', async (importOriginal) => {
+vi.mock('@codingcode/infra', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
@@ -52,7 +53,7 @@ vi.mock('../../src/infra/config.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/session/file-ops.js', async (importOriginal) => {
+vi.mock('@codingcode/session', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
@@ -61,7 +62,7 @@ vi.mock('../../src/session/file-ops.js', async (importOriginal) => {
 });
 
 function setLlmResponse(response: string, beforeResolve?: () => void) {
-  mockLlm.complete.mockImplementation((_req: unknown, _model: string) => {
+  mockLlm.complete.mockImplementation((_req: unknown) => {
     beforeResolve?.();
     return Effect.succeed({ content: response });
   });
@@ -74,13 +75,13 @@ beforeEach(async () => {
   fs.mkdirSync(tmpDir, { recursive: true });
   mockLlm.complete.mockReset();
   setLlmResponse('');
-  const { getMemoryConfig } = await import('../../src/memory/config.js');
+  const { getMemoryConfig } = await import('@codingcode/memory');
   vi.mocked(getMemoryConfig).mockReturnValue({
     enabled: false,
     model: '',
     promptMaxBytes: 8192,
   });
-  const { readTranscript } = await import('../../src/session/file-ops.js');
+  const { readTranscript } = await import('@codingcode/session');
   vi.mocked(readTranscript).mockImplementation(() => []);
   service = await Effect.runPromise(
     Effect.gen(function* () {
@@ -94,7 +95,7 @@ afterEach(() => {
 });
 
 async function enableConfig() {
-  const { getMemoryConfig } = await import('../../src/memory/config.js');
+  const { getMemoryConfig } = await import('@codingcode/memory');
   vi.mocked(getMemoryConfig).mockReturnValue({
     enabled: true,
     model: '',
@@ -125,7 +126,7 @@ describe('loadMemoryForPrompt', () => {
   });
 
   it('truncates memory when exceeds promptMaxBytes', async () => {
-    const { getMemoryConfig } = await import('../../src/memory/config.js');
+    const { getMemoryConfig } = await import('@codingcode/memory');
     vi.mocked(getMemoryConfig).mockReturnValue({
       enabled: true,
       model: '',
@@ -142,33 +143,48 @@ describe('loadMemoryForPrompt', () => {
 
 describe('flushSessionToMemory', () => {
   it('returns early when memory disabled', async () => {
-    const result = await run(service.flushSessionToMemory('fake-session-id', TEST_MODEL, tmpDir));
+    const result = await run(
+      service.flushSessionToMemory({
+        session: { cwd: tmpDir, sessionId: 'fake-session-id' },
+        model: TEST_MODEL,
+      })
+    );
     expect(result.written).toBe(false);
   });
 
   it('returns early when session has no events', async () => {
     await enableConfig();
-    const result = await run(service.flushSessionToMemory('empty-session', TEST_MODEL, tmpDir));
+    const result = await run(
+      service.flushSessionToMemory({
+        session: { cwd: tmpDir, sessionId: 'empty-session' },
+        model: TEST_MODEL,
+      })
+    );
     expect(result.written).toBe(false);
   });
 
   it('gracefully handles an LLM failure', async () => {
     await enableConfig();
-    const { readTranscript } = await import('../../src/session/file-ops.js');
+    const { readTranscript } = await import('@codingcode/session');
     vi.mocked(readTranscript).mockImplementation(
       () => [{ type: 'user', content: [{ type: 'text', text: 'hello' }] }] as any
     );
     mockLlm.complete.mockImplementation(() =>
       Effect.fail(new AgentError('LLM_FAILED', 'llm unavailable'))
     );
-    const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
+    const result = await run(
+      service.flushSessionToMemory({
+        session: { cwd: tmpDir, sessionId: 'session' },
+        model: TEST_MODEL,
+      })
+    );
     expect(result.written).toBe(false);
   });
 
   it('replaces the whole memory file with extracted content', async () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
-    const { readTranscript } = await import('../../src/session/file-ops.js');
+    const { readTranscript } = await import('@codingcode/session');
     vi.mocked(readTranscript).mockImplementation(
       () =>
         [
@@ -178,9 +194,14 @@ describe('flushSessionToMemory', () => {
     );
     setLlmResponse('### 项目\n- 新的架构决策');
 
-    const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
+    const result = await run(
+      service.flushSessionToMemory({
+        session: { cwd: tmpDir, sessionId: 'session' },
+        model: TEST_MODEL,
+      })
+    );
 
-    expect(mockLlm.complete.mock.calls[0]?.[1]).toBe(TEST_MODEL);
+    expect(mockLlm.complete.mock.calls[0]?.[0]?.model).toBe(TEST_MODEL);
     expect(result.written).toBe(true);
     expect(result.bytes).toBeGreaterThan(0);
     expect(fs.readFileSync(memFile, 'utf-8')).toBe('### 项目\n- 新的架构决策');
@@ -189,13 +210,18 @@ describe('flushSessionToMemory', () => {
   it('keeps file unchanged when the model returns blank output', async () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
-    const { readTranscript } = await import('../../src/session/file-ops.js');
+    const { readTranscript } = await import('@codingcode/session');
     vi.mocked(readTranscript).mockImplementation(
       () => [{ type: 'user', content: [{ type: 'text', text: 'hello' }] }] as any
     );
     setLlmResponse('');
 
-    const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
+    const result = await run(
+      service.flushSessionToMemory({
+        session: { cwd: tmpDir, sessionId: 'session' },
+        model: TEST_MODEL,
+      })
+    );
 
     expect(result.written).toBe(false);
     expect(fs.readFileSync(memFile, 'utf-8')).toBe('### 旧主题\n- 旧内容');
@@ -204,13 +230,18 @@ describe('flushSessionToMemory', () => {
   it('skips rewrite when extracted content equals current file', async () => {
     await enableConfig();
     writeMemory('### 主题\n- 不变的内容');
-    const { readTranscript } = await import('../../src/session/file-ops.js');
+    const { readTranscript } = await import('@codingcode/session');
     vi.mocked(readTranscript).mockImplementation(
       () => [{ type: 'user', content: [{ type: 'text', text: '无新信息' }] }] as any
     );
     setLlmResponse('### 主题\n- 不变的内容');
 
-    const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
+    const result = await run(
+      service.flushSessionToMemory({
+        session: { cwd: tmpDir, sessionId: 'session' },
+        model: TEST_MODEL,
+      })
+    );
 
     expect(result.written).toBe(false);
   });
@@ -218,7 +249,7 @@ describe('flushSessionToMemory', () => {
   it('does not overwrite a memory file manually edited during extraction', async () => {
     await enableConfig();
     writeMemory('### 旧主题\n- 旧内容');
-    const { readTranscript } = await import('../../src/session/file-ops.js');
+    const { readTranscript } = await import('@codingcode/session');
     vi.mocked(readTranscript).mockImplementation(
       () => [{ type: 'user', content: [{ type: 'text', text: 'hello' }] }] as any
     );
@@ -226,7 +257,12 @@ describe('flushSessionToMemory', () => {
       writeMemory('### 手动\n- 用户并发编辑');
     });
 
-    const result = await run(service.flushSessionToMemory('session', TEST_MODEL, tmpDir));
+    const result = await run(
+      service.flushSessionToMemory({
+        session: { cwd: tmpDir, sessionId: 'session' },
+        model: TEST_MODEL,
+      })
+    );
 
     expect(result.written).toBe(false);
     expect(fs.readFileSync(memFile, 'utf-8')).toBe('### 手动\n- 用户并发编辑');
@@ -263,7 +299,12 @@ describe('runtime memory toggle', () => {
 
   it('flushSessionToMemory returns early when runtime disabled', async () => {
     await run(service.setMemoryEnabled(false));
-    const result = await run(service.flushSessionToMemory('any-session', TEST_MODEL, tmpDir));
+    const result = await run(
+      service.flushSessionToMemory({
+        session: { cwd: tmpDir, sessionId: 'any-session' },
+        model: TEST_MODEL,
+      })
+    );
     expect(result.written).toBe(false);
   });
 });

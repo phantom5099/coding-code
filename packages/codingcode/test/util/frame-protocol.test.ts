@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { isTurnEnd } from '../../src/sink/types.js';
-import type { FrameBody } from '../../src/sink/types.js';
-import type { Frame } from '../../src/server/frame-io.js';
+import { isTurnEnd } from '@codingcode/sink';
+import type { FrameBody } from '@codingcode/sink';
+import type { Frame } from '@codingcode/http';
 
 const turnId = 1;
 

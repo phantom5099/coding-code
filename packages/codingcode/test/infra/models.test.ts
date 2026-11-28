@@ -42,7 +42,7 @@ function mockActiveModel(
   activeModel: { model: string; apiKeyEnv: string } | undefined,
   extra: Record<string, unknown> = {}
 ) {
-  vi.doMock('../../src/infra/config.js', async (importOriginal: any) => {
+  vi.doMock('@codingcode/infra', async (importOriginal: any) => {
     const orig = await importOriginal();
     return { ...orig, loadConfig: () => ({ activeModel }), ...extra };
   });
@@ -60,13 +60,13 @@ async function drain(iterable: AsyncIterable<unknown>): Promise<void> {
  * Tag 与 Layer 必须取自同一份 import 图，故两者都在调用点动态导入。
  */
 async function streamOnce(model: string) {
-  const { LLMService } = await import('../../src/llm/port.js');
-  const { LlmLayer } = await import('../../src/llm/llm.js');
+  const { LLMService } = await import('@codingcode/model');
+  const { LlmLayer } = await import('@codingcode/model');
   return Effect.runPromise(
     Effect.gen(function* () {
       const llm = yield* LLMService;
       yield* Effect.tryPromise({
-        try: () => drain(llm.completeStream({ messages: [] }, model)),
+        try: () => drain(llm.completeStream({ messages: [], model })),
         catch: (e) => (e instanceof Error ? e : new Error(String(e))),
       });
     }).pipe(Effect.provide(LlmLayer), Effect.either)
@@ -81,7 +81,7 @@ describe('catalog - listModels / findModel', () => {
   it('flattens provider x model into {model}@{provider} ids', async () => {
     mockFs();
     mockActiveModel(undefined);
-    const { listModels } = await import('../../src/infra/models.js');
+    const { listModels } = await import('@codingcode/model');
 
     const ids = listModels().map((m) => m.id);
     expect(ids).toEqual(['model-x@provider-a', 'model-y@provider-a', 'model-x@provider-b']);
@@ -90,7 +90,7 @@ describe('catalog - listModels / findModel', () => {
   it('prefers the exact compound id over a bare-name match', async () => {
     mockFs();
     mockActiveModel(undefined);
-    const { findModel } = await import('../../src/infra/models.js');
+    const { findModel } = await import('@codingcode/model');
 
     expect(findModel('model-x@provider-b')?.provider).toBe('provider-b');
   });
@@ -98,7 +98,7 @@ describe('catalog - listModels / findModel', () => {
   it('falls back to the first bare-name match when no exact id matches', async () => {
     mockFs();
     mockActiveModel(undefined);
-    const { findModel } = await import('../../src/infra/models.js');
+    const { findModel } = await import('@codingcode/model');
 
     expect(findModel('model-x')?.id).toBe('model-x@provider-a');
     expect(findModel('Model Y')?.id).toBe('model-y@provider-a');
@@ -108,7 +108,7 @@ describe('catalog - listModels / findModel', () => {
   it('reports the configured context window, falling back to the default', async () => {
     mockFs();
     mockActiveModel(undefined);
-    const { contextWindowOf } = await import('../../src/infra/models.js');
+    const { contextWindowOf } = await import('@codingcode/model');
 
     expect(contextWindowOf('model-x@provider-a')).toBe(32000);
     expect(contextWindowOf('model-y@provider-a')).toBe(128000);
@@ -123,7 +123,7 @@ describe('activeModel - config priority', () => {
   it('resolves the configured activeModel to a catalog entry', async () => {
     mockFs();
     mockActiveModel({ model: 'model-y', apiKeyEnv: 'API_KEY_A' });
-    const { activeModelId } = await import('../../src/infra/models.js');
+    const { activeModelId } = await import('@codingcode/model');
 
     expect(activeModelId()).toBe('model-y@provider-a');
   });
@@ -131,7 +131,7 @@ describe('activeModel - config priority', () => {
   it('returns an empty id when activeModel is not set in config', async () => {
     mockFs();
     mockActiveModel(undefined);
-    const { activeModelId } = await import('../../src/infra/models.js');
+    const { activeModelId } = await import('@codingcode/model');
 
     expect(activeModelId()).toBe('');
   });
@@ -139,7 +139,7 @@ describe('activeModel - config priority', () => {
   it('returns an empty id when activeModel matches no catalog entry', async () => {
     mockFs();
     mockActiveModel({ model: 'nonexistent', apiKeyEnv: 'UNKNOWN_KEY' });
-    const { activeModelId } = await import('../../src/infra/models.js');
+    const { activeModelId } = await import('@codingcode/model');
 
     expect(activeModelId()).toBe('');
   });
@@ -154,18 +154,18 @@ describe('setGlobalActive - persists to config', () => {
     const updateActiveModel = vi.fn();
     mockFs();
     mockActiveModel({ model: 'model-x', apiKeyEnv: 'API_KEY_A' }, { updateActiveModel });
-    const { setGlobalActive } = await import('../../src/infra/models.js');
+    const { setGlobalActive } = await import('@codingcode/model');
 
     setGlobalActive('model-y@provider-a');
 
-    expect(updateActiveModel).toHaveBeenCalledWith('model-y', 'API_KEY_A');
+    expect(updateActiveModel).toHaveBeenCalledWith({ model: 'model-y', apiKeyEnv: 'API_KEY_A' });
   });
 
   it('throws CONFIG_INVALID and does not touch config when the id is unknown', async () => {
     const updateActiveModel = vi.fn();
     mockFs();
     mockActiveModel({ model: 'model-x', apiKeyEnv: 'API_KEY_A' }, { updateActiveModel });
-    const { setGlobalActive } = await import('../../src/infra/models.js');
+    const { setGlobalActive } = await import('@codingcode/model');
 
     expect(() => setGlobalActive('nonexistent@provider-a')).toThrow(/not found/);
     expect(updateActiveModel).not.toHaveBeenCalled();

@@ -1,8 +1,8 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { TodoService } from '../../../src/todo/port.js';
-import type { TodoItem } from '../../../src/todo/types.js';
-import { TodoLayer } from '../../../src/todo/todo.js';
+import { TodoService } from '@codingcode/todo';
+import type { TodoItem } from '@codingcode/todo';
+import { TodoLayer } from '@codingcode/todo';
 
 describe('TodoService', () => {
   it('write then read returns full list', async () => {

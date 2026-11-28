@@ -1,0 +1,15 @@
+﻿{
+    "name":  "@codingcode/infra",
+    "version":  "0.2.0",
+    "type":  "module",
+    "exports":  {
+                    ".":  "./src/index.ts",
+                    "./config":  "./src/config.ts"
+                },
+    "dependencies":  {
+                         "@codingcode/util":  "workspace:*",
+                         "effect":  "^3.21.2",
+                         "pino":  "^9.6.0",
+                         "yaml":  "^2.9.0"
+                     }
+}

@@ -3,11 +3,11 @@ import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { encodeProjectPath } from '../../src/util/path.js';
-import { computePaths } from '../../src/session/paths.js';
-import { readSessionMeta } from '../../src/session/file-ops.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { encodeProjectPath } from '@codingcode/util';
+import { computePaths } from '@codingcode/session';
+import { readSessionMeta } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { text } from '../helpers/parts.js';
 
@@ -32,9 +32,9 @@ describe('load — keeps the persisted model untouched', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'gpt-4o',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -44,15 +44,13 @@ describe('load — keeps the persisted model untouched', () => {
       const loaded = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.load(dir, sid);
+          return yield* svc.load({ cwd: dir, sessionId: sid });
         })
       );
 
       expect(loaded.sessionId).toBe(sid);
 
-      const meta = readSessionMeta(
-        computePaths(created.cwd, created.sessionId, created.parentSessionId).transcriptPath
-      );
+      const meta = readSessionMeta(computePaths(created).transcriptPath);
       expect(meta?.model).toBe('gpt-4o');
     } finally {
       cleanup(dir);
@@ -68,9 +66,9 @@ describe('load — keeps the persisted model untouched', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'claude-3-5-sonnet',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -80,23 +78,19 @@ describe('load — keeps the persisted model untouched', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, sid);
+          const state = yield* svc.load({ cwd: dir, sessionId: sid });
           yield* svc.recordUser(state, text('first message'));
         })
       );
 
-      const transcriptPath = computePaths(
-        created.cwd,
-        created.sessionId,
-        created.parentSessionId
-      ).transcriptPath;
+      const transcriptPath = computePaths(created).transcriptPath;
       expect(readSessionMeta(transcriptPath)?.model).toBe('claude-3-5-sonnet');
 
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, sid);
-          yield* svc.rollbackToTurn(state, 1, 'test rollback');
+          const state = yield* svc.load({ cwd: dir, sessionId: sid });
+          yield* svc.rollbackToTurn(state, { throughTurnId: 1, reason: 'test rollback' });
         })
       );
 
@@ -115,7 +109,7 @@ describe('load — keeps the persisted model untouched', () => {
       const exit = await Effect.runPromiseExit(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.load(dir, 'nonexistent-session-id');
+          return yield* svc.load({ cwd: dir, sessionId: 'nonexistent-session-id' });
         }).pipe(Effect.provide(SessionLayer))
       );
 
@@ -140,9 +134,9 @@ describe('load — keeps the persisted model untouched', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'gpt-4o',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -151,7 +145,7 @@ describe('load — keeps the persisted model untouched', () => {
       const exit = await Effect.runPromiseExit(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.load(otherDir, created.sessionId);
+          return yield* svc.load({ cwd: otherDir, sessionId: created.sessionId });
         }).pipe(Effect.provide(SessionLayer))
       );
 
@@ -177,9 +171,9 @@ describe('create — generates sessionId internally', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -187,7 +181,7 @@ describe('create — generates sessionId internally', () => {
 
       expect(state.sessionId).toBeTruthy();
       expect(state.sessionId.length).toBeGreaterThan(8);
-      expect(state.type).toBe('session_meta');
+      expect(state.model).toBe('test-model');
     } finally {
       cleanup(dir);
     }
@@ -202,17 +196,15 @@ describe('create — generates sessionId internally', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'my-special-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
       );
 
-      const meta = readSessionMeta(
-        computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
-      );
+      const meta = readSessionMeta(computePaths(state).transcriptPath);
       expect(meta?.model).toBe('my-special-model');
     } finally {
       cleanup(dir);
@@ -228,9 +220,9 @@ describe('create — generates sessionId internally', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -255,9 +247,9 @@ describe('load restores persisted fields', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -267,14 +259,14 @@ describe('load restores persisted fields', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, sid);
+          const state = yield* svc.load({ cwd: dir, sessionId: sid });
           yield* svc.recordUser(state, text('first'));
         })
       );
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, sid);
+          const state = yield* svc.load({ cwd: dir, sessionId: sid });
           yield* svc.recordUser(state, text('second'));
         })
       );
@@ -282,7 +274,7 @@ describe('load restores persisted fields', () => {
       const loaded = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.load(dir, sid);
+          return yield* svc.load({ cwd: dir, sessionId: sid });
         })
       );
 
@@ -301,9 +293,9 @@ describe('load restores persisted fields', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -313,18 +305,19 @@ describe('load restores persisted fields', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, sid);
+          const state = yield* svc.load({ cwd: dir, sessionId: sid });
           yield* svc.recordUser(state, text('hello'));
-          yield* svc.recordAssistant(state, 'world', [
-            { id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } },
-          ]);
+          yield* svc.recordAssistant(state, {
+            content: 'world',
+            toolCalls: [{ id: 'tc1', name: 'bash', arguments: { cmd: 'echo' } }],
+          });
         })
       );
 
       const loaded = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.load(dir, sid);
+          return yield* svc.load({ cwd: dir, sessionId: sid });
         })
       );
 

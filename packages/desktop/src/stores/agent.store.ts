@@ -66,12 +66,12 @@ function applyChunkToThread(thread: Thread, turnId: string, chunk: Item): void {
       if (existingItem.status === 'pending' && chunk.status === 'running') return;
       turn.items[existing] = {
         ...chunk,
-        args:
-          Object.keys(chunk.args ?? {}).length > 0
-            ? chunk.args
+        arguments:
+          Object.keys(chunk.arguments ?? {}).length > 0
+            ? chunk.arguments
             : existingItem.type === 'tool_call'
-              ? existingItem.args
-              : chunk.args,
+              ? existingItem.arguments
+              : chunk.arguments,
       };
     } else {
       turn.items.push(chunk);

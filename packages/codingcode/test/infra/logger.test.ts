@@ -46,7 +46,7 @@ describe('createLogger', () => {
   it('returns sync logger without transport in Electron', async () => {
     setVersions({ ...process.versions, electron: '35.0.0' });
 
-    const { createLogger } = await import('../../src/infra/logger.js');
+    const { createLogger } = await import('@codingcode/infra');
     const logger = createLogger('debug');
 
     expect(logger).toBeDefined();
@@ -61,7 +61,7 @@ describe('createLogger', () => {
     setVersions(versions);
     process.env.NODE_ENV = 'development';
 
-    const { createLogger } = await import('../../src/infra/logger.js');
+    const { createLogger } = await import('@codingcode/infra');
     const logger = createLogger('info');
 
     expect(logger).toBeDefined();
@@ -76,7 +76,7 @@ describe('createLogger', () => {
     setVersions(versions);
     process.env.NODE_ENV = 'production';
 
-    const { createLogger } = await import('../../src/infra/logger.js');
+    const { createLogger } = await import('@codingcode/infra');
     const logger = createLogger('warn');
 
     expect(logger).toBeDefined();

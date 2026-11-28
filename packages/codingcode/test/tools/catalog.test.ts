@@ -1,16 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { createToolCatalog, TOOLS_BY_NAME } from '../../src/tools/catalog.js';
-import type { McpToolSpec } from '../../src/mcp/types.js';
+import { createToolCatalog } from '@codingcode/tool';
+import type { McpToolSpec } from '@codingcode/mcp';
+import { ALL_BUILTIN_TOOLS } from '../helpers/builtin-tools.js';
+
+const BUILTIN_NAMES = ALL_BUILTIN_TOOLS.map((t) => t.name);
 
 describe('createToolCatalog', () => {
   it('assembles the complete built-in catalog', () => {
-    const { tools } = createToolCatalog();
-    expect(tools.map((t) => t.name)).toEqual([...TOOLS_BY_NAME.keys()]);
+    const { tools } = createToolCatalog(ALL_BUILTIN_TOOLS);
+    expect(tools.map((t) => t.name)).toEqual(BUILTIN_NAMES);
   });
 
   it('lookup resolves registered tools by name only', () => {
-    const { lookup } = createToolCatalog();
+    const { lookup } = createToolCatalog(ALL_BUILTIN_TOOLS);
     expect(lookup('write_file')?.name).toBe('write_file');
     expect(lookup('unknown_tool')).toBeUndefined();
   });
@@ -24,8 +27,8 @@ describe('createToolCatalog', () => {
       readOnlyHint: false,
       execute: () => Effect.succeed('ok'),
     };
-    const { tools, lookup } = createToolCatalog([spec]);
-    expect(tools.map((t) => t.name)).toEqual([...TOOLS_BY_NAME.keys(), 'srv:thing']);
+    const { tools, lookup } = createToolCatalog(ALL_BUILTIN_TOOLS, [spec]);
+    expect(tools.map((t) => t.name)).toEqual([...BUILTIN_NAMES, 'srv:thing']);
     expect(lookup('srv:thing')?.name).toBe('srv:thing');
   });
 
@@ -42,7 +45,7 @@ describe('createToolCatalog', () => {
       readOnlyHint: false,
       execute: () => Effect.succeed('ok'),
     };
-    const { lookup } = createToolCatalog([spec]);
+    const { lookup } = createToolCatalog(ALL_BUILTIN_TOOLS, [spec]);
     const tool = lookup('srv:thing')!;
     expect(() => tool.parse({})).toThrow();
     expect(tool.parse({ text: 'hello' })).toEqual({ text: 'hello' });
@@ -57,7 +60,7 @@ describe('createToolCatalog', () => {
       readOnlyHint: false,
       execute: (args) => Effect.succeed(`called:${String(args.n)}`),
     };
-    const { lookup } = createToolCatalog([spec]);
+    const { lookup } = createToolCatalog(ALL_BUILTIN_TOOLS, [spec]);
     const tool = lookup('srv:thing')!;
     await expect(
       Effect.runPromise(tool.execute({ n: 1 }, { model: 'test-model' }) as Effect.Effect<string, never>)
@@ -73,7 +76,7 @@ describe('createToolCatalog', () => {
       readOnlyHint: false,
       execute: (args) => Effect.succeed(`called:${String(args.n)}`),
     };
-    const { lookup } = createToolCatalog([spec]);
+    const { lookup } = createToolCatalog(ALL_BUILTIN_TOOLS, [spec]);
     const tool = lookup('srv:thing')!;
     const out = await Effect.runPromise(
       tool.execute(

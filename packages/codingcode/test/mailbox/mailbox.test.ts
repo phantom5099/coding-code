@@ -1,0 +1,90 @@
+import { describe, it, expect } from 'vitest';
+import { randomUUID } from 'crypto';
+import { Effect } from 'effect';
+import { MailboxLayer, MailboxService } from '@codingcode/mailbox';
+import type { SubagentMessageEvent, SubagentResultEvent } from '@codingcode/session';
+
+const item = (sessionId: string, content = 'x'): SubagentResultEvent => ({
+  type: 'subagent_result',
+  uuid: randomUUID(),
+  sessionId,
+  agentName: 'build',
+  content,
+});
+
+const message = (sessionId: string, content = 'hi'): SubagentMessageEvent => ({
+  type: 'subagent_message',
+  uuid: randomUUID(),
+  sessionId,
+  agentName: 'build',
+  content,
+});
+
+const run = <T>(eff: Effect.Effect<T, any, any>): Promise<T> =>
+  Effect.runPromise(
+    eff.pipe(Effect.provide(MailboxLayer)) as unknown as Effect.Effect<T, never, never>
+  );
+
+describe('mailbox', () => {
+  it('offer / drain：取走当前全部，再 drain 为空', async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const mb = yield* MailboxService;
+        yield* mb.offer({ recipientSessionId: 's1', item: item('child-1', 'a') });
+        yield* mb.offer({ recipientSessionId: 's1', item: item('child-2', 'b') });
+        return { first: yield* mb.drain('s1'), second: yield* mb.drain('s1') };
+      })
+    );
+    expect(result.first.map((i) => i.content)).toEqual(['a', 'b']);
+    expect(result.second).toEqual([]);
+  });
+
+  it('按收件人分区：两个会话互不可见', async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const mb = yield* MailboxService;
+        yield* mb.offer({ recipientSessionId: 's1', item: item('child-1') });
+        return { s2: yield* mb.drain('s2'), s1: yield* mb.drain('s1') };
+      })
+    );
+    expect(result.s2).toEqual([]);
+    expect(result.s1).toHaveLength(1);
+  });
+
+  it('dispose 只清该会话，其它会话不受影响', async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const mb = yield* MailboxService;
+        yield* mb.offer({ recipientSessionId: 's1', item: item('child-1') });
+        yield* mb.offer({ recipientSessionId: 's2', item: item('child-2') });
+        yield* mb.dispose('s1');
+        return { s1: yield* mb.drain('s1'), s2: yield* mb.drain('s2') };
+      })
+    );
+    expect(result.s1).toEqual([]);
+    expect(result.s2).toHaveLength(1);
+  });
+
+  it('drain 一个从未投递过的会话返回空数组而不报错', async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const mb = yield* MailboxService;
+        return yield* mb.drain('never-used');
+      })
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('subagent_message 与终态结果同队列，按投递顺序原样取回', async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const mb = yield* MailboxService;
+        yield* mb.offer({ recipientSessionId: 's1', item: item('child-1', 'done') });
+        yield* mb.offer({ recipientSessionId: 's1', item: message('mid-1', 'ping') });
+        return yield* mb.drain('s1');
+      })
+    );
+    expect(result.map((i) => i.type)).toEqual(['subagent_result', 'subagent_message']);
+    expect(result[1]).toMatchObject({ sessionId: 'mid-1', agentName: 'build', content: 'ping' });
+  });
+});

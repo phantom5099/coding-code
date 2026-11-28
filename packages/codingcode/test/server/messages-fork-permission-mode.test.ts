@@ -3,14 +3,14 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { createServer, type ServerApp } from '../../src/server/index.js';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { HookService } from '../../src/hooks/port.js';
-import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import { AgentService } from '../../src/agent/port.js';
+import { createServer, type ServerApp } from '@codingcode/http';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { HookService } from '@codingcode/hook';
+import { ApprovalWaitService } from '@codingcode/approval';
+import { AgentService } from '@codingcode/agent';
 import { useTempProjectBase } from '../helpers/project-base.js';
-import type { IncomingPart } from '../../src/llm/types.js';
+import type { IncomingPart } from '@codingcode/model';
 
 useTempProjectBase();
 
@@ -36,9 +36,10 @@ const mockAgentService = {
   runTurn: (_input: IncomingPart[], opts: any) =>
     Effect.gen(function* () {
       const session = yield* SessionService;
-      const state = yield* session.load(opts.cwd, opts.sessionId);
+      const state = yield* session.load({ cwd: opts.cwd, sessionId: opts.sessionId });
       loadedPermissionModes.push(state.permissionMode);
       return {
+        kind: 'turn' as const,
         stream: (async function* () {})() as any,
         sessionId: state.sessionId,
       };
@@ -66,9 +67,9 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
     const state = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        return yield* session.create(cwd, {
+        return yield* session.create({
+          cwd,
           model: 'm',
-
           permissionMode: 'askBeforeExec',
         });
       })
@@ -77,7 +78,7 @@ describe('POST /api/sessions/:id/messages — reads permissionMode from disk', (
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setPermissionMode(cwd, sessionId, 'bypass');
+        yield* session.setPermissionMode({ cwd, sessionId }, 'bypass');
       })
     );
 

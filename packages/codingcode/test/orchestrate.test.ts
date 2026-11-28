@@ -9,14 +9,19 @@ import {
   endReason,
 } from './helpers/agent-harness.js';
 
-vi.mock('../src/infra/config.js', () => ({
+vi.mock('@codingcode/infra', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+
   loadConfig: () => ({
     maxSteps: 5,
     maxStopContinuations: 2,
     context: { compactionModel: '' },
     memory: { enabled: false },
   }),
-}));
+  };
+});
 
 const state = makeState({ sessionId: 'test-session', cwd: '/tmp/test', title: 'test-sess' });
 

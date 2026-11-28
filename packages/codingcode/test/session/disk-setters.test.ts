@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { HookService } from '../../src/hooks/port.js';
-import { McpService } from '../../src/mcp/port.js';
-import { RulesService } from '../../src/rules/port.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { HookService } from '@codingcode/hook';
+import { McpService } from '@codingcode/mcp';
+import { RulesService } from '@codingcode/rules';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -52,7 +52,8 @@ describe('SessionService disk setter/getter consistency', () => {
     const state = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        return yield* session.create(cwd, {
+        return yield* session.create({
+          cwd,
           model: 'm',
           permissionMode: 'askBeforeExec',
         });
@@ -69,13 +70,13 @@ describe('SessionService disk setter/getter consistency', () => {
     await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        yield* session.setPermissionMode(cwd, sessionId, 'bypass');
+        yield* session.setPermissionMode({ cwd, sessionId }, 'bypass');
       })
     );
     const state = await rt.runPromise(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        return yield* session.load(cwd, sessionId);
+        return yield* session.load({ cwd, sessionId });
       })
     );
     expect(state.permissionMode).toBe('bypass');

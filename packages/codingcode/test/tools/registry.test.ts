@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { ToolRegistry } from '../../src/tools/registry.js';
-import type { ToolDefinition } from '../../src/tools/types.js';
+import { ToolRegistry } from '@codingcode/tool';
+import type { ToolDefinition } from '@codingcode/tool';
 
 const readTool: ToolDefinition = {
   name: 'read',

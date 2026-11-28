@@ -9,13 +9,13 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { createServer, type ServerApp } from '../../src/server/index.js';
-import { AgentService } from '../../src/agent/port.js';
-import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import { AskWaitService } from '../../src/askuser/port.js';
-import { AgentError } from '../../src/util/error.js';
-import type { FrameBody } from '../../src/sink/types.js';
-import type { IncomingPart } from '../../src/llm/types.js';
+import { createServer, type ServerApp } from '@codingcode/http';
+import { AgentService } from '@codingcode/agent';
+import { ApprovalWaitService } from '@codingcode/approval';
+import { AskWaitService } from '@codingcode/askuser';
+import { AgentError } from '@codingcode/util';
+import type { FrameBody } from '@codingcode/sink';
+import type { IncomingPart } from '@codingcode/model';
 
 const TEXT_FRAME: FrameBody = { family: 'event', event: { type: 'text_delta', text: 'hello' } };
 

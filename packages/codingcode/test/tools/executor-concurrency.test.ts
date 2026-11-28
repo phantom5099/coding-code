@@ -3,20 +3,18 @@ import { Duration, Effect, Layer } from 'effect';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { ToolExecutorLayer } from '../../src/tools/tools.js';
-import { ToolExecutorService } from '../../src/tools/port.js';
-import { HookService } from '../../src/hooks/port.js';
-import { TodoService } from '../../src/todo/port.js';
-import { McpService } from '../../src/mcp/port.js';
-import { SubagentRunnerService } from '../../src/subagent/port.js';
-import { SubagentRunRegistryService } from '../../src/subagent/registry.js';
-import { TOOLS_BY_NAME, createToolCatalog } from '../../src/tools/catalog.js';
-import type { ToolCall } from '../../src/llm/types.js';
-import type { TodoItem } from '../../src/todo/types.js';
-import type { ToolResult } from '../../src/tools/types.js';
-import type { McpToolSpec } from '../../src/mcp/types.js';
-import type { HookPoint } from '../../src/hooks/types.js';
-import type { FrameBody } from '../../src/sink/types.js';
+import { ToolExecutorLayer, ToolExecutorService, createToolCatalog, makeToolRegistryLayer } from '@codingcode/tool';
+import { HookService } from '@codingcode/hook';
+import { TodoService } from '@codingcode/todo';
+import { McpService } from '@codingcode/mcp';
+import { SubagentRunRegistryService, SubagentRunnerService } from '@codingcode/subagent';
+import { ALL_BUILTIN_TOOLS } from '../helpers/builtin-tools.js';
+import type { ToolCall } from '@codingcode/model';
+import type { TodoItem } from '@codingcode/todo';
+import type { ToolResult } from '@codingcode/tool';
+import type { McpToolSpec } from '@codingcode/mcp';
+import type { HookPoint } from '@codingcode/hook';
+import type { FrameBody } from '@codingcode/sink';
 
 // 桩 hook 在工具执行窗口内 sleep，把窗口拉宽到足以用「区间是否相交」判定并发/串行
 const WINDOW_MS = 150;
@@ -94,7 +92,7 @@ function makeHarness(): Harness {
     runSubagent: () => Effect.succeed({ stream: makeSubagentStream(200), sessionId: 'child-1' }),
   };
 
-  // spawn_agent 消费注册表（生产装配在 AppLayer，这里只提供最小桩）
+  // spawn_agent 直接解析 SubagentRunRegistryService，这里只提供最小桩
   const registry = {
     spawn: () => Effect.succeed({ sessionId: 'child-1', agentName: 'build' }),
     wait: () => Effect.succeed('completed'),
@@ -102,6 +100,7 @@ function makeHarness(): Harness {
 
   h.layers = Layer.mergeAll(
     Layer.succeed(HookService, hooks as any),
+    makeToolRegistryLayer(ALL_BUILTIN_TOOLS),
     Layer.succeed(TodoService, todo as any),
     Layer.succeed(McpService, mcp as any),
     Layer.succeed(SubagentRunnerService, runner as any),
@@ -136,17 +135,15 @@ function runBatch(
   const program = Effect.gen(function* () {
     const exec = yield* ToolExecutorService;
     const catalog = yield* exec.prepare(mcpSpecs);
-    return yield* exec.executeBatch(
-      calls,
-      ctx.sessionId,
-      {
-        projectPath: ctx.projectPath,
+    return yield* exec.executeBatch({
+      toolCalls: calls,
+      context: {
+        session: { cwd: ctx.projectPath, sessionId: ctx.sessionId ?? '', currentTurnId: 1 },
         signal: ctx.signal,
-
         model: ctx.model,
       },
-      catalog.lookup
-    );
+      toolLookup: catalog.lookup,
+    });
   });
   return Effect.runPromise(
     program.pipe(Effect.provide(ToolExecutorLayer), Effect.provide(h.layers))
@@ -440,11 +437,11 @@ describe('executeBatch 保序波次调度', () => {
       execute_command: false,
     };
 
-    const { lookup } = createToolCatalog();
+    const { lookup } = createToolCatalog(ALL_BUILTIN_TOOLS);
     for (const [name, safe] of Object.entries(expected)) {
       expect(lookup(name)?.concurrencySafe, name).toBe(safe);
     }
-    expect([...TOOLS_BY_NAME.keys()].sort()).toEqual(Object.keys(expected).sort());
+    expect(ALL_BUILTIN_TOOLS.map((t) => t.name).sort()).toEqual(Object.keys(expected).sort());
 
     // 未声明的构造出的 runner 收敛为 false（fail-closed）
     expect(lookup('read_file')?.concurrencySafe).toBe(true);

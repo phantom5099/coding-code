@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { filterForContext, buildContextMessages } from '../../src/context/context.js';
-import { readHistory } from '../../src/session/file-ops.js';
-import { filterForUI } from '../../src/session/session.js';
-import type { SessionEvent } from '../../src/session/types.js';
+import { filterForContext, buildContextMessages } from '@codingcode/context';
+import { readHistory } from '@codingcode/session/file-ops';
+import { filterForUI } from '@codingcode/session';
+import type { SessionEvent } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { text } from '../helpers/parts.js';
 

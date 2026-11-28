@@ -1,0 +1,12 @@
+{
+  "name": "@codingcode/mailbox",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codingcode/session": "workspace:*",
+    "effect": "^3.21.2"
+  }
+}

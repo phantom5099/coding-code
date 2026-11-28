@@ -4,10 +4,10 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import { CheckpointService } from '../../src/checkpoint/port.js';
-import { CheckpointLayer } from '../../src/checkpoint/checkpoint.js';
-import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
-import { normalizePath } from '../../src/util/path.js';
+import { CheckpointService } from '@codingcode/checkpoint';
+import { CheckpointLayer } from '@codingcode/checkpoint';
+import { ShadowGit } from '@codingcode/checkpoint/shadow-git';
+import { normalizePath } from '@codingcode/util';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase();
@@ -36,10 +36,10 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       const result = (await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
           writeFileSync(join(projectPath, 'after.txt'), 'after\n', 'utf8');
           writeFileSync(join(projectPath, 'before.txt'), 'before\nmodified\n', 'utf8');
-          return yield* checkpoint.getCheckpointDiff(projectPath, sessionId);
+          return yield* checkpoint.getCheckpointDiff({ cwd: projectPath, sessionId });
         }).pipe(Effect.provide(CheckpointLayer) as any)
       )) as { turnId: number; files: DiffFile[] };
 
@@ -70,10 +70,14 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
           writeFileSync(join(projectPath, 'after.txt'), 'after\n', 'utf8');
           writeFileSync(join(projectPath, 'before.txt'), 'before\nmodified\n', 'utf8');
-          return yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, []);
+          return yield* checkpoint.revertCheckpointFiles({
+            target: { cwd: projectPath, sessionId },
+            turnId: 1,
+            files: [],
+          });
         }).pipe(Effect.provide(CheckpointLayer) as any)
       );
 
@@ -90,12 +94,14 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       const result = (await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
           writeFileSync(join(projectPath, 'after.txt'), 'after\n', 'utf8');
           writeFileSync(join(projectPath, 'before.txt'), 'before\nmodified\n', 'utf8');
-          return yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, [
-            join(projectPath, 'after.txt'),
-          ]);
+          return yield* checkpoint.revertCheckpointFiles({
+            target: { cwd: projectPath, sessionId },
+            turnId: 1,
+            files: [join(projectPath, 'after.txt')],
+          });
         }).pipe(Effect.provide(CheckpointLayer) as any)
       )) as { reverted: boolean; throughTurnId: number; selectedFiles: string[] };
 
@@ -113,10 +119,10 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       const preview = (await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
           writeFileSync(join(projectPath, 'after.txt'), 'after\n', 'utf8');
           writeFileSync(join(projectPath, 'before.txt'), 'before\nmodified\n', 'utf8');
-          return yield* checkpoint.previewRollbackDiff(projectPath, sessionId, 1);
+          return yield* checkpoint.previewRollbackDiff({ cwd: projectPath, sessionId }, 1);
         }).pipe(Effect.provide(CheckpointLayer) as any)
       )) as { throughTurnId: number; diff: string };
 
@@ -135,11 +141,15 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       const result = (await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
           writeFileSync(join(projectPath, 'after.txt'), 'after\n', 'utf8');
-          yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, []);
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 2);
-          return yield* checkpoint.getCheckpointDiff(projectPath, sessionId);
+          yield* checkpoint.revertCheckpointFiles({
+            target: { cwd: projectPath, sessionId },
+            turnId: 1,
+            files: [],
+          });
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 2 });
+          return yield* checkpoint.getCheckpointDiff({ cwd: projectPath, sessionId });
         }).pipe(Effect.provide(CheckpointLayer) as any)
       )) as { turnId: number; files: DiffFile[] };
 
@@ -159,12 +169,16 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
         Effect.runPromise(
           Effect.gen(function* () {
             const checkpoint = yield* CheckpointService;
-            yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+            yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
             writeFileSync(afterPath, 'agent\n', 'utf8');
             writeFileSync(beforePath, 'before\nagent\n', 'utf8');
             return op === 'revert'
-              ? yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, files)
-              : yield* checkpoint.undoRollback(projectPath, sessionId, files);
+              ? yield* checkpoint.revertCheckpointFiles({
+                  target: { cwd: projectPath, sessionId },
+                  turnId: 1,
+                  files,
+                })
+              : yield* checkpoint.undoRollback({ cwd: projectPath, sessionId }, files);
           }).pipe(Effect.provide(CheckpointLayer) as any)
         ) as Promise<{ reverted: boolean }>;
 
@@ -195,9 +209,13 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
           writeFileSync(afterPath, 'v1\n', 'utf8');
-          return yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, [afterPath]);
+          return yield* checkpoint.revertCheckpointFiles({
+            target: { cwd: projectPath, sessionId },
+            turnId: 1,
+            files: [afterPath],
+          });
         }).pipe(Effect.provide(CheckpointLayer) as any)
       );
       expect(existsSync(afterPath)).toBe(false);
@@ -206,10 +224,14 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 2);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 2 });
           writeFileSync(afterPath, 'v2\n', 'utf8');
           // 又回退第 1 轮 → 新快照（回退时刻当前轮2），内容为 v2
-          return yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, [afterPath]);
+          return yield* checkpoint.revertCheckpointFiles({
+            target: { cwd: projectPath, sessionId },
+            turnId: 1,
+            files: [afterPath],
+          });
         }).pipe(Effect.provide(CheckpointLayer) as any)
       );
       expect(existsSync(afterPath)).toBe(false);
@@ -218,7 +240,7 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          return yield* checkpoint.undoRollback(projectPath, sessionId, [afterPath]);
+          return yield* checkpoint.undoRollback({ cwd: projectPath, sessionId }, [afterPath]);
         }).pipe(Effect.provide(CheckpointLayer) as any)
       );
       expect(readFileSync(afterPath, 'utf8')).toBe('v2\n');
@@ -235,13 +257,17 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       const result = (await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
           writeFileSync(afterPath, 'agent\n', 'utf8');
           writeFileSync(beforePath, 'before\nagent\n', 'utf8');
           // 空 files = 整轮回退
-          yield* checkpoint.revertCheckpointFiles(projectPath, sessionId, 1, []);
+          yield* checkpoint.revertCheckpointFiles({
+            target: { cwd: projectPath, sessionId },
+            turnId: 1,
+            files: [],
+          });
           // 空 files = 整轮撤销
-          return yield* checkpoint.undoRollback(projectPath, sessionId, []);
+          return yield* checkpoint.undoRollback({ cwd: projectPath, sessionId }, []);
         }).pipe(Effect.provide(CheckpointLayer) as any)
       )) as { reverted: boolean; selectedFiles: string[] };
 
@@ -261,9 +287,9 @@ describe('staged diff（add 方案：新文件经 stageAll 进入 index）', () 
       const result = (await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
           writeFileSync(join(projectPath, 'after.txt'), 'after\n', 'utf8');
-          return yield* checkpoint.undoRollback(projectPath, sessionId, [
+          return yield* checkpoint.undoRollback({ cwd: projectPath, sessionId }, [
             join(projectPath, 'after.txt'),
           ]);
         }).pipe(Effect.provide(CheckpointLayer) as any)

@@ -34,19 +34,19 @@ interface ToolCallItem {
   id: string;
   type: 'tool_call';
   name: string;
-  args: Record<string, unknown>;
+  arguments: Record<string, unknown>;
   status: 'pending' | 'running' | 'approved' | 'rejected';
 }
 
 function handleApprovalRequestChunk(
-  chunk: { id: string; tool: string; args: Record<string, unknown> },
+  chunk: { id: string; tool: string; arguments: Record<string, unknown> },
   items: ToolCallItem[]
 ): ToolCallItem {
   const item: ToolCallItem = {
     id: chunk.id,
     type: 'tool_call',
     name: chunk.tool,
-    args: chunk.args,
+    arguments: chunk.arguments,
     status: 'pending',
   };
   items.push(item);
@@ -79,7 +79,7 @@ describe('stream chunk approval handling', () => {
   it('approval_request creates pending tool_call item with correct id', () => {
     const items: ToolCallItem[] = [];
     const item = handleApprovalRequestChunk(
-      { id: 'apr-123', tool: 'bash', args: { command: 'ls' } },
+      { id: 'apr-123', tool: 'bash', arguments: { command: 'ls' } },
       items
     );
 
@@ -91,7 +91,7 @@ describe('stream chunk approval handling', () => {
 
   it('tool_result updates matching tool_call status to approved', () => {
     const items: ToolCallItem[] = [];
-    handleApprovalRequestChunk({ id: 'apr-1', tool: 'bash', args: {} }, items);
+    handleApprovalRequestChunk({ id: 'apr-1', tool: 'bash', arguments: {} }, items);
     const updated = handleToolResultChunk({ name: 'bash', ok: true }, items);
 
     expect(updated?.status).toBe('approved');
@@ -100,7 +100,7 @@ describe('stream chunk approval handling', () => {
 
   it('tool_denied updates matching tool_call status to rejected', () => {
     const items: ToolCallItem[] = [];
-    handleApprovalRequestChunk({ id: 'apr-2', tool: 'read_file', args: {} }, items);
+    handleApprovalRequestChunk({ id: 'apr-2', tool: 'read_file', arguments: {} }, items);
     const updated = handleToolDeniedChunk({ name: 'read_file' }, items);
 
     expect(updated?.status).toBe('rejected');
@@ -115,8 +115,8 @@ describe('stream chunk approval handling', () => {
 
   it('multiple pending approvals: tool_denied resolves last matching', () => {
     const items: ToolCallItem[] = [];
-    handleApprovalRequestChunk({ id: 'apr-1', tool: 'bash', args: {} }, items);
-    handleApprovalRequestChunk({ id: 'apr-2', tool: 'bash', args: {} }, items);
+    handleApprovalRequestChunk({ id: 'apr-1', tool: 'bash', arguments: {} }, items);
+    handleApprovalRequestChunk({ id: 'apr-2', tool: 'bash', arguments: {} }, items);
 
     handleToolDeniedChunk({ name: 'bash' }, items);
 

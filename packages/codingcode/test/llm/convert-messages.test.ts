@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { convertMessages } from '../../src/llm/providers/shared.js';
-import type { ResolvedContentPart, ResolvedMessage } from '../../src/llm/types.js';
+import { convertMessages } from '@codingcode/model';
+import type { ResolvedContentPart, ResolvedMessage } from '@codingcode/model';
 
 const t = (text: string): ResolvedContentPart => ({ type: 'text', text });
 

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/session/paths.js';
-import { readSessionMeta } from '../../src/session/file-ops.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { computePaths } from '@codingcode/session';
+import { readSessionMeta } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 useTempProjectBase('codingcode-test-subagent-meta-');
@@ -26,18 +26,20 @@ describe('subagent identity persisted in the session head', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, childOpts, {
-          parentSessionId: PARENT,
-          agentName: 'reviewer',
-          description: 'reviews the diff',
-          systemPrompt: 'CUSTOM-MIDDLE-MARKER',
+        return yield* svc.create({
+          cwd,
+          ...childOpts,
+          lineage: { parentSessionId: PARENT },
+          subagent: {
+            agentName: 'reviewer',
+            description: 'reviews the diff',
+            systemPrompt: 'CUSTOM-MIDDLE-MARKER',
+          },
         });
       })
     );
 
-    const meta = readSessionMeta(
-      computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
-    );
+    const meta = readSessionMeta(computePaths(state).transcriptPath);
     expect(meta?.parentSessionId).toBe(PARENT);
     expect(meta?.agentName).toBe('reviewer');
     expect(meta?.description).toBe('reviews the diff');
@@ -49,11 +51,15 @@ describe('subagent identity persisted in the session head', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, childOpts, { systemPrompt: 'SHOULD-NOT-PERSIST' });
+        return yield* svc.create({
+          cwd,
+          ...childOpts,
+          subagent: { systemPrompt: 'SHOULD-NOT-PERSIST' },
+        });
       })
     );
 
-    const meta = readSessionMeta(computePaths(state.cwd, state.sessionId).transcriptPath);
+    const meta = readSessionMeta(computePaths(state).transcriptPath);
     expect(meta?.systemPrompt).toBeUndefined();
     expect(meta?.parentSessionId).toBeUndefined();
   });
@@ -63,13 +69,16 @@ describe('subagent identity persisted in the session head', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, childOpts, { parentSessionId: PARENT, agentName: 'worker' });
+        return yield* svc.create({
+          cwd,
+          ...childOpts,
+          lineage: { parentSessionId: PARENT },
+          subagent: { agentName: 'worker' },
+        });
       })
     );
 
-    const meta = readSessionMeta(
-      computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
-    );
+    const meta = readSessionMeta(computePaths(state).transcriptPath);
     expect(meta?.description).toBeUndefined();
     expect(meta?.systemPrompt).toBeUndefined();
   });

@@ -164,5 +164,5 @@ type FrameBody =
 | `agent/agent.ts` | `runTurn` 是唯一的回合驱动方：claim → start → 循环（transition running / compressing / complete / fail / interrupt） |
 | `sink/` | 状态机的相位帧出口，见上 |
 | `subagent/registry.ts` | 用 `runningChildren` 做并发闸，用 `markDelivered` 唤醒 `wait`，用 `stopChildren` 级联停止 |
-| `session/mailbox.ts` | 子代理结果入站队列，与回合的 drain 节奏配合 |
+| `mailbox/` | 子代理结果入站队列，与回合的 drain 节奏配合 |
 | `server/` | 并发提交经 `submit` 判定；`/api/sessions/:id/subagents/stop` 走 `stopChildren` |

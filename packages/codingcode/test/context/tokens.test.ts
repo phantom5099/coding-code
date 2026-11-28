@@ -1,5 +1,5 @@
-﻿import { describe, it, expect } from 'vitest';
-import { estimateTokensForContent } from '../../src/context/tokens.js';
+import { describe, it, expect } from 'vitest';
+import { estimateTokensForContent } from '@codingcode/context';
 
 describe('token estimation', () => {
   it('empty content returns 0', () => {

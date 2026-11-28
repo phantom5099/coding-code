@@ -1,6 +1,8 @@
 import type { ContentPart } from './parts';
+import type { TodoItem, TodoStatus } from '@codingcode/sdk';
 
 export type { ContentPart } from './parts';
+export type { TodoItem, TodoStatus };
 
 export type ItemType =
   | 'message'
@@ -18,7 +20,7 @@ export type Item =
       id: string;
       type: 'tool_call';
       name: string;
-      args: object;
+      arguments: object;
       status: 'pending' | 'approved' | 'rejected' | 'running';
     }
   | {
@@ -34,7 +36,6 @@ export type Item =
       deletions?: number;
     }
   | { id: string; type: 'error'; message: string; code?: string }
-  /** 后台子代理的进展条目：id = `subagent:<子会话 id>`，同一子代理后续帧原地改状态 */
   | {
       id: string;
       type: 'subagent';
@@ -42,7 +43,6 @@ export type Item =
       agentName: string;
       status: 'running' | 'completed' | 'failed';
     }
-  /** ask_user 提问条目：id = `ask:<tool call id>`，等待用户作答 */
   | {
       id: string;
       type: 'ask_user';
@@ -52,13 +52,6 @@ export type Item =
       options: string[];
       status: 'waiting' | 'answered';
     };
-
-export type TodoStatus = 'pending' | 'in_progress' | 'completed';
-
-export interface TodoItem {
-  step: string;
-  status: TodoStatus;
-}
 
 export interface TodoUpdateChunk {
   type: 'todo_update';

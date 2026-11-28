@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Chunk } from 'effect';
-import { buildRouter } from '../../src/server/app.js';
+import { buildRouter } from '@codingcode/http';
 
 /**
  * 路由表结构。这些约束以前靠「mock 掉各 register* 函数、数 Hono 实例」来间接保证，

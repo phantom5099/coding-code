@@ -1,15 +1,7 @@
-export type PermissionMode = 'askBeforeExec' | 'bypass' | 'unrestricted';
-
-export interface TokenUsage {
-  prompt: number;
-  completion: number;
-  total: number;
-  reasoningTokens?: number;
-}
-
-export type TodoStatus = 'pending' | 'in_progress' | 'completed';
-
-export interface TodoItem {
-  step: string;
-  status: TodoStatus;
-}
+/**
+ * sdk 类型层：全部从 core 各领域包 re-export，不复制定义。
+ * 拥有者见 docs/entity-contract-observability-plan.md §4。
+ */
+export type { PermissionMode, ApprovalAction } from '@codingcode/util';
+export type { TodoItem, TodoStatus } from '@codingcode/todo';
+export type { TokenUsage } from '@codingcode/model';

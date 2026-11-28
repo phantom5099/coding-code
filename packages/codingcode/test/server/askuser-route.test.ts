@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Effect, Fiber, ManagedRuntime } from 'effect';
-import { createServer } from '../../src/server/index.js';
-import { AskWaitService, type AskAnswer } from '../../src/askuser/port.js';
-import { AskWaitLayer } from '../../src/askuser/wait.js';
+import { createServer } from '@codingcode/http';
+import { AskWaitService, type AskAnswer } from '@codingcode/askuser';
+import { AskWaitLayer } from '@codingcode/askuser';
 
 // askuser 路由只在请求期依赖 AskWaitService（见 sse.test.ts：createServer 不在装配期索取全部服务）
 const rt = ManagedRuntime.make(AskWaitLayer);
@@ -26,7 +26,7 @@ async function postAsk(sessionId: string, id: string, body: unknown): Promise<{ 
 
 /** 注册一个等待者并返回读取其收到答案的 Effect；runFork 同步执行到 Deferred.await，返回即已注册 */
 function waitRegistered(svc: Awaited<ReturnType<typeof getService>>, id: string, sessionId: string) {
-  const fiber = rt.runFork(svc.waitForAsk(id, sessionId));
+  const fiber = rt.runFork(svc.waitForAsk({ callId: id, sessionId }));
   return Effect.map(Fiber.join(fiber), (answer) => answer);
 }
 
@@ -93,7 +93,11 @@ describe('POST /api/sessions/:sessionId/askuser/:id', () => {
 
     // 原等待者仍未被解决——用正确会话补一发 resolve 验证条目完好
     const ok = await rt.runPromise(
-      svc.resolveAsk('tc-6', 'sess-1', { status: 'answered', options: ['C'], custom: null })
+      svc.resolveAsk({
+        callId: 'tc-6',
+        sessionId: 'sess-1',
+        answer: { status: 'answered', options: ['C'], custom: null },
+      })
     );
     expect(ok).toBe(true);
     const answer: AskAnswer = await rt.runPromise(waiter);

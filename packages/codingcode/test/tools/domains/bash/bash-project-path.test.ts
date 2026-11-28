@@ -4,7 +4,7 @@ import { mkdirSync, rmSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import { bashTool } from '../../../../src/tools/domains/bash/exec.js';
+import { bashTool } from '@codingcode/bash';
 import { testSandboxPolicy } from '../../../helpers/sandbox.js';
 
 describe('tools/domains/bash projectPath isolation', () => {
@@ -37,7 +37,11 @@ describe('tools/domains/bash projectPath isolation', () => {
     }
   });
 
-  const ctx = (cwd: string) => ({ projectPath: cwd, model: 'test-model', sandboxPolicy: testSandboxPolicy(cwd) });
+  const ctx = (cwd: string) => ({
+    session: { cwd, sessionId: 'test-sid' },
+    model: 'test-model',
+    sandboxPolicy: testSandboxPolicy(cwd),
+  });
 
   it('executes command in ctx.projectPath when cwd arg is absent', async () => {
     const cmd = 'echo hello > test-bash.txt';
@@ -55,7 +59,7 @@ describe('tools/domains/bash projectPath isolation', () => {
 
     try {
       await Effect.runPromise(
-        bashTool.execute({ command: cmd, timeout_ms: 10000 }, { projectPath: process.cwd(), model: 'test-model', sandboxPolicy: testSandboxPolicy(process.cwd()) }) as any
+        bashTool.execute({ command: cmd, timeout_ms: 10000 }, ctx(process.cwd())) as any
       );
 
       const cwd = process.cwd();

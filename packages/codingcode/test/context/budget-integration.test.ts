@@ -3,15 +3,15 @@ import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { dirname } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
-import { ContextService } from '../../src/context/port.js';
-import type { ContextShape } from '../../src/context/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { LLMService } from '../../src/llm/port.js';
-import type { SessionRef } from '../../src/session/types.js';
+import { ContextService } from '@codingcode/context';
+import type { ContextShape } from '@codingcode/context';
+import { SessionLayer, transcriptPathOf } from '@codingcode/session';
+import { LLMService } from '@codingcode/model';
+import type { SessionRef } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
-import { ContextLayer, transcriptPathFor } from '../../src/context/context.js';
-import { EventSinkLayer } from '../../src/sink/sink.js';
-import { TurnRegistryLayer } from '../../src/turn/registry.js';
+import { ContextLayer } from '@codingcode/context';
+import { EventSinkLayer } from '@codingcode/sink';
+import { TurnRegistryLayer } from '@codingcode/turn';
 
 useTempProjectBase();
 
@@ -43,7 +43,7 @@ describe('getHistory integration', () => {
 
   beforeEach(() => {
     ref = { cwd: CWD, sessionId: randomUUID(), currentTurnId: 1 };
-    transcriptPath = transcriptPathFor(ref);
+    transcriptPath = transcriptPathOf(ref);
     mkdirSync(dirname(transcriptPath), { recursive: true });
 
     const lines: any[] = [
@@ -91,7 +91,7 @@ describe('getHistory integration', () => {
 
   it('returns messages assembled from the transcript', async () => {
     const ctx = await getCtxService();
-    const messages = await Effect.runPromise(ctx.getHistory(ref, 'test-model'));
+    const messages = await Effect.runPromise(ctx.getHistory({ session: ref, model: 'test-model' }));
 
     expect(messages.length).toBeGreaterThan(0);
   });
@@ -102,10 +102,12 @@ describe('getHistory integration', () => {
       sessionId: `${ref.sessionId}-empty`,
       currentTurnId: 1,
     };
-    const emptyPath = transcriptPathFor(emptyRef);
+    const emptyPath = transcriptPathOf(emptyRef);
     writeFileSync(emptyPath, '', 'utf8');
     const ctx = await getCtxService();
-    const messages = await Effect.runPromise(ctx.getHistory(emptyRef, 'test-model'));
+    const messages = await Effect.runPromise(
+      ctx.getHistory({ session: emptyRef, model: 'test-model' })
+    );
     expect(messages).toEqual([]);
   });
 });

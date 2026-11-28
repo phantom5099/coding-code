@@ -394,7 +394,7 @@ export function AutomationForm({
               className={selectClass}
             >
               <option value="workspace-write">workspace-write (可读写)</option>
-              <option value="readonly">readonly (只读)</option>
+              <option value="read-only">read-only (只读)</option>
             </select>
           </div>
 

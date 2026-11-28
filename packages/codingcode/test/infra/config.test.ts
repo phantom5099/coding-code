@@ -4,11 +4,10 @@ import { resolve } from 'path';
 import { parse as parseYaml } from 'yaml';
 import {
   loadConfig,
-  updateMaxSteps,
-  updateMaxStopContinuations,
+  updateAppConfig,
   updateContextCompactionModel,
   updateMemoryModel,
-} from '../../src/infra/config.js';
+} from '@codingcode/infra';
 
 const TMP_DIR = resolve(__dirname, '..', '..', '.tmp-test-config');
 
@@ -34,32 +33,32 @@ describe('Config writer functions', () => {
     rmSync(TMP_DIR, { recursive: true, force: true });
   });
 
-  describe('updateMaxSteps', () => {
+  describe('updateAppConfig (maxSteps)', () => {
     it('writes maxSteps to config', () => {
-      updateMaxSteps(500, tmpPath());
+      updateAppConfig({ maxSteps: 500 }, { configPath: tmpPath() });
       const content = readConfigContent(tmpPath());
       expect(content.maxSteps).toBe(500);
     });
 
     it('preserves existing config fields', () => {
       writeFileSync(tmpPath(), 'maxStopContinuations: 5\n', 'utf8');
-      updateMaxSteps(300, tmpPath());
+      updateAppConfig({ maxSteps: 300 }, { configPath: tmpPath() });
       const content = readConfigContent(tmpPath());
       expect(content.maxSteps).toBe(300);
       expect(content.maxStopContinuations).toBe(5);
     });
   });
 
-  describe('updateMaxStopContinuations', () => {
+  describe('updateAppConfig (maxStopContinuations)', () => {
     it('writes maxStopContinuations to config', () => {
-      updateMaxStopContinuations(10, tmpPath());
+      updateAppConfig({ maxStopContinuations: 10 }, { configPath: tmpPath() });
       const content = readConfigContent(tmpPath());
       expect(content.maxStopContinuations).toBe(10);
     });
 
     it('preserves existing config fields', () => {
       writeFileSync(tmpPath(), 'maxSteps: 100\n', 'utf8');
-      updateMaxStopContinuations(7, tmpPath());
+      updateAppConfig({ maxStopContinuations: 7 }, { configPath: tmpPath() });
       const content = readConfigContent(tmpPath());
       expect(content.maxStopContinuations).toBe(7);
       expect(content.maxSteps).toBe(100);
@@ -99,7 +98,7 @@ describe('Config writer functions', () => {
 
   describe('round-trip: write then load', () => {
     it('loadConfig returns written maxSteps', () => {
-      updateMaxSteps(777, tmpPath());
+      updateAppConfig({ maxSteps: 777 }, { configPath: tmpPath() });
       const cfg = loadConfig(tmpPath());
       expect(cfg.maxSteps).toBe(777);
     });

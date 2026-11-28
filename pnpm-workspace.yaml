@@ -1,5 +1,8 @@
 packages:
-  - 'packages/*'
+  - 'packages/codingcode'
+  - 'packages/codingcode/*'
+  - 'packages/sdk'
+  - 'packages/desktop'
 
 overrides:
   vite: ^6.4.2

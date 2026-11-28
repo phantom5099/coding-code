@@ -1,21 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Either, Layer } from 'effect';
-import { SessionService } from '../../../../src/session/port.js';
-import { SessionLayer } from '../../../../src/session/session.js';
-import { MailboxService } from '../../../../src/session/mailbox.js';
-import { HookService } from '../../../../src/hooks/port.js';
-import { TurnRegistryService } from '../../../../src/turn/port.js';
-import { SubagentRunRegistryService } from '../../../../src/subagent/registry.js';
-import { SUBAGENT_MESSAGE_PREFIX } from '../../../../src/session/types.js';
-import { computePaths } from '../../../../src/session/paths.js';
-import { readHistory } from '../../../../src/session/file-ops.js';
-import { resumeAgentTool } from '../../../../src/tools/domains/subagent/resume.js';
-import { sendMessageTool } from '../../../../src/tools/domains/subagent/message.js';
-import { interruptAgentTool } from '../../../../src/tools/domains/subagent/interrupt.js';
-import { listAgentsTool } from '../../../../src/tools/domains/subagent/list.js';
-import { listModels } from '../../../../src/infra/models.js';
-import type { SessionStoreState } from '../../../../src/session/types.js';
-import type { ToolExecCtx } from '../../../../src/tools/types.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { MailboxService } from '@codingcode/mailbox';
+import { HookService } from '@codingcode/hook';
+import { TurnRegistryService } from '@codingcode/turn';
+import {
+  SubagentRunRegistryService,
+  resumeAgentTool,
+  sendMessageTool,
+  interruptAgentTool,
+  listAgentsTool,
+} from '@codingcode/subagent';
+import { SUBAGENT_MESSAGE_PREFIX } from '@codingcode/session';
+import { computePaths } from '@codingcode/session';
+import { readHistory } from '@codingcode/session/file-ops';
+import { listModels } from '@codingcode/model';
+import type { SessionStoreState } from '@codingcode/session';
+import type { ToolExecCtx } from '@codingcode/tool';
 import { useTempProjectBase } from '../../../helpers/project-base.js';
 import { testSandboxPolicy } from '../../../helpers/sandbox.js';
 
@@ -59,32 +61,47 @@ function createSession(
   return Effect.runPromise(
     Effect.gen(function* () {
       const svc = yield* SessionService;
-      return yield* svc.create(
+      return yield* svc.create({
         cwd,
-        {
-          model: overrides.model ?? CHILD_MODEL,
-          permissionMode: 'askBeforeExec',
-        },
-        {
-          ...(parentSessionId ? { parentSessionId } : {}),
-          ...(overrides.parentChain ? { parentChain: overrides.parentChain } : {}),
-          ...(overrides.agentName ? { agentName: overrides.agentName } : {}),
-          ...(overrides.description ? { description: overrides.description } : {}),
-        }
-      );
+        model: overrides.model ?? CHILD_MODEL,
+        permissionMode: 'askBeforeExec',
+        ...(parentSessionId || overrides.parentChain
+          ? {
+              lineage: {
+                ...(parentSessionId ? { parentSessionId } : {}),
+                ...(overrides.parentChain ? { parentChain: overrides.parentChain } : {}),
+              },
+            }
+          : {}),
+        ...(overrides.agentName || overrides.description
+          ? {
+              subagent: {
+                ...(overrides.agentName ? { agentName: overrides.agentName } : {}),
+                ...(overrides.description ? { description: overrides.description } : {}),
+              },
+            }
+          : {}),
+      });
     }).pipe(Effect.provide(SessionLayer)) as any
   ) as Promise<SessionStoreState>;
 }
 
-function ctx(cwd: string, over: Partial<ToolExecCtx> = {}): ToolExecCtx {
+function ctx(
+  cwd: string,
+  over: { sessionId?: string; parentChain?: readonly string[]; agentName?: string } = {}
+): ToolExecCtx {
+  const parentChain = over.parentChain ?? [];
   return {
-    sessionId: PARENT,
-    parentChain: [],
-    projectPath: cwd,
+    session: {
+      cwd,
+      sessionId: over.sessionId ?? PARENT,
+      parentSessionId: parentChain[0],
+      parentChain,
+    },
+    ...(over.agentName ? { agentName: over.agentName } : {}),
     sandboxPolicy: testSandboxPolicy(cwd),
     model: 'parent-model',
-    ...over,
-  } as ToolExecCtx;
+  };
 }
 
 const hooksLayer = (deny = false) =>
@@ -111,8 +128,8 @@ function registryLayer() {
 function mailboxLayer() {
   const items: any[] = [];
   const layer = Layer.succeed(MailboxService, {
-    offer: (_sessionId: string, item: any) => {
-      items.push(item);
+    offer: (cmd: { recipientSessionId: string; item: any }) => {
+      items.push(cmd.item);
       return Effect.void;
     },
     drain: () => Effect.succeed([]),
@@ -178,13 +195,18 @@ describe('resume_agent', () => {
     expect(calls[0].resumeSessionId).toBe(child.sessionId);
     expect(calls[0].agentName).toBe('reviewer');
     expect(calls[0].model).toBe(CHILD_MODEL);
-    expect(calls[0].parentChain).toEqual([PARENT]);
+    expect(calls[0].parent).toEqual({
+      cwd,
+      sessionId: PARENT,
+      parentSessionId: undefined,
+      parentChain: [],
+    });
     // 续跑不重述 systemPrompt，也不重发 description
     expect(calls[0].systemPrompt).toBeUndefined();
     expect(calls[0].description).toBeUndefined();
   });
 
-  it('祖先链跨两代仍然完整：深层子智能体续跑时链条前置当前会话', async () => {
+  it('祖先链跨两代仍然完整：深层子智能体续跑时传递父定位器与祖先链', async () => {
     const cwd = freshCwd();
     // 该会话由 PARENT 派发，PARENT 自身链条为 [mid-1, root-1]，
     // 故它的转录挂在链末位 root-1 名下
@@ -201,7 +223,12 @@ describe('resume_agent', () => {
       Layer.merge(hooksLayer(), layer)
     );
 
-    expect(calls[0].parentChain).toEqual([PARENT, 'mid-1', 'root-1']);
+    expect(calls[0].parent).toEqual({
+      cwd,
+      sessionId: PARENT,
+      parentSessionId: 'mid-1',
+      parentChain: ['mid-1', 'root-1'],
+    });
   });
 
   it('模型参数可覆盖；未登记的名字回落会话头', async () => {
@@ -314,9 +341,9 @@ describe('send_message', () => {
     const targets = [
       {
         id: mid.sessionId,
-        path: computePaths(cwd, mid.sessionId, root.sessionId, [root.sessionId]).transcriptPath,
+        path: computePaths(mid).transcriptPath,
       },
-      { id: root.sessionId, path: computePaths(cwd, root.sessionId).transcriptPath },
+      { id: root.sessionId, path: computePaths(root).transcriptPath },
     ];
 
     for (const { id, path } of targets) {
@@ -338,9 +365,7 @@ describe('send_message', () => {
     expect(codeOf(r)).toBe('ok');
 
     // 收件人此刻不在线：消息已经在盘上，下次重建上下文就能读到
-    const events = readHistory(
-      computePaths(cwd, child.sessionId, child.parentSessionId).transcriptPath
-    );
+    const events = readHistory(computePaths(child).transcriptPath);
     const last = events[events.length - 1]!;
     expect(last.type).toBe('subagent_message');
     expect(last).toEqual(items[0]);

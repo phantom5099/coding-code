@@ -3,30 +3,35 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { dirname } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
-import { ContextService } from '../../../src/context/port.js';
-import type { ContextShape } from '../../../src/context/port.js';
-import { SessionService } from '../../../src/session/port.js';
-import { SessionLayer } from '../../../src/session/session.js';
-import { LLMService } from '../../../src/llm/port.js';
-import type { SessionEvent, SummaryEvent } from '../../../src/session/types.js';
-import type { SessionRef } from '../../../src/session/types.js';
+import { ContextService } from '@codingcode/context';
+import type { ContextShape } from '@codingcode/context';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer, transcriptPathOf } from '@codingcode/session';
+import { LLMService } from '@codingcode/model';
+import type { SessionEvent, SummaryEvent } from '@codingcode/session';
+import type { SessionRef } from '@codingcode/session';
 import {
   filterForContext,
   buildContextMessages,
-  transcriptPathFor,
-} from '../../../src/context/context.js';
-import { readHistory } from '../../../src/session/file-ops.js';
-import { estimateTokens } from '../../../src/context/tokens.js';
+
+} from '@codingcode/context';
+import { readHistory } from '@codingcode/session/file-ops';
+import { estimateTokens } from '@codingcode/context';
 import { useTempProjectBase } from '../../helpers/project-base.js';
-import { ContextLayer } from '../../../src/context/context.js';
-import { EventSinkLayer } from '../../../src/sink/sink.js';
-import { TurnRegistryLayer } from '../../../src/turn/registry.js';
+import { ContextLayer } from '@codingcode/context';
+import { EventSinkLayer } from '@codingcode/sink';
+import { TurnRegistryLayer } from '@codingcode/turn';
 
 // 上下文窗口现在由 catalog 按模型值现取，测试里钉死成一个可控值
 const windowState = vi.hoisted(() => ({ value: 128000 }));
-vi.mock('../../../src/infra/models.js', () => ({
+vi.mock('@codingcode/model', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+
   contextWindowOf: () => windowState.value,
-}));
+  };
+});
 
 useTempProjectBase();
 
@@ -41,7 +46,7 @@ const CWD = '/tmp/test';
 function makeFixture(opts: FixtureOptions) {
   const sessionId = randomUUID();
   const ref: SessionRef = { cwd: CWD, sessionId, currentTurnId: opts.numTurns };
-  const transcriptPath = transcriptPathFor(ref);
+  const transcriptPath = transcriptPathOf(ref);
   mkdirSync(dirname(transcriptPath), { recursive: true });
 
   const lines: any[] = [
@@ -142,7 +147,7 @@ describe('compressor behavior', () => {
           '## Compacted History\n\n### Goal\nfix bug\n\n### Instructions\nbe careful\n\n### Discoveries\nrace condition\n\n### Accomplished\npatched\n\n### Relevant Files\nsrc/x.ts';
         windowState.value = 1000;
         const ctx = await getCtxService(makeMockLLM(summary));
-        await run(ctx.compact(fx.ref, 'test-model'));
+        await run(ctx.compact({ session: fx.ref, model: 'test-model' }));
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries.length).toBe(1);
         expect(summaries[0]!.summaryText).toContain('### Goal');
@@ -160,7 +165,7 @@ describe('compressor behavior', () => {
       try {
         windowState.value = 1000;
         const ctx = await getCtxService(FailingLLM);
-        const result = await run(ctx.compact(fx.ref, 'test-model'));
+        const result = await run(ctx.compact({ session: fx.ref, model: 'test-model' }));
         expect(result.didCompress).toBe(false);
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(0);
@@ -180,7 +185,7 @@ describe('compressor behavior', () => {
             '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
           )
         );
-        await run(ctx.compact(fx.ref, 'test-model'));
+        await run(ctx.compact({ session: fx.ref, model: 'test-model' }));
 
         const summaries = readSummaryEvents(fx.transcriptPath);
         expect(summaries).toHaveLength(1);
@@ -206,7 +211,7 @@ describe('compressor behavior', () => {
             '## Compacted History\n\n### Goal\na\n\n### Instructions\nb\n\n### Discoveries\nc\n\n### Accomplished\nd\n\n### Relevant Files\ne'
           )
         );
-        const result = await run(ctx.compact(fx.ref, 'test-model'));
+        const result = await run(ctx.compact({ session: fx.ref, model: 'test-model' }));
         expect(result.didCompress).toBe(true);
         expect(result.promptEstimate).toBeGreaterThan(0);
         expect(result.promptEstimate).toBeLessThan(before);
@@ -226,7 +231,7 @@ describe('compressor behavior', () => {
       try {
         windowState.value = 1000;
         const ctx = await getCtxService(makeMockLLM(SUMMARY));
-        const messages = await run(ctx.getHistory(fx.ref, 'test-model'));
+        const messages = await run(ctx.getHistory({ session: fx.ref, model: 'test-model' }));
         expect(messages.length).toBeGreaterThan(0);
         expect(messages.some((m) => m.name === 'compacted_history')).toBe(true);
       } finally {
@@ -239,7 +244,7 @@ describe('compressor behavior', () => {
       try {
         windowState.value = 2_000_000;
         const ctx = await getCtxService(makeMockLLM(SUMMARY));
-        const messages = await run(ctx.getHistory(fx.ref, 'test-model'));
+        const messages = await run(ctx.getHistory({ session: fx.ref, model: 'test-model' }));
         expect(messages.some((m) => m.name === 'compacted_history')).toBe(false);
       } finally {
         cleanup(fx.dir);

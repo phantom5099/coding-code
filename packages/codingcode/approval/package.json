@@ -1,0 +1,17 @@
+{
+  "name": "@codingcode/approval",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codingcode/util": "workspace:*",
+    "@codingcode/sink": "workspace:*",
+    "@codingcode/hook": "workspace:*",
+    "@codingcode/sandbox": "workspace:*",
+    "@codingcode/session": "workspace:*",
+    "@codingcode/tool": "workspace:*",
+    "effect": "^3.21.2"
+  }
+}

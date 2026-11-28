@@ -1,0 +1,15 @@
+{
+  "name": "@codingcode/bash",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codingcode/util": "workspace:*",
+    "@codingcode/sandbox": "workspace:*",
+    "@codingcode/tool": "workspace:*",
+    "effect": "^3.21.2",
+    "zod": "^4.4.3"
+  }
+}

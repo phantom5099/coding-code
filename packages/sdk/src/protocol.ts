@@ -1,90 +1,16 @@
-import type { TodoItem, TokenUsage } from './types.js';
-import type { StoredContentPart } from './dto.js';
-
-export type ApprovalAction = 'file' | 'exec' | 'network' | 'mcp' | 'subagent' | 'sandbox' | 'other';
-
-export type EndReason = 'done' | 'error' | 'maxSteps' | 'aborted';
-
-export interface FrameError {
-  readonly message: string;
-  readonly code: string;
-}
-
-export interface ResponseMeta {
-  readonly usage?: TokenUsage;
-}
-
-export interface Envelope {
-  readonly sessionId: string;
-  readonly turnId: number | null;
-  readonly seq: number;
-}
-
-export type Transition =
-  | { readonly to: 'start'; readonly turnId: number }
-  | {
-      readonly to: 'executing';
-      readonly responded?: ResponseMeta;
-    }
-  | { readonly to: 'compress' }
-  | { readonly to: 'end'; readonly reason: 'done' | 'maxSteps' | 'aborted' }
-  | { readonly to: 'end'; readonly reason: 'error'; readonly error: FrameError };
-
-export type ToolOutcome =
-  | { readonly status: 'ok'; readonly output: string }
-  | { readonly status: 'error'; readonly output: string }
-  | { readonly status: 'denied'; readonly reason: string };
-
-export type RuntimeEvent =
-  | { readonly type: 'reasoning_delta'; readonly text: string }
-  | { readonly type: 'text_delta'; readonly text: string }
-  | {
-      readonly type: 'tool_call';
-      readonly id: string;
-      readonly name: string;
-      readonly args: Readonly<Record<string, unknown>>;
-    }
-  | {
-      readonly type: 'tool_result';
-      readonly id: string;
-      readonly name: string;
-      readonly outcome: ToolOutcome;
-      readonly todos?: readonly TodoItem[];
-    }
-  | {
-      readonly type: 'approval_request';
-      readonly id: string;
-      readonly tool: string;
-      readonly action: ApprovalAction;
-      readonly args: Readonly<Record<string, unknown>>;
-    }
-  | {
-      readonly type: 'ask_user';
-      readonly id: string;
-      readonly question: string;
-      readonly questiontype: 'single' | 'multiple' | 'text';
-      readonly options?: readonly string[];
-    }
-  | {
-      readonly type: 'subagent_event';
-      readonly sessionId: string;
-      readonly agentName: string;
-      readonly status: 'spawned' | 'completed' | 'failed';
-    }
-  | {
-      readonly type: 'user_input';
-      readonly id: string;
-      readonly parts: readonly StoredContentPart[];
-    };
-
-export interface Fatal {
-  readonly message: string;
-  readonly code: string;
-}
-
-export type FrameBody =
-  | { readonly family: 'transition'; readonly transition: Transition }
-  | { readonly family: 'event'; readonly event: RuntimeEvent }
-  | { readonly family: 'fatal'; readonly fatal: Fatal };
-
-export type Frame = Envelope & FrameBody;
+/**
+ * 帧协议层：全部从 core re-export。
+ * `Envelope`/`Frame` 拥有者是 `@codingcode/http`（SSE 帧封套），
+ * 其余帧体类型拥有者是 `@codingcode/sink`，`ApprovalAction` 拥有者是 `@codingcode/util`。
+ */
+export type {
+  FrameError,
+  ResponseMeta,
+  Transition,
+  ToolOutcome,
+  RuntimeEvent,
+  Fatal,
+  FrameBody,
+} from '@codingcode/sink';
+export type { Envelope, Frame } from '@codingcode/http';
+export type { ApprovalAction } from '@codingcode/util';

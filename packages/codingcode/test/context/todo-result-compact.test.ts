@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildContextMessages } from '../../src/context/context.js';
-import type { SessionEvent } from '../../src/session/types.js';
-import { textOf, type Message } from '../../src/llm/types.js';
+import { buildContextMessages } from '@codingcode/context';
+import type { SessionEvent } from '@codingcode/session';
+import { textOf, type Message } from '@codingcode/model';
 import { text } from '../helpers/parts.js';
 
 function build(events: unknown[], compactedTurnIds?: Set<number>): Message[] {

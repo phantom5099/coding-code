@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { toIncomingParts } from '../../src/server/routes/messages.js';
-import type { AgentError } from '../../src/util/error.js';
+import { toIncomingParts } from '@codingcode/http';
+import type { AgentError } from '@codingcode/util';
 
 function codeOf(fn: () => unknown): string {
   try {

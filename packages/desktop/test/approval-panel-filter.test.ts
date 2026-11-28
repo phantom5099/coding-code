@@ -17,7 +17,7 @@ function makeToolCall(
   status: 'pending' | 'running' | 'approved' | 'rejected',
   id?: string
 ): Item {
-  return { id: id ?? 'tc-' + name, type: 'tool_call', name, args: {}, status };
+  return { id: id ?? 'tc-' + name, type: 'tool_call', name, arguments: {}, status };
 }
 
 function makeMsg(role: 'user' | 'assistant', content: string): Item {

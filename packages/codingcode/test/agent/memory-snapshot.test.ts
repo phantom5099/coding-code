@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeState, runAgentTurn, llmStream, pEnd } from '../helpers/agent-harness.js';
 
-vi.mock('../../src/infra/config.js', () => ({
+vi.mock('@codingcode/infra', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+
   loadConfig: () => ({
     maxSteps: 5,
     maxStopContinuations: 2,
@@ -15,7 +19,8 @@ vi.mock('../../src/infra/config.js', () => ({
       promptMaxBytes: 8192,
     },
   }),
-}));
+  };
+});
 
 const MEMORY = '## Long-term Memory\n\nFrozen content';
 

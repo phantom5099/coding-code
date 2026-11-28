@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
 
-import { deleteSession, sessionJsonlPathFromCwd } from '../../src/session/file-ops.js';
-import { computePaths } from '../../src/session/paths.js';
+import { deleteSession } from '@codingcode/session/file-ops';
+import { computePaths, transcriptPathOf } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -15,31 +15,26 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
   return Effect.runPromise(eff.pipe(Effect.provide(SessionLayer) as any));
 }
 
-describe('sessionJsonlPathFromCwd', () => {
+describe('transcriptPathOf', () => {
   it('returns path matching SessionService.create transcriptPath', async () => {
     const cwd = '/tmp/test-jsonl-path';
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, {
+        return yield* svc.create({
+          cwd,
           model: 'test-model',
-
           permissionMode: 'askBeforeExec',
         });
       })
     );
 
     try {
-      const result = sessionJsonlPathFromCwd(cwd, state.sessionId);
-      expect(result).toBe(
-        computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
-      );
+      const result = transcriptPathOf({ cwd, sessionId: state.sessionId });
+      expect(result).toBe(computePaths(state).transcriptPath);
       expect(existsSync(result)).toBe(true);
     } finally {
-      rmSync(
-        join(base.dir, computePaths(state.cwd, state.sessionId, state.parentSessionId).projectPath),
-        { recursive: true, force: true }
-      );
+      rmSync(join(base.dir, computePaths(state).projectPath), { recursive: true, force: true });
     }
   });
 
@@ -48,29 +43,22 @@ describe('sessionJsonlPathFromCwd', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, {
+        return yield* svc.create({
+          cwd,
           model: 'test-model',
-
           permissionMode: 'askBeforeExec',
         });
       })
     );
 
     try {
-      expect(
-        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath)
-      ).toBe(true);
+      expect(existsSync(computePaths(state).transcriptPath)).toBe(true);
 
-      deleteSession(state.sessionId, cwd);
+      deleteSession({ cwd, sessionId: state.sessionId });
 
-      expect(
-        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath)
-      ).toBe(false);
+      expect(existsSync(computePaths(state).transcriptPath)).toBe(false);
     } finally {
-      rmSync(
-        join(base.dir, computePaths(state.cwd, state.sessionId, state.parentSessionId).projectPath),
-        { recursive: true, force: true }
-      );
+      rmSync(join(base.dir, computePaths(state).projectPath), { recursive: true, force: true });
     }
   });
 });

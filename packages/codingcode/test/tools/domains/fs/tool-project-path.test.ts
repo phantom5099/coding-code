@@ -4,11 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from 'fs'
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import { readFileTool } from '../../../../src/tools/domains/fs/read.js';
-import { writeFileTool } from '../../../../src/tools/domains/fs/write.js';
-import { editFileTool } from '../../../../src/tools/domains/fs/edit.js';
-import { searchTool } from '../../../../src/tools/domains/fs/grep.js';
-import { globTool } from '../../../../src/tools/domains/fs/glob.js';
+import { readFileTool, writeFileTool, editFileTool, searchTool, globTool } from '@codingcode/fs';
 import { testSandboxPolicy } from '../../../helpers/sandbox.js';
 
 describe('tools/domains/fs projectPath isolation', () => {
@@ -41,7 +37,11 @@ describe('tools/domains/fs projectPath isolation', () => {
     }
   });
 
-  const ctx = (cwd: string) => ({ projectPath: cwd, model: 'test-model', sandboxPolicy: testSandboxPolicy(cwd) });
+  const ctx = (cwd: string) => ({
+    session: { cwd, sessionId: 'test-sid' },
+    model: 'test-model',
+    sandboxPolicy: testSandboxPolicy(cwd),
+  });
 
   it('read_file uses ctx.projectPath over workspaceCwd', async () => {
     writeFileSync(join(projectDir, 'a.txt'), 'hello', 'utf8');
@@ -102,7 +102,7 @@ describe('tools/domains/fs projectPath isolation', () => {
       const result = await Effect.runPromise(
         readFileTool.execute(
           { path: 'h-test.txt', offset: 1, limit: 200 },
-          { projectPath: cwd, model: 'test-model', sandboxPolicy: testSandboxPolicy(cwd) }
+          { session: { cwd, sessionId: 'test-sid' }, model: 'test-model', sandboxPolicy: testSandboxPolicy(cwd) }
         )
       );
       expect(result).toContain('fallback');

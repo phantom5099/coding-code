@@ -1,5 +1,5 @@
-﻿import { describe, expect, it } from 'vitest';
-import { parseApprovalResponse } from '../../src/approval/confirmation.js';
+import { describe, expect, it } from 'vitest';
+import { parseApprovalResponse } from '@codingcode/approval';
 
 describe('parseApprovalResponse', () => {
   it('maps single-use approval responses', () => {

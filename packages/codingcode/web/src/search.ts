@@ -1,0 +1,190 @@
+import { z } from 'zod';
+import { Effect } from 'effect';
+import { AgentError } from '@codingcode/util';
+import { defineTool } from '@codingcode/tool';
+import { assertNetworkTarget } from '@codingcode/sandbox';
+
+interface SearchResult {
+  readonly title: string;
+  readonly url: string;
+  readonly snippet: string;
+}
+
+interface WebSearchQuery {
+  readonly query: string;
+  readonly maxResults: number;
+  readonly signal: AbortSignal;
+}
+
+type SearchEngine = (req: WebSearchQuery) => Promise<SearchResult[]>;
+
+const BROWSER_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+  'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  'Accept-Encoding': 'gzip, deflate',
+};
+
+const searchBing: SearchEngine = async ({ query, maxResults, signal }) => {
+  const url = `https://cn.bing.com/search?q=${encodeURIComponent(query)}&count=${maxResults}&setlang=zh-CN`;
+  const response = await fetch(url, {
+    signal,
+    headers: BROWSER_HEADERS,
+    redirect: 'follow',
+  });
+  if (!response.ok) throw new Error(`Bing HTTP ${response.status}`);
+  return parseBingHtml(await response.text(), maxResults);
+};
+
+export function parseBingHtml(html: string, maxResults: number): SearchResult[] {
+  const results: SearchResult[] = [];
+  const parts = html.split(/<li class="b_algo"/i);
+
+  for (let i = 1; i < parts.length && results.length < maxResults; i++) {
+    const block = parts[i];
+    if (!block) continue;
+
+    const endIdx = block.indexOf('</li>');
+    const blockContent = endIdx !== -1 ? block.substring(0, endIdx) : block;
+
+    const titleMatch = blockContent.match(
+      /<h2[^>]*>\s*<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i
+    );
+    const snippetMatch =
+      blockContent.match(/class="b_caption[^"]*"[^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i) ||
+      blockContent.match(/<p[^>]*class="b_lineclamp[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
+
+    if (!titleMatch) continue;
+
+    const url = titleMatch[1]?.replace(/&amp;/g, '&').trim() || '';
+    const title = titleMatch[2]?.replace(/<[^>]+>/g, '').trim() || '';
+    const snippet = snippetMatch?.[1]?.replace(/<[^>]+>/g, '').trim() || '';
+
+    if (title && url) results.push({ title, url, snippet });
+  }
+
+  return results;
+}
+
+const searchBaidu: SearchEngine = async ({ query, maxResults, signal }) => {
+  const url = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}&rn=${maxResults}`;
+  const response = await fetch(url, {
+    signal,
+    headers: { ...BROWSER_HEADERS, Referer: 'https://www.baidu.com/' },
+    redirect: 'follow',
+  });
+  if (!response.ok) throw new Error(`Baidu HTTP ${response.status}`);
+  return parseBaiduHtml(await response.text(), maxResults);
+};
+
+export function parseBaiduHtml(html: string, maxResults: number): SearchResult[] {
+  const results: SearchResult[] = [];
+  const containerBlocks = html.split(/class="[^"]*c-container[^"]*"/);
+
+  for (let i = 1; i < containerBlocks.length && results.length < maxResults; i++) {
+    const block = containerBlocks[i];
+    if (!block) continue;
+
+    const titleMatch = block.match(/<h3[^>]*>[\s\S]*?<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
+    const snippetMatch =
+      block.match(/class="c-abstract[^"]*"[^>]*>([\s\S]*?)<\/(?:span|div)>/i) ||
+      block.match(/class="content-right[^"]*"[^>]*>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i) ||
+      block.match(/<span class="[^"]*content-right[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+
+    if (!titleMatch) continue;
+
+    const url = titleMatch[1]?.replace(/&amp;/g, '&').trim() || '';
+    const title = titleMatch[2]?.replace(/<[^>]+>/g, '').trim() || '';
+    const snippet = snippetMatch?.[1]?.replace(/<[^>]+>/g, '').trim() || '';
+
+    if (title && url && !url.startsWith('/') && !url.startsWith('#')) {
+      results.push({ title, url, snippet });
+    }
+  }
+
+  return results;
+}
+
+export const webSearchTool = defineTool({
+  name: 'web_search',
+  concurrencySafe: true,
+  approval: {
+    action: 'network',
+    requiresConfirmation: true,
+    network: { hosts: ['cn.bing.com', 'www.baidu.com'], ports: [80, 443] },
+  },
+  description:
+    'Search the web and return results with titles, URLs, and snippets. Use this when you need up-to-date information or to find documentation, references, or answers beyond your knowledge cutoff.',
+  parameters: z.object({
+    query: z.string().describe('The search query string'),
+    max_results: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .default(8)
+      .describe('Maximum number of results to return'),
+  }),
+  execute: ({ query, max_results }, ctx) =>
+    Effect.gen(function* () {
+      if (!ctx?.sandboxPolicy) {
+        return yield* Effect.fail(
+          new AgentError('SANDBOX_NETWORK_DENIED', 'web_search requires a sandbox policy')
+        );
+      }
+      yield* Effect.try({
+        try: () => {
+          assertNetworkTarget(ctx.sandboxPolicy!, 'https://cn.bing.com/');
+          assertNetworkTarget(ctx.sandboxPolicy!, 'https://www.baidu.com/');
+        },
+        catch: (e) =>
+          e instanceof AgentError ? e : AgentError.toolExecutionFailed('web_search', e),
+      });
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
+      const searchReq: WebSearchQuery = {
+        query,
+        maxResults: max_results,
+        signal: controller.signal,
+      };
+
+      const result = yield* Effect.gen(function* () {
+        const engines: readonly SearchEngine[] = [searchBing, searchBaidu];
+        let lastError = '';
+        for (const engine of engines) {
+          const engineResult = yield* Effect.either(
+            Effect.tryPromise({
+              try: () => engine(searchReq),
+              catch: (e) => AgentError.toolExecutionFailed('web_search', e),
+            })
+          );
+
+          if (engineResult._tag === 'Right') {
+            const results = engineResult.right;
+            if (results.length > 0) {
+              return results
+                .map(
+                  (r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet || '(no snippet)'}`
+                )
+                .join('\n\n');
+            }
+          } else {
+            const e = engineResult.left;
+            lastError = e.cause instanceof Error ? e.cause.message : String(e.cause);
+          }
+        }
+
+        return `No results found for "${query}".${lastError ? ` Last error: ${lastError}` : ''}`;
+      }).pipe(
+        Effect.catchAll((e: AgentError) => {
+          const message = e.cause instanceof Error ? e.cause.message : String(e.cause);
+          return Effect.succeed(`Search error for "${query}": ${message}`);
+        })
+      );
+
+      clearTimeout(timer);
+      return result;
+    }),
+});

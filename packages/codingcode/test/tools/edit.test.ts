@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect } from 'effect';
-import { editFileTool } from '../../src/tools/domains/fs/edit.js';
+import { editFileTool } from '@codingcode/fs';
 import { writeFile, readFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { testSandboxPolicy } from '../helpers/sandbox.js';
 
 const testFile = join(tmpdir(), 'coding-agent-edit-test-' + Date.now() + '.txt');
-const ctx = { projectPath: tmpdir(), model: 'test-model', sandboxPolicy: testSandboxPolicy(tmpdir()) };
+const ctx = {
+  session: { cwd: tmpdir(), sessionId: 'test-sid' },
+  model: 'test-model',
+  sandboxPolicy: testSandboxPolicy(tmpdir()),
+};
 
 const initialContent = `line one
 line two

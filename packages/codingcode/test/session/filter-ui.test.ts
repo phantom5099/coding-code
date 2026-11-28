@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { SessionEvent } from '../../src/session/types.js';
-import { filterForUI, sessionEventsToTurns } from '../../src/session/session.js';
+import type { SessionEvent } from '@codingcode/session';
+import { filterForUI, sessionEventsToTurns } from '@codingcode/session';
 import { text } from '../helpers/parts.js';
 
 function makeBaseEvents(extra: SessionEvent[] = []): SessionEvent[] {

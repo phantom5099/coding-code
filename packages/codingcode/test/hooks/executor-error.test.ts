@@ -1,5 +1,5 @@
-﻿import { describe, it, expect, vi } from 'vitest';
-import { executeHookCommand } from '../../src/hooks/executor';
+import { describe, it, expect, vi } from 'vitest';
+import { executeHookCommand } from '@codingcode/hook';
 import { EventEmitter } from 'events';
 
 const createMockProc = () =>
@@ -19,7 +19,7 @@ vi.mock('child_process', () => ({
 describe('hooks/executor error propagation', () => {
   it('rejects when spawn emits error', async () => {
     _mockProc = createMockProc();
-    const promise = executeHookCommand({ command: 'test-cmd' }, { foo: 'bar' });
+    const promise = executeHookCommand({ command: 'test-cmd' }, { projectPath: '/tmp' });
     _mockProc.emit('error', new Error('spawn failed'));
     await expect(promise).rejects.toThrow('spawn failed');
   });
@@ -33,7 +33,7 @@ describe('hooks/executor error propagation', () => {
     };
 
     _mockProc = createMockProc();
-    const p = executeHookCommand({ command: 'test-cmd' }, { foo: 'bar' });
+    const p = executeHookCommand({ command: 'test-cmd' }, { projectPath: '/tmp' });
     expect(timerCb).not.toBeNull();
     timerCb!();
     (globalThis as any).setTimeout = origSetTimeout;

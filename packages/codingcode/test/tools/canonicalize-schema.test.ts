@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
-import { canonicalizeSchema } from '../../src/tools/utils/canonicalize-schema.js';
+import { canonicalizeSchema } from '@codingcode/tool';
 
 function sha256(v: unknown): string {
   return createHash('sha256').update(JSON.stringify(v)).digest('hex');

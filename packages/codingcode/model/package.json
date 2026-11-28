@@ -1,0 +1,15 @@
+{
+  "name": "@codingcode/model",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codingcode/util": "workspace:*",
+    "@codingcode/infra": "workspace:*",
+    "@ai-sdk/provider": "^3.0.0",
+    "ai": "^6.0.180",
+    "effect": "^3.21.2"
+  }
+}

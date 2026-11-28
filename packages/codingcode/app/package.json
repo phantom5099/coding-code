@@ -1,0 +1,43 @@
+{
+  "name": "@codingcode/app",
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "bundle": "node scripts/bundle.mjs"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codingcode/util": "workspace:*",
+    "@codingcode/todo": "workspace:*",
+    "@codingcode/sandbox": "workspace:*",
+    "@codingcode/askuser": "workspace:*",
+    "@codingcode/infra": "workspace:*",
+    "@codingcode/checkpoint": "workspace:*",
+    "@codingcode/rules": "workspace:*",
+    "@codingcode/skill": "workspace:*",
+    "@codingcode/model": "workspace:*",
+    "@codingcode/mcp": "workspace:*",
+    "@codingcode/hook": "workspace:*",
+    "@codingcode/session": "workspace:*",
+    "@codingcode/mailbox": "workspace:*",
+    "@codingcode/sink": "workspace:*",
+    "@codingcode/turn": "workspace:*",
+    "@codingcode/memory": "workspace:*",
+    "@codingcode/context": "workspace:*",
+    "@codingcode/tool": "workspace:*",
+    "@codingcode/fs": "workspace:*",
+    "@codingcode/bash": "workspace:*",
+    "@codingcode/web": "workspace:*",
+    "@codingcode/self": "workspace:*",
+    "@codingcode/approval": "workspace:*",
+    "@codingcode/agent": "workspace:*",
+    "@codingcode/subagent": "workspace:*",
+    "@codingcode/scheduler": "workspace:*",
+    "@codingcode/http": "workspace:*",
+    "effect": "^3.21.2",
+    "@effect/platform": "^0.96.0",
+    "@effect/platform-node": "^0.96.0"
+  }
+}

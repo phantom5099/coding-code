@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
 
 describe('session service surface', () => {
   it('does not leak file-level operations through the service', async () => {

@@ -1,43 +1,43 @@
 import { describe, it } from 'vitest';
-import type { ToolExecCall, ToolExecCtx, ToolExecOpts } from '../../src/tools/types.js';
+import type { ToolBatchContext, ToolExecCtx } from '@codingcode/tool';
 
 // 本文件只做编译期类型约束（tsc 执行 @ts-expect-error 校验），不含运行时断言。
 
-/** ToolExecCtx 的键若有一个没进 ToolExecCall，投影就会漏字段 */
-type UnprojectedCtxKey = Exclude<keyof ToolExecCtx, keyof ToolExecCall>;
-type CtxFullyProjected = [UnprojectedCtxKey] extends [never] ? true : false;
-
 describe('工具执行参数的形状收口', () => {
-  it('ToolExecOpts 由 ToolExecCtx 派生：换掉 sessionId、加上 turnId', () => {
-    const opts: ToolExecOpts = {
-      turnId: 3,
-      projectPath: '/p',
+  it('ToolBatchContext 封装批次级上下文与 SessionRef', () => {
+    const batch: ToolBatchContext = {
+      session: { cwd: '/p', sessionId: 's-1', currentTurnId: 3 },
       signal: new AbortController().signal,
-
       model: 'm',
     };
-    void opts;
-
-    // 派生关系：ToolExecCtx 改字段而 ToolExecOpts 没跟上时，这里编译不过
-    const asCtx: Omit<ToolExecCtx, 'sessionId'> = opts;
-    void asCtx;
+    void batch;
   });
 
-  it('ToolExecCtx 的每个字段都进了投影链（ToolExecCall）', () => {
-    // 若哪天把 ToolExecOpts/ToolExecCall 改回手写接口并漏了字段，这里会变成 false
-    const fullyProjected: CtxFullyProjected = true;
-    void fullyProjected;
+  it('sessionId / projectPath 不作为裸字段挂在 ToolBatchContext 上（统一归属 session）', () => {
+    const badSid: ToolBatchContext = {
+      session: { cwd: '/p', sessionId: 's-1', currentTurnId: 1 },
+      model: 'm',
+      // @ts-expect-error sessionId 归属 session: SessionRef，不作为平铺字段
+      sessionId: 's-1',
+    };
+    void badSid;
+
+    const badPath: ToolBatchContext = {
+      session: { cwd: '/p', sessionId: 's-1', currentTurnId: 1 },
+      model: 'm',
+      // @ts-expect-error projectPath 归属 session.cwd，不作为平铺字段
+      projectPath: '/p',
+    };
+    void badPath;
   });
 
-  it('sessionId 不进 ToolExecOpts —— 它是 executeBatch 的位置参数', () => {
-    // @ts-expect-error sessionId 由 executeBatch 位置参数传，不放进 opts
-    const bad: ToolExecOpts = { model: 'm', sessionId: 's-1' };
-    void bad;
-  });
-
-  it('callId 不进 ToolExecOpts —— 它由 execSingle 按 tc.id 注入', () => {
-    // @ts-expect-error callId 由 execSingle 注入，不放进批次选项
-    const bad: ToolExecOpts = { model: 'm', callId: 'c-1' };
+  it('callId 不进 ToolBatchContext —— 它由执行器按 tc.id 注入', () => {
+    const bad: ToolBatchContext = {
+      session: { cwd: '/p', sessionId: 's-1', currentTurnId: 1 },
+      model: 'm',
+      // @ts-expect-error callId 按单次调用注入，不放进批次上下文
+      callId: 'c-1',
+    };
     void bad;
   });
 
@@ -45,15 +45,14 @@ describe('工具执行参数的形状收口', () => {
     // @ts-expect-error turnId 只进 hook payload，不属于 ToolExecCtx
     const badTurn: ToolExecCtx = { model: 'm', turnId: 1 };
     void badTurn;
+
+    // @ts-expect-error currentTurnId 属于 SessionRef，不外泄到 ToolExecCtx
+    const badCurrentTurn: ToolExecCtx = { model: 'm', currentTurnId: 1 };
+    void badCurrentTurn;
   });
 
   it('callId 随 ctx 透传给工具（ask_user 等待键）', () => {
     const ctx: ToolExecCtx = { model: 'm', callId: 'c-1' };
     void ctx;
-  });
-
-  it('ToolExecCall = ToolExecOpts + 批次级 sessionId / callId', () => {
-    const call: ToolExecCall = { model: 'm', turnId: 1, sessionId: 's', callId: 'c' };
-    void call;
   });
 });

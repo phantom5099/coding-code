@@ -1,0 +1,29 @@
+{
+  "name": "@codingcode/agent",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codingcode/util": "workspace:*",
+    "@codingcode/todo": "workspace:*",
+    "@codingcode/sandbox": "workspace:*",
+    "@codingcode/infra": "workspace:*",
+    "@codingcode/checkpoint": "workspace:*",
+    "@codingcode/rules": "workspace:*",
+    "@codingcode/skill": "workspace:*",
+    "@codingcode/model": "workspace:*",
+    "@codingcode/mcp": "workspace:*",
+    "@codingcode/hook": "workspace:*",
+    "@codingcode/session": "workspace:*",
+    "@codingcode/mailbox": "workspace:*",
+    "@codingcode/sink": "workspace:*",
+    "@codingcode/turn": "workspace:*",
+    "@codingcode/memory": "workspace:*",
+    "@codingcode/context": "workspace:*",
+    "@codingcode/tool": "workspace:*",
+    "@codingcode/approval": "workspace:*",
+    "effect": "^3.21.2"
+  }
+}

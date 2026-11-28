@@ -1,0 +1,14 @@
+{
+  "name": "@codingcode/hook",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts"
+  },
+  "dependencies": {
+    "@codingcode/util": "workspace:*",
+    "@codingcode/infra": "workspace:*",
+    "effect": "^3.21.2"
+  }
+}

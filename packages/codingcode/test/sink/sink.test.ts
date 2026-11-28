@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Queue } from 'effect';
-import { EventSinkService } from '../../src/sink/port.js';
-import { EventSinkLayer } from '../../src/sink/sink.js';
-import type { FrameBody } from '../../src/sink/types.js';
+import { EventSinkService } from '@codingcode/sink';
+import { EventSinkLayer } from '@codingcode/sink';
+import type { FrameBody } from '@codingcode/sink';
 
 const run = <A, E>(eff: Effect.Effect<A, E, EventSinkService>): Promise<A> =>
   Effect.runPromise(eff.pipe(Effect.provide(EventSinkLayer)));
@@ -13,7 +13,7 @@ const textDelta = (t: string): FrameBody => ({
 });
 const toolCall = (id: string): FrameBody => ({
   family: 'event',
-  event: { type: 'tool_call', id, name: 'read_file', args: {} },
+  event: { type: 'tool_call', id, name: 'read_file', arguments: {} },
 });
 
 function takeN(q: Queue.Queue<FrameBody>, n: number): Effect.Effect<FrameBody[]> {

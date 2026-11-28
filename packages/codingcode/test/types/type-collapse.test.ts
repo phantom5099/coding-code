@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
-import type { UITurn, UITurnItem } from '../../src/session/types.js';
-import type { TodoItem } from '../../src/todo/types.js';
+import type { UITurn, UITurnItem } from '@codingcode/session';
+import type { TodoItem } from '@codingcode/todo';
 
 // 本文件只做编译期类型约束（tsc 执行 @ts-expect-error 校验），不含运行时断言。
 describe('类型收口', () => {
@@ -13,7 +13,7 @@ describe('类型收口', () => {
   it('UITurnItem 覆盖 session 产出的全部变体', () => {
     const items: UITurnItem[] = [
       { id: 'a', type: 'message', role: 'user', parts: [{ type: 'text', text: 'hi' }] },
-      { id: 'b', type: 'tool_call', name: 'read_file', args: {}, status: 'approved' },
+      { id: 'b', type: 'tool_call', name: 'read_file', arguments: {}, status: 'approved' },
       { id: 'c', type: 'tool_result', callId: 'b', name: 'read_file', output: 'ok' },
       { id: 'd', type: 'summary', content: 's', startTurnId: 1, endTurnId: 2 },
       { id: 'e', type: 'reasoning', content: 'r', isVisible: false },

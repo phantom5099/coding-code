@@ -3,12 +3,12 @@ import { existsSync, mkdirSync, readdirSync, rmSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect, Either } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import type { SessionStoreState } from '../../src/session/types.js';
-import { assetsDirOf } from '../../src/session/paths.js';
-import { encodeProjectPath } from '../../src/util/path.js';
-import { assetNameFor, MAX_MEDIA_PER_TURN } from '../../src/session/assets.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import type { SessionStoreState } from '@codingcode/session';
+import { assetsDirOf } from '@codingcode/session';
+import { encodeProjectPath } from '@codingcode/util';
+import { assetNameFor, MAX_MEDIA_PER_TURN } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { incomingText } from '../helpers/parts.js';
 
@@ -40,11 +40,13 @@ async function newSession(
   return run(
     Effect.gen(function* () {
       const svc = yield* SessionService;
-      return yield* svc.create(
-        dir,
-        { model: 'test-model', permissionMode: 'askBeforeExec' },
-        opts
-      );
+      return yield* svc.create({
+        cwd: dir,
+        model: 'test-model',
+        permissionMode: 'askBeforeExec',
+        ...(opts?.parentSessionId ? { lineage: { parentSessionId: opts.parentSessionId } } : {}),
+        ...(opts?.agentName ? { subagent: { agentName: opts.agentName } } : {}),
+      });
     })
   );
 }
@@ -276,10 +278,11 @@ describe('SessionService.resolveAssets', () => {
       const { first, second } = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.create(
-            dir,
-            { model: 'test-model', permissionMode: 'askBeforeExec' }
-          );
+          const state = yield* svc.create({
+            cwd: dir,
+            model: 'test-model',
+            permissionMode: 'askBeforeExec',
+          });
           const png = mediaBytes('png');
           const parts = yield* svc.materializeInput(state, [{ type: 'media', bytes: png }]);
           const asset = (parts[0] as any).asset as string;

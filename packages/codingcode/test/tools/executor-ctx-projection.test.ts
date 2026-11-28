@@ -1,17 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { z } from 'zod';
 import { Effect, Layer } from 'effect';
-import { ToolExecutorLayer } from '../../src/tools/tools.js';
-import { ToolExecutorService } from '../../src/tools/port.js';
-import { HookService } from '../../src/hooks/port.js';
-import { TOOLS_BY_NAME } from '../../src/tools/catalog.js';
-import type { ToolDefinition, ToolExecCtx, ToolExecOpts } from '../../src/tools/types.js';
+import { ToolExecutorLayer, ToolExecutorService, makeToolRegistryLayer } from '@codingcode/tool';
+import { HookService } from '@codingcode/hook';
+import type { ToolBatchContext, ToolDefinition, ToolExecCtx } from '@codingcode/tool';
 
 /**
  * 探针工具：临时挂进内置表，从真实执行路径（executeBatch → execute → 投影）
  * 里把「工具实际收到的那份 ctx」抓出来。
  *
- * 投影是 ToolExecOpts/ToolExecCall → ToolExecCtx 的收窄口子，这里钉住它的
+ * 投影是 ToolBatchContext → ToolExecCtx 的收窄口子，这里钉住它的
  * 两条契约：可见字段一个不少，编排私有字段一个不漏。
  */
 const PROBE = '__ctx_probe';
@@ -36,66 +34,79 @@ function hooksStub() {
   };
 }
 
-function runProbe(opts: ToolExecOpts, sessionId: string | undefined): Promise<void> {
+function runProbe(ctx: ToolBatchContext): Promise<void> {
   const program = Effect.gen(function* () {
     const exec = yield* ToolExecutorService;
     const catalog = yield* exec.prepare();
-    yield* exec.executeBatch(
-      [{ id: 'c1', name: PROBE, arguments: {} }],
-      sessionId,
-      opts,
-      catalog.lookup
-    );
+    yield* exec.executeBatch({
+      toolCalls: [{ id: 'c1', name: PROBE, arguments: {} }],
+      context: ctx,
+      toolLookup: catalog.lookup,
+    });
   });
-  // prepare 的 catalog 只依赖 HookService，其余服务与探针无关
-  const live = ToolExecutorLayer.pipe(Layer.provide(Layer.succeed(HookService, hooksStub() as any)));
+  // prepare 的 catalog 只依赖 HookService 与 ToolRegistryService，其余服务与探针无关
+  const live = ToolExecutorLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.succeed(HookService, hooksStub() as any),
+        makeToolRegistryLayer([probeTool])
+      )
+    )
+  );
   return Effect.runPromise(Effect.asVoid(program).pipe(Effect.provide(live)));
 }
 
 describe('工具执行上下文投影', () => {
   beforeEach(() => {
     captured = undefined;
-    TOOLS_BY_NAME.set(PROBE, probeTool);
   });
 
-  afterEach(() => {
-    TOOLS_BY_NAME.delete(PROBE);
-  });
-
-  it('可见字段一个不少：sessionId 由位置参数并入，其余从 opts 流过', async () => {
+  it('可见字段一个不少：由 ToolBatchContext 与 session 投影到 ToolExecCtx', async () => {
     const signal = new AbortController().signal;
-    await runProbe({ turnId: 7, projectPath: '/proj', signal, model: 'm-1' }, 'sess-1');
+    await runProbe({
+      session: { cwd: '/proj', sessionId: 'sess-1', currentTurnId: 7 },
+      signal,
+      model: 'm-1',
+    });
 
     expect(captured).toBeDefined();
     // 精确断言键集合：既防漏抄，也防多塞
     expect(Object.keys(captured!).sort()).toEqual([
       'callId',
       'model',
-      'projectPath',
       'sandboxPolicy',
-      'sessionId',
+      'session',
       'signal',
     ]);
-    expect(captured!.sessionId).toBe('sess-1');
+    expect(captured!.session).toEqual({ cwd: '/proj', sessionId: 'sess-1' });
     expect(captured!.callId).toBe('c1');
-    expect(captured!.projectPath).toBe('/proj');
     expect(captured!.model).toBe('m-1');
     expect(captured!.signal).toBe(signal);
   });
 
-  it('turnId 到不了工具，callId 以 tc.id 透传', async () => {
-    await runProbe({ turnId: 7, projectPath: '/proj', model: 'm-1' }, 'sess-1');
+  it('currentTurnId 到不了工具，callId 以 tc.id 透传', async () => {
+    await runProbe({
+      session: { cwd: '/proj', sessionId: 'sess-1', currentTurnId: 7 },
+      model: 'm-1',
+    });
 
     expect(captured).toBeDefined();
     expect('turnId' in captured!).toBe(false);
+    expect('currentTurnId' in captured!).toBe(false);
+    expect('currentTurnId' in (captured!.session ?? {})).toBe(false);
     expect(captured!.callId).toBe('c1');
   });
 
-  it('sessionId 缺省时不伪造该字段', async () => {
-    await runProbe({ projectPath: '/proj', model: 'm-1' }, undefined);
+  it('可选字段缺省时不伪造对应键', async () => {
+    await runProbe({
+      session: { cwd: '/proj', sessionId: '', currentTurnId: 1 },
+      model: 'm-1',
+    });
 
-    // 键仍在（位置参数是显式传的），值为 undefined —— 与旧的手写投影行为一致
-    expect(captured!.sessionId).toBeUndefined();
+    expect(captured!.session).toEqual({ cwd: '/proj', sessionId: '' });
+    expect('signal' in captured!).toBe(false);
+    expect('parentChain' in (captured!.session ?? {})).toBe(false);
+    expect('agentName' in captured!).toBe(false);
     expect(captured!.model).toBe('m-1');
   });
 });

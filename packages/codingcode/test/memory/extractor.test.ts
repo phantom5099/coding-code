@@ -1,23 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { extractMemory } from '../../src/memory/extractor.js';
-import { textOf } from '../../src/llm/types.js';
-import { AgentError } from '../../src/util/error.js';
-import type { LLMShape } from '../../src/llm/port.js';
-import type { LLMRequest } from '../../src/llm/types.js';
+import { extractMemory } from '@codingcode/memory';
+import { textOf } from '@codingcode/model';
+import { AgentError } from '@codingcode/util';
+import type { LLMInvocation, LLMShape } from '@codingcode/model';
 
 const TEST_MODEL = 'demo-model@demo';
 
 /** 记忆提取走非流式通道：断言直接看 complete 的入参。 */
 function createMockLlm(response: string) {
   return {
-    complete: vi.fn((_req: LLMRequest, _model: string) => Effect.succeed({ content: response })),
+    complete: vi.fn((_req: LLMInvocation) => Effect.succeed({ content: response })),
     completeStream: vi.fn(),
   };
 }
 
 function extract(llm: LLMShape, currentMemory: string, transcript: string) {
-  return Effect.runPromise(extractMemory({ currentMemory, transcript, llm, model: TEST_MODEL }));
+  return Effect.runPromise(extractMemory({ currentMemory, transcript, model: TEST_MODEL }, llm));
 }
 
 describe('Memory Extractor', () => {
@@ -49,7 +48,7 @@ describe('Memory Extractor', () => {
 
   it('handles LLM call failure gracefully', async () => {
     const llm = {
-      complete: vi.fn((_req: LLMRequest, _model: string) =>
+      complete: vi.fn((_req: LLMInvocation) =>
         Effect.fail(new AgentError('LLM_FAILED', 'llm unavailable'))
       ),
       completeStream: vi.fn(),
@@ -91,7 +90,7 @@ describe('Memory Extractor', () => {
 
     await extract(mockLlm, '', '[user] hi');
 
-    expect(mockLlm.complete.mock.calls[0]?.[1]).toBe(TEST_MODEL);
+    expect(mockLlm.complete.mock.calls[0]?.[0]?.model).toBe(TEST_MODEL);
     expect(mockLlm.completeStream).not.toHaveBeenCalled();
   });
 });

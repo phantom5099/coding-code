@@ -1,29 +1,30 @@
 import { Effect, Layer } from 'effect';
-import { AgentLayer } from '../../src/agent/agent.js';
-import { ToolEnvLayer } from '../../src/agent/tool-env.js';
-import { createToolCatalog } from '../../src/tools/catalog.js';
-import { AgentService } from '../../src/agent/port.js';
-import { ApprovalService } from '../../src/approval/port.js';
-import { CheckpointService } from '../../src/checkpoint/port.js';
-import { ContextService } from '../../src/context/port.js';
-import { HookService } from '../../src/hooks/port.js';
-import { LLMService } from '../../src/llm/port.js';
-import { McpService } from '../../src/mcp/port.js';
-import { MemoryService } from '../../src/memory/port.js';
-import { RulesService } from '../../src/rules/port.js';
-import { SessionService } from '../../src/session/port.js';
-import { EventSinkService } from '../../src/sink/port.js';
-import { EventSinkLayer } from '../../src/sink/sink.js';
-import { MailboxLayer } from '../../src/session/mailbox.js';
-import { SkillService } from '../../src/skills/port.js';
-import { SubagentRunnerService } from '../../src/subagent/port.js';
-import { TodoService } from '../../src/todo/port.js';
-import { ToolExecutorService } from '../../src/tools/port.js';
-import { TurnRegistryLayer } from '../../src/turn/registry.js';
-import type { FrameBody, RuntimeEvent, Transition } from '../../src/sink/types.js';
-import type { TokenUsage, LLMStreamPart } from '../../src/llm/types.js';
-import type { SessionStoreState, SessionRef } from '../../src/session/types.js';
-import type { IncomingPart } from '../../src/llm/types.js';
+import { AgentLayer } from '@codingcode/agent';
+import { ToolEnvLayer } from '@codingcode/agent';
+import { createToolCatalog } from '@codingcode/tool';
+import { ALL_BUILTIN_TOOLS } from './builtin-tools.js';
+import { AgentService } from '@codingcode/agent';
+import { ApprovalService } from '@codingcode/approval';
+import { CheckpointService } from '@codingcode/checkpoint';
+import { ContextService } from '@codingcode/context';
+import { HookService } from '@codingcode/hook';
+import { LLMService } from '@codingcode/model';
+import { McpService } from '@codingcode/mcp';
+import { MemoryService } from '@codingcode/memory';
+import { RulesService } from '@codingcode/rules';
+import { SessionService } from '@codingcode/session';
+import { EventSinkService } from '@codingcode/sink';
+import { EventSinkLayer } from '@codingcode/sink';
+import { MailboxLayer } from '@codingcode/mailbox';
+import { SkillService } from '@codingcode/skill';
+import { SubagentRunnerService } from '@codingcode/subagent';
+import { TodoService } from '@codingcode/todo';
+import { ToolExecutorService } from '@codingcode/tool';
+import { TurnRegistryLayer } from '@codingcode/turn';
+import type { FrameBody, RuntimeEvent, Transition } from '@codingcode/sink';
+import type { TokenUsage, LLMStreamPart } from '@codingcode/model';
+import type { SessionLocator, SessionStoreState, SessionRef } from '@codingcode/session';
+import type { IncomingPart } from '@codingcode/model';
 import { incomingText } from './parts.js';
 
 // ---- LLM 部件构造器 ----
@@ -137,11 +138,10 @@ export interface HarnessMocks {
     emitDecision: (point: string, payload: any) => Effect.Effect<any>;
   };
   executor?: {
-    executeBatch: (calls: any[], sessionId?: string, opts?: any) => Effect.Effect<any[]>;
+    executeBatch: (calls: any[], ctx?: any) => Effect.Effect<any[]>;
     prepareBatch?: (
       calls: readonly any[],
-      sessionId: string | undefined,
-      opts: any,
+      ctx: any,
       lookup: any
     ) => Effect.Effect<any>;
   };
@@ -153,7 +153,7 @@ export interface HarnessMocks {
   contextWillCompact?: () => Promise<boolean>;
   /** 可选：覆盖 SessionService 的个别方法（默认实现见 makeAgentLayer）。 */
   session?: Partial<{
-    load: (cwd: string, sid: string) => any;
+    load: (locator: SessionLocator) => any;
     create: (cwd: string, opts: any, extra?: any) => any;
     materializeInput: (state: any, input: any) => any;
     resolveAssets: (cwd: string, assets: readonly string[]) => any;
@@ -161,7 +161,7 @@ export interface HarnessMocks {
     recordSystem: (state: any, content: any) => any;
     recordAssistant: (state: any, content: any, toolCalls: any[], usage?: any) => any;
     recordToolResult: (state: any, name: string, id: string, output: string) => any;
-    setPermissionMode: (cwd: string, sid: string, mode: any) => any;
+    setPermissionMode: (locator: SessionLocator, mode: any) => any;
     setActiveProfile: (cwd: string, sid: string, profile: any) => any;
   }>;
   /** 可选：用真实 SessionLayer 替换默认 mock，用于需要真实落盘的端到端用例。 */
@@ -172,7 +172,6 @@ export interface HarnessMocks {
 
 export function makeState(partial: Partial<SessionStoreState> = {}): SessionStoreState {
   return {
-    type: 'session_meta',
     sessionId: 'test-sid',
     cwd: '/tmp',
     createdAt: new Date().toISOString(),
@@ -251,12 +250,12 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
   const executor = {
     prepare: (mcpTools: any[] = []) =>
       Effect.sync(() => {
-        const { tools, lookup } = createToolCatalog(mcpTools);
+        const { tools, lookup } = createToolCatalog(ALL_BUILTIN_TOOLS, mcpTools);
         return { tools, lookup };
       }),
     prepareBatch:
       mocks.executor?.prepareBatch ??
-      ((calls: readonly any[], sessionId: string | undefined, opts: any, lookup: any) =>
+      (({ toolCalls: calls, context: ctx, toolLookup: lookup }: any) =>
         Effect.sync(() => {
           const prepared: any[] = [];
           for (const call of calls) {
@@ -274,30 +273,33 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
               parsedArgs,
               argsHash: 'test',
               operation: runner.describeOperation(parsedArgs),
-              sandboxPolicy: testSandboxPolicy(opts.projectPath, sessionId ?? 'test'),
+              sandboxPolicy: testSandboxPolicy(ctx.session.cwd, ctx.session.sessionId || 'test'),
             });
           }
           return { prepared, denied: [], escalations: [] };
         })),
-    executeBatch: (calls: any[], sessionId?: string, opts?: any) =>
+    executeBatch: ({ toolCalls: calls, context: ctx }: any) =>
       batch(
-        calls.map((call) =>
+        calls.map((call: any) =>
           'call' in call
             ? { ...call.call, arguments: call.parsedArgs }
             : call
         ),
-        sessionId,
-        opts
+        ctx
       ),
   } as any;
 
   const session: Record<string, any> = {
-    load: (_cwd: string, sid: string) => Effect.succeed({ ...state, sessionId: sid }),
-    create: (_cwd: string, opts: any) =>
+    load: (locator: SessionLocator) => Effect.succeed({ ...state, sessionId: locator.sessionId }),
+    create: (cmd: any) =>
       Effect.succeed({
         ...state,
-        sessionId: opts.sessionId ?? 'created-sid',
-
+        cwd: cmd.cwd,
+        model: cmd.model,
+        permissionMode: cmd.permissionMode,
+        ...cmd.lineage,
+        ...cmd.subagent,
+        sessionId: 'created-sid',
       }),
     materializeInput: (_state: any, input: any[]) =>
       Effect.succeed(
@@ -334,7 +336,7 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     Effect.gen(function* () {
       const sink = yield* EventSinkService;
       return {
-        getHistory: (ref: SessionRef) =>
+        getHistory: ({ session: ref }: { session: SessionRef; model: string }) =>
           Effect.gen(function* () {
             const shouldCompact = mocks.contextWillCompact
               ? yield* Effect.promise(mocks.contextWillCompact)
@@ -376,7 +378,6 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     mocks.sessionLayer ?? Layer.succeed(SessionService, session as any),
     Layer.succeed(ToolExecutorService, executor as any),
     Layer.succeed(CheckpointService, {
-      snapshotBeforeWrite: () => Effect.void,
       ensureBaseline: () => Effect.void,
     } as any),
     Layer.succeed(ApprovalService, {
@@ -395,8 +396,8 @@ export function makeAgentLayer(mocks: HarnessMocks): Layer.Layer<any> {
     Layer.succeed(MemoryService, memory as any),
     Layer.succeed(LLMService, {
       complete: () => Effect.fail(new Error('complete not implemented in harness')),
-      completeStream: (params: any, model: string, signal?: AbortSignal) =>
-        mocks.llm.completeStream(params, model, signal),
+      completeStream: (req: any) =>
+        mocks.llm.completeStream(req, req.model, req.signal),
     } as any),
     Layer.succeed(RulesService, {
       getAllRules: () => Effect.succeed(''),

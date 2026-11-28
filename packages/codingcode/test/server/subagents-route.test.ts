@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { createServer } from '../../src/server/index.js';
-import { TurnRegistryService } from '../../src/turn/port.js';
+import { createServer } from '@codingcode/http';
+import { TurnRegistryService } from '@codingcode/turn';
 
 async function makeApp(stopChildren: (sessionId: string) => Effect.Effect<number>) {
   const layer = Layer.succeed(TurnRegistryService, { stopChildren } as any);

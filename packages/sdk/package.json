@@ -5,5 +5,19 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codingcode/checkpoint": "workspace:*",
+    "@codingcode/context": "workspace:*",
+    "@codingcode/hook": "workspace:*",
+    "@codingcode/http": "workspace:*",
+    "@codingcode/mcp": "workspace:*",
+    "@codingcode/model": "workspace:*",
+    "@codingcode/scheduler": "workspace:*",
+    "@codingcode/session": "workspace:*",
+    "@codingcode/sink": "workspace:*",
+    "@codingcode/skill": "workspace:*",
+    "@codingcode/todo": "workspace:*",
+    "@codingcode/util": "workspace:*"
   }
 }

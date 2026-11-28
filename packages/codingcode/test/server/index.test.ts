@@ -1,21 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { createServer } from '../../src/server/index.js';
-import { SessionService } from '../../src/session/port.js';
-import { LLMService } from '../../src/llm/port.js';
-import { ApprovalService } from '../../src/approval/port.js';
-import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import { HookService } from '../../src/hooks/port.js';
-import { SkillService } from '../../src/skills/port.js';
-import { McpService } from '../../src/mcp/port.js';
-import { MemoryService } from '../../src/memory/port.js';
-import { SchedulerService } from '../../src/scheduler/port.js';
-import { ContextService } from '../../src/context/port.js';
-import { CheckpointService } from '../../src/checkpoint/port.js';
-import { HookLayer } from '../../src/hooks/hooks.js';
-import { ApprovalWaitLayer } from '../../src/approval/wait.js';
-import { ApprovalLayer } from '../../src/approval/approval.js';
-import { EventSinkLayer } from '../../src/sink/sink.js';
+import { createServer } from '@codingcode/http';
+import { SessionService } from '@codingcode/session';
+import { LLMService } from '@codingcode/model';
+import { ApprovalService } from '@codingcode/approval';
+import { ApprovalWaitService } from '@codingcode/approval';
+import { HookService } from '@codingcode/hook';
+import { SkillService } from '@codingcode/skill';
+import { McpService } from '@codingcode/mcp';
+import { MemoryService } from '@codingcode/memory';
+import { SchedulerService } from '@codingcode/scheduler';
+import { ContextService } from '@codingcode/context';
+import { CheckpointService } from '@codingcode/checkpoint';
+import { HookLayer } from '@codingcode/hook';
+import { ApprovalWaitLayer } from '@codingcode/approval';
+import { ApprovalLayer } from '@codingcode/approval';
+import { EventSinkLayer } from '@codingcode/sink';
 
 const MockSessionLayer = Layer.succeed(SessionService, {
   create: () => Effect.succeed({ sessionId: 'test', cwd: '/tmp/test' }),
@@ -82,7 +82,7 @@ const MockContextLayer = Layer.succeed(ContextService, {
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, {
   _tag: 'Checkpoint' as const,
-  snapshotBeforeWrite: () => Effect.void,
+  ensureBaseline: () => Effect.void,
   getCheckpointDiff: () => Effect.succeed({ turnId: 0, files: [] }),
   revertCheckpointFiles: () =>
     Effect.succeed({

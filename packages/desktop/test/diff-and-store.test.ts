@@ -75,7 +75,7 @@ describe('global store - applyChunk tool_result searches current turn first', ()
     useAgentStore.getState().startTurn(threadId, {
       id: 'turn-1',
       items: [
-        { id: 'call-1', type: 'tool_call', name: 'read_file', args: {}, status: 'running' } as Item,
+        { id: 'call-1', type: 'tool_call', name: 'read_file', arguments: {}, status: 'running' } as Item,
       ],
       status: 'completed',
     });
@@ -85,7 +85,7 @@ describe('global store - applyChunk tool_result searches current turn first', ()
     useAgentStore.getState().startTurn(threadId, {
       id: 'turn-2',
       items: [
-        { id: 'call-2', type: 'tool_call', name: 'read_file', args: {}, status: 'running' } as Item,
+        { id: 'call-2', type: 'tool_call', name: 'read_file', arguments: {}, status: 'running' } as Item,
       ],
       status: 'running',
     });
@@ -113,7 +113,7 @@ describe('global store - applyChunk tool_result searches current turn first', ()
     useAgentStore.getState().startTurn(threadId, {
       id: 'turn-1',
       items: [
-        { id: 'call-1', type: 'tool_call', name: 'read_file', args: {}, status: 'running' } as Item,
+        { id: 'call-1', type: 'tool_call', name: 'read_file', arguments: {}, status: 'running' } as Item,
       ],
       status: 'completed',
     });
@@ -165,7 +165,7 @@ describe('global store - applyChunk tool_result uses push', () => {
       id: 'turn-1',
       items: [
         { id: 'msg-1', type: 'message', role: 'user', parts: [textPart('hi')] } as Item,
-        { id: 'call-1', type: 'tool_call', name: 'read_file', args: {}, status: 'running' } as Item,
+        { id: 'call-1', type: 'tool_call', name: 'read_file', arguments: {}, status: 'running' } as Item,
         {
           id: 'msg-2',
           type: 'message',
@@ -201,7 +201,7 @@ describe('global store - applyChunk tool_result uses push', () => {
     useAgentStore.getState().startTurn(threadId, {
       id: 'turn-1',
       items: [
-        { id: 'call-1', type: 'tool_call', name: 'edit', args: {}, status: 'running' } as Item,
+        { id: 'call-1', type: 'tool_call', name: 'edit', arguments: {}, status: 'running' } as Item,
         {
           id: 'msg-1',
           type: 'message',

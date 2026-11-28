@@ -8,8 +8,8 @@ import {
   readAudioDurationSec,
   readImageSize,
   writeAsset,
-} from '../../src/session/assets.js';
-import { sniffMediaMime } from '../../src/util/media.js';
+} from '@codingcode/session';
+import { sniffMediaMime } from '@codingcode/util';
 
 function ascii(b: Uint8Array, at: number, s: string): void {
   for (let i = 0; i < s.length; i++) b[at + i] = s.charCodeAt(i);
@@ -269,8 +269,8 @@ describe('writeAsset', () => {
     try {
       const bytes = pngBytes(16, 16);
       const name = assetNameFor(bytes, 'image/png');
-      writeAsset(dir, name, bytes);
-      writeAsset(dir, name, bytes);
+      writeAsset({ dir, name }, bytes);
+      writeAsset({ dir, name }, bytes);
 
       const entries = readdirSync(dir);
       expect(entries).toEqual([name]);
@@ -286,7 +286,7 @@ describe('writeAsset', () => {
     try {
       const bytes = pdfBytes();
       const name = assetNameFor(bytes, 'application/pdf');
-      writeAsset(dir, name, bytes);
+      writeAsset({ dir, name }, bytes);
       expect(readdirSync(dir)).toEqual([name]);
     } finally {
       rmSync(root, { recursive: true, force: true });

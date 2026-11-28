@@ -61,7 +61,7 @@ export function buildToolSummaryTitle(
   }
 
   if (isFileWrite) {
-    const path = toolResult?.filePath || getFilePathFromArgs(toolCall.args) || '';
+    const path = toolResult?.filePath || getFilePathFromArgs(toolCall.arguments) || '';
     if (toolCall.name === 'write_file') {
       return { title: path ? `写入文件 ${path}` : '写入文件', isError: false, isRejected: false };
     }
@@ -71,7 +71,7 @@ export function buildToolSummaryTitle(
   }
 
   if (isReadFile) {
-    const path = getFilePathFromArgs(toolCall.args);
+    const path = getFilePathFromArgs(toolCall.arguments);
     return {
       title: path ? `读取文件 ${path}` : '读取文件',
       isError: toolResult ? toolResult.exitCode !== undefined && toolResult.exitCode !== 0 : false,
@@ -80,7 +80,7 @@ export function buildToolSummaryTitle(
   }
 
   if (isShell) {
-    const cmd = getCommand(toolCall.args);
+    const cmd = getCommand(toolCall.arguments);
     return {
       title: cmd ? `执行命令 ${cmd}` : `执行命令 ${toolCall.name}`,
       isError: toolResult ? toolResult.exitCode !== undefined && toolResult.exitCode !== 0 : false,
@@ -89,7 +89,7 @@ export function buildToolSummaryTitle(
   }
 
   if (isSearch) {
-    const query = getSearchQuery(toolCall.args);
+    const query = getSearchQuery(toolCall.arguments);
     return {
       title: query ? `搜索 "${query}"` : '搜索文件',
       isError: toolResult ? toolResult.exitCode !== undefined && toolResult.exitCode !== 0 : false,
@@ -98,7 +98,7 @@ export function buildToolSummaryTitle(
   }
 
   if (isListDir) {
-    const path = getFilePathFromArgs(toolCall.args);
+    const path = getFilePathFromArgs(toolCall.arguments);
     return {
       title: path ? `列出目录 ${path}` : '列出目录',
       isError: toolResult ? toolResult.exitCode !== undefined && toolResult.exitCode !== 0 : false,
@@ -125,8 +125,8 @@ const ToolSummary = memo(function ToolSummary({ toolCall, toolResult }: ToolSumm
 
   const effectiveResult = computedResult ?? toolResult;
   const { isError, isRejected } = buildToolSummaryTitle(toolCall, effectiveResult);
-  const argsSummary = formatToolArgs(toolCall.args);
-  const argsFull = JSON.stringify(toolCall.args, null, 2);
+  const argsSummary = formatToolArgs(toolCall.arguments);
+  const argsFull = JSON.stringify(toolCall.arguments, null, 2);
   const ToolIcon = toolIcon(toolCall.name);
   const statusLabel = isRejected
     ? '已拒绝'

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Effect, Exit, Fiber, Layer, ManagedRuntime } from 'effect';
-import { askUserTool } from '../../src/tools/domains/self/ask-user.js';
-import { AskWaitService, type AskAnswer } from '../../src/askuser/port.js';
-import { AskWaitLayer } from '../../src/askuser/wait.js';
-import { EventSinkService } from '../../src/sink/port.js';
-import type { FrameBody } from '../../src/sink/types.js';
+import { askUserTool } from '@codingcode/self';
+import { AskWaitService, type AskAnswer } from '@codingcode/askuser';
+import { AskWaitLayer } from '@codingcode/askuser';
+import { EventSinkService } from '@codingcode/sink';
+import type { FrameBody } from '@codingcode/sink';
 
 // ---------- 测试环境：真实 AskWaitLayer + 捕获型 EventSink mock ----------
 
@@ -24,12 +24,16 @@ beforeEach(() => {
   frames.length = 0;
 });
 
-const CTX = { sessionId: 'sess-1', callId: 'tc-1', model: 'test-model' } as const;
+const CTX = {
+  session: { cwd: '/tmp', sessionId: 'sess-1' },
+  callId: 'tc-1',
+  model: 'test-model',
+} as const;
 
 /** 起一个 execute fiber，并以重试方式 resolve（emit 之后 waitForAsk 注册之间存在竞态） */
 function askAndResolve(
-  args: unknown,
-  ctx: { sessionId: string; callId: string; model: string },
+  args: Parameters<typeof askUserTool.execute>[0],
+  ctx: { session: { cwd: string; sessionId: string }; callId: string; model: string },
   answer: AskAnswer
 ) {
   return Effect.gen(function* () {
@@ -37,7 +41,11 @@ function askAndResolve(
     const fiber = yield* Effect.fork(askUserTool.execute(args, ctx));
     let resolved = false;
     for (let i = 0; i < 500 && !resolved; i++) {
-      resolved = yield* svc.resolveAsk(ctx.callId, ctx.sessionId, answer);
+      resolved = yield* svc.resolveAsk({
+        callId: ctx.callId,
+        sessionId: ctx.session.sessionId,
+        answer,
+      });
       if (!resolved) yield* Effect.sleep(2);
     }
     if (!resolved) throw new Error('ask entry never registered');
@@ -98,7 +106,13 @@ describe('ask_user 参数校验', () => {
         CTX
       )
     );
-    await rt.runPromise(svc.resolveAsk('tc-1', 'sess-1', { status: 'answered', options: [], custom: '绿色' }));
+    await rt.runPromise(
+      svc.resolveAsk({
+        callId: 'tc-1',
+        sessionId: 'sess-1',
+        answer: { status: 'answered', options: [], custom: '绿色' },
+      })
+    );
     const output = await rt.runPromise(Fiber.join(fiber));
     expect(output).toBe('用户回答：绿色');
     // 帧不带 options
@@ -120,7 +134,7 @@ describe('ask_user 参数校验', () => {
     const exit = await rt.runPromiseExit(
       askUserTool.execute(
         { questiontype: 'single', question: 'q', options: ['a', 'b'] },
-        { sessionId: 's', model: 'm' }
+        { session: { cwd: '/tmp', sessionId: 's' }, model: 'm' }
       )
     );
     expect(Exit.isFailure(exit)).toBe(true);
@@ -236,7 +250,11 @@ describe('ask_user 等待-回流与 output 格式', () => {
         );
         expect(raced).toBe('still-hanging');
         // 收尾：resolve 让 fiber 干净退出
-        yield* svc.resolveAsk('tc-1', 'sess-1', { status: 'answered', options: ['A'], custom: null });
+        yield* svc.resolveAsk({
+          callId: 'tc-1',
+          sessionId: 'sess-1',
+          answer: { status: 'answered', options: ['A'], custom: null },
+        });
         return yield* Fiber.join(fiber);
       })
     );
@@ -246,7 +264,11 @@ describe('ask_user 等待-回流与 output 格式', () => {
   it('resolveAsk 未知 id 返回 false', async () => {
     const svc = await rt.runPromise(AskWaitService);
     const ok = await rt.runPromise(
-      svc.resolveAsk('no-such-id', 'sess-1', { status: 'answered', options: ['A'], custom: null })
+      svc.resolveAsk({
+        callId: 'no-such-id',
+        sessionId: 'sess-1',
+        answer: { status: 'answered', options: ['A'], custom: null },
+      })
     );
     expect(ok).toBe(false);
   });
@@ -261,12 +283,20 @@ describe('ask_user 等待-回流与 output 格式', () => {
     );
     await Effect.runPromise(Effect.sleep(20));
     const ok = await rt.runPromise(
-      svc.resolveAsk('tc-1', 'other-session', { status: 'answered', options: ['A'], custom: null })
+      svc.resolveAsk({
+        callId: 'tc-1',
+        sessionId: 'other-session',
+        answer: { status: 'answered', options: ['A'], custom: null },
+      })
     );
     expect(ok).toBe(false);
     // 正确会话仍可 resolve（条目未被污染）
     const ok2 = await rt.runPromise(
-      svc.resolveAsk('tc-1', 'sess-1', { status: 'answered', options: ['A'], custom: null })
+      svc.resolveAsk({
+        callId: 'tc-1',
+        sessionId: 'sess-1',
+        answer: { status: 'answered', options: ['A'], custom: null },
+      })
     );
     expect(ok2).toBe(true);
     expect(await rt.runPromise(Fiber.join(fiber))).toBe('用户选择了：["A:a"]');
@@ -295,10 +325,14 @@ describe('ask_user 等待-回流与 output 格式', () => {
             yield* Effect.sleep(2);
             continue;
           }
-          const r2 = yield* svc.resolveAsk('tc-2', 'sess-1', {
-            status: 'answered',
-            options: [],
-            custom: '张三',
+          const r2 = yield* svc.resolveAsk({
+            callId: 'tc-2',
+            sessionId: 'sess-1',
+            answer: {
+              status: 'answered',
+              options: [],
+              custom: '张三',
+            },
           });
           if (!r2) {
             yield* Effect.sleep(2);
@@ -306,10 +340,14 @@ describe('ask_user 等待-回流与 output 格式', () => {
           }
           let r1 = false;
           for (let j = 0; j < 500 && !r1; j++) {
-            r1 = yield* svc.resolveAsk('tc-1', 'sess-1', {
-              status: 'answered',
-              options: ['B'],
-              custom: null,
+            r1 = yield* svc.resolveAsk({
+              callId: 'tc-1',
+              sessionId: 'sess-1',
+              answer: {
+                status: 'answered',
+                options: ['B'],
+                custom: null,
+              },
             });
             if (!r1) yield* Effect.sleep(2);
           }
@@ -358,13 +396,13 @@ describe('ask_user fail-closed 生命周期', () => {
         yield* Effect.fork(
           askUserTool.execute(
             { questiontype: 'single', question: 'q', options: ['a', 'b'] },
-            { ...CTX, callId: 'tc-a1', sessionId: 'sess-A' }
+            { ...CTX, callId: 'tc-a1', session: { cwd: '/tmp', sessionId: 'sess-A' } }
           )
         );
         yield* Effect.fork(
           askUserTool.execute(
             { questiontype: 'single', question: 'q', options: ['a', 'b'] },
-            { ...CTX, callId: 'tc-b1', sessionId: 'sess-B' }
+            { ...CTX, callId: 'tc-b1', session: { cwd: '/tmp', sessionId: 'sess-B' } }
           )
         );
         yield* Effect.sleep(50); // 给两个条目留足注册时间
@@ -394,10 +432,14 @@ describe('ask_user fail-closed 生命周期', () => {
         }
         yield* Effect.sleep(5); // waitForAsk 注册紧随 emit
         yield* Fiber.interrupt(fiber);
-        return yield* svc.resolveAsk('tc-1', 'sess-1', {
-          status: 'answered',
-          options: ['A'],
-          custom: null,
+        return yield* svc.resolveAsk({
+          callId: 'tc-1',
+          sessionId: 'sess-1',
+          answer: {
+            status: 'answered',
+            options: ['A'],
+            custom: null,
+          },
         });
       })
     );
@@ -408,11 +450,15 @@ describe('ask_user fail-closed 生命周期', () => {
     const result = await rt.runPromise(
       Effect.gen(function* () {
         const svc = yield* AskWaitService;
-        const fiber = yield* Effect.fork(svc.waitForAsk('manual-1', 'sess-1'));
+        const fiber = yield* Effect.fork(svc.waitForAsk({ callId: 'manual-1', sessionId: 'sess-1' }));
         // 等注册完成再 resolve（复用重试模式）
         let resolved = false;
         for (let i = 0; i < 500 && !resolved; i++) {
-          resolved = yield* svc.resolveAsk('manual-1', 'sess-1', { status: 'no_answer' });
+          resolved = yield* svc.resolveAsk({
+            callId: 'manual-1',
+            sessionId: 'sess-1',
+            answer: { status: 'no_answer' },
+          });
           if (!resolved) yield* Effect.sleep(2);
         }
         const forgot = yield* svc.forget('manual-1');
