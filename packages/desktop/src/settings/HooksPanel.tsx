@@ -8,57 +8,62 @@ import {
   deleteHook,
   setHookEnabled,
 } from '../lib/core-api';
-import type { HookPoint, UserHookConfig } from '@codingcode/sdk';
+import {
+  HOOK_POINT,
+  type HookConfigEntry,
+  type HookPoint,
+  type UserHookConfig,
+} from '@codingcode/sdk';
 
-interface HookEntry {
-  name: string;
-  description?: string;
-  point: string;
-  type: 'observer' | 'decision';
-  command: string;
-  args?: string[];
-  env?: Record<string, string>;
-  priority?: number;
-  enabled?: boolean;
-  source?: 'global' | 'project';
-  hasProjectOverride?: boolean;
-}
+type HookEntry = HookConfigEntry;
 
 interface HookGroup {
   label: string;
-  points: { name: string; description: string; type: 'observer' | 'decision' }[];
+  points: { name: HookPoint; description: string; type: 'observer' | 'decision' }[];
 }
 
 const HOOK_GROUPS: HookGroup[] = [
   {
     label: '工具执行',
     points: [
-      { name: 'tool.execute.before', description: '工具执行前触发', type: 'decision' },
-      { name: 'tool.execute.after', description: '工具执行成功后触发', type: 'observer' },
-      { name: 'tool.execute.error', description: '工具执行失败后触发', type: 'observer' },
-      { name: 'tool.approval.pre', description: '工具审批请求前触发', type: 'decision' },
-      { name: 'tool.approval.post', description: '工具审批完成后触发', type: 'observer' },
+      { name: HOOK_POINT.TOOL_EXECUTE_BEFORE, description: '工具执行前触发', type: 'decision' },
+      { name: HOOK_POINT.TOOL_EXECUTE_AFTER, description: '工具执行成功后触发', type: 'observer' },
+      { name: HOOK_POINT.TOOL_EXECUTE_ERROR, description: '工具执行失败后触发', type: 'observer' },
+      { name: HOOK_POINT.TOOL_APPROVAL_PRE, description: '工具审批请求前触发', type: 'decision' },
+      { name: HOOK_POINT.TOOL_APPROVAL_POST, description: '工具审批完成后触发', type: 'observer' },
     ],
   },
   {
     label: 'Agent 轮次',
     points: [
-      { name: 'agent.turn.start', description: '每一轮对话开始时触发', type: 'observer' },
-      { name: 'agent.step.before', description: '每个推理步骤前触发', type: 'decision' },
+      { name: HOOK_POINT.AGENT_TURN_START, description: '每一轮对话开始时触发', type: 'observer' },
+      { name: HOOK_POINT.AGENT_STEP_BEFORE, description: '每个推理步骤前触发', type: 'decision' },
       {
-        name: 'agent.turn.stop',
+        name: HOOK_POINT.AGENT_TURN_STOP,
         description: 'Agent 本轮无工具调用、准备停止时裁决，可返回 continue 续行',
         type: 'decision',
       },
-      { name: 'agent.turn.end', description: '轮次最终结束时通知，不可干预', type: 'observer' },
+      { name: HOOK_POINT.AGENT_TURN_END, description: '轮次最终结束时通知，不可干预', type: 'observer' },
     ],
   },
   {
     label: '子智能体',
     points: [
-      { name: 'agent.subagent.spawn.before', description: '派生子智能体前触发', type: 'decision' },
-      { name: 'agent.subagent.spawn.after', description: '子智能体派生后触发', type: 'observer' },
-      { name: 'agent.subagent.complete', description: '子智能体任务完成时触发', type: 'observer' },
+      {
+        name: HOOK_POINT.AGENT_SUBAGENT_SPAWN_BEFORE,
+        description: '派生子智能体前触发',
+        type: 'decision',
+      },
+      {
+        name: HOOK_POINT.AGENT_SUBAGENT_SPAWN_AFTER,
+        description: '子智能体派生后触发',
+        type: 'observer',
+      },
+      {
+        name: HOOK_POINT.AGENT_SUBAGENT_COMPLETE,
+        description: '子智能体任务完成时触发',
+        type: 'observer',
+      },
     ],
   },
 ];

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import type { SandboxMode, SandboxPolicy } from '../../src/sandbox/types.js';
+import type { SandboxMode, SandboxPolicy } from '@codingcode/sandbox';
 
 export function testSandboxPolicy(
   workspaceRoot: string,

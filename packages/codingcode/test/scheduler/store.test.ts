@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve, join } from 'path';
 import { tmpdir } from 'os';
-import { readAutomations, writeAutomations } from '../../src/scheduler/store.js';
-import type { Automation } from '../../src/scheduler/types.js';
+import { readAutomations, writeAutomations } from '@codingcode/scheduler';
+import type { Automation } from '@codingcode/scheduler';
 
 const testDir = resolve(tmpdir(), 'codingcode-test-scheduler-store');
 const testFile = join(testDir, 'automations.yaml');
@@ -118,7 +118,7 @@ describe('writeAutomations', () => {
         description: 'Second description',
         cron: '0 10 * * *',
         timezone: 'Asia/Shanghai',
-        sandbox: 'readonly',
+        sandbox: 'read-only',
         enabled: false,
         projectCwd: '/home/user/other',
         runOnce: true,

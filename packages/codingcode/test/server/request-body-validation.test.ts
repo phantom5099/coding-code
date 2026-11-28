@@ -10,9 +10,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { parse as parseYaml } from 'yaml';
-import { createServer, type ServerApp } from '../../src/server/index.js';
-import { HookLayer } from '../../src/hooks/hooks.js';
-import { McpLayer } from '../../src/mcp/mcp.js';
+import { createServer, type ServerApp } from '@codingcode/http';
+import { HookLayer } from '@codingcode/hook';
+import { McpLayer } from '@codingcode/mcp';
 import { useTempHome } from '../helpers/temp-home.js';
 
 // 全局层落在临时 home，避免写坏开发机的 ~/.codingcode

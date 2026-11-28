@@ -4,39 +4,38 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { useTempHome } from '../helpers/temp-home.js';
-import { AgentLayer } from '../../src/agent/agent.js';
-import { ToolEnvLayer } from '../../src/agent/tool-env.js';
-import { SubagentRunnerLayer } from '../../src/subagent/subagent.js';
-import { SubagentRunnerService } from '../../src/subagent/port.js';
-import { ApprovalService } from '../../src/approval/port.js';
-import { CheckpointService } from '../../src/checkpoint/port.js';
-import { ContextService } from '../../src/context/port.js';
-import { EventSinkLayer } from '../../src/sink/sink.js';
-import { MailboxLayer } from '../../src/session/mailbox.js';
-import { TurnRegistryLayer } from '../../src/turn/registry.js';
-import { LLMService } from '../../src/llm/port.js';
-import { AgentError } from '../../src/util/error.js';
-import { MemoryService } from '../../src/memory/port.js';
-import { RulesService } from '../../src/rules/port.js';
-import { SkillService } from '../../src/skills/port.js';
-import { ToolExecutorService } from '../../src/tools/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { SessionService } from '../../src/session/port.js';
-import { HookService } from '../../src/hooks/port.js';
-import { McpService } from '../../src/mcp/port.js';
-import { textPart } from '../../src/llm/types.js';
+import { AgentLayer } from '@codingcode/agent';
+import { ToolEnvLayer } from '@codingcode/agent';
+import { SubagentRunnerLayer } from '@codingcode/subagent';
+import { SubagentRunnerService } from '@codingcode/subagent';
+import { ApprovalService } from '@codingcode/approval';
+import { CheckpointService } from '@codingcode/checkpoint';
+import { ContextService } from '@codingcode/context';
+import { EventSinkLayer } from '@codingcode/sink';
+import { MailboxLayer } from '@codingcode/mailbox';
+import { TurnRegistryLayer } from '@codingcode/turn';
+import { LLMService } from '@codingcode/model';
+import { AgentError } from '@codingcode/util';
+import { MemoryService } from '@codingcode/memory';
+import { RulesService } from '@codingcode/rules';
+import { SkillService } from '@codingcode/skill';
+import { ToolExecutorService } from '@codingcode/tool';
+import { SessionLayer } from '@codingcode/session';
+import { SessionService } from '@codingcode/session';
+import { HookService } from '@codingcode/hook';
+import { McpService } from '@codingcode/mcp';
+import { textPart } from '@codingcode/model';
 import { incomingText } from '../helpers/parts.js';
-import { TodoService } from '../../src/todo/port.js';
-import { readHistory } from '../../src/session/file-ops.js';
-import { encodeProjectPath, normalizePath } from '../../src/util/path.js';
-import { computePaths } from '../../src/session/paths.js';
-import { transcriptPathFor } from '../../src/context/context.js';
+import { TodoService } from '@codingcode/todo';
+import { readHistory } from '@codingcode/session/file-ops';
+import { encodeProjectPath, normalizePath } from '@codingcode/util';
+import { computePaths, transcriptPathOf } from '@codingcode/session';
 import { projectBaseDir } from '../helpers/project-base.js';
-import type { SessionMetaEvent } from '../../src/session/types.js';
-import type { SessionRef } from '../../src/session/types.js';
-import type { Message, ResolvedMessage, LLMRequest } from '../../src/llm/types.js';
+import type { SessionMetaEvent } from '@codingcode/session';
+import type { SessionRef } from '@codingcode/session';
+import type { Message, ResolvedMessage, LLMInvocation } from '@codingcode/model';
 
-import type { FrameBody } from '../../src/sink/types.js';
+import type { FrameBody } from '@codingcode/sink';
 
 const CHILD_MODEL = 'child-model';
 const PARENT_MODEL = 'parent-model';
@@ -52,9 +51,9 @@ const CHILD_ANSWER = 'child answer';
 /** 未命中即失败（与 LlmLayer 的 entryFor 同语义）；空模型同样不是合法模型 */
 const LLMMock = Layer.succeed(LLMService, {
   complete: () => Effect.succeed({ content: CHILD_ANSWER }),
-  completeStream: (req: LLMRequest, model: string) =>
+  completeStream: (req: LLMInvocation) =>
     (async function* () {
-      const target = model?.trim() ?? '';
+      const target = req.model?.trim() ?? '';
       if (target !== CHILD_MODEL) {
         throw new AgentError('CONFIG_INVALID', `Model "${target}" not found in models.json`);
       }
@@ -136,7 +135,7 @@ const AgentDeps = Layer.mergeAll(
     executeBatch: () => Effect.succeed([]),
   } as any),
   Layer.succeed(CheckpointService, {
-    snapshotBeforeWrite: () => Effect.void,
+    ensureBaseline: () => Effect.void,
   } as any),
   Layer.succeed(ApprovalService, {
     evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
@@ -151,7 +150,8 @@ const AgentDeps = Layer.mergeAll(
     readContent: () => Effect.succeed(''),
   } as any),
   Layer.succeed(ContextService, {
-    getHistory: (ref: SessionRef) => Effect.sync(() => readMessages(transcriptPathFor(ref))),
+    getHistory: ({ session: ref }: { session: SessionRef }) =>
+      Effect.sync(() => readMessages(transcriptPathOf(ref))),
     absorb: () => Effect.void,
     compact: () => Effect.succeed({ didCompress: false, released: 0, promptEstimate: 0 }),
     dispose: () => Effect.void,
@@ -219,19 +219,20 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
       Effect.gen(function* () {
         const session = yield* SessionService;
         const runner = yield* SubagentRunnerService;
-        const parent = yield* session.create(cwd, {
+        const parent = yield* session.create({
+          cwd,
           model: PARENT_MODEL,
-
           permissionMode: 'askBeforeExec',
         });
         const { stream, sessionId } = yield* runner.runSubagent(incomingText('do the thing'), {
           cwd,
-
-          parentSessionId: parent.sessionId,
-          agentName: opts.agentName ?? 'reviewer',
-          ...(opts.description ? { description: opts.description } : {}),
+          lineage: { parentSessionId: parent.sessionId },
+          subagent: {
+            agentName: opts.agentName ?? 'reviewer',
+            ...(opts.description ? { description: opts.description } : {}),
+            ...(opts.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
+          },
           model: opts.model ?? CHILD_MODEL,
-          ...(opts.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),
         });
         const content = yield* drainStream(stream);
         return { parentId: parent.sessionId, childId: sessionId, content };
@@ -240,7 +241,7 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
   }
 
   function pathsFor(childId: string, parentId: string) {
-    return computePaths(normalizePath(cwd), childId, parentId);
+    return computePaths({ cwd: normalizePath(cwd), sessionId: childId, parentSessionId: parentId });
   }
 
   /** 续跑既有子会话：不传 systemPrompt，由 runner 从会话头回读 */
@@ -251,9 +252,8 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
         const { stream, sessionId } = yield* runner.runSubagent(incomingText(text), {
           sessionId: childId,
           cwd,
-
-          parentSessionId: parentId,
-          agentName: 'reviewer',
+          lineage: { parentSessionId: parentId },
+          subagent: { agentName: 'reviewer' },
           model: CHILD_MODEL,
         });
         const content = yield* drainStream(stream);
@@ -295,8 +295,12 @@ describe('subagent runner wiring (child session mounts under the parent)', () =>
     const reloaded = await run(
       Effect.gen(function* () {
         const session = yield* SessionService;
-        const ok = yield* Effect.either(session.load(normalizePath(cwd), childId, parentId));
-        const withoutParent = yield* Effect.either(session.load(normalizePath(cwd), childId));
+        const ok = yield* Effect.either(
+          session.load({ cwd: normalizePath(cwd), sessionId: childId, parentSessionId: parentId })
+        );
+        const withoutParent = yield* Effect.either(
+          session.load({ cwd: normalizePath(cwd), sessionId: childId })
+        );
         return { ok: ok._tag === 'Right' ? ok.right : null, withoutParent };
       })
     );

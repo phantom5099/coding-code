@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Effect, Layer } from 'effect';
 import { z } from 'zod';
 import { mkdirSync, mkdtempSync, rmSync, existsSync } from 'fs';
@@ -6,37 +6,36 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { useTempHome } from '../helpers/temp-home.js';
 import { projectBaseDir } from '../helpers/project-base.js';
-import { AgentLayer } from '../../src/agent/agent.js';
-import { ToolEnvLayer } from '../../src/agent/tool-env.js';
-import { SubagentRunnerLayer } from '../../src/subagent/subagent.js';
+import { AgentLayer } from '@codingcode/agent';
+import { ToolEnvLayer } from '@codingcode/agent';
+import { SubagentRunnerLayer } from '@codingcode/subagent';
 import {
   SubagentRunRegistryLayer,
   SubagentRunRegistryService,
-} from '../../src/subagent/registry.js';
-import { ApprovalService } from '../../src/approval/port.js';
-import { CheckpointService } from '../../src/checkpoint/port.js';
-import { ContextService } from '../../src/context/port.js';
-import { EventSinkLayer } from '../../src/sink/sink.js';
-import { MailboxLayer, MailboxService } from '../../src/session/mailbox.js';
-import { TurnRegistryLayer } from '../../src/turn/registry.js';
-import { TurnRegistryService } from '../../src/turn/port.js';
-import { LLMService } from '../../src/llm/port.js';
-import { MemoryService } from '../../src/memory/port.js';
-import { RulesService } from '../../src/rules/port.js';
-import { SkillService } from '../../src/skills/port.js';
-import { ToolExecutorLayer } from '../../src/tools/tools.js';
-import { TOOLS_BY_NAME } from '../../src/tools/catalog.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { HookService } from '../../src/hooks/port.js';
-import { McpService } from '../../src/mcp/port.js';
-import { TodoService } from '../../src/todo/port.js';
-import { readHistory } from '../../src/session/file-ops.js';
-import { encodeProjectPath, normalizePath } from '../../src/util/path.js';
-import { transcriptPathFor } from '../../src/context/context.js';
-import { textPart } from '../../src/llm/types.js';
-import type { ToolDefinition, ToolExecCtx } from '../../src/tools/types.js';
-import type { SessionMetaEvent, SessionRef } from '../../src/session/types.js';
-import type { Message, LLMRequest, LLMStreamPart } from '../../src/llm/types.js';
+} from '@codingcode/subagent';
+import { ApprovalService } from '@codingcode/approval';
+import { CheckpointService } from '@codingcode/checkpoint';
+import { ContextService } from '@codingcode/context';
+import { EventSinkLayer } from '@codingcode/sink';
+import { MailboxLayer, MailboxService } from '@codingcode/mailbox';
+import { TurnRegistryLayer } from '@codingcode/turn';
+import { TurnRegistryService } from '@codingcode/turn';
+import { LLMService } from '@codingcode/model';
+import { MemoryService } from '@codingcode/memory';
+import { RulesService } from '@codingcode/rules';
+import { SkillService } from '@codingcode/skill';
+import { ToolExecutorLayer, makeToolRegistryLayer } from '@codingcode/tool';
+import { ALL_BUILTIN_TOOLS } from '../helpers/builtin-tools.js';
+import { SessionLayer, transcriptPathOf } from '@codingcode/session';
+import { HookService } from '@codingcode/hook';
+import { McpService } from '@codingcode/mcp';
+import { TodoService } from '@codingcode/todo';
+import { readHistory } from '@codingcode/session/file-ops';
+import { encodeProjectPath, normalizePath } from '@codingcode/util';
+import { textPart } from '@codingcode/model';
+import type { ToolDefinition, ToolExecCtx } from '@codingcode/tool';
+import type { SessionMetaEvent, SessionRef } from '@codingcode/session';
+import type { Message, LLMInvocation, LLMStreamPart } from '@codingcode/model';
 
 const CHILD_MODEL = 'integration-child-model';
 const PROBE = '__lifecycle_ctx_probe';
@@ -53,11 +52,6 @@ const probeTool: ToolDefinition = {
     return Effect.succeed('probed');
   },
 };
-
-TOOLS_BY_NAME.set(PROBE, probeTool);
-afterAll(() => {
-  TOOLS_BY_NAME.delete(PROBE);
-});
 
 // ---- LLM 脚本：按模型排队，逐次取一段响应；'hang' 表示永不收尾 ----
 type Step = LLMStreamPart[] | 'hang';
@@ -76,8 +70,9 @@ const toolCall = (id: string, name: string, args: Record<string, unknown> = {}):
 
 const LLMMock = Layer.succeed(LLMService, {
   complete: () => Effect.succeed({ content: 'n/a' }),
-  completeStream: (_req: LLMRequest, model: string) =>
+  completeStream: (req: LLMInvocation) =>
     (async function* () {
+      const model = req.model;
       const i = cursors.get(model) ?? 0;
       cursors.set(model, i + 1);
       const step = scripts.get(model)?.[i];
@@ -98,8 +93,12 @@ const HookMock = Layer.succeed(HookService, {
 
 const Deps = Layer.mergeAll(
   SessionLayer,
-  ToolExecutorLayer.pipe(Layer.provide(HookMock)),
-  Layer.succeed(CheckpointService, { snapshotBeforeWrite: () => Effect.void } as any),
+  ToolExecutorLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(HookMock, makeToolRegistryLayer([...ALL_BUILTIN_TOOLS, probeTool]))
+    )
+  ),
+  Layer.succeed(CheckpointService, { ensureBaseline: () => Effect.void } as any),
   Layer.succeed(ApprovalService, {
     evaluate: () => Effect.succeed({ type: 'allow', source: 'test' }),
     evaluateBatch: (requests: readonly unknown[]) =>
@@ -114,9 +113,9 @@ const Deps = Layer.mergeAll(
   } as any),
   // 历史直接从 transcript 重建，等价于真实 context 的唯一读盘点
   Layer.succeed(ContextService, {
-    getHistory: (ref: SessionRef) =>
+    getHistory: ({ session: ref }: { session: SessionRef }) =>
       Effect.sync(() =>
-        readHistory(transcriptPathFor(ref)).flatMap((e) => {
+        readHistory(transcriptPathOf(ref)).flatMap((e) => {
           if (e.type === 'user') return [{ role: 'user', content: e.content }] as Message[];
           if (e.type === 'assistant')
             return [
@@ -185,23 +184,24 @@ describe('subagent lifecycle integration (real agent + runner + registry)', () =
     scripts.clear();
     cursors.clear();
     capturedCtx = undefined;
-    TOOLS_BY_NAME.set(PROBE, probeTool);
   });
 
   afterEach(() => {
-    TOOLS_BY_NAME.delete(PROBE);
     if (existsSync(cwd)) rmSync(cwd, { recursive: true, force: true });
   });
 
-  const spawnOpts = {
+  const spawnOpts = (projectCwd: string) => ({
     prompt: 'do the thing',
     agentName: 'worker',
-    parentSessionId: 'parent-1',
-    parentProfile: 'build' as const,
+    parent: {
+      cwd: projectCwd,
+      sessionId: 'parent-1',
+      parentSessionId: 'root-1',
+      parentChain: ['root-1'],
+    },
     model: CHILD_MODEL,
     description: 'probes the ctx',
-    parentChain: ['parent-1', 'root-1'],
-  };
+  });
 
   // 新布局：不论派发多深，子会话转录一律挂在顶层主会话（链末位）的 subagents/ 下
   const childTranscriptPath = (childId: string) =>
@@ -235,7 +235,7 @@ describe('subagent lifecycle integration (real agent + runner + registry)', () =
       Effect.gen(function* () {
         const registry = yield* SubagentRunRegistryService;
         const turn = yield* TurnRegistryService;
-        const handle = yield* registry.spawn({ ...spawnOpts, parentCwd: cwd });
+        const handle = yield* registry.spawn(spawnOpts(cwd));
         const wait = yield* turn.wait(handle.sessionId, 5_000);
         return { handle, wait };
       })
@@ -243,9 +243,9 @@ describe('subagent lifecycle integration (real agent + runner + registry)', () =
 
     expect(result.wait).toBe('completed');
     expect(capturedCtx).toBeDefined();
-    expect(capturedCtx!.sessionId).toBe(result.handle.sessionId);
+    expect(capturedCtx!.session?.sessionId).toBe(result.handle.sessionId);
     expect(capturedCtx!.agentName).toBe('worker');
-    expect(capturedCtx!.parentChain).toEqual(['parent-1', 'root-1']);
+    expect(capturedCtx!.session?.parentChain).toEqual(['parent-1', 'root-1']);
 
     const meta = readHistory(childTranscriptPath(result.handle.sessionId))[0] as SessionMetaEvent;
     expect(meta.description).toBe('probes the ctx');
@@ -266,7 +266,7 @@ describe('subagent lifecycle integration (real agent + runner + registry)', () =
         const turn = yield* TurnRegistryService;
         const mailbox = yield* MailboxService;
 
-        const handle = yield* registry.spawn({ ...spawnOpts, parentCwd: cwd });
+        const handle = yield* registry.spawn(spawnOpts(cwd));
         const outcome = yield* turn.interrupt(handle.sessionId);
         const wait = yield* turn.wait(handle.sessionId, 5_000);
         const items = yield* mailbox.drain('parent-1');
@@ -291,14 +291,13 @@ describe('subagent lifecycle integration (real agent + runner + registry)', () =
         const turn = yield* TurnRegistryService;
         const mailbox = yield* MailboxService;
 
-        const first = yield* registry.spawn({ ...spawnOpts, parentCwd: cwd });
+        const first = yield* registry.spawn(spawnOpts(cwd));
         yield* turn.interrupt(first.sessionId);
         yield* turn.wait(first.sessionId, 5_000);
         yield* mailbox.drain('parent-1');
 
         const resumed = yield* registry.spawn({
-          ...spawnOpts,
-          parentCwd: cwd,
+          ...spawnOpts(cwd),
           resumeSessionId: first.sessionId,
           description: undefined,
         });

@@ -1,0 +1,23 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../util" },
+    { "path": "../sandbox" },
+    { "path": "../infra" },
+    { "path": "../model" },
+    { "path": "../hook" },
+    { "path": "../session" },
+    { "path": "../mailbox" },
+    { "path": "../sink" },
+    { "path": "../turn" },
+    { "path": "../context" },
+    { "path": "../tool" },
+    { "path": "../agent" }
+  ]
+}

@@ -1,5 +1,5 @@
 import { expect, it, describe, vi } from 'vitest';
-import { textOf } from '../../src/llm/types.js';
+import { textOf } from '@codingcode/model';
 import { Effect } from 'effect';
 import {
   makeState,
@@ -11,7 +11,11 @@ import {
   endReason,
 } from '../helpers/agent-harness.js';
 
-vi.mock('../../src/infra/config.js', () => ({
+vi.mock('@codingcode/infra', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+
   loadConfig: () => ({
     maxSteps: 100,
     maxStopContinuations: 2,
@@ -25,7 +29,8 @@ vi.mock('../../src/infra/config.js', () => ({
       promptMaxBytes: 8192,
     },
   }),
-}));
+  };
+});
 
 const mockState = makeState({ sessionId: 'test-sid', cwd: '/tmp', title: 'test' });
 

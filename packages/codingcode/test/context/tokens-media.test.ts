@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   estimateMessageTokens,
   estimateTokensForPart,
-} from '../../src/context/tokens.js';
-import type { StoredMediaPart } from '../../src/session/types.js';
+} from '@codingcode/context';
+import type { StoredMediaPart } from '@codingcode/session';
 
 function image(extra: Partial<StoredMediaPart> = {}): StoredMediaPart {
   return { type: 'media', asset: 'a.png', mimeType: 'image/png', bytes: 1024, ...extra };

@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { todoWriteTool } from '../../src/tools/domains/self/todo-write.js';
-import { todoReadTool } from '../../src/tools/domains/self/todo-read.js';
-import { TodoLayer } from '../../src/todo/todo.js';
-import type { TodoItem } from '../../src/todo/types.js';
+import { todoWriteTool, todoReadTool } from '@codingcode/self';
+import { TodoLayer } from '@codingcode/todo';
+import type { TodoItem } from '@codingcode/todo';
 
 const tool = todoWriteTool;
 
@@ -23,7 +22,7 @@ describe('todo_write tool', () => {
               { step: 'third', status: 'completed' },
             ],
           },
-          { sessionId: 'test-agent', model: 'test-model' }
+          { session: { cwd: '/tmp', sessionId: 'test-agent' }, model: 'test-model' }
         )
         .pipe(Effect.provide(TodoLayer))
     );
@@ -35,7 +34,7 @@ describe('todo_write tool', () => {
   it('returns a cleared notice for an empty plan', async () => {
     const result = await Effect.runPromise(
       tool
-        .execute({ plan: [] }, { sessionId: 'test-agent', model: 'test-model' })
+        .execute({ plan: [] }, { session: { cwd: '/tmp', sessionId: 'test-agent' }, model: 'test-model' })
         .pipe(Effect.provide(TodoLayer))
     );
     expect(result).toBe('Todo list cleared (now empty).');
@@ -96,7 +95,7 @@ describe('todo_read tool', () => {
 
   it('returns an empty notice for an unknown sessionId', async () => {
     const result = await Effect.runPromise(
-      readTool.execute({}, { sessionId: 'test-agent', model: 'test-model' }).pipe(Effect.provide(TodoLayer))
+      readTool.execute({}, { session: { cwd: '/tmp', sessionId: 'test-agent' }, model: 'test-model' }).pipe(Effect.provide(TodoLayer))
     );
     expect(result).toBe('Todo list is empty.');
   });
@@ -109,8 +108,8 @@ describe('todo_read tool', () => {
     ];
     const result = await Effect.runPromise(
       Effect.gen(function* () {
-        yield* todoWriteTool.execute({ plan }, { sessionId: 'test-agent', model: 'test-model' });
-        return yield* readTool.execute({}, { sessionId: 'test-agent', model: 'test-model' });
+        yield* todoWriteTool.execute({ plan }, { session: { cwd: '/tmp', sessionId: 'test-agent' }, model: 'test-model' });
+        return yield* readTool.execute({}, { session: { cwd: '/tmp', sessionId: 'test-agent' }, model: 'test-model' });
       }).pipe(Effect.provide(TodoLayer))
     );
     expect(result).toBe(
@@ -123,11 +122,11 @@ describe('todo_read tool', () => {
       Effect.gen(function* () {
         yield* todoWriteTool.execute(
           { plan: [{ step: 'a1', status: 'pending' }] },
-          { sessionId: 'agent-a', model: 'test-model' }
+          { session: { cwd: '/tmp', sessionId: 'agent-a' }, model: 'test-model' }
         );
         return {
-          readA: yield* readTool.execute({}, { sessionId: 'agent-a', model: 'test-model' }),
-          readB: yield* readTool.execute({}, { sessionId: 'agent-b', model: 'test-model' }),
+          readA: yield* readTool.execute({}, { session: { cwd: '/tmp', sessionId: 'agent-a' }, model: 'test-model' }),
+          readB: yield* readTool.execute({}, { session: { cwd: '/tmp', sessionId: 'agent-b' }, model: 'test-model' }),
         };
       }).pipe(Effect.provide(TodoLayer))
     );
@@ -140,10 +139,10 @@ describe('todo_read tool', () => {
       Effect.gen(function* () {
         yield* todoWriteTool.execute(
           { plan: [{ step: 'x', status: 'pending' }] },
-          { sessionId: 'test-agent', model: 'test-model' }
+          { session: { cwd: '/tmp', sessionId: 'test-agent' }, model: 'test-model' }
         );
-        yield* todoWriteTool.execute({ plan: [] }, { sessionId: 'test-agent', model: 'test-model' });
-        return yield* readTool.execute({}, { sessionId: 'test-agent', model: 'test-model' });
+        yield* todoWriteTool.execute({ plan: [] }, { session: { cwd: '/tmp', sessionId: 'test-agent' }, model: 'test-model' });
+        return yield* readTool.execute({}, { session: { cwd: '/tmp', sessionId: 'test-agent' }, model: 'test-model' });
       }).pipe(Effect.provide(TodoLayer))
     );
     expect(result).toBe('Todo list is empty.');

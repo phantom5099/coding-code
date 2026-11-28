@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "electron-vite build",
-    "bundle:backend": "pnpm --filter @codingcode/core run bundle",
+    "bundle:backend": "pnpm --filter @codingcode/app run bundle",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "clean:out": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\"",

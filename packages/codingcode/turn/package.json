@@ -1,0 +1,14 @@
+{
+  "name": "@codingcode/turn",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codingcode/util": "workspace:*",
+    "@codingcode/model": "workspace:*",
+    "@codingcode/sink": "workspace:*",
+    "effect": "^3.21.2"
+  }
+}

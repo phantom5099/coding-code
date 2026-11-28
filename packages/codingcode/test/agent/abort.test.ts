@@ -1,15 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeState, runAgentTurn, textDeltas } from '../helpers/agent-harness.js';
-import type { EndTransition, FrameBody } from '../../src/sink/types.js';
+import type { EndTransition, FrameBody } from '@codingcode/sink';
 
-vi.mock('../../src/infra/config.js', () => ({
+vi.mock('@codingcode/infra', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+
   loadConfig: () => ({
     maxSteps: 5,
     maxStopContinuations: 2,
     context: { compactionModel: '' },
     memory: { enabled: false },
   }),
-}));
+  };
+});
 
 const state = makeState({ sessionId: 'abort-sid', cwd: '/tmp', title: 'abort' });
 

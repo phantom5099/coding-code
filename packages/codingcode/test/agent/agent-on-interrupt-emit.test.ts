@@ -5,8 +5,8 @@ import { Effect, Fiber } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
-import { HookService } from '../../src/hooks/port.js';
-import { HookLayer } from '../../src/hooks/hooks.js';
+import { HookService } from '@codingcode/hook';
+import { HookLayer } from '@codingcode/hook';
 import { useTempHome } from '../helpers/temp-home.js';
 
 vi.mock('child_process', () => ({
@@ -51,7 +51,12 @@ describe('Effect.onInterrupt 回调里 yield* HookService + emit（agent.ts abor
         Effect.gen(function* () {
           const hooks = yield* HookService;
           yield* hooks
-            .emit('agent.turn.end', { projectPath: testDir, status: 'aborted' })
+            .emit('agent.turn.end', {
+              sessionId: 'test-sid',
+              turnId: 1,
+              projectPath: testDir,
+              status: 'aborted',
+            })
             .pipe(Effect.ignore);
         })
       )

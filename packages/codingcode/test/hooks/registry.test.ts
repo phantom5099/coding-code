@@ -6,8 +6,8 @@ import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
-import { HookService } from '../../src/hooks/port.js';
-import { HookLayer } from '../../src/hooks/hooks.js';
+import { HookService } from '@codingcode/hook';
+import { HookLayer } from '@codingcode/hook';
 import { useTempHome } from '../helpers/temp-home.js';
 
 const AppLayer = HookLayer;
@@ -69,27 +69,45 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
     writeFileSync(join(tempHome.configDir, 'hooks.yaml'), hookYaml(hooks));
   }
 
+  const beforePayload = (projectPath: string = testDir, toolName = 'read_file') => ({
+    toolName,
+    args: {},
+    sessionId: 'test-sid',
+    turnId: 1,
+    projectPath,
+    callId: 'c1',
+  });
+
   it('把 hooks.yaml 里的观察者注册到对应点，并把 payload 原样送进子进程 stdin', async () => {
     writeHooksYaml([{ name: 'h-a', point: 'tool.execute.before', command: 'cmd-a' }]);
 
+    const payload = beforePayload(testDir, 'read_file');
     await runWithLayer(
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.before', { projectPath: testDir, toolName: 'read_file' });
+        yield* hooks.emit('tool.execute.before', payload);
       })
     );
 
     expect(spawnRecords).toHaveLength(1);
     expect(spawnRecords[0]!.command).toBe('cmd-a');
-    expect(spawnRecords[0]!.payload).toEqual({ projectPath: testDir, toolName: 'read_file' });
+    expect(spawnRecords[0]!.payload).toEqual(payload);
   });
 
   it('emit 在没有 handler 的点上是 no-op：不抛错、不 spawn', async () => {
     await runWithLayer(
       Effect.gen(function* () {
         const hooks = yield* HookService;
-        yield* hooks.emit('tool.execute.after', { projectPath: testDir });
+        yield* hooks.emit('tool.execute.after', {
+          toolName: 'read_file',
+          args: {},
+          result: '',
+          sessionId: 'test-sid',
+          turnId: 1,
+          projectPath: testDir,
+          callId: 'c1',
+        });
       })
     );
     expect(spawnRecords).toHaveLength(0);
@@ -104,7 +122,7 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+        yield* hooks.emit('tool.execute.before', beforePayload());
       })
     );
 
@@ -122,7 +140,7 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+        yield* hooks.emit('tool.execute.before', beforePayload());
       })
     );
 
@@ -136,7 +154,10 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.before', { projectPath: testDir, label });
+        yield* hooks.emit('tool.execute.before', {
+          ...beforePayload(),
+          args: { label },
+        });
       });
 
     await runWithLayer(program('one'));
@@ -155,9 +176,12 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.before', { projectPath: '/somewhere/else' });
-        yield* hooks.emit('tool.execute.before', { projectPath: undefined });
-        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+        yield* hooks.emit('tool.execute.before', beforePayload('/somewhere/else'));
+        yield* hooks.emit('tool.execute.before', {
+          ...beforePayload(),
+          projectPath: undefined as unknown as string,
+        });
+        yield* hooks.emit('tool.execute.before', beforePayload(testDir));
       })
     );
 
@@ -175,7 +199,7 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+        yield* hooks.emit('tool.execute.before', beforePayload());
         return 'emit survived';
       })
     );
@@ -190,7 +214,7 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(join(testDir, 'nope'));
-        yield* hooks.emit('tool.execute.before', { projectPath: join(testDir, 'nope') });
+        yield* hooks.emit('tool.execute.before', beforePayload(join(testDir, 'nope')));
       })
     );
     expect(spawnRecords).toHaveLength(0);
@@ -199,25 +223,25 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
   it('emit 把 payload 的全部字段（含非字符串值）序列化给子进程', async () => {
     writeHooksYaml([{ name: 'h-a', point: 'tool.execute.after', command: 'cmd-a' }]);
 
-    await runWithLayer(
-      Effect.gen(function* () {
-        const hooks = yield* HookService;
-        yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.after', {
-          projectPath: testDir,
-          toolName: 'write_file',
-          durationMs: 42,
-          args: { path: '/tmp/x', content: 'hi' },
-        });
-      })
-    );
-
-    expect(spawnRecords[0]!.payload).toEqual({
+    const payload = {
       projectPath: testDir,
       toolName: 'write_file',
       durationMs: 42,
       args: { path: '/tmp/x', content: 'hi' },
-    });
+      result: 'ok',
+      sessionId: 'test-sid',
+      turnId: 1,
+      callId: 'c1',
+    };
+    await runWithLayer(
+      Effect.gen(function* () {
+        const hooks = yield* HookService;
+        yield* hooks.reloadUserHooks(testDir);
+        yield* hooks.emit('tool.execute.after', payload);
+      })
+    );
+
+    expect(spawnRecords[0]!.payload).toEqual(payload);
   });
 
   it('只在全局层定义的 hook 在项目层没写任何东西时照常生效', async () => {
@@ -227,7 +251,7 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+        yield* hooks.emit('tool.execute.before', beforePayload());
       })
     );
 
@@ -249,7 +273,7 @@ describe('HookService.emit（YAML 定义的观察者）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+        yield* hooks.emit('tool.execute.before', beforePayload());
       })
     );
 

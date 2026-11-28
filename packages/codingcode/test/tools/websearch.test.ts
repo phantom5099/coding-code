@@ -4,7 +4,7 @@ import {
   webSearchTool,
   parseBingHtml,
   parseBaiduHtml,
-} from '../../src/tools/domains/web/search.js';
+} from '@codingcode/web';
 import { testSandboxPolicy } from '../helpers/sandbox.js';
 
 const ctx = { projectPath: process.cwd(), model: 'test-model', sandboxPolicy: testSandboxPolicy(process.cwd()) };

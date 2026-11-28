@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect } from 'effect';
-import { McpService } from '../../src/mcp/port.js';
-import { McpLayer } from '../../src/mcp/mcp.js';
+import { McpService } from '@codingcode/mcp';
+import { McpLayer } from '@codingcode/mcp';
 
 interface MockTool {
   name: string;
@@ -10,8 +10,10 @@ interface MockTool {
   readOnlyHint?: boolean;
 }
 
-// McpClient 桩：把实例留在 static 数组里，供测试断言建连/断连次数
-vi.mock('../../src/mcp/client.js', () => {
+// McpClient 桩：把实例留在 static 数组里，供测试断言建连/断连次数。
+// mock 物理模块：mcp 包内部走相对导入，必须拦在子路径上才能传导到实现
+vi.mock('@codingcode/mcp/client', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
   class MockMcpClient {
     static instances: MockMcpClient[] = [];
     connectCalls = 0;
@@ -37,10 +39,10 @@ vi.mock('../../src/mcp/client.js', () => {
       this.disconnectCalls++;
     }
   }
-  return { McpClient: MockMcpClient, McpError: class McpError extends Error {} };
+  return { ...actual, McpClient: MockMcpClient };
 });
 
-vi.mock('../../src/mcp/config.js', () => ({
+vi.mock('@codingcode/mcp/config', () => ({
   resolveMcpConfig: vi.fn(() => []),
 }));
 
@@ -52,7 +54,7 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 
 /** 桩 client 的实际实例（vi.mock 工厂里的 static 数组） */
 async function clients(): Promise<any[]> {
-  const mod = await import('../../src/mcp/client.js');
+  const mod = await import('@codingcode/mcp');
   return (mod.McpClient as any).instances;
 }
 
@@ -80,7 +82,7 @@ describe('McpService（syncConnections / listProjectMcpTools / status）', () =>
   beforeEach(async () => {
     mockConfigs = [];
     (await clients()).length = 0;
-    const { resolveMcpConfig } = await import('../../src/mcp/config.js');
+    const { resolveMcpConfig } = await import('@codingcode/mcp');
     (resolveMcpConfig as any).mockImplementation(() => mockConfigs);
   });
 

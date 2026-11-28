@@ -1,0 +1,17 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../util" },
+    { "path": "../sink" },
+    { "path": "../hook" },
+    { "path": "../sandbox" },
+    { "path": "../session" },
+    { "path": "../tool" }
+  ]
+}

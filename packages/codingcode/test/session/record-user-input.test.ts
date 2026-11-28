@@ -3,11 +3,11 @@ import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { encodeProjectPath } from '../../src/util/path.js';
-import { computePaths } from '../../src/session/paths.js';
-import { readSessionMeta } from '../../src/session/file-ops.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { encodeProjectPath } from '@codingcode/util';
+import { computePaths } from '@codingcode/session';
+import { readSessionMeta } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { text } from '../helpers/parts.js';
 
@@ -31,9 +31,9 @@ function newDir(): string {
 const create = (dir: string) =>
   Effect.gen(function* () {
     const svc = yield* SessionService;
-    return yield* svc.create(dir, {
+    return yield* svc.create({
+      cwd: dir,
       model: 'test-model',
-
       permissionMode: 'askBeforeExec',
     });
   });
@@ -46,7 +46,7 @@ describe('recordUserInput — steer input lands under the current turnId', () =>
       const res = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           // 先落一条常规用户消息，建立 turnId=1
           yield* svc.recordUser(state, text('first turn'));
           const before = state.currentTurnId;
@@ -71,13 +71,13 @@ describe('recordUserInput — steer input lands under the current turnId', () =>
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.recordUser(state, text('fix the login bug'));
           yield* svc.recordUserInput(state, text('a steer that must not become the title'));
         })
       );
 
-      expect(readSessionMeta(computePaths(dir, created.sessionId).transcriptPath)?.title).toBe(
+      expect(readSessionMeta(computePaths({ cwd: dir, sessionId: created.sessionId }).transcriptPath)?.title).toBe(
         'fix the login bug'
       );
     } finally {
@@ -92,12 +92,12 @@ describe('recordUserInput — steer input lands under the current turnId', () =>
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.recordUserInput(state, text('first thing said is a steer'));
         })
       );
 
-      expect(readSessionMeta(computePaths(dir, created.sessionId).transcriptPath)?.title).toBe(
+      expect(readSessionMeta(computePaths({ cwd: dir, sessionId: created.sessionId }).transcriptPath)?.title).toBe(
         'first thing said is a steer'
       );
     } finally {
@@ -112,7 +112,7 @@ describe('recordUserInput — steer input lands under the current turnId', () =>
       const res = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.recordUser(state, text('turn one'));
           const afterOne = state.currentTurnId;
           yield* svc.recordUserInput(state, text('steer'));
@@ -137,7 +137,7 @@ describe('recordUserInput — steer input lands under the current turnId', () =>
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.recordUser(state, text('turn one'));
           yield* svc.recordUserInput(state, parts);
         })
@@ -146,7 +146,7 @@ describe('recordUserInput — steer input lands under the current turnId', () =>
       const turns = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.readUITurns(created.sessionId, dir);
+          return yield* svc.readUITurns({ cwd: dir, sessionId: created.sessionId });
         })
       );
 

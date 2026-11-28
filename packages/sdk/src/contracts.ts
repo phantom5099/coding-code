@@ -1,34 +1,39 @@
 import type {
+  AgentConfigView,
   Automation,
   CheckpointDiff,
   CodeRollbackResult,
+  CompressResult,
   CreateAutomationInput,
+  ForkResult,
+  HookConfigEntry,
+  InputPart,
   McpServerConfig,
   McpServerEntry,
+  RollbackBothResult,
+  RollbackContextResult,
   RollbackPreviewDiff,
   RunAutomationResult,
   SelectableModel,
   SessionSummary,
+  SkillEntry,
   UITurn,
   UpdateAutomationInput,
   UserHookConfig,
 } from './dto.js';
-import type { PermissionMode, TokenUsage } from './types.js';
+import type { PermissionMode } from './types.js';
 import type { Frame } from './protocol.js';
 
-export interface RollbackContextResult {
-  turns: UITurn[];
-}
-
-export interface RollbackBothResult {
-  turns: UITurn[];
-  codeResult: CodeRollbackResult;
-}
-
-export interface ForkResult {
-  sessionId: string;
-  turns: UITurn[];
-}
+export type {
+  AgentConfigView,
+  CompressResult,
+  ForkResult,
+  InputPart,
+  RollbackBothResult,
+  RollbackContextResult,
+  RunAutomationResult,
+  SkillEntry,
+};
 
 export interface SessionClient {
   createSession(input: {
@@ -93,40 +98,15 @@ export interface SessionClient {
   }): Promise<void>;
 }
 
-/**
- * 输入内容部件的线上形状：文本或媒体。
- *
- * 媒体随 base64 data URL 内联在同一个请求里 —— 新会话的请求 id 是 `_`，
- * 那一刻还没有 sessionId、资产无处安放。
- */
-export type InputPart =
-  | { type: 'text'; text: string }
-  | { type: 'media'; dataUrl: string; filename?: string };
-
-/**
- * 单个媒体附件的字节上限，与服务端准入闸口
- * `packages/codingcode/src/session/assets.ts` 的 `MAX_MEDIA_BYTES` 同值同义。
- * 前端只用它做提交前的 UX 早退，最终准入以服务端校验为准。
- */
-export const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
-
 export interface AgentRuntimeClient {
-  /**
-   * 提交一轮输入。
-   *
-   * 命中活跃回合时服务端把输入并入当前回合（202），返回 `{ kind: 'queued' }`；
-   * 否则开新回合并返回 `{ kind: 'turn', stream }`。
-   */
   submitInput(
     input: InputPart[],
     options: {
       sessionId?: string;
-      /** 前端队列项 id：命中活跃回合时原样回显在 user_input 帧上 */
       inputId?: string;
       cwd: string;
       model?: string;
       signal?: AbortSignal;
-      /** 用户在输入框显式 @ 的 skill，name 供对齐、path 为唯一查找键 */
       skills?: Array<{ name: string; path: string }>;
     }
   ): Promise<
@@ -139,32 +119,17 @@ export interface AgentRuntimeClient {
     approvalId: string;
     response: string;
   }): Promise<void>;
-  /** 用户回答 ask_user 提问；options 为所选选项字母（如 ['A','C']），custom 为「其他」填空 */
   sendAskUserAnswer(input: {
     sessionId: string;
     askId: string;
     options?: string[];
     custom?: string;
   }): Promise<void>;
-  /** model 为空时用全局默认模型压缩 */
   compact(input: { sessionId: string; cwd: string; model?: string }): Promise<CompressResult>;
-}
-
-export interface CompressResult {
-  didCompress: boolean;
-  released: number;
-  promptEstimate: number;
 }
 
 export interface ModelClient {
   listModels(): Promise<{ models: SelectableModel[]; activeId: string }>;
-}
-
-/** config.yaml 的 agent 配置投影。 */
-export interface AgentConfigView {
-  maxSteps: number;
-  maxStopContinuations: number;
-  permissionMode: PermissionMode;
 }
 
 export interface SettingsClient {
@@ -184,8 +149,8 @@ export interface SettingsClient {
   createMcpServer(input: { cwd: string; server: McpServerConfig }): Promise<void>;
   updateMcpServer(input: { cwd: string; name: string; server: McpServerConfig }): Promise<void>;
   deleteMcpServer(input: { cwd: string; name: string }): Promise<void>;
-  listSkills(input: { cwd: string }): Promise<Array<{ name: string; description: string; skillPath: string }>>;
-  listHooks(input: { cwd: string }): Promise<UserHookConfig[]>;
+  listSkills(input: { cwd: string }): Promise<SkillEntry[]>;
+  listHooks(input: { cwd: string }): Promise<HookConfigEntry[]>;
   createHook(input: { cwd: string; hook: UserHookConfig }): Promise<void>;
   updateHook(input: { cwd: string; name: string; hook: UserHookConfig }): Promise<void>;
   deleteHook(input: { cwd: string; name: string }): Promise<void>;
@@ -198,12 +163,10 @@ export interface SettingsClient {
   }): Promise<void>;
 }
 
-/** 定时任务的增删改查与立即执行。 */
 export interface AutomationClient {
   listAutomations(): Promise<Automation[]>;
   createAutomation(input: CreateAutomationInput): Promise<Automation>;
   updateAutomation(id: string, patch: UpdateAutomationInput): Promise<Automation>;
   deleteAutomation(id: string): Promise<void>;
-  /** 不等下个 cron 点，立即跑一次，返回新建的会话 id。 */
   runAutomationOnce(id: string): Promise<RunAutomationResult>;
 }

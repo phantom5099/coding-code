@@ -2,10 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { estimateTokensForContent } from '../../src/context/tokens.js';
+import { estimateTokensForContent } from '@codingcode/context';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
-vi.mock('../../src/infra/config.js', () => ({
+vi.mock('@codingcode/infra', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+
   loadConfig: () => ({
     context: {
       compactionModel: '',
@@ -17,7 +21,8 @@ vi.mock('../../src/infra/config.js', () => ({
       promptMaxBytes: 8192,
     },
   }),
-}));
+  };
+});
 
 const base = useTempProjectBase();
 

@@ -3,15 +3,15 @@ import { rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
 import {
   computePaths,
   projectSessionsDir,
   subagentOwnerOf,
   transcriptPathOf,
-} from '../../src/session/paths.js';
-import { deleteSession, sessionJsonlPathFromCwd } from '../../src/session/file-ops.js';
+} from '@codingcode/session';
+import { deleteSession } from '@codingcode/session/file-ops';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -28,18 +28,18 @@ const createOpts = {
 
 describe('subagentOwnerOf', () => {
   it('no parent: undefined (top-level session)', () => {
-    expect(subagentOwnerOf(undefined, undefined)).toBeUndefined();
-    expect(subagentOwnerOf(undefined, ['x'])).toBeUndefined();
+    expect(subagentOwnerOf({})).toBeUndefined();
+    expect(subagentOwnerOf({ parentChain: ['x'] })).toBeUndefined();
   });
 
   it('chain absent: falls back to the direct parent (legacy layout)', () => {
-    expect(subagentOwnerOf('parent', undefined)).toBe('parent');
-    expect(subagentOwnerOf('parent', [])).toBe('parent');
+    expect(subagentOwnerOf({ parentSessionId: 'parent' })).toBe('parent');
+    expect(subagentOwnerOf({ parentSessionId: 'parent', parentChain: [] })).toBe('parent');
   });
 
   it('chain present: last element is the root session', () => {
-    expect(subagentOwnerOf('a', ['a', 'root'])).toBe('root');
-    expect(subagentOwnerOf('a', ['root'])).toBe('root');
+    expect(subagentOwnerOf({ parentSessionId: 'a', parentChain: ['a', 'root'] })).toBe('root');
+    expect(subagentOwnerOf({ parentSessionId: 'a', parentChain: ['root'] })).toBe('root');
   });
 });
 
@@ -50,21 +50,26 @@ describe('transcriptPathOf with parentChain', () => {
     const mid = randomUUID();
     const leaf = randomUUID();
 
-    const leafPath = transcriptPathOf(cwd, leaf, mid, [mid, root]);
+    const leafPath = transcriptPathOf({
+      cwd,
+      sessionId: leaf,
+      parentSessionId: mid,
+      parentChain: [mid, root],
+    });
     const sessionsDir = projectSessionsDir(cwd);
     expect(leafPath).toBe(join(sessionsDir, root, 'subagents', `${leaf}.jsonl`));
 
     // 直接派生的子会话同样在根名下：全部子智能体共享一个 subagents/ 目录
-    expect(transcriptPathOf(cwd, mid, root, [root])).toBe(
-      join(sessionsDir, root, 'subagents', `${mid}.jsonl`)
-    );
+    expect(
+      transcriptPathOf({ cwd, sessionId: mid, parentSessionId: root, parentChain: [root] })
+    ).toBe(join(sessionsDir, root, 'subagents', `${mid}.jsonl`));
   });
 
   it('chain absent keeps the legacy per-parent layout', () => {
     const cwd = '/tmp/test-owner-legacy';
     const parent = randomUUID();
     const child = randomUUID();
-    expect(transcriptPathOf(cwd, child, parent)).toBe(
+    expect(transcriptPathOf({ cwd, sessionId: child, parentSessionId: parent })).toBe(
       join(projectSessionsDir(cwd), parent, 'subagents', `${child}.jsonl`)
     );
   });
@@ -72,7 +77,9 @@ describe('transcriptPathOf with parentChain', () => {
   it('top-level stays directly under sessions/', () => {
     const cwd = '/tmp/test-owner-top';
     const sid = randomUUID();
-    expect(transcriptPathOf(cwd, sid)).toBe(join(projectSessionsDir(cwd), `${sid}.jsonl`));
+    expect(transcriptPathOf({ cwd, sessionId: sid })).toBe(
+      join(projectSessionsDir(cwd), `${sid}.jsonl`)
+    );
   });
 
   it('computePaths forwards the chain', () => {
@@ -80,12 +87,8 @@ describe('transcriptPathOf with parentChain', () => {
     const root = randomUUID();
     const mid = randomUUID();
     const leaf = randomUUID();
-    expect(computePaths(cwd, leaf, mid, [mid, root]).transcriptPath).toBe(
-      transcriptPathOf(cwd, leaf, mid, [mid, root])
-    );
-    expect(sessionJsonlPathFromCwd(cwd, leaf, mid, [mid, root])).toBe(
-      transcriptPathOf(cwd, leaf, mid, [mid, root])
-    );
+    const locator = { cwd, sessionId: leaf, parentSessionId: mid, parentChain: [mid, root] };
+    expect(computePaths(locator).transcriptPath).toBe(transcriptPathOf(locator));
   });
 });
 
@@ -95,7 +98,7 @@ describe('SessionService.create with parentChain', () => {
     const root = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, createOpts);
+        return yield* svc.create({ cwd, ...createOpts });
       })
     );
 
@@ -103,10 +106,14 @@ describe('SessionService.create with parentChain', () => {
       const mid = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(cwd, createOpts, {
-            parentSessionId: root.sessionId,
-            parentChain: [root.sessionId],
-            agentName: 'mid',
+          return yield* svc.create({
+            cwd,
+            ...createOpts,
+            lineage: {
+              parentSessionId: root.sessionId,
+              parentChain: [root.sessionId],
+            },
+            subagent: { agentName: 'mid' },
           });
         })
       );
@@ -115,10 +122,14 @@ describe('SessionService.create with parentChain', () => {
       const leaf = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(cwd, createOpts, {
-            parentSessionId: mid.sessionId,
-            parentChain: [mid.sessionId, root.sessionId],
-            agentName: 'leaf',
+          return yield* svc.create({
+            cwd,
+            ...createOpts,
+            lineage: {
+              parentSessionId: mid.sessionId,
+              parentChain: [mid.sessionId, root.sessionId],
+            },
+            subagent: { agentName: 'leaf' },
           });
         })
       );
@@ -139,26 +150,24 @@ describe('SessionService.create with parentChain', () => {
         const reloaded = await run(
           Effect.gen(function* () {
             const svc = yield* SessionService;
-            return yield* svc.load(cwd, leaf.sessionId, leaf.parentSessionId, leaf.parentChain);
+            return yield* svc.load({
+              cwd,
+              sessionId: leaf.sessionId,
+              parentSessionId: leaf.parentSessionId,
+              parentChain: leaf.parentChain,
+            });
           })
         );
         expect(reloaded.parentChain).toEqual([mid.sessionId, root.sessionId]);
         expect(reloaded.agentName).toBe('leaf');
       } finally {
-        rmSync(
-          join(
-            base.dir,
-            computePaths(cwd, leaf.sessionId, mid.sessionId, [mid.sessionId, root.sessionId])
-              .projectPath
-          ),
-          {
-            recursive: true,
-            force: true,
-          }
-        );
+        rmSync(join(base.dir, computePaths(leaf).projectPath), {
+          recursive: true,
+          force: true,
+        });
       }
     } finally {
-      rmSync(join(base.dir, computePaths(cwd, root.sessionId).projectPath), {
+      rmSync(join(base.dir, computePaths(root).projectPath), {
         recursive: true,
         force: true,
       });
@@ -170,14 +179,14 @@ describe('SessionService.create with parentChain', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, createOpts);
+        return yield* svc.create({ cwd, ...createOpts });
       })
     );
     try {
       expect(state.parentChain).toBeUndefined();
       expect(existsSync(join(projectSessionsDir(cwd), `${state.sessionId}.jsonl`))).toBe(true);
     } finally {
-      rmSync(join(base.dir, computePaths(cwd, state.sessionId).projectPath), {
+      rmSync(join(base.dir, computePaths(state).projectPath), {
         recursive: true,
         force: true,
       });
@@ -191,7 +200,7 @@ describe('deleteSession', () => {
     const root = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, createOpts);
+        return yield* svc.create({ cwd, ...createOpts });
       })
     );
 
@@ -199,20 +208,28 @@ describe('deleteSession', () => {
       const mid = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(cwd, createOpts, {
-            parentSessionId: root.sessionId,
-            parentChain: [root.sessionId],
-            agentName: 'mid',
+          return yield* svc.create({
+            cwd,
+            ...createOpts,
+            lineage: {
+              parentSessionId: root.sessionId,
+              parentChain: [root.sessionId],
+            },
+            subagent: { agentName: 'mid' },
           });
         })
       );
       const leaf = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(cwd, createOpts, {
-            parentSessionId: mid.sessionId,
-            parentChain: [mid.sessionId, root.sessionId],
-            agentName: 'leaf',
+          return yield* svc.create({
+            cwd,
+            ...createOpts,
+            lineage: {
+              parentSessionId: mid.sessionId,
+              parentChain: [mid.sessionId, root.sessionId],
+            },
+            subagent: { agentName: 'leaf' },
           });
         })
       );
@@ -223,13 +240,13 @@ describe('deleteSession', () => {
       expect(existsSync(join(subagentsDir, `${mid.sessionId}.jsonl`))).toBe(true);
       expect(existsSync(join(subagentsDir, `${leaf.sessionId}.jsonl`))).toBe(true);
 
-      deleteSession(root.sessionId, cwd);
+      deleteSession({ cwd, sessionId: root.sessionId });
 
       expect(existsSync(join(sessionsDir, `${root.sessionId}.jsonl`))).toBe(false);
       // subagents/ 连同全部后代一并删除
       expect(existsSync(join(sessionsDir, root.sessionId))).toBe(false);
     } finally {
-      rmSync(join(base.dir, computePaths(cwd, root.sessionId).projectPath), {
+      rmSync(join(base.dir, computePaths(root).projectPath), {
         recursive: true,
         force: true,
       });

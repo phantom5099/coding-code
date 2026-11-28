@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -7,7 +7,7 @@ import {
   resolveMemoryPath,
   enforceMaxBytes,
   writeMemoryFileAtomic,
-} from '../../src/memory/storage.js';
+} from '@codingcode/memory';
 
 const tmpDir = path.join(os.tmpdir(), 'memory-test');
 
@@ -51,7 +51,7 @@ describe('writeMemoryFileAtomic', () => {
   it('writes file atomically', () => {
     const file = path.join(tmpDir, 'atomic.md');
     const content = 'Test content';
-    writeMemoryFileAtomic(file, content);
+    writeMemoryFileAtomic({ path: file, content });
     expect(fs.existsSync(file)).toBe(true);
     expect(fs.readFileSync(file, 'utf-8')).toBe(content);
   });
@@ -59,7 +59,7 @@ describe('writeMemoryFileAtomic', () => {
   it('creates parent directories', () => {
     const file = path.join(tmpDir, 'deep/nested/dir/file.md');
     const content = 'Nested content';
-    writeMemoryFileAtomic(file, content);
+    writeMemoryFileAtomic({ path: file, content });
     expect(fs.existsSync(file)).toBe(true);
     expect(fs.readFileSync(file, 'utf-8')).toBe(content);
   });

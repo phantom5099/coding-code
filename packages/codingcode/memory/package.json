@@ -1,0 +1,16 @@
+﻿{
+    "name":  "@codingcode/memory",
+    "version":  "0.2.0",
+    "type":  "module",
+    "exports":  {
+                    ".":  "./src/index.ts",
+                    "./config":  "./src/config.ts"
+                },
+    "dependencies":  {
+                         "@codingcode/util":  "workspace:*",
+                         "@codingcode/infra":  "workspace:*",
+                         "@codingcode/model":  "workspace:*",
+                         "@codingcode/session":  "workspace:*",
+                         "effect":  "^3.21.2"
+                     }
+}

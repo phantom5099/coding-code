@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { createServer } from '../../src/server/index.js';
-import { SessionService } from '../../src/session/port.js';
-import { ApprovalService } from '../../src/approval/port.js';
-import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import { HookService } from '../../src/hooks/port.js';
-import { SkillService } from '../../src/skills/port.js';
-import { McpService } from '../../src/mcp/port.js';
-import { MemoryService } from '../../src/memory/port.js';
-import { SchedulerService } from '../../src/scheduler/port.js';
-import { ContextService } from '../../src/context/port.js';
-import { CheckpointService } from '../../src/checkpoint/port.js';
-import { HookLayer } from '../../src/hooks/hooks.js';
-import { ApprovalWaitLayer } from '../../src/approval/wait.js';
-import { ApprovalLayer } from '../../src/approval/approval.js';
-import { EventSinkLayer } from '../../src/sink/sink.js';
+import { createServer } from '@codingcode/http';
+import { SessionService } from '@codingcode/session';
+import { ApprovalService } from '@codingcode/approval';
+import { ApprovalWaitService } from '@codingcode/approval';
+import { HookService } from '@codingcode/hook';
+import { SkillService } from '@codingcode/skill';
+import { McpService } from '@codingcode/mcp';
+import { MemoryService } from '@codingcode/memory';
+import { SchedulerService } from '@codingcode/scheduler';
+import { ContextService } from '@codingcode/context';
+import { CheckpointService } from '@codingcode/checkpoint';
+import { HookLayer } from '@codingcode/hook';
+import { ApprovalWaitLayer } from '@codingcode/approval';
+import { ApprovalLayer } from '@codingcode/approval';
+import { EventSinkLayer } from '@codingcode/sink';
 
 const mockCompactWithLLM = vi.fn();
 
@@ -91,7 +91,7 @@ const MockContextLayer = Layer.succeed(ContextService, {
 
 const MockCheckpointLayer = Layer.succeed(CheckpointService, {
   _tag: 'Checkpoint' as const,
-  snapshotBeforeWrite: () => Effect.void,
+  ensureBaseline: () => Effect.void,
   getCheckpointDiff: () => Effect.succeed({ turnId: 0, files: [] }),
   revertCheckpointFiles: () =>
     Effect.succeed({
@@ -142,12 +142,14 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
     expect(res.status).toBe(200);
     expect(mockCompactWithLLM).toHaveBeenCalledTimes(1);
 
-    const args = mockCompactWithLLM.mock.calls[0];
+    const req = mockCompactWithLLM.mock.calls[0]?.[0] as {
+      session: { cwd: string; sessionId: string };
+      model: string;
+    };
     // context 现在收的是会话身份（cwd + sessionId），转录路径由它自己拼
-    const ref = args?.[0] as { cwd: string; sessionId: string };
-    expect(typeof ref.cwd).toBe('string');
-    expect(typeof ref.sessionId).toBe('string');
-    expect(args?.[1]).toBe('deepseek-chat@deepseek');
+    expect(typeof req.session.cwd).toBe('string');
+    expect(typeof req.session.sessionId).toBe('string');
+    expect(req.model).toBe('deepseek-chat@deepseek');
   });
 
   it('should return CompressResult from the API', async () => {
@@ -171,7 +173,7 @@ describe('POST /api/sessions/:id/compact (manual compact)', () => {
     });
 
     expect(res.status).toBe(200);
-    const args = mockCompactWithLLM.mock.calls[0];
-    expect(args?.[1]).toBe('');
+    const req = mockCompactWithLLM.mock.calls[0]?.[0] as { model: string };
+    expect(req.model).toBe('');
   });
 });

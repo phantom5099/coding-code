@@ -3,15 +3,16 @@ import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
 
-import { estimatePromptTokensFrom } from '../../src/context/context.js';
-import { readHistory, readLastUsage, readSessionMeta } from '../../src/session/file-ops.js';
-import { estimateTokensForContent } from '../../src/context/tokens.js';
-import { encodeProjectPath } from '../../src/util/path.js';
-import { computePaths } from '../../src/session/paths.js';
-import type { SessionStoreState } from '../../src/session/types.js';
+import { estimatePromptTokensFrom } from '@codingcode/context';
+import { readHistory, readLastUsage } from '@codingcode/session/file-ops';
+import { readSessionMeta } from '@codingcode/session';
+import { estimateTokensForContent } from '@codingcode/context';
+import { encodeProjectPath } from '@codingcode/util';
+import { computePaths } from '@codingcode/session';
+import type { SessionStoreState } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { text } from '../helpers/parts.js';
 
@@ -23,7 +24,7 @@ function makeFixture(
   usage?: { prompt: number; completion: number; total: number }
 ) {
   const cwd = `/${slug}`;
-  const paths = computePaths(cwd, sessionId);
+  const paths = computePaths({ cwd, sessionId });
   const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = paths.transcriptPath;
@@ -82,7 +83,6 @@ function makeState(
   usage: { prompt: number; completion: number; total: number } | undefined
 ): SessionStoreState {
   return {
-    type: 'session_meta',
     sessionId,
     cwd,
     createdAt: new Date().toISOString(),
@@ -158,17 +158,15 @@ describe('SessionService create sets model', () => {
       const state = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'my-test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
       );
 
-      const meta = readSessionMeta(
-        computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath
-      );
+      const meta = readSessionMeta(computePaths(state).transcriptPath);
       expect(meta?.model).toBe('my-test-model');
     } finally {
       await new Promise((r) => setTimeout(r, 50));

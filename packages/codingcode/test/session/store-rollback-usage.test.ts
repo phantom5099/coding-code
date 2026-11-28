@@ -3,11 +3,11 @@ import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/session/paths.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { computePaths } from '@codingcode/session';
 
-import type { SessionStoreState } from '../../src/session/types.js';
+import type { SessionStoreState } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -26,7 +26,7 @@ function makeFixture(
   }>
 ) {
   const cwd = `/${slug}`;
-  const paths = computePaths(cwd, sessionId);
+  const paths = computePaths({ cwd, sessionId });
   mkdirSync(join(base.dir, slug, 'sessions'), { recursive: true });
   const transcriptPath = paths.transcriptPath;
 
@@ -66,7 +66,6 @@ function buildState(
   currentTurnId: number
 ): SessionStoreState {
   return {
-    type: 'session_meta',
     sessionId,
     cwd,
     createdAt: new Date().toISOString(),
@@ -91,8 +90,8 @@ describe('SessionService.rollbackToTurn - state.usage reset', () => {
       const reloaded = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          yield* svc.rollbackToTurn(state, 1, 'user rollback');
-          return yield* svc.load(fx.cwd, sessionId);
+          yield* svc.rollbackToTurn(state, { throughTurnId: 1, reason: 'user rollback' });
+          return yield* svc.load({ cwd: fx.cwd, sessionId });
         })
       );
       expect(state.usage).toBeUndefined();
@@ -118,8 +117,8 @@ describe('SessionService.rollbackToTurn - state.usage reset', () => {
       const reloaded = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          yield* svc.rollbackToTurn(state, 2, 'user rollback');
-          return yield* svc.load(fx.cwd, sessionId);
+          yield* svc.rollbackToTurn(state, { throughTurnId: 2, reason: 'user rollback' });
+          return yield* svc.load({ cwd: fx.cwd, sessionId });
         })
       );
       expect(state.usage).toEqual(usage1);
@@ -144,7 +143,7 @@ describe('SessionService.rollbackToTurn - state.usage reset', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.rollbackToTurn(state, 3, 'user rollback');
+          return yield* svc.rollbackToTurn(state, { throughTurnId: 3, reason: 'user rollback' });
         })
       );
       expect(state.usage).toEqual(usage1);

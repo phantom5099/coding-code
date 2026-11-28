@@ -1,5 +1,5 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { LLMStreamPart } from '../../src/llm/types.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { LLMStreamPart } from '@codingcode/model';
 import { text } from '../helpers/parts.js';
 
 const streamText = vi.fn();
@@ -27,7 +27,8 @@ function entry() {
   return {
     id: 'model@deepseek',
     provider: 'deepseek',
-    driver: 'openai',
+    driver: 'openai' as const,
+    protocol: 'chat' as const,
     name: 'DeepSeek',
     model: 'deepseek-chat',
     base_url: 'https://api.deepseek.com/v1',
@@ -58,7 +59,7 @@ describe('DeepSeekProvider completeStream', () => {
   });
 
   it('streams text and extracts usage from the finish part', async () => {
-    const { DeepSeekProvider } = await import('../../src/llm/providers/deepseek.js');
+    const { DeepSeekProvider } = await import('@codingcode/model');
     const provider = new DeepSeekProvider({} as any, entry());
 
     const parts = await collect(provider.completeStream(request() as any));

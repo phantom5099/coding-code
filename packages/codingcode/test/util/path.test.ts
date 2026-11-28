@@ -1,8 +1,8 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { join } from 'path';
 import { homedir, tmpdir } from 'os';
-import { normalizePath, encodeProjectPath, getGlobalDir } from '../../src/util/path.js';
-import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
+import { normalizePath, encodeProjectPath, getGlobalDir } from '@codingcode/util';
+import { ShadowGit } from '@codingcode/checkpoint/shadow-git';
 import { setFakeHome, restoreHome } from '../helpers/temp-home.js';
 
 describe('util/path：纯格式化函数', () => {

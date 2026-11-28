@@ -6,12 +6,10 @@ import { parse as parseYaml } from 'yaml';
 import {
   loadMcpConfig,
   writeMcpConfig,
-  loadGlobalMcpConfig,
-  writeGlobalMcpConfig,
   resolveMcpConfig,
-  setGlobalMcpServerEnabled,
-  setProjectMcpServerEnabled,
-} from '../../src/mcp/config.js';
+  setMcpServerEnabledConfig,
+} from '@codingcode/mcp';
+import { GLOBAL_CONFIG_SCOPE, projectConfigScope } from '@codingcode/util';
 import { useTempHome, setFakeHome } from '../helpers/temp-home.js';
 
 let projectDir: string;
@@ -36,7 +34,7 @@ describe('MCP config merge', () => {
     const nestedHome = join(tempHome.home, 'nested', 'home'); // 连 home 本身都还不存在
     setFakeHome(nestedHome);
 
-    writeGlobalMcpConfig([{ name: 's', command: 'c' }]);
+    writeMcpConfig(GLOBAL_CONFIG_SCOPE, [{ name: 's', command: 'c' }]);
 
     expect(readYaml(join(nestedHome, '.codingcode', 'mcp.yaml')).servers).toEqual([
       { name: 's', command: 'c' },
@@ -44,11 +42,11 @@ describe('MCP config merge', () => {
   });
 
   it('merges global and project by name, project wins', () => {
-    writeGlobalMcpConfig([
+    writeMcpConfig(GLOBAL_CONFIG_SCOPE, [
       { name: 'global-server', command: 'global-cmd' },
       { name: 'shared-server', command: 'global-shared-cmd' },
     ]);
-    writeMcpConfig(projectDir, [
+    writeMcpConfig(projectConfigScope(projectDir), [
       { name: 'shared-server', command: 'project-shared-cmd' },
       { name: 'project-server', command: 'project-cmd' },
     ]);
@@ -62,10 +60,10 @@ describe('MCP config merge', () => {
   });
 
   it('project layer only overrides the fields it declares', () => {
-    writeGlobalMcpConfig([
+    writeMcpConfig(GLOBAL_CONFIG_SCOPE, [
       { name: 'shared', command: 'global-cmd', args: ['--a'], concurrency: 5 },
     ]);
-    writeMcpConfig(projectDir, [{ name: 'shared', command: 'project-cmd' }]);
+    writeMcpConfig(projectConfigScope(projectDir), [{ name: 'shared', command: 'project-cmd' }]);
 
     const merged = resolveMcpConfig(projectDir);
 
@@ -76,7 +74,7 @@ describe('MCP config merge', () => {
   });
 
   it('returns only project config when no global config', () => {
-    writeMcpConfig(projectDir, [{ name: 'project-server', command: 'project-cmd' }]);
+    writeMcpConfig(projectConfigScope(projectDir), [{ name: 'project-server', command: 'project-cmd' }]);
 
     const merged = resolveMcpConfig(projectDir);
     expect(merged).toHaveLength(1);
@@ -84,7 +82,7 @@ describe('MCP config merge', () => {
   });
 
   it('returns only global config when no project config', () => {
-    writeGlobalMcpConfig([{ name: 'global-server', command: 'global-cmd' }]);
+    writeMcpConfig(GLOBAL_CONFIG_SCOPE, [{ name: 'global-server', command: 'global-cmd' }]);
 
     const merged = resolveMcpConfig(projectDir);
     expect(merged).toHaveLength(1);
@@ -94,7 +92,7 @@ describe('MCP config merge', () => {
 
 describe('MCP enabled switch (a plain boolean field in mcp.yaml)', () => {
   it('absent field means enabled', () => {
-    writeGlobalMcpConfig([{ name: 'a', command: 'x' }]);
+    writeMcpConfig(GLOBAL_CONFIG_SCOPE, [{ name: 'a', command: 'x' }]);
 
     const merged = resolveMcpConfig(projectDir);
     expect(merged[0]!.enabled).toBeUndefined();
@@ -102,20 +100,20 @@ describe('MCP enabled switch (a plain boolean field in mcp.yaml)', () => {
   });
 
   it('writes the boolean to the global mcp.yaml', () => {
-    writeGlobalMcpConfig([{ name: 'a', command: 'x' }]);
+    writeMcpConfig(GLOBAL_CONFIG_SCOPE, [{ name: 'a', command: 'x' }]);
 
-    setGlobalMcpServerEnabled('a', false);
+    setMcpServerEnabledConfig({ scope: GLOBAL_CONFIG_SCOPE, name: 'a', enabled: false });
 
     expect(readYaml(join(tempHome.configDir, 'mcp.yaml')).servers).toEqual([
       { name: 'a', command: 'x', enabled: false },
     ]);
-    expect(loadGlobalMcpConfig()[0]!.enabled).toBe(false);
+    expect(loadMcpConfig(GLOBAL_CONFIG_SCOPE)[0]!.enabled).toBe(false);
   });
 
   it('project toggle writes a minimal override that wins over the global definition', () => {
-    writeGlobalMcpConfig([{ name: 'a', command: 'x' }]);
+    writeMcpConfig(GLOBAL_CONFIG_SCOPE, [{ name: 'a', command: 'x' }]);
 
-    setProjectMcpServerEnabled(projectDir, 'a', false);
+    setMcpServerEnabledConfig({ scope: projectConfigScope(projectDir), name: 'a', enabled: false });
 
     expect(readYaml(join(projectDir, '.codingcode', 'mcp.yaml')).servers).toEqual([
       { name: 'a', enabled: false },
@@ -127,9 +125,9 @@ describe('MCP enabled switch (a plain boolean field in mcp.yaml)', () => {
   });
 
   it('patches an existing project entry in place', () => {
-    writeMcpConfig(projectDir, [{ name: 'a', command: 'proj-cmd' }]);
+    writeMcpConfig(projectConfigScope(projectDir), [{ name: 'a', command: 'proj-cmd' }]);
 
-    setProjectMcpServerEnabled(projectDir, 'a', false);
+    setMcpServerEnabledConfig({ scope: projectConfigScope(projectDir), name: 'a', enabled: false });
 
     expect(readYaml(join(projectDir, '.codingcode', 'mcp.yaml')).servers).toEqual([
       { name: 'a', command: 'proj-cmd', enabled: false },
@@ -137,11 +135,11 @@ describe('MCP enabled switch (a plain boolean field in mcp.yaml)', () => {
   });
 
   it('round-trips back to enabled', () => {
-    writeGlobalMcpConfig([{ name: 'a', command: 'x' }]);
-    setGlobalMcpServerEnabled('a', false);
-    setGlobalMcpServerEnabled('a', true);
+    writeMcpConfig(GLOBAL_CONFIG_SCOPE, [{ name: 'a', command: 'x' }]);
+    setMcpServerEnabledConfig({ scope: GLOBAL_CONFIG_SCOPE, name: 'a', enabled: false });
+    setMcpServerEnabledConfig({ scope: GLOBAL_CONFIG_SCOPE, name: 'a', enabled: true });
 
-    expect(loadMcpConfig(projectDir)).toEqual([]);
-    expect(loadGlobalMcpConfig()[0]!.enabled).toBe(true);
+    expect(loadMcpConfig(projectConfigScope(projectDir))).toEqual([]);
+    expect(loadMcpConfig(GLOBAL_CONFIG_SCOPE)[0]!.enabled).toBe(true);
   });
 });

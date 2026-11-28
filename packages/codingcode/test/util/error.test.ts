@@ -1,5 +1,5 @@
-﻿import { describe, it, expect } from 'vitest';
-import { AgentError } from '../../src/util/error.js';
+import { describe, it, expect } from 'vitest';
+import { AgentError } from '@codingcode/util';
 
 // util 只负责「领域错误码 + 消息」，HTTP 状态码的映射在 server 层（见 test/server/http-error.test.ts）
 describe('AgentError', () => {
@@ -13,9 +13,9 @@ describe('AgentError', () => {
 
   it('工厂方法产出对应领域码', () => {
     expect(AgentError.sessionNotFound('abc').code).toBe('SESSION_NOT_FOUND');
-    expect(AgentError.sessionWorkspaceMismatch('abc', '/foo').code).toBe(
-      'SESSION_WORKSPACE_MISMATCH'
-    );
+    expect(
+      AgentError.sessionWorkspaceMismatch({ sessionId: 'abc', expectedCwd: '/foo' }).code
+    ).toBe('SESSION_WORKSPACE_MISMATCH');
     expect(AgentError.toolNotAllowed('write_file').code).toBe('TOOL_NOT_ALLOWED');
     expect(AgentError.toolExecutionFailed('read_file', new Error('boom')).code).toBe(
       'TOOL_EXECUTION_FAILED'

@@ -1,5 +1,5 @@
-import type { ContentPart, IncomingPart } from '../../src/llm/types.js';
-import type { StoredPart } from '../../src/session/types.js';
+import type { ContentPart, IncomingPart } from '@codingcode/model';
+import type { StoredPart } from '@codingcode/session';
 
 /**
  * 测试里的纯文本内容块。

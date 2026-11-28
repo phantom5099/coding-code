@@ -1,0 +1,16 @@
+{
+  "name": "@codingcode/context",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@codingcode/util": "workspace:*",
+    "@codingcode/infra": "workspace:*",
+    "@codingcode/model": "workspace:*",
+    "@codingcode/session": "workspace:*",
+    "@codingcode/turn": "workspace:*",
+    "effect": "^3.21.2"
+  }
+}

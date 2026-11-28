@@ -37,7 +37,7 @@ const STREAM: Frame[] = [
     ...ENVELOPE,
     seq: 4,
     family: 'event',
-    event: { type: 'tool_call', id: 'tc-1', name: 'bash', args: { command: 'ls' } },
+    event: { type: 'tool_call', id: 'tc-1', name: 'bash', arguments: { command: 'ls' } },
   },
   {
     ...ENVELOPE,

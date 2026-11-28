@@ -5,7 +5,7 @@ interface ToolCallItem {
   id: string;
   type: 'tool_call';
   name: string;
-  args: object;
+  arguments: object;
   status: 'pending' | 'approved' | 'rejected' | 'running';
 }
 
@@ -19,7 +19,7 @@ interface ToolCallCardProps {
 
 export default function ToolCallCard({ item, threadId, onApprove, onReject, compact = false }: ToolCallCardProps) {
   const [argsOpen, setArgsOpen] = useState(true);
-  const argsJson = JSON.stringify(item.args, null, 2);
+  const argsJson = JSON.stringify(item.arguments, null, 2);
   const isRejected = item.status === 'rejected';
   const hasArgs = argsJson !== '{}';
 
@@ -50,7 +50,7 @@ export default function ToolCallCard({ item, threadId, onApprove, onReject, comp
         )}
         {hasArgs && (
           <span className="cc-approval-args-preview" title={argsJson}>
-            {JSON.stringify(item.args)}
+            {JSON.stringify(item.arguments)}
           </span>
         )}
         <div className="cc-approval-actions flex items-center gap-1">

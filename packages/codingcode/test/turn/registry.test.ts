@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Layer, Queue } from 'effect';
-import { TurnRegistryLayer } from '../../src/turn/registry.js';
-import { TurnRegistryService } from '../../src/turn/port.js';
-import type { PendingUserInput, TurnCommand } from '../../src/turn/types.js';
-import { EventSinkService } from '../../src/sink/port.js';
-import type { FrameBody } from '../../src/sink/types.js';
-import { textPart } from '../../src/llm/types.js';
+import { TurnRegistryLayer } from '@codingcode/turn';
+import { TurnRegistryService } from '@codingcode/turn';
+import type { PendingUserInput, TurnCommand } from '@codingcode/turn';
+import { EventSinkService } from '@codingcode/sink';
+import type { FrameBody } from '@codingcode/sink';
+import { textPart } from '@codingcode/model';
 
 function makeHarness() {
   const emitted: Array<{ sessionId: string; body: FrameBody }> = [];
@@ -36,8 +36,8 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        const first = yield* t.claim('s1', { turnId: 1 });
-        const second = yield* t.claim('s1', { turnId: 2 });
+        const first = yield* t.claim({ sessionId: 's1', turnId: 1 });
+        const second = yield* t.claim({ sessionId: 's1', turnId: 2 });
         return { first, second };
       })
     );
@@ -51,9 +51,9 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('s1', { turnId: 1 });
+        yield* t.claim({ sessionId: 's1', turnId: 1 });
         yield* t.transition('s1', { kind: 'complete', reason: 'done' });
-        const re = yield* t.claim('s1', { turnId: 5 });
+        const re = yield* t.claim({ sessionId: 's1', turnId: 5 });
         yield* t.transition('s1', { kind: 'start' });
         return re;
       })
@@ -73,7 +73,7 @@ describe('turn registry', () => {
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
         const none = yield* t.submit('s1', input('a'));
-        yield* t.claim('s1', { turnId: 7 });
+        yield* t.claim({ sessionId: 's1', turnId: 7 });
         const attached = yield* t.submit('s1', input('b'));
         const drained = yield* t.drain('s1');
         yield* t.transition('s1', { kind: 'complete', reason: 'done' });
@@ -93,7 +93,7 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('s1', { turnId: 1 });
+        yield* t.claim({ sessionId: 's1', turnId: 1 });
         yield* t.submit('s1', input('a'));
         const first = yield* t.drain('s1');
         const second = yield* t.drain('s1');
@@ -115,7 +115,7 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('s1', { turnId: 1 });
+        yield* t.claim({ sessionId: 's1', turnId: 1 });
         yield* t.transition('s1', cmd);
         yield* t.transition('s1', cmd);
       })
@@ -132,7 +132,7 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('s1', { turnId: 3 });
+        yield* t.claim({ sessionId: 's1', turnId: 3 });
         yield* t.transition('s1', { kind: 'start' });
         yield* t.transition('s1', { kind: 'running' });
         yield* t.transition('s1', { kind: 'compressing' });
@@ -153,7 +153,7 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('s1', { turnId: 1 });
+        yield* t.claim({ sessionId: 's1', turnId: 1 });
         // 稍后终结
         yield* Effect.forkDaemon(
           Effect.gen(function* () {
@@ -173,7 +173,7 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('s1', { turnId: 1 });
+        yield* t.claim({ sessionId: 's1', turnId: 1 });
         yield* t.transition('s1', { kind: 'interrupt' });
         return { a: yield* t.wait('s1', 5_000), b: yield* t.wait('s1', 5_000) };
       })
@@ -189,7 +189,7 @@ describe('turn registry', () => {
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
         const unknown = yield* t.wait('nope', 10);
-        yield* t.claim('s1', { turnId: 1 });
+        yield* t.claim({ sessionId: 's1', turnId: 1 });
         const timed = yield* t.wait('s1', 20);
         return { unknown, timed };
       })
@@ -204,7 +204,7 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('child', { turnId: 1, parentSessionId: 'parent' });
+        yield* t.claim({ sessionId: 'child', turnId: 1, parentSessionId: 'parent' });
         yield* t.transition('child', { kind: 'complete', reason: 'done' });
         const before = yield* t.wait('child', 30);
         yield* t.markDelivered('child');
@@ -222,10 +222,10 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('parent', { turnId: 1 });
-        yield* t.claim('done-child', { turnId: 1, parentSessionId: 'parent' });
+        yield* t.claim({ sessionId: 'parent', turnId: 1 });
+        yield* t.claim({ sessionId: 'done-child', turnId: 1, parentSessionId: 'parent' });
         yield* t.transition('done-child', { kind: 'complete', reason: 'done' });
-        yield* t.claim('live-child', { turnId: 1, parentSessionId: 'parent' });
+        yield* t.claim({ sessionId: 'live-child', turnId: 1, parentSessionId: 'parent' });
         yield* t.transition('parent', { kind: 'complete', reason: 'done' });
         // done-child 已被回收 ⇒ wait 返回 undefined
         return {
@@ -245,9 +245,9 @@ describe('turn registry', () => {
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
         const stopped: string[] = [];
-        yield* t.claim('c1', { turnId: 1, parentSessionId: 'p1' });
-        yield* t.claim('c2', { turnId: 1, parentSessionId: 'p1' });
-        yield* t.claim('c3', { turnId: 1, parentSessionId: 'p2' });
+        yield* t.claim({ sessionId: 'c1', turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim({ sessionId: 'c2', turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim({ sessionId: 'c3', turnId: 1, parentSessionId: 'p2' });
         yield* t.arm('c1', () => stopped.push('c1'));
         yield* t.arm('c2', () => stopped.push('c2'));
         // 未 arm 的 c3 会被跳过
@@ -267,8 +267,8 @@ describe('turn registry', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('parent', { turnId: 1 });
-        yield* t.claim('child', { turnId: 1, parentSessionId: 'parent' });
+        yield* t.claim({ sessionId: 'parent', turnId: 1 });
+        yield* t.claim({ sessionId: 'child', turnId: 1, parentSessionId: 'parent' });
         yield* t.dispose('parent');
         return {
           parent: yield* t.wait('parent', 10),
@@ -289,7 +289,7 @@ describe('turn registry — interrupt', () => {
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
         const stopped: string[] = [];
-        yield* t.claim('c1', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim({ sessionId: 'c1', turnId: 1, parentSessionId: 'p1' });
         yield* t.arm('c1', () => stopped.push('c1'));
         const first = yield* t.interrupt('c1');
         const second = yield* t.interrupt('c1');
@@ -308,7 +308,7 @@ describe('turn registry — interrupt', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('c1', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim({ sessionId: 'c1', turnId: 1, parentSessionId: 'p1' });
         // 真实装配里 stop 会 Fiber.interrupt 该回合，回合的 onInterrupt 投 interrupt 转移
         yield* t.arm('c1', () => {
           Effect.runSync(t.transition('c1', { kind: 'interrupt' }));
@@ -333,7 +333,7 @@ describe('turn registry — interrupt', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('done', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim({ sessionId: 'done', turnId: 1, parentSessionId: 'p1' });
         yield* t.transition('done', { kind: 'complete', reason: 'done' });
         return {
           terminal: yield* t.interrupt('done'),
@@ -351,7 +351,7 @@ describe('turn registry — interrupt', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('c1', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim({ sessionId: 'c1', turnId: 1, parentSessionId: 'p1' });
         return yield* t.interrupt('c1');
       })
     );
@@ -365,8 +365,8 @@ describe('turn registry — interrupt', () => {
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
         const stopped: string[] = [];
-        yield* t.claim('c1', { turnId: 1, parentSessionId: 'p1' });
-        yield* t.claim('c2', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim({ sessionId: 'c1', turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim({ sessionId: 'c2', turnId: 1, parentSessionId: 'p1' });
         yield* t.arm('c1', () => stopped.push('c1'));
         yield* t.arm('c2', () => stopped.push('c2'));
         const outcome = yield* t.interrupt('c1');
@@ -386,20 +386,22 @@ describe('turn registry — listChildren', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('live', {
+        yield* t.claim({
+          sessionId: 'live',
           turnId: 1,
           parentSessionId: 'p1',
           agentName: 'worker',
           description: 'writes docs',
         });
-        yield* t.claim('done', {
+        yield* t.claim({
+          sessionId: 'done',
           turnId: 2,
           parentSessionId: 'p1',
           agentName: 'scout',
           description: 'reads code',
         });
         yield* t.transition('done', { kind: 'complete', reason: 'done' });
-        yield* t.claim('other', { turnId: 1, parentSessionId: 'p2' });
+        yield* t.claim({ sessionId: 'other', turnId: 1, parentSessionId: 'p2' });
         return yield* t.listChildren('p1');
       })
     );
@@ -431,7 +433,7 @@ describe('turn registry — listChildren', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('bare', { turnId: 1, parentSessionId: 'p1' });
+        yield* t.claim({ sessionId: 'bare', turnId: 1, parentSessionId: 'p1' });
         return {
           listed: yield* t.listChildren('p1'),
           unknown: yield* t.listChildren('nobody'),
@@ -448,10 +450,10 @@ describe('turn registry — listChildren', () => {
       layers,
       Effect.gen(function* () {
         const t = yield* TurnRegistryService;
-        yield* t.claim('parent', { turnId: 1 });
-        yield* t.claim('done', { turnId: 1, parentSessionId: 'parent' });
+        yield* t.claim({ sessionId: 'parent', turnId: 1 });
+        yield* t.claim({ sessionId: 'done', turnId: 1, parentSessionId: 'parent' });
         yield* t.transition('done', { kind: 'complete', reason: 'done' });
-        yield* t.claim('live', { turnId: 1, parentSessionId: 'parent' });
+        yield* t.claim({ sessionId: 'live', turnId: 1, parentSessionId: 'parent' });
         const before = yield* t.listChildren('parent');
         yield* t.transition('parent', { kind: 'complete', reason: 'done' });
         const after = yield* t.listChildren('parent');

@@ -13,9 +13,21 @@ import type {
   AgentConfigView,
   InputPart,
 } from './contracts.js';
-import { MAX_MEDIA_BYTES } from './contracts.js';
 
-export { MAX_MEDIA_BYTES };
+/** 纯媒体原语（零 effect、零 Node 运行时依赖），与服务端准入同源 */
+export {
+  ACCEPTED_MEDIA_MIMES,
+  MAX_MEDIA_BYTES,
+  mediaKindOf,
+  textOf,
+  textPart,
+  type AcceptedMediaMime,
+  type MediaKind,
+  type TextPart,
+} from '@codingcode/util/media';
+
+/** 纯 Hook 点位常量（零 effect、零 Node 运行时依赖），与服务端同源 */
+export { HOOK_POINT } from '@codingcode/hook/types';
 
 export type {
   AgentRuntimeClient,
@@ -32,6 +44,8 @@ export type {
   RollbackBothResult,
   ForkResult,
   CompressResult,
+  RunAutomationResult,
+  SkillEntry,
 } from './contracts.js';
 
 export type {
@@ -40,14 +54,15 @@ export type {
   CheckpointDiff,
   CodeRollbackResult,
   CreateAutomationInput,
+  HookConfigEntry,
   HookPoint,
   McpServerConfig,
   McpServerEntry,
   RollbackPreviewDiff,
-  RunAutomationResult,
   SelectableModel,
   SessionSummary,
-  StoredContentPart,
+  StoredMediaPart,
+  StoredPart,
   UITurn,
   UITurnItem,
   UpdateAutomationInput,

@@ -12,9 +12,13 @@ import {
   type PermissionMode,
   type RollbackPreviewDiff,
   type RunAutomationResult,
-  type TokenUsage,
   type UITurn,
   type UpdateAutomationInput,
+  type ForkResult,
+  type HookConfigEntry,
+  type RollbackBothResult,
+  type RollbackContextResult,
+  type SkillEntry,
   type UserHookConfig,
 } from '@codingcode/sdk';
 
@@ -183,20 +187,13 @@ export function deleteMcpServer(cwd: string | undefined, name: string): Promise<
 
 // ---- Settings: Skills ----
 
-export function listSkills(cwd?: string): Promise<
-  Array<{
-    name: string;
-    description: string;
-    skillPath: string;
-    source?: 'global' | 'project';
-  }>
-> {
+export function listSkills(cwd?: string): Promise<SkillEntry[]> {
   return clients.settings.listSkills({ cwd: cwd ?? '' });
 }
 
 // ---- Settings: Hooks ----
 
-export function listHooks(cwd?: string): Promise<UserHookConfig[]> {
+export function listHooks(cwd?: string): Promise<HookConfigEntry[]> {
   return clients.settings.listHooks({ cwd: cwd ?? '' });
 }
 
@@ -273,40 +270,23 @@ export function rollbackContext(
   sessionId: string,
   cwd: string,
   throughTurnId: number
-): Promise<{
-  ok: boolean;
-  turns: UITurn[];
-  promptEstimate?: number;
-  usage?: TokenUsage;
-}> {
-  return clients.sessions.rollbackContext({ sessionId, cwd, throughTurnId }).then((r) => ({
-    ok: true,
-    turns: r.turns,
-  }));
+): Promise<RollbackContextResult> {
+  return clients.sessions.rollbackContext({ sessionId, cwd, throughTurnId });
 }
 
 export function rollbackBothToTurn(
   sessionId: string,
   cwd: string,
   throughTurnId: number
-): Promise<{
-  ok: boolean;
-  turns: UITurn[];
-  codeResult: CodeRollbackResult;
-  promptEstimate?: number;
-  usage?: TokenUsage;
-}> {
-  return clients.sessions.rollbackBothToTurn({ sessionId, cwd, throughTurnId }).then((r) => ({
-    ok: true,
-    ...r,
-  }));
+): Promise<RollbackBothResult> {
+  return clients.sessions.rollbackBothToTurn({ sessionId, cwd, throughTurnId });
 }
 
 export function forkSession(
   sessionId: string,
   cwd: string,
   atTurnId?: number
-): Promise<{ sessionId: string; turns: UITurn[] }> {
+): Promise<ForkResult> {
   return clients.sessions.forkSession({ sessionId, cwd, atTurnId });
 }
 

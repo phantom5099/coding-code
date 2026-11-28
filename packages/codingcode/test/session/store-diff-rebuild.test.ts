@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { SessionEvent } from '../../src/session/types.js';
-import { sessionEventsToTurns } from '../../src/session/session.js';
+import type { SessionEvent } from '@codingcode/session';
+import { sessionEventsToTurns } from '@codingcode/session';
 import { text } from '../helpers/parts.js';
 
 describe('sessionEventsToTurns', () => {

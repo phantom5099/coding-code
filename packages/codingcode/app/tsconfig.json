@@ -1,0 +1,38 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../util" },
+    { "path": "../todo" },
+    { "path": "../sandbox" },
+    { "path": "../askuser" },
+    { "path": "../infra" },
+    { "path": "../checkpoint" },
+    { "path": "../rules" },
+    { "path": "../skill" },
+    { "path": "../model" },
+    { "path": "../mcp" },
+    { "path": "../hook" },
+    { "path": "../session" },
+    { "path": "../mailbox" },
+    { "path": "../sink" },
+    { "path": "../turn" },
+    { "path": "../memory" },
+    { "path": "../context" },
+    { "path": "../tool" },
+    { "path": "../fs" },
+    { "path": "../bash" },
+    { "path": "../web" },
+    { "path": "../self" },
+    { "path": "../approval" },
+    { "path": "../agent" },
+    { "path": "../subagent" },
+    { "path": "../scheduler" },
+    { "path": "../http" }
+  ]
+}

@@ -1,7 +1,7 @@
 import { expect, it, describe } from 'vitest';
 import { Effect, Layer } from 'effect';
-import { SubagentRunnerService } from '../../src/subagent/port.js';
-import type { IncomingPart } from '../../src/llm/types.js';
+import { SubagentRunnerService } from '@codingcode/subagent';
+import type { IncomingPart } from '@codingcode/model';
 import { incomingText } from '../helpers/parts.js';
 
 const SAMPLE_FRAME = {

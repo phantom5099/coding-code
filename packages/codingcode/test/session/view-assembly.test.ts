@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { filterForContext, buildContextMessages } from '../../src/context/context.js';
-import type { SessionEvent } from '../../src/session/types.js';
+import { filterForContext, buildContextMessages } from '@codingcode/context';
+import type { SessionEvent } from '@codingcode/session';
 import { text } from '../helpers/parts.js';
 
 /** 合并后的 parts 拍平成文本，断言里只关心文本内容。 */

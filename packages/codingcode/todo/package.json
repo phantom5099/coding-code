@@ -1,0 +1,11 @@
+{
+  "name": "@codingcode/todo",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "effect": "^3.21.2"
+  }
+}

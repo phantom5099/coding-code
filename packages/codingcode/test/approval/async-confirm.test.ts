@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Effect, Fiber, Layer } from 'effect';
-import { ApprovalWaitService } from '../../src/approval/wait-port.js';
-import type { ConfirmResult } from '../../src/approval/confirmation.js';
-import { ApprovalWaitLayer } from '../../src/approval/wait.js';
+import { ApprovalWaitService } from '@codingcode/approval';
+import type { ConfirmResult } from '@codingcode/approval';
+import { ApprovalWaitLayer } from '@codingcode/approval';
 
 const TestLayer = ApprovalWaitLayer;
 
@@ -21,11 +21,15 @@ describe('ApprovalWaitService', () => {
         yield* Effect.fork(
           Effect.gen(function* () {
             yield* Effect.sleep('10 millis');
-            yield* svc.resolveConfirm(id, 'test-session', { type: 'allow' });
+            yield* svc.resolveConfirm({
+              callId: id,
+              sessionId: 'test-session',
+              result: { type: 'allow' },
+            });
           })
         );
 
-        return yield* svc.waitForConfirm(id, 'test-session');
+        return yield* svc.waitForConfirm({ callId: id, sessionId: 'test-session' });
       })
     );
 
@@ -36,7 +40,11 @@ describe('ApprovalWaitService', () => {
     const result = await run(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
-        return yield* svc.resolveConfirm('nonexistent', 'test-session', { type: 'deny' });
+        return yield* svc.resolveConfirm({
+          callId: 'nonexistent',
+          sessionId: 'test-session',
+          result: { type: 'deny' },
+        });
       })
     );
     expect(result).toBe(false);
@@ -49,11 +57,15 @@ describe('ApprovalWaitService', () => {
         const id = 'cross-session-id';
 
         // register a pending approval under the child session id
-        yield* Effect.fork(svc.waitForConfirm(id, 'child-session-uuid'));
+        yield* Effect.fork(svc.waitForConfirm({ callId: id, sessionId: 'child-session-uuid' }));
         yield* Effect.sleep('5 millis');
 
         // resolving with a different session id must fail (no cross-session resolve)
-        return yield* svc.resolveConfirm(id, 'parent-session', { type: 'allow' });
+        return yield* svc.resolveConfirm({
+          callId: id,
+          sessionId: 'parent-session',
+          result: { type: 'allow' },
+        });
       })
     );
     expect(result).toBe(false);
@@ -68,16 +80,20 @@ describe('cancelPendingFor', () => {
     const results = await run(
       Effect.gen(function* () {
         const svc = yield* ApprovalWaitService;
-        const mine = yield* Effect.fork(svc.waitForConfirm('a1', sid));
-        const alsoMine = yield* Effect.fork(svc.waitForConfirm('a2', sid));
-        const theirs = yield* Effect.fork(svc.waitForConfirm('b1', other));
+        const mine = yield* Effect.fork(svc.waitForConfirm({ callId: 'a1', sessionId: sid }));
+        const alsoMine = yield* Effect.fork(svc.waitForConfirm({ callId: 'a2', sessionId: sid }));
+        const theirs = yield* Effect.fork(svc.waitForConfirm({ callId: 'b1', sessionId: other }));
         yield* Effect.sleep('5 millis');
 
         const cleared = yield* svc.cancelPendingFor(sid);
         const mineRes = yield* Fiber.join(mine);
         const alsoMineRes = yield* Fiber.join(alsoMine);
         // 其它会话的待决项不受影响
-        const stillPending = yield* svc.resolveConfirm('b1', other, { type: 'allow' });
+        const stillPending = yield* svc.resolveConfirm({
+          callId: 'b1',
+          sessionId: other,
+          result: { type: 'allow' },
+        });
         yield* Fiber.join(theirs);
         return { cleared, mineRes, alsoMineRes, stillPending };
       })

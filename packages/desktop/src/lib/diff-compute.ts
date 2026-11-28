@@ -132,10 +132,10 @@ export function wrapUnifiedDiff(
 
 export function buildToolDiff(
   result: Record<string, unknown> & { type: 'tool_result'; name?: string },
-  callItem: Record<string, unknown> & { type: 'tool_call'; args?: Record<string, unknown> }
+  callItem: Record<string, unknown> & { type: 'tool_call'; arguments?: Record<string, unknown> }
 ): Record<string, unknown> & { type: 'tool_result'; name?: string } {
   if (result.name !== 'edit_file' && result.name !== 'write_file') return result;
-  const args = callItem.args ?? {};
+  const args = callItem.arguments ?? {};
   const rawPath = args.path as string | undefined;
   if (
     result.name === 'edit_file' &&

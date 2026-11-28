@@ -4,11 +4,11 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID, createHash } from 'crypto';
-import { CheckpointService } from '../../src/checkpoint/port.js';
-import { ShadowGit } from '../../src/checkpoint/shadow-git.js';
-import { normalizePath } from '../../src/util/path.js';
+import { CheckpointService } from '@codingcode/checkpoint';
+import { ShadowGit } from '@codingcode/checkpoint/shadow-git';
+import { normalizePath } from '@codingcode/util';
 import { useTempProjectBase } from '../helpers/project-base.js';
-import { CheckpointLayer } from '../../src/checkpoint/checkpoint.js';
+import { CheckpointLayer } from '@codingcode/checkpoint';
 
 useTempProjectBase();
 
@@ -23,9 +23,9 @@ describe('checkpoint turn title removal', () => {
       const checkpoints = (await Effect.runPromise(
         Effect.gen(function* () {
           const checkpoint = yield* CheckpointService;
-          yield* checkpoint.snapshotBeforeWrite(projectPath, sessionId, 1);
+          yield* checkpoint.ensureBaseline({ target: { cwd: projectPath, sessionId }, turnId: 1 });
           writeFileSync(join(projectPath, 'after.txt'), 'after', 'utf8');
-          return yield* checkpoint.getCheckpointDiff(projectPath, sessionId);
+          return yield* checkpoint.getCheckpointDiff({ cwd: projectPath, sessionId });
         }).pipe(Effect.provide(CheckpointLayer) as any)
       )) as { turnId: number; files: Array<{ path: string }> };
 

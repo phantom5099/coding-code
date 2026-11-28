@@ -1,4 +1,16 @@
-import type { ApprovalAction, EndReason, Frame, FrameError, ToolOutcome } from './protocol.js';
+import type {
+  ApprovalAction,
+  Frame,
+  FrameError,
+  RuntimeEvent,
+  ToolOutcome,
+  Transition,
+} from './protocol.js';
+
+type WireTransitionTarget = Transition['to'];
+type WireEndReason = Extract<Transition, { to: 'end' }>['reason'];
+type WireEventType = RuntimeEvent['type'];
+type WireOutcomeStatus = ToolOutcome['status'];
 
 export type DecodeFailureReason =
   | 'shape'
@@ -10,8 +22,13 @@ export type DecodeResult =
   | { readonly ok: true; readonly frame: Frame }
   | { readonly ok: false; readonly reason: DecodeFailureReason; readonly raw: unknown };
 
-const TRANSITIONS = new Set(['start', 'executing', 'compress', 'end']);
-const EVENTS = new Set([
+/**
+ * 帧词汇表：运行时校验用的字面量集合，逐个 `satisfies` 对齐 core 权威类型
+ * （`@codingcode/sink` 的 Transition/RuntimeEvent/ToolOutcome、`@codingcode/util` 的 ApprovalAction）。
+ * 拥有者改动词汇表而这里没跟上时，编译期即报错 —— 不再是运行时漂移。
+ */
+const TRANSITIONS = ['start', 'executing', 'compress', 'end'] as const satisfies readonly WireTransitionTarget[];
+const EVENTS = [
   'reasoning_delta',
   'text_delta',
   'tool_call',
@@ -20,17 +37,24 @@ const EVENTS = new Set([
   'ask_user',
   'subagent_event',
   'user_input',
-]);
-const END_REASONS = new Set<EndReason>(['done', 'error', 'maxSteps', 'aborted']);
-const OUTCOMES = new Set(['ok', 'error', 'denied']);
-const APPROVAL_ACTIONS = new Set<ApprovalAction>([
+] as const satisfies readonly WireEventType[];
+const END_REASONS = ['done', 'error', 'maxSteps', 'aborted'] as const satisfies readonly WireEndReason[];
+const OUTCOMES = ['ok', 'error', 'denied'] as const satisfies readonly WireOutcomeStatus[];
+const APPROVAL_ACTIONS = [
   'file',
   'exec',
   'network',
   'mcp',
   'subagent',
+  'sandbox',
   'other',
-]);
+] as const satisfies readonly ApprovalAction[];
+
+const TRANSITION_SET = new Set<string>(TRANSITIONS);
+const EVENT_SET = new Set<string>(EVENTS);
+const END_REASON_SET = new Set<string>(END_REASONS);
+const OUTCOME_SET = new Set<string>(OUTCOMES);
+const APPROVAL_ACTION_SET = new Set<string>(APPROVAL_ACTIONS);
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -41,7 +65,7 @@ function isError(v: unknown): v is FrameError {
 }
 
 function isOutcome(v: unknown): v is ToolOutcome {
-  if (!isRecord(v) || typeof v.status !== 'string' || !OUTCOMES.has(v.status)) return false;
+  if (!isRecord(v) || typeof v.status !== 'string' || !OUTCOME_SET.has(v.status)) return false;
   if (v.status === 'denied') return typeof v.reason === 'string';
   return typeof v.output === 'string';
 }
@@ -65,14 +89,14 @@ export function decodeFrame(raw: unknown): DecodeResult {
 
   if (family === 'transition') {
     const t = raw.transition;
-    if (!isRecord(t) || typeof t.to !== 'string' || !TRANSITIONS.has(t.to)) {
+    if (!isRecord(t) || typeof t.to !== 'string' || !TRANSITION_SET.has(t.to)) {
       return { ok: false, reason: 'unknown-transition', raw };
     }
     if (t.to === 'start' && typeof t.turnId !== 'number') {
       return { ok: false, reason: 'shape', raw };
     }
     if (t.to === 'end') {
-      if (typeof t.reason !== 'string' || !END_REASONS.has(t.reason as EndReason)) {
+      if (typeof t.reason !== 'string' || !END_REASON_SET.has(t.reason)) {
         return { ok: false, reason: 'shape', raw };
       }
       if (t.reason === 'error' && !isError(t.error)) {
@@ -89,7 +113,7 @@ export function decodeFrame(raw: unknown): DecodeResult {
 
   if (family === 'event') {
     const e = raw.event;
-    if (!isRecord(e) || typeof e.type !== 'string' || !EVENTS.has(e.type)) {
+    if (!isRecord(e) || typeof e.type !== 'string' || !EVENT_SET.has(e.type)) {
       return { ok: false, reason: 'unknown-event', raw };
     }
     if ((e.type === 'reasoning_delta' || e.type === 'text_delta') && typeof e.text !== 'string') {
@@ -97,7 +121,7 @@ export function decodeFrame(raw: unknown): DecodeResult {
     }
     if (
       (e.type === 'tool_call' || e.type === 'approval_request') &&
-      (typeof e.id !== 'string' || !isRecord(e.args))
+      (typeof e.id !== 'string' || !isRecord(e.arguments))
     ) {
       return { ok: false, reason: 'shape', raw };
     }
@@ -113,7 +137,7 @@ export function decodeFrame(raw: unknown): DecodeResult {
       e.type === 'approval_request' &&
       (typeof e.tool !== 'string' ||
         typeof e.action !== 'string' ||
-        !APPROVAL_ACTIONS.has(e.action as ApprovalAction))
+        !APPROVAL_ACTION_SET.has(e.action))
     ) {
       return { ok: false, reason: 'shape', raw };
     }

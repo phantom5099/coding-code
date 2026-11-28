@@ -1,8 +1,9 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { loadMcpConfig, writeMcpConfig } from '../../src/mcp/config.js';
+import { loadMcpConfig, writeMcpConfig } from '@codingcode/mcp';
+import { projectConfigScope } from '@codingcode/util';
 import { parse as parseYaml } from 'yaml';
 
 let projectRoot: string;
@@ -20,7 +21,7 @@ describe('loadMcpConfig', () => {
   });
 
   it('should return empty array when no config exists', () => {
-    const result = loadMcpConfig(projectRoot);
+    const result = loadMcpConfig(projectConfigScope(projectRoot));
     expect(result).toEqual([]);
   });
 
@@ -34,7 +35,7 @@ describe('loadMcpConfig', () => {
 `
     );
 
-    const configs = loadMcpConfig(projectRoot);
+    const configs = loadMcpConfig(projectConfigScope(projectRoot));
     expect(configs).toHaveLength(1);
     expect(configs[0]!.name).toBe('test-stdio');
     expect(configs[0]!.command).toBe('npx');
@@ -53,7 +54,7 @@ describe('loadMcpConfig', () => {
 `
     );
 
-    const configs = loadMcpConfig(projectRoot);
+    const configs = loadMcpConfig(projectConfigScope(projectRoot));
     expect(configs).toHaveLength(1);
     expect(configs[0]!.name).toBe('test-sse');
     expect(configs[0]!.url).toBe('https://mcp.example.com/sse');
@@ -72,7 +73,7 @@ describe('loadMcpConfig', () => {
 `
     );
 
-    const configs = loadMcpConfig(projectRoot);
+    const configs = loadMcpConfig(projectConfigScope(projectRoot));
     expect(configs[0]!.headers!.Authorization).toBe('Bearer resolved-token');
 
     delete process.env.TEST_TOKEN;
@@ -89,7 +90,7 @@ describe('loadMcpConfig', () => {
 `
     );
 
-    const configs = loadMcpConfig(projectRoot);
+    const configs = loadMcpConfig(projectConfigScope(projectRoot));
     expect(configs[0]!.headers!.Authorization).toBeUndefined();
   });
 });
@@ -107,17 +108,17 @@ describe('writeMcpConfig', () => {
 
   it('should write and read back servers correctly', () => {
     const servers = [{ name: 'test-server', command: 'npx', args: ['-y', 'test'], concurrency: 5 }];
-    writeMcpConfig(projectRoot, servers);
-    const result = loadMcpConfig(projectRoot);
+    writeMcpConfig(projectConfigScope(projectRoot), servers);
+    const result = loadMcpConfig(projectConfigScope(projectRoot));
     expect(result).toHaveLength(1);
     expect(result[0]!.name).toBe('test-server');
     expect(result[0]!.concurrency).toBe(5);
   });
 
   it('should overwrite existing servers list', () => {
-    writeMcpConfig(projectRoot, [{ name: 'old', command: 'echo' }]);
-    writeMcpConfig(projectRoot, [{ name: 'new', command: 'ls' }]);
-    const result = loadMcpConfig(projectRoot);
+    writeMcpConfig(projectConfigScope(projectRoot), [{ name: 'old', command: 'echo' }]);
+    writeMcpConfig(projectConfigScope(projectRoot), [{ name: 'new', command: 'ls' }]);
+    const result = loadMcpConfig(projectConfigScope(projectRoot));
     expect(result).toHaveLength(1);
     expect(result[0]!.name).toBe('new');
   });
@@ -125,7 +126,7 @@ describe('writeMcpConfig', () => {
   it('should preserve other top-level keys in the yaml', () => {
     const p = join(projectRoot, '.codingcode', 'mcp.yaml');
     writeFileSync(p, 'otherKey: value\nservers: []\n');
-    writeMcpConfig(projectRoot, [{ name: 'srv', command: 'echo' }]);
+    writeMcpConfig(projectConfigScope(projectRoot), [{ name: 'srv', command: 'echo' }]);
     const raw = JSON.parse(JSON.stringify(parseYaml(readFileSync(p, 'utf8'))));
     expect(raw.otherKey).toBe('value');
     expect(raw.servers).toHaveLength(1);

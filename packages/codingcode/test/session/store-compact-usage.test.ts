@@ -3,11 +3,11 @@ import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { computePaths } from '../../src/session/paths.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { computePaths } from '@codingcode/session';
 
-import type { SessionStoreState } from '../../src/session/types.js';
+import type { SessionStoreState } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -26,7 +26,7 @@ function makeFixture(
   }>
 ) {
   const cwd = `/${slug}`;
-  const paths = computePaths(cwd, sessionId);
+  const paths = computePaths({ cwd, sessionId });
   mkdirSync(join(base.dir, slug, 'sessions'), { recursive: true });
   const transcriptPath = paths.transcriptPath;
 
@@ -66,7 +66,6 @@ function buildState(
   currentTurnId: number
 ): SessionStoreState {
   return {
-    type: 'session_meta',
     sessionId,
     cwd,
     createdAt: new Date().toISOString(),
@@ -91,7 +90,11 @@ describe('SessionService.appendSummary - state.usage reset (used by tryCompactio
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.appendSummary(state, 'compacted summary', 1, 1);
+          return yield* svc.appendSummary(state, {
+            summaryText: 'compacted summary',
+            startTurnId: 1,
+            endTurnId: 1,
+          });
         })
       );
       expect(state.usage).toBeUndefined();
@@ -109,7 +112,11 @@ describe('SessionService.appendSummary - state.usage reset (used by tryCompactio
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.appendSummary(state, 'compacted summary', 1, 1);
+          return yield* svc.appendSummary(state, {
+            summaryText: 'compacted summary',
+            startTurnId: 1,
+            endTurnId: 1,
+          });
         })
       );
       expect(state.usage).toBeUndefined();

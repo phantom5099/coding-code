@@ -3,33 +3,30 @@ import { Effect, Layer, Queue } from 'effect';
 import {
   SubagentRunRegistryLayer,
   SubagentRunRegistryService,
-} from '../../src/subagent/registry.js';
-import { SubagentRunnerService } from '../../src/subagent/port.js';
-import { MailboxLayer, MailboxService } from '../../src/session/mailbox.js';
-import { SessionService } from '../../src/session/port.js';
-import type { SessionEvent } from '../../src/session/types.js';
-import { EventSinkService } from '../../src/sink/port.js';
-import { HookService } from '../../src/hooks/port.js';
-import { TurnRegistryLayer } from '../../src/turn/registry.js';
-import { TurnRegistryService } from '../../src/turn/port.js';
-import type { FrameBody } from '../../src/sink/types.js';
+} from '@codingcode/subagent';
+import { SubagentRunnerService } from '@codingcode/subagent';
+import { MailboxLayer, MailboxService } from '@codingcode/mailbox';
+import { SessionService, transcriptPathOf } from '@codingcode/session';
+import type { SessionEvent, SessionLocator } from '@codingcode/session';
+import { EventSinkService } from '@codingcode/sink';
+import { HookService } from '@codingcode/hook';
+import { TurnRegistryLayer } from '@codingcode/turn';
+import { TurnRegistryService } from '@codingcode/turn';
+import type { FrameBody } from '@codingcode/sink';
 
 const spawnOpts = {
   prompt: 'do a thing',
   agentName: 'build',
-  parentSessionId: 'parent-1',
-  parentCwd: '/tmp',
-  parentProfile: 'build' as const,
+  parent: { cwd: '/tmp', sessionId: 'parent-1' },
   model: 'test-model',
-  parentChain: ['parent-1'],
 };
 
-/** 只关心 appendEvent 的 (path, event)：投递点必须先把结果写进父转录 */
+/** 只关心 appendEvent 的 (locator, event)：投递点必须先把结果写进父转录 */
 const sessionLayer = (appended: Array<{ path: string; event: SessionEvent }>) =>
   Layer.succeed(SessionService, {
-    appendEvent: (path: string, event: SessionEvent) =>
+    appendEvent: (locator: SessionLocator, event: SessionEvent) =>
       Effect.sync(() => {
-        appended.push({ path, event });
+        appended.push({ path: transcriptPathOf(locator), event });
       }),
   } as any);
 
@@ -218,7 +215,15 @@ describe('subagent run registry', () => {
       layers,
       Effect.gen(function* () {
         const reg = yield* SubagentRunRegistryService;
-        yield* reg.spawn({ ...spawnOpts, parentChain: ['parent-1', 'mid-1', 'root-1'] });
+        yield* reg.spawn({
+          ...spawnOpts,
+          parent: {
+            cwd: '/tmp',
+            sessionId: 'parent-1',
+            parentSessionId: 'mid-1',
+            parentChain: ['mid-1', 'root-1'],
+          },
+        });
         yield* Effect.sleep(50);
       })
     );
@@ -258,7 +263,11 @@ describe('subagent run registry', () => {
           const r = yield* Effect.either(reg.spawn(spawnOpts));
           outcomes.push(r._tag);
           if (r._tag === 'Right') {
-            yield* turn.claim(r.right.sessionId, { turnId: 1, parentSessionId: 'parent-1' });
+            yield* turn.claim({
+              sessionId: r.right.sessionId,
+              turnId: 1,
+              parentSessionId: 'parent-1',
+            });
           }
         }
         return outcomes;
@@ -277,7 +286,7 @@ describe('subagent run registry', () => {
         const turn = yield* TurnRegistryService;
         for (let i = 0; i < 2; i++) {
           const sid = `child-${i + 1}`;
-          yield* turn.claim(sid, { turnId: 1, parentSessionId: 'parent-1' });
+          yield* turn.claim({ sessionId: sid, turnId: 1, parentSessionId: 'parent-1' });
           const stopped: string[] = [];
           yield* turn.arm(sid, () => stopped.push(sid));
           yield* reg.spawn(spawnOpts);
@@ -300,15 +309,20 @@ describe('subagent run registry', () => {
         yield* reg.spawn({
           ...spawnOpts,
           resumeSessionId: 'child-9',
-          parentChain: ['parent-1', 'root-1'],
+          parent: {
+            cwd: '/tmp',
+            sessionId: 'parent-1',
+            parentSessionId: 'root-1',
+            parentChain: ['root-1'],
+          },
           description: 'reads code',
         });
       })
     );
 
     expect(captured[0].sessionId).toBe('child-9');
-    expect(captured[0].parentChain).toEqual(['parent-1', 'root-1']);
-    expect(captured[0].description).toBe('reads code');
+    expect(captured[0].lineage?.parentChain).toEqual(['parent-1', 'root-1']);
+    expect(captured[0].subagent?.description).toBe('reads code');
   });
 
   it('首次派发不传续跑字段时，runner 收到 undefined（现状路径不变）', async () => {
@@ -322,7 +336,7 @@ describe('subagent run registry', () => {
     );
 
     expect(captured[0].sessionId).toBeUndefined();
-    expect(captured[0].description).toBeUndefined();
+    expect(captured[0].subagent?.description).toBeUndefined();
   });
 
   it('aborted 终态：回注文案引导用 resume_agent 续跑，而非重新 spawn', async () => {

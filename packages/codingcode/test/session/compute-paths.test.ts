@@ -3,11 +3,10 @@ import { rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { computePaths, projectSessionsDir } from '../../src/session/paths.js';
-import { sessionJsonlPathFromCwd } from '../../src/session/file-ops.js';
-import { normalizePath, encodeProjectPath } from '../../src/util/path.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { computePaths, projectSessionsDir, transcriptPathOf } from '@codingcode/session';
+import { normalizePath, encodeProjectPath } from '@codingcode/util';
 import { useTempProjectBase } from '../helpers/project-base.js';
 
 const base = useTempProjectBase();
@@ -17,12 +16,12 @@ function run<T>(eff: Effect.Effect<T, any, any>): Promise<T> {
 }
 
 describe('computePaths', () => {
-  it('top-level: returns path matching sessionJsonlPathFromCwd', () => {
+  it('top-level: returns path matching transcriptPathOf', () => {
     const cwd = '/tmp/test-compute-top-level';
     const sid = randomUUID();
-    const result = computePaths(cwd, sid);
+    const result = computePaths({ cwd, sessionId: sid });
 
-    expect(result.transcriptPath).toBe(sessionJsonlPathFromCwd(cwd, sid));
+    expect(result.transcriptPath).toBe(transcriptPathOf({ cwd, sessionId: sid }));
     expect(result.sessionId).toBe(sid);
     expect(result.cwd).toBe(normalizePath(cwd));
     expect(result.projectPath).toBe(encodeProjectPath(normalizePath(cwd)));
@@ -32,7 +31,7 @@ describe('computePaths', () => {
     const cwd = '/tmp/test-compute-subagent';
     const sid = randomUUID();
     const parentSid = randomUUID();
-    const result = computePaths(cwd, sid, parentSid);
+    const result = computePaths({ cwd, sessionId: sid, parentSessionId: parentSid });
 
     const sessionsDir = projectSessionsDir(cwd);
     const expectedTranscript = join(sessionsDir, parentSid, 'subagents', `${sid}.jsonl`);
@@ -40,36 +39,27 @@ describe('computePaths', () => {
     expect(result.sessionId).toBe(sid);
   });
 
-  it('e2e: SessionService.create returns computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath matching computePaths', async () => {
+  it('e2e: SessionService.create returns computePaths(state).transcriptPath matching computePaths', async () => {
     const cwd = '/tmp/test-compute-e2e-top';
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, {
+        return yield* svc.create({
+          cwd,
           model: 'test-model',
-
           permissionMode: 'askBeforeExec',
         });
       })
     );
 
     try {
-      const expected = computePaths(cwd, state.sessionId);
-      expect(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath).toBe(
-        expected.transcriptPath
-      );
-      expect(computePaths(state.cwd, state.sessionId, state.parentSessionId).projectPath).toBe(
-        expected.projectPath
-      );
+      const expected = computePaths({ cwd, sessionId: state.sessionId });
+      expect(computePaths(state).transcriptPath).toBe(expected.transcriptPath);
+      expect(computePaths(state).projectPath).toBe(expected.projectPath);
       expect(state.cwd).toBe(expected.cwd);
-      expect(
-        existsSync(computePaths(state.cwd, state.sessionId, state.parentSessionId).transcriptPath)
-      ).toBe(true);
+      expect(existsSync(computePaths(state).transcriptPath)).toBe(true);
     } finally {
-      rmSync(
-        join(base.dir, computePaths(state.cwd, state.sessionId, state.parentSessionId).projectPath),
-        { recursive: true, force: true }
-      );
+      rmSync(join(base.dir, computePaths(state).projectPath), { recursive: true, force: true });
     }
   });
 
@@ -78,9 +68,9 @@ describe('computePaths', () => {
     const state = await run(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.create(cwd, {
+        return yield* svc.create({
+          cwd,
           model: 'test-model',
-
           permissionMode: 'askBeforeExec',
         });
       })
@@ -90,27 +80,22 @@ describe('computePaths', () => {
       const childState = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(
+          return yield* svc.create({
             cwd,
-            {
-              model: 'subagent-model',
-
-              permissionMode: 'askBeforeExec',
-            },
-            {
-              parentSessionId: state.sessionId,
-            }
-          );
+            model: 'subagent-model',
+            permissionMode: 'askBeforeExec',
+            lineage: { parentSessionId: state.sessionId },
+          });
         })
       );
 
       try {
-        const expected = computePaths(cwd, childState.sessionId, state.sessionId);
-        const actual = computePaths(
-          childState.cwd,
-          childState.sessionId,
-          childState.parentSessionId
-        );
+        const expected = computePaths({
+          cwd,
+          sessionId: childState.sessionId,
+          parentSessionId: state.sessionId,
+        });
+        const actual = computePaths(childState);
         expect(actual).toEqual(expected);
         expect(existsSync(actual.transcriptPath)).toBe(true);
         expect(childState).not.toHaveProperty('projectPath');
@@ -118,18 +103,11 @@ describe('computePaths', () => {
         expect(childState).not.toHaveProperty('indexPath');
         expect(childState).not.toHaveProperty('mode');
       } finally {
-        const paths = computePaths(
-          childState.cwd,
-          childState.sessionId,
-          childState.parentSessionId
-        );
+        const paths = computePaths(childState);
         rmSync(join(base.dir, paths.projectPath), { recursive: true, force: true });
       }
     } finally {
-      rmSync(
-        join(base.dir, computePaths(state.cwd, state.sessionId, state.parentSessionId).projectPath),
-        { recursive: true, force: true }
-      );
+      rmSync(join(base.dir, computePaths(state).projectPath), { recursive: true, force: true });
     }
   });
 });

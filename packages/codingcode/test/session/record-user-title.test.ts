@@ -3,11 +3,11 @@ import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { encodeProjectPath } from '../../src/util/path.js';
-import { computePaths } from '../../src/session/paths.js';
-import { readSessionMeta } from '../../src/session/file-ops.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { encodeProjectPath } from '@codingcode/util';
+import { computePaths } from '@codingcode/session';
+import { readSessionMeta } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { text } from '../helpers/parts.js';
 
@@ -29,7 +29,7 @@ function newDir(): string {
 }
 
 function metaOf(cwd: string, sessionId: string, parentSessionId?: string) {
-  return readSessionMeta(computePaths(cwd, sessionId, parentSessionId).transcriptPath);
+  return readSessionMeta(computePaths({ cwd, sessionId, parentSessionId }).transcriptPath);
 }
 
 describe('title persistence — backfilled from the first user message', () => {
@@ -39,9 +39,9 @@ describe('title persistence — backfilled from the first user message', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -60,9 +60,9 @@ describe('title persistence — backfilled from the first user message', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -71,7 +71,7 @@ describe('title persistence — backfilled from the first user message', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.recordUser(state, text('fix the login bug'));
         })
       );
@@ -88,9 +88,9 @@ describe('title persistence — backfilled from the first user message', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -99,7 +99,7 @@ describe('title persistence — backfilled from the first user message', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.recordUser(state, text(`${'a'.repeat(40)}\nsecond line`));
         })
       );
@@ -116,9 +116,9 @@ describe('title persistence — backfilled from the first user message', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -127,14 +127,14 @@ describe('title persistence — backfilled from the first user message', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.recordUser(state, text('first message'));
         })
       );
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.recordUser(state, text('second message should not win'));
         })
       );
@@ -151,10 +151,10 @@ describe('title persistence — backfilled from the first user message', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
             title: 'explicit title',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -163,7 +163,7 @@ describe('title persistence — backfilled from the first user message', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.recordUser(state, text('a totally different message'));
         })
       );
@@ -180,9 +180,9 @@ describe('title persistence — backfilled from the first user message', () => {
       const created = await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.create(dir, {
+          return yield* svc.create({
+            cwd: dir,
             model: 'test-model',
-
             permissionMode: 'askBeforeExec',
           });
         })
@@ -191,7 +191,7 @@ describe('title persistence — backfilled from the first user message', () => {
       await run(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          const state = yield* svc.load(dir, created.sessionId);
+          const state = yield* svc.load({ cwd: dir, sessionId: created.sessionId });
           yield* svc.renameSession(state, 'my custom name');
           yield* svc.recordUser(state, text('first message'));
         })

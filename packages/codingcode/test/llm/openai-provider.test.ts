@@ -1,5 +1,5 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { LLMStreamPart } from '../../src/llm/types.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { LLMStreamPart } from '@codingcode/model';
 import { text } from '../helpers/parts.js';
 
 const generateText = vi.fn();
@@ -29,7 +29,8 @@ function entry(provider: string) {
   return {
     id: `model@${provider}`,
     provider,
-    driver: 'openai',
+    driver: 'openai' as const,
+    protocol: 'chat' as const,
     name: 'Model',
     model: 'model',
     base_url: 'https://example.com/v1',
@@ -63,7 +64,7 @@ describe('OpenAIProvider completeStream', () => {
   });
 
   it('uses non-streaming completion for sansen requests with tools', async () => {
-    const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
+    const { OpenAIProvider } = await import('@codingcode/model');
     const provider = new OpenAIProvider({} as any, entry('sansen'));
 
     const parts = await collect(provider.completeStream(request(true) as any));
@@ -77,7 +78,7 @@ describe('OpenAIProvider completeStream', () => {
   }, 30000);
 
   it('keeps streaming for sansen requests without tools', async () => {
-    const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
+    const { OpenAIProvider } = await import('@codingcode/model');
     const provider = new OpenAIProvider({} as any, entry('sansen'));
 
     const parts = await collect(provider.completeStream(request(false) as any));
@@ -91,7 +92,7 @@ describe('OpenAIProvider completeStream', () => {
   });
 
   it('keeps streaming for non-sansen requests with tools', async () => {
-    const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
+    const { OpenAIProvider } = await import('@codingcode/model');
     const provider = new OpenAIProvider({} as any, entry('openai'));
 
     const parts = await collect(provider.completeStream(request(true) as any));
@@ -117,7 +118,7 @@ describe('OpenAIProvider completeStream', () => {
         yield { type: 'finish', totalUsage: USAGE };
       })(),
     });
-    const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
+    const { OpenAIProvider } = await import('@codingcode/model');
     const provider = new OpenAIProvider({} as any, entry('openai'));
 
     const parts = await collect(provider.completeStream(request(false) as any));
@@ -130,7 +131,7 @@ describe('OpenAIProvider completeStream', () => {
   });
 
   it('extracts usage from the finish part', async () => {
-    const { OpenAIProvider } = await import('../../src/llm/providers/openai.js');
+    const { OpenAIProvider } = await import('@codingcode/model');
     const provider = new OpenAIProvider({} as any, entry('openai'));
 
     const parts = await collect(provider.completeStream(request(false) as any));

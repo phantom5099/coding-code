@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
-import { isGlobalCwd, tempCwd, resolveCwd, resolveWorkspaceCwd } from '../../src/server/cwd.js';
-import { AgentError } from '../../src/util/error.js';
-import { statusOf } from '../../src/server/http-error.js';
+import { isGlobalCwd, tempCwd, resolveCwd, resolveWorkspaceCwd } from '@codingcode/http';
+import { AgentError } from '@codingcode/util';
+import { statusOf } from '@codingcode/http';
 
 describe('server/cwd：请求入口的工作区解析', () => {
   it('isGlobalCwd treats missing, empty and "global" as global', () => {

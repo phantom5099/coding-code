@@ -3,19 +3,19 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { filterForContext, buildContextMessages } from '../../src/context/context.js';
-import { readHistory } from '../../src/session/file-ops.js';
-import type { SessionMetaEvent, SessionEvent } from '../../src/session/types.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { filterForContext, buildContextMessages } from '@codingcode/context';
+import { readHistory } from '@codingcode/session/file-ops';
+import type { SessionMetaEvent, SessionEvent } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
-import { computePaths } from '../../src/session/paths.js';
+import { computePaths } from '@codingcode/session';
 
 const base = useTempProjectBase();
 
 function makeFixture(sessionId: string, slug: string) {
   const cwd = `/${slug}`;
-  const paths = computePaths(cwd, sessionId);
+  const paths = computePaths({ cwd, sessionId });
   const dir = join(base.dir, slug, 'sessions');
   mkdirSync(dir, { recursive: true });
   const transcriptPath = paths.transcriptPath;
@@ -262,7 +262,7 @@ describe('forkSession', () => {
     const sessionId = randomUUID();
     const slug = randomUUID();
     const cwd = `/${slug}`;
-    const paths = computePaths(cwd, sessionId);
+    const paths = computePaths({ cwd, sessionId });
     const dir = join(base.dir, slug, 'sessions');
     mkdirSync(dir, { recursive: true });
     const transcriptPath = paths.transcriptPath;

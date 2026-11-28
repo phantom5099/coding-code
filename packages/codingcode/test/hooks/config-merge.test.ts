@@ -6,13 +6,11 @@ import { parse as parseYaml } from 'yaml';
 import {
   loadHookConfigs,
   writeHookConfigs,
-  loadGlobalHookConfigs,
-  writeGlobalHookConfigs,
   resolveHookConfigs,
-  setGlobalHookEnabled,
-  setProjectHookEnabled,
-} from '../../src/hooks/config.js';
-import type { UserHookConfig } from '../../src/hooks/types.js';
+  setHookEnabledConfig,
+} from '@codingcode/hook';
+import { GLOBAL_CONFIG_SCOPE, projectConfigScope } from '@codingcode/util';
+import type { UserHookConfig } from '@codingcode/hook';
 import { useTempHome, setFakeHome } from '../helpers/temp-home.js';
 
 let projectDir: string;
@@ -41,7 +39,7 @@ describe('Hooks config merge', () => {
     const nestedHome = join(tempHome.home, 'nested', 'home'); // 连 home 本身都还不存在
     setFakeHome(nestedHome);
 
-    writeGlobalHookConfigs([hook('a', 'x')]);
+    writeHookConfigs(GLOBAL_CONFIG_SCOPE, [hook('a', 'x')]);
 
     expect(readYaml(join(nestedHome, '.codingcode', 'hooks.yaml')).hooks).toEqual([
       { name: 'a', point: 'tool.execute.before', type: 'observer', command: 'x' },
@@ -49,11 +47,11 @@ describe('Hooks config merge', () => {
   });
 
   it('merges global and project by name, project wins', () => {
-    writeGlobalHookConfigs([
+    writeHookConfigs(GLOBAL_CONFIG_SCOPE, [
       hook('global-hook', 'global-cmd'),
       hook('shared-hook', 'global-shared'),
     ]);
-    writeHookConfigs(projectDir, [
+    writeHookConfigs(projectConfigScope(projectDir), [
       hook('shared-hook', 'project-shared'),
       hook('project-hook', 'project-cmd'),
     ]);
@@ -67,9 +65,11 @@ describe('Hooks config merge', () => {
   });
 
   it('project layer only overrides the fields it declares', () => {
-    writeGlobalHookConfigs([hook('shared', 'global-cmd')]);
+    writeHookConfigs(GLOBAL_CONFIG_SCOPE, [hook('shared', 'global-cmd')]);
     // 项目层只写了 name + enabled
-    writeHookConfigs(projectDir, [{ name: 'shared', enabled: false } as UserHookConfig]);
+    writeHookConfigs(projectConfigScope(projectDir), [
+      { name: 'shared', enabled: false } as UserHookConfig,
+    ]);
 
     const merged = resolveHookConfigs(projectDir);
 
@@ -82,7 +82,7 @@ describe('Hooks config merge', () => {
 
 describe('Hook enabled switch (a plain boolean field in hooks.yaml)', () => {
   it('absent field means enabled', () => {
-    writeGlobalHookConfigs([hook('a', 'x')]);
+    writeHookConfigs(GLOBAL_CONFIG_SCOPE, [hook('a', 'x')]);
 
     const merged = resolveHookConfigs(projectDir);
     expect(merged[0]!.enabled).toBeUndefined();
@@ -90,9 +90,9 @@ describe('Hook enabled switch (a plain boolean field in hooks.yaml)', () => {
   });
 
   it('writes the boolean to the global hooks.yaml', () => {
-    writeGlobalHookConfigs([hook('a', 'x')]);
+    writeHookConfigs(GLOBAL_CONFIG_SCOPE, [hook('a', 'x')]);
 
-    setGlobalHookEnabled('a', false);
+    setHookEnabledConfig({ scope: GLOBAL_CONFIG_SCOPE, name: 'a', enabled: false });
 
     expect(readYaml(join(tempHome.configDir, 'hooks.yaml')).hooks[0]).toEqual({
       name: 'a',
@@ -101,13 +101,13 @@ describe('Hook enabled switch (a plain boolean field in hooks.yaml)', () => {
       command: 'x',
       enabled: false,
     });
-    expect(loadGlobalHookConfigs()[0]!.enabled).toBe(false);
+    expect(loadHookConfigs(GLOBAL_CONFIG_SCOPE)[0]!.enabled).toBe(false);
   });
 
   it('project toggle writes a minimal override that wins over the global definition', () => {
-    writeGlobalHookConfigs([hook('a', 'x')]);
+    writeHookConfigs(GLOBAL_CONFIG_SCOPE, [hook('a', 'x')]);
 
-    setProjectHookEnabled(projectDir, 'a', false);
+    setHookEnabledConfig({ scope: projectConfigScope(projectDir), name: 'a', enabled: false });
 
     expect(readYaml(join(projectDir, '.codingcode', 'hooks.yaml')).hooks).toEqual([
       { name: 'a', enabled: false },
@@ -119,9 +119,9 @@ describe('Hook enabled switch (a plain boolean field in hooks.yaml)', () => {
   });
 
   it('patches an existing project entry in place', () => {
-    writeHookConfigs(projectDir, [hook('a', 'proj-cmd')]);
+    writeHookConfigs(projectConfigScope(projectDir), [hook('a', 'proj-cmd')]);
 
-    setProjectHookEnabled(projectDir, 'a', false);
+    setHookEnabledConfig({ scope: projectConfigScope(projectDir), name: 'a', enabled: false });
 
     expect(readYaml(join(projectDir, '.codingcode', 'hooks.yaml')).hooks).toEqual([
       {
@@ -135,11 +135,11 @@ describe('Hook enabled switch (a plain boolean field in hooks.yaml)', () => {
   });
 
   it('round-trips back to enabled', () => {
-    writeGlobalHookConfigs([hook('a', 'x')]);
-    setGlobalHookEnabled('a', false);
-    setGlobalHookEnabled('a', true);
+    writeHookConfigs(GLOBAL_CONFIG_SCOPE, [hook('a', 'x')]);
+    setHookEnabledConfig({ scope: GLOBAL_CONFIG_SCOPE, name: 'a', enabled: false });
+    setHookEnabledConfig({ scope: GLOBAL_CONFIG_SCOPE, name: 'a', enabled: true });
 
-    expect(loadHookConfigs(projectDir)).toEqual([]);
-    expect(loadGlobalHookConfigs()[0]!.enabled).toBe(true);
+    expect(loadHookConfigs(projectConfigScope(projectDir))).toEqual([]);
+    expect(loadHookConfigs(GLOBAL_CONFIG_SCOPE)[0]!.enabled).toBe(true);
   });
 });

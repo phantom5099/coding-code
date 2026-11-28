@@ -1,13 +1,11 @@
-﻿import { describe, it, expect } from 'vitest';
-import { readFileTool } from '../../src/tools/domains/fs/read.js';
-import { writeFileTool } from '../../src/tools/domains/fs/write.js';
-import { bashTool } from '../../src/tools/domains/bash/exec.js';
-import { searchTool } from '../../src/tools/domains/fs/grep.js';
-import { webFetchTool } from '../../src/tools/domains/web/fetch.js';
+import { describe, it, expect } from 'vitest';
+import { readFileTool, writeFileTool, searchTool } from '@codingcode/fs';
+import { bashTool } from '@codingcode/bash';
+import { webFetchTool } from '@codingcode/web';
 import { z } from 'zod';
-import type { ToolDefinition } from '../../src/tools/types.js';
+import type { ToolDefinition } from '@codingcode/tool';
 
-const allTools: ToolDefinition[] = [
+const allTools: ToolDefinition<any, any>[] = [
   readFileTool,
   writeFileTool,
   bashTool,

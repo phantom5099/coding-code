@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { AgentError, type ErrorCode } from '../../src/util/error.js';
+import { AgentError, type ErrorCode } from '@codingcode/util';
 import {
   AlreadyExistsError,
-  InvalidInputError,
   NotFoundError,
   errorCodeOf,
   errorResponse,
   statusOf,
-} from '../../src/server/http-error.js';
+} from '@codingcode/http';
 
 describe('领域错误码 → 状态码（server 层唯一映射点）', () => {
   it('CONFIG_* → 400', () => {
@@ -20,7 +19,9 @@ describe('领域错误码 → 状态码（server 层唯一映射点）', () => {
   });
 
   it('SESSION_WORKSPACE_MISMATCH → 409', () => {
-    expect(statusOf(AgentError.sessionWorkspaceMismatch('abc', '/foo'))).toBe(409);
+    expect(
+      statusOf(AgentError.sessionWorkspaceMismatch({ sessionId: 'abc', expectedCwd: '/foo' }))
+    ).toBe(409);
   });
 
   it('TOOL_NOT_ALLOWED → 403', () => {
@@ -73,12 +74,6 @@ describe('server 自带的 HttpError', () => {
     const err = new AlreadyExistsError("Hook 'x' already exists");
     expect(statusOf(err)).toBe(409);
     expect(errorCodeOf(err)).toBe('ALREADY_EXISTS');
-  });
-
-  it('InvalidInputError → 400 / CONFIG_INVALID', () => {
-    const err = new InvalidInputError('bad body');
-    expect(statusOf(err)).toBe(400);
-    expect(errorCodeOf(err)).toBe('CONFIG_INVALID');
   });
 });
 

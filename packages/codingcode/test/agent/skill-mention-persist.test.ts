@@ -3,18 +3,18 @@ import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect } from 'effect';
-import { SessionLayer } from '../../src/session/session.js';
-import { SessionService } from '../../src/session/port.js';
-import { SkillLayer } from '../../src/skills/skills.js';
-import { SkillService } from '../../src/skills/port.js';
-import { normalizePath } from '../../src/util/path.js';
-import { computePaths } from '../../src/session/paths.js';
-import { readHistory } from '../../src/session/file-ops.js';
-import type { UserEvent } from '../../src/session/types.js';
+import { SessionLayer } from '@codingcode/session';
+import { SessionService } from '@codingcode/session';
+import { SkillLayer } from '@codingcode/skill';
+import { SkillService } from '@codingcode/skill';
+import { normalizePath, projectConfigScope } from '@codingcode/util';
+import { computePaths } from '@codingcode/session';
+import { readHistory } from '@codingcode/session/file-ops';
+import type { UserEvent } from '@codingcode/session';
 import { runAgentTurn, llmStream, pText, pEnd } from '../helpers/agent-harness.js';
 import { useTempProjectBase } from '../helpers/project-base.js';
 import { incomingText } from '../helpers/parts.js';
-import { textOf } from '../../src/llm/types.js';
+import { textOf } from '@codingcode/model';
 
 const base = useTempProjectBase();
 
@@ -33,7 +33,7 @@ async function canonicalSkillPath(cwd: string): Promise<string> {
     Effect.provide(
       Effect.gen(function* () {
         const svc = yield* SkillService;
-        const all = yield* svc.getAll(normalizePath(cwd));
+        const all = yield* svc.getAll(projectConfigScope(normalizePath(cwd)));
         return all.find((s) => s.name === SKILL_NAME)!.skillPath;
       }),
       SkillLayer
@@ -84,7 +84,7 @@ describe('agent runTurn with an explicit @ skill', () => {
   it('persists the untouched user text and the skill block as two events of one turn', async () => {
     const { sessionId, input, skillPath } = await runTurnWithSkill();
 
-    const persisted = readHistory(computePaths(projectDir, sessionId).transcriptPath);
+    const persisted = readHistory(computePaths({ cwd: projectDir, sessionId }).transcriptPath);
     const userEvents = persisted.filter((e): e is UserEvent => e.type === 'user');
 
     expect(userEvents).toHaveLength(2);
@@ -106,7 +106,7 @@ describe('agent runTurn with an explicit @ skill', () => {
       Effect.provide(
         Effect.gen(function* () {
           const svc = yield* SessionService;
-          return yield* svc.readUITurns(sessionId, projectDir);
+          return yield* svc.readUITurns({ cwd: projectDir, sessionId });
         }),
         SessionLayer
       )

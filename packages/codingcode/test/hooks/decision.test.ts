@@ -1,12 +1,12 @@
-﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // 必须排在 hooks.js 前面：vi.mock 工厂要引用 fakeSpawn
 import { spawnRecords, whenCommand, resetFakeSpawn, fakeSpawn } from './fake-spawn.js';
 import { Effect } from 'effect';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
-import { HookService } from '../../src/hooks/port.js';
-import { HookLayer } from '../../src/hooks/hooks.js';
+import { HookService } from '@codingcode/hook';
+import { HookLayer } from '@codingcode/hook';
 import { useTempHome } from '../helpers/temp-home.js';
 
 const TestLayer = HookLayer;
@@ -57,12 +57,19 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
     writeFileSync(join(testDir, '.codingcode', 'hooks.yaml'), `hooks:\n${lines.join('\n')}\n`);
   }
 
+  const approvalPayload = (toolName = 'Bash') => ({
+    projectPath: testDir,
+    toolName,
+    args: {},
+    sessionId: 'test-sid',
+  });
+
   it('没有决策 hook 时返回 null，且不 spawn', async () => {
     const result = await run(
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        return yield* hooks.emitDecision('tool.approval.pre', { projectPath: testDir });
+        return yield* hooks.emitDecision('tool.approval.pre', approvalPayload());
       })
     );
 
@@ -76,19 +83,17 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
     ]);
     whenCommand('cmd-deny', { stdout: '{"decision":"deny","reason":"blocked by policy"}' });
 
+    const payload = approvalPayload('Bash');
     const result = await run(
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        return yield* hooks.emitDecision('tool.approval.pre', {
-          projectPath: testDir,
-          toolName: 'Bash',
-        });
+        return yield* hooks.emitDecision('tool.approval.pre', payload);
       })
     );
 
     expect(result).toEqual({ decision: 'deny', reason: 'blocked by policy' });
-    expect(spawnRecords[0]!.payload).toEqual({ projectPath: testDir, toolName: 'Bash' });
+    expect(spawnRecords[0]!.payload).toEqual(payload);
   });
 
   it('按 priority 升序取首个非 null 的决策，命中即不再跑后面的', async () => {
@@ -121,7 +126,7 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        return yield* hooks.emitDecision('tool.approval.pre', { projectPath: testDir });
+        return yield* hooks.emitDecision('tool.approval.pre', approvalPayload());
       })
     );
 
@@ -153,7 +158,7 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        return yield* hooks.emitDecision('tool.approval.pre', { projectPath: testDir });
+        return yield* hooks.emitDecision('tool.approval.pre', approvalPayload());
       })
     );
 
@@ -184,7 +189,7 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        return yield* hooks.emitDecision('tool.approval.pre', { projectPath: testDir });
+        return yield* hooks.emitDecision('tool.approval.pre', approvalPayload());
       })
     );
 
@@ -200,7 +205,7 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        return yield* hooks.emitDecision('tool.approval.pre', { projectPath: testDir });
+        return yield* hooks.emitDecision('tool.approval.pre', approvalPayload());
       })
     );
 
@@ -218,7 +223,14 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        yield* hooks.emit('tool.execute.before', { projectPath: testDir });
+        yield* hooks.emit('tool.execute.before', {
+          toolName: 'Bash',
+          args: {},
+          sessionId: 'test-sid',
+          turnId: 1,
+          projectPath: testDir,
+          callId: 'c1',
+        });
       })
     );
 
@@ -236,6 +248,8 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
         return yield* hooks.emitDecision('agent.turn.stop', {
+          sessionId: 'test-sid',
+          turnId: 1,
           projectPath: testDir,
           content: 'hi',
         });
@@ -256,7 +270,7 @@ describe('HookService.emitDecision（YAML 定义的决策 hook）', () => {
       Effect.gen(function* () {
         const hooks = yield* HookService;
         yield* hooks.reloadUserHooks(testDir);
-        return yield* hooks.emitDecision('tool.approval.pre', { projectPath: testDir });
+        return yield* hooks.emitDecision('tool.approval.pre', approvalPayload());
       })
     );
 

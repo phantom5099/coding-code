@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useWorkspaceStore } from '../stores/workspace.store';
 import { listSkills } from '../lib/core-api';
-
-interface SkillEntry {
-  name: string;
-  description: string;
-  skillPath: string;
-  source?: 'global' | 'project';
-}
+import type { SkillEntry } from '@codingcode/sdk';
 
 export default function SkillPanel({ global: isGlobal }: { global?: boolean }) {
   const [skills, setSkills] = useState<SkillEntry[]>([]);

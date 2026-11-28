@@ -1,13 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { Effect } from 'effect';
-import { globTool } from '../../src/tools/domains/fs/glob.js';
+import { globTool } from '@codingcode/fs';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { resolve, join } from 'path';
 import { tmpdir } from 'os';
 import { testSandboxPolicy } from '../helpers/sandbox.js';
 
 const testDir = join(tmpdir(), 'coding-agent-glob-test-' + Date.now());
-const ctx = { projectPath: tmpdir(), model: 'test-model', sandboxPolicy: testSandboxPolicy(tmpdir()) };
+const ctx = {
+  session: { cwd: tmpdir(), sessionId: 'test-sid' },
+  model: 'test-model',
+  sandboxPolicy: testSandboxPolicy(tmpdir()),
+};
 
 async function setup() {
   await mkdir(testDir, { recursive: true });

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { renderSkillBlock } from '../../src/agent/prompt.js';
-import type { Skill } from '../../src/skills/types.js';
+import { renderSkillBlock } from '@codingcode/agent';
+import type { Skill } from '@codingcode/skill';
 
 function skill(name: string, skillPath: string): Skill {
-  return { name, description: `${name} description`, skillPath };
+  return { name, description: `${name} description`, skillPath, source: 'project' };
 }
 
 describe('renderSkillBlock', () => {

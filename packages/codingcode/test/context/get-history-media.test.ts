@@ -3,17 +3,17 @@ import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { dirname } from 'path';
 import { randomUUID } from 'crypto';
 import { Effect, Layer } from 'effect';
-import { ContextService } from '../../src/context/port.js';
-import type { ContextShape } from '../../src/context/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { LLMService } from '../../src/llm/port.js';
-import type { SessionRef } from '../../src/session/types.js';
-import { assetsDirOf } from '../../src/session/paths.js';
-import { assetNameFor, writeAsset } from '../../src/session/assets.js';
+import { ContextService } from '@codingcode/context';
+import type { ContextShape } from '@codingcode/context';
+import { SessionLayer } from '@codingcode/session';
+import { LLMService } from '@codingcode/model';
+import type { SessionRef } from '@codingcode/session';
+import { assetsDirOf, transcriptPathOf } from '@codingcode/session';
+import { assetNameFor, writeAsset } from '@codingcode/session';
 import { useTempProjectBase } from '../helpers/project-base.js';
-import { ContextLayer, transcriptPathFor } from '../../src/context/context.js';
-import { EventSinkLayer } from '../../src/sink/sink.js';
-import { TurnRegistryLayer } from '../../src/turn/registry.js';
+import { ContextLayer } from '@codingcode/context';
+import { EventSinkLayer } from '@codingcode/sink';
+import { TurnRegistryLayer } from '@codingcode/turn';
 
 useTempProjectBase();
 
@@ -44,7 +44,7 @@ function getCtxService(): Promise<ContextShape> {
 
 /** 转录里引用一个媒体块；`onDisk` 决定资产是否真的落在 assets 下。 */
 function writeTranscript(ref: SessionRef, asset: string, onDisk: boolean): string {
-  const path = transcriptPathFor(ref);
+  const path = transcriptPathOf(ref);
   mkdirSync(dirname(path), { recursive: true });
   const lines = [
     {
@@ -70,7 +70,7 @@ function writeTranscript(ref: SessionRef, asset: string, onDisk: boolean): strin
 
   const assetDir = assetsDirOf(CWD);
   mkdirSync(assetDir, { recursive: true });
-  if (onDisk) writeAsset(assetDir, asset, PNG);
+  if (onDisk) writeAsset({ dir: assetDir, name: asset }, PNG);
   return path;
 }
 
@@ -95,7 +95,7 @@ describe('getHistory 的媒体装配', () => {
     transcriptPath = writeTranscript(ref, asset, true);
 
     const ctx = await getCtxService();
-    const messages = await Effect.runPromise(ctx.getHistory(ref, 'test-model'));
+    const messages = await Effect.runPromise(ctx.getHistory({ session: ref, model: 'test-model' }));
 
     const user = messages.find((m) => m.role === 'user')!;
     expect(user.content[0]).toEqual({ type: 'text', text: '看这张图' });
@@ -112,7 +112,7 @@ describe('getHistory 的媒体装配', () => {
     transcriptPath = writeTranscript(ref, 'deadbeefdeadbeef.png', false);
 
     const ctx = await getCtxService();
-    const messages = await Effect.runPromise(ctx.getHistory(ref, 'test-model'));
+    const messages = await Effect.runPromise(ctx.getHistory({ session: ref, model: 'test-model' }));
 
     const user = messages.find((m) => m.role === 'user')!;
     expect(user.content[1]).toEqual({

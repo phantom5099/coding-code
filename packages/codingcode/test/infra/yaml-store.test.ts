@@ -10,7 +10,7 @@ import {
   writeNamedList,
   yamlStorePath,
   type NamedListFile,
-} from '../../src/infra/yaml-store.js';
+} from '@codingcode/infra';
 
 interface Item {
   name: string;
@@ -40,41 +40,41 @@ afterEach(() => {
 
 describe('yamlStorePath', () => {
   it('.yaml 优先，缺失时才退回 .yml', () => {
-    expect(yamlStorePath(dir, FILE)).toBe(storePath('yaml'));
+    expect(yamlStorePath({ dir, file: FILE })).toBe(storePath('yaml'));
 
     writeFileSync(storePath('yml'), 'widgets: []\n');
-    expect(yamlStorePath(dir, FILE)).toBe(storePath('yml'));
+    expect(yamlStorePath({ dir, file: FILE })).toBe(storePath('yml'));
 
     writeFileSync(storePath('yaml'), 'widgets: []\n');
-    expect(yamlStorePath(dir, FILE)).toBe(storePath('yaml'));
+    expect(yamlStorePath({ dir, file: FILE })).toBe(storePath('yaml'));
   });
 });
 
 describe('readNamedList', () => {
   it('文件不存在 → []', () => {
-    expect(readNamedList<Item>(dir, FILE)).toEqual([]);
+    expect(readNamedList<Item>({ dir, file: FILE })).toEqual([]);
   });
 
   it('YAML 非法 → []（不让坏文件炸掉整条链路）', () => {
     writeFileSync(storePath(), 'widgets: [1, 2\n');
-    expect(readNamedList<Item>(dir, FILE)).toEqual([]);
+    expect(readNamedList<Item>({ dir, file: FILE })).toEqual([]);
   });
 
   it('顶层键缺失 → []', () => {
     writeFileSync(storePath(), 'otherKey: 1\n');
-    expect(readNamedList<Item>(dir, FILE)).toEqual([]);
+    expect(readNamedList<Item>({ dir, file: FILE })).toEqual([]);
   });
 
   it('从 .yml 也能读', () => {
     writeFileSync(storePath('yml'), 'widgets:\n  - name: from-yml\n');
-    expect(readNamedList<Item>(dir, FILE)).toEqual([{ name: 'from-yml' }]);
+    expect(readNamedList<Item>({ dir, file: FILE })).toEqual([{ name: 'from-yml' }]);
   });
 });
 
 describe('writeNamedList', () => {
   it('目录不存在则自建', () => {
     const nested = join(dir, 'a', 'b');
-    writeNamedList(nested, FILE, [{ name: 'x' }]);
+    writeNamedList({ dir: nested, file: FILE }, [{ name: 'x' }]);
     expect((parseYaml(readFileSync(join(nested, 'widgets.yaml'), 'utf8')) as any).widgets).toEqual([
       { name: 'x' },
     ]);
@@ -82,7 +82,7 @@ describe('writeNamedList', () => {
 
   it('覆盖同名列表，但保留文件里其它顶层键', () => {
     writeFileSync(storePath(), 'otherKey: keep-me\nwidgets: []\n');
-    writeNamedList(dir, FILE, [{ name: 'new' }]);
+    writeNamedList({ dir, file: FILE }, [{ name: 'new' }]);
     const raw = readRawYaml();
     expect(raw.otherKey).toBe('keep-me');
     expect(raw.widgets).toEqual([{ name: 'new' }]);
@@ -113,20 +113,20 @@ describe('mergeNamed', () => {
 describe('patchNamed', () => {
   it('name 不存在 → 追加 { name, ...patch }，并建出目录/文件', () => {
     const nested = join(dir, 'created');
-    patchNamed<Item>(nested, FILE, 'fresh', { enabled: false });
-    expect(readNamedList<Item>(nested, FILE)).toEqual([{ name: 'fresh', enabled: false }]);
+    patchNamed<Item>({ dir: nested, file: FILE }, { name: 'fresh', patch: { enabled: false } });
+    expect(readNamedList<Item>({ dir: nested, file: FILE })).toEqual([{ name: 'fresh', enabled: false }]);
   });
 
   it('name 存在 → 只改 patch 里的字段，其它字段原样保留', () => {
-    writeNamedList(dir, FILE, [{ name: 'a', enabled: true, command: 'x' }]);
-    patchNamed<Item>(dir, FILE, 'a', { enabled: false });
-    expect(readNamedList<Item>(dir, FILE)).toEqual([{ name: 'a', enabled: false, command: 'x' }]);
+    writeNamedList({ dir, file: FILE }, [{ name: 'a', enabled: true, command: 'x' }]);
+    patchNamed<Item>({ dir, file: FILE }, { name: 'a', patch: { enabled: false } });
+    expect(readNamedList<Item>({ dir, file: FILE })).toEqual([{ name: 'a', enabled: false, command: 'x' }]);
   });
 
   it('打 patch 不动同文件里的其它顶层键', () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(storePath(), 'otherKey: keep-me\nwidgets:\n  - name: a\n    enabled: true\n');
-    patchNamed<Item>(dir, FILE, 'a', { enabled: false });
+    patchNamed<Item>({ dir, file: FILE }, { name: 'a', patch: { enabled: false } });
     expect(readRawYaml().otherKey).toBe('keep-me');
   });
 });

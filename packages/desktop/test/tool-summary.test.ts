@@ -5,7 +5,7 @@ import type { Item } from '../shared/types';
 type ToolCallItem = Extract<Item, { type: 'tool_call' }>;
 
 function makeToolCall(name: string, status: ToolCallItem['status'], args?: object): ToolCallItem {
-  return { id: 'tc-' + name, type: 'tool_call', name, args: args ?? {}, status };
+  return { id: 'tc-' + name, type: 'tool_call', name, arguments: args ?? {}, status };
 }
 
 type ToolResultItem = Extract<Item, { type: 'tool_result' }>;

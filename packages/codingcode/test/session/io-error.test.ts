@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Effect } from 'effect';
-import { SessionService } from '../../src/session/port.js';
-import { SessionLayer } from '../../src/session/session.js';
-import { AgentError } from '../../src/util/error.js';
+import { SessionService } from '@codingcode/session';
+import { SessionLayer } from '@codingcode/session';
+import { AgentError } from '@codingcode/util';
 import * as fs from 'fs';
 import { text } from '../helpers/parts.js';
 
@@ -62,7 +62,7 @@ describe('SessionService — SESSION_IO_ERROR', () => {
     const exit = await Effect.runPromiseExit(
       Effect.gen(function* () {
         const svc = yield* SessionService;
-        return yield* svc.recordAssistant(state, 'hi', []);
+        return yield* svc.recordAssistant(state, { content: 'hi', toolCalls: [] });
       }).pipe(Effect.provide(SessionLayer))
     );
 
